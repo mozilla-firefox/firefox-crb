@@ -112,23 +112,31 @@ def _open(path, mode):
     return open(path, mode, encoding="utf-8", newline="\n")
 
 
-def hash_file(path, hasher=None):
+def hash_file(path, hasher=None, cache={}):
     """Hashes a file specified by the path given and returns the hex digest."""
+
+    # Hashing large files is slow, so remember digests we've already computed.
+    if path in cache:
+        return cache[path]
 
     # If the default hashing function changes, this may invalidate
     # lots of cached data.  Don't change it lightly.
     h = hasher or hashlib.sha1()
 
-    with open(path, "rb") as fh:
-        while True:
-            data = fh.read(8192)
+    try:
+        with open(path, "rb") as fh:
+            while True:
+                data = fh.read(8192)
 
-            if not len(data):
-                break
+                if not len(data):
+                    break
 
-            h.update(data)
+                h.update(data)
+    except:
+        return None
 
-    return h.hexdigest()
+    cache[path] = h.hexdigest()
+    return cache[path]
 
 
 class EmptyValue(str):
@@ -231,8 +239,8 @@ def simple_diff(filename, old_lines, new_lines):
     new_lines can be None, indicating a file deletion.
     """
 
-    old_name = "/dev/null" if old_lines is None else filename
-    new_name = "/dev/null" if new_lines is None else filename
+    old_name = "/dev/null" if old_lines == None else filename
+    new_name = "/dev/null" if new_lines == None else filename
 
     return difflib.unified_diff(
         old_lines or [], new_lines or [], old_name, new_name, n=4, lineterm=""
