@@ -241,10 +241,9 @@ async function onBlock(event) {
     }
     document.l10n.setAttributes(event.target, blockButtonL10nId);
     updatedBlocklist = true;
+    processingBlockRequest = false;
   } catch (ex) {
     console.error("Failed to update the blocklist file - ", ex.result);
-  } finally {
-    processingBlockRequest = false;
   }
   if (updatedBlocklist && (await confirmRestartPrompt())) {
     let cancelQuit = Cc["@mozilla.org/supports-PRBool;1"].createInstance(
@@ -357,9 +356,9 @@ function copyDataToClipboard(aData) {
     }
     return copied;
   });
-  let clipboardData = { modules: modulesData, blocked: blockedData };
+  var Clipboard_data = { modules: modulesData, blocked: blockedData };
 
-  return navigator.clipboard.writeText(JSON.stringify(clipboardData, null, 2));
+  return navigator.clipboard.writeText(JSON.stringify(Clipboard_data, null, 2));
 }
 
 function correctProcessTypeForFluent(type) {
@@ -433,17 +432,20 @@ function visualizeData(aData) {
   const mainContentFragment = new DocumentFragment();
 
   // Blocklist entries are case-insensitive
-  let lowercaseModuleNames = new Set(
-    aData.modules.map(module => module.moduleName.toLowerCase())
-  );
   for (const module of aData.blocked) {
-    if (lowercaseModuleNames.has(module.moduleName.toLowerCase())) {
+    const lowercaseModuleNames = aData.modules.map(loaded =>
+      loaded.moduleName.toLowerCase()
+    );
+    if (lowercaseModuleNames.includes(module.moduleName.toLowerCase())) {
       // Only show entries that we haven't already tried to load,
       // because those will already show up in the page
       continue;
     }
     const newCard = templateBlockedCard.content.cloneNode(true);
-    setContent(newCard.querySelector(".module-name"), module.moduleName);
+    // Flag crashers inline so they stand out in the list of blocked modules.
+    newCard.querySelector(".module-name").innerHTML = module.isCrasher
+      ? `${module.moduleName} <strong>(crasher)</strong>`
+      : module.moduleName;
     // Referred by the button click handlers
     newCard.querySelector(".card").module = {
       moduleName: module.moduleName,
