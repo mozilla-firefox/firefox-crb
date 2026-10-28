@@ -200,22 +200,19 @@ char16_t* UTF8ToNewUnicode(const nsACString& aSource, uint32_t* aUTF16Count) {
 
 char16_t* CopyUnicodeTo(const nsAString& aSource, uint32_t aSrcOffset,
                         char16_t* aDest, uint32_t aLength) {
-  MOZ_ASSERT(aSrcOffset + aLength <= aSource.Length());
+  // Bail out in release builds too, rather than only asserting in debug.
+  if (aSrcOffset > aSource.Length()) {
+    return nullptr;
+  }
   memcpy(aDest, aSource.BeginReading() + aSrcOffset,
          size_t(aLength) * sizeof(char16_t));
   return aDest;
 }
 
 void ToUpperCase(nsACString& aCString) {
-  char* cp = aCString.BeginWriting();
-  char* end = cp + aCString.Length();
-  while (cp != end) {
-    char ch = *cp;
-    if (ch >= 'a' && ch <= 'z') {
-      *cp = ch - ('a' - 'A');
-    }
-    ++cp;
-  }
+  nsAutoCString upper;
+  ToUpperCase(aCString, upper);
+  aCString.Assign(upper);
 }
 
 void ToUpperCase(const nsACString& aSource, nsACString& aDest) {
@@ -225,11 +222,10 @@ void ToUpperCase(const nsACString& aSource, nsACString& aDest) {
   char* dst = aDest.BeginWriting();
   while (src != end) {
     char ch = *src;
-    if (ch >= 'a' && ch <= 'z') {
+    if (ch >= 'a' && ch <= 'z')
       *dst = ch - ('a' - 'A');
-    } else {
+    else
       *dst = ch;
-    }
     ++src;
     ++dst;
   }
@@ -517,7 +513,7 @@ bool StringBeginsWith(const nsACString& aSource, const nsACString& aSubstring,
 bool StringEndsWith(const nsAString& aSource, const nsAString& aSubstring) {
   nsAString::size_type src_len = aSource.Length(),
                        sub_len = aSubstring.Length();
-  if (sub_len > src_len) {
+  if (sub_len >= src_len) {
     return false;
   }
   return Substring(aSource, src_len - sub_len, sub_len).Equals(aSubstring);
