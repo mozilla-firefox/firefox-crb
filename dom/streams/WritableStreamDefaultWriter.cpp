@@ -64,6 +64,12 @@ void WritableStreamDefaultWriter::SetStream(WritableStream* aStream) {
   mStream = aStream;
 }
 
+// https://streams.spec.whatwg.org/#writablestreamdefaultwriter-set-up
+void WritableStreamDefaultWriter::SetUp(WritableStream* aStream,
+                                        ErrorResult& aRv) {
+  SetUpWritableStreamDefaultWriter(this, aStream, aRv);
+}
+
 void WritableStreamDefaultWriter::SetReadyPromise(Promise* aPromise) {
   MOZ_ASSERT(aPromise);
   mReadyPromise = aPromise;
