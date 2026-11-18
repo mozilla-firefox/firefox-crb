@@ -275,6 +275,9 @@ bitflags! {
         /// Marks that this color is in the legacy color format. This flag is
         /// only valid for the `Srgb` color space.
         const IS_LEGACY_SRGB = 1 << 4;
+        /// Marks a color-mix() result that keeps the hsl or hwb color space, because it
+        /// has missing components. It is not in the legacy color format.
+        const IS_COLOR_MIX_RESULT = 1 << 5;
     }
 }
 
@@ -534,7 +537,9 @@ impl AbsoluteColor {
         // rgb(), rgba(), hsl(), hsla(), hwb(), hwba()
         match self.color_space {
             ColorSpace::Srgb => self.flags.contains(ColorFlags::IS_LEGACY_SRGB),
-            ColorSpace::Hsl | ColorSpace::Hwb => true,
+            ColorSpace::Hsl | ColorSpace::Hwb => {
+                !self.flags.contains(ColorFlags::IS_COLOR_MIX_RESULT)
+            },
             _ => false,
         }
     }

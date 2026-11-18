@@ -175,7 +175,16 @@ pub fn mix_many(
     // - legacy srgb when every mixed color used legacy syntax.
     let finalize = |result: AbsoluteColor| -> AbsoluteColor {
         if flags.contains(ColorMixFlags::RESULT_IN_MODERN_SYNTAX) {
-            if result.is_legacy_syntax() {
+            let keeps_hsl_or_hwb_form =
+                matches!(result.color_space, ColorSpace::Hsl | ColorSpace::Hwb)
+                    && result.flags.intersects(ColorFlags::NONE_FLAGS);
+            if keeps_hsl_or_hwb_form {
+                // Keep the missing components:
+                // https://drafts.csswg.org/css-color-5/#serial-color-mix
+                let mut result = result;
+                result.flags.insert(ColorFlags::IS_COLOR_MIX_RESULT);
+                result
+            } else if result.is_legacy_syntax() {
                 // If the result *MUST* be in modern syntax, then make sure it is in a color space
                 // that allows the modern syntax. So hsl and hwb will be converted to srgb.
                 let mut srgb = result.to_color_space(ColorSpace::Srgb);
