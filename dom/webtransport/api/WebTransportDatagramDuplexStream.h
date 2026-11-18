@@ -92,80 +92,78 @@ class OutgoingDatagramStreamAlgorithms final
       WritableStreamDefaultController& aController,
       ErrorResult& aError) override;
 
-  // Resolves the oldest deferred promise if aAvailableBytes covers its
-  // DatagramQueueCharge(), standing in for sendDatagrams steps 5.1.2.2/5.3.4.
-  // On success, *aResolvedBytes is that datagram's size.
-  bool TryResolveOldestFromCredit(uint64_t aAvailableBytes,
-                                  size_t* aResolvedBytes);
+  // https://w3c.github.io/webtransport/#dequeue-outgoing-datagrams step 3:
+  // "If the length of writable.[[OutgoingDatagramsQueue]] is less than
+  // transport.[[Datagrams]].[[OutgoingMaxBufferedDatagrams]], then resolve
+  // writable.[[BackpressurePromise]] with undefined."
+  //
+  // Resolves [[BackpressurePromise]] if it is pending and aAvailableBytes
+  // covers the DatagramQueueCharge() of the datagram that left it pending.
+  // Not in spec: room is measured by the parent's DatagramCapacity credit,
+  // not by this writable's queue length.  Called by
+  // WebTransportDatagramDuplexStream::OnDatagramCapacity()'s round-robin
+  // across every algorithms instance.  On success, *aResolvedBytes is that
+  // datagram's size, for the caller to charge against its byte credit.
+  bool TryResolveBackpressureFromCredit(uint64_t aAvailableBytes,
+                                        size_t* aResolvedBytes);
 
-  // Lowers the in-flight count by aCount (never below 0) as datagrams leave
-  // neqo's queue, freeing writeDatagrams step 9 slots for new writes.  It
-  // resolves nothing already deferred.
+  // https://w3c.github.io/webtransport/#dequeue-outgoing-datagrams steps 1-2:
+  // "Let n be the minimum of count and the length of
+  // writable.[[OutgoingDatagramsQueue]]." and "Repeat dequeuing
+  // writable.[[OutgoingDatagramsQueue]] n times."
+  //
+  // Lowers the in-flight count by aCount (never below 0), called from
+  // WebTransportDatagramDuplexStream::OnDatagramCapacity() with the
+  // sent+expired+dropped delta -- the aggregate signal that this many
+  // datagrams have left neqo's queue one way or another.  This only lets
+  // future writes leave [[BackpressurePromise]] resolved;
+  // TryResolveBackpressureFromCredit() is what resolves a pending one.
   void RetireInFlight(uint64_t aCount);
 
   // Send queue parameter updates to parent
   void UpdateQueueParams(uint32_t aMaxBufferedDatagrams, double aMaxAge);
 
-  // Resolves this writable's withheld write promise, if any, so the
-  // WritableStream is not left waiting on it once the session is torn down.
-  // See WebTransportDatagramDuplexStream::Cleanup().
+  // https://w3c.github.io/webtransport/#webtransport-cleanup step 12 for this
+  // writable; see WebTransportDatagramDuplexStream::Cleanup().
   void Cleanup();
 
  private:
   ~OutgoingDatagramStreamAlgorithms() override = default;
 
-  struct QueuedDatagram {
-    UniquePtr<DatagramEntry> mEntry;
-    RefPtr<Promise> mPromise;
-
-    QueuedDatagram(UniquePtr<DatagramEntry>&& aEntry, RefPtr<Promise> aPromise)
-        : mEntry(std::move(aEntry)), mPromise(std::move(aPromise)) {}
-  };
-
-  struct PendingDatagram {
-    RefPtr<Promise> mPromise;
-    size_t mBytes;
-  };
-
-  // So nsTArray<QueuedDatagram>/nsTArray<PendingDatagram>'s generic
-  // cycle-collection support (see nsTArray.h) can reach mPromise via the
-  // overloads below, which need to name these otherwise-private types.
-  friend void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback&,
-                                          QueuedDatagram&, const char*,
-                                          uint32_t);
-  friend void ImplCycleCollectionUnlink(QueuedDatagram&);
-  friend void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback&,
-                                          PendingDatagram&, const char*,
-                                          uint32_t);
-  friend void ImplCycleCollectionUnlink(PendingDatagram&);
-
   RefPtr<WebTransportDatagramDuplexStream> mDatagrams;
   RefPtr<WebTransportChild> mChild;
   RefPtr<WebTransportDatagramsWritable> mOwnerWritable;
-  // Queue for datagrams sent before connection is ready
-  nsTArray<QueuedDatagram> mWaitConnectQueue;
+  // Datagrams written before the session connected, waiting for SetChild().
+  nsTArray<UniquePtr<DatagramEntry>> mWaitConnectQueue;
 
   // Send group and order for this writable stream (null/0 for default)
   RefPtr<WebTransportSendGroup> mSendGroup;
   int64_t mSendOrder;
 
-  // Oldest first, the write() promises step 9 left unresolved; settled only
-  // by TryResolveOldestFromCredit() or Cleanup().
-  nsTArray<PendingDatagram> mPendingDatagramPromises;
+  // [[BackpressurePromise]]: "A promise which is resolved once
+  // [[OutgoingDatagramsQueue]] has room for another datagram."  Null until
+  // the first write, standing in for the initial "a promise resolved with
+  // undefined".  WritableStream only calls the sink's write once the
+  // previous write's promise has settled, so at most one write is ever
+  // waiting on it.
+  RefPtr<Promise> mBackpressurePromise;
+  // Size of the datagram whose write left mBackpressurePromise pending, to
+  // charge against the byte credit when it resolves.
+  size_t mBackpressureBytes = 0;
 
   // Stands in for the length of this writable's [[OutgoingDatagramsQueue]],
-  // which lives in the parent: datagrams handed over, resolved or not, that
-  // RetireInFlight() hasn't retired yet.
+  // which really lives in the parent: datagrams handed to the parent that
+  // RetireInFlight() hasn't yet been told have left neqo's queue.
+  // writeDatagrams step 8 measures against this.
   OutgoingDatagramInFlight mInFlight;
 
   // Set by Cleanup().  WritableStream dequeues one write() at a time, only
   // advancing once the previous one's promise settles, so a burst queued
   // synchronously is still draining across many later microtask turns
-  // after Cleanup() itself already ran and returned, and Cleanup() cannot
-  // resolve promises for writes that do not exist yet at the moment it
-  // runs.  Once set, WriteCallbackImpl resolves every future write
-  // immediately without queueing or forwarding it, since nothing will ever
-  // grant more credit to release a deferred one again.
+  // after Cleanup() itself already ran and returned.  Once set,
+  // WriteCallbackImpl returns the [[BackpressurePromise]] Cleanup() resolved
+  // without queueing or forwarding the write, since nothing will ever grant
+  // more credit to resolve a new one.
   bool mCleanedUp = false;
 };
 
@@ -189,7 +187,7 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // https://w3c.github.io/webtransport/#webtransport-cleanup steps 11-13.
   // Returns what [[Writables]] held, for ErrorWritables().
   //
-  // Resolving the withheld write promises also lets
+  // Resolving [[BackpressurePromise]] (step 12.2) also lets
   // WritableStreamStartErroring() finish, since it only does once no write
   // is marked in flight.
   [[nodiscard]] nsTArray<RefPtr<WebTransportDatagramsWritable>> Cleanup();
@@ -230,7 +228,14 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   void FlushOutgoingDatagrams();
 
   // Handles a DatagramCapacity message, the parent's aggregate stand-in for
-  // sendDatagrams.  The credit limits only rise, as with MAX_DATA.
+  // sendDatagrams (https://w3c.github.io/webtransport/#senddatagrams) calling
+  // dequeue outgoing datagrams: raises the credit limits (a decrease is
+  // ignored, matching MAX_DATA), adds sentDelta/droppedDelta to their own
+  // running totals and expiredDelta to mExpiredOutgoing, dequeues that many
+  // datagrams from every writable (RetireInFlight()), then resolves pending
+  // [[BackpressurePromise]]s out of the credit -- round-robin across every
+  // OutgoingDatagramStreamAlgorithms instance while both credit dimensions
+  // allow it, so no single writable can starve another.
   void OnDatagramCapacity(uint64_t aCumulativeDatagrams,
                           uint64_t aCumulativeBytes, uint64_t aSentDelta,
                           uint64_t aExpiredDelta, uint64_t aDroppedDelta,
@@ -301,10 +306,11 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // timeliness of transmitted data".
   //
   // outgoingMaxBufferedDatagrams is the length of the sink's send queue.
-  // writeDatagrams withholds write()'s promise once the queue reaches it, so
-  // the WritableStream holds back further writes, awaited or not, until
-  // datagrams leave the queue. (The incoming side is deliberately different:
-  // receiveDatagrams drops whatever exceeds incomingMaxBufferedDatagrams.)
+  // writeDatagrams returns a pending [[BackpressurePromise]] once the queue
+  // reaches it, so the WritableStream holds back further writes, awaited or
+  // not, until datagrams leave the queue. (The incoming side is deliberately
+  // different: receiveDatagrams drops whatever exceeds
+  // incomingMaxBufferedDatagrams.)
   //
   // 5 rather than Chromium's and WebKit's 1 is deliberate: our outgoing queue
   // lives in the parent process, so a slot frees up only once a
