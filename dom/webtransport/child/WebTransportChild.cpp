@@ -123,9 +123,20 @@ void WebTransportChild::CloseAll() {
     RefPtr<WebTransportSendStream> stream =
         mTransport->GetSendStream(aStreamId);
 
+    // A verdict for an atomic write that is no longer the one held in flight
+    // was aborted already by an earlier failure; it must not act again.
+    if (stream && !stream->IsAtomicWriteUnconfirmed(aAtomicWriteId)) {
+      return IPC_OK();
+    }
+
     if (NS_SUCCEEDED(aResult)) {
       if (stream) {
         stream->UntrackAtomicWriteId(aAtomicWriteId);
+        // Settle the write request this atomic write has been holding in
+        // flight, which lets WritableStream dispatch whatever is queued
+        // behind it (see WebTransportSendStream.cpp).
+        stream->ResolveAtomicWriteRequest(aAtomicWriteId,
+                                          /* aConfirmed = */ true);
       }
       RefPtr<Promise> promise =
           mTransport->TakeAtomicWritePromise(aAtomicWriteId);
@@ -137,7 +148,7 @@ void WebTransportChild::CloseAll() {
       // Per spec "write" step 8.1: abort all atomic write requests on
       // the stream. This rejects all pending atomic write promises.
       if (stream) {
-        stream->AbortAllAtomicWriteRequests();
+        stream->AbortAllAtomicWriteRequests(aAtomicWriteId);
       }
     }
   }
