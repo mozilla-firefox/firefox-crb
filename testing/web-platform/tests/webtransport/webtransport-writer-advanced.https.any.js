@@ -142,18 +142,20 @@ promise_test(async t => {
 
   const data = new Uint8Array([1, 2, 3]);
 
-  // Queue several atomic writes without awaiting so they are pending
+  // Queue several atomic writes without awaiting so they are pending. The
+  // first is dispatched synchronously and so is the in-flight write request;
+  // the rest stay queued in the WritableStream.
   const writes = [];
   for (let i = 0; i < 5; i++) {
     writes.push(writer.atomicWrite(data));
   }
 
-  // Abort with an explicit reason; per spec all pending write requests
-  // (including atomicWrite requests) must be rejected with that reason.
+  // Abort with an explicit reason. The in-flight write is the stream's
+  // [[PendingOperation]], which the abort signal rejects, and erroring then
+  // rejects every queued one with the same reason.
   const reason = new DOMException('test abort', 'AbortError');
   await writer.abort(reason);
 
-  // ALL pending atomicWrite promises must be rejected, not just some
   const results = await Promise.allSettled(writes);
   for (const [i, result] of results.entries()) {
     assert_equals(result.status, 'rejected',
@@ -161,7 +163,7 @@ promise_test(async t => {
     assert_equals(result.reason, reason,
       `atomicWrite[${i}] should be rejected with the abort reason`);
   }
-}, 'abort() rejects all pending atomicWrite requests with the abort reason');
+}, 'abort() rejects every pending atomicWrite request with the abort reason');
 
 // Test that atomicWrite() respects WritableStream backpressure
 promise_test(async t => {
@@ -255,8 +257,9 @@ promise_test(async t => {
   }
 }, 'atomicWrite() is properly serialized with regular writes through pipeline');
 
-// Per WritableStream spec, abort() rejects all pending write requests
-// (both atomic and regular) with the abort reason.
+// abort() rejects the write in flight, which here is the atomicWrite()
+// dispatched synchronously before abort() is reached, and every write queued
+// behind it.
 promise_test(async t => {
   const wt = new WebTransport(webtransport_url('echo.py'));
   t.add_cleanup(() => wt.close());
@@ -271,7 +274,7 @@ promise_test(async t => {
   const abortPromise = writer.abort(new DOMException('test abort', 'AbortError'));
 
   await promise_rejects_dom(t, 'AbortError', atomicPromise,
-                            'atomic write should be aborted');
+                            'in-flight atomic write should be aborted');
   await promise_rejects_dom(t, 'AbortError', regularPromise,
                             'regular write should be aborted');
 
@@ -281,7 +284,7 @@ promise_test(async t => {
   // with the stream's stored error (the abort reason).
   await promise_rejects_dom(t, 'AbortError', writer.write(new Uint8Array([7])),
                             'write after abort should fail');
-}, 'abort() with interleaved atomic/non-atomic writes rejects all pending writes');
+}, 'abort() rejects an in-flight atomicWrite() and the write queued behind it');
 
 // Per spec, if an atomicWrite() is rejected because its chunk doesn't fit the
 // current flow-control window, any write already queued behind it must also
