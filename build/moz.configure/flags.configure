@@ -419,6 +419,13 @@ def add_gnu_specific_dso_flags(
                 else:
                     ldopts.append("-Wl,--warn-unresolved-symbols")
 
+            # gettid was added to glibc in 2.30; the sysroot may be older.
+            # Rust std references it as a weak symbol for thread ID lookup
+            # with a raw-syscall fallback, so it is always safe at runtime.
+            if target.kernel == "Linux":
+                if have_linker_support_ignore_unresolved:
+                    ldopts.append("-Wl,--ignore-unresolved-symbol,gettid")
+
                 if librunpath := environ.get("LIBRUNPATH"):
                     if target.os == "NetBSD":
                         ldopts.insert(0, f"-Wl,-R{librunpath}")
