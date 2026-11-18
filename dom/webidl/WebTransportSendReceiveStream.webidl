@@ -10,6 +10,7 @@ interface WebTransportSendStream : WritableStream {
   [SetterThrows] attribute WebTransportSendGroup? sendGroup;
   attribute long long sendOrder;
   Promise<WebTransportSendStreamStats> getStats();
+  [NewObject, Throws] WebTransportWriter getWriter();
 };
 
 /* https://w3c.github.io/webtransport/#send-stream-stats */
