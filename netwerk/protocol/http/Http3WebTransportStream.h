@@ -101,6 +101,21 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
   static nsresult WritePipeSegment(nsIOutputStream*, void*, char*, uint32_t,
                                    uint32_t, uint32_t*);
 
+  // Sends aPayload atomically now via WebTransportSendStreamAtomic(), which
+  // fails if it does not fit.  Returns whether it succeeded.
+  bool TrySendAtomicPayload(nsTArray<uint8_t>&& aPayload);
+  // Looks up the owning Http3WebTransportSession and resolves the DOM-side
+  // atomicWrite() promise for aAtomicWriteId.
+  void ResolveAtomicWrite(uint32_t aAtomicWriteId, bool aSuccess);
+  // Retries atomic writes deferred because regular data was still draining
+  // ahead of them; called whenever mPendingRegularFrameData empties out.
+  void TryDrainPendingAtomicWrites();
+  // Fails (rather than retries) any atomic writes still deferred in
+  // mPendingAtomicWrites; called from Close()/Reset() since the stream is
+  // going away and TryDrainPendingAtomicWrites() will never run again to
+  // settle their DOM-side promises otherwise.
+  void FailPendingAtomicWrites();
+
   uint64_t mTotalSent = 0;
   uint64_t mTotalReceived = 0;
   // TODO: neqo doesn't expose this information for now.
@@ -124,6 +139,15 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
   // Buffer for Regular frame data that couldn't be sent due to flow control
   // When OnReadSegment can't send all data, remainder is stored here
   nsTArray<uint8_t> mPendingRegularFrameData;
+
+  struct PendingAtomicWrite {
+    uint32_t mAtomicWriteId;
+    nsTArray<uint8_t> mPayload;
+  };
+  // Atomic writes deferred, in order, because regular data written before
+  // them was still draining out of mPendingRegularFrameData; retried via
+  // TryDrainPendingAtomicWrites() once that buffer empties out.
+  nsTArray<PendingAtomicWrite> mPendingAtomicWrites;
 
   // True when stream close is detected but we have pending data to send first
   bool mDeferredClose{false};
