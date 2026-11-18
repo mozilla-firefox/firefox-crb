@@ -197,10 +197,12 @@ impl<Color> ColorFunction<Color> {
         // The absolute origin color, if available, used to substitute channels.
         let abs_origin = origin.as_ref().and_then(|o| o.as_absolute());
         // Builds a variant where the origin is converted to `$space` (the
-        // function's color space) before its channels are read.
+        // function's color space) before its channels are read. Missing components
+        // of the origin are carried forward:
+        // https://drafts.csswg.org/css-color-5/#relative-processing
         macro_rules! convert {
             ($variant:ident, $space:expr, $c0:expr, $c1:expr, $c2:expr, $alpha:expr) => {{
-                let converted = abs_origin.map(|o| o.to_color_space($space));
+                let converted = abs_origin.map(|o| o.to_color_space_with_missing($space));
                 ColorFunction::$variant(
                     Optional::from(origin),
                     $c0.to_computed_value(context, converted.as_ref())?,
@@ -216,7 +218,7 @@ impl<Color> ColorFunction<Color> {
                 // rgb(..) channels are in the [0..255] range, so map the origin's
                 // components accordingly.
                 let converted = abs_origin.map(|o| {
-                    let o = o.to_color_space(ColorSpace::Srgb);
+                    let o = o.to_color_space_with_missing(ColorSpace::Srgb);
                     AbsoluteColor::new(
                         ColorSpace::Srgb,
                         o.c0().map(|v| v * 255.0),
@@ -253,7 +255,7 @@ impl<Color> ColorFunction<Color> {
             },
             ColorFunction::Color(_, c0, c1, c2, alpha, color_space) => {
                 let converted = abs_origin.map(|o| {
-                    let mut result = o.to_color_space(*color_space);
+                    let mut result = o.to_color_space_with_missing(*color_space);
                     // Drop the legacy flag so the origin is read as a `color()`.
                     result.flags.set(ColorFlags::IS_LEGACY_SRGB, false);
                     result
