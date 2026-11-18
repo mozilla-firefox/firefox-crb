@@ -74,6 +74,30 @@ promise_test(async t => {
                             'bytesSent must not decrease');
 }, 'WebTransportSendStream.getStats() bytesWritten is monotonically non-decreasing');
 
+promise_test(async t => {
+  const wt = new WebTransport(webtransport_url('echo.py'));
+  t.add_cleanup(() => wt.close());
+  await wt.ready;
+
+  const stream = await wt.createUnidirectionalStream();
+  const writer = stream.getWriter();
+
+  // The first call must not pin bytesSent: it has to keep following the
+  // network as more data goes out.
+  const stats1 = await stream.getStats();
+  const dataSize = 1000;
+  await writer.write(new Uint8Array(dataSize).fill(7));
+
+  let stats;
+  do {
+    await new Promise(resolve => t.step_timeout(resolve, 50));
+    stats = await stream.getStats();
+  } while (stats.bytesSent < dataSize);
+
+  assert_greater_than(stats.bytesSent, stats1.bytesSent,
+                      'bytesSent must advance past the first reading');
+}, 'WebTransportSendStream.getStats() bytesSent advances after the first call');
+
 // --- WebTransportReceiveStream.getStats() ---
 
 promise_test(async t => {
@@ -236,8 +260,6 @@ promise_test(async t => {
     writer2.write(new Uint8Array(700).fill(2)),
   ]);
 
-  // Populate each stream's cached bytesSent/bytesAcknowledged before reading
-  // the group's aggregation of them.
   const stream1Stats = await stream1.getStats();
   const stream2Stats = await stream2.getStats();
 
@@ -246,17 +268,20 @@ promise_test(async t => {
   // from all streams in the group, not just bytesWritten.
   assert_equals(stats.bytesWritten, 1000,
                 'group bytesWritten must sum all streams in the group');
-  assert_equals(stats.bytesSent,
-                stream1Stats.bytesSent + stream2Stats.bytesSent,
-                'group bytesSent must sum all streams in the group');
-  assert_equals(stats.bytesAcknowledged,
-                stream1Stats.bytesAcknowledged + stream2Stats.bytesAcknowledged,
-                'group bytesAcknowledged must sum all streams in the group');
+  // bytesSent and bytesAcknowledged keep advancing, so the group's values,
+  // read after the per-stream ones, cannot be smaller than their sum.
+  assert_greater_than_equal(
+      stats.bytesSent, stream1Stats.bytesSent + stream2Stats.bytesSent,
+      'group bytesSent must cover all streams in the group');
+  assert_greater_than_equal(
+      stats.bytesAcknowledged,
+      stream1Stats.bytesAcknowledged + stream2Stats.bytesAcknowledged,
+      'group bytesAcknowledged must cover all streams in the group');
   assert_less_than_equal(stats.bytesSent, stats.bytesWritten,
                          'bytesSent <= bytesWritten');
   assert_less_than_equal(stats.bytesAcknowledged, stats.bytesSent,
                          'bytesAcknowledged <= bytesSent');
-}, 'WebTransportSendGroup.getStats() aggregates bytesWritten from all grouped streams');
+}, 'WebTransportSendGroup.getStats() aggregates stats from all grouped streams');
 
 promise_test(async t => {
   const wt = new WebTransport(webtransport_url('echo.py'));
@@ -287,29 +312,83 @@ promise_test(async t => {
   const stream = await wt.createUnidirectionalStream({ sendGroup });
   const writer = stream.getWriter();
 
-  // Query the stream first so the group's aggregation (which uses the
-  // stream's last-known cached bytesSent/bytesAcknowledged) reflects it.
   const streamStats1 = await stream.getStats();
   const groupStats1 = await sendGroup.getStats();
   assert_equals(groupStats1.bytesWritten, streamStats1.bytesWritten,
                 'group with one stream: group.bytesWritten == stream.bytesWritten');
-  assert_equals(groupStats1.bytesSent, streamStats1.bytesSent,
-                'group with one stream: group.bytesSent == stream.bytesSent');
-  assert_equals(groupStats1.bytesAcknowledged, streamStats1.bytesAcknowledged,
-                'group with one stream: group.bytesAcknowledged == stream.bytesAcknowledged');
+  assert_greater_than_equal(
+      groupStats1.bytesSent, streamStats1.bytesSent,
+      'group with one stream: group.bytesSent >= stream.bytesSent');
+  assert_greater_than_equal(
+      groupStats1.bytesAcknowledged, streamStats1.bytesAcknowledged,
+      'group with one stream: group.bytesAcknowledged >= stream.bytesAcknowledged');
 
   await writer.write(new Uint8Array(400).fill(7));
   const streamStats2 = await stream.getStats();
   const groupStats2 = await sendGroup.getStats();
   assert_equals(groupStats2.bytesWritten, streamStats2.bytesWritten,
                 'group with one stream: group.bytesWritten == stream.bytesWritten after write');
-  assert_equals(groupStats2.bytesSent, streamStats2.bytesSent,
-                'group with one stream: group.bytesSent == stream.bytesSent after write');
-  assert_equals(groupStats2.bytesAcknowledged, streamStats2.bytesAcknowledged,
-                'group with one stream: group.bytesAcknowledged == stream.bytesAcknowledged after write');
+  assert_greater_than_equal(
+      groupStats2.bytesSent, streamStats2.bytesSent,
+      'group with one stream: group.bytesSent >= stream.bytesSent after write');
+  assert_greater_than_equal(
+      groupStats2.bytesAcknowledged, streamStats2.bytesAcknowledged,
+      'group with one stream: group.bytesAcknowledged >= stream.bytesAcknowledged after write');
   assert_equals(groupStats2.bytesWritten, 400,
                 'group bytesWritten must reflect the write');
 }, 'WebTransportSendGroup.getStats() matches the single stream it contains');
+
+promise_test(async t => {
+  const wt = new WebTransport(webtransport_url('echo.py'));
+  t.add_cleanup(() => wt.close());
+  await wt.ready;
+
+  const sendGroup = wt.createSendGroup();
+  const stream1 = await wt.createUnidirectionalStream({ sendGroup });
+  const stream2 = await wt.createUnidirectionalStream({ sendGroup });
+  await Promise.all([
+    stream1.getWriter().write(new Uint8Array(300).fill(1)),
+    stream2.getWriter().write(new Uint8Array(700).fill(2)),
+  ]);
+
+  // Never call the streams' own getStats(): the group alone must see
+  // bytesSent reach bytesWritten.
+  let stats;
+  do {
+    await new Promise(resolve => t.step_timeout(resolve, 50));
+    stats = await sendGroup.getStats();
+  } while (stats.bytesSent < stats.bytesWritten);
+
+  assert_equals(stats.bytesWritten, 1000,
+                'group bytesWritten must sum all streams in the group');
+  assert_equals(stats.bytesSent, 1000,
+                'group bytesSent must reach bytesWritten');
+}, 'WebTransportSendGroup.getStats() bytesSent advances without per-stream getStats()');
+
+promise_test(async t => {
+  const wt = new WebTransport(webtransport_url('echo.py'));
+  t.add_cleanup(() => wt.close());
+  await wt.ready;
+
+  const sendGroup = wt.createSendGroup();
+  const stream = await wt.createUnidirectionalStream({ sendGroup });
+  const writer = stream.getWriter();
+
+  // The first call must not pin the group's bytesSent: later calls have to
+  // keep following the network as more data goes out.
+  const stats1 = await sendGroup.getStats();
+  const dataSize = 1000;
+  await writer.write(new Uint8Array(dataSize).fill(7));
+
+  let stats;
+  do {
+    await new Promise(resolve => t.step_timeout(resolve, 50));
+    stats = await sendGroup.getStats();
+  } while (stats.bytesSent < dataSize);
+
+  assert_greater_than(stats.bytesSent, stats1.bytesSent,
+                      'group bytesSent must advance past the first reading');
+}, 'WebTransportSendGroup.getStats() bytesSent advances after the first call');
 
 promise_test(async t => {
   const wt = new WebTransport(webtransport_url('echo.py'));
