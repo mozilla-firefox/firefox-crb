@@ -34,6 +34,8 @@ NS_IMPL_ISUPPORTS(WebTransportParent, WebTransportSessionEventListener);
 
 using CreateWebTransportPromise =
     MozPromise<WebTransportReliabilityMode, nsresult, true>;
+WebTransportParent::WebTransportParent() = default;
+
 WebTransportParent::~WebTransportParent() {
   LOG(("Destroying WebTransportParent %p", this));
 }
@@ -540,18 +542,28 @@ BidiReceiveStream::OnUnidirectionalStreamReady(
 }
 
 JS_HAZ_CAN_RUN_SCRIPT NS_IMETHODIMP UniReceiveStream::OnError(uint8_t aError) {
-  nsresult rv = aError == nsIWebTransport::INVALID_STATE_ERROR
-                    ? NS_ERROR_DOM_INVALID_STATE_ERR
-                    : NS_ERROR_FAILURE;
+  nsresult rv;
+  if (aError == nsIWebTransport::QUOTA_EXCEEDED_ERROR) {
+    rv = NS_ERROR_DOM_QUOTA_EXCEEDED_ERR;
+  } else if (aError == nsIWebTransport::INVALID_STATE_ERROR) {
+    rv = NS_ERROR_DOM_INVALID_STATE_ERR;
+  } else {
+    rv = NS_ERROR_FAILURE;
+  }
   LOG(("CreateStream OnError: %u", aError));
   mResolver(rv);
   return NS_OK;
 }
 
 JS_HAZ_CAN_RUN_SCRIPT NS_IMETHODIMP BidiReceiveStream::OnError(uint8_t aError) {
-  nsresult rv = aError == nsIWebTransport::INVALID_STATE_ERROR
-                    ? NS_ERROR_DOM_INVALID_STATE_ERR
-                    : NS_ERROR_FAILURE;
+  nsresult rv;
+  if (aError == nsIWebTransport::QUOTA_EXCEEDED_ERROR) {
+    rv = NS_ERROR_DOM_QUOTA_EXCEEDED_ERR;
+  } else if (aError == nsIWebTransport::INVALID_STATE_ERROR) {
+    rv = NS_ERROR_DOM_INVALID_STATE_ERR;
+  } else {
+    rv = NS_ERROR_FAILURE;
+  }
   LOG(("CreateStream OnError: %u", aError));
   mResolver(rv);
   return NS_OK;
@@ -644,21 +656,6 @@ IPCResult WebTransportParent::RecvExportKeyingMaterial(
   return IPC_OK();
 }
 
-IPCResult WebTransportParent::RecvCreateSendGroup(uint64_t aGroupId) {
-  LOG(("%s for %p received, groupId=%" PRIu64, __func__, this, aGroupId));
-  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
-
-  if (mWebTransport) {
-    nsresult rv = mWebTransport->RegisterSendGroup(aGroupId);
-    if (NS_FAILED(rv)) {
-      LOG(("RegisterSendGroup failed: %x", static_cast<uint32_t>(rv)));
-    }
-  } else {
-    LOG(("CreateSendGroup called with null mWebTransport"));
-  }
-  return IPC_OK();
-}
-
 IPCResult WebTransportParent::RecvGetStats(GetStatsResolver&& aResolver) {
   LOG(("GetStats for %p", this));
   MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
@@ -687,12 +684,28 @@ IPCResult WebTransportParent::RecvGetStats(GetStatsResolver&& aResolver) {
   return IPC_OK();
 }
 
+IPCResult WebTransportParent::RecvCreateSendGroup(uint64_t aGroupId) {
+  LOG(("%s for %p received, groupId=%" PRIu64, __func__, this, aGroupId));
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+
+  if (mWebTransport) {
+    nsresult rv = mWebTransport->RegisterSendGroup(aGroupId);
+    if (NS_FAILED(rv)) {
+      LOG(("RegisterSendGroup failed: %x", static_cast<uint32_t>(rv)));
+    }
+  } else {
+    LOG(("CreateSendGroup called with null mWebTransport"));
+  }
+  return IPC_OK();
+}
+
 IPCResult WebTransportParent::RecvCreateUnidirectionalStream(
     int64_t aSendOrder, Maybe<uint64_t> aSendGroupId, bool aWaitUntilAvailable,
     CreateUnidirectionalStreamResolver&& aResolver) {
-  LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64,
+  LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64
+       ", wait=%d",
        __func__, this, aSendOrder,
-       aSendGroupId.isSome() ? aSendGroupId.value() : 0));
+       aSendGroupId.isSome() ? aSendGroupId.value() : 0, aWaitUntilAvailable));
 
   auto streamCb =
       [self = RefPtr{this}](
@@ -706,10 +719,17 @@ IPCResult WebTransportParent::RecvCreateUnidirectionalStream(
   RefPtr<UniReceiveStream> callback =
       new UniReceiveStream(this, std::move(aResolver), std::move(streamCb),
                            aSendOrder, aSendGroupId, mSocketThread);
-  nsresult rv;
-  rv = mWebTransport->CreateOutgoingUnidirectionalStream(callback);
+  // WebTransportSessionProxy::CreateOutgoingUnidirectionalStream() always
+  // dispatches the real work asynchronously and returns NS_OK synchronously;
+  // quota-exceeded and other errors are delivered later via callback's own
+  // OnError(), not via this return value. Passing aWaitUntilAvailable
+  // through lets necko hold the request in its own per-connection queue
+  // (Http3Session::QueueStream(), woken on quota increase) instead of
+  // failing immediately with QUOTA_EXCEEDED_ERROR.
+  nsresult rv = mWebTransport->CreateOutgoingUnidirectionalStream(
+      callback, aWaitUntilAvailable);
   if (NS_FAILED(rv)) {
-    callback->OnError(0);  // XXX
+    callback->OnError(nsIWebTransport::INVALID_STATE_ERROR);
   }
   return IPC_OK();
 }
@@ -717,9 +737,10 @@ IPCResult WebTransportParent::RecvCreateUnidirectionalStream(
 IPCResult WebTransportParent::RecvCreateBidirectionalStream(
     int64_t aSendOrder, Maybe<uint64_t> aSendGroupId, bool aWaitUntilAvailable,
     CreateBidirectionalStreamResolver&& aResolver) {
-  LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64,
+  LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64
+       ", wait=%d",
        __func__, this, aSendOrder,
-       aSendGroupId.isSome() ? aSendGroupId.value() : 0));
+       aSendGroupId.isSome() ? aSendGroupId.value() : 0, aWaitUntilAvailable));
 
   auto streamCb =
       [self = RefPtr{this}](
@@ -733,10 +754,14 @@ IPCResult WebTransportParent::RecvCreateBidirectionalStream(
   RefPtr<BidiReceiveStream> callback =
       new BidiReceiveStream(this, std::move(aResolver), std::move(streamCb),
                             aSendOrder, aSendGroupId, mSocketThread);
-  nsresult rv;
-  rv = mWebTransport->CreateOutgoingBidirectionalStream(callback);
+  // See the identical comment in RecvCreateUnidirectionalStream(): errors
+  // (including quota-exceeded) are delivered later via callback->OnError(),
+  // not via this synchronous return value; aWaitUntilAvailable is forwarded
+  // so necko's own per-connection queue can hold the request instead.
+  nsresult rv = mWebTransport->CreateOutgoingBidirectionalStream(
+      callback, aWaitUntilAvailable);
   if (NS_FAILED(rv)) {
-    callback->OnError(0);  // XXX
+    callback->OnError(nsIWebTransport::INVALID_STATE_ERROR);
   }
   return IPC_OK();
 }
@@ -1451,4 +1476,5 @@ void WebTransportParent::ResolvePendingGetStats(
     resolver(aStats);
   }
 }
+
 }  // namespace mozilla::dom

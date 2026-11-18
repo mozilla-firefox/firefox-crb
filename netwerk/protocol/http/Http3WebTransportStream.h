@@ -35,7 +35,8 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
       Http3SessionBase* aSession, uint64_t aSessionId,
       WebTransportStreamType aType,
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback);
+          aCallback,
+      bool aWaitUntilAvailable = false);
   explicit Http3WebTransportStream(Http3SessionBase* aSession,
                                    uint64_t aSessionId,
                                    WebTransportStreamType aType,
@@ -88,6 +89,8 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
   void CloseReceiveSide(nsresult aResult);
   void CloseSendSide(nsresult aResult);
 
+  bool WaitUntilAvailable() const { return mWaitUntilAvailable; }
+
  private:
   friend class Http3WebTransportSession;
   virtual ~Http3WebTransportStream();
@@ -110,6 +113,9 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
 
   // This is used when SendFin or Reset is called when mSendState is SENDING.
   nsTArray<std::function<void()>> mPendingTasks;
+
+  // Controls behavior when stream quota is exhausted
+  bool mWaitUntilAvailable{false};
 };
 
 }  // namespace mozilla::net
