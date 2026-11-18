@@ -17858,8 +17858,13 @@
   mirror: always
 
 # WebTransport per-session initial flow control limits (draft-ietf-webtrans-http3-15).
-# These are advertised to peers in HTTP/3 SETTINGS. 0 means "do not advertise this
-# setting" (unlimited). Set to a non-zero value to restrict per-session streams/data.
+# These are advertised to peers in HTTP/3 SETTINGS. Per the spec, flow control is only
+# negotiated as enabled once *both* endpoints send a non-zero value for at least one of
+# these three settings; left at 0, Firefox does not opt in and no per-session limit is
+# enforced. This is intentional and disabled on purpose: neqo does not yet send
+# WT_MAX_STREAMS capsules to raise a limit once granted, so a non-zero value here would
+# only ever restrict streams, never relax them again. See bug 2060061 for what's needed
+# to enable this by default.
 - name: network.webtransport.initial_max_streams_uni
   type: RelaxedAtomicUint32
   value: 0
