@@ -119,8 +119,8 @@ class NeqoHttp3Conn final {
 
   nsresult SendRequestBody(uint64_t aStreamId, const uint8_t* aBuf,
                            uint32_t aCount, uint32_t* aCountRead) {
-    return neqo_htttp3conn_send_request_body(this, aStreamId, aBuf, aCount,
-                                             aCountRead);
+    return neqo_http3conn_send_request_body(this, aStreamId, aBuf, aCount,
+                                            aCountRead);
   }
 
   // This closes only the sending side of a stream.
@@ -235,10 +235,9 @@ class NeqoHttp3Conn final {
   }
 
   nsresult ConnectUdpSendDatagram(uint64_t aSessionId, nsTArray<uint8_t>& aData,
-                                  uint64_t aTrackingId, uint64_t aSendGroupId,
-                                  int64_t aSendOrder) {
-    return neqo_http3conn_connect_udp_send_datagram(
-        this, aSessionId, &aData, aTrackingId, aSendGroupId, aSendOrder);
+                                  uint64_t aTrackingId) {
+    return neqo_http3conn_connect_udp_send_datagram(this, aSessionId, &aData,
+                                                    aTrackingId);
   }
 
   nsresult WebTransportMaxDatagramSize(uint64_t aSessionId, uint64_t* aResult) {
