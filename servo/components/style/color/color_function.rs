@@ -306,9 +306,7 @@ impl ColorFunction<ComputedColor> {
                     )
                 } else {
                     // Resolve a component to its legacy sRGB value in [0..1], preserving
-                    // `none` as `None` so the `*_IS_NONE` flags are kept on the color. Legacy
-                    // syntax cannot serialize `none`, but the flags are still needed to carry
-                    // missing components forward through interpolation (e.g. `color-mix`).
+                    // `none` as `None` so the `*_IS_NONE` flags are kept on the color.
                     #[inline]
                     fn resolve(
                         component: &ColorComponent<NumberOrPercentageComponent>,
