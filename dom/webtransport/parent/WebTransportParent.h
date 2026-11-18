@@ -29,7 +29,7 @@ class WebTransportParent : public PWebTransportParent,
   using IPCResult = mozilla::ipc::IPCResult;
 
  public:
-  WebTransportParent() = default;
+  WebTransportParent();
 
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_WEBTRANSPORTSESSIONEVENTLISTENER
