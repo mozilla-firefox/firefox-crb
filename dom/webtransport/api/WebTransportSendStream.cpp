@@ -4,18 +4,17 @@
 
 #include "mozilla/dom/WebTransportSendStream.h"
 
-#include "mozilla/CycleCollectedJSContext.h"
-#include "mozilla/dom/AbortFollower.h"
-#include "mozilla/dom/AbortSignal.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/UnderlyingSinkCallbackHelpers.h"
 #include "mozilla/dom/WebTransport.h"
+#include "mozilla/dom/WebTransportFraming.h"
+#include "mozilla/dom/WebTransportLog.h"
 #include "mozilla/dom/WebTransportSendGroup.h"
 #include "mozilla/dom/WebTransportSendReceiveStreamBinding.h"
+#include "mozilla/dom/WebTransportSendStreamAlgorithms.h"
 #include "mozilla/dom/WebTransportWriter.h"
 #include "mozilla/dom/WritableStream.h"
-#include "mozilla/dom/WritableStreamDefaultController.h"
 #include "mozilla/dom/WritableStreamDefaultWriter.h"
 #include "mozilla/ipc/DataPipe.h"
 
@@ -24,10 +23,13 @@ using namespace mozilla::ipc;
 namespace mozilla::dom {
 
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStream, WritableStream,
-                                   mTransport, mSendGroup)
+                                   mTransport, mSendGroup, mSender,
+                                   mAtomicWriteReqPromises)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStream, WritableStream)
 NS_IMPL_RELEASE_INHERITED(WebTransportSendStream, WritableStream)
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebTransportSendStream)
+  NS_INTERFACE_MAP_ENTRY(nsIOutputStreamCallback)
+  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, WritableStream)
 NS_INTERFACE_MAP_END_INHERITING(WritableStream)
 
 WebTransportSendStream::WebTransportSendStream(nsIGlobalObject* aGlobal,
@@ -47,172 +49,6 @@ JSObject* WebTransportSendStream::WrapObject(
   return WebTransportSendStream_Binding::Wrap(aCx, this, aGivenProto);
 }
 
-namespace {
-
-// Adds [[PendingOperation]] for close() to the generic output sink, so an
-// abort() racing an in-flight close() resets the stream and rejects the close.
-class WebTransportSendStreamSink final
-    : public WritableStreamToOutputAlgorithms {
- public:
-  NS_DECL_ISUPPORTS_INHERITED
-  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(WebTransportSendStreamSink,
-                                           WritableStreamToOutputAlgorithms)
-
-  WebTransportSendStreamSink(nsIGlobalObject* aParent,
-                             nsIAsyncOutputStream* aOutput)
-      : WritableStreamToOutputAlgorithms(aParent, aOutput) {}
-
-  // https://w3c.github.io/webtransport/#webtransportsendstream-close
-  already_AddRefed<Promise> CloseCallbackImpl(JSContext* aCx,
-                                              ErrorResult& aRv) override;
-
-  // ClearAlgorithms() runs right after the close algorithm; while a close is
-  // deferred the FIN is sent from IssueDeferredClose() instead.
-  void ReleaseObjects() override {
-    if (!mPendingClose) {
-      WritableStreamToOutputAlgorithms::ReleaseObjects();
-    }
-  }
-
-  void IssueDeferredClose();
-
-  // https://w3c.github.io/webtransport/#webtransportsendstream-create
-  // Step 7: Add the following steps to abortSignal.
-  void RunAbortSignalSteps(AbortSignalImpl* aSignal);
-
- private:
-  ~WebTransportSendStreamSink() override = default;
-
-  // The close() promise while its FIN has not been sent yet.
-  RefPtr<Promise> mPendingClose;
-};
-
-NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStreamSink,
-                                   WritableStreamToOutputAlgorithms,
-                                   mPendingClose)
-NS_IMPL_ADDREF_INHERITED(WebTransportSendStreamSink,
-                         WritableStreamToOutputAlgorithms)
-NS_IMPL_RELEASE_INHERITED(WebTransportSendStreamSink,
-                          WritableStreamToOutputAlgorithms)
-NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebTransportSendStreamSink)
-NS_INTERFACE_MAP_END_INHERITING(WritableStreamToOutputAlgorithms)
-
-class DeferredCloseMicroTask final : public MicroTaskRunnable {
- public:
-  explicit DeferredCloseMicroTask(WebTransportSendStreamSink* aSink)
-      : mSink(aSink) {}
-
-  MOZ_CAN_RUN_SCRIPT_BOUNDARY void Run(AutoSlowOperation& aAso) override {
-    mSink->IssueDeferredClose();
-  }
-
- private:
-  RefPtr<WebTransportSendStreamSink> mSink;
-};
-
-already_AddRefed<Promise> WebTransportSendStreamSink::CloseCallbackImpl(
-    JSContext* aCx, ErrorResult& aRv) {
-  // Step 2: Let promise be a new promise.
-  RefPtr<Promise> promise = Promise::CreateInfallible(GetParent());
-
-  // Step 3: Remove stream from transport.[[SendStreams]].
-  // Not implemented; entries stay until transport cleanup.
-
-  // Step 4: Set stream.[[PendingOperation]] to promise.
-  mPendingClose = promise;
-
-  // Step 5: Run the following steps in parallel:
-  // Steps 5.1-5.3 run in IssueDeferredClose().  The FIN goes out from a
-  // microtask so that an abort() in the same turn still finds it unsent and
-  // can reset the stream instead.
-  CycleCollectedJSContext::Get()->DispatchToMicroTask(
-      MakeAndAddRef<DeferredCloseMicroTask>(this));
-
-  // Step 6: Return promise.
-  return promise.forget();
-}
-
-void WebTransportSendStreamSink::IssueDeferredClose() {
-  RefPtr<Promise> promise = std::move(mPendingClose);
-  if (!promise) {
-    // An abort preempted the close and already reset the stream.
-    return;
-  }
-
-  // Step 5.1: Send FIN on stream.[[InternalStream]] and wait for the
-  // operation to complete.
-  CloseOutput();
-
-  // Step 5.2: Wait for stream.[[InternalStream]] to enter the "all data
-  // committed" state.
-  // Step 5.3: Queue a network task with transport to run these steps:
-  // Step 5.3.1: Set stream.[[PendingOperation]] to null.
-  // Step 5.3.2: Resolve promise with undefined.
-  // Nothing waits for the commit: the promise resolves once the FIN is in the
-  // pipe, so [[PendingOperation]] spans only the microtask that got us here
-  // rather than the window the spec gives it (see bug 2073981).
-  promise->MaybeResolveWithUndefined();
-}
-
-void WebTransportSendStreamSink::RunAbortSignalSteps(AbortSignalImpl* aSignal) {
-  // Step 7.1: Let pendingOperation be stream.[[PendingOperation]].
-  // Step 7.2: If pendingOperation is null, then abort these steps.
-  // Step 7.3: Set stream.[[PendingOperation]] to null.
-  RefPtr<Promise> pendingOperation = std::move(mPendingClose);
-  if (!pendingOperation) {
-    return;
-  }
-
-  AutoJSAPI jsapi;
-  if (!jsapi.Init(GetParent())) {
-    return;
-  }
-  JSContext* cx = jsapi.cx();
-
-  // Step 7.4: Let reason be abortSignal's abort reason.
-  JS::Rooted<JS::Value> reason(cx);
-  aSignal->GetReason(cx, &reason);
-
-  // Step 7.5: Let promise be the result of aborting stream with reason.
-  // Closing the pipe with an error status makes the parent send RESET_STREAM
-  // instead of the FIN.
-  Optional<JS::Handle<JS::Value>> optionalReason(cx, reason);
-  CloseOutputWithStatus(BuildErrorStatus(cx, optionalReason));
-
-  // Step 7.6: Upon fulfillment of promise, reject pendingOperation with
-  // reason.
-  // Aborting completes synchronously, so there is no promise to wait on.
-  pendingOperation->MaybeReject(reason);
-}
-
-class SendStreamAbortWatcher final : public AbortFollower {
- public:
-  NS_DECL_CYCLE_COLLECTING_ISUPPORTS_FINAL
-  NS_DECL_CYCLE_COLLECTION_CLASS(SendStreamAbortWatcher)
-
-  explicit SendStreamAbortWatcher(WebTransportSendStreamSink* aSink)
-      : mSink(aSink) {}
-
-  void RunAbortAlgorithm() override {
-    RefPtr<WebTransportSendStreamSink> sink = mSink;
-    sink->RunAbortSignalSteps(Signal());
-  }
-
- private:
-  ~SendStreamAbortWatcher() = default;
-
-  RefPtr<WebTransportSendStreamSink> mSink;
-};
-
-NS_IMPL_CYCLE_COLLECTION(SendStreamAbortWatcher, mSink)
-NS_IMPL_CYCLE_COLLECTING_ADDREF(SendStreamAbortWatcher)
-NS_IMPL_CYCLE_COLLECTING_RELEASE(SendStreamAbortWatcher)
-NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(SendStreamAbortWatcher)
-  NS_INTERFACE_MAP_ENTRY(nsISupports)
-NS_INTERFACE_MAP_END
-
-}  // namespace
-
 // NOTE: this does not yet implement SendOrder; see bug 1816925
 /* static */
 already_AddRefed<WebTransportSendStream> WebTransportSendStream::Create(
@@ -228,33 +64,39 @@ already_AddRefed<WebTransportSendStream> WebTransportSendStream::Create(
 
   auto stream = MakeRefPtr<WebTransportSendStream>(aGlobal, aWebTransport);
 
-  nsCOMPtr<nsIAsyncOutputStream> outputStream = aSender;
-  auto algorithms = MakeRefPtr<WebTransportSendStreamSink>(
-      stream->GetParentObject(), outputStream);
-
   stream->mStreamId = aStreamId;
   stream->mSendGroup = aSendGroup;
+  // The parent only sends a UnidirectionalStream/BidirectionalStream response
+  // with a valid sender (a NewDataPipe failure resolves the error variant), and
+  // callers reject other response types, so aSender is always non-null here.
+  // The underlying sink created below dereferences it unconditionally.
+  MOZ_ASSERT(aSender);
+  stream->mSender = aSender;
 
   stream->mSendOrder = aSendOrder;
+
+  // Use custom underlying sink that frames all writes
+  // NOTE: Must create after setting mStreamId, mSender since sink uses them
+  auto algorithms = MakeRefPtr<WebTransportSendStreamAlgorithms>(
+      stream->GetParentObject(), stream);
 
   // Steps 2-5
   RefPtr<QueuingStrategySize> writableSizeAlgorithm;
   stream->SetUpNative(cx, *algorithms, Nothing(), writableSizeAlgorithm, aRv);
 
-  // Step 6: Let abortSignal be stream's [[controller]].[[abortController]].
-  // [[signal]].
-  // Step 7: Add the following steps to abortSignal.  (Implemented in
-  // WebTransportSendStreamSink::RunAbortSignalSteps.)  The signal holds a
-  // strong reference to its followers, so the watcher needs no other owner.
-  if (WritableStreamDefaultController* controller = stream->Controller()) {
-    if (AbortSignal* signal = controller->Signal()) {
-      MakeRefPtr<SendStreamAbortWatcher>(algorithms)->Follow(signal);
-    }
-  }
+  // Step 6:  Add the following steps to stream’s [[controller]]'s [[signal]].
+  // Step 6.1: If stream.[[PendingOperation]] is null, then abort these steps.
+  // Step 6.2: Let reason be stream’s [[controller]]'s [[signal]]'s abort
+  // reason. Step 6.3: Let abortPromise be the result of aborting stream with
+  // reason. Step 6.4: Upon fulfillment of abortPromise, reject promise with
+  // reason. Step 6.5: Let pendingOperation be stream.[[PendingOperation]].
+  // Step 6.6: Set stream.[[PendingOperation]] to null.
+  // Step 6.7: Resolve pendingOperation with promise.
+  // XXX TODO
 
-  // Step 8: Append stream to transport.[[SendStreams]].
+  // Step 7: Append stream to SendStreams
   aWebTransport->mSendStreams.InsertOrUpdate(aStreamId, stream);
-  // Step 9: Return stream.
+  // Step 8: return stream
   return stream.forget();
 }
 
@@ -302,6 +144,213 @@ already_AddRefed<WebTransportWriter> WebTransportSendStream::GetWriter(
   }
 
   return writer.forget();
+}
+
+void WebTransportSendStream::EnqueueWrite(PendingWriteEntry&& aEntry) {
+  LOG(
+      ("WebTransportSendStream::EnqueueWrite streamId=%llu, isAtomic=%d, "
+       "dataLen=%zu",
+       (unsigned long long)mStreamId, aEntry.mAtomicWriteId.isSome(),
+       aEntry.mData.Length()));
+
+  mPendingWrites.Push(std::move(aEntry));
+}
+
+bool WebTransportSendStream::WriteBufferToDataPipe(const uint8_t* aBuffer,
+                                                   uint32_t aTotalSize,
+                                                   uint32_t& aBytesWritten,
+                                                   const char* aPhase) {
+  // Loop until all bytes written, would block, or error
+  while (aBytesWritten < aTotalSize) {
+    uint32_t remaining = aTotalSize - aBytesWritten;
+    const uint8_t* ptr = aBuffer + aBytesWritten;
+    uint32_t written = 0;
+    nsresult rv =
+        mSender->Write(reinterpret_cast<const char*>(ptr), remaining, &written);
+
+    LOG(("DataPipe Write %s: rv=0x%x, written=%u, remaining=%u", aPhase,
+         static_cast<uint32_t>(rv), written, remaining));
+
+    if (written > 0) {
+      aBytesWritten += written;
+      // Continue loop to try writing more
+      continue;
+    }
+
+    // No progress made: a hard error (anything other than WOULD_BLOCK)
+    if (NS_FAILED(rv) && rv != NS_BASE_STREAM_WOULD_BLOCK) {
+      LOG(("DataPipe write error during %s: rv=0x%x", aPhase,
+           static_cast<uint32_t>(rv)));
+      mPendingWrites.Iterate([](PendingWriteEntry& pendingEntry) {
+        pendingEntry.mPromise->MaybeRejectWithInvalidStateError(
+            "Failed to write to DataPipe");
+      });
+      mPendingWrites.Clear();
+      return false;  // Error occurred
+    }
+
+    // WOULD_BLOCK, or success with no bytes written: pipe is full - wait for
+    // space using AsyncWait
+    LOG(("DataPipe full during %s write, waiting via AsyncWait", aPhase));
+    mWaitingForDrain = true;
+    rv = mSender->AsyncWait(this, 0, 0, GetCurrentSerialEventTarget());
+    if (NS_FAILED(rv)) {
+      LOG(("AsyncWait failed: rv=0x%x", static_cast<uint32_t>(rv)));
+      mWaitingForDrain = false;
+      mPendingWrites.Iterate([](PendingWriteEntry& pendingEntry) {
+        pendingEntry.mPromise->MaybeRejectWithInvalidStateError(
+            "Failed to wait for DataPipe space");
+      });
+      mPendingWrites.Clear();
+    }
+    return false;  // Need to wait
+  }
+
+  return true;  // All bytes written
+}
+
+void WebTransportSendStream::DrainQueue() {
+  LOG((
+      "WebTransportSendStream::DrainQueue streamId=%llu, queueLength=%zu, "
+      "waiting=%d",
+      (unsigned long long)mStreamId, mPendingWrites.Count(), mWaitingForDrain));
+
+  if (mWaitingForDrain) {
+    // Already waiting for AsyncWait callback
+    return;
+  }
+
+  while (!mPendingWrites.IsEmpty()) {
+    PendingWriteEntry& entry = mPendingWrites.FirstElement();
+
+    // Phase 1: Write header
+    if (!WriteBufferToDataPipe(entry.mHeader, entry.mHeaderLen,
+                               entry.mHeaderBytesWritten, "header")) {
+      return;  // Waiting or error
+    }
+
+    // Phase 2: Write data
+    if (!WriteBufferToDataPipe(entry.mData.Elements(), entry.mData.Length(),
+                               entry.mDataBytesWritten, "data")) {
+      return;  // Waiting or error
+    }
+
+    // Entry complete - increment bytes written, resolve promise and remove
+    mBytesWritten += entry.mData.Length();
+
+    // Always resolve the write callback promise (the underlying sink's write
+    // algorithm promise) so WritableStream can continue processing queued
+    // writes. For atomic writes, the user-facing promise (stored in the
+    // transport) is resolved separately via IPC once the parent confirms the
+    // flow-control window.
+    //
+    // This promise can't be left pending until that IPC confirmation instead:
+    // WritableStream::StartErroring() only calls FinishErroring() -- which is
+    // what invokes our AbortCallbackImpl -- once
+    // !HasOperationMarkedInFlight(), i.e. once this promise settles. Leaving
+    // it pending would make writer.abort() wait for the parent's flow-control
+    // response before it can even run our abort logic, instead of being able
+    // to preempt it -- confirmed by webtransport-writer-advanced.https.any.js's
+    // abort tests failing when this was tried.
+    entry.mPromise->MaybeResolveWithUndefined();
+
+    mPendingWrites.Pop();
+  }
+
+  LOG(("DrainQueue complete, queue empty"));
+}
+
+// https://w3c.github.io/webtransport/#webtransportsendstream-abort-all-atomic-write-requests
+void WebTransportSendStream::AbortAllAtomicWriteRequests() {
+  LOG(("WebTransportSendStream::AbortAllAtomicWriteRequests streamId=%llu",
+       (unsigned long long)mStreamId));
+
+  WebTransport* transport = mTransport;
+  if (!transport) {
+    return;
+  }
+
+  // Step 1: Let writeRequests be stream.writeRequests.
+  // Step 2: Let requestsToAbort be stream.[[AtomicWriteRequests]].
+  // Step 3: If writeRequests contains a promise not in requestsToAbort,
+  //         then error stream with AbortError, and abort these steps.
+  bool hasNonAtomic = false;
+  mPendingWrites.Iterate([&](const PendingWriteEntry& entry) {
+    if (entry.mAtomicWriteId.isNothing()) {
+      hasNonAtomic = true;
+    }
+  });
+
+  if (hasNonAtomic) {
+    LOG(("  Non-atomic writes found in queue, erroring stream"));
+    AutoJSAPI jsapi;
+    if (jsapi.Init(GetParentObject())) {
+      JSContext* cx = jsapi.cx();
+      JS::Rooted<JS::Value> error(cx);
+      ErrorResult rv;
+      rv.ThrowAbortError(
+          "Non-atomic writes queued behind atomic writes during abort");
+      MOZ_ASSERT(rv.Failed());
+      rv.WouldReportJSException();
+      if (ToJSValue(cx, std::move(rv), &error)) {
+        IgnoredErrorResult ignored;
+        ErrorNative(cx, error, ignored);
+      }
+    }
+    return;
+  }
+
+  // Step 4: Empty stream.[[AtomicWriteRequests]].
+  nsTArray<uint32_t> atomicWriteIds = std::move(mPendingAtomicWriteIds);
+
+  // Step 5: For each promise in requestsToAbort, reject promise with
+  //         AbortError.
+  // Reject promises for atomic writes sent to parent (tracked via IPC)
+  for (uint32_t atomicWriteId : atomicWriteIds) {
+    LOG(("  Rejecting sent atomic write id=%u", atomicWriteId));
+    RefPtr<Promise> promise = transport->TakeAtomicWritePromise(atomicWriteId);
+    if (promise) {
+      promise->MaybeRejectWithAbortError(
+          "Atomic write failed - insufficient flow control window"_ns);
+    }
+  }
+
+  // The atomicWrite() user-facing promise for entries still queued locally
+  // was already rejected above (their IDs are also in atomicWriteIds).
+  // Resolve, rather than reject, their sink write-progress promise
+  // (entry.mPromise): WritableStreamDefaultControllerProcessWrite awaits it
+  // as [[inFlightWriteRequest]], and rejecting it would run
+  // FinishInFlightWriteWithError, which errors the *whole* WritableStream --
+  // whereas "abort all atomic write requests" must leave the stream open and
+  // only reject the individual atomicWrite() promises.
+  mPendingWrites.Iterate([&](PendingWriteEntry& entry) {
+    if (entry.mAtomicWriteId) {
+      LOG(("  Completing queued atomic write id=%u without erroring stream",
+           *entry.mAtomicWriteId));
+      if (entry.mPromise) {
+        entry.mPromise->MaybeResolveWithUndefined();
+      }
+    }
+  });
+  mPendingWrites.Clear();
+
+  // Step 6: In parallel, for each promise in requestsToAbort, abort the
+  //         sending of bytes associated with promise.
+  // The parent process will handle cancellation of in-flight sends when
+  // it sees subsequent writes or stream reset.
+}
+
+NS_IMETHODIMP WebTransportSendStream::OnOutputStreamReady(
+    nsIAsyncOutputStream* aStream) {
+  LOG(("WebTransportSendStream::OnOutputStreamReady streamId=%llu",
+       (unsigned long long)mStreamId));
+
+  mWaitingForDrain = false;
+
+  // Resume draining the queue
+  DrainQueue();
+
+  return NS_OK;
 }
 
 }  // namespace mozilla::dom

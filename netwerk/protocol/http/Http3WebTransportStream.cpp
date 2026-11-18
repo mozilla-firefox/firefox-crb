@@ -10,6 +10,7 @@
 #include "Http3WebTransportSession.h"
 #include "HttpLog.h"
 #include "mozilla/TimeStamp.h"
+#include "mozilla/dom/WebTransportFraming.h"
 #include "nsHttpHandler.h"
 #include "nsIOService.h"
 #include "nsIPipe.h"
@@ -172,12 +173,60 @@ nsresult Http3WebTransportStream::TryActivating() {
 
 NS_IMETHODIMP Http3WebTransportStream::OnInputStreamReady(
     nsIAsyncInputStream* aStream) {
-  LOG1(
+  LOG(
       ("Http3WebTransportStream::OnInputStreamReady [this=%p stream=%p "
-       "state=%d]",
-       this, aStream, mSendState));
+       "streamId=%llu state=%d]",
+       this, aStream, (unsigned long long)mStreamId, mSendState));
+
+  // Check if stream is closed
+  uint64_t available = 0;
+  nsresult rv = aStream->Available(&available);
+  LOG(("  streamId=%llu Available check: rv=0x%x available=%llu",
+       (unsigned long long)mStreamId, static_cast<uint32_t>(rv),
+       static_cast<unsigned long long>(available)));
+
   if (mSendState == SEND_DONE) {
     // already closed
+    LOG(
+        ("Http3WebTransportStream::OnInputStreamReady streamId=%llu already "
+         "closed",
+         (unsigned long long)mStreamId));
+    return NS_OK;
+  }
+
+  // DataPipe workaround: Available() returns NS_BASE_STREAM_WOULD_BLOCK when
+  // sender is closed, but ReadSegments() doesn't return NS_BASE_STREAM_CLOSED.
+  // Detect closure here instead.
+  if ((rv == NS_BASE_STREAM_WOULD_BLOCK || rv == NS_BASE_STREAM_CLOSED) &&
+      available == 0) {
+    LOG(
+        ("Stream closure detected via Available() - check for incomplete "
+         "frames"));
+
+    // Check if there's incomplete framed data
+    if (!mPartialFrameBuffer.IsEmpty()) {
+      LOG(("Stream closed with %zu bytes of incomplete frame",
+           mPartialFrameBuffer.Length()));
+      Reset(0x1);
+      mSendState = SEND_DONE;
+      return NS_OK;
+    }
+
+    // Check if there's pending Regular frame data that needs to be sent
+    if (!mPendingRegularFrameData.IsEmpty()) {
+      LOG(
+          ("*** STREAM CLOSE in OnInputStreamReady - DEFERRING CLOSE - %zu "
+           "bytes pending",
+           mPendingRegularFrameData.Length()));
+      mDeferredClose = true;
+      // Notify session we have data to write
+      mSession->StreamHasDataToWrite(this);
+      return NS_OK;
+    }
+
+    // Clean close - send FIN
+    mSendState = SEND_DONE;
+    SendFin();
     return NS_OK;
   }
 
@@ -230,7 +279,7 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
       if (rv == NS_BASE_STREAM_WOULD_BLOCK) {
         // If waitUntilAvailable is false, treat quota exhaustion as an error
         if (!mWaitUntilAvailable) {
-          LOG3(
+          LOG(
               ("Http3WebTransportStream::OnReadSegment %p cannot activate, "
                "quota exhausted, waitUntilAvailable=false.\n",
                this));
@@ -239,7 +288,7 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
           mStreamReadyCallback = nullptr;
           break;
         }
-        LOG3(
+        LOG(
             ("Http3WebTransportStream::OnReadSegment %p cannot activate now. "
              "queued.\n",
              this));
@@ -283,7 +332,7 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
     } break;
     case SENDING: {
       rv = mSession->SendRequestBody(mStreamId, buf, count, countRead);
-      LOG3(
+      LOG(
           ("Http3WebTransportStream::OnReadSegment %p sending body returns "
            "error=0x%" PRIx32 ".",
            this, static_cast<uint32_t>(rv)));
@@ -291,9 +340,6 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
     } break;
     case WAITING_DATA:
       // Still waiting
-      LOG3((
-          "Http3WebTransportStream::OnReadSegment %p Still waiting for data...",
-          this));
       break;
     case SEND_DONE:
       LOG3(("Http3WebTransportStream::OnReadSegment %p called after SEND_DONE ",
@@ -311,86 +357,318 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
   return mSocketOutCondition;
 }
 
+// Helper struct for ReadSegments callback
+struct ReadSegmentContext {
+  uint8_t* buffer;
+  uint32_t bufferSize;
+  uint32_t bytesWritten;
+};
+
 // static
 nsresult Http3WebTransportStream::ReadRequestSegment(
     nsIInputStream* stream, void* closure, const char* buf, uint32_t offset,
     uint32_t count, uint32_t* countRead) {
-  Http3WebTransportStream* wtStream = (Http3WebTransportStream*)closure;
-  nsresult rv = wtStream->OnReadSegment(buf, count, countRead);
-  LOG(("Http3WebTransportStream::ReadRequestSegment %p read=%u", wtStream,
-       *countRead));
-  return rv;
+  ReadSegmentContext* ctx = (ReadSegmentContext*)closure;
+
+  // Copy as much as fits in the buffer
+  uint32_t toCopy = std::min(count, ctx->bufferSize - ctx->bytesWritten);
+
+  LOG(("ReadRequestSegment: offset=%u count=%u ctx->bytesWritten=%u toCopy=%u",
+       offset, count, ctx->bytesWritten, toCopy));
+
+  if (toCopy > 0) {
+    memcpy(ctx->buffer + ctx->bytesWritten, buf, toCopy);
+    ctx->bytesWritten += toCopy;
+  }
+
+  *countRead = toCopy;
+  return NS_OK;
 }
 
 nsresult Http3WebTransportStream::ReadSegments() {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
-  LOG(("Http3WebTransportStream::ReadSegments [this=%p]", this));
+  LOG(("Http3WebTransportStream::ReadSegments streamId=%llu [this=%p state=%d]",
+       (unsigned long long)mStreamId, this, mSendState));
   nsresult rv = NS_OK;
-  uint32_t sendBytes = 0;
   bool again = true;
-  do {
-    sendBytes = 0;
-    rv = mSocketOutCondition = NS_OK;
-    LOG(("Http3WebTransportStream::ReadSegments state=%d [this=%p]", mSendState,
+
+  // Handle activation - WebTransportStreams start in WAITING_TO_ACTIVATE
+  if (mSendState == WAITING_TO_ACTIVATE) {
+    LOG(("Http3WebTransportStream %p ReadSegments forcing OnReadSegment call",
          this));
-    switch (mSendState) {
-      case WAITING_TO_ACTIVATE: {
-        LOG3(
-            ("Http3WebTransportStream %p ReadSegments forcing OnReadSegment "
-             "call\n",
-             this));
-        uint32_t wasted = 0;
-        nsresult rv2 = OnReadSegment("", 0, &wasted);
-        LOG3(("  OnReadSegment returned 0x%08" PRIx32,
-              static_cast<uint32_t>(rv2)));
-        if (mSendState != WAITING_DATA) {
-          break;
+    uint32_t wasted = 0;
+    nsresult rv2 = OnReadSegment("", 0, &wasted);
+    LOG(("  OnReadSegment returned 0x%08" PRIx32, static_cast<uint32_t>(rv2)));
+    if (mSendState != WAITING_DATA && mSendState != SENDING) {
+      return NS_OK;
+    }
+  }
+
+  if (mSendState == SEND_DONE) {
+    return NS_OK;
+  }
+
+  // Skip processing for incoming unidirectional streams
+  if (mStreamRole == INCOMING && mStreamType == WebTransportStreamType::UniDi) {
+    return NS_OK;
+  }
+
+  if (mSendState == WAITING_DATA) {
+    mSendState = SENDING;
+  }
+
+  // Always try to send any pending data first, before processing new frames
+  if (!mPendingRegularFrameData.IsEmpty()) {
+    uint32_t written = 0;
+    nsresult pendingRv = OnReadSegment(
+        reinterpret_cast<const char*>(mPendingRegularFrameData.Elements()),
+        mPendingRegularFrameData.Length(), &written);
+    if (written != 0 && written < mPendingRegularFrameData.Length()) {
+      LOG(("Retry at start - sent %u of %zu bytes, rv=0x%x", written,
+           mPendingRegularFrameData.Length(),
+           static_cast<uint32_t>(pendingRv)));
+    }
+    if (written > 0) {
+      mPendingRegularFrameData.RemoveElementsAt(0, written);
+
+      // Check if we can now complete a deferred close
+      if (mDeferredClose && mPendingRegularFrameData.IsEmpty()) {
+        LOG(("All pending data sent - completing deferred close"));
+        mSendState = SEND_DONE;
+        if (!mPendingTasks.IsEmpty()) {
+          nsTArray<std::function<void()>> tasks = std::move(mPendingTasks);
+          for (const auto& task : tasks) {
+            task();
+          }
         }
-      }
-        [[fallthrough]];
-      case WAITING_DATA:
-        [[fallthrough]];
-      case SENDING: {
-        if (mStreamRole == INCOMING &&
-            mStreamType == WebTransportStreamType::UniDi) {
-          rv = NS_OK;
-          break;
-        }
-        mSendState = SENDING;
-        rv = mSendStreamPipeIn->ReadSegments(ReadRequestSegment, this,
-                                             nsIOService::gDefaultSegmentSize,
-                                             &sendBytes);
-      } break;
-      case SEND_DONE: {
+        SendFin();
         return NS_OK;
       }
-      default:
-        sendBytes = 0;
-        rv = NS_OK;
-        break;
+    }
+  }
+
+  do {
+    // Read data from pipe into our frame buffer
+    uint8_t tempBuf[nsIOService::gDefaultSegmentSize];
+    ReadSegmentContext ctx = {tempBuf, static_cast<uint32_t>(sizeof(tempBuf)),
+                              0};
+
+    // Track what ReadSegments returns separately from ctx.bytesWritten
+    uint32_t readSegmentsResult = 0;
+    rv = mSendStreamPipeIn->ReadSegments(ReadRequestSegment, &ctx,
+                                         sizeof(tempBuf), &readSegmentsResult);
+
+    bool streamClosed = (rv == NS_BASE_STREAM_CLOSED);
+
+    LOG(("ReadSegments: rv=0x%" PRIx32
+         " ctx.bytesWritten=%u readSegmentsResult=%u",
+         static_cast<uint32_t>(rv), ctx.bytesWritten, readSegmentsResult));
+
+    // Verify consistency between callback and ReadSegments return
+    if (ctx.bytesWritten != readSegmentsResult) {
+      LOG(("WARNING: Mismatch! ctx.bytesWritten=%u != readSegmentsResult=%u",
+           ctx.bytesWritten, readSegmentsResult));
+    }
+
+    if (streamClosed || !mPendingTasks.IsEmpty()) {
+      rv = NS_OK;
+      readSegmentsResult = 0;
     }
 
     LOG(("Http3WebTransportStream::ReadSegments rv=0x%" PRIx32
-         " read=%u sock-cond=%" PRIx32 " again=%d mSendFin=%d [this=%p]",
-         static_cast<uint32_t>(rv), sendBytes,
-         static_cast<uint32_t>(mSocketOutCondition), again, mSendFin, this));
+         " read=%u streamClosed=%d [this=%p]",
+         static_cast<uint32_t>(rv), readSegmentsResult, streamClosed, this));
 
-    // XXX some streams return NS_BASE_STREAM_CLOSED to indicate EOF.
-    if (rv == NS_BASE_STREAM_CLOSED || !mPendingTasks.IsEmpty()) {
-      rv = NS_OK;
-      sendBytes = 0;
+    // Append newly read data to our partial frame buffer
+    // Use readSegmentsResult (the authoritative value from ReadSegments)
+    if (readSegmentsResult > 0) {
+      // Log first few bytes being appended for debugging
+      nsAutoCString hexDump;
+      for (uint32_t i = 0; i < std::min(readSegmentsResult, uint32_t(16));
+           i++) {
+        hexDump.AppendPrintf("%02x ", tempBuf[i]);
+      }
+      LOG(("Appending %u bytes to frame buffer: %s%s", readSegmentsResult,
+           hexDump.get(), readSegmentsResult > 16 ? "..." : ""));
+
+      mPartialFrameBuffer.AppendElements(tempBuf, readSegmentsResult);
+      LOG(("Frame buffer now has %zu bytes", mPartialFrameBuffer.Length()));
     }
 
+    // Process complete frames from the buffer
+    // this will return false if the full data for an entry isn't there
+    while (true) {
+      dom::WebTransportFrameType frameType;
+      uint32_t atomicWriteId;
+      size_t payloadLength;
+      nsTArray<uint8_t> payload;  // Fresh payload for each frame
+
+      // This will return false unless we have a complete frame including
+      // all data.
+
+      // XXX This means we need to receive and buffer the entire write
+      // before passing any of it down to the lower level.  Better would be
+      // to parse the header, then start forwarding data as received until
+      // the entire entry has been received, then look for a new framing
+      // header.
+      if (!ParseWebTransportFrameHeader(mPartialFrameBuffer, frameType,
+                                        atomicWriteId, payload,
+                                        payloadLength)) {
+        break;  // No more complete frames
+      }
+      LOG(("Frame header: type=0x%02x len=%zu", frameType, payloadLength));
+      uint32_t totalFrameSize = 5 + payloadLength;  // regardless of type
+
+      // Remove frame from buffer BEFORE processing to avoid buffer corruption
+      // on early return
+      // XXX Could be better for performance - avoid copying data
+      mPartialFrameBuffer.RemoveElementsAt(0, totalFrameSize);
+
+      // Now process the frame (safe to return early from here)
+      switch (frameType) {
+        case dom::WebTransportFrameType::Regular: {
+          // Regular write - send to neqo
+          LOG(("Processing regular frame: %zu bytes (pending: %zu)",
+               payloadLength, mPendingRegularFrameData.Length()));
+
+          // First, try to send any pending data from previous frames
+          if (!mPendingRegularFrameData.IsEmpty()) {
+            LOG(("Regular frame handler - retrying %zu pending bytes first",
+                 mPendingRegularFrameData.Length()));
+            uint32_t pendingWritten = 0;
+            nsresult pendingRv = OnReadSegment(
+                reinterpret_cast<const char*>(
+                    mPendingRegularFrameData.Elements()),
+                mPendingRegularFrameData.Length(), &pendingWritten);
+            if (NS_FAILED(pendingRv)) {
+              LOG(("Failed OnReadSegment for regular frame: 0x%x",
+                   static_cast<uint32_t>(pendingRv)));
+            }
+            if (pendingWritten > 0) {
+              mPendingRegularFrameData.RemoveElementsAt(0, pendingWritten);
+              LOG(("After retry - %zu bytes still pending",
+                   mPendingRegularFrameData.Length()));
+            }
+          }
+
+          // Now try to send the new frame data
+          uint32_t written = 0;
+          nsresult sendRv =
+              OnReadSegment(reinterpret_cast<const char*>(payload.Elements()),
+                            payload.Length(), &written);
+
+          // If not all data was sent, buffer the remainder for retry
+          if (written < payload.Length()) {
+            size_t unsent = payload.Length() - written;
+            LOG(("Buffering %zu unsent bytes (total pending will be %zu)",
+                 unsent, mPendingRegularFrameData.Length() + unsent));
+            mPendingRegularFrameData.AppendElements(
+                &payload.Elements()[written], unsent);
+            // Notify session we have more data to send
+            mSession->StreamHasDataToWrite(this);
+          }
+
+          if (NS_FAILED(sendRv)) {
+            LOG(("Failed to send regular frame: 0x%x",
+                 static_cast<uint32_t>(sendRv)));
+          }
+
+          // Check if we can now complete a deferred close
+          if (mDeferredClose && mPendingRegularFrameData.IsEmpty()) {
+            LOG(
+                ("Deferred close check in frame handler - all sent, completing "
+                 "close"));
+            mSendState = SEND_DONE;
+            if (!mPendingTasks.IsEmpty()) {
+              LOG(("Executing %zu pending tasks before SendFin",
+                   mPendingTasks.Length()));
+              nsTArray<std::function<void()>> tasks = std::move(mPendingTasks);
+              for (const auto& task : tasks) {
+                task();
+              }
+            }
+            SendFin();
+            return NS_OK;
+          } else if (mDeferredClose && mPendingRegularFrameData.Length() != 0) {
+            LOG(("Deferred close check - still have %zu bytes pending",
+                 mPendingRegularFrameData.Length()));
+          }
+        } break;
+
+        case dom::WebTransportFrameType::Atomic: {
+          // Atomic write frame format: 0x01 | totalPayloadLength(4) |
+          // atomicWriteId(4) | data The payload contains: atomicWriteId(4)
+          // + data dataLength = totalPayloadLength - 4 -- already removed above
+
+          LOG(("Processing atomic write: atomicWriteId=%u, payloadLength=%zu",
+               atomicWriteId, payloadLength));
+
+          // QUIC framing overhead: conservatively reserve 17 bytes
+          const uint64_t QUIC_STREAM_FRAME_OVERHEAD = 17;
+
+          // Get flow control info NOW (at send time, not queue time)
+          uint64_t availableWindow = 0;
+          uint64_t bytesBuffered = 0;
+          bool flowControlSuccess =
+              mSession->GetWebTransportSendStreamFlowControlInfo(
+                  mStreamId, &availableWindow, &bytesBuffered);
+
+          bool sendSuccess = false;
+          if (flowControlSuccess) {
+            // Check if we have enough quota window including QUIC overhead.
+            // payload holds only the data sent over QUIC (the 4-byte
+            // atomicWriteId is stripped), so use its length, not payloadLength.
+            uint64_t totalNeeded =
+                bytesBuffered + payload.Length() + QUIC_STREAM_FRAME_OVERHEAD;
+            LOG(
+                ("Atomic write flow control: need=%llu, available=%llu, "
+                 "buffered=%llu",
+                 (unsigned long long)totalNeeded,
+                 (unsigned long long)availableWindow,
+                 (unsigned long long)bytesBuffered));
+
+            if (availableWindow >= totalNeeded) {
+              // Sufficient flow control window - send atomically
+              sendSuccess = mSession->WebTransportSendStreamAtomic(
+                  mStreamId, std::move(payload));
+              LOG(("Atomic write %s", sendSuccess ? "succeeded" : "failed"));
+            } else {
+              LOG(("Atomic write rejected: insufficient flow control window"));
+            }
+          }
+
+          // Notify child process via WebTransportParent
+          Http3Session* http3Session =
+              static_cast<Http3Session*>(mSession.get());
+          RefPtr<Http3WebTransportSession> wtSession;
+          for (const auto& stream : http3Session->WebTransportSessions()) {
+            if (stream->StreamId() == mSessionId) {
+              wtSession = stream->GetHttp3WebTransportSession();
+              break;
+            }
+          }
+          if (wtSession) {
+            wtSession->ResolveAtomicWrite(mStreamId, atomicWriteId,
+                                          sendSuccess ? NS_OK : NS_ERROR_ABORT);
+          }
+        } break;
+        default:
+          // Unknown frame type - protocol error
+          LOG(("Unknown frame type: 0x%02x", frameType));
+          Reset(0x1);  // QUIC application error code
+          mSendState = SEND_DONE;
+          return NS_ERROR_ABORT;
+      }
+    }
+
+    // Handle errors and stream state
     if (NS_FAILED(rv)) {
-      // if the writer didn't want to write any more data, then
-      // wait for the transaction to call ResumeSend.
       if (rv == NS_BASE_STREAM_WOULD_BLOCK) {
         mSendState = WAITING_DATA;
         rv = mSendStreamPipeIn->AsyncWait(this, 0, 0, gSocketTransportService);
       }
       again = false;
 
-      // Got a  WebTransport specific error
       if (rv >= NS_ERROR_WEBTRANSPORT_CODE_BASE &&
           rv <= NS_ERROR_WEBTRANSPORT_CODE_END) {
         uint8_t errorCode = GetWebTransportErrorFromNSResult(rv);
@@ -398,28 +676,62 @@ nsresult Http3WebTransportStream::ReadSegments() {
         Reset(WebTransportErrorToHttp3Error(errorCode));
         rv = NS_OK;
       }
-    } else if (NS_FAILED(mSocketOutCondition)) {
-      if (mSocketOutCondition != NS_BASE_STREAM_WOULD_BLOCK) {
-        rv = mSocketOutCondition;
+    } else if (streamClosed) {
+      LOG(("Stream closure detected! mPartialFrameBuffer.Length=%zu",
+           mPartialFrameBuffer.Length()));
+
+      // Stream closed - check for incomplete frame
+      if (!mPartialFrameBuffer.IsEmpty()) {
+        LOG(("Stream closed with %zu bytes of incomplete frame",
+             mPartialFrameBuffer.Length()));
+        Reset(0x1);  // QUIC application error code
+        mSendState = SEND_DONE;
+        return NS_ERROR_ABORT;
       }
-      again = false;
-    } else if (!sendBytes) {
-      mSendState = SEND_DONE;
-      rv = NS_OK;
-      again = false;
-      if (!mPendingTasks.IsEmpty()) {
-        LOG(("Has pending tasks to do"));
-        nsTArray<std::function<void()>> tasks = std::move(mPendingTasks);
-        for (const auto& task : tasks) {
-          task();
+
+      // If we have pending data, defer the close until it's sent. The
+      // pending tasks and SendFin() are run by the Regular frame handler
+      // once mPendingRegularFrameData has drained.
+      if (!mPendingRegularFrameData.IsEmpty()) {
+        LOG(("Stream closed, have %zu bytes of pending data to send first",
+             mPendingRegularFrameData.Length()));
+        mDeferredClose = true;
+        // Stay in SENDING state and notify session we have data to write
+        mSession->StreamHasDataToWrite(this);
+        rv = NS_OK;
+        again = false;  // Exit loop, will be called again by HTTP/3 session
+      } else {
+        // No pending data - clean close
+        mSendState = SEND_DONE;
+        rv = NS_OK;
+        again = false;
+
+        if (!mPendingTasks.IsEmpty()) {
+          LOG(("Has pending tasks to do"));
+          nsTArray<std::function<void()>> tasks = std::move(mPendingTasks);
+          for (const auto& task : tasks) {
+            task();
+          }
         }
+
+        SendFin();
       }
-      // Tell the underlying stream we're done
-      SendFin();
+    } else if (readSegmentsResult == 0) {
+      // No data available but pipe not closed - wait
+      LOG(
+          ("Http3WebTransportStream::ReadSegments streamId=%llu [this=%p] no "
+           "data, setting AsyncWait",
+           (unsigned long long)mStreamId, this));
+
+      mSendState = WAITING_DATA;
+      rv = mSendStreamPipeIn->AsyncWait(this, 0, 0, gSocketTransportService);
+      LOG(("  streamId=%llu AsyncWait returned: rv=0x%x",
+           (unsigned long long)mStreamId, static_cast<uint32_t>(rv)));
+      again = false;
     }
 
-    // write more to the socket until error or end-of-request...
   } while (again && gHttpHandler->Active());
+
   return rv;
 }
 

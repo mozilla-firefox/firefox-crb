@@ -54,6 +54,10 @@ class WebTransportChild : public PWebTransportChild {
       const uint64_t& aSentDelta, const uint64_t& aExpiredDelta,
       const uint64_t& aDroppedDelta, const uint64_t& aDatagramPrefixBytes);
 
+  ::mozilla::ipc::IPCResult RecvAtomicWriteResult(
+      const uint64_t& aStreamId, const uint32_t& aAtomicWriteId,
+      const nsresult& aResult);
+
   ::mozilla::ipc::IPCResult RecvDraining();
 
   ::mozilla::ipc::IPCResult RecvNegotiatedProtocolAndHeaders(

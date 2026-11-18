@@ -374,6 +374,18 @@ already_AddRefed<Promise> WritableStreamDefaultWriter::Write(
   return WritableStreamDefaultWriterWrite(aCx, this, aChunk, aRv);
 }
 
+// https://streams.spec.whatwg.org/#writablestreamdefaultwriter-write-a-chunk
+already_AddRefed<Promise> WritableStreamDefaultWriter::WriteChunk(
+    JSContext* aCx, JS::Handle<JS::Value> aChunk) {
+  ErrorResult rv;
+  RefPtr<Promise> p = Write(aCx, aChunk, rv);
+  if (rv.Failed()) {
+    p = Promise::CreateInfallible(GetParentObject());
+    p->MaybeReject(std::move(rv));
+  }
+  return p.forget();
+}
+
 namespace streams_abstract {
 
 // https://streams.spec.whatwg.org/#set-up-writable-stream-default-writer

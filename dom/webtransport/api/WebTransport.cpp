@@ -59,7 +59,8 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(WebTransport)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mResponseHeaders)
   for (const auto& hashEntry : tmp->mSendStreams.Values()) {
     NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "mSendStreams entry item");
-    cb.NoteXPCOMChild(hashEntry);
+    cb.NoteXPCOMChild(static_cast<nsISupports*>(
+        static_cast<WritableStream*>(hashEntry.get())));
   }
   for (const auto& hashEntry : tmp->mReceiveStreams.Values()) {
     NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "mReceiveStreams entry item");
@@ -69,12 +70,16 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(WebTransport)
     CycleCollectionNoteChild(cb, promise.get(),
                              "mPendingGetStatsPromises promise");
   }
+  for (const auto& promise : tmp->mAtomicWritePromises.Values()) {
+    CycleCollectionNoteChild(cb, promise.get(), "mAtomicWritePromises promise");
+  }
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
 NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(WebTransport)
   tmp->mSendStreams.Clear();
   tmp->mReceiveStreams.Clear();
   tmp->mPendingGetStatsPromises.Clear();
+  tmp->mAtomicWritePromises.Clear();
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mGlobal)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mUnidirectionalStreams)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mBidirectionalStreams)
@@ -1603,6 +1608,8 @@ void WebTransport::Cleanup(DOMException* aError,
   RefPtr<ReadableStream> incomingUnidirectionalStreams =
       mIncomingUnidirectionalStreams;
   RefPtr<WebTransportDatagramDuplexStream> datagrams = mDatagrams;
+  nsTHashMap<nsUint32HashKey, RefPtr<Promise>> atomicWritePromises;
+  atomicWritePromises.SwapElements(mAtomicWritePromises);
   nsTArray<RefPtr<WebTransportDatagramsWritable>> outgoingDatagramWritables;
   if (datagrams) {
     outgoingDatagramWritables = datagrams->Cleanup();
@@ -1689,6 +1696,28 @@ void WebTransport::Cleanup(DOMException* aError,
   // Let go of the algorithms
   mIncomingBidirectionalAlgorithm = nullptr;
   mIncomingUnidirectionalAlgorithm = nullptr;
+
+  // Step 15.1: If stream.[[PendingOperation]] is not null, reject
+  // stream.[[PendingOperation]] with error.
+  //
+  // [[PendingOperation]] is WriteCallbackImpl's own write-algorithm promise
+  // (WebTransportSendStream::DrainQueue's entry.mPromise), and it resolves
+  // as soon as the bytes reach the DataPipe -- for atomic writes too, since
+  // nothing here yet holds one open pending the parent's flow-control
+  // verdict.  By the time Cleanup can run it is therefore already settled,
+  // so there is nothing left to reject and no code for it here.
+  //
+  // atomicWrite()'s own return value is a second, different promise: per
+  // spec step 7 it is a reaction *on* [[PendingOperation]], so it settles on
+  // its own once that does.  Our implementation instead hands back a
+  // separate Promise object (see WebTransportWriter::AtomicWrite()), so
+  // nothing settles it for free; mAtomicWritePromises is what keeps the two
+  // in sync, and this loop is its rejection.  It runs after step 17/18 so
+  // these rejections are observed after closed settles, as a reaction on
+  // [[PendingOperation]] would be.
+  for (const auto& promise : atomicWritePromises.Values()) {
+    promise->MaybeReject(errorValue);
+  }
 
   // We no longer block BFCache
   NotifyToWindow(false);

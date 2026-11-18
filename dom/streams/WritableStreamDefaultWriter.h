@@ -67,6 +67,16 @@ class WritableStreamDefaultWriter : public nsISupports, public nsWrapperCache {
   MOZ_CAN_RUN_SCRIPT already_AddRefed<Promise> Write(
       JSContext* aCx, JS::Handle<JS::Value> aChunk, ErrorResult& aRv);
 
+  // https://streams.spec.whatwg.org/#writablestreamdefaultwriter-write-a-chunk
+  // Unlike Write(), this never fails via an out-param: any C++-level failure
+  // (e.g. a queuing strategy size() callback throwing) is converted to a
+  // rejected promise instead, matching the spec's "!" (never throws)
+  // convention -- so there is no aRv for a caller to check. Use this instead
+  // of Write() when the caller needs a promise unconditionally, e.g. a
+  // subclass's own WebIDL write-like method.
+  MOZ_CAN_RUN_SCRIPT already_AddRefed<Promise> WriteChunk(
+      JSContext* aCx, JS::Handle<JS::Value> aChunk);
+
   void SetUp(WritableStream* aStream, ErrorResult& aRv);
 
   // Internal Slots:

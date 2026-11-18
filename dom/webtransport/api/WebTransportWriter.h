@@ -36,7 +36,6 @@ class WebTransportWriter final : public WritableStreamDefaultWriter {
   ~WebTransportWriter() override = default;
 
   RefPtr<WebTransportSendStream> mSendStream;
-  nsTArray<RefPtr<Promise>> mAtomicWriteRequests;
 };
 
 }  // namespace mozilla::dom

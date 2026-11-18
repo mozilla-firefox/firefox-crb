@@ -160,6 +160,25 @@ class WebTransport final : public nsISupports, public nsWrapperCache {
   void SendSetSendOrder(uint64_t aStreamId, int64_t aSendOrder);
   void SendSetSendGroup(uint64_t aStreamId, uint64_t aGroupId);
 
+  WebTransportChild* SendChild() const { return mChild; }
+
+  // Atomic write promise storage
+  void StoreAtomicWritePromise(uint32_t aAtomicWriteId, Promise* aPromise) {
+    mAtomicWritePromises.InsertOrUpdate(aAtomicWriteId, RefPtr{aPromise});
+  }
+
+  void RemoveAtomicWritePromise(uint32_t aAtomicWriteId) {
+    mAtomicWritePromises.Remove(aAtomicWriteId);
+  }
+
+  RefPtr<Promise> TakeAtomicWritePromise(uint32_t aAtomicWriteId) {
+    return mAtomicWritePromises.Extract(aAtomicWriteId).valueOr(nullptr);
+  }
+
+  RefPtr<WebTransportSendStream> GetSendStream(uint64_t aStreamId) {
+    return mSendStreams.Get(aStreamId);
+  }
+
   void Shutdown() {}
 
  private:
@@ -244,6 +263,12 @@ class WebTransport final : public nsISupports, public nsWrapperCache {
   // Close pending state and queued GetStats requests
   bool mClosePending = false;
   nsTArray<RefPtr<Promise>> mPendingGetStatsPromises;
+
+  // Atomic write promises indexed by atomicWriteId
+  // Key is atomicWriteId, which in theory could collide, but that
+  // would require an AtomicWrite promise to be unresolved while
+  // 2^32 writes in other streams complete.
+  nsTHashMap<nsUint32HashKey, RefPtr<Promise>> mAtomicWritePromises;
 };
 
 }  // namespace mozilla::dom

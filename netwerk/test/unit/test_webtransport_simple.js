@@ -245,7 +245,7 @@ add_task(async function test_wt_stream_send_and_stats() {
   let outputStream = stream.outputStream;
 
   let data = "1234567890ABC";
-  outputStream.write(data, data.length);
+  writeFramed(outputStream, data);
 
   // We need some time to send the packet out.
   // eslint-disable-next-line mozilla/no-arbitrary-setTimeout
@@ -329,7 +329,7 @@ add_task(async function test_wt_outgoing_bidi_stream() {
   let outputStream = stream.outputStream;
 
   let data = "1234567";
-  outputStream.write(data, data.length);
+  writeFramed(outputStream, data);
 
   let received = await new Promise(resolve => {
     let handler = new inputStreamReader().QueryInterface(
@@ -382,7 +382,7 @@ add_task(async function test_wt_incoming_bidi_stream() {
   let outputStream = stream.outputStream;
 
   let data = "12345678";
-  outputStream.write(data, data.length);
+  writeFramed(outputStream, data);
 
   let received = await new Promise(resolve => {
     let handler = new inputStreamReader().QueryInterface(

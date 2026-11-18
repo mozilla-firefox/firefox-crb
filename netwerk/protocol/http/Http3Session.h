@@ -400,6 +400,10 @@ class Http3Session final : public Http3SessionBase,
 
   void SetDontExclude() { mDontExclude = true; }
 
+  const nsTArray<RefPtr<Http3StreamBase>>& WebTransportSessions() const {
+    return mWebTransportSessions;
+  }
+
  private:
   ~Http3Session();
 

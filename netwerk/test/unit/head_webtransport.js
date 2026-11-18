@@ -112,6 +112,24 @@ function streamCreatePromise(transport, bidi) {
   });
 }
 
+// The send pipe carries the content process framing (see
+// dom/webtransport/api/WebTransportFraming.h): a Regular frame is a 0x00 type
+// byte, a big-endian 32-bit length, then the data.
+function writeFramed(outputStream, str) {
+  let data = new TextEncoder().encode(str);
+  let frame = new Uint8Array(5 + data.length);
+  frame[1] = (data.length >>> 24) & 0xff;
+  frame[2] = (data.length >>> 16) & 0xff;
+  frame[3] = (data.length >>> 8) & 0xff;
+  frame[4] = data.length & 0xff;
+  frame.set(data, 5);
+  let binaryStream = Cc["@mozilla.org/binaryoutputstream;1"].createInstance(
+    Ci.nsIBinaryOutputStream
+  );
+  binaryStream.setOutputStream(outputStream);
+  binaryStream.writeByteArray(frame);
+}
+
 function sendStreamStatsPromise(stream) {
   return new Promise(resolve => {
     let listener = new StreamStatsCallback().QueryInterface(
