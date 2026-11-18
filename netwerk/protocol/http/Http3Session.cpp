@@ -2490,6 +2490,7 @@ void Http3Session::CloseStreamInternal(Http3StreamBase* aStream,
     }
 
     mStreamIdHash.Remove(aStream->StreamId());
+    mWebTransportStreamToSessionMap.Remove(aStream->StreamId());
 
     // Start to idle when we remove the last stream.
     if (mStreamIdHash.IsEmpty()) {
