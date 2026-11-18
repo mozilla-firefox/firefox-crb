@@ -2319,6 +2319,12 @@ void Http3Session::CloseInternal(bool aCallNeqoClose) {
     mBeforeConnectedError = true;
   }
 
+  // Our own closes (aCallNeqoClose without a socket error) are not failures.
+  if (mTokenAccepted && !mHandshakeSucceeded && NS_FAILED(mError) &&
+      (!aCallNeqoClose || NS_FAILED(mSocketError))) {
+    RecordTokenResumption("failed"_ns);
+  }
+
   if (mState == ZERORTT) {
     ZeroRttTelemetry(aCallNeqoClose ? ZeroRttOutcome::USED_CONN_CLOSED_BY_NECKO
                                     : ZeroRttOutcome::USED_CONN_ERROR);
