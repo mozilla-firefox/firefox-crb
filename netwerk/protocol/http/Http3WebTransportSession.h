@@ -145,6 +145,10 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
   bool GetDatagramSessionStats(uint64_t* aSent, uint64_t* aExpired,
                                uint64_t* aDropped) override;
 
+  bool GetSendStreamStats(uint64_t aStreamId, uint64_t* aBytesWritten,
+                          uint64_t* aBytesSent,
+                          uint64_t* aBytesAcknowledged) override;
+
   nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,
                                 const nsTArray<uint8_t>& aContext,
                                 uint32_t aOutputLength,

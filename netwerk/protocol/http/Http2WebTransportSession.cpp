@@ -114,6 +114,13 @@ nsresult Http2WebTransportSessionImpl::RegisterSendGroup(uint64_t aGroupId) {
   return NS_OK;
 }
 
+bool Http2WebTransportSessionImpl::GetSendStreamStats(
+    uint64_t aStreamId, uint64_t* aBytesWritten, uint64_t* aBytesSent,
+    uint64_t* aBytesAcknowledged) {
+  // TODO: Implement stream stats for HTTP/2 WebTransport
+  return false;
+}
+
 void Http2WebTransportSessionImpl::GetNegotiatedProtocol(
     nsACString& aProtocol) {
   // TODO: Implement protocol negotiation for HTTP/2 WebTransport
