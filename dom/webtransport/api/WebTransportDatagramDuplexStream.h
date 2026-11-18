@@ -200,22 +200,25 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
 
   void SetChild(WebTransportChild* aChild);
 
-  // https://w3c.github.io/webtransport/#webtransport-cleanup step 11: empty
-  // every outgoing datagram writable's [[OutgoingDatagramsQueue]].
+  // https://w3c.github.io/webtransport/#webtransport-cleanup steps 11-13.
+  // Returns what [[Writables]] held, for CloseOrErrorWritables().
   //
-  // The queued chunk's promise is also our WritableStream sink's write
-  // promise, which the spec leaves unsettled here; dropping it would wedge
-  // WritableStreamStartErroring(), which only finishes erroring -- and so
-  // only reaches CloseOrErrorWritables() below -- once no write is marked in
-  // flight. Resolving with undefined matches how sendDatagrams settles a
-  // datagram dropped without being sent (step 5.1.2.2).
-  void Cleanup();
+  // Resolving the withheld write promises also lets
+  // WritableStreamStartErroring() finish, since it only does once no write
+  // is marked in flight.
+  [[nodiscard]] nsTArray<RefPtr<WebTransportDatagramsWritable>> Cleanup();
 
-  // https://w3c.github.io/webtransport/#webtransport-cleanup steps 16.5/17.7:
-  // close (aClean) or error (!aClean, with aErrorValue) every outgoing
-  // datagram writable -- the default one plus every one from
-  // createWritable(). Must run after Cleanup().
+  // https://w3c.github.io/webtransport/#webtransport-cleanup steps 17.5
+  // (aClean) and 18.7 (!aClean, with aErrorValue as error), for aWritables
+  // as returned by Cleanup() plus the default writable.
   MOZ_CAN_RUN_SCRIPT void CloseOrErrorWritables(
+      JSContext* aCx,
+      const nsTArray<RefPtr<WebTransportDatagramsWritable>>& aWritables,
+      bool aClean, JS::Handle<JS::Value> aErrorValue);
+
+  // https://w3c.github.io/webtransport/#webtransport-cleanup steps 17.6
+  // (aClean) and 18.8 (!aClean, with aErrorValue as error).
+  MOZ_CAN_RUN_SCRIPT void CloseOrErrorReadable(
       JSContext* aCx, bool aClean, JS::Handle<JS::Value> aErrorValue);
 
   void NewDatagramReceived(nsTArray<uint8_t>&& aData,
@@ -320,8 +323,7 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // historical entry -- isn't wrapped in a WebTransportDatagramsWritable
   // object, so it isn't in here; it's tracked separately via
   // mOutgoingAlgorithms, and anything walking [[Writables]] has to cover both.
-  // Unlike mCreatedWritables, never cleared, so Cleanup() can always reach all
-  // of them.
+  // Unlike mCreatedWritables, only emptied by Cleanup().
   nsTArray<RefPtr<WebTransportDatagramsWritable>> mAllWritables;
 
   // https://w3c.github.io/webtransport/#webtransportdatagramduplexstream-create
