@@ -55,6 +55,9 @@ class WebTransportSessionBase {
   virtual uint64_t GetStreamId() const = 0;
   virtual void CloseSession(uint32_t aStatus, const nsACString& aReason) = 0;
   virtual void GetMaxDatagramSize() = 0;
+  virtual bool GetSendStreamStats(uint64_t aStreamId, uint64_t* aBytesWritten,
+                                  uint64_t* aBytesSent,
+                                  uint64_t* aBytesAcknowledged) = 0;
   virtual void GetResponseHeaders(nsTArray<nsCString>& aNames,
                                   nsTArray<nsCString>& aValues) {}
   virtual nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,

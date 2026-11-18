@@ -3200,6 +3200,30 @@ pub extern "C" fn neqo_http3conn_webtransport_transport_stats(
     populate_transport_stats(stats, &conn.conn.transport_stats());
 }
 
+#[repr(C)]
+pub struct WebTransportStreamStats {
+    pub bytes_written: u64,
+    pub bytes_sent: u64,
+    pub bytes_acknowledged: u64,
+}
+
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_send_stream_stats(
+    conn: &mut NeqoHttp3Conn,
+    stream_id: u64,
+    stats: &mut WebTransportStreamStats,
+) -> bool {
+    match conn.conn.webtransport_send_stream_stats(StreamId::from(stream_id)) {
+        Ok(stream_stats) => {
+            stats.bytes_written = stream_stats.written;
+            stats.bytes_sent = stream_stats.sent;
+            stats.bytes_acknowledged = stream_stats.acked;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 /// Convert a [`std::io::Error`] into a [`nsresult`].
 ///
 /// Note that this conversion is specific to `neqo_glue`, i.e. does not aim to

@@ -489,6 +489,33 @@ WebTransportSessionProxy::GetResponseHeaders(nsTArray<nsCString>& aNames,
   return NS_OK;
 }
 
+// Out parameter lifetime: All out parameters (aBytesWritten, aBytesSent,
+// aBytesAcknowledged, aResult) are owned by the caller
+// (WebTransportParent::RecvGetStreamStats) and remain valid for the duration
+// of this synchronous call. Standard XPCOM out parameter pattern.
+NS_IMETHODIMP
+WebTransportSessionProxy::GetSendStreamStats(uint64_t aStreamId,
+                                             uint64_t* aBytesWritten,
+                                             uint64_t* aBytesSent,
+                                             uint64_t* aBytesAcknowledged,
+                                             bool* aResult) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+
+  RefPtr<WebTransportSessionBase> session;
+  {
+    MutexAutoLock lock(mMutex);
+    if (mState != WebTransportSessionProxyState::ACTIVE ||
+        !mWebTransportSession) {
+      *aResult = false;
+      return NS_OK;
+    }
+    session = mWebTransportSession;
+  }
+
+  *aResult = session->GetSendStreamStats(aStreamId, aBytesWritten, aBytesSent,
+                                         aBytesAcknowledged);
+  return NS_OK;
+}
 NS_IMETHODIMP
 WebTransportSessionProxy::RegisterSendGroup(uint64_t aGroupId) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");

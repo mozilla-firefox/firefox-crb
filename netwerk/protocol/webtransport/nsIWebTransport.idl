@@ -146,6 +146,13 @@ interface nsIWebTransport : nsISupports {
   void setAnticipatedConcurrentIncomingUnidirectionalStreams(in unsigned short aValue);
   void setAnticipatedConcurrentIncomingBidirectionalStreams(in unsigned short aValue);
 
+  // Get stream statistics.
+  // Returns true if stats were retrieved successfully.
+  [noscript] boolean getSendStreamStats(in uint64_t aStreamId,
+                                        out uint64_t aBytesWritten,
+                                        out uint64_t aBytesSent,
+                                        out uint64_t aBytesAcknowledged);
+
   // This can be only called after onSessionReady().
   // After this point, we can retarget the underlying WebTransportSessionProxy
   // object off main thread.
