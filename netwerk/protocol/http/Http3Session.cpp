@@ -755,18 +755,6 @@ nsresult Http3Session::ProcessEvents() {
                                   event.stop_sending.error, STOP_SENDING);
         }
         break;
-      case Http3Event::Tag::PushPromise:
-        LOG(("Http3Session::ProcessEvents - PushPromise"));
-        break;
-      case Http3Event::Tag::PushHeaderReady:
-        LOG(("Http3Session::ProcessEvents - PushHeaderReady"));
-        break;
-      case Http3Event::Tag::PushDataReadable:
-        LOG(("Http3Session::ProcessEvents - PushDataReadable"));
-        break;
-      case Http3Event::Tag::PushCanceled:
-        LOG(("Http3Session::ProcessEvents - PushCanceled"));
-        break;
       case Http3Event::Tag::RequestsCreatable:
         LOG(("Http3Session::ProcessEvents - StreamCreatable"));
         ProcessPending();
@@ -3421,10 +3409,8 @@ void Http3Session::SendHTTPDatagram(uint64_t aStreamId,
                                     uint64_t aTrackingId) {
   LOG(("Http3Session::SendHTTPDatagram %p length=%zu aTrackingId=%" PRIx64,
        this, aData.Length(), aTrackingId));
-  // Connect-UDP (MASQUE) doesn't use WebTransport send groups or send order,
-  // so pass 0 for both (0 = null sendGroup, 0 = default sendOrder).
-  (void)mHttp3Connection->ConnectUdpSendDatagram(aStreamId, aData, aTrackingId,
-                                                 0, 0);
+  // Connect-UDP (MASQUE) doesn't use WebTransport send groups or send order.
+  (void)mHttp3Connection->ConnectUdpSendDatagram(aStreamId, aData, aTrackingId);
 }
 
 void Http3Session::SetSendOrder(Http3StreamBase* aStream, int64_t aSendOrder) {
