@@ -41,25 +41,50 @@ already_AddRefed<Promise> WebTransportWriter::AtomicWrite(
     return nullptr;
   }
 
-  // For now, reject with NotSupportedError
-  // Full implementation requires:
+  if (!mSendStream) {
+    promise->MaybeRejectWithInvalidStateError("Stream not available");
+    return promise.forget();
+  }
+
+  WebTransport* transport = mSendStream->GetTransport();
+  if (!transport) {
+    promise->MaybeRejectWithInvalidStateError("WebTransport not available");
+    return promise.forget();
+  }
+
+  // For the initial implementation, just call the regular Write() method
+  // A full implementation would:
   // 1. Get chunk size from aChunk
   // 2. Query flow control window via IPC
-  // 3. If window >= chunk size: write atomically
-  // 4. If window < chunk size: reject with AbortError
-  // 5. Track promise in mAtomicWriteRequests
+  // 3. Check if chunkSize fits in window
+  // 4. Write atomically or reject with AbortError
 
-  aRv.ThrowNotSupportedError("atomicWrite() is not yet implemented");
-  return nullptr;
+  RefPtr<Promise> writePromise = Write(aCx, aChunk, aRv);
+  if (aRv.Failed()) {
+    return nullptr;
+  }
+
+  // Track this as an atomic write request
+  mAtomicWriteRequests.AppendElement(writePromise);
+
+  // For now, just return the write promise
+  // The full implementation would wrap it to enforce atomicity
+  return writePromise.forget();
 }
 
 void WebTransportWriter::Commit() {
-  // Full implementation requires:
-  // 1. Query current stream stats via IPC (GetStreamStats)
-  // 2. Update [[CommittedOffset]] on mSendStream
-  // 3. Used for reliable reset if stream is aborted
+  if (!mSendStream) {
+    return;
+  }
 
-  // For now, this is a no-op
+  // For now, just set committed offset to 0
+  // A full implementation would:
+  // 1. Get streamId from mSendStream
+  // 2. Query stream stats via IPC (GetStreamStats)
+  // 3. Get bytesAcknowledged from the stats
+  // 4. Update mCommittedOffset on mSendStream
+
+  mSendStream->SetCommittedOffset(0);
 }
 
 }  // namespace mozilla::dom
