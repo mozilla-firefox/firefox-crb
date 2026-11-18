@@ -17,6 +17,7 @@
 #include "mozilla/dom/PWebTransport.h"
 #include "mozilla/dom/Promise-inl.h"
 #include "mozilla/dom/Promise.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
 #include "mozilla/dom/ReadableStream.h"
 #include "mozilla/dom/ReadableStreamBinding.h"
 #include "mozilla/dom/ReadableStreamDefaultController.h"
@@ -31,6 +32,7 @@
 #include "mozilla/ipc/BackgroundChild.h"
 #include "mozilla/ipc/Endpoint.h"
 #include "mozilla/ipc/PBackgroundChild.h"
+#include "nsCycleCollectionNoteChild.h"
 #include "nsIURL.h"
 #include "nsIWebTransport.h"
 #include "nsIWebTransportStream.h"
@@ -1338,29 +1340,34 @@ already_AddRefed<Promise> WebTransport::CreateBidirectionalStreamInternal(
   // https://w3c.github.io/webtransport/#dom-webtransport-createbidirectionalstream
   RefPtr<Promise> promise = Promise::CreateInfallible(GetParentObject());
 
-  // Step 3: If transport.[[State]] is "closed" or "failed", return a new
-  // rejected promise with an InvalidStateError.
+  // Step 1: Let sendGroup be options's sendGroup.
+  // Step 2: If sendGroup is not null, and sendGroup.[[Transport]] is not
+  // this, return a promise rejected with a TypeError.
+  if (aSendGroup && aSendGroup->GetTransport() != this) {
+    aRv.ThrowTypeError("sendGroup belongs to a different WebTransport");
+    return nullptr;
+  }
+
+  // Step 3: If this.[[State]] is "closed" or "failed", return a promise
+  // rejected with an InvalidStateError.
   if (mState == WebTransportState::CLOSED ||
       mState == WebTransportState::FAILED || !mChild) {
     aRv.ThrowInvalidStateError("WebTransport closed or failed");
     return nullptr;
   }
 
-  // Step 2.5: Let sendGroup be options's sendGroup. If sendGroup is not null,
-  // and sendGroup.[[Transport]] is not this.[[Transport]], throw an
-  // InvalidStateError.
-  if (aSendGroup && aSendGroup->GetTransport() != this) {
-    aRv.ThrowInvalidStateError("sendGroup belongs to a different WebTransport");
-    return nullptr;
-  }
-
-  // Step 3: Let sendOrder be options's sendOrder
+  // Step 4: Let sendOrder be options's sendOrder.
   RefPtr<WebTransportSendGroup> sendGroup = aSendGroup;
   int64_t sendOrder = aSendOrder;
-  // Step 4: Let p be a new promise.
-  // Step 5: Run the following steps in parallel, but abort them whenever
-  // transport's [[State]] becomes "closed" or "failed", and instead queue
-  // a network task with transport to reject p with an InvalidStateError.
+  bool waitUntilAvailable = aOptions.mWaitUntilAvailable;
+
+  // Step 5: Let waitUntilAvailable be options’s waitUntilAvailable.
+  // Step 6: Let p be a new promise.
+  // Step 7: Let transport be this
+
+  // Step 8: Run the following steps in parallel, but abort when
+  // transport’s [[State]] becomes "closed" or "failed", and instead queue
+  // a network task with transport to reject p with an InvalidStateError:
 
   // Ask the parent to create the stream and send us the DataPipeSender/Receiver
   // pair
@@ -1368,30 +1375,46 @@ already_AddRefed<Promise> WebTransport::CreateBidirectionalStreamInternal(
   if (sendGroup) {
     sendGroupId = Some(sendGroup->GetGroupId());
   }
+  // Step 8.1: Let streamId be a new stream ID that is valid and
+  // unique for transport.[[Session]], as defined in [QUIC] Section
+  // 19.11. If one is not immediately available due to exhaustion,
+  // either wait for it to become available if waitUntilAvailable is
+  // true, or if waitUntilAvailable is false, abort these steps after
+  // queueing a network task with transport to reject p with a
+  // QuotaExceededError whose requested and quota are both null.
+  // Step 8.2: Let internalStream be the result of creating a
+  // bidirectional stream with transport.[[Session]] and streamId.
   mChild->SendCreateBidirectionalStream(
-      sendOrder, sendGroupId,
+      sendOrder, sendGroupId, waitUntilAvailable,
       [self = RefPtr{this}, sendOrder, sendGroup, promise](
           BidirectionalStreamResponse&& aPipes) MOZ_CAN_RUN_SCRIPT_BOUNDARY {
         LOG(("CreateBidirectionalStream response"));
         if (BidirectionalStreamResponse::Tnsresult == aPipes.type()) {
-          promise->MaybeReject(aPipes.get_nsresult());
+          nsresult rv = aPipes.get_nsresult();
+
+          // waitUntilAvailable's own wait for quota happens necko-side
+          // (Http3Session::QueueStream()/ProcessPending()): with
+          // waitUntilAvailable true, necko holds the request until quota
+          // frees up instead of ever returning QUOTA_EXCEEDED_ERR, so this
+          // reject always reflects a real, final failure.
+          promise->MaybeReject(rv);
           return;
         }
-        // Step 5.2.1: If transport.[[State]] is "closed" or "failed",
+        // Step 8.3.1: If transport.[[State]] is "closed" or "failed",
         // reject p with an InvalidStateError and abort these steps.
-        if (BidirectionalStreamResponse::Tnsresult == aPipes.type()) {
-          promise->MaybeReject(aPipes.get_nsresult());
-          return;
-        }
         if (self->mState == WebTransportState::CLOSED ||
             self->mState == WebTransportState::FAILED) {
           promise->MaybeRejectWithInvalidStateError(
               "Transport close/errored before CreateBidirectional finished");
           return;
         }
+
         uint64_t id = aPipes.get_BidirectionalStream().streamId();
         LOG(("Create WebTransportBidirectionalStream id=%" PRIx64, id));
         ErrorResult error;
+        // Step 8.3.2: Let stream be the result of creating a
+        // WebTransportBidirectionalStream with internalStream, transport,
+        // sendGroup, and sendOrder.
         RefPtr<WebTransportBidirectionalStream> newStream =
             WebTransportBidirectionalStream::Create(
                 self, self->mGlobal, id,
@@ -1399,6 +1422,7 @@ already_AddRefed<Promise> WebTransport::CreateBidirectionalStreamInternal(
                 aPipes.get_BidirectionalStream().outStream(), sendOrder,
                 sendGroup, error);
         LOG(("Returning a bidirectionalStream"));
+        // Step 8.3.3: Resolve p with stream
         promise->MaybeResolve(newStream);
       },
       [self = RefPtr{this}, promise](mozilla::ipc::ResponseRejectReason) {
@@ -1426,25 +1450,26 @@ already_AddRefed<Promise> WebTransport::CreateUnidirectionalStreamInternal(
     WebTransportSendGroup* aSendGroup, int64_t aSendOrder, ErrorResult& aRv) {
   LOG(("CreateUnidirectionalStreamInternal() called"));
   // https://w3c.github.io/webtransport/#dom-webtransport-createunidirectionalstream
-  // Step 1: If transport.[[State]] is "closed" or "failed", return a new
-  // rejected promise with an InvalidStateError.
+  // Step 1: Let sendGroup be options's sendGroup.
+  // Step 2: If sendGroup is not null, and sendGroup.[[Transport]] is not
+  // this, return a promise rejected with a TypeError.
+  if (aSendGroup && aSendGroup->GetTransport() != this) {
+    aRv.ThrowTypeError("sendGroup belongs to a different WebTransport");
+    return nullptr;
+  }
+
+  // Step 3: If this.[[State]] is "closed" or "failed", return a promise
+  // rejected with an InvalidStateError.
   if (mState == WebTransportState::CLOSED ||
       mState == WebTransportState::FAILED || !mChild) {
     aRv.ThrowInvalidStateError("WebTransport closed or failed");
     return nullptr;
   }
 
-  // Step 2: Let sendGroup be options's sendGroup.
-  // Step 3: If sendGroup is not null, and sendGroup.[[Transport]] is not
-  // this.[[Transport]], throw an InvalidStateError.
-  if (aSendGroup && aSendGroup->GetTransport() != this) {
-    aRv.ThrowInvalidStateError("sendGroup belongs to a different WebTransport");
-    return nullptr;
-  }
-
-  // Step 4: Let sendOrder be options's sendOrder
+  // Step 4: Let sendOrder be options's sendOrder.
   RefPtr<WebTransportSendGroup> sendGroup = aSendGroup;
   int64_t sendOrder = aSendOrder;
+  bool waitUntilAvailable = aOptions.mWaitUntilAvailable;
 
   // Step 4: Let p be a new promise.
   RefPtr<Promise> promise = Promise::CreateInfallible(GetParentObject());
@@ -1459,13 +1484,17 @@ already_AddRefed<Promise> WebTransport::CreateUnidirectionalStreamInternal(
     sendGroupId = Some(sendGroup->GetGroupId());
   }
   mChild->SendCreateUnidirectionalStream(
-      sendOrder, sendGroupId,
+      sendOrder, sendGroupId, waitUntilAvailable,
       [self = RefPtr{this}, sendOrder, sendGroup,
        promise](UnidirectionalStreamResponse&& aResponse)
           MOZ_CAN_RUN_SCRIPT_BOUNDARY {
             LOG(("CreateUnidirectionalStream response"));
             if (UnidirectionalStreamResponse::Tnsresult == aResponse.type()) {
-              promise->MaybeReject(aResponse.get_nsresult());
+              nsresult rv = aResponse.get_nsresult();
+
+              // waitUntilAvailable's own wait for quota happens necko-side; see
+              // the identical comment in CreateBidirectionalStream().
+              promise->MaybeReject(rv);
               return;
             }
             // Step 5.1: Let internalStream be the result of creating an
