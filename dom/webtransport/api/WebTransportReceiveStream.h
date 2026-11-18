@@ -15,6 +15,7 @@ class DataPipeReceiver;
 namespace mozilla::dom {
 
 class WebTransport;
+class InputToReadableStreamAlgorithms;
 
 class WebTransportReceiveStream final : public ReadableStream {
  public:
@@ -44,6 +45,7 @@ class WebTransportReceiveStream final : public ReadableStream {
   // streams, breaking the cycle.
   RefPtr<WebTransport> mTransport;
   uint64_t mStreamId{0};
+  RefPtr<InputToReadableStreamAlgorithms> mAlgorithms;
 };
 }  // namespace mozilla::dom
 
