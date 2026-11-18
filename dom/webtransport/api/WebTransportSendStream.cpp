@@ -13,8 +13,10 @@
 #include "mozilla/dom/WebTransport.h"
 #include "mozilla/dom/WebTransportSendGroup.h"
 #include "mozilla/dom/WebTransportSendReceiveStreamBinding.h"
+#include "mozilla/dom/WebTransportWriter.h"
 #include "mozilla/dom/WritableStream.h"
 #include "mozilla/dom/WritableStreamDefaultController.h"
+#include "mozilla/dom/WritableStreamDefaultWriter.h"
 #include "mozilla/ipc/DataPipe.h"
 
 using namespace mozilla::ipc;
@@ -285,6 +287,21 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats() {
   RefPtr<Promise> promise = Promise::CreateInfallible(WritableStream::mGlobal);
   promise->MaybeRejectWithNotSupportedError("GetStats isn't supported yet");
   return promise.forget();
+}
+
+// https://w3c.github.io/webtransport/#dom-webtransportsendstream-getwriter
+// https://w3c.github.io/webtransport/#webtransportwriter-create
+already_AddRefed<WebTransportWriter> WebTransportSendStream::GetWriter(
+    ErrorResult& aRv) {
+  RefPtr<WebTransportWriter> writer =
+      new WebTransportWriter(GetParentObject(), this);
+
+  writer->SetUp(this, aRv);
+  if (aRv.Failed()) {
+    return nullptr;
+  }
+
+  return writer.forget();
 }
 
 }  // namespace mozilla::dom

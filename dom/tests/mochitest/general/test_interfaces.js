@@ -1833,6 +1833,8 @@ let interfaceNamesInGlobalScope = [
   // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "WebTransportSendStream", insecureContext: false },
   // IMPORTANT: Do not change this list without review from a DOM peer!
+  { name: "WebTransportWriter", insecureContext: false },
+  // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "WheelEvent", insecureContext: true },
   // IMPORTANT: Do not change this list without review from a DOM peer!
   { name: "Window", insecureContext: true },
