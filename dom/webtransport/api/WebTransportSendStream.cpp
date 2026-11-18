@@ -4,6 +4,7 @@
 
 #include "mozilla/dom/WebTransportSendStream.h"
 
+#include "mozilla/CycleCollectedJSContext.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/UnderlyingSinkCallbackHelpers.h"
@@ -29,7 +30,8 @@ using ::ImplCycleCollectionUnlink;
 
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStream, WritableStream,
                                    mTransport, mSendGroup, mSender,
-                                   mAtomicWriteReqPromises, mPendingWrites)
+                                   mAtomicWriteReqPromises, mPendingWrites,
+                                   mUnconfirmedAtomicWrites)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStream, WritableStream)
 NS_IMPL_RELEASE_INHERITED(WebTransportSendStream, WritableStream)
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebTransportSendStream)
@@ -240,24 +242,26 @@ void WebTransportSendStream::DrainQueue() {
       return;  // Waiting or error
     }
 
-    // Entry complete - increment bytes written, resolve promise and remove
-    mBytesWritten += entry.mData.Length();
-
-    // Always resolve the write callback promise (the underlying sink's write
-    // algorithm promise) so WritableStream can continue processing queued
-    // writes. For atomic writes, the user-facing promise (stored in the
-    // transport) is resolved separately via IPC once the parent confirms the
-    // flow-control window.
-    //
-    // This promise can't be left pending until that IPC confirmation instead:
-    // WritableStream::StartErroring() only calls FinishErroring() -- which is
-    // what invokes our AbortCallbackImpl -- once
-    // !HasOperationMarkedInFlight(), i.e. once this promise settles. Leaving
-    // it pending would make writer.abort() wait for the parent's flow-control
-    // response before it can even run our abort logic, instead of being able
-    // to preempt it -- confirmed by webtransport-writer-advanced.https.any.js's
-    // abort tests failing when this was tried.
-    entry.mPromise->MaybeResolveWithUndefined();
+    // Entry complete - settle promise and remove
+    if (entry.mAtomicWriteId) {
+      // An atomic write's bytes being in the DataPipe says nothing about
+      // whether they fit the flow-control window; only the parent's
+      // AtomicWriteResult does. Keep its write request unsettled until then
+      // so the atomic write stays the in-flight one and WritableStream
+      // dispatches nothing behind it: a later failure can then reject the
+      // whole pipeline, which is what the spec's "abort all atomic write
+      // requests" assumes. abort() waits on that round trip too, since a
+      // write request in flight blocks erroring; atomic writes are rare and
+      // small enough that the stall beats diverging from Streams.
+      //
+      // [[BytesWritten]] only counts it once confirmed.
+      mUnconfirmedAtomicBytes = entry.mData.Length();
+      mUnconfirmedAtomicWrites.InsertOrUpdate(*entry.mAtomicWriteId,
+                                              entry.mPromise);
+    } else {
+      mBytesWritten += entry.mData.Length();
+      entry.mPromise->MaybeResolveWithUndefined();
+    }
 
     mPendingWrites.Pop();
   }
@@ -265,8 +269,66 @@ void WebTransportSendStream::DrainQueue() {
   LOG(("DrainQueue complete, queue empty"));
 }
 
+void WebTransportSendStream::ResolveAtomicWriteRequest(uint32_t aId,
+                                                       bool aConfirmed) {
+  RefPtr<Promise> promise;
+  if (auto entry = mUnconfirmedAtomicWrites.Lookup(aId)) {
+    promise = entry.Data();
+    entry.Remove();
+  }
+  if (!promise) {
+    return;
+  }
+  LOG(("WebTransportSendStream::ResolveAtomicWriteRequest streamId=%llu, id=%u",
+       (unsigned long long)mStreamId, aId));
+  if (aConfirmed) {
+    mBytesWritten += mUnconfirmedAtomicBytes;
+  }
+  mUnconfirmedAtomicBytes = 0;
+  // Settling the write request runs it through the normal
+  // FinishInFlightWrite() path, which is what clears
+  // [[inFlightWriteRequest]] and lets the stream make progress (close, error
+  // or the next write). That only happens once SpiderMonkey processes the
+  // resolution as a microtask, and our caller is an IPC message handler
+  // rather than script execution, so force a checkpoint here.
+  nsAutoMicroTask mt;
+  promise->MaybeResolveWithUndefined();
+}
+
+void WebTransportSendStream::RejectUnconfirmedAtomicWrites(
+    JS::Handle<JS::Value> aReason) {
+  if (mUnconfirmedAtomicWrites.IsEmpty()) {
+    return;
+  }
+  LOG(("WebTransportSendStream::RejectUnconfirmedAtomicWrites streamId=%llu",
+       (unsigned long long)mStreamId));
+  nsTArray<RefPtr<Promise>> promises;
+  for (const auto& promise : mUnconfirmedAtomicWrites.Values()) {
+    promises.AppendElement(promise);
+  }
+  mUnconfirmedAtomicWrites.Clear();
+  mUnconfirmedAtomicBytes = 0;
+  // Rejecting takes the FinishInFlightWriteWithError() path, which errors the
+  // stream.
+  for (const auto& promise : promises) {
+    promise->MaybeReject(aReason);
+  }
+}
+
+void WebTransportSendStream::RejectPendingWrites(
+    JS::Handle<JS::Value> aReason) {
+  nsTArray<RefPtr<Promise>> promises;
+  mPendingWrites.Iterate([&](PendingWriteEntry& aEntry) {
+    promises.AppendElement(aEntry.mPromise);
+  });
+  mPendingWrites.Clear();
+  for (const auto& promise : promises) {
+    promise->MaybeReject(aReason);
+  }
+}
+
 // https://w3c.github.io/webtransport/#webtransportsendstream-abort-all-atomic-write-requests
-void WebTransportSendStream::AbortAllAtomicWriteRequests() {
+void WebTransportSendStream::AbortAllAtomicWriteRequests(uint32_t aFailedId) {
   LOG(("WebTransportSendStream::AbortAllAtomicWriteRequests streamId=%llu",
        (unsigned long long)mStreamId));
 
@@ -279,15 +341,46 @@ void WebTransportSendStream::AbortAllAtomicWriteRequests() {
   // Step 2: Let requestsToAbort be stream.[[AtomicWriteRequests]].
   // Step 3: If writeRequests contains a promise not in requestsToAbort,
   //         then error stream with AbortError, and abort these steps.
-  bool hasNonAtomic = false;
-  mPendingWrites.Iterate([&](const PendingWriteEntry& entry) {
-    if (entry.mAtomicWriteId.isNothing()) {
-      hasNonAtomic = true;
+  // requestsToAbort always contains the write currently in flight -- this
+  // only runs for its own flow-control failure -- so it is exactly one
+  // bigger than the atomic subset of writeRequests, which excludes the
+  // in-flight one. writeRequests reaching parity with it therefore means
+  // every queued write is atomic; anything beyond that is a non-atomic one.
+  // mPendingAtomicWriteIds is used rather than mAtomicWriteReqPromises,
+  // which can already be missing the in-flight write's own entry:
+  // WriteCallbackImpl removes it there at dispatch time for a write that
+  // was deferred rather than sent synchronously.
+  bool hasNonAtomic = WriteRequestCount() >= mPendingAtomicWriteIds.Length();
+
+  // Step 4: Empty stream.[[AtomicWriteRequests]].
+  nsTArray<uint32_t> atomicWriteIds = std::move(mPendingAtomicWriteIds);
+
+  // Step 5: For each promise in requestsToAbort, reject promise with
+  //         AbortError.
+  //
+  // Per spec this promise (p, per atomicWrite()'s algorithm) is the same
+  // object as the write-request promise that erroring the stream rejects on
+  // its own, so the spec's step 3 skips straight past 4-6 when it errors
+  // the stream instead. Our atomicWrite() (WebTransportWriter::AtomicWrite)
+  // returns a *separate* user-facing promise, decoupled from the sink's own
+  // write-progress promise -- nothing else settles it, so it must be
+  // rejected here explicitly regardless of which branch runs below.
+  for (uint32_t atomicWriteId : atomicWriteIds) {
+    LOG(("  Rejecting sent atomic write id=%u", atomicWriteId));
+    RefPtr<Promise> promise = transport->TakeAtomicWritePromise(atomicWriteId);
+    if (promise) {
+      promise->MaybeRejectWithAbortError(
+          "Atomic write failed - insufficient flow control window"_ns);
     }
-  });
+  }
 
   if (hasNonAtomic) {
-    LOG(("  Non-atomic writes found in queue, erroring stream"));
+    // Step 3, continued: "then error stream with AbortError, and abort these
+    // steps."  Rejecting the failed atomic write's own write request -- still
+    // in flight, holding everything else back -- is what errors it, via the
+    // standard FinishInFlightWriteWithError() -> WritableStreamStartErroring()
+    // path, which also rejects the write requests queued behind it.
+    LOG(("  Non-atomic write pending, erroring stream"));
     AutoJSAPI jsapi;
     if (jsapi.Init(GetParentObject())) {
       JSContext* cx = jsapi.cx();
@@ -298,51 +391,31 @@ void WebTransportSendStream::AbortAllAtomicWriteRequests() {
       MOZ_ASSERT(rv.Failed());
       rv.WouldReportJSException();
       if (ToJSValue(cx, std::move(rv), &error)) {
-        IgnoredErrorResult ignored;
-        ErrorNative(cx, error, ignored);
+        RejectUnconfirmedAtomicWrites(error);
       }
     }
     return;
   }
 
-  // Step 4: Empty stream.[[AtomicWriteRequests]].
-  nsTArray<uint32_t> atomicWriteIds = std::move(mPendingAtomicWriteIds);
-
-  // Step 5: For each promise in requestsToAbort, reject promise with
-  //         AbortError.
-  // Reject promises for atomic writes sent to parent (tracked via IPC)
-  for (uint32_t atomicWriteId : atomicWriteIds) {
-    LOG(("  Rejecting sent atomic write id=%u", atomicWriteId));
-    RefPtr<Promise> promise = transport->TakeAtomicWritePromise(atomicWriteId);
-    if (promise) {
-      promise->MaybeRejectWithAbortError(
-          "Atomic write failed - insufficient flow control window"_ns);
-    }
-  }
-
-  // The atomicWrite() user-facing promise for entries still queued locally
-  // was already rejected above (their IDs are also in atomicWriteIds).
-  // Resolve, rather than reject, their sink write-progress promise
-  // (entry.mPromise): WritableStreamDefaultControllerProcessWrite awaits it
-  // as [[inFlightWriteRequest]], and rejecting it would run
-  // FinishInFlightWriteWithError, which errors the *whole* WritableStream --
-  // whereas "abort all atomic write requests" must leave the stream open and
-  // only reject the individual atomicWrite() promises.
-  mPendingWrites.Iterate([&](PendingWriteEntry& entry) {
-    if (entry.mAtomicWriteId) {
-      LOG(("  Completing queued atomic write id=%u without erroring stream",
-           *entry.mAtomicWriteId));
-      if (entry.mPromise) {
-        entry.mPromise->MaybeResolveWithUndefined();
-      }
-    }
-  });
-  mPendingWrites.Clear();
-
+  // Only atomic writes are pending, so the stream must stay open and just
+  // the individual atomicWrite() promises reject -- which happened above.
+  // Their write requests are therefore resolved, not rejected: rejecting
+  // one runs FinishInFlightWriteWithError(), which errors the whole stream.
+  //
   // Step 6: In parallel, for each promise in requestsToAbort, abort the
   //         sending of bytes associated with promise.
-  // The parent process will handle cancellation of in-flight sends when
-  // it sees subsequent writes or stream reset.
+  // Only aFailedId's write request is in flight; the others are still queued
+  // in the WritableStream and have not been sent.  Record them as cancelled
+  // first, since resolving aFailedId's request is what dispatches the next
+  // queued write, and WriteCallbackImpl then drops each cancelled one
+  // instead of sending it.
+  for (uint32_t atomicWriteId : atomicWriteIds) {
+    if (atomicWriteId != aFailedId) {
+      mCancelledAtomicWriteIds.AppendElement(atomicWriteId);
+    }
+  }
+  LOG(("  Completing atomic write id=%u without erroring stream", aFailedId));
+  ResolveAtomicWriteRequest(aFailedId, /* aConfirmed = */ false);
 }
 
 NS_IMETHODIMP WebTransportSendStream::OnOutputStreamReady(
