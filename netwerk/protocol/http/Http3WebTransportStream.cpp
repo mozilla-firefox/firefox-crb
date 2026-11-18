@@ -431,6 +431,20 @@ void Http3WebTransportStream::ResolveAtomicWrite(uint32_t aAtomicWriteId,
   }
 }
 
+void Http3WebTransportStream::NotifyCloseComplete() {
+  Http3Session* http3Session = static_cast<Http3Session*>(mSession.get());
+  RefPtr<Http3WebTransportSession> wtSession;
+  for (const auto& stream : http3Session->WebTransportSessions()) {
+    if (stream->StreamId() == mSessionId) {
+      wtSession = stream->GetHttp3WebTransportSession();
+      break;
+    }
+  }
+  if (wtSession) {
+    wtSession->NotifyStreamCloseComplete(mStreamId);
+  }
+}
+
 void Http3WebTransportStream::TryDrainPendingAtomicWrites() {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   while (!mPendingAtomicWrites.IsEmpty() &&
@@ -1010,6 +1024,7 @@ void Http3WebTransportStream::SendFin() {
     case SENDING: {
       mPendingTasks.AppendElement([self = RefPtr{this}]() {
         self->mSession->CloseSendingSide(self->mStreamId);
+        self->NotifyCloseComplete();
       });
     } break;
     case WAITING_DATA:
@@ -1019,6 +1034,7 @@ void Http3WebTransportStream::SendFin() {
       mSession->CloseSendingSide(mStreamId);
       // StreamHasDataToWrite needs to be called to trigger ProcessOutput.
       mSession->StreamHasDataToWrite(this);
+      NotifyCloseComplete();
       break;
     default:
       MOZ_ASSERT_UNREACHABLE("invalid mSendState!");

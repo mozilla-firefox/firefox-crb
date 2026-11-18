@@ -1879,6 +1879,37 @@ NS_IMETHODIMP WebTransportSessionProxy::OnAtomicWriteResult(
   return NS_OK;
 }
 
+NS_IMETHODIMP WebTransportSessionProxy::OnStreamCloseComplete(
+    uint64_t aStreamId) {
+  MOZ_ASSERT(OnSocketThread());
+
+  nsCOMPtr<WebTransportSessionEventListener> listener;
+  {
+    MutexAutoLock lock(mMutex);
+    if (!mStopRequestCalled) {
+      mPendingEvents.AppendElement([self = RefPtr{this}, aStreamId]() {
+        self->OnStreamCloseComplete(aStreamId);
+      });
+      return NS_OK;
+    }
+
+    if (!mTarget->IsOnCurrentThread()) {
+      return mTarget->Dispatch(NS_NewRunnableFunction(
+          "WebTransportSessionProxy::OnStreamCloseComplete",
+          [self = RefPtr{this}, aStreamId]() {
+            self->OnStreamCloseComplete(aStreamId);
+          }));
+    }
+    listener = mListener;
+  }
+
+  if (listener) {
+    listener->OnStreamCloseComplete(aStreamId);
+  }
+
+  return NS_OK;
+}
+
 NS_IMETHODIMP WebTransportSessionProxy::OnDatagramReceivedInternal(
     nsTArray<uint8_t>&& aData) {
   MOZ_ASSERT(OnSocketThread());

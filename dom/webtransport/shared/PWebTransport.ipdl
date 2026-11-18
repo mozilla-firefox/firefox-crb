@@ -262,6 +262,13 @@ async protocol PWebTransport
   async AtomicWriteResult(uint64_t streamId, uint32_t atomicWriteId, nsresult result);
 
   /**
+  * Notify child that a send stream's FIN has been issued, completing a
+  * close(). Settles the promise the stream holds as [[PendingOperation]].
+  * @param streamId the ID of the stream
+  */
+  async StreamCloseComplete(uint64_t streamId);
+
+  /**
   * Notify child of the negotiated protocol and HTTP response headers
   */
   async NegotiatedProtocolAndHeaders(nsCString subprotocol,

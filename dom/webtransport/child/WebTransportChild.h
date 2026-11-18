@@ -58,6 +58,8 @@ class WebTransportChild : public PWebTransportChild {
       const uint64_t& aStreamId, const uint32_t& aAtomicWriteId,
       const nsresult& aResult);
 
+  ::mozilla::ipc::IPCResult RecvStreamCloseComplete(const uint64_t& aStreamId);
+
   ::mozilla::ipc::IPCResult RecvDraining();
 
   ::mozilla::ipc::IPCResult RecvNegotiatedProtocolAndHeaders(

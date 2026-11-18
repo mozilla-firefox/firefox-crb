@@ -8,9 +8,12 @@
 
 #include <algorithm>
 
+#include "mozilla/CycleCollectedJSContext.h"
+#include "mozilla/dom/AbortSignal.h"
 #include "mozilla/dom/BufferSourceBinding.h"
 #include "mozilla/dom/Promise-inl.h"
 #include "mozilla/dom/Promise.h"
+#include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/TypedArray.h"
 #include "mozilla/dom/WebTransport.h"
 #include "mozilla/dom/WebTransportChild.h"
@@ -25,7 +28,7 @@ namespace mozilla::dom {
 
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStreamAlgorithms,
                                    UnderlyingSinkAlgorithmsWrapper, mGlobal,
-                                   mStream)
+                                   mStream, mDeferredClosePromise)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStreamAlgorithms,
                          UnderlyingSinkAlgorithmsWrapper)
 NS_IMPL_RELEASE_INHERITED(WebTransportSendStreamAlgorithms,
@@ -174,11 +177,169 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::CloseSenderHelper(
   return promise.forget();
 }
 
+namespace {
+class DeferredCloseMicroTask final : public MicroTaskRunnable {
+ public:
+  explicit DeferredCloseMicroTask(WebTransportSendStreamAlgorithms* aAlgorithms)
+      : mAlgorithms(aAlgorithms) {}
+
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY void Run(AutoSlowOperation& aAso) override {
+    mAlgorithms->IssueDeferredClose();
+  }
+
+ private:
+  RefPtr<WebTransportSendStreamAlgorithms> mAlgorithms;
+};
+}  // namespace
+
+// https://w3c.github.io/webtransport/#webtransportsendstream-close
+// "To close a WebTransportSendStream stream"
 already_AddRefed<Promise> WebTransportSendStreamAlgorithms::CloseCallbackImpl(
     JSContext* aCx, ErrorResult& aRv) {
-  return CloseSenderHelper(
-      [](mozilla::ipc::DataPipeSender* sender) { return sender->Close(); },
-      "CloseCallbackImpl");
+  LOG(("WebTransportSendStreamAlgorithms::CloseCallbackImpl [this=%p]", this));
+
+  // Step 2: Let promise be a new promise.
+  RefPtr<Promise> promise = Promise::CreateInfallible(mGlobal);
+  if (!mStream) {
+    promise->MaybeResolveWithUndefined();
+    return promise.forget();
+  }
+
+  // Step 4: Set stream.[[PendingOperation]] to promise.
+  mStream->SetPendingOperation(promise);
+
+  // Step 5: Run the following steps in parallel:
+  // Step 5.1: Send FIN on stream.[[InternalStream]] and wait for the
+  // operation to complete.
+  //
+  // Deferred to a microtask rather than closing the sender synchronously
+  // here: abort() signals the controller synchronously, so an abort in this
+  // same turn still finds the close un-issued and can convert it into a
+  // reset -- on the framed pipe, the same ordered channel the data uses.
+  // Issuing the FIN here instead would force the reset onto a separate IPC
+  // racing the pipe-close teardown, which is exactly what routing aborts
+  // through the pipe is meant to avoid.
+  mCloseSenderPending = true;
+  mDeferredCloseSender = mStream->GetDataPipeSender();
+  mDeferredClosePromise = promise;
+  if (CycleCollectedJSContext* ccjs = CycleCollectedJSContext::Get()) {
+    ccjs->DispatchToMicroTask(MakeAndAddRef<DeferredCloseMicroTask>(this));
+  } else {
+    IssueDeferredClose();
+  }
+
+  // Step 6: Return promise.
+  return promise.forget();
+}
+
+void WebTransportSendStreamAlgorithms::IssueDeferredClose() {
+  if (!mCloseSenderPending) {
+    // An abort preempted the close; it already reset the stream.
+    return;
+  }
+  mCloseSenderPending = false;
+
+  LOG(("WebTransportSendStreamAlgorithms::IssueDeferredClose [this=%p]", this));
+
+  RefPtr<mozilla::ipc::DataPipeSender> sender = std::move(mDeferredCloseSender);
+  RefPtr<Promise> pendingOperation = std::move(mDeferredClosePromise);
+  if (!sender) {
+    return;
+  }
+  // Step 5.2: Wait for stream.[[InternalStream]] to enter the "all data
+  // committed" state. [QUIC]
+  // Step 5.3: Queue a network task with transport to run these steps:
+  // Step 5.3.1: Set stream.[[PendingOperation]] to null.
+  // Step 5.3.2: Resolve promise with undefined.
+  // On success these run once the parent reports the FIN went out
+  // (StreamCloseComplete), not here. Handle the failure case here instead,
+  // since the DataPipe can fail the close synchronously and the parent will
+  // never send that confirmation.
+  nsresult rv = sender->Close();
+  if (NS_FAILED(rv)) {
+    if (mStream) {
+      mStream->SetPendingOperation(nullptr);
+    }
+    if (pendingOperation) {
+      pendingOperation->MaybeReject(rv);
+    }
+  }
+}
+
+// https://w3c.github.io/webtransport/#send-stream-procedures
+// "create a WebTransportSendStream" step 7.
+void WebTransportSendStreamAlgorithms::RunAbortSignalSteps(
+    AbortSignalImpl* aSignal) {
+  // Step 7.1: Let pendingOperation be stream.[[PendingOperation]].
+  // Step 7.2: If pendingOperation is null, then abort these steps.
+  //
+  // mCloseSenderPending tracks exactly this: [[PendingOperation]] is set
+  // only here, for a close() not yet issued to the pipe (see
+  // CloseCallbackImpl), so the boolean is equivalent to the null check.
+  // ReleaseObjects() may already have cleared mStream, so work from the
+  // sender and promise captured when the close was deferred rather than
+  // from mStream directly.
+  if (!mCloseSenderPending) {
+    return;
+  }
+  mCloseSenderPending = false;
+
+  // Step 7.3: Set stream.[[PendingOperation]] to null.
+  RefPtr<Promise> pendingOperation = std::move(mDeferredClosePromise);
+  if (mStream) {
+    mStream->SetPendingOperation(nullptr);
+  }
+  if (!pendingOperation) {
+    return;
+  }
+
+  LOG(("WebTransportSendStreamAlgorithms::RunAbortSignalSteps [this=%p]",
+       this));
+
+  AutoJSAPI jsapi;
+  if (!jsapi.Init(mGlobal)) {
+    return;
+  }
+  JSContext* cx = jsapi.cx();
+
+  // Step 7.4: Let reason be abortSignal's abort reason.
+  JS::Rooted<JS::Value> reason(cx, JS::UndefinedValue());
+  if (aSignal) {
+    aSignal->GetReason(cx, &reason);
+  }
+
+  uint32_t wtCode = 0;
+  if (reason.isObject()) {
+    JS::Rooted<JSObject*> obj(cx, &reason.toObject());
+    RefPtr<WebTransportError> wtError;
+    if (NS_SUCCEEDED(UNWRAP_OBJECT(WebTransportError, &obj, wtError))) {
+      auto streamErrorCode = wtError->GetStreamErrorCode();
+      if (!streamErrorCode.IsNull()) {
+        wtCode = streamErrorCode.Value();
+      }
+    }
+  }
+
+  // Step 7.5: Let promise be the result of aborting stream with reason.
+  //
+  // The FIN was never issued, so closing the framed pipe with the error
+  // status now makes the parent emit RESET_STREAM instead -- ordered with
+  // this stream's data, with no second channel involved.
+  RefPtr<mozilla::ipc::DataPipeSender> sender = std::move(mDeferredCloseSender);
+  if (sender) {
+    nsresult abortStatus = static_cast<nsresult>(
+        static_cast<uint32_t>(NS_ERROR_WEBTRANSPORT_CODE_BASE) +
+        std::min(wtCode, 255u));
+    (void)sender->CloseWithStatus(abortStatus);
+  }
+
+  // Step 7.6: Upon fulfillment of promise, reject pendingOperation with
+  // reason.
+  //
+  // CloseWithStatus() above settles synchronously rather than returning a
+  // promise to wait on, so the rejection follows immediately instead of
+  // through a separate fulfillment callback.
+  pendingOperation->MaybeReject(reason);
 }
 
 // https://w3c.github.io/webtransport/#webtransportsendstream-abort

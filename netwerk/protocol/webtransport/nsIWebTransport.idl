@@ -191,6 +191,10 @@ interface WebTransportSessionEventListener : nsISupports {
   // When an atomic write completes (sent or rejected due to flow control).
   void onAtomicWriteResult(in uint64_t aStreamId, in uint32_t aAtomicWriteId, in nsresult aResult);
 
+  // When a send stream's FIN has been issued, completing a close(). Lets the
+  // DOM settle the close promise it has been holding as [[PendingOperation]].
+  void onStreamCloseComplete(in uint64_t aStreamId);
+
   // When a new datagram has been received.
   void onDatagramReceived(in Array<uint8_t> aData);
 

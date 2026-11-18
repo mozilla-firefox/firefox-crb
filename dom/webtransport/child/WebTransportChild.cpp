@@ -2,8 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "mozilla/dom/Promise.h"
 #include "mozilla/dom/WebTransport.h"
 #include "mozilla/dom/WebTransportLog.h"
+#include "mozilla/dom/WebTransportSendStream.h"
 
 namespace mozilla::dom {
 
@@ -106,6 +108,26 @@ void WebTransportChild::CloseAll() {
     self->OnDatagramCapacity(aCumulativeDatagrams, aCumulativeBytes, aSentDelta,
                              aExpiredDelta, aDroppedDelta,
                              aDatagramPrefixBytes);
+  }
+  return IPC_OK();
+}
+
+::mozilla::ipc::IPCResult WebTransportChild::RecvStreamCloseComplete(
+    const uint64_t& aStreamId) {
+  LOG(("WebTransportChild::RecvStreamCloseComplete streamId=%llu",
+       (unsigned long long)aStreamId));
+
+  if (mTransport) {
+    RefPtr<WebTransportSendStream> stream =
+        mTransport->GetSendStream(aStreamId);
+    if (stream) {
+      // The FIN went out without an abort preempting it, so settle the
+      // close() promise held as [[PendingOperation]].
+      RefPtr<Promise> pendingOperation = stream->TakePendingOperation();
+      if (pendingOperation) {
+        pendingOperation->MaybeResolveWithUndefined();
+      }
+    }
   }
   return IPC_OK();
 }

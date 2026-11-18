@@ -1161,6 +1161,11 @@ void WebTransport::PropagateError(Stream* aStream, WebTransportError* aError) {
     // ever finishing erroring. No confirmation is coming now, so settle it.
     aStream->RejectUnconfirmedAtomicWrites(errorValue);
     aStream->RejectPendingWrites(errorValue);
+    // Likewise an in-flight close(): [[PendingOperation]] is rejected so the
+    // stream can finish erroring.
+    if (RefPtr<Promise> pending = aStream->TakePendingOperation()) {
+      pending->MaybeReject(errorValue);
+    }
   }
   aStream->ErrorNative(cx, errorValue, IgnoreErrors());
 }
@@ -1655,6 +1660,11 @@ void WebTransport::Cleanup(DOMException* aError,
     // torn-down session, so settle it here too.
     MOZ_KnownLive(stream)->RejectUnconfirmedAtomicWrites(errorValue);
     MOZ_KnownLive(stream)->RejectPendingWrites(errorValue);
+    // Step 15.1 for a close() still in flight: see below.
+    if (RefPtr<Promise> pending =
+            MOZ_KnownLive(stream)->TakePendingOperation()) {
+      pending->MaybeReject(errorValue);
+    }
     // Step 15.2: Error stream with error.
     MOZ_KnownLive(stream)->ErrorNative(cx, errorValue, IgnoreErrors());
   }
@@ -1713,10 +1723,12 @@ void WebTransport::Cleanup(DOMException* aError,
   // Step 15.1: If stream.[[PendingOperation]] is not null, reject
   // stream.[[PendingOperation]] with error.
   //
-  // For a regular write, [[PendingOperation]] (WriteCallbackImpl's own
-  // write-algorithm promise) resolves as soon as the bytes reach the
-  // DataPipe, long before Cleanup can run, so there is nothing left to
-  // reject there.  For an atomic write it is instead the promise parked in
+  // The stream loop above rejects the close() promise held as
+  // [[PendingOperation]].  For a regular write, [[PendingOperation]]
+  // (WriteCallbackImpl's own write-algorithm promise) resolves as soon as
+  // the bytes reach the DataPipe, long before Cleanup can run, so there is
+  // nothing left to reject there.  For an atomic write it is instead the
+  // promise parked in
   // WebTransportSendStream::mUnconfirmedAtomicWrites until the parent's
   // flow-control verdict arrives; RejectUnconfirmedAtomicWrites(), called
   // above for each stream, is what rejects that one, and doing so already
