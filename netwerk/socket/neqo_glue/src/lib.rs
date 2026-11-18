@@ -2321,6 +2321,8 @@ pub extern "C" fn neqo_http3conn_event(
                 local,
             },
             Http3ClientEvent::RequestsCreatable => Http3Event::RequestsCreatable,
+            // Not yet surfaced through this event path.
+            Http3ClientEvent::StreamCreatable { .. } => Http3Event::NoEvent,
             Http3ClientEvent::OutgoingDatagramSpaceAvailable { .. } => {
                 Http3Event::OutgoingDatagramSpaceAvailable
             }
