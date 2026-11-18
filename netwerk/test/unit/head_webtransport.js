@@ -105,9 +105,9 @@ function streamCreatePromise(transport, bidi) {
     listener.finish = resolve;
 
     if (bidi) {
-      transport.createOutgoingBidirectionalStream(listener);
+      transport.createOutgoingBidirectionalStream(listener, false);
     } else {
-      transport.createOutgoingUnidirectionalStream(listener);
+      transport.createOutgoingUnidirectionalStream(listener, false);
     }
   });
 }

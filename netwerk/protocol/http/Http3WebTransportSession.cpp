@@ -469,34 +469,39 @@ bool Http3WebTransportSession::CloseSessionAndGetStats(
 
 void Http3WebTransportSession::CreateOutgoingBidirectionalStream(
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback) {
-  return CreateStreamInternal(true, std::move(aCallback));
+        aCallback,
+    bool aWaitUntilAvailable) {
+  return CreateStreamInternal(true, std::move(aCallback), aWaitUntilAvailable);
 }
 
 void Http3WebTransportSession::CreateOutgoingUnidirectionalStream(
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback) {
-  return CreateStreamInternal(false, std::move(aCallback));
+        aCallback,
+    bool aWaitUntilAvailable) {
+  return CreateStreamInternal(false, std::move(aCallback), aWaitUntilAvailable);
 }
 
 void Http3WebTransportSession::CreateStreamInternal(
     bool aBidi,
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback) {
-  LOG(("Http3WebTransportSession::CreateStreamInternal this=%p aBidi=%d", this,
-       aBidi));
+        aCallback,
+    bool aWaitUntilAvailable) {
+  LOG(
+      ("Http3WebTransportSession::CreateStreamInternal this=%p aBidi=%d "
+       "waitUntilAvailable=%d",
+       this, aBidi, aWaitUntilAvailable));
   if (mRecvState != ACTIVE) {
     aCallback(Err(NS_ERROR_NOT_AVAILABLE));
     return;
   }
 
   RefPtr<Http3WebTransportStream> stream =
-      aBidi ? new Http3WebTransportStream(mSession, mStreamId,
-                                          WebTransportStreamType::BiDi,
-                                          std::move(aCallback))
-            : new Http3WebTransportStream(mSession, mStreamId,
-                                          WebTransportStreamType::UniDi,
-                                          std::move(aCallback));
+      aBidi ? new Http3WebTransportStream(
+                  mSession, mStreamId, WebTransportStreamType::BiDi,
+                  std::move(aCallback), aWaitUntilAvailable)
+            : new Http3WebTransportStream(
+                  mSession, mStreamId, WebTransportStreamType::UniDi,
+                  std::move(aCallback), aWaitUntilAvailable);
   mSession->StreamHasDataToWrite(stream);
   // Put the newly created stream in to |mStreams| to keep it alive.
   mStreams.AppendElement(std::move(stream));

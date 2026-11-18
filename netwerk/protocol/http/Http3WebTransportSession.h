@@ -120,10 +120,12 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
 
   void CreateOutgoingBidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) override;
+          aCallback,
+      bool aWaitUntilAvailable = false) override;
   void CreateOutgoingUnidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) override;
+          aCallback,
+      bool aWaitUntilAvailable = false) override;
   void RemoveWebTransportStream(Http3WebTransportStream* aStream);
 
   already_AddRefed<Http3WebTransportStream> OnIncomingWebTransportStream(
@@ -178,7 +180,8 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
   void CreateStreamInternal(
       bool aBidi,
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback);
+          aCallback,
+      bool aWaitUntilAvailable);
   void OnClosePending() override;
 
   nsTArray<RefPtr<Http3WebTransportStream>> mStreams;
