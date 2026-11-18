@@ -42,12 +42,26 @@ class WebTransportSendGroup final : public nsISupports, public nsWrapperCache {
 
   already_AddRefed<Promise> GetStats(ErrorResult& aRv);
 
+  // Called from WebTransport::Cleanup() for each member stream just before
+  // mWebTransport->mSendStreams is emptied, so this group's aggregate
+  // GetStats() doesn't regress to zero once its streams are no longer
+  // enumerable that way.
+  void AddFinalStreamStats(uint64_t aBytesWritten, uint64_t aBytesSent,
+                           uint64_t aBytesAcknowledged) {
+    mCachedBytesWritten += aBytesWritten;
+    mCachedBytesSent += aBytesSent;
+    mCachedBytesAcknowledged += aBytesAcknowledged;
+  }
+
  private:
   ~WebTransportSendGroup();
 
   nsCOMPtr<nsIGlobalObject> mGlobal;
   RefPtr<WebTransport> mWebTransport;
   uint64_t mGroupId = 0;
+  uint64_t mCachedBytesWritten = 0;
+  uint64_t mCachedBytesSent = 0;
+  uint64_t mCachedBytesAcknowledged = 0;
 };
 
 }  // namespace mozilla::dom

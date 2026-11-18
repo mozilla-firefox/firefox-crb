@@ -56,9 +56,12 @@ already_AddRefed<Promise> WebTransportSendGroup::GetStats(ErrorResult& aRv) {
   // Step 4.1: Let gatheredStats be the list of aggregated stats from all
   // streams in streams needed to populate the dictionary members of
   // WebTransportSendStreamStats accurately.
-  uint64_t bytesWritten = 0;
-  uint64_t bytesSent = 0;
-  uint64_t bytesAcknowledged = 0;
+  // Streams already accounted for by AddFinalStreamStats() (see
+  // WebTransport::Cleanup()) are no longer enumerable via
+  // mWebTransport->mSendStreams, so start from their cached contribution.
+  uint64_t bytesWritten = mCachedBytesWritten;
+  uint64_t bytesSent = mCachedBytesSent;
+  uint64_t bytesAcknowledged = mCachedBytesAcknowledged;
   if (mWebTransport) {
     for (const auto& stream : mWebTransport->mSendStreams.Values()) {
       if (stream->GetSendGroup() == this) {

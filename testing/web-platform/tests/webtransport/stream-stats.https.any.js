@@ -191,8 +191,10 @@ promise_test(async t => {
 
   const writer1 = stream1.getWriter();
   const writer2 = stream2.getWriter();
-  await writer1.write(new Uint8Array(300).fill(1));
-  await writer2.write(new Uint8Array(700).fill(2));
+  await Promise.all([
+    writer1.write(new Uint8Array(300).fill(1)),
+    writer2.write(new Uint8Array(700).fill(2)),
+  ]);
 
   // Populate each stream's cached bytesSent/bytesAcknowledged before reading
   // the group's aggregation of them.
@@ -268,3 +270,38 @@ promise_test(async t => {
   assert_equals(groupStats2.bytesWritten, 400,
                 'group bytesWritten must reflect the write');
 }, 'WebTransportSendGroup.getStats() matches the single stream it contains');
+
+promise_test(async t => {
+  const wt = new WebTransport(webtransport_url('echo.py'));
+  await wt.ready;
+
+  const sendGroup = wt.createSendGroup();
+  const stream1 = await wt.createUnidirectionalStream({ sendGroup });
+  const stream2 = await wt.createUnidirectionalStream({ sendGroup });
+  const writer1 = stream1.getWriter();
+  const writer2 = stream2.getWriter();
+  await Promise.all([
+    writer1.write(new Uint8Array(300).fill(1)),
+    writer2.write(new Uint8Array(200).fill(2)),
+  ]);
+
+  const statsBeforeClose = await sendGroup.getStats();
+  assert_equals(statsBeforeClose.bytesWritten, 500,
+                'sanity: group aggregates both streams before close');
+
+  wt.close();
+  await wt.closed;
+
+  // Per-stream getStats() correctly keeps returning last-known values after
+  // close (the stream objects survive); the group's own aggregate must not
+  // regress to zero just because the streams are no longer reachable via
+  // the transport's own internal bookkeeping.
+  const statsAfterClose = await sendGroup.getStats();
+  assert_equals(statsAfterClose.bytesWritten, statsBeforeClose.bytesWritten,
+                'group bytesWritten must not regress to zero after close');
+  assert_equals(statsAfterClose.bytesSent, statsBeforeClose.bytesSent,
+                'group bytesSent must not regress to zero after close');
+  assert_equals(
+    statsAfterClose.bytesAcknowledged, statsBeforeClose.bytesAcknowledged,
+    'group bytesAcknowledged must not regress to zero after close');
+}, 'WebTransportSendGroup.getStats() keeps last-known values after the connection closes');
