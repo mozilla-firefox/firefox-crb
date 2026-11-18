@@ -9,6 +9,8 @@
 #include "mozilla/dom/ReadableStream.h"
 #include "mozilla/dom/UnderlyingSourceCallbackHelpers.h"
 #include "mozilla/dom/WebTransport.h"
+#include "mozilla/dom/WebTransportChild.h"
+#include "mozilla/dom/WebTransportError.h"
 #include "mozilla/dom/WebTransportLog.h"
 #include "mozilla/dom/WebTransportSendReceiveStreamBinding.h"
 #include "mozilla/ipc/DataPipe.h"
@@ -23,6 +25,46 @@ NS_IMPL_ADDREF_INHERITED(WebTransportReceiveStream, ReadableStream)
 NS_IMPL_RELEASE_INHERITED(WebTransportReceiveStream, ReadableStream)
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebTransportReceiveStream)
 NS_INTERFACE_MAP_END_INHERITING(ReadableStream)
+
+namespace {
+
+class WebTransportReceiveStreamAlgorithms final
+    : public InputToReadableStreamAlgorithms {
+ public:
+  WebTransportReceiveStreamAlgorithms(JSContext* aCx,
+                                      nsIAsyncInputStream* aInput,
+                                      WebTransportReceiveStream* aStream)
+      : InputToReadableStreamAlgorithms(aCx, aInput, aStream) {}
+
+  // https://w3c.github.io/webtransport/#webtransportreceivestream-cancel
+  // step 9.1: abort receiving on internalStream with code, i.e. send
+  // STOP_SENDING with the app-supplied error code.
+  // InputToReadableStreamAlgorithms is a generic dom/streams helper with no
+  // cancelAlgorithm of its own, so this adds the WebTransport-specific
+  // behavior on top of the base class's generic cleanup.
+  MOZ_CAN_RUN_SCRIPT already_AddRefed<Promise> CancelCallbackImpl(
+      JSContext* aCx, const Optional<JS::Handle<JS::Value>>& aReason,
+      ErrorResult& aRv) override {
+    uint32_t wtCode = 0;
+    if (aReason.WasPassed() && aReason.Value().isObject()) {
+      JS::Rooted<JSObject*> obj(aCx, &aReason.Value().toObject());
+      RefPtr<WebTransportError> wtError;
+      if (NS_SUCCEEDED(UNWRAP_OBJECT(WebTransportError, &obj, wtError))) {
+        Nullable<uint32_t> streamErrorCode = wtError->GetStreamErrorCode();
+        if (!streamErrorCode.IsNull()) {
+          wtCode = streamErrorCode.Value();
+        }
+      }
+    }
+    static_cast<WebTransportReceiveStream*>(mStream.get())
+        ->SendStopSending(wtCode);
+    // cancelAlgorithm is optional; InputToReadableStreamAlgorithms doesn't
+    // define one of its own to chain to.
+    return nullptr;
+  }
+};
+
+}  // namespace
 
 WebTransportReceiveStream::WebTransportReceiveStream(nsIGlobalObject* aGlobal,
                                                      WebTransport* aTransport)
@@ -58,7 +100,7 @@ already_AddRefed<WebTransportReceiveStream> WebTransportReceiveStream::Create(
 
   nsCOMPtr<nsIAsyncInputStream> inputStream = receiver;
   auto algorithms =
-      MakeRefPtr<InputToReadableStreamAlgorithms>(cx, inputStream, stream);
+      MakeRefPtr<WebTransportReceiveStreamAlgorithms>(cx, inputStream, stream);
 
   stream->SetUpByteNative(cx, *algorithms, Some(0.0), aRv);
   if (aRv.Failed()) {
@@ -146,6 +188,14 @@ already_AddRefed<Promise> WebTransportReceiveStream::GetStats(
 
   // Step 4: Return p.
   return promise.forget();
+}
+
+void WebTransportReceiveStream::SendStopSending(uint32_t aErrorCode) {
+  WebTransportChild* child = mTransport ? mTransport->SendChild() : nullptr;
+  if (!child || !child->CanSend()) {
+    return;
+  }
+  child->SendStopSendingStream(mStreamId, aErrorCode);
 }
 
 }  // namespace mozilla::dom

@@ -37,6 +37,11 @@ class WebTransportReceiveStream final : public ReadableStream {
   // WebIDL Interface
   already_AddRefed<Promise> GetStats(ErrorResult& aRv);
 
+  // https://w3c.github.io/webtransport/#webtransportreceivestream-cancel
+  // step 9.1: abort receiving on internalStream with code. Called from
+  // WebTransportReceiveStreamAlgorithms::CancelCallbackImpl.
+  void SendStopSending(uint32_t aErrorCode);
+
  private:
   ~WebTransportReceiveStream() override;
 
