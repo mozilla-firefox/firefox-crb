@@ -123,6 +123,7 @@ const PREF_REGEXES_NOT_TO_DISPLAY = [
   /^media[.]webrtc[.]debug[.]log_file/,
   /^print[.].*print_to_filename$/,
   /^network[.]proxy[.]/,
+  /^network[.]ssl_tokens_cache_trr$/,
 ];
 
 // Table of getters for various preference types.

@@ -2099,6 +2099,9 @@ void nsHttpConnection::SetupSecondaryTLS() {
       gHttpHandler->ConnMgr()->BeConservativeIfProxied(ci->ProxyInfo())) {
     controlFlags |= nsISocketProvider::BE_CONSERVATIVE;
   }
+  if (ci->GetIsTrrServiceChannel() && !StaticPrefs::network_trr_use_ohttp()) {
+    controlFlags |= nsISocketProvider::IS_TRR_CONNECTION;
+  }
 
   RefPtr<TLSTransportLayer> transportLayer =
       new TLSTransportLayer(mSocketTransport, mSocketIn, mSocketOut, this);

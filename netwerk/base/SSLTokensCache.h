@@ -159,6 +159,26 @@ class SSLTokensCache : public nsIMemoryReporter,
   // Preferences::RegisterCallback; the two parameters are ignored.
   static void ReconcilePersistence(const char* = nullptr, void* = nullptr);
 
+  // network.ssl_tokens_cache_trr support. The static functions are main thread
+  // only, except ScheduleTRRPrefUpdate.
+  // Loads the first valid TRR pref value when the gate is on and the DB load
+  // hasn't started; forgets the TRR tokens when the gate is turned off.
+  // Matches PrefChangedFunc.
+  static void ApplyTRRTokensGate(const char* = nullptr, void* = nullptr)
+      MOZ_EXCLUDES(sLock);
+  // Fails if any record is malformed, has another key than the first, a non-TRR
+  // or private key, or an overridable error. Skips expired records.
+  static bool DecodeTRRTokens(const nsACString& aValue, PRTime aNow,
+                              nsTArray<SSLTokensCacheRecordInfo>& aOut);
+  // Rewrites the pref from mTRRKey's persistable records, or clears it.
+  static void WriteTRRPref() MOZ_EXCLUDES(sLock);
+  // Calls WriteTRRPref on the main thread, coalescing off-main-thread calls.
+  static void ScheduleTRRPrefUpdate() MOZ_EXCLUDES(sLock);
+  // Forgets mTRRKey and clears the pref.
+  static void ForgetTRRTokens() MOZ_EXCLUDES(sLock);
+  void CollectTRRRecordInfosLocked(
+      nsTArray<SSLTokensCacheRecordInfo>& aOut) const MOZ_REQUIRES(sLock);
+
   size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const
       MOZ_REQUIRES(sLock);
 
@@ -188,6 +208,12 @@ class SSLTokensCache : public nsIMemoryReporter,
   nsCOMPtr<nsITimer> mDBDeleteTimer MOZ_GUARDED_BY(sLock);
   // Removals made during the startup load; PutFromPersisted skips matches.
   nsTArray<StringPredicate> mRemovalsBeforeLoad MOZ_GUARDED_BY(sLock);
+  // Records loaded from the TRR pref; PutFromPersisted skips identical DB rows.
+  nsTArray<SSLTokensCacheRecordInfo> mTRRPrefRecords MOZ_GUARDED_BY(sLock);
+  // Peer ID of the TRR server whose tokens the TRR pref holds.
+  nsCString mTRRKey MOZ_GUARDED_BY(sLock);
+  bool mTRRPrefUpdatePending MOZ_GUARDED_BY(sLock){false};
+  bool mTRRPrefLoaded MOZ_GUARDED_BY(sLock){false};
   // Null once persistence is off.
   nsISerialEventTarget* ActiveDBQueueLocked() const MOZ_REQUIRES(sLock);
   template <typename F>
@@ -218,7 +244,8 @@ class SSLTokensCache : public nsIMemoryReporter,
       nsTArray<uint8_t>&& aCompressedPayload);
 
   // Skips insertion, returning false, if Clear() bumped mLoadGeneration past
-  // aExpectedGen since the load started.
+  // aExpectedGen since the load started, or if aRec was already loaded from the
+  // TRR pref.
   static bool PutFromPersisted(const SSLTokensCacheRecordInfo& aRec,
                                uint32_t aExpectedGen, bool aRestored);
 
@@ -287,6 +314,8 @@ class SSLTokensCache : public nsIMemoryReporter,
   void CollectRecordInfosLocked(nsTArray<SSLTokensCacheRecordInfo>& aOut,
                                 bool aFilterForPersistence) const
       MOZ_REQUIRES(sLock);
+  static void AppendRecordInfo(nsTArray<SSLTokensCacheRecordInfo>& aOut,
+                               const TokenCacheRecord& aRec);
   // Removes entries matching aPredicate.
   template <typename Pred>
   void RemoveMatchingLocked(Pred&& aPredicate) MOZ_REQUIRES(sLock);

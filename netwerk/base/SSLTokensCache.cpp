@@ -17,12 +17,16 @@
 #include "mozStorageCID.h"
 #include "mozStorageHelper.h"
 #include "mozilla/ArrayAlgorithm.h"
+#include "mozilla/AutoRestore.h"
+#include "mozilla/Base64.h"
+#include "mozilla/CheckedInt.h"
 #include "mozilla/Components.h"
 #include "mozilla/EndianUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/OriginAttributes.h"
 #include "mozilla/Preferences.h"
+#include "mozilla/ScopeExit.h"
 #include "mozilla/Services.h"
 #include "mozilla/Span.h"
 #include "mozilla/StaticPrefs_privacy.h"
@@ -30,10 +34,13 @@
 #include "mozilla/glean/NetwerkMetrics.h"
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
+#include "nsHostResolver.h"
+#include "nsIDNSService.h"
 #include "nsIEventTarget.h"
 #include "nsIGlobalObject.h"
 #include "nsIOService.h"
 #include "nsIObserverService.h"
+#include "nsISocketProvider.h"
 #include "nsITimer.h"
 #include "nsThreadUtils.h"
 #include "nss.h"
@@ -316,6 +323,94 @@ static bool DeserializeRecord(Span<const uint8_t> aBuf,
   return r.AtEnd();
 }
 
+static constexpr char kTRRTokensPref[] = "network.ssl_tokens_cache_trr";
+static constexpr char kTRRTokensEnabledPref[] =
+    "network.trr.tls_tokens.enabled";
+static const char* const kTRRTokensGatePrefs[] = {kTRRTokensPref,
+                                                  kTRRTokensEnabledPref};
+// Set while WriteTRRPref changes kTRRTokensPref. Main thread only.
+static bool sWritingTRRPref = false;
+
+// Base64 of [1: version], then per record (all integers little-endian):
+//   [4: key_len][key][8: expiration_time][1: overridable_error]
+//   [4: payload_len][compressed payload]
+static constexpr uint8_t kTRRTokensPrefVersion = 1;
+static constexpr uint32_t kMaxKeySize = 0xffff;
+
+static nsresult EncodeTRRTokens(
+    const nsTArray<SSLTokensCacheRecordInfo>& aRecords, nsACString& aOut) {
+  CheckedInt<size_t> size = sizeof(kTRRTokensPrefVersion);
+  for (const auto& rec : aRecords) {
+    size += sizeof(uint32_t) + sizeof(rec.expirationTime) +
+            sizeof(rec.overridableError) + sizeof(uint32_t);
+    size += rec.key.Length();
+    size += rec.compressedPayload.Length();
+  }
+  nsTArray<uint8_t> buf;
+  if (!size.isValid() || !buf.SetCapacity(size.value(), fallible)) {
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+  buf.AppendElement(kTRRTokensPrefVersion);
+  for (const auto& rec : aRecords) {
+    AppendLE(buf, AssertedCast<uint32_t>(rec.key.Length()));
+    buf.AppendElements(AsBytes(Span(rec.key)));
+    AppendLE(buf, rec.expirationTime);
+    buf.AppendElement(rec.overridableError);
+    AppendLE(buf, AssertedCast<uint32_t>(rec.compressedPayload.Length()));
+    buf.AppendElements(rec.compressedPayload);
+  }
+  return Base64Encode(reinterpret_cast<const char*>(buf.Elements()),
+                      buf.Length(), aOut);
+}
+
+// static
+bool SSLTokensCache::DecodeTRRTokens(const nsACString& aValue, PRTime aNow,
+                                     nsTArray<SSLTokensCacheRecordInfo>& aOut) {
+  nsAutoCString bin;
+  if (NS_FAILED(Base64Decode(aValue, bin))) {
+    return false;
+  }
+  PayloadReader r{AsBytes(Span(bin))};
+  uint8_t version;
+  if (!r.Read(version) || version != kTRRTokensPrefVersion) {
+    return false;
+  }
+  nsAutoCString firstKey;
+  while (!r.AtEnd()) {
+    SSLTokensCacheRecordInfo rec{};
+    uint32_t keyLen;
+    nsTArray<uint8_t> key;
+    if (!r.Read(keyLen) || keyLen == 0 || keyLen > kMaxKeySize ||
+        !r.Bytes(key, keyLen)) {
+      return false;
+    }
+    rec.key.Assign(reinterpret_cast<const char*>(key.Elements()), keyLen);
+    if (firstKey.IsEmpty()) {
+      // GetPeerId puts "trr:" last among the connection-type prefixes.
+      int32_t trrPos = rec.key.Find("trr:tlsflags");
+      if (trrPos == kNotFound ||
+          Substring(rec.key, 0, trrPos).Contains("private:") ||
+          OAFromPeerId(rec.key).mPrivateBrowsingId != 0) {
+        return false;
+      }
+      firstKey = rec.key;
+    } else if (rec.key != firstKey) {
+      return false;
+    }
+    uint32_t payloadLen;
+    if (!r.Read(rec.expirationTime) || !r.Read(rec.overridableError) ||
+        rec.overridableError != 0 || !r.Read(payloadLen) ||
+        payloadLen > kMaxPayloadSize ||
+        !r.Bytes(rec.compressedPayload, payloadLen)) {
+      return false;
+    }
+    if (rec.expirationTime > aNow) {
+      aOut.AppendElement(std::move(rec));
+    }
+  }
+  return true;
+}
+
 StaticRefPtr<SSLTokensCache> SSLTokensCache::gInstance;
 StaticMutex SSLTokensCache::sLock;
 uint64_t SSLTokensCache::sRecordId = 0;
@@ -450,10 +545,19 @@ void SSLTokensCache::DispatchToDBQueue(nsISerialEventTarget* aQueue,
 void SSLTokensCache::RemoveMatchingAndQueueDeletes(
     StringPredicate&& aPredicate) {
   MOZ_ASSERT(NS_IsMainThread());
+  bool matchesTRRKey = false;
+  // Declared before the lock so it runs after the lock is released.
+  auto updateTRRPref = MakeScopeExit([&] {
+    if (matchesTRRKey) {
+      WriteTRRPref();
+    }
+  });
   StaticMutexAutoLock lock(sLock);
   if (!gInstance) {
     return;
   }
+  matchesTRRKey =
+      !gInstance->mTRRKey.IsEmpty() && aPredicate(gInstance->mTRRKey);
   gInstance->RemoveMatchingLocked(aPredicate);
   if (!gInstance->mDBActive) {
     return;
@@ -526,6 +630,19 @@ void SSLTokensCache::ClearCacheLocked() {
   mCacheSize = 0;
   mPendingDBRemovals.Clear();
   mRemovalsBeforeLoad.Clear();
+  mTRRPrefRecords.Clear();
+}
+
+// static
+void SSLTokensCache::AppendRecordInfo(nsTArray<SSLTokensCacheRecordInfo>& aOut,
+                                      const TokenCacheRecord& aRec) {
+  auto info = aOut.AppendElement();
+  info->key = aRec.mKey;
+  info->expirationTime = static_cast<int64_t>(aRec.mExpirationTime);
+  info->overridableError = aRec.mOverridableError;
+  info->restored = aRec.mRestored;
+  info->id = aRec.mId;
+  info->compressedPayload = aRec.mCompressedPayload.Clone();
 }
 
 void SSLTokensCache::CollectRecordInfosLocked(
@@ -538,15 +655,127 @@ void SSLTokensCache::CollectRecordInfosLocked(
       if (aFilterForPersistence && !ShouldPersist(*rec, now)) {
         continue;
       }
-      auto info = aOut.AppendElement();
-      info->key = rec->mKey;
-      info->expirationTime = static_cast<int64_t>(rec->mExpirationTime);
-      info->overridableError = rec->mOverridableError;
-      info->restored = rec->mRestored;
-      info->id = rec->mId;
-      info->compressedPayload = rec->mCompressedPayload.Clone();
+      AppendRecordInfo(aOut, *rec);
     }
   }
+}
+
+void SSLTokensCache::CollectTRRRecordInfosLocked(
+    nsTArray<SSLTokensCacheRecordInfo>& aOut) const {
+  sLock.AssertCurrentThreadOwns();
+  TokenCacheEntry* entry =
+      mTRRKey.IsEmpty() ? nullptr : mTokenCacheRecords.Get(mTRRKey);
+  if (!entry) {
+    return;
+  }
+  PRTime now = PR_Now();
+  for (const auto& rec : entry->Records()) {
+    if (ShouldPersist(*rec, now)) {
+      AppendRecordInfo(aOut, *rec);
+    }
+  }
+}
+
+// static
+void SSLTokensCache::WriteTRRPref() {
+  MOZ_ASSERT(NS_IsMainThread());
+  nsTArray<SSLTokensCacheRecordInfo> records;
+  {
+    StaticMutexAutoLock lock(sLock);
+    if (!gInstance) {
+      return;
+    }
+    gInstance->mTRRPrefUpdatePending = false;
+    if (StaticPrefs::network_trr_tls_tokens_enabled()) {
+      gInstance->CollectTRRRecordInfosLocked(records);
+    }
+  }
+  AutoRestore<bool> restore(sWritingTRRPref);
+  sWritingTRRPref = true;
+  nsAutoCString value;
+  if (records.IsEmpty() || NS_FAILED(EncodeTRRTokens(records, value)) ||
+      NS_FAILED(Preferences::SetCString(kTRRTokensPref, value))) {
+    Preferences::ClearUser(kTRRTokensPref);
+  }
+}
+
+// static
+void SSLTokensCache::ScheduleTRRPrefUpdate() {
+  if (NS_IsMainThread()) {
+    WriteTRRPref();
+    return;
+  }
+  {
+    StaticMutexAutoLock lock(sLock);
+    if (!gInstance || gInstance->mTRRPrefUpdatePending) {
+      return;
+    }
+    gInstance->mTRRPrefUpdatePending = true;
+  }
+  NS_DispatchToMainThread(NS_NewRunnableFunction("SSLTokensCache::WriteTRRPref",
+                                                 [] { WriteTRRPref(); }));
+}
+
+// static
+void SSLTokensCache::ForgetTRRTokens() {
+  MOZ_ASSERT(NS_IsMainThread());
+  {
+    StaticMutexAutoLock lock(sLock);
+    if (!gInstance) {
+      return;
+    }
+    gInstance->mTRRKey.Truncate();
+  }
+  WriteTRRPref();
+}
+
+// static
+void SSLTokensCache::ApplyTRRTokensGate(const char* aPrefName, void*) {
+  MOZ_ASSERT(NS_IsMainThread());
+  if (sWritingTRRPref) {
+    return;
+  }
+  if (!StaticPrefs::network_trr_tls_tokens_enabled()) {
+    // Only a gate change clears, so a later-enabled gate finds the tokens.
+    if (aPrefName && !strcmp(aPrefName, kTRRTokensEnabledPref)) {
+      ForgetTRRTokens();
+    }
+    return;
+  }
+  nsAutoCString value;
+  if (NS_FAILED(Preferences::GetCString(kTRRTokensPref, value)) ||
+      value.IsEmpty()) {
+    return;
+  }
+  uint32_t loadGen;
+  {
+    StaticMutexAutoLock lock(sLock);
+    // Once the DB load starts, its rows may already hold these records.
+    if (!gInstance || gInstance->mTRRPrefLoaded || gInstance->mDBActive) {
+      return;
+    }
+    loadGen = gInstance->mLoadGeneration;
+  }
+  nsTArray<SSLTokensCacheRecordInfo> records;
+  if (!DecodeTRRTokens(value, PR_Now(), records) || records.IsEmpty()) {
+    LOG(("SSLTokensCache::ApplyTRRTokensGate: no usable tokens"));
+    WriteTRRPref();
+    return;
+  }
+  for (const auto& rec : records) {
+    PutFromPersisted(rec, loadGen, /* aRestored */ true);
+  }
+  LOG(("SSLTokensCache::ApplyTRRTokensGate: loaded %zu tokens",
+       records.Length()));
+  StaticMutexAutoLock lock(sLock);
+  if (!gInstance) {
+    return;
+  }
+  gInstance->mTRRPrefLoaded = true;
+  if (gInstance->mTRRKey.IsEmpty()) {
+    gInstance->mTRRKey = records[0].key;
+  }
+  gInstance->mTRRPrefRecords = std::move(records);
 }
 
 // static
@@ -661,29 +890,33 @@ nsresult SSLTokensCache::Init() {
         [dbFile]() { RemoveLegacyBackingFilesSync(dbFile); }));
   }
 
-  StaticMutexAutoLock lock(sLock);
+  {
+    StaticMutexAutoLock lock(sLock);
 
-  MOZ_ASSERT(!gInstance);
+    MOZ_ASSERT(!gInstance);
 
-  gInstance = new SSLTokensCache();
+    gInstance = new SSLTokensCache();
 
-  RegisterWeakMemoryReporter(gInstance);
+    RegisterWeakMemoryReporter(gInstance);
 
-  nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
-  if (obs) {
-    obs->AddObserver(gInstance, "profile-after-change", false);
-    obs->AddObserver(gInstance, "last-pb-context-exited", false);
+    nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+    if (obs) {
+      obs->AddObserver(gInstance, "profile-after-change", false);
+      obs->AddObserver(gInstance, "last-pb-context-exited", false);
+      obs->AddObserver(gInstance, NS_NETWORK_TRR_MODE_CHANGED_TOPIC, false);
+    }
+
+    if (StaticPrefs::network_ssl_tokens_cache_persistence() && obs) {
+      obs->AddObserver(gInstance, "application-background", false);
+      obs->AddObserver(gInstance, "idle-daily", false);
+      gInstance->mWriteObserversRegistered = true;
+    }
   }
 
-  if (!StaticPrefs::network_ssl_tokens_cache_persistence()) {
-    return NS_OK;
-  }
-
-  if (obs) {
-    obs->AddObserver(gInstance, "application-background", false);
-    obs->AddObserver(gInstance, "idle-daily", false);
-    gInstance->mWriteObserversRegistered = true;
-  }
+  // User prefs may load before or after this, firing the callbacks per pref.
+  Preferences::RegisterCallbacks(&SSLTokensCache::ApplyTRRTokensGate,
+                                 kTRRTokensGatePrefs);
+  ApplyTRRTokensGate();
 
   return NS_OK;
 }
@@ -741,8 +974,11 @@ void SSLTokensCache::UnregisterFromServices(SSLTokensCache* aInstance) {
   }
   Preferences::UnregisterCallback(&SSLTokensCache::ReconcilePersistence,
                                   "network.ssl_tokens_cache_persistence");
+  Preferences::UnregisterCallbacks(&SSLTokensCache::ApplyTRRTokensGate,
+                                   kTRRTokensGatePrefs);
   obs->RemoveObserver(aInstance, "profile-after-change");
   obs->RemoveObserver(aInstance, "last-pb-context-exited");
+  obs->RemoveObserver(aInstance, NS_NETWORK_TRR_MODE_CHANGED_TOPIC);
 }
 
 SSLTokensCache::SSLTokensCache() { LOG(("SSLTokensCache::SSLTokensCache")); }
@@ -1018,6 +1254,11 @@ nsresult SSLTokensCache::Put(const nsACString& aKey, const uint8_t* aToken,
     return NS_ERROR_FAILURE;
   }
 
+  bool isTRR = StaticPrefs::network_trr_tls_tokens_enabled() &&
+               (aSocketControl->GetProviderFlags() &
+                nsISocketProvider::IS_TRR_CONNECTION) &&
+               !TRR_DISABLED(nsHostResolver::Mode());
+
   {
     StaticMutexAutoLock lock(sLock);
 
@@ -1036,7 +1277,14 @@ nsresult SSLTokensCache::Put(const nsACString& aKey, const uint8_t* aToken,
     gInstance->InsertRecordLocked(std::move(rec));
     gInstance->LogStats();
 
+    if (isTRR) {
+      gInstance->mTRRKey = aKey;
+    }
   }  // sLock released
+
+  if (isTRR) {
+    ScheduleTRRPrefUpdate();
+  }
 
   return NS_OK;
 }
@@ -1047,11 +1295,19 @@ nsresult SSLTokensCache::Get(const nsACString& aKey, nsTArray<uint8_t>& aToken,
                              bool* aRestored) {
   LOG(("SSLTokensCache::Get [key=%s]", PromiseFlatCString(aKey).get()));
 
+  bool isTRRKey = false;
+  // Declared before the lock so it runs after the lock is released.
+  auto updateTRRPref = MakeScopeExit([&] {
+    if (isTRRKey) {
+      ScheduleTRRPrefUpdate();
+    }
+  });
   StaticMutexAutoLock lock(sLock);
   if (!gInstance) {
     LOG(("  service not initialized"));
     return NS_ERROR_NOT_INITIALIZED;
   }
+  isTRRKey = gInstance->mTRRKey.Equals(aKey);
   if (!gInstance->mLoadComplete && gInstance->mDBActive) {
     LOG(("SSLTokensCache::Get: connection before load complete"));
     mozilla::glean::network::ssl_token_cache_early_connections.Add(1);
@@ -1167,6 +1423,13 @@ nsresult SSLTokensCache::RemoveLocked(const nsACString& aKey, uint64_t aId) {
 
 // static
 nsresult SSLTokensCache::RemoveAll(const nsACString& aKey) {
+  bool isTRRKey = false;
+  // Declared before the lock so it runs after the lock is released.
+  auto updateTRRPref = MakeScopeExit([&] {
+    if (isTRRKey) {
+      ScheduleTRRPrefUpdate();
+    }
+  });
   StaticMutexAutoLock lock(sLock);
 
   LOG(("SSLTokensCache::RemoveAll [key=%s]", PromiseFlatCString(aKey).get()));
@@ -1176,6 +1439,7 @@ nsresult SSLTokensCache::RemoveAll(const nsACString& aKey) {
     return NS_ERROR_NOT_INITIALIZED;
   }
 
+  isTRRKey = gInstance->mTRRKey.Equals(aKey);
   return gInstance->RemoveAllLocked(aKey);
 }
 
@@ -1314,6 +1578,7 @@ void SSLTokensCache::Clear() {
     }
 
     gInstance->ClearCacheLocked();
+    gInstance->mTRRKey.Truncate();
     queue = gInstance->ActiveDBQueueLocked();
   }
 
@@ -1321,6 +1586,7 @@ void SSLTokensCache::Clear() {
     // The serial queue guarantees this runs after any pending write.
     DispatchToDBQueue(queue, "SSLTokensCache::ClearDB", [] { ClearDB(); });
   }
+  ScheduleTRRPrefUpdate();
 }
 
 void SSLTokensCache::DoWrite(bool aSynchronous) {
@@ -1412,6 +1678,7 @@ void SSLTokensCache::OnLoadCompleteNotify(uint32_t aCount) {
     }
     gInstance->mLoadComplete = true;
     gInstance->mRemovalsBeforeLoad.Clear();
+    gInstance->mTRRPrefRecords.Clear();
     removals = std::move(gInstance->mPendingDBRemovals);
     loadGen = gInstance->mLoadGeneration;
     elapsed = TimeStamp::Now() - gInstance->mLoadStartTime;
@@ -1454,6 +1721,13 @@ bool SSLTokensCache::PutFromPersisted(const SSLTokensCacheRecordInfo& aRec,
   }
   if (MatchesAny(gInstance->mRemovalsBeforeLoad, aRec.key)) {
     return false;
+  }
+  // Tickets are single-use, so don't add one again, even if already consumed.
+  for (const auto& prefRec : gInstance->mTRRPrefRecords) {
+    if (prefRec.key == aRec.key &&
+        prefRec.compressedPayload == aRec.compressedPayload) {
+      return false;
+    }
   }
   auto rec =
       MakeRecord(aRec.key, static_cast<PRTime>(aRec.expirationTime),
@@ -1995,6 +2269,7 @@ void SSLTokensCache::ReconcilePersistence(const char*, void*) {
       // Ordered after any pending write.
       DispatchToDBQueue(queueForRemoval, "SSLTokensCache::RemoveDB",
                         [] { RemoveDBFileSync(); });
+      WriteTRRPref();  // The cache was cleared.
     } else if (nsCOMPtr<nsIFile> dbFile = ProfileDBFile()) {
       NS_DispatchBackgroundTask(
           NS_NewRunnableFunction("SSLTokensCache::RemoveDB",
@@ -2040,6 +2315,10 @@ SSLTokensCache::Observe(nsISupports* aSubject, const char* aTopic,
     LOG(("SSLTokensCache::Observe [topic=last-pb-context-exited]"));
     // Remove only PBM entries from this process's token cache.
     ClearPrivateBrowsing();
+  } else if (!strcmp(aTopic, NS_NETWORK_TRR_MODE_CHANGED_TOPIC)) {
+    if (TRR_DISABLED(nsHostResolver::Mode())) {
+      ForgetTRRTokens();
+    }
   }
   return NS_OK;
 }

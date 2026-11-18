@@ -1886,7 +1886,9 @@ nsresult nsSSLIOLayerAddToSocket(int32_t family, const char* host, int32_t port,
     return NS_ERROR_FAILURE;
   }
   // Only plaintext tokens resume after a restart.
-  if (StaticPrefs::network_ssl_tokens_cache_persistence() &&
+  if ((StaticPrefs::network_ssl_tokens_cache_persistence() ||
+       (StaticPrefs::network_trr_tls_tokens_enabled() &&
+        (providerFlags & nsISocketProvider::IS_TRR_CONNECTION))) &&
       SSL_EnablePlaintextResumptionExport(sslSock, PR_TRUE) != SECSuccess) {
     MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
             ("[%p] Plaintext resumption export unavailable", (void*)sslSock));

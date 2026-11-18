@@ -16482,6 +16482,13 @@
   value: 0
   mirror: always
 
+# Persist the active TRR server's TLS session tokens in a pref for early
+# startup, and enable plaintext resumption export for TRR connections.
+- name: network.trr.tls_tokens.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Default global TRR provider
 - name: network.trr.default_provider_uri
   type: String

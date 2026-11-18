@@ -7291,6 +7291,7 @@ static const PrefListEntry sRestrictFromWebContentProcesses[] = {
     PREF_LIST_ENTRY("identity.fxaccounts.account.device.name"),
     PREF_LIST_ENTRY("identity.fxaccounts.account.telemetry.sanitized_uid"),
     PREF_LIST_ENTRY("identity.fxaccounts.lastSignedInUserHash"),
+    PREF_LIST_ENTRY("network.ssl_tokens_cache_trr"),
     PREF_LIST_ENTRY("print_printer"),
     PREF_LIST_ENTRY("services."),
     PREF_LIST_ENTRY("termsofuse."),

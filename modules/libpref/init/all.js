@@ -3256,6 +3256,8 @@ pref("network.trr.confirmationNS", "example.com");
 // Comma separated list of domains that we should not use TRR for
 pref("network.trr.excluded-domains", "");
 pref("network.trr.builtin-excluded-domains", "localhost,local");
+// TLS session tokens of the active TRR server.
+pref("network.ssl_tokens_cache_trr", "");
 
 // This preference controls if LNA blocking should be tied to ETP strict modes.
 // Used for progressive rollout of LNA for ETP strict users

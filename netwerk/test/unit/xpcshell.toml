@@ -29,6 +29,7 @@ support-files = [
   "http3_proxy_common.js",
   "http3_common.js",
   "head_ssl_token_cache_load.js",
+  "head_trr_tls_tokens.js",
 ]
 
 # dom.serviceWorkers.enabled is currently set to false in StaticPrefList.yaml
@@ -2046,6 +2047,12 @@ skip-if = [
 
 ["test_trr_telemetry.js"]
 head = "head_channels.js head_cache.js head_cookies.js head_trr.js head_http3.js trr_common.js"
+
+["test_trr_tls_tokens.js"]
+head = "head_channels.js head_cache.js head_cookies.js head_trr.js head_http3.js trr_common.js head_trr_tls_tokens.js"
+
+["test_trr_tls_tokens_decode.js"]
+head = "head_trr_tls_tokens.js"
 
 ["test_trr_ttl.js"]
 

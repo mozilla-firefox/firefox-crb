@@ -141,4 +141,9 @@ interface nsISocketProvider : nsISupports
      * set only when DoH is used via the TRR.
      */
     const unsigned long USED_PRIVATE_DNS = (1 << 12);
+
+    /**
+     * If set, indicates that the connection is to a TRR (DoH) server.
+     */
+    const unsigned long IS_TRR_CONNECTION = (1 << 13);
 };

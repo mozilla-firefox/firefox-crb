@@ -695,6 +695,9 @@ NSSSocketControl::GetPeerId(nsACString& aResult) {
   if (mProviderFlags & nsISocketProvider::BE_CONSERVATIVE) {
     mPeerId.AppendLiteral("beConservative:");
   }
+  if (mProviderFlags & nsISocketProvider::IS_TRR_CONNECTION) {
+    mPeerId.AppendLiteral("trr:");
+  }
 
   mPeerId.AppendPrintf("tlsflags0x%08x:", mProviderTlsFlags);
 
