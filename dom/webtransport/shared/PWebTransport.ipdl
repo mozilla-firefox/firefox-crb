@@ -67,6 +67,12 @@ struct WebTransportStatsData {
   WebTransportDatagramStatsData datagrams;
 };
 
+struct StreamStats {
+  uint64_t bytesWritten;
+  uint64_t bytesSent;
+  uint64_t bytesAcknowledged;
+};
+
 union BidirectionalStreamResponse {
   nsresult;
   BidirectionalStream;
@@ -173,6 +179,13 @@ async protocol PWebTransport
   */
   async GetStats()
     returns(WebTransportStatsData? stats);
+
+  /**
+  * Get stream statistics
+  * @param streamId the ID of the stream to query
+  */
+  async GetStreamStats(uint64_t streamId)
+    returns(StreamStats? stats);
 
  child:
 

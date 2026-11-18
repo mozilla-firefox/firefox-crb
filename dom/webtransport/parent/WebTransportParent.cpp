@@ -684,6 +684,23 @@ IPCResult WebTransportParent::RecvGetStats(GetStatsResolver&& aResolver) {
   return IPC_OK();
 }
 
+IPCResult WebTransportParent::RecvGetStreamStats(
+    uint64_t aStreamId, GetStreamStatsResolver&& aResolver) {
+  LOG(("GetStreamStats for %p, streamId=%llu", this,
+       (unsigned long long)aStreamId));
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+
+  if (!mWebTransport) {
+    aResolver(Nothing());
+    return IPC_OK();
+  }
+
+  // TODO: Call mWebTransport->GetStreamStats(aStreamId)
+  // For now, return Nothing() as placeholder
+  aResolver(Nothing());
+  return IPC_OK();
+}
+
 IPCResult WebTransportParent::RecvCreateSendGroup(uint64_t aGroupId) {
   LOG(("%s for %p received, groupId=%" PRIu64, __func__, this, aGroupId));
   MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
