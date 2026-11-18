@@ -184,10 +184,15 @@ class Http3SessionBase {
                                               uint64_t* aBytesWritten,
                                               uint64_t* aBytesSent,
                                               uint64_t* aBytesAcknowledged) = 0;
-  virtual nsresult RegisterWebTransportSendGroup(uint64_t aSessionId,
-                                                 uint64_t aGroupId) = 0;
+  virtual bool GetWebTransportSendStreamFlowControlInfo(
+      uint64_t aStreamId, uint64_t* aAvailableWindow,
+      uint64_t* aBytesBuffered) = 0;
+  virtual bool WebTransportSendStreamAtomic(uint64_t aStreamId,
+                                            nsTArray<uint8_t>&& aData) = 0;
   virtual nsresult GetWebTransportSessionProtocol(uint64_t aSessionId,
                                                   nsACString& aProtocol) = 0;
+  virtual nsresult RegisterWebTransportSendGroup(uint64_t aSessionId,
+                                                 uint64_t aGroupId) = 0;
   virtual void
   SetWebTransportAnticipatedConcurrentIncomingUnidirectionalStreams(
       uint64_t aSessionId, uint16_t aValue) = 0;
@@ -362,6 +367,11 @@ class Http3Session final : public Http3SessionBase,
                                       uint64_t* aBytesWritten,
                                       uint64_t* aBytesSent,
                                       uint64_t* aBytesAcknowledged) override;
+  bool GetWebTransportSendStreamFlowControlInfo(
+      uint64_t aStreamId, uint64_t* aAvailableWindow,
+      uint64_t* aBytesBuffered) override;
+  bool WebTransportSendStreamAtomic(uint64_t aStreamId,
+                                    nsTArray<uint8_t>&& aData) override;
   nsresult GetWebTransportSessionProtocol(uint64_t aSessionId,
                                           nsACString& aProtocol) override;
   void SetWebTransportAnticipatedConcurrentIncomingUnidirectionalStreams(

@@ -292,6 +292,31 @@ class NeqoHttp3Conn final {
     return true;
   }
 
+  bool GetWebTransportSendStreamFlowControlInfo(uint64_t aStreamId,
+                                                uint64_t* aAvailableWindow,
+                                                uint64_t* aBytesBuffered) {
+    struct WebTransportStreamFlowControlInfo info;
+    nsresult rv = neqo_http3conn_webtransport_send_stream_flow_control_info(
+        this, aStreamId, &info);
+    if (NS_FAILED(rv)) {
+      return false;
+    }
+    *aAvailableWindow = info.available_window;
+    *aBytesBuffered = info.bytes_buffered;
+    return true;
+  }
+
+  bool WebTransportSendStreamAtomic(uint64_t aStreamId,
+                                    nsTArray<uint8_t>&& aData) {
+    bool result = false;
+    nsresult rv = neqo_http3conn_webtransport_send_stream_atomic(
+        this, aStreamId, &aData, &result);
+    if (NS_FAILED(rv)) {
+      return false;
+    }
+    return result;
+  }
+
   nsresult WebTransportSetSendOrder(uint64_t aSessionId, int64_t aSendOrder) {
     return neqo_http3conn_webtransport_set_sendorder(this, aSessionId,
                                                      &aSendOrder);
