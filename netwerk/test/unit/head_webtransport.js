@@ -41,6 +41,7 @@ WebTransportListener.prototype = {
   },
   onDatagramsFlush() {},
   onOutgoingDatagramSpaceAvailable() {},
+  onStreamCloseComplete() {},
   onMaxDatagramSize(size) {
     info("max datagram size: " + size);
     if (this.onMaxDatagramSize) {

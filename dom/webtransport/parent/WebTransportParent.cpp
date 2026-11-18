@@ -1448,6 +1448,18 @@ NS_IMETHODIMP WebTransportParent::OnAtomicWriteResult(uint64_t aStreamId,
   return NS_OK;
 }
 
+NS_IMETHODIMP WebTransportParent::OnStreamCloseComplete(uint64_t aStreamId) {
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+  LOG(("WebTransportParent::OnStreamCloseComplete streamId=%" PRIu64,
+       aStreamId));
+
+  if (CanSend()) {
+    (void)SendStreamCloseComplete(aStreamId);
+  }
+
+  return NS_OK;
+}
+
 NS_IMETHODIMP WebTransportParent::OnOutgoingDatagramSpaceAvailable() {
   MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
 

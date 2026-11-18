@@ -7,6 +7,7 @@
 
 #include "WebTransportFraming.h"
 #include "mozilla/Queue.h"
+#include "mozilla/dom/AbortFollower.h"
 #include "mozilla/dom/WritableStream.h"
 #include "nsIAsyncOutputStream.h"
 #include "nsTHashMap.h"
@@ -85,6 +86,12 @@ class WebTransportSendStream final : public WritableStream,
   WebTransport* GetTransport() const { return mTransport; }
 
   mozilla::ipc::DataPipeSender* GetDataPipeSender() const { return mSender; }
+
+  Promise* GetPendingOperation() const { return mPendingOperation; }
+  void SetPendingOperation(Promise* aPromise) { mPendingOperation = aPromise; }
+  already_AddRefed<Promise> TakePendingOperation() {
+    return mPendingOperation.forget();
+  }
 
   // Enqueue a write operation (from WriteCallbackImpl)
   void EnqueueWrite(PendingWriteEntry&& aEntry);
@@ -182,6 +189,15 @@ class WebTransportSendStream final : public WritableStream,
   RefPtr<WebTransport> mTransport;
   RefPtr<WebTransportSendGroup> mSendGroup;
   RefPtr<mozilla::ipc::DataPipeSender> mSender;
+
+  // [[PendingOperation]] -- the close() promise, held unsettled while the FIN
+  // is in flight so an abort() racing it can reject it instead.
+  RefPtr<Promise> mPendingOperation;
+
+  // Follows the controller's abort signal so an abort() racing an in-flight
+  // close() can reject [[PendingOperation]] -- "create a
+  // WebTransportSendStream" step 7.
+  RefPtr<AbortFollower> mAbortWatcher;
   uint64_t mStreamId;
   int64_t mSendOrder;
   uint64_t mBytesWritten{0};

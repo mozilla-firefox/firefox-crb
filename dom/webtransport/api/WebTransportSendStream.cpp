@@ -5,6 +5,7 @@
 #include "mozilla/dom/WebTransportSendStream.h"
 
 #include "mozilla/CycleCollectedJSContext.h"
+#include "mozilla/dom/AbortFollower.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/UnderlyingSinkCallbackHelpers.h"
@@ -30,6 +31,7 @@ using ::ImplCycleCollectionUnlink;
 
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStream, WritableStream,
                                    mTransport, mSendGroup, mSender,
+                                   mPendingOperation, mAbortWatcher,
                                    mAtomicWriteReqPromises, mPendingWrites,
                                    mUnconfirmedAtomicWrites)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStream, WritableStream)
@@ -58,6 +60,42 @@ JSObject* WebTransportSendStream::WrapObject(
 
 // NOTE: this does not yet implement SendOrder; see bug 1816925
 /* static */
+namespace {
+
+// https://w3c.github.io/webtransport/#send-stream-procedures
+// "create a WebTransportSendStream" step 7: the steps added to the
+// controller's abort signal. The work itself lives on the sink, which owns
+// the close/abort algorithms.
+class SendStreamAbortWatcher final : public AbortFollower {
+ public:
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
+  NS_DECL_CYCLE_COLLECTION_CLASS(SendStreamAbortWatcher)
+
+  explicit SendStreamAbortWatcher(WebTransportSendStreamAlgorithms* aAlgorithms)
+      : mAlgorithms(aAlgorithms) {}
+
+  void RunAbortAlgorithm() override {
+    RefPtr<WebTransportSendStreamAlgorithms> algorithms = mAlgorithms;
+    if (algorithms) {
+      algorithms->RunAbortSignalSteps(Signal());
+    }
+  }
+
+ private:
+  ~SendStreamAbortWatcher() = default;
+
+  RefPtr<WebTransportSendStreamAlgorithms> mAlgorithms;
+};
+
+NS_IMPL_CYCLE_COLLECTION(SendStreamAbortWatcher, mAlgorithms)
+NS_IMPL_CYCLE_COLLECTING_ADDREF(SendStreamAbortWatcher)
+NS_IMPL_CYCLE_COLLECTING_RELEASE(SendStreamAbortWatcher)
+NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(SendStreamAbortWatcher)
+  NS_INTERFACE_MAP_ENTRY(nsISupports)
+NS_INTERFACE_MAP_END
+
+}  // namespace
+
 already_AddRefed<WebTransportSendStream> WebTransportSendStream::Create(
     WebTransport* aWebTransport, nsIGlobalObject* aGlobal, uint64_t aStreamId,
     DataPipeSender* aSender, int64_t aSendOrder,
@@ -91,19 +129,20 @@ already_AddRefed<WebTransportSendStream> WebTransportSendStream::Create(
   RefPtr<QueuingStrategySize> writableSizeAlgorithm;
   stream->SetUpNative(cx, *algorithms, Nothing(), writableSizeAlgorithm, aRv);
 
-  // Step 6:  Add the following steps to stream’s [[controller]]'s [[signal]].
-  // Step 6.1: If stream.[[PendingOperation]] is null, then abort these steps.
-  // Step 6.2: Let reason be stream’s [[controller]]'s [[signal]]'s abort
-  // reason. Step 6.3: Let abortPromise be the result of aborting stream with
-  // reason. Step 6.4: Upon fulfillment of abortPromise, reject promise with
-  // reason. Step 6.5: Let pendingOperation be stream.[[PendingOperation]].
-  // Step 6.6: Set stream.[[PendingOperation]] to null.
-  // Step 6.7: Resolve pendingOperation with promise.
-  // XXX TODO
+  // Step 6: Let abortSignal be stream's [[controller]].[[abortController]].
+  // [[signal]].
+  // Step 7: Add the following steps to abortSignal. (7.1-7.6 implemented in
+  // WebTransportSendStreamAlgorithms::RunAbortSignalSteps.)
+  if (WritableStreamDefaultController* controller = stream->Controller()) {
+    if (AbortSignal* signal = controller->Signal()) {
+      stream->mAbortWatcher = new SendStreamAbortWatcher(algorithms);
+      stream->mAbortWatcher->Follow(signal);
+    }
+  }
 
-  // Step 7: Append stream to SendStreams
+  // Step 8: Append stream to transport.[[SendStreams]].
   aWebTransport->mSendStreams.InsertOrUpdate(aStreamId, stream);
-  // Step 8: return stream
+  // Step 9: Return stream.
   return stream.forget();
 }
 

@@ -58,4 +58,11 @@ WebTransportSessionBase::TakeListener() {
   return mListener.forget();
 }
 
+void WebTransportSessionBase::NotifyStreamCloseComplete(uint64_t aStreamId) {
+  RefPtr<WebTransportSessionEventListener> listener = GetListener();
+  if (listener) {
+    listener->OnStreamCloseComplete(aStreamId);
+  }
+}
+
 }  // namespace mozilla::net

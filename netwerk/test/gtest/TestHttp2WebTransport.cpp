@@ -310,6 +310,11 @@ NS_IMETHODIMP MockWebTransportSessionEventListener::OnStopSending(
   return NS_OK;
 }
 
+NS_IMETHODIMP MockWebTransportSessionEventListener::OnStreamCloseComplete(
+    uint64_t aStreamId) {
+  return NS_OK;
+}
+
 NS_IMETHODIMP MockWebTransportSessionEventListener::OnResetReceived(
     uint64_t aStreamId, uint64_t aErrorCode) {
   mReset = Some(std::pair<uint64_t, uint64_t>(aStreamId, aErrorCode));
