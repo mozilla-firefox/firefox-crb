@@ -1765,7 +1765,16 @@ pub unsafe extern "C" fn neqo_http3conn_send_request_body(
     len: u32,
     read: &mut u32,
 ) -> nsresult {
-    let array = slice::from_raw_parts(buf, len as usize);
+    if buf.is_null() && len > 0 {
+        return NS_ERROR_INVALID_ARG;
+    }
+    // buf is only null here when len == 0 (checked above); from_raw_parts
+    // requires a non-null data pointer even for a zero-length slice.
+    let array = if buf.is_null() {
+        &[]
+    } else {
+        slice::from_raw_parts(buf, len as usize)
+    };
     conn.conn
         .send_data(StreamId::from(stream_id), array, Instant::now())
         .map_or(NS_ERROR_UNEXPECTED, |amount| {
@@ -2403,7 +2412,16 @@ pub unsafe extern "C" fn neqo_http3conn_read_response_data(
     read: &mut u32,
     fin: &mut bool,
 ) -> nsresult {
-    let array = slice::from_raw_parts_mut(buf, len as usize);
+    if buf.is_null() && len > 0 {
+        return NS_ERROR_INVALID_ARG;
+    }
+    // buf is only null here when len == 0 (checked above); from_raw_parts_mut
+    // requires a non-null data pointer even for a zero-length slice.
+    let array: &mut [u8] = if buf.is_null() {
+        &mut []
+    } else {
+        slice::from_raw_parts_mut(buf, len as usize)
+    };
     match conn
         .conn
         .read_data(Instant::now(), StreamId::from(stream_id), &mut array[..])
@@ -3328,13 +3346,31 @@ pub extern "C" fn neqo_encode_uint(encoder: &mut NeqoEncoder, n: u32, data: u64)
 
 #[no_mangle]
 pub unsafe extern "C" fn neqo_encode_buffer(encoder: &mut NeqoEncoder, buf: *const u8, len: u32) {
-    let array = slice::from_raw_parts(buf, len as usize);
+    if buf.is_null() && len > 0 {
+        return;
+    }
+    // buf is only null here when len == 0 (checked above); from_raw_parts
+    // requires a non-null data pointer even for a zero-length slice.
+    let array = if buf.is_null() {
+        &[]
+    } else {
+        slice::from_raw_parts(buf, len as usize)
+    };
     encoder.encoder.encode(array);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn neqo_encode_vvec(encoder: &mut NeqoEncoder, buf: *const u8, len: u32) {
-    let array = slice::from_raw_parts(buf, len as usize);
+    if buf.is_null() && len > 0 {
+        return;
+    }
+    // buf is only null here when len == 0 (checked above); from_raw_parts
+    // requires a non-null data pointer even for a zero-length slice.
+    let array = if buf.is_null() {
+        &[]
+    } else {
+        slice::from_raw_parts(buf, len as usize)
+    };
     encoder.encoder.encode_vvec(array);
 }
 
@@ -3364,7 +3400,16 @@ pub struct NeqoDecoder {
 
 impl NeqoDecoder {
     fn new(buf: *const u8, len: u32) -> Result<RefPtr<NeqoDecoder>, nsresult> {
-        let slice = unsafe { slice::from_raw_parts(buf, len as usize) };
+        if buf.is_null() && len > 0 {
+            return Err(NS_ERROR_INVALID_ARG);
+        }
+        // buf is only null here when len == 0 (checked above); from_raw_parts
+        // requires a non-null data pointer even for a zero-length slice.
+        let slice: &[u8] = if buf.is_null() {
+            &[]
+        } else {
+            unsafe { slice::from_raw_parts(buf, len as usize) }
+        };
         let decoder = Box::new(Decoder::new(slice));
         let wrapper = Box::into_raw(Box::new(NeqoDecoder {
             decoder: Box::into_raw(decoder),
