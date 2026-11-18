@@ -437,10 +437,11 @@ void InputToReadableStreamAlgorithms::PullFromInputStream(JSContext* aCx,
   // We do this in step 8 and 9, as we don't have a direct access to the data
   // but need to let nsIInputStream to write into the view.
 
+  uint32_t bytesWritten = 0;
+
   // Step 8. If stream’s current BYOB request view is non-null, then:
   if (byobView) {
     // Step 8.1. Write pulled into stream’s current BYOB request view.
-    uint32_t bytesWritten = 0;
     WriteIntoReadRequestBuffer(aCx, mStream, byobView, pullSize, &bytesWritten,
                                aRv);
     if (aRv.Failed()) {
@@ -457,6 +458,9 @@ void InputToReadableStreamAlgorithms::PullFromInputStream(JSContext* aCx,
         mStream->Controller()->AsByte());
     MOZ_ASSERT(byteController);
     ReadableByteStreamControllerRespond(aCx, byteController, bytesWritten, aRv);
+    if (aRv.Failed()) {
+      return;
+    }
   }
   // Step 9. Otherwise,
   else {
@@ -469,7 +473,6 @@ void InputToReadableStreamAlgorithms::PullFromInputStream(JSContext* aCx,
       return;
     }
 
-    uint32_t bytesWritten = 0;
     nsresult rv = mInput->Read((char*)buffer.get(), pullSize, &bytesWritten);
     if (!bytesWritten) {
       rv = NS_BASE_STREAM_CLOSED;
@@ -494,7 +497,12 @@ void InputToReadableStreamAlgorithms::PullFromInputStream(JSContext* aCx,
         mStream->Controller()->AsByte());
     MOZ_ASSERT(byteController);
     ReadableByteStreamControllerEnqueue(aCx, byteController, view, aRv);
+    if (aRv.Failed()) {
+      return;
+    }
   }
+
+  mBytesPulled += bytesWritten;
 }
 
 void InputToReadableStreamAlgorithms::CloseAndReleaseObjects(

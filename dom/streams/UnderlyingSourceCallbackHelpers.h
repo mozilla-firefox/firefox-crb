@@ -251,6 +251,12 @@ class InputToReadableStreamAlgorithms
 
   nsIInputStream* MaybeGetInputStreamIfUnread() override;
 
+  // Total bytes handed to the stream's pending read requests so far.
+  // Streams created with a high water mark of 0 are only pulled from while a
+  // read is outstanding, so for those this counts the bytes the consumer
+  // actually received.
+  uint64_t BytesPulled() const { return mBytesPulled; }
+
  protected:
   ~InputToReadableStreamAlgorithms();
 
@@ -300,6 +306,8 @@ class InputToReadableStreamAlgorithms
 
   // mStream never changes after construction and before CC
   MOZ_KNOWN_LIVE RefPtr<ReadableStream> mStream;
+
+  uint64_t mBytesPulled{0};
 };
 
 class NonAsyncInputToReadableStreamAlgorithms

@@ -118,6 +118,46 @@ promise_test(async t => {
 }, 'WebTransportReceiveStream.getStats() tracks bytes read by the application');
 
 promise_test(async t => {
+  // stats-data-transfer.py sends 5000 bytes then closes the stream. Read a
+  // single 100-byte BYOB chunk and let the rest arrive without reading it, to
+  // verify bytesRead counts what the application consumed rather than
+  // everything the transport received.
+  // See https://w3c.github.io/webtransport/#receive-stream-stats.
+  const CHUNK_SIZE = 100;
+  const wt = new WebTransport(webtransport_url('stats-data-transfer.py'));
+  t.add_cleanup(() => wt.close());
+  await wt.ready;
+
+  const streams = wt.incomingBidirectionalStreams.getReader();
+  const {value: {readable}, done} = await streams.read();
+  assert_false(done, 'the server must open a stream');
+
+  const reader = readable.getReader({mode: 'byob'});
+  // A BYOB read is capped by the view, but may return less if that much has
+  // not arrived yet.
+  const {value} = await reader.read(new Uint8Array(CHUNK_SIZE));
+  assert_between_inclusive(value.length, 1, CHUNK_SIZE,
+                           'BYOB read is bounded by the view');
+
+  // Poll until bytesReceived reflects the full transfer (the wire-level FIN
+  // has been processed), without reading any further.
+  let stats;
+  for (let i = 0; i < 50; i++) {
+    stats = await readable.getStats();
+    if (stats.bytesReceived >= 5000) {
+      break;
+    }
+    await wait(50);
+  }
+
+  assert_equals(stats.bytesReceived, 5000,
+                'bytesReceived must reflect the full transfer');
+  assert_equals(stats.bytesRead, value.length,
+                'bytesRead must only count what the application read');
+}, 'WebTransportReceiveStream.getStats() does not conflate bytesRead with ' +
+   'bytesReceived');
+
+promise_test(async t => {
   const wt = new WebTransport(webtransport_url('stats-data-transfer.py'));
   t.add_cleanup(() => wt.close());
   await wt.ready;
