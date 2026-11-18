@@ -180,9 +180,9 @@ add_task(async function test_sendGroup_validation() {
   // Try to use send group from wt1 on wt2's stream - should fail
   try {
     await wt2.createUnidirectionalStream({ sendGroup });
-    Assert.ok(false, "Should have thrown InvalidStateError");
+    Assert.ok(false, "Should have thrown TypeError");
   } catch (e) {
-    Assert.equal(e.name, "InvalidStateError");
+    Assert.equal(e.name, "TypeError");
   }
 
   wt1.close();
