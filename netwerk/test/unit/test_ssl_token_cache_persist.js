@@ -10,7 +10,7 @@
 //
 // The DB file is created as soon as persistence activates, before any token is
 // written, so each test polls the row count rather than checking existence.
-// The read-back uses the synchronous Services.storage API, since
+// The read-back uses the Services.storage API, since
 // Sqlite.sys.mjs refuses new connections during profile-before-change.
 
 "use strict";
@@ -18,12 +18,6 @@
 const { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
 );
-const { AsyncShutdown } = ChromeUtils.importESModule(
-  "resource://gre/modules/AsyncShutdown.sys.mjs"
-);
-
-let gProfileDir = null;
-let gCacheFile = null;
 
 add_setup({ skip_if: () => AppConstants.MOZ_SYSTEM_NSS }, async () => {
   const { HttpServer } = ChromeUtils.importESModule(
@@ -35,8 +29,7 @@ add_setup({ skip_if: () => AppConstants.MOZ_SYSTEM_NSS }, async () => {
   // returns without firing profile-after-change.  Fire it explicitly so that
   // SSLTokensCache::Observe() sets up persistence and schedules the
   // shutdown blocker.
-  gProfileDir = do_get_profile();
-  gCacheFile = PathUtils.join(gProfileDir.path, "ssl_tokens_cache.sqlite");
+  do_get_profile();
   Services.obs.notifyObservers(
     null,
     "profile-after-change",
@@ -73,34 +66,9 @@ async function makeConnection() {
   ok(buf, "connection succeeded and NewSessionTicket was issued");
 }
 
-// Row count via a throwaway connection, or null if the file/table isn't there
-// yet or is briefly locked by a concurrent write.
-function readCacheRowCount() {
-  let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-  file.initWithPath(gCacheFile);
-  if (!file.exists()) {
-    return null;
-  }
-  let conn;
-  try {
-    conn = Services.storage.openDatabase(file);
-  } catch (e) {
-    return null;
-  }
-  try {
-    let stmt = conn.createStatement("SELECT COUNT(*) FROM ssl_tokens");
-    try {
-      stmt.executeStep();
-      return stmt.getInt32(0);
-    } finally {
-      stmt.reset();
-      stmt.finalize();
-    }
-  } catch (e) {
-    return null;
-  } finally {
-    conn.close();
-  }
+async function readCacheRowCount() {
+  let values = await queryCacheColumn("SELECT COUNT(*) FROM ssl_tokens");
+  return values ? values[0] : null;
 }
 
 // Polls the row count until it reaches aMinCount or times out, returning the
@@ -108,7 +76,7 @@ function readCacheRowCount() {
 async function waitForCacheRows(aMinCount = 1) {
   let lastCount = 0;
   for (let i = 0; i < 50; i++) {
-    let count = readCacheRowCount();
+    let count = await readCacheRowCount();
     if (count !== null) {
       lastCount = count;
       if (count >= aMinCount) {
@@ -119,6 +87,133 @@ async function waitForCacheRows(aMinCount = 1) {
   }
   return lastCount;
 }
+
+// --- Host removal after the load -----------------------------------------
+
+const kHostA = "host-a.example.com:443";
+const kHostB = "host-b.example.com:443";
+const kOther = "other.example.com:443";
+
+// Persists kHostA, kHostB and kOther, then evicts them from memory so that only
+// a DELETE, not a snapshot, can remove rows while kOther survives.
+async function setUpEvictedRows(aCache, aTestCache) {
+  aCache.clearSSLExternalAndInternalSessionCache();
+  for (let key of [kHostA, kHostB, kOther]) {
+    aTestCache.putSSLTokenForTest(key);
+  }
+  Services.obs.notifyObservers(null, "idle-daily");
+  await waitForCacheKeys([kHostA, kHostB, kOther]);
+  Services.prefs.setIntPref("network.ssl_tokens_cache_capacity", 0);
+  aTestCache.putSSLTokenForTest("trigger.example.com:443");
+  Services.prefs.clearUserPref("network.ssl_tokens_cache_capacity");
+  Assert.equal(aTestCache.countSSLTokens(), 0, "all records were evicted");
+  Assert.deepEqual(await readCacheKeys(), [kHostA, kHostB, kOther]);
+}
+
+function removeHost(aCache, aHost) {
+  aCache.removeSSLTokensByHostAndOriginAttributesPattern(
+    aHost,
+    JSON.stringify({ userContextId: 0 })
+  );
+}
+
+add_task(
+  { skip_if: () => AppConstants.MOZ_SYSTEM_NSS },
+  async function test_ssl_token_cache_host_removal_deletes_rows() {
+    const kRemoved = "host-a.example.com:443";
+    const kOtherContainer = "host-a.example.com:443^userContextId=1";
+    const kOtherHost = "other.example.com:443";
+    let { cache, testCache } = getCacheServices();
+
+    cache.clearSSLExternalAndInternalSessionCache();
+    for (let key of [kRemoved, kOtherContainer, kOtherHost]) {
+      testCache.putSSLTokenForTest(key);
+    }
+    // The snapshot is queued after the startup load, so the load is done once
+    // the rows appear.
+    Services.obs.notifyObservers(null, "idle-daily");
+    await waitForCacheKeys([kRemoved, kOtherContainer, kOtherHost]);
+
+    removeHost(cache, "host-a.example.com");
+    Assert.equal(testCache.countSSLTokens(), 2, "memory is updated at once");
+    await waitForCacheKeys(
+      [kOtherContainer, kOtherHost],
+      "the delayed DELETE removes only the matching row"
+    );
+
+    // Leave nothing behind for the connection-based tests below.
+    cache.clearSSLExternalAndInternalSessionCache();
+    await waitForCacheKeys([]);
+  }
+);
+
+add_task(
+  { skip_if: () => AppConstants.MOZ_SYSTEM_NSS },
+  async function test_ssl_token_cache_host_removal_deletes_evicted_rows() {
+    let { cache, testCache } = getCacheServices();
+    await setUpEvictedRows(cache, testCache);
+
+    removeHost(cache, "host-a.example.com");
+    await waitForCacheKeys(
+      [kHostB, kOther],
+      "the delayed DELETE removes the evicted matching row"
+    );
+
+    cache.clearSSLExternalAndInternalSessionCache();
+    await waitForCacheKeys([]);
+  }
+);
+
+add_task(
+  { skip_if: () => AppConstants.MOZ_SYSTEM_NSS },
+  async function test_ssl_token_cache_host_removal_failed_delete_is_retried() {
+    let { cache, testCache } = getCacheServices();
+    await setUpEvictedRows(cache, testCache);
+
+    let requeued = TestUtils.topicObserved(kRequeuedTopic);
+    testCache.failDBOpensForTest(1);
+    removeHost(cache, "host-a.example.com");
+    await requeued;
+    Assert.deepEqual(await readCacheKeys(), [kHostA, kHostB, kOther]);
+
+    removeHost(cache, "host-b.example.com");
+    await waitForCacheKeys(
+      [kOther],
+      "the next DELETE applies the requeued and the new removal"
+    );
+
+    cache.clearSSLExternalAndInternalSessionCache();
+    await waitForCacheKeys([]);
+  }
+);
+
+add_task(
+  { skip_if: () => AppConstants.MOZ_SYSTEM_NSS },
+  async function test_ssl_token_cache_host_removal_failed_snapshot_keeps_removals() {
+    let { cache, testCache } = getCacheServices();
+    await setUpEvictedRows(cache, testCache);
+
+    let requeued = TestUtils.topicObserved(kRequeuedTopic);
+    testCache.failDBOpensForTest(1);
+    removeHost(cache, "host-a.example.com");
+    await requeued;
+
+    requeued = TestUtils.topicObserved(kRequeuedTopic);
+    testCache.failDBOpensForTest(1);
+    Services.obs.notifyObservers(null, "idle-daily");
+    await requeued;
+    Assert.deepEqual(await readCacheKeys(), [kHostA, kHostB, kOther]);
+
+    removeHost(cache, "host-b.example.com");
+    await waitForCacheKeys(
+      [kOther],
+      "the next DELETE applies the removal kept by the failed snapshot"
+    );
+
+    cache.clearSSLExternalAndInternalSessionCache();
+    await waitForCacheKeys([]);
+  }
+);
 
 // --- Test 1: idle-daily --------------------------------------------------
 
@@ -163,14 +258,10 @@ add_task(
 
     // _trigger() awaits all blockers, so when it resolves SSLTokensCache's
     // BlockShutdown has written the final snapshot.
-    Services.prefs.setBoolPref("toolkit.asyncshutdown.testing", true);
-    registerCleanupFunction(() =>
-      Services.prefs.clearUserPref("toolkit.asyncshutdown.testing")
-    );
-    await AsyncShutdown.profileBeforeChange._trigger();
+    await triggerProfileBeforeChange();
 
     ok(
-      await IOUtils.exists(gCacheFile),
+      await IOUtils.exists(getCacheFile().path),
       "ssl_tokens_cache.sqlite exists after profile-before-change"
     );
     Assert.greaterOrEqual(
