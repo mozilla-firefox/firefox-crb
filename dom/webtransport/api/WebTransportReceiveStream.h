@@ -6,6 +6,7 @@
 #define DOM_WEBTRANSPORT_API_WEBTRANSPORTRECEIVESTREAM_H_
 
 #include "mozilla/ErrorResult.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/dom/ReadableStream.h"
 
 namespace mozilla::ipc {
@@ -46,6 +47,9 @@ class WebTransportReceiveStream final : public ReadableStream {
   RefPtr<WebTransport> mTransport;
   uint64_t mStreamId{0};
   RefPtr<InputToReadableStreamAlgorithms> mAlgorithms;
+  // Last bytesReceived reported by the networking process, so getStats() can
+  // keep reporting it once the stream or transport can no longer be queried.
+  Maybe<uint64_t> mCachedBytesReceived;
 };
 }  // namespace mozilla::dom
 

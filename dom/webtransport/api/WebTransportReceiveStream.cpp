@@ -86,14 +86,18 @@ already_AddRefed<Promise> WebTransportReceiveStream::GetStats(
   // independent of whether the networking process can still report
   // bytesReceived -- so it's always safe to report, even
   // when we can't gather real stats otherwise. bytesReceived has no local
-  // equivalent, and per spec can only increase, so leave it unconstructed
-  // (step 2.2.2's "for each member ... the user agent wishes to expose")
-  // rather than reporting 0, which would be a monotonicity-violating
-  // regression after a prior successful getStats() call reported a nonzero
-  // value.
+  // equivalent, and per spec can only increase, so report the last value the
+  // networking process gave us (never less than bytesRead), or leave it
+  // unconstructed (step 2.2.2's "for each member ... the user agent wishes to
+  // expose") if it never reported one, rather than reporting 0, which would
+  // be a monotonicity-violating regression.
   const uint64_t bytesRead = mAlgorithms->BytesPulled();
-  auto resolveUnavailable = [promise, bytesRead] {
+  auto resolveUnavailable = [promise, bytesRead,
+                             cachedBytesReceived = mCachedBytesReceived] {
     WebTransportReceiveStreamStats stats;
+    if (cachedBytesReceived) {
+      stats.mBytesReceived.Construct(std::max(*cachedBytesReceived, bytesRead));
+    }
     stats.mBytesRead.Construct(bytesRead);
     promise->MaybeResolve(stats);
   };
@@ -114,7 +118,7 @@ already_AddRefed<Promise> WebTransportReceiveStream::GetStats(
   // process; bytesRead is only known here, see BytesPulled().
   child->SendGetReceiveStreamStats(
       mStreamId,
-      [promise, resolveUnavailable,
+      [self = RefPtr{this}, promise, resolveUnavailable,
        bytesRead](Maybe<ReceiveStreamStats>&& aStats) {
         // Step 3.2: Queue a network task with transport to run the following
         // steps:
@@ -122,6 +126,7 @@ already_AddRefed<Promise> WebTransportReceiveStream::GetStats(
         // Step 3.2.2: For each member of stats that the user agent wishes to
         // expose, set member to the corresponding entry in gatheredStats.
         if (aStats) {
+          self->mCachedBytesReceived = Some(aStats->bytesReceived());
           WebTransportReceiveStreamStats stats;
           stats.mBytesReceived.Construct(aStats->bytesReceived());
           // The spec requires bytesRead <= bytesReceived, and the networking
