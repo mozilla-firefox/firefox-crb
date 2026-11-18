@@ -208,6 +208,8 @@ class TestEnvironment:
             "wss": [8889],
             "h2": [9000],
             "webtransport-h3": [11000],
+            "webtransport-h3-draft07": [11001],
+            "webtransport-h3-draft15": [11002],
             "dns": [8053],
         }
         config.ports = ports
@@ -332,12 +334,13 @@ class TestEnvironment:
             # with "Connection refused" like the sockets do), so testing these
             # first improves the likelihood the non-webtransport-h3 servers are
             # ready by the time they're checked.
-            for port, server in self.servers.get("webtransport-h3", []):
-                if not webtranport_h3_server_is_running(host, port, timeout=5):
-                    pending.append((host, port))
+            for wt_scheme in ("webtransport-h3", "webtransport-h3-draft07", "webtransport-h3-draft15"):
+                for port, server in self.servers.get(wt_scheme, []):
+                    if not webtranport_h3_server_is_running(host, port, timeout=5):
+                        pending.append((wt_scheme, port))
 
             for scheme, servers in self.servers.items():
-                if scheme in ("dns", "webtransport-h3"):
+                if scheme in ("dns", "webtransport-h3", "webtransport-h3-draft07", "webtransport-h3-draft15"):
                     continue
                 for port, server in servers:
                     s = socket.socket()

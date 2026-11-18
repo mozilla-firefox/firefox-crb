@@ -14,6 +14,14 @@ function webtransport_url(handler) {
   return `https://{{host}}:{{ports[webtransport-h3][0]}}/webtransport/handlers/${handler}`;
 }
 
+function webtransport_url_draft15(handler) {
+  return `https://{{host}}:{{ports[webtransport-h3-draft15][0]}}/webtransport/handlers/${handler}`;
+}
+
+function webtransport_url_draft07(handler) {
+  return `https://{{host}}:{{ports[webtransport-h3-draft07][0]}}/webtransport/handlers/${handler}`;
+}
+
 // Converts WebTransport stream error code to HTTP/3 error code.
 // https://ietf-wg-webtrans.github.io/draft-ietf-webtrans-http3/draft-ietf-webtrans-http3.html#section-4.3
 function webtransport_code_to_http_code(n) {
@@ -75,6 +83,9 @@ function check_and_remove_standard_headers(headers) {
   delete headers[':authority'];
   assert_equals(headers[':path'], '/webtransport/handlers/echo-request-headers.py');
   delete headers[':path'];
+  // Firefox's HTTP/3 client currently always negotiates draft-07
+  // (":protocol: webtransport"), even against the "both" server which also
+  // accepts the draft-15 ("webtransport-h3") value.
   assert_equals(headers[':protocol'], 'webtransport');
   delete headers[':protocol'];
   assert_equals(headers['origin'], 'https://{{location[host]}}');

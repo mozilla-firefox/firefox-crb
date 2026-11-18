@@ -1169,7 +1169,7 @@ def start_servers(logger, host, ports, paths, routes, bind_address, config,
                 continue
 
         # Skip WebTransport over HTTP/3 server unless it is enabled explicitly.
-        if scheme == "webtransport-h3" and not kwargs.get("webtransport_h3"):
+        if scheme in ("webtransport-h3", "webtransport-h3-draft07", "webtransport-h3-draft15") and not kwargs.get("webtransport_h3"):
             logging.warning("WebTransport over HTTP/3 server disabled")
             continue
 
@@ -1193,6 +1193,8 @@ def start_servers(logger, host, ports, paths, routes, bind_address, config,
                 "ws": start_ws_server,
                 "wss": start_wss_server,
                 "webtransport-h3": start_webtransport_h3_server,
+                "webtransport-h3-draft07": start_webtransport_h3_draft07_server,
+                "webtransport-h3-draft15": start_webtransport_h3_draft15_server,
                 "dns": start_dns_server,
             }[scheme]
 
@@ -1360,6 +1362,20 @@ def start_wss_server(logger, host, port, paths, routes, bind_address, config, **
 
 
 def start_webtransport_h3_server(logger, host, port, paths, routes, bind_address, config, **kwargs):
+    return _start_webtransport_h3_server(logger, host, port, paths, config, version="both")
+
+
+def start_webtransport_h3_draft07_server(logger, host, port, paths, routes, bind_address, config,
+                                          **kwargs):
+    return _start_webtransport_h3_server(logger, host, port, paths, config, version="draft07")
+
+
+def start_webtransport_h3_draft15_server(logger, host, port, paths, routes, bind_address, config,
+                                          **kwargs):
+    return _start_webtransport_h3_server(logger, host, port, paths, config, version="draft15")
+
+
+def _start_webtransport_h3_server(logger, host, port, paths, config, version):
     try:
         # TODO(bashi): Move the following import to the beginning of this file
         # once WebTransportH3Server is enabled by default.
@@ -1369,10 +1385,11 @@ def start_webtransport_h3_server(logger, host, port, paths, routes, bind_address
                                     doc_root=paths["doc_root"],
                                     cert_path=config.ssl_config["cert_path"],
                                     key_path=config.ssl_config["key_path"],
-                                    logger=logger)
+                                    logger=logger,
+                                    version=version)
     except Exception as error:
         logger.critical(
-            f"Failed to start WebTransport over HTTP/3 server: {error}")
+            f"Failed to start WebTransport over HTTP/3 server (version={version}): {error}")
         sys.exit(0)
 
 
@@ -1452,6 +1469,8 @@ class ConfigBuilder(config.ConfigBuilder):
             "ws": ["auto"],
             "wss": ["auto"],
             "webtransport-h3": ["auto"],
+            "webtransport-h3-draft07": ["auto"],
+            "webtransport-h3-draft15": ["auto"],
             "dns": [8053],
         },
         "check_subdomains": True,
