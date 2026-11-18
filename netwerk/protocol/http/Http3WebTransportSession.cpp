@@ -697,6 +697,17 @@ void Http3WebTransportSession::GetStats() {
   listener->OnStatsAvailable(statsWrapper);
 }
 
+bool Http3WebTransportSession::GetSendStreamStats(
+    uint64_t aStreamId, uint64_t* aBytesWritten, uint64_t* aBytesSent,
+    uint64_t* aBytesAcknowledged) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  if (mRecvState != ACTIVE) {
+    return false;
+  }
+  return mSession->GetWebTransportSendStreamStats(
+      aStreamId, aBytesWritten, aBytesSent, aBytesAcknowledged);
+}
+
 void Http3WebTransportSession::GetNegotiatedProtocol(nsACString& aProtocol) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   aProtocol.Truncate();
