@@ -75,6 +75,9 @@ class WebTransportParent : public PWebTransportParent,
   IPCResult RecvGetStreamStats(uint64_t aStreamId,
                                GetStreamStatsResolver&& aResolver);
 
+  IPCResult RecvGetReceiveStreamStats(
+      uint64_t aStreamId, GetReceiveStreamStatsResolver&& aResolver);
+
   IPCResult RecvCreateUnidirectionalStream(
       int64_t aSendOrder, Maybe<uint64_t> aSendGroupId,
       bool aWaitUntilAvailable, CreateUnidirectionalStreamResolver&& aResolver);

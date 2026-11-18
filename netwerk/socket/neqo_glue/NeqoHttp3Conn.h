@@ -292,6 +292,20 @@ class NeqoHttp3Conn final {
     return true;
   }
 
+  bool GetWebTransportRecvStreamStats(uint64_t aStreamId,
+                                      uint64_t* aBytesReceived,
+                                      uint64_t* aBytesRead) {
+    struct WebTransportRecvStreamStats stats;
+    nsresult rv =
+        neqo_http3conn_webtransport_recv_stream_stats(this, aStreamId, &stats);
+    if (NS_FAILED(rv)) {
+      return false;
+    }
+    *aBytesReceived = stats.bytes_received;
+    *aBytesRead = stats.bytes_read;
+    return true;
+  }
+
   bool WebTransportSendStreamAtomic(uint64_t aStreamId,
                                     nsTArray<uint8_t>&& aData) {
     bool result = false;

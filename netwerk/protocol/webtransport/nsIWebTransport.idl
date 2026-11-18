@@ -153,6 +153,12 @@ interface nsIWebTransport : nsISupports {
                                         out uint64_t aBytesSent,
                                         out uint64_t aBytesAcknowledged);
 
+  // Get receive stream statistics.
+  // Returns true if stats were retrieved successfully.
+  [noscript] boolean getReceiveStreamStats(in uint64_t aStreamId,
+                                           out uint64_t aBytesReceived,
+                                           out uint64_t aBytesRead);
+
   // This can be only called after onSessionReady().
   // After this point, we can retarget the underlying WebTransportSessionProxy
   // object off main thread.

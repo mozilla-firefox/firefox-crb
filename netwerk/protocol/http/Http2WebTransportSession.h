@@ -89,6 +89,8 @@ class Http2WebTransportSessionImpl final : public WebTransportSessionBase,
   bool GetSendStreamStats(uint64_t aStreamId, uint64_t* aBytesWritten,
                           uint64_t* aBytesSent,
                           uint64_t* aBytesAcknowledged) override;
+  bool GetReceiveStreamStats(uint64_t aStreamId, uint64_t* aBytesReceived,
+                             uint64_t* aBytesRead) override;
   nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,
                                 const nsTArray<uint8_t>& aContext,
                                 uint32_t aOutputLength,
