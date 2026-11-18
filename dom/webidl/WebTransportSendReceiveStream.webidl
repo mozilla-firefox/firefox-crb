@@ -9,7 +9,7 @@
 interface WebTransportSendStream : WritableStream {
   [SetterThrows] attribute WebTransportSendGroup? sendGroup;
   attribute long long sendOrder;
-  Promise<WebTransportSendStreamStats> getStats();
+  [NewObject] Promise<WebTransportSendStreamStats> getStats();
   [NewObject, Throws] WebTransportWriter getWriter();
 };
 
@@ -25,7 +25,7 @@ dictionary WebTransportSendStreamStats {
 
 [Exposed=(Window,Worker), SecureContext, Pref="network.webtransport.enabled"]
 interface WebTransportReceiveStream : ReadableStream {
-  Promise<WebTransportReceiveStreamStats> getStats();
+  [NewObject] Promise<WebTransportReceiveStreamStats> getStats();
 };
 
 /* https://w3c.github.io/webtransport/#receive-stream-stats */

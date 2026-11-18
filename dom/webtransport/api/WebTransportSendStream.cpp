@@ -171,10 +171,15 @@ void WebTransportSendStream::SetSendGroup(WebTransportSendGroup* aSendGroup,
   mTransport->SendSetSendGroup(mStreamId, groupId);
 }
 
-already_AddRefed<Promise> WebTransportSendStream::GetStats() {
+already_AddRefed<Promise> WebTransportSendStream::GetStats(ErrorResult& aRv) {
   // https://w3c.github.io/webtransport/#dom-webtransportsendstream-getstats
-  // Step 1: Let p be a new promise.
-  RefPtr<Promise> promise = Promise::CreateInfallible(WritableStream::mGlobal);
+  // Step 1: Let transport be this.[[Transport]]. (implicit)
+
+  // Step 2: Let p be a new promise.
+  RefPtr<Promise> promise = Promise::Create(WritableStream::mGlobal, aRv);
+  if (aRv.Failed()) {
+    return nullptr;
+  }
 
   WebTransportChild* child = mTransport ? mTransport->SendChild() : nullptr;
   if (!child) {
@@ -189,8 +194,8 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats() {
     return promise.forget();
   }
 
-  // Step 2: Run the following steps in parallel:
-  // Step 2.1: Let gatheredStats be the list of stats specific to this
+  // Step 3: Run the following steps in parallel:
+  // Step 3.1: Let gatheredStats be the list of stats specific to this
   // WebTransportSendStream needed to populate the dictionary members of
   // WebTransportSendStreamStats accurately.
   // Implemented by sending an async IPC request to the networking process,
@@ -203,10 +208,10 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats() {
   child->SendGetStreamStats(
       mStreamId,
       [self = RefPtr{this}, promise](Maybe<StreamStats>&& aStats) {
-        // Step 2.2: Queue a network task with transport to run the following:
-        // Step 2.2.1: Let stats be a new WebTransportSendStreamStats object.
+        // Step 3.2: Queue a network task with transport to run the following:
+        // Step 3.2.1: Let stats be a new WebTransportSendStreamStats object.
         WebTransportSendStreamStats stats;
-        // Step 2.2.2: For each member of stats that the user agent wishes to
+        // Step 3.2.2: For each member of stats that the user agent wishes to
         // expose, set member to the corresponding entry in gatheredStats.
         uint64_t bytesWritten = self->mBytesWritten;
         stats.mBytesWritten.Construct(bytesWritten);
@@ -230,7 +235,7 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats() {
           stats.mBytesSent.Construct(self->mCachedBytesSent);
           stats.mBytesAcknowledged.Construct(self->mCachedBytesAcknowledged);
         }
-        // Step 2.2.3: Resolve p with stats.
+        // Step 3.2.3: Resolve p with stats.
         promise->MaybeResolve(stats);
       },
       [self = RefPtr{this}, promise](mozilla::ipc::ResponseRejectReason) {
@@ -242,7 +247,7 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats() {
         promise->MaybeResolve(stats);
       });
 
-  // Step 3: Return p.
+  // Step 4: Return p.
   return promise.forget();
 }
 
