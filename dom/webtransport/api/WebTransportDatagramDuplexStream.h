@@ -91,20 +91,25 @@ class OutgoingDatagramStreamAlgorithms final
       ErrorResult& aError) override;
 
   // Resolves the oldest deferred promise, if aAvailableBytes covers its
-  // DatagramQueueCharge() and there is one, as part of
-  // WebTransportDatagramDuplexStream::OnDatagramCapacity()'s round-robin drain
-  // across every algorithms instance. On success, *aResolvedBytes is that
-  // promise's datagram size, for the caller to charge against its byte credit.
+  // DatagramQueueCharge() and there is one, standing in for sendDatagrams
+  // resolving the promise of a datagram that has left
+  // [[OutgoingDatagramsQueue]] (steps 5.1.2.2/5.3.4 of
+  // https://w3c.github.io/webtransport/#senddatagrams). Called by
+  // WebTransportDatagramDuplexStream::OnDatagramCapacity()'s round-robin
+  // drain across every algorithms instance. On success, *aResolvedBytes is
+  // that promise's datagram size, for the caller to charge against its byte
+  // credit.
   bool TryResolveOldestFromCredit(uint64_t aAvailableBytes,
                                   size_t* aResolvedBytes);
 
   // Lowers the in-flight count by aCount (never below 0), called from
   // WebTransportDatagramDuplexStream::OnDatagramCapacity() with the
   // sent+expired+dropped delta -- the aggregate signal that this many
-  // datagrams have left neqo's queue one way or another, freeing that many
-  // local pipeline slots for future write()s to resolve immediately again.
-  // Independent of TryResolveOldestFromCredit(): this only ever lets *new*
-  // writes in, it does not itself resolve anything already deferred.
+  // datagrams have left neqo's queue one way or another, so writeDatagrams
+  // step 9 has that many slots free again and that many future write()s can
+  // resolve immediately. Independent of TryResolveOldestFromCredit(): this
+  // only ever lets *new* writes in, it does not itself resolve anything
+  // already deferred.
   void RetireInFlight(uint64_t aCount);
 
   // Send queue parameter updates to parent
@@ -153,17 +158,18 @@ class OutgoingDatagramStreamAlgorithms final
   RefPtr<WebTransportSendGroup> mSendGroup;
   int64_t mSendOrder;
 
-  // FIFO (oldest first) of write() promises deferred past
-  // outgoingMaxBufferedDatagrams, sent untracked and so resolved either by
+  // FIFO (oldest first) of write() promises writeDatagrams step 9 left
+  // unresolved. Sent untracked, so they are resolved either by
   // TryResolveOldestFromCredit() or by Cleanup() -- never individually.
   nsTArray<PendingDatagram> mPendingDatagramPromises;
 
-  // Datagrams handed to the parent (resolved immediately or deferred alike)
-  // that RetireInFlight() hasn't yet been told have left neqo's queue.
-  // outgoingMaxBufferedDatagrams gates against this, not against
+  // Stands in for the length of this writable's [[OutgoingDatagramsQueue]],
+  // which really lives in the parent: datagrams handed to the parent
+  // (resolved immediately or deferred alike) that RetireInFlight() hasn't yet
+  // been told have left neqo's queue. Step 9 gates against this, not against
   // mPendingDatagramPromises.Length() -- that array counts only deferred
-  // promises, which says nothing about how many are actually in flight once
-  // datagrams are sent untracked.
+  // promises, which says nothing about how many datagrams are actually queued
+  // once they are sent untracked.
   size_t mInFlightCount = 0;
 };
 
@@ -215,13 +221,15 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // kMaxOutgoingMessageDatagrams; a no-op if nothing has.
   void FlushOutgoingDatagrams();
 
-  // Handles a DatagramCapacity message: raises the credit limits (a
-  // decrease is ignored, matching MAX_DATA), adds sentDelta/droppedDelta to
-  // their own running totals and expiredDelta to mExpiredOutgoing, then
-  // round-robins across every OutgoingDatagramStreamAlgorithms instance
-  // resolving one deferred promise at a time from each while both credit
-  // dimensions allow it, so no single writable can starve another's
-  // backlog.
+  // Handles a DatagramCapacity message, the parent's aggregate stand-in for
+  // sendDatagrams (https://w3c.github.io/webtransport/#senddatagrams): raises
+  // the credit limits (a decrease is ignored, matching MAX_DATA), adds
+  // sentDelta/droppedDelta to their own running totals and expiredDelta to
+  // mExpiredOutgoing, frees that many writeDatagrams step 9 slots on every
+  // writable, then pays the resolutions steps 5.1.2.2/5.3.4 owe out of the
+  // credit -- round-robin across every OutgoingDatagramStreamAlgorithms
+  // instance, one deferred promise at a time from each while both credit
+  // dimensions allow it, so no single writable can starve another's backlog.
   void OnDatagramCapacity(uint64_t aCumulativeDatagrams,
                           uint64_t aCumulativeBytes, uint64_t aSentDelta,
                           uint64_t aExpiredDelta, uint64_t aDroppedDelta,
@@ -285,11 +293,15 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // queued datagrams.
   nsTArray<RefPtr<WebTransportDatagramsWritable>> mCreatedWritables;
   // Every WebTransportDatagramsWritable this duplex stream has ever created
-  // via CreateWritable(), for the lifetime of the stream. The default
-  // writable exposed via `.writable` isn't wrapped in a
-  // WebTransportDatagramsWritable object, so it's tracked separately via
-  // mOutgoingAlgorithms instead. Unlike mCreatedWritables, never cleared, so
-  // Cleanup() can always reach all of them.
+  // via CreateWritable(), for the lifetime of the stream: the spec's
+  // [[Writables]]. The default writable exposed via our `.writable` attribute
+  // -- which the spec has dropped from WebTransportDatagramDuplexStream in
+  // favor of createWritable(), and which we keep for now as a deprecated
+  // historical entry -- isn't wrapped in a WebTransportDatagramsWritable
+  // object, so it isn't in here; it's tracked separately via
+  // mOutgoingAlgorithms, and anything walking [[Writables]] has to cover both.
+  // Unlike mCreatedWritables, never cleared, so Cleanup() can always reach all
+  // of them.
   nsTArray<RefPtr<WebTransportDatagramsWritable>> mAllWritables;
 
   // https://w3c.github.io/webtransport/#webtransportdatagramduplexstream-create
@@ -319,18 +331,22 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   uint64_t mDroppedIncoming = 0;
   uint64_t mExpiredIncoming = 0;
 
-  // Fed by OnDatagramCapacity()'s expiredDelta, which covers both expiry
-  // sites: neqo's own outgoingMaxAge queue, and WebTransportParent's
-  // arrival-staleness drop (datagrams already too old when they reach the
-  // parent), which neqo cannot see.
+  // WebTransportDatagramStats' expiredOutgoing, fed by OnDatagramCapacity()'s
+  // expiredDelta, which covers both expiry sites: neqo's own outgoingMaxAge
+  // queue, and WebTransportParent's arrival-staleness drop (datagrams already
+  // too old when they reach the parent), which neqo cannot see. getStats()
+  // reports the parent's copy of the same total, folded together there.
+  // https://w3c.github.io/webtransport/#dom-webtransportdatagramstats-expiredoutgoing
   uint64_t mExpiredOutgoing = 0;
   // Fed by OnDatagramCapacity()'s sentDelta/droppedDelta. Not exposed via
   // getStats() -- outgoing datagrams are sent untracked, so these are
   // aggregate counts with no per-datagram outcome behind them, and neither
-  // has a defined field in WebTransportDatagramStats (droppedOutgoing isn't
-  // spec'd at all; sent isn't a "problem" stat like the others). Kept for
-  // future use (e.g. an adaptive sender wanting the full sent/expired/
-  // dropped picture, or telemetry).
+  // has a field in WebTransportDatagramStats to report them in. Nothing is
+  // spec'd for a datagram the local stack refused (the nearest field,
+  // lostOutgoing, is for one that was sent and then lost in the network), and
+  // a plain sent count isn't a "problem" stat like the rest of the dictionary.
+  // Kept for future use (e.g. an adaptive sender wanting the full
+  // sent/expired/dropped picture, or telemetry).
   uint64_t mSentOutgoing = 0;
   uint64_t mDroppedOutgoing = 0;
 
