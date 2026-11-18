@@ -277,6 +277,21 @@ class NeqoHttp3Conn final {
     TranslateWebTransportSessionStats(stats, aStats);
   }
 
+  bool GetWebTransportSendStreamStats(uint64_t aStreamId,
+                                      uint64_t* aBytesWritten,
+                                      uint64_t* aBytesSent,
+                                      uint64_t* aBytesAcknowledged) {
+    struct WebTransportStreamStats stats;
+    if (!neqo_http3conn_webtransport_send_stream_stats(this, aStreamId,
+                                                       &stats)) {
+      return false;
+    }
+    *aBytesWritten = stats.bytes_written;
+    *aBytesSent = stats.bytes_sent;
+    *aBytesAcknowledged = stats.bytes_acknowledged;
+    return true;
+  }
+
   nsresult WebTransportSetSendOrder(uint64_t aSessionId, int64_t aSendOrder) {
     return neqo_http3conn_webtransport_set_sendorder(this, aSessionId,
                                                      &aSendOrder);

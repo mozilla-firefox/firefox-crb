@@ -695,9 +695,24 @@ IPCResult WebTransportParent::RecvGetStreamStats(
     return IPC_OK();
   }
 
-  // TODO: Call mWebTransport->GetStreamStats(aStreamId)
-  // For now, return Nothing() as placeholder
-  aResolver(Nothing());
+  uint64_t bytesWritten = 0;
+  uint64_t bytesSent = 0;
+  uint64_t bytesAcknowledged = 0;
+  bool success = false;
+
+  nsresult rv = mWebTransport->GetSendStreamStats(
+      aStreamId, &bytesWritten, &bytesSent, &bytesAcknowledged, &success);
+  if (NS_FAILED(rv) || !success) {
+    aResolver(Nothing());
+    return IPC_OK();
+  }
+
+  StreamStats stats;
+  stats.bytesWritten() = bytesWritten;
+  stats.bytesSent() = bytesSent;
+  stats.bytesAcknowledged() = bytesAcknowledged;
+
+  aResolver(Some(stats));
   return IPC_OK();
 }
 

@@ -153,6 +153,10 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
     return std::exchange(mOutgoingDatagramProgressRequested, false);
   }
 
+  bool GetSendStreamStats(uint64_t aStreamId, uint64_t* aBytesWritten,
+                          uint64_t* aBytesSent,
+                          uint64_t* aBytesAcknowledged) override;
+
   nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,
                                 const nsTArray<uint8_t>& aContext,
                                 uint32_t aOutputLength,
