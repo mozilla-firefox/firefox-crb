@@ -667,6 +667,8 @@ let interfaceNamesInGlobalScope = [
   // IMPORTANT: Do not change this list without review from a DOM peer!
   "WebTransportSendStream",
   // IMPORTANT: Do not change this list without review from a DOM peer!
+  "WebTransportWriter",
+  // IMPORTANT: Do not change this list without review from a DOM peer!
   "WindowClient",
   // IMPORTANT: Do not change this list without review from a DOM peer!
   "WorkerGlobalScope",
