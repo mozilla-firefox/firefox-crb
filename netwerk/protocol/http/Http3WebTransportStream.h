@@ -116,6 +116,17 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
 
   // Controls behavior when stream quota is exhausted
   bool mWaitUntilAvailable{false};
+
+  // Buffer for accumulating partial frames from DataPipe
+  // Frame format: [1 byte type][4 bytes length][N bytes data]
+  nsTArray<uint8_t> mPartialFrameBuffer;
+
+  // Buffer for Regular frame data that couldn't be sent due to flow control
+  // When OnReadSegment can't send all data, remainder is stored here
+  nsTArray<uint8_t> mPendingRegularFrameData;
+
+  // True when stream close is detected but we have pending data to send first
+  bool mDeferredClose{false};
 };
 
 }  // namespace mozilla::net

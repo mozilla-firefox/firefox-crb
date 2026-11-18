@@ -15,6 +15,7 @@
 #include "mozilla/dom/ClientInfo.h"
 #include "mozilla/dom/InternalHeaders.h"
 #include "mozilla/dom/WebTransportBinding.h"
+#include "mozilla/dom/WebTransportErrorCodeUtil.h"
 #include "mozilla/dom/WebTransportLog.h"
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/net/WebTransportHash.h"
@@ -1407,6 +1408,20 @@ NS_IMETHODIMP WebTransportParent::OnDatagramsFlush() {
   }
 
   FlushIncomingDatagrams();
+  return NS_OK;
+}
+
+NS_IMETHODIMP WebTransportParent::OnAtomicWriteResult(uint64_t aStreamId,
+                                                      uint32_t aAtomicWriteId,
+                                                      nsresult aResult) {
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+  LOG(("WebTransportParent::OnAtomicWriteResult streamId=%" PRIu64
+       " atomicWriteId=%u result=0x%x",
+       aStreamId, aAtomicWriteId, static_cast<uint32_t>(aResult)));
+
+  // Send result back to child process via IPC
+  (void)SendAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
+
   return NS_OK;
 }
 

@@ -9,6 +9,7 @@
 #include "Http3Stream.h"
 #include "Http3WebTransportStream.h"
 #include "HttpLog.h"
+#include "mozilla/dom/WebTransportParent.h"
 #include "nsHttpHandler.h"
 #include "nsHttpRequestHead.h"
 #include "nsHttpTransaction.h"
@@ -811,6 +812,24 @@ void Http3WebTransportSession::OnStreamReset(uint64_t aId,
   }
 
   listener->OnResetReceived(aId, aErrorCode);
+}
+
+void Http3WebTransportSession::ResolveAtomicWrite(uint64_t aStreamId,
+                                                  uint32_t aAtomicWriteId,
+                                                  nsresult aResult) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  LOG(("Http3WebTransportSession::ResolveAtomicWrite streamId=%" PRIu64
+       " atomicWriteId=%u result=0x%x",
+       aStreamId, aAtomicWriteId, static_cast<uint32_t>(aResult)));
+
+  RefPtr<WebTransportSessionEventListener> listener = GetListener();
+  if (!listener) {
+    LOG(("  No listener"));
+    return;
+  }
+
+  // Call the interface method - WebTransportParent will send the IPC
+  listener->OnAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
 }
 
 }  // namespace mozilla::net
