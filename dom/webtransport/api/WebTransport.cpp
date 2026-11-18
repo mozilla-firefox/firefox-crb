@@ -26,6 +26,7 @@
 #include "mozilla/dom/WebTransportDatagramDuplexStream.h"
 #include "mozilla/dom/WebTransportError.h"
 #include "mozilla/dom/WebTransportLog.h"
+#include "mozilla/dom/WebTransportSendGroup.h"
 #include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/dom/WorkerPrivate.h"
 #include "mozilla/dom/WorkerRunnable.h"
@@ -1667,6 +1668,14 @@ void WebTransport::Cleanup(DOMException* aError,
     }
     // Step 15.2: Error stream with error.
     MOZ_KnownLive(stream)->ErrorNative(cx, errorValue, IgnoreErrors());
+    // This stream is about to become unreachable via mSendStreams (already
+    // emptied above); fold its final contribution into its SendGroup now so
+    // WebTransportSendGroup::GetStats() doesn't regress to zero for it.
+    if (WebTransportSendGroup* group = stream->GetSendGroup()) {
+      group->AddFinalStreamStats(stream->GetBytesWritten(),
+                                 stream->GetBytesSent(),
+                                 stream->GetBytesAcknowledged());
+    }
   }
   // Step 16: For each stream in receiveStreams, error stream with error.
   for (const auto& stream : receiveStreams.Values()) {

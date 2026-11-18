@@ -459,6 +459,12 @@ class Http3Session final : public Http3SessionBase,
   // STOP_SENDING for a stream can be reported to the session.  Entries live
   // as long as the stream is in mStreamIdHash.
   nsTHashMap<nsUint64HashKey, uint64_t> mWebTransportStreamToSessionMap;
+  // Final byte count cached for a WebTransport receive stream just before it
+  // is removed from mStreamIdHash, so GetWebTransportRecvStreamStats() can
+  // still answer a getStats() call that arrives after the stream (and
+  // neqo's own per-stream state) is gone. Bounded by streams seen over the
+  // connection's lifetime; cleared with everything else on connection close.
+  nsTHashMap<nsUint64HashKey, uint64_t> mFinalWebTransportRecvStreamBytes;
   nsRefPtrHashtable<nsUint64HashKey, Http3StreamBase> mStreamIdHash;
   nsRefPtrHashtable<nsPtrHashKey<nsAHttpTransaction>, Http3StreamBase>
       mStreamTransactionHash;

@@ -2550,6 +2550,11 @@ void Http3Session::CloseStreamInternal(Http3StreamBase* aStream,
       mFirstStreamIdReuseIdleConnection.reset();
     }
 
+    if (Http3WebTransportStream* wtStream =
+            aStream->GetHttp3WebTransportStream()) {
+      mFinalWebTransportRecvStreamBytes.InsertOrUpdate(
+          aStream->StreamId(), wtStream->TotalReceived());
+    }
     mStreamIdHash.Remove(aStream->StreamId());
     mWebTransportStreamToSessionMap.Remove(aStream->StreamId());
 
@@ -3435,6 +3440,17 @@ bool Http3Session::GetWebTransportRecvStreamStats(uint64_t aStreamId,
       *aBytesRead = wtStream->TotalReceived();
       return true;
     }
+  }
+  // The stream object itself is gone too (CloseStreamInternal() already
+  // removed it from mStreamIdHash) -- this is the common case for a stream
+  // that fully completed before getStats() was called. Fall back to the
+  // final byte count cached at removal time; same approximation caveat as
+  // above.
+  uint64_t finalBytes = 0;
+  if (mFinalWebTransportRecvStreamBytes.Get(aStreamId, &finalBytes)) {
+    *aBytesReceived = finalBytes;
+    *aBytesRead = finalBytes;
+    return true;
   }
   return false;
 }
