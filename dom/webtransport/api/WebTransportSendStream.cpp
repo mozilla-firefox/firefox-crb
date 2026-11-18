@@ -22,9 +22,14 @@ using namespace mozilla::ipc;
 
 namespace mozilla::dom {
 
+// The mozilla::Queue helpers are global, and the binding headers declare
+// overloads in this namespace that would otherwise hide them.
+using ::ImplCycleCollectionTraverse;
+using ::ImplCycleCollectionUnlink;
+
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStream, WritableStream,
                                    mTransport, mSendGroup, mSender,
-                                   mAtomicWriteReqPromises)
+                                   mAtomicWriteReqPromises, mPendingWrites)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStream, WritableStream)
 NS_IMPL_RELEASE_INHERITED(WebTransportSendStream, WritableStream)
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebTransportSendStream)

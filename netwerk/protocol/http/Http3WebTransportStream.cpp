@@ -21,6 +21,10 @@ namespace mozilla::net {
 
 namespace {
 
+// Bytes neqo has refused that are held in mPendingRegularFrameData before
+// ReadSegments() stops reading the send pipe.
+constexpr size_t kMaxPendingRegularFrameDataBytes = 512 * 1024;
+
 // This is an nsAHttpTransaction that does nothing.
 class DummyWebTransportStreamTransaction : public nsAHttpTransaction {
  public:
@@ -385,6 +389,76 @@ nsresult Http3WebTransportStream::ReadRequestSegment(
   return NS_OK;
 }
 
+bool Http3WebTransportStream::TrySendAtomicPayload(
+    nsTArray<uint8_t>&& aPayload) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  if (aPayload.IsEmpty()) {
+    // Zero-length atomic writes carry no QUIC stream data and consume no
+    // flow-control credit; skip calling WebTransportSendStreamAtomic: neqo's
+    // send_data_atomic fails when the stream header hasn't been sent yet
+    // (state != SendingData), which can happen on a fresh stream with no
+    // prior data. There is nothing to send atomically, so we trivially
+    // succeed.
+    return true;
+  }
+
+  // No separate flow-control pre-check: neqo's stream-level avail() already
+  // nets out both connection- and stream-level credit already consumed by
+  // buffered data, and QUIC STREAM frame header bytes are never charged
+  // against flow control (that's a per-packet concern neqo's own packet
+  // builder handles, unrelated to this credit). WebTransportSendStreamAtomic
+  // is the only source of truth for whether the write fits.
+  bool sendSuccess =
+      mSession->WebTransportSendStreamAtomic(mStreamId, std::move(aPayload));
+  LOG(("Atomic write %s", sendSuccess ? "succeeded" : "failed"));
+  return sendSuccess;
+}
+
+void Http3WebTransportStream::ResolveAtomicWrite(uint32_t aAtomicWriteId,
+                                                 bool aSuccess) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  Http3Session* http3Session = static_cast<Http3Session*>(mSession.get());
+  RefPtr<Http3WebTransportSession> wtSession;
+  for (const auto& stream : http3Session->WebTransportSessions()) {
+    if (stream->StreamId() == mSessionId) {
+      wtSession = stream->GetHttp3WebTransportSession();
+      break;
+    }
+  }
+  if (wtSession) {
+    wtSession->ResolveAtomicWrite(mStreamId, aAtomicWriteId,
+                                  aSuccess ? NS_OK : NS_ERROR_ABORT);
+  }
+}
+
+void Http3WebTransportStream::TryDrainPendingAtomicWrites() {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  while (!mPendingAtomicWrites.IsEmpty() &&
+         mPendingRegularFrameData.IsEmpty()) {
+    PendingAtomicWrite item = std::move(mPendingAtomicWrites[0]);
+    mPendingAtomicWrites.RemoveElementAt(0);
+    LOG(("Retrying deferred atomic write id=%u", item.mAtomicWriteId));
+    bool sendSuccess = TrySendAtomicPayload(std::move(item.mPayload));
+    ResolveAtomicWrite(item.mAtomicWriteId, sendSuccess);
+    if (!sendSuccess) {
+      // Spec: "If the atomic write is rejected, everything queued behind
+      // it at that moment will be rejected as well."
+      FailPendingAtomicWrites();
+      break;
+    }
+  }
+}
+
+void Http3WebTransportStream::FailPendingAtomicWrites() {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  nsTArray<PendingAtomicWrite> pending = std::move(mPendingAtomicWrites);
+  for (auto& item : pending) {
+    LOG(("Failing deferred atomic write id=%u due to stream reset/close",
+         item.mAtomicWriteId));
+    ResolveAtomicWrite(item.mAtomicWriteId, false);
+  }
+}
+
 nsresult Http3WebTransportStream::ReadSegments() {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   LOG(("Http3WebTransportStream::ReadSegments streamId=%llu [this=%p state=%d]",
@@ -431,6 +505,10 @@ nsresult Http3WebTransportStream::ReadSegments() {
     if (written > 0) {
       mPendingRegularFrameData.RemoveElementsAt(0, written);
 
+      // Same order as the frame handler below: settle parked atomic writes
+      // before a deferred close can FIN over them.
+      TryDrainPendingAtomicWrites();
+
       // Check if we can now complete a deferred close
       if (mDeferredClose && mPendingRegularFrameData.IsEmpty()) {
         LOG(("All pending data sent - completing deferred close"));
@@ -446,17 +524,31 @@ nsresult Http3WebTransportStream::ReadSegments() {
       }
     }
   }
+  TryDrainPendingAtomicWrites();
+
+  // gDefaultSegmentSize is a runtime value, so this cannot be an array.
+  nsTArray<uint8_t> tempBuf;
+  tempBuf.SetLength(nsIOService::gDefaultSegmentSize);
 
   do {
+    // neqo is not taking the data.  Leave the rest in the pipe, so the content
+    // process's writes back up instead of growing this buffer, and carry on
+    // when DataWritable calls ReadSegments() again.
+    if (mPendingRegularFrameData.Length() >= kMaxPendingRegularFrameDataBytes) {
+      LOG(("ReadSegments streamId=%llu: %zu bytes pending, not reading",
+           (unsigned long long)mStreamId, mPendingRegularFrameData.Length()));
+      rv = NS_OK;
+      break;
+    }
+
     // Read data from pipe into our frame buffer
-    uint8_t tempBuf[nsIOService::gDefaultSegmentSize];
-    ReadSegmentContext ctx = {tempBuf, static_cast<uint32_t>(sizeof(tempBuf)),
-                              0};
+    ReadSegmentContext ctx = {tempBuf.Elements(),
+                              static_cast<uint32_t>(tempBuf.Length()), 0};
 
     // Track what ReadSegments returns separately from ctx.bytesWritten
     uint32_t readSegmentsResult = 0;
     rv = mSendStreamPipeIn->ReadSegments(ReadRequestSegment, &ctx,
-                                         sizeof(tempBuf), &readSegmentsResult);
+                                         tempBuf.Length(), &readSegmentsResult);
 
     bool streamClosed = (rv == NS_BASE_STREAM_CLOSED);
 
@@ -491,7 +583,8 @@ nsresult Http3WebTransportStream::ReadSegments() {
       LOG(("Appending %u bytes to frame buffer: %s%s", readSegmentsResult,
            hexDump.get(), readSegmentsResult > 16 ? "..." : ""));
 
-      mPartialFrameBuffer.AppendElements(tempBuf, readSegmentsResult);
+      mPartialFrameBuffer.AppendElements(tempBuf.Elements(),
+                                         readSegmentsResult);
       LOG(("Frame buffer now has %zu bytes", mPartialFrameBuffer.Length()));
     }
 
@@ -583,6 +676,8 @@ nsresult Http3WebTransportStream::ReadSegments() {
                  static_cast<uint32_t>(sendRv)));
           }
 
+          TryDrainPendingAtomicWrites();
+
           // Check if we can now complete a deferred close
           if (mDeferredClose && mPendingRegularFrameData.IsEmpty()) {
             LOG(
@@ -613,53 +708,42 @@ nsresult Http3WebTransportStream::ReadSegments() {
           LOG(("Processing atomic write: atomicWriteId=%u, payloadLength=%zu",
                atomicWriteId, payloadLength));
 
-          // QUIC framing overhead: conservatively reserve 17 bytes
-          const uint64_t QUIC_STREAM_FRAME_OVERHEAD = 17;
+          // Ensure any pending regular data that precedes this atomic write
+          // in DataPipe order has been delivered to neqo before attempting
+          // the atomic send.  Regular and atomic frames are written to the
+          // DataPipe in JavaScript call order; bypassing un-delivered regular
+          // bytes would reorder data on the QUIC stream.
+          if (!mPendingRegularFrameData.IsEmpty()) {
+            LOG(("Atomic write id=%u: draining %zu pending regular bytes first",
+                 atomicWriteId, mPendingRegularFrameData.Length()));
+            uint32_t pendingWritten = 0;
+            (void)OnReadSegment(reinterpret_cast<const char*>(
+                                    mPendingRegularFrameData.Elements()),
+                                mPendingRegularFrameData.Length(),
+                                &pendingWritten);
+            if (pendingWritten > 0) {
+              mPendingRegularFrameData.RemoveElementsAt(0, pendingWritten);
+            }
+          }
 
-          // Get flow control info NOW (at send time, not queue time)
-          uint64_t availableWindow = 0;
-          uint64_t bytesBuffered = 0;
-          bool flowControlSuccess =
-              mSession->GetWebTransportSendStreamFlowControlInfo(
-                  mStreamId, &availableWindow, &bytesBuffered);
-
-          bool sendSuccess = false;
-          if (flowControlSuccess) {
-            // Check if we have enough quota window including QUIC overhead.
-            // payload holds only the data sent over QUIC (the 4-byte
-            // atomicWriteId is stripped), so use its length, not payloadLength.
-            uint64_t totalNeeded =
-                bytesBuffered + payload.Length() + QUIC_STREAM_FRAME_OVERHEAD;
+          // If regular data is still blocked (flow-control or send-buffer
+          // full is a routine, frequent condition, not a corner case), or an
+          // earlier atomic write is already waiting on it, defer this one
+          // instead of failing it outright: its bytes and ID are queued and
+          // retried by TryDrainPendingAtomicWrites() once
+          // mPendingRegularFrameData empties out, preserving both ordering
+          // and the data itself instead of discarding it.
+          if (!mPendingRegularFrameData.IsEmpty() ||
+              !mPendingAtomicWrites.IsEmpty()) {
             LOG(
-                ("Atomic write flow control: need=%llu, available=%llu, "
-                 "buffered=%llu",
-                 (unsigned long long)totalNeeded,
-                 (unsigned long long)availableWindow,
-                 (unsigned long long)bytesBuffered));
-
-            if (availableWindow >= totalNeeded) {
-              // Sufficient flow control window - send atomically
-              sendSuccess = mSession->WebTransportSendStreamAtomic(
-                  mStreamId, std::move(payload));
-              LOG(("Atomic write %s", sendSuccess ? "succeeded" : "failed"));
-            } else {
-              LOG(("Atomic write rejected: insufficient flow control window"));
-            }
-          }
-
-          // Notify child process via WebTransportParent
-          Http3Session* http3Session =
-              static_cast<Http3Session*>(mSession.get());
-          RefPtr<Http3WebTransportSession> wtSession;
-          for (const auto& stream : http3Session->WebTransportSessions()) {
-            if (stream->StreamId() == mSessionId) {
-              wtSession = stream->GetHttp3WebTransportSession();
-              break;
-            }
-          }
-          if (wtSession) {
-            wtSession->ResolveAtomicWrite(mStreamId, atomicWriteId,
-                                          sendSuccess ? NS_OK : NS_ERROR_ABORT);
+                ("Atomic write id=%u deferred: %zu bytes of regular data "
+                 "still pending, cannot reorder",
+                 atomicWriteId, mPendingRegularFrameData.Length()));
+            mPendingAtomicWrites.AppendElement(
+                PendingAtomicWrite{atomicWriteId, std::move(payload)});
+          } else {
+            bool sendSuccess = TrySendAtomicPayload(std::move(payload));
+            ResolveAtomicWrite(atomicWriteId, sendSuccess);
           }
         } break;
       }
@@ -875,6 +959,12 @@ void Http3WebTransportStream::Close(nsresult aResult) {
   }
   mSendState = SEND_DONE;
   mRecvState = RECV_DONE;
+  // TryDrainPendingAtomicWrites() will never run again for this stream, so
+  // any writes still deferred here would otherwise leave their DOM-side
+  // atomicWrite() promises permanently pending. Must happen before mSession
+  // is cleared below: ResolveAtomicWrite() needs it to look up the owning
+  // WebTransportSession.
+  FailPendingAtomicWrites();
   mSession = nullptr;
 }
 
@@ -899,7 +989,9 @@ void Http3WebTransportStream::CloseSendSide(nsresult aResult) {
   // Reset() and Commit() from touching it again.
   mSendFin = true;
   mSendState = SEND_DONE;
+  mPendingRegularFrameData.Clear();
   mPendingTasks.Clear();
+  FailPendingAtomicWrites();
 }
 
 void Http3WebTransportStream::SendFin() {
@@ -945,6 +1037,15 @@ void Http3WebTransportStream::Reset(uint64_t aErrorCode) {
   }
 
   mResetError = Some(aErrorCode);
+
+  // TryDrainPendingAtomicWrites() is only ever reached from ReadSegments()/
+  // OnReadSegment()'s SENDING path, both of which short-circuit once this
+  // stream is resetting -- so any writes still deferred here would
+  // otherwise leave their DOM-side atomicWrite() promises permanently
+  // pending. mSession is still valid at this point in every switch branch
+  // below, so this must run before any of them (not deferred alongside the
+  // SENDING case's mPendingTasks entry).
+  FailPendingAtomicWrites();
 
   switch (mSendState) {
     case SENDING: {
