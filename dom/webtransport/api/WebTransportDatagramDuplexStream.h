@@ -5,6 +5,7 @@
 #ifndef DOM_WEBTRANSPORT_API_WEBTRANSPORTDATAGRAMDUPLEXSTREAM_H_
 #define DOM_WEBTRANSPORT_API_WEBTRANSPORTDATAGRAMDUPLEXSTREAM_H_
 
+#include "mozilla/dom/DatagramQueueCharge.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ReadableStream.h"
 #include "mozilla/dom/TypedArray.h"
@@ -89,8 +90,22 @@ class OutgoingDatagramStreamAlgorithms final
       WritableStreamDefaultController& aController,
       ErrorResult& aError) override;
 
-  // Called when parent notifies that a datagram is ready (sent or dropped)
-  void OnDatagramReady(uint64_t aDatagramId);
+  // Resolves the oldest deferred promise, if aAvailableBytes covers its
+  // DatagramQueueCharge() and there is one, as part of
+  // WebTransportDatagramDuplexStream::OnDatagramCapacity()'s round-robin drain
+  // across every algorithms instance. On success, *aResolvedBytes is that
+  // promise's datagram size, for the caller to charge against its byte credit.
+  bool TryResolveOldestFromCredit(uint64_t aAvailableBytes,
+                                  size_t* aResolvedBytes);
+
+  // Lowers the in-flight count by aCount (never below 0), called from
+  // WebTransportDatagramDuplexStream::OnDatagramCapacity() with the
+  // sent+expired+dropped delta -- the aggregate signal that this many
+  // datagrams have left neqo's queue one way or another, freeing that many
+  // local pipeline slots for future write()s to resolve immediately again.
+  // Independent of TryResolveOldestFromCredit(): this only ever lets *new*
+  // writes in, it does not itself resolve anything already deferred.
+  void RetireInFlight(uint64_t aCount);
 
   // Send queue parameter updates to parent
   void UpdateQueueParams(uint32_t aMaxBufferedDatagrams, double aMaxAge);
@@ -104,24 +119,29 @@ class OutgoingDatagramStreamAlgorithms final
   ~OutgoingDatagramStreamAlgorithms() override = default;
 
   struct QueuedDatagram {
-    uint64_t mDatagramId;
     UniquePtr<DatagramEntry> mEntry;
     RefPtr<Promise> mPromise;
 
-    QueuedDatagram(uint64_t aId, UniquePtr<DatagramEntry>&& aEntry,
-                   RefPtr<Promise> aPromise)
-        : mDatagramId(aId),
-          mEntry(std::move(aEntry)),
-          mPromise(std::move(aPromise)) {}
+    QueuedDatagram(UniquePtr<DatagramEntry>&& aEntry, RefPtr<Promise> aPromise)
+        : mEntry(std::move(aEntry)), mPromise(std::move(aPromise)) {}
   };
 
-  // So nsTArray<QueuedDatagram>'s generic cycle-collection support (see
-  // nsTArray.h) can reach mPromise via the overloads below, which need to
-  // name the otherwise-private QueuedDatagram type.
+  struct PendingDatagram {
+    RefPtr<Promise> mPromise;
+    size_t mBytes;
+  };
+
+  // So nsTArray<QueuedDatagram>/nsTArray<PendingDatagram>'s generic
+  // cycle-collection support (see nsTArray.h) can reach mPromise via the
+  // overloads below, which need to name these otherwise-private types.
   friend void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback&,
                                           QueuedDatagram&, const char*,
                                           uint32_t);
   friend void ImplCycleCollectionUnlink(QueuedDatagram&);
+  friend void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback&,
+                                          PendingDatagram&, const char*,
+                                          uint32_t);
+  friend void ImplCycleCollectionUnlink(PendingDatagram&);
 
   RefPtr<WebTransportDatagramDuplexStream> mDatagrams;
   RefPtr<WebTransportChild> mChild;
@@ -133,8 +153,18 @@ class OutgoingDatagramStreamAlgorithms final
   RefPtr<WebTransportSendGroup> mSendGroup;
   int64_t mSendOrder;
 
-  // Pending promises tracked by datagram ID
-  nsTHashMap<nsUint64HashKey, RefPtr<Promise>> mPendingDatagramPromises;
+  // FIFO (oldest first) of write() promises deferred past
+  // outgoingMaxBufferedDatagrams, sent untracked and so resolved either by
+  // TryResolveOldestFromCredit() or by Cleanup() -- never individually.
+  nsTArray<PendingDatagram> mPendingDatagramPromises;
+
+  // Datagrams handed to the parent (resolved immediately or deferred alike)
+  // that RetireInFlight() hasn't yet been told have left neqo's queue.
+  // outgoingMaxBufferedDatagrams gates against this, not against
+  // mPendingDatagramPromises.Length() -- that array counts only deferred
+  // promises, which says nothing about how many are actually in flight once
+  // datagrams are sent untracked.
+  size_t mInFlightCount = 0;
 };
 
 class WebTransportDatagramDuplexStream final : public nsISupports,
@@ -175,9 +205,6 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   void NewDatagramReceived(nsTArray<uint8_t>&& aData,
                            const mozilla::TimeStamp& aTimeStamp);
 
-  // Called when parent notifies that a datagram is ready
-  void OnDatagramReady(uint64_t aDatagramId);
-
   // Sends a datagram to the parent in an OutgoingDatagrams IPC message.
   // Called by every OutgoingDatagramStreamAlgorithms instance (the default
   // writable plus any from createWritable()) once mChild is set.
@@ -187,6 +214,18 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // OutgoingDatagrams messages of at most about kMaxOutgoingMessageBytes or
   // kMaxOutgoingMessageDatagrams; a no-op if nothing has.
   void FlushOutgoingDatagrams();
+
+  // Handles a DatagramCapacity message: raises the credit limits (a
+  // decrease is ignored, matching MAX_DATA), adds sentDelta/droppedDelta to
+  // their own running totals and expiredDelta to mExpiredOutgoing, then
+  // round-robins across every OutgoingDatagramStreamAlgorithms instance
+  // resolving one deferred promise at a time from each while both credit
+  // dimensions allow it, so no single writable can starve another's
+  // backlog.
+  void OnDatagramCapacity(uint64_t aCumulativeDatagrams,
+                          uint64_t aCumulativeBytes, uint64_t aSentDelta,
+                          uint64_t aExpiredDelta, uint64_t aDroppedDelta,
+                          uint64_t aDatagramPrefixBytes);
 
   // WebIDL Boilerplate
   nsIGlobalObject* GetParentObject() const;
@@ -257,7 +296,21 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // null means no maximum age (infinite)
   Nullable<double> mIncomingMaxAge;
   Nullable<double> mOutgoingMaxAge;
-  // These are implementation-defined
+  // Both are implementation-defined; for the outgoing one the spec asks only
+  // that it be "tuned to ensure decent throughput, without jeopardizing the
+  // timeliness of transmitted data".
+  //
+  // outgoingMaxBufferedDatagrams is the length of the sink's send queue.
+  // writeDatagrams withholds write()'s promise once the queue reaches it, so
+  // the WritableStream holds back further writes, awaited or not, until
+  // datagrams leave the queue. (The incoming side is deliberately different:
+  // receiveDatagrams drops whatever exceeds incomingMaxBufferedDatagrams.)
+  //
+  // 5 rather than Chromium's and WebKit's 1 is deliberate: our outgoing queue
+  // lives in the parent process, so a slot frees up only once a
+  // DatagramCapacity grant comes back over IPC. The count is therefore
+  // pipeline depth measured in IPC round trips, not in local queue slots, and
+  // 1 would serialize a sender on them.
   uint32_t mIncomingMaxBufferedDatagrams = 5;
   uint32_t mOutgoingMaxBufferedDatagrams = 5;
   uint64_t mOutgoingMaxDataSize = 1024;  // implementation-defined integer
@@ -266,26 +319,61 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   uint64_t mDroppedIncoming = 0;
   uint64_t mExpiredIncoming = 0;
 
-  // Datagram ID counter shared across all OutgoingDatagramStreamAlgorithms
-  // instances created by this duplex stream (scoped to this duplex stream,
-  // not global across duplex streams).
-  uint64_t mNextDatagramId = 1;
-  // Maps datagram IDs from created writables to the owning writable for routing
-  nsTHashMap<nsUint64HashKey, RefPtr<WebTransportDatagramsWritable>>
-      mWritableDatagramMap;
-  // Set by Cleanup(); lets OnDatagramReady() distinguish a late,
-  // already-expected notification (mChild can stay alive past Cleanup(),
-  // e.g. after a remote close, so a DatagramReady already in flight can
-  // still arrive) from a genuine unregistered/duplicate-id bug.
-  bool mCleanedUp = false;
+  // Fed by OnDatagramCapacity()'s expiredDelta, which covers both expiry
+  // sites: neqo's own outgoingMaxAge queue, and WebTransportParent's
+  // arrival-staleness drop (datagrams already too old when they reach the
+  // parent), which neqo cannot see.
+  uint64_t mExpiredOutgoing = 0;
+  // Fed by OnDatagramCapacity()'s sentDelta/droppedDelta. Not exposed via
+  // getStats() -- outgoing datagrams are sent untracked, so these are
+  // aggregate counts with no per-datagram outcome behind them, and neither
+  // has a defined field in WebTransportDatagramStats (droppedOutgoing isn't
+  // spec'd at all; sent isn't a "problem" stat like the others). Kept for
+  // future use (e.g. an adaptive sender wanting the full sent/expired/
+  // dropped picture, or telemetry).
+  uint64_t mSentOutgoing = 0;
+  uint64_t mDroppedOutgoing = 0;
 
   // Outgoing datagrams accumulated by QueueOutgoingDatagram() or SetChild()
   // for the next OutgoingDatagrams message.
   nsTArray<OutgoingDatagram> mPendingOutgoing;
 
+  // Mirrors neqo-transport's SenderFlowControl (limit/used/available),
+  // separately for each credit dimension. mCredit*Limit is the latest
+  // DatagramCapacity grant; mCredit*Used is how much of it has been spent
+  // resolving write() promises, immediately or from every
+  // OutgoingDatagramStreamAlgorithms instance's own mPendingDatagramPromises.
+  uint64_t mCreditDatagramsLimit = 0;
+  uint64_t mCreditDatagramsUsed = 0;
+  uint64_t mCreditBytesLimit = 0;
+  uint64_t mCreditBytesUsed = 0;
+  // From DatagramCapacity; 0 until the first grant.
+  uint64_t mDatagramPrefixBytes = 0;
+
+  // Charged when a write() promise resolves, immediately or not, which can be
+  // before the parent has been told about the datagram.  Bytes are charged the
+  // way neqo's queue charges them, payload plus a fixed overhead.
+  void ChargeCredit(uint64_t aPayloadBytes) {
+    mCreditDatagramsUsed++;
+    mCreditBytesUsed +=
+        DatagramQueueCharge(aPayloadBytes, mDatagramPrefixBytes);
+  }
+  uint64_t CreditBytesAvailable() const {
+    return mCreditBytesLimit > mCreditBytesUsed
+               ? mCreditBytesLimit - mCreditBytesUsed
+               : 0;
+  }
+  bool HasCreditBytesFor(uint64_t aPayloadBytes) const {
+    return DatagramQueueCharge(aPayloadBytes, mDatagramPrefixBytes) <=
+           CreditBytesAvailable();
+  }
+
  public:
   uint64_t GetDroppedIncoming() const { return mDroppedIncoming; }
   uint64_t GetExpiredIncoming() const { return mExpiredIncoming; }
+  uint64_t GetExpiredOutgoing() const { return mExpiredOutgoing; }
+  uint64_t GetSentOutgoing() const { return mSentOutgoing; }
+  uint64_t GetDroppedOutgoing() const { return mDroppedOutgoing; }
 };
 
 }  // namespace mozilla::dom
