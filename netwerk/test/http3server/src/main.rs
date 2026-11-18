@@ -903,6 +903,7 @@ impl HttpServer for Http3TestServer {
                 Http3ServerEvent::ConnectUdp(_) => {
                     unimplemented!()
                 }
+                Http3ServerEvent::WebTransport(_) => {}
             }
         }
     }
