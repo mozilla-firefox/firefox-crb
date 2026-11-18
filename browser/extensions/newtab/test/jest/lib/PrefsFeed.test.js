@@ -1779,6 +1779,84 @@ describe("PrefsFeed", () => {
         })
       );
     });
+    it("should merge disjoint keys from enrollments of the same type", () => {
+      mockDefaultBranch({
+        setStringPref: jest.fn(),
+        setBoolPref: jest.fn(),
+      });
+      const enrollmentA = {
+        meta: { isRollout: false },
+        value: {
+          type: "widgets",
+          payload: { enabled: true },
+        },
+      };
+      const enrollmentB = {
+        meta: { isRollout: true },
+        value: {
+          type: "widgets",
+          payload: { listsBadgeEnabled: true },
+        },
+      };
+      nimbusFeatures.newtabTrainhop.getAllEnrollments.mockReturnValue([
+        enrollmentA,
+        enrollmentB,
+      ]);
+      feed.onTrainhopExperimentUpdated();
+      expect(feed.store.dispatch).toHaveBeenCalledWith(
+        ac.BroadcastToContent({
+          type: at.PREF_CHANGED,
+          data: {
+            name: "trainhopConfig",
+            value: {
+              widgets: {
+                enabled: true,
+                listsBadgeEnabled: true,
+              },
+            },
+          },
+        })
+      );
+    });
+    it("should let an experiment override a rollout-set key while keeping disjoint rollout keys", () => {
+      mockDefaultBranch({
+        setStringPref: jest.fn(),
+        setBoolPref: jest.fn(),
+      });
+      const rollout = {
+        meta: { isRollout: true },
+        value: {
+          type: "widgets",
+          payload: { enabled: false, listsBadgeEnabled: true },
+        },
+      };
+      const experiment = {
+        meta: { isRollout: false },
+        value: {
+          type: "widgets",
+          payload: { enabled: true },
+        },
+      };
+      nimbusFeatures.newtabTrainhop.getAllEnrollments.mockReturnValue([
+        rollout,
+        experiment,
+      ]);
+      feed.onTrainhopExperimentUpdated();
+      expect(feed.store.dispatch).toHaveBeenCalledWith(
+        ac.BroadcastToContent({
+          type: at.PREF_CHANGED,
+          data: {
+            name: "trainhopConfig",
+            value: {
+              widgets: {
+                enabled: true,
+                listsBadgeEnabled: true,
+              },
+            },
+          },
+        })
+      );
+    });
   });
   describe("adsBackend", () => {
     it("should send a PREF_CHANGED action when onAdsBackendUpdated is called", () => {
