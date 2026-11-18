@@ -47,6 +47,12 @@ class WebTransportSendStream final : public WritableStream {
 
   already_AddRefed<WebTransportWriter> GetWriter(ErrorResult& aRv);
 
+  uint64_t GetCommittedOffset() const { return mCommittedOffset; }
+  void SetCommittedOffset(uint64_t aOffset) { mCommittedOffset = aOffset; }
+
+  uint64_t GetStreamId() const { return mStreamId; }
+  WebTransport* GetTransport() const { return mTransport; }
+
  private:
   ~WebTransportSendStream() override;
 
@@ -58,6 +64,7 @@ class WebTransportSendStream final : public WritableStream {
   RefPtr<WebTransportSendGroup> mSendGroup;
   uint64_t mStreamId;
   int64_t mSendOrder;
+  uint64_t mCommittedOffset{0};
 };
 }  // namespace mozilla::dom
 
