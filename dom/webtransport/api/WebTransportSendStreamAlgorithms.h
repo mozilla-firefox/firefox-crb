@@ -57,11 +57,6 @@ class WebTransportSendStreamAlgorithms final
   ~WebTransportSendStreamAlgorithms() override = default;
 
  private:
-  // Helper for Close/Abort callbacks - takes a callable for the close operation
-  template <typename CloseOp>
-  already_AddRefed<Promise> CloseSenderHelper(CloseOp aCloseOp,
-                                              const char* aLogPrefix = nullptr);
-
   nsCOMPtr<nsIGlobalObject> mGlobal;
   RefPtr<WebTransportSendStream> mStream;
 
@@ -69,10 +64,12 @@ class WebTransportSendStreamAlgorithms final
   // the sender. While set, an abort can still preempt the FIN.
   bool mCloseSenderPending = false;
 
-  // The sender to close once the deferral elapses, and the close() promise
-  // ([[PendingOperation]]) to settle. Held directly because ReleaseObjects()
-  // can null mStream before either the microtask or the abort steps run.
+  // The sender to close once the deferral elapses, the stream whose queue an
+  // abort has to go through, and the close() promise ([[PendingOperation]]) to
+  // settle. Held directly because ReleaseObjects() can null mStream before
+  // either the microtask or the abort steps run.
   RefPtr<mozilla::ipc::DataPipeSender> mDeferredCloseSender;
+  RefPtr<WebTransportSendStream> mDeferredCloseStream;
   RefPtr<Promise> mDeferredClosePromise;
 };
 

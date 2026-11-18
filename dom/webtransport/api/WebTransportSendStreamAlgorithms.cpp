@@ -28,7 +28,8 @@ namespace mozilla::dom {
 
 NS_IMPL_CYCLE_COLLECTION_INHERITED(WebTransportSendStreamAlgorithms,
                                    UnderlyingSinkAlgorithmsWrapper, mGlobal,
-                                   mStream, mDeferredClosePromise)
+                                   mStream, mDeferredCloseStream,
+                                   mDeferredClosePromise)
 NS_IMPL_ADDREF_INHERITED(WebTransportSendStreamAlgorithms,
                          UnderlyingSinkAlgorithmsWrapper)
 NS_IMPL_RELEASE_INHERITED(WebTransportSendStreamAlgorithms,
@@ -134,45 +135,10 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::WriteCallbackImpl(
 
   InitializePendingWriteEntryHeader(entry);
 
+  // Step 6: Set stream.[[PendingOperation]] to promise.
+  mStream->SetPendingOperation(promise);
   mStream->EnqueueWrite(std::move(entry));
   mStream->DrainQueue();
-
-  return promise.forget();
-}
-
-template <typename CloseOp>
-already_AddRefed<Promise> WebTransportSendStreamAlgorithms::CloseSenderHelper(
-    CloseOp aCloseOp, const char* aLogPrefix) {
-  RefPtr<Promise> promise = Promise::CreateInfallible(mGlobal);
-
-  if (aLogPrefix) {
-    LOG(("WebTransportSendStreamAlgorithms::%s [this=%p]", aLogPrefix, this));
-  }
-
-  if (mStream) {
-    mozilla::ipc::DataPipeSender* sender = mStream->GetDataPipeSender();
-    if (sender) {
-      if (aLogPrefix) {
-        LOG(("  Calling close operation"));
-      }
-      nsresult rv = aCloseOp(sender);
-      if (aLogPrefix) {
-        LOG(("  Close operation returned: 0x%x", static_cast<uint32_t>(rv)));
-      }
-      if (NS_FAILED(rv)) {
-        promise->MaybeReject(rv);
-      } else {
-        promise->MaybeResolveWithUndefined();
-      }
-    } else {
-      promise->MaybeResolveWithUndefined();
-    }
-  } else {
-    if (aLogPrefix) {
-      LOG(("  No mStream"));
-    }
-    promise->MaybeResolveWithUndefined();
-  }
 
   return promise.forget();
 }
@@ -221,6 +187,7 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::CloseCallbackImpl(
   // through the pipe is meant to avoid.
   mCloseSenderPending = true;
   mDeferredCloseSender = mStream->GetDataPipeSender();
+  mDeferredCloseStream = mStream;
   mDeferredClosePromise = promise;
   if (CycleCollectedJSContext* ccjs = CycleCollectedJSContext::Get()) {
     ccjs->DispatchToMicroTask(MakeAndAddRef<DeferredCloseMicroTask>(this));
@@ -242,6 +209,7 @@ void WebTransportSendStreamAlgorithms::IssueDeferredClose() {
   LOG(("WebTransportSendStreamAlgorithms::IssueDeferredClose [this=%p]", this));
 
   RefPtr<mozilla::ipc::DataPipeSender> sender = std::move(mDeferredCloseSender);
+  mDeferredCloseStream = nullptr;
   RefPtr<Promise> pendingOperation = std::move(mDeferredClosePromise);
   if (!sender) {
     return;
@@ -273,21 +241,31 @@ void WebTransportSendStreamAlgorithms::RunAbortSignalSteps(
   // Step 7.1: Let pendingOperation be stream.[[PendingOperation]].
   // Step 7.2: If pendingOperation is null, then abort these steps.
   //
-  // mCloseSenderPending tracks exactly this: [[PendingOperation]] is set
-  // only here, for a close() not yet issued to the pipe (see
-  // CloseCallbackImpl), so the boolean is equivalent to the null check.
-  // ReleaseObjects() may already have cleared mStream, so work from the
-  // sender and promise captured when the close was deferred rather than
-  // from mStream directly.
-  if (!mCloseSenderPending) {
-    return;
-  }
-  mCloseSenderPending = false;
-
+  // For a close() not yet issued to the pipe (see CloseCallbackImpl),
+  // mCloseSenderPending covers the null check.  ReleaseObjects() may already
+  // have cleared mStream, so work from the sender, stream and promise
+  // captured when the close was deferred rather than from mStream directly.
+  //
+  // A write is only pending until its promise settles; the slot is not
+  // cleared then, so a settled promise counts as null.
+  RefPtr<Promise> pendingOperation;
+  RefPtr<WebTransportSendStream> stream;
   // Step 7.3: Set stream.[[PendingOperation]] to null.
-  RefPtr<Promise> pendingOperation = std::move(mDeferredClosePromise);
-  if (mStream) {
-    mStream->SetPendingOperation(nullptr);
+  if (mCloseSenderPending) {
+    mCloseSenderPending = false;
+    pendingOperation = std::move(mDeferredClosePromise);
+    stream = std::move(mDeferredCloseStream);
+    mDeferredCloseSender = nullptr;
+    if (mStream) {
+      mStream->SetPendingOperation(nullptr);
+    }
+  } else if (mStream) {
+    stream = mStream;
+    pendingOperation = mStream->TakePendingOperation();
+    if (pendingOperation &&
+        pendingOperation->State() != Promise::PromiseState::Pending) {
+      pendingOperation = nullptr;
+    }
   }
   if (!pendingOperation) {
     return;
@@ -322,23 +300,20 @@ void WebTransportSendStreamAlgorithms::RunAbortSignalSteps(
 
   // Step 7.5: Let promise be the result of aborting stream with reason.
   //
-  // The FIN was never issued, so closing the framed pipe with the error
-  // status now makes the parent emit RESET_STREAM instead -- ordered with
-  // this stream's data, with no second channel involved.
-  RefPtr<mozilla::ipc::DataPipeSender> sender = std::move(mDeferredCloseSender);
-  if (sender) {
-    nsresult abortStatus = static_cast<nsresult>(
-        static_cast<uint32_t>(NS_ERROR_WEBTRANSPORT_CODE_BASE) +
-        std::min(wtCode, 255u));
-    (void)sender->CloseWithStatus(abortStatus);
+  // For a deferred close the FIN was never issued, so an Abort frame on the
+  // framed pipe makes the parent emit RESET_STREAM instead, ordered with this
+  // stream's data.  For a stuck write the pipe may never drain, so the
+  // out-of-band reset is what gets it out.
+  if (stream) {
+    stream->AbortWithCode(wtCode);
   }
 
   // Step 7.6: Upon fulfillment of promise, reject pendingOperation with
   // reason.
   //
-  // CloseWithStatus() above settles synchronously rather than returning a
-  // promise to wait on, so the rejection follows immediately instead of
-  // through a separate fulfillment callback.
+  // Aborting settles synchronously rather than returning a promise to wait
+  // on, so the rejection follows immediately instead of through a separate
+  // fulfillment callback.
   pendingOperation->MaybeReject(reason);
 }
 
@@ -391,25 +366,18 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::AbortCallbackImpl(
   // Not in spec: committedOffset isn't sent, since reliable reset
   // (RESET_STREAM_AT) isn't used yet; the abort is a plain RESET_STREAM.
   //
-  // Close the outgoing (framed) pipe with the WebTransport error code encoded
-  // as an nsresult; the parent (Http3WebTransportStream) decodes it and issues
-  // the RESET_STREAM. Routing the abort through the framed pipe keeps it
-  // ordered with the stream's data and avoids racing a separate SendResetStream
-  // IPC against the pipe-close teardown -- that race could cancel the stream
-  // with H3_REQUEST_CANCELLED before the intended code was applied.
-  //
-  // The nsresult carrier (NS_ERROR_WEBTRANSPORT_CODE_BASE..
-  // NS_ERROR_WEBTRANSPORT_CODE_END) only reserves 256 values, so a code above
-  // 255 must be clamped here rather than added unchecked -- otherwise it
-  // would overflow into an unrelated nsresult's namespace.
-  nsresult abortStatus = static_cast<nsresult>(
-      static_cast<uint32_t>(NS_ERROR_WEBTRANSPORT_CODE_BASE) +
-      std::min(wtCode, 255u));
-  return CloseSenderHelper(
-      [abortStatus](mozilla::ipc::DataPipeSender* sender) {
-        return sender->CloseWithStatus(abortStatus);
-      },
-      "AbortCallbackImpl");
+  // The code travels two ways: as an Abort frame on the framed pipe, ordered
+  // with the stream's data, and as a ResetStream IPC that does not wait behind
+  // data that flow control may never let out.  Both carry the same code and
+  // the backend resets only once, so whichever arrives first wins; the code is
+  // never lost to the pipe-close teardown, which would otherwise cancel the
+  // stream with H3_REQUEST_CANCELLED.
+  RefPtr<Promise> promise = Promise::CreateInfallible(mGlobal);
+  if (mStream && mStream->GetDataPipeSender()) {
+    mStream->AbortWithCode(wtCode);
+  }
+  promise->MaybeResolveWithUndefined();
+  return promise.forget();
 }
 
 }  // namespace mozilla::dom

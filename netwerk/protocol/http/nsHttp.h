@@ -515,13 +515,10 @@ void CreatePushHashKey(const nsCString& scheme, const nsCString& hostHeader,
                        nsCString& outOrigin, nsCString& outKey);
 
 // The nsresult carrier (NS_ERROR_WEBTRANSPORT_CODE_BASE..
-// NS_ERROR_WEBTRANSPORT_CODE_END) reserves only 256 values, so these two
-// stay 8-bit; callers that need the full application-code range (0..2^32-1)
-// use WebTransportErrorToHttp3Error()/Http3ErrorToWebTransportError()
-// directly, and only clamp for this carrier.
+// NS_ERROR_WEBTRANSPORT_CODE_END) reserves only 256 values, so this stays
+// 8-bit; the full application-code range (0..2^32-1) is carried by
+// WebTransportErrorToHttp3Error()/Http3ErrorToWebTransportError().
 nsresult GetNSResultFromWebTransportError(uint8_t aErrorCode);
-
-uint8_t GetWebTransportErrorFromNSResult(nsresult aResult);
 
 uint64_t WebTransportErrorToHttp3Error(uint32_t aErrorCode);
 

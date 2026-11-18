@@ -4,8 +4,11 @@
 
 #include "Http3TestStubs.h"
 #include "Http3WebTransportSession.h"
+#include "Http3WebTransportStream.h"
 #include "gtest/gtest.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/dom/WebTransportFraming.h"
+#include "mozilla/gtest/MozAssertions.h"
 #include "nsSocketTransportService2.h"
 #include "nsTArray.h"
 #include "nsThreadUtils.h"
@@ -194,4 +197,52 @@ TEST(TestHttp3WebTransportSession, ErrorCodeMapping)
   }
   EXPECT_TRUE(Http3ErrorToWebTransportError(reserved).isNothing());
   EXPECT_TRUE(Http3ErrorToWebTransportError(reserved + 1).isSome());
+}
+
+TEST(TestHttp3WebTransportSession, AbortSendingWhileBlockedByFlowControl)
+{
+  InitHttpHandler();
+
+  RunOnSocketThreadAndWait([]() {
+    RefPtr<Http3SessionStub> stub = new Http3SessionStub();
+    RefPtr<WebTransportStreamBase> created;
+    RefPtr<Http3WebTransportStream> stream = new Http3WebTransportStream(
+        stub, 0, WebTransportStreamType::UniDi,
+        [&](Result<RefPtr<WebTransportStreamBase>, nsresult>&& aResult) {
+          ASSERT_TRUE(aResult.isOk());
+          created = aResult.unwrap();
+        },
+        false);
+    auto releaseStream = MakeScopeExit([&] { stub->ProcessOutput(); });
+
+    ASSERT_NS_SUCCEEDED(stream->ReadSegments());
+    ASSERT_TRUE(created);
+
+    nsCOMPtr<nsIAsyncOutputStream> writer;
+    nsCOMPtr<nsIAsyncInputStream> reader;
+    stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+    // neqo takes nothing, so the stream buffers until it stops reading the
+    // pipe, and stays in SENDING with the rest backed up behind it.
+    stub->mBlockRequestBody = true;
+    nsTArray<uint8_t> data;
+    data.SetLength(16 * 1024);
+    uint8_t header[WEBTRANSPORT_FRAME_MAX_HEADER_SIZE];
+    uint32_t headerLen = dom::FrameWebTransportChunkHeader(
+        header, dom::WebTransportFrameType::Regular, 0, data);
+    nsTArray<uint8_t> frame;
+    frame.AppendElements(header, headerLen);
+    frame.AppendElements(data);
+    for (int i = 0; i < 64; i++) {
+      uint32_t written = 0;
+      (void)writer->Write(reinterpret_cast<const char*>(frame.Elements()),
+                          frame.Length(), &written);
+      ASSERT_NS_SUCCEEDED(stream->ReadSegments());
+    }
+    ASSERT_TRUE(stub->mResetStreamCode.isNothing());
+
+    stream->AbortSending(0x1234);
+    ASSERT_TRUE(stub->mResetStreamCode.isSome());
+    EXPECT_EQ(*stub->mResetStreamCode, WebTransportErrorToHttp3Error(0x1234));
+  });
 }

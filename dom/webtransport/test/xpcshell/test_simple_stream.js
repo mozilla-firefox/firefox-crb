@@ -13,7 +13,12 @@ var host;
 registerCleanupFunction(async () => {
   Services.prefs.clearUserPref("network.dns.localDomains");
   Services.prefs.clearUserPref("network.webtransport.redirect.enabled");
+  Services.prefs.clearUserPref("network.webtransport.test.stall_send_reads");
 });
+
+var { AppConstants } = ChromeUtils.importESModule(
+  "resource://gre/modules/AppConstants.sys.mjs"
+);
 
 var { NetUtil } = ChromeUtils.importESModule(
   "resource://gre/modules/NetUtil.sys.mjs"
@@ -169,3 +174,47 @@ add_task(async function test_wt_incoming_bidi_stream_huge_data() {
   Assert.equal(str.length, 32 * 1024 * 1024);
   wt.close();
 });
+
+// abort() has to reset the stream even while a write is stuck in flight
+// because the network has stopped taking data.  Debug builds only: the stall
+// is driven by a debug-only pref.
+add_task(
+  { skip_if: () => !AppConstants.DEBUG },
+  async function test_wt_abort_with_write_stalled_by_flow_control() {
+    let wt = newWebTransport(`https://${host}/success`);
+    await wt.ready;
+
+    let win = webTransportWindow();
+    let writable = await wt.createUnidirectionalStream();
+    let writer = writable.getWriter();
+    await writer.ready;
+
+    Services.prefs.setBoolPref(
+      "network.webtransport.test.stall_send_reads",
+      true
+    );
+
+    let chunk = new win.Uint8Array(64 * 1024);
+    let writes = [];
+    for (let i = 0; i < 64; i++) {
+      writes.push(
+        writer.write(chunk).then(
+          () => "resolved",
+          () => "rejected"
+        )
+      );
+    }
+    // Let the pipe fill so a write is in flight.
+    await new Promise(resolve => do_timeout(500, resolve));
+
+    let reason = new win.WebTransportError({ streamErrorCode: 7 });
+    let abortResult = await Promise.race([
+      writer.abort(reason).then(() => "aborted"),
+      new Promise(resolve => do_timeout(5000, () => resolve("timeout"))),
+    ]);
+    Services.prefs.clearUserPref("network.webtransport.test.stall_send_reads");
+    wt.close();
+    Assert.equal(abortResult, "aborted");
+    Assert.ok((await Promise.all(writes)).includes("rejected"));
+  }
+);

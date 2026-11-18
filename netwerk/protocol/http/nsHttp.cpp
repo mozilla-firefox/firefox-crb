@@ -1076,16 +1076,6 @@ nsresult GetNSResultFromWebTransportError(uint8_t aErrorCode) {
                                (uint32_t)aErrorCode);
 }
 
-uint8_t GetWebTransportErrorFromNSResult(nsresult aResult) {
-  if (aResult < NS_ERROR_WEBTRANSPORT_CODE_BASE ||
-      aResult > NS_ERROR_WEBTRANSPORT_CODE_END) {
-    return 0;
-  }
-
-  return static_cast<uint8_t>((uint32_t)aResult -
-                              (uint32_t)NS_ERROR_WEBTRANSPORT_CODE_BASE);
-}
-
 uint64_t WebTransportErrorToHttp3Error(uint32_t aErrorCode) {
   return kWebTransportErrorCodeStart + aErrorCode +
          static_cast<uint64_t>(aErrorCode) / 0x1e;

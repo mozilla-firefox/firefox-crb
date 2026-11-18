@@ -114,9 +114,9 @@ async protocol PWebTransport
       returns(BidirectionalStreamResponse response);
 
   /**
-   * Reset a stream with an error code
+   * Abort sending on a stream with an error code, discarding unsent data
    * @param streamId the stream to reset
-   * @param errorCode the HTTP/3 error code (varint up to 2^62-1)
+   * @param errorCode the application error code (WebIDL unsigned long)
    */
   async ResetStream(uint64_t streamId, uint64_t errorCode);
 

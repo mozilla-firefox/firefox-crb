@@ -9,6 +9,7 @@
 #include "Http3Session.h"
 #include "Http3WebTransportSession.h"
 #include "HttpLog.h"
+#include "mozilla/StaticPrefs_network.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/dom/WebTransportFraming.h"
 #include "nsHttpHandler.h"
@@ -505,6 +506,12 @@ nsresult Http3WebTransportStream::ReadSegments() {
     mSendState = SENDING;
   }
 
+#ifdef DEBUG
+  if (StaticPrefs::network_webtransport_test_stall_send_reads()) {
+    return NS_OK;
+  }
+#endif
+
   // Always try to send any pending data first, before processing new frames
   if (!mPendingRegularFrameData.IsEmpty()) {
     uint32_t written = 0;
@@ -715,6 +722,14 @@ nsresult Http3WebTransportStream::ReadSegments() {
           }
         } break;
 
+        case dom::WebTransportFrameType::Abort: {
+          // abort(): atomicWriteId carries the stream error code. SEND_DONE
+          // must be set before Reset(), see the malformed-frame case.
+          mSendState = SEND_DONE;
+          Reset(WebTransportErrorToHttp3Error(atomicWriteId));
+          return NS_OK;
+        }
+
         case dom::WebTransportFrameType::Atomic: {
           // Atomic write frame format: 0x01 | totalPayloadLength(4) |
           // atomicWriteId(4) | data The payload contains: atomicWriteId(4)
@@ -771,14 +786,6 @@ nsresult Http3WebTransportStream::ReadSegments() {
         rv = mSendStreamPipeIn->AsyncWait(this, 0, 0, gSocketTransportService);
       }
       again = false;
-
-      if (rv >= NS_ERROR_WEBTRANSPORT_CODE_BASE &&
-          rv <= NS_ERROR_WEBTRANSPORT_CODE_END) {
-        uint8_t errorCode = GetWebTransportErrorFromNSResult(rv);
-        mSendState = SEND_DONE;
-        Reset(WebTransportErrorToHttp3Error(errorCode));
-        rv = NS_OK;
-      }
     } else if (streamClosed) {
       LOG(("Stream closure detected! mPartialFrameBuffer.Length=%zu",
            mPartialFrameBuffer.Length()));
@@ -1093,6 +1100,19 @@ void Http3WebTransportStream::Reset(uint64_t aErrorCode) {
       MOZ_ASSERT_UNREACHABLE("invalid mSendState!");
       break;
   }
+}
+
+void Http3WebTransportStream::AbortSending(uint32_t aErrorCode) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  if (mSendState == SENDING && !mResetError && !mSendFin) {
+    // From SENDING, Reset() would queue behind data that flow control may
+    // never let out; see the Abort frame case in ReadSegments().
+    mPendingRegularFrameData.Clear();
+    mPartialFrameBuffer.Clear();
+    mPendingTasks.Clear();
+    mSendState = SEND_DONE;
+  }
+  Reset(WebTransportErrorToHttp3Error(aErrorCode));
 }
 
 void Http3WebTransportStream::Commit() {

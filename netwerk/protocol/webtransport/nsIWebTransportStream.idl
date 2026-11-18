@@ -17,7 +17,7 @@ class TimeStamp;
 
 native TimeStamp(mozilla::TimeStamp);
 
-[builtinclass, scriptable, uuid(ccc3e685-8411-48f0-8b3e-ff6d1fae4809)]
+[builtinclass, scriptable, uuid(7163c89c-d1da-463c-a424-e83036dedb98)]
 interface nsIWebTransportSendStreamStats : nsISupports {
   [noscript] readonly attribute TimeStamp timestamp;
   readonly attribute unsigned long long bytesSent;
@@ -51,13 +51,14 @@ interface nsIWebTransportReceiveStream : nsISupports {
   readonly attribute uint64_t streamId;
 };
 
-[builtinclass, scriptable, uuid(804f245c-52ea-403c-8a78-f751533bdd70)]
+[builtinclass, scriptable, uuid(5b24b52a-9cf5-4184-abc3-393f0f596a6d)]
 interface nsIWebTransportSendStream : nsISupports {
   // Sends the FIN on the stream.
   void sendFin();
 
-  // Reset the stream with the specified HTTP/3 error code.
-  void reset(in uint64_t aErrorCode);
+  // Aborts sending with the specified application error code: unsent data
+  // is discarded and the stream is reset without waiting for flow control.
+  void abortSending(in unsigned long aErrorCode);
 
   // Commit to reliably delivering the data written so far: if the stream is
   // later reset, this prefix is still delivered via RESET_STREAM_AT (when
@@ -72,7 +73,7 @@ interface nsIWebTransportSendStream : nsISupports {
   [noscript] void setSendGroup(in uint64_t aSendGroupId);
 };
 
-[builtinclass, scriptable, uuid(f9ecb509-36db-4689-97d6-137639a08750)]
+[builtinclass, scriptable, uuid(0e969a1c-33f2-4906-89cf-b4e1de5136f5)]
 interface nsIWebTransportBidirectionalStream : nsISupports {
   // Sends the STOP_SENDING on the stream with the specified application
   // error code.
@@ -81,8 +82,9 @@ interface nsIWebTransportBidirectionalStream : nsISupports {
   // Sends the FIN on the stream.
   void sendFin();
 
-  // Reset the stream with the specified HTTP/3 error code.
-  void reset(in uint64_t aErrorCode);
+  // Aborts sending with the specified application error code: unsent data
+  // is discarded and the stream is reset without waiting for flow control.
+  void abortSending(in unsigned long aErrorCode);
 
   // Commit to reliably delivering the data written so far: if the stream is
   // later reset, this prefix is still delivered via RESET_STREAM_AT (when

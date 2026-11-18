@@ -73,7 +73,7 @@ NS_IMETHODIMP WebTransportStreamProxy::SendFin(void) {
   return NS_OK;
 }
 
-NS_IMETHODIMP WebTransportStreamProxy::Reset(uint64_t aErrorCode) {
+NS_IMETHODIMP WebTransportStreamProxy::AbortSending(uint32_t aErrorCode) {
   if (!mWriter) {
     return NS_ERROR_UNEXPECTED;
   }
@@ -83,13 +83,13 @@ NS_IMETHODIMP WebTransportStreamProxy::Reset(uint64_t aErrorCode) {
   if (!OnSocketThread()) {
     RefPtr<WebTransportStreamProxy> self(this);
     return gSocketTransportService->Dispatch(
-        NS_NewRunnableFunction("WebTransportStreamProxy::Reset",
+        NS_NewRunnableFunction("WebTransportStreamProxy::AbortSending",
                                [self{std::move(self)}, error(aErrorCode)]() {
-                                 self->mWebTransportStream->Reset(error);
+                                 self->mWebTransportStream->AbortSending(error);
                                }));
   }
 
-  mWebTransportStream->Reset(aErrorCode);
+  mWebTransportStream->AbortSending(aErrorCode);
   return NS_OK;
 }
 

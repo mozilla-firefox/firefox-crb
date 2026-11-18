@@ -46,6 +46,9 @@ class Http3SessionStub final : public Http3SessionBase {
 
   nsresult SendRequestBody(uint64_t aStreamId, const char* buf, uint32_t count,
                            uint32_t* countRead) override {
+    if (mBlockRequestBody) {
+      *countRead = 0;
+    }
     return NS_OK;
   }
 
@@ -159,7 +162,9 @@ class Http3SessionStub final : public Http3SessionBase {
   }
 
   void ResetWebTransportStream(Http3WebTransportStream* aStream,
-                               uint64_t aErrorCode) override {}
+                               uint64_t aErrorCode) override {
+    mResetStreamCode = Some(aErrorCode);
+  }
 
   void CommitWebTransportStream(Http3WebTransportStream* aStream) override {}
 
@@ -188,6 +193,10 @@ class Http3SessionStub final : public Http3SessionBase {
   const nsCString& PathHeader() { return mPathHeader; }
   const nsCString& AuthHeader() { return mAuthHeader; }
 
+  // When set, SendRequestBody() accepts nothing, as neqo does while flow
+  // control blocks the stream.
+  bool mBlockRequestBody = false;
+  Maybe<uint64_t> mResetStreamCode;
   // What SendDatagram() returns, standing in for neqo's enqueue result.
   nsresult mSendDatagramResult = NS_OK;
   uint32_t mDatagramsEnqueued = 0;
