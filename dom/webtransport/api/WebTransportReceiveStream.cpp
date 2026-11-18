@@ -69,10 +69,14 @@ already_AddRefed<WebTransportReceiveStream> WebTransportReceiveStream::Create(
   return stream.forget();
 }
 
-already_AddRefed<Promise> WebTransportReceiveStream::GetStats() {
+already_AddRefed<Promise> WebTransportReceiveStream::GetStats(
+    ErrorResult& aRv) {
   // https://w3c.github.io/webtransport/#dom-webtransportreceivestream-getstats
   // Step 1: Let p be a new promise.
-  RefPtr<Promise> promise = Promise::CreateInfallible(ReadableStream::mGlobal);
+  RefPtr<Promise> promise = Promise::Create(ReadableStream::mGlobal, aRv);
+  if (aRv.Failed()) {
+    return nullptr;
+  }
 
   // Both bytesReceived and bytesRead can only increase per spec, and we have
   // no locally-tracked value for either yet, so when we can't gather real

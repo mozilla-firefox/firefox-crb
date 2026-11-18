@@ -5,6 +5,7 @@
 #ifndef DOM_WEBTRANSPORT_API_WEBTRANSPORTRECEIVESTREAM_H_
 #define DOM_WEBTRANSPORT_API_WEBTRANSPORTRECEIVESTREAM_H_
 
+#include "mozilla/ErrorResult.h"
 #include "mozilla/dom/ReadableStream.h"
 
 namespace mozilla::ipc {
@@ -32,7 +33,7 @@ class WebTransportReceiveStream final : public ReadableStream {
                        JS::Handle<JSObject*> aGivenProto) override;
 
   // WebIDL Interface
-  already_AddRefed<Promise> GetStats();
+  already_AddRefed<Promise> GetStats(ErrorResult& aRv);
 
  private:
   ~WebTransportReceiveStream() override;

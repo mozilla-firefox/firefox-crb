@@ -74,7 +74,7 @@ class WebTransportSendStream final : public WritableStream,
 
   void SetSendGroup(WebTransportSendGroup* aSendGroup, ErrorResult& aRv);
 
-  already_AddRefed<Promise> GetStats();
+  already_AddRefed<Promise> GetStats(ErrorResult& aRv);
 
   already_AddRefed<WebTransportWriter> GetWriter(ErrorResult& aRv);
 
