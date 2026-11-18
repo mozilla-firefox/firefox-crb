@@ -1759,7 +1759,7 @@ pub extern "C" fn neqo_http3conn_priority_update(
 ///
 /// Use of raw (i.e. unsafe) pointers as arguments.
 #[no_mangle]
-pub unsafe extern "C" fn neqo_htttp3conn_send_request_body(
+pub unsafe extern "C" fn neqo_http3conn_send_request_body(
     conn: &mut NeqoHttp3Conn,
     stream_id: u64,
     buf: *const u8,
@@ -2080,6 +2080,7 @@ pub enum WebTransportEventExternal {
         session_id: u64,
     },
 }
+
 #[repr(C)]
 pub enum ConnectUdpEventExternal {
     Negotiated(bool),
@@ -2209,28 +2210,6 @@ pub enum Http3Event {
         stream_id: u64,
         error: u64,
         local: bool,
-    },
-    /// A `PushPromise`
-    PushPromise {
-        push_id: u64,
-        request_stream_id: u64,
-    },
-    /// A push response headers are ready.
-    PushHeaderReady {
-        push_id: u64,
-        fin: bool,
-    },
-    /// New bytes are available on a push stream for reading.
-    PushDataReadable {
-        push_id: u64,
-    },
-    /// A push has been canceled.
-    PushCanceled {
-        push_id: u64,
-    },
-    PushReset {
-        push_id: u64,
-        error: u64,
     },
     RequestsCreatable,
     AuthenticationNeeded,
@@ -2855,18 +2834,12 @@ pub extern "C" fn neqo_http3conn_connect_udp_send_datagram(
     session_id: u64,
     data: &mut ThinVec<u8>,
     tracking_id: u64,
-    send_group_id: u64,
-    send_order: i64,
 ) -> nsresult {
     let id = if tracking_id == 0 {
         None
     } else {
         Some(tracking_id)
     };
-    // The local neqo2 vendor doesn't yet support per-datagram send group/order
-    // prioritization; accept the params from the C++ side but don't forward
-    // them until neqo grows the corresponding API.
-    let _ = (send_group_id, send_order);
     match conn.conn.connect_udp_send_datagram(
         StreamId::from(session_id),
         data,
