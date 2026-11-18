@@ -19,14 +19,13 @@ namespace mozilla::dom {
 class Promise;
 class WritableStream;
 
-class WritableStreamDefaultWriter final : public nsISupports,
-                                          public nsWrapperCache {
+class WritableStreamDefaultWriter : public nsISupports, public nsWrapperCache {
  public:
-  NS_DECL_CYCLE_COLLECTING_ISUPPORTS_FINAL
+  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(WritableStreamDefaultWriter)
 
  protected:
-  ~WritableStreamDefaultWriter();
+  virtual ~WritableStreamDefaultWriter();
 
  public:
   explicit WritableStreamDefaultWriter(nsIGlobalObject* aGlobal);
@@ -67,6 +66,8 @@ class WritableStreamDefaultWriter final : public nsISupports,
 
   MOZ_CAN_RUN_SCRIPT already_AddRefed<Promise> Write(
       JSContext* aCx, JS::Handle<JS::Value> aChunk, ErrorResult& aRv);
+
+  void SetUp(WritableStream* aStream, ErrorResult& aRv);
 
   // Internal Slots:
  private:
