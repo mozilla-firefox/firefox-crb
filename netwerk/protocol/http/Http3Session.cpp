@@ -3415,8 +3415,28 @@ bool Http3Session::GetWebTransportSendStreamStats(
 bool Http3Session::GetWebTransportRecvStreamStats(uint64_t aStreamId,
                                                   uint64_t* aBytesReceived,
                                                   uint64_t* aBytesRead) {
-  return mHttp3Connection->GetWebTransportRecvStreamStats(
-      aStreamId, aBytesReceived, aBytesRead);
+  if (mHttp3Connection->GetWebTransportRecvStreamStats(
+          aStreamId, aBytesReceived, aBytesRead)) {
+    return true;
+  }
+  // neqo has already removed the stream from its internal state (all data
+  // consumed). The stream object may still be in mStreamIdHash; if so, use
+  // mTotalReceived as the cached final byte count.
+  RefPtr<Http3StreamBase> stream = mStreamIdHash.Get(aStreamId);
+  if (stream) {
+    Http3WebTransportStream* wtStream = stream->GetHttp3WebTransportStream();
+    if (wtStream && wtStream->RecvDone()) {
+      *aBytesReceived = wtStream->TotalReceived();
+      // Approximation: data received by neqo may still be buffered in the
+      // DataPipe and not yet read by the application. We use TotalReceived()
+      // because neqo's per-stream state is gone; this is only accurate when
+      // all buffered data has been drained by the reader before getStats() is
+      // called.
+      *aBytesRead = wtStream->TotalReceived();
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Http3Session::WebTransportSendStreamAtomic(uint64_t aStreamId,

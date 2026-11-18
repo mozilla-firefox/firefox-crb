@@ -81,6 +81,8 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
   // When mRecvState is RECV_DONE, this means we already received the FIN.
   bool RecvDone() const override { return mRecvState == RECV_DONE; }
 
+  uint64_t TotalReceived() const { return mTotalReceived; }
+
   bool SentReset() const { return mResetError.isSome(); }
 
   // RESET_STREAM or STOP_SENDING from the peer on a bidirectional stream ends
