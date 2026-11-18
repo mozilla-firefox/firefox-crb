@@ -156,6 +156,20 @@ pub enum ColorSpace {
     XyzD65,
 }
 
+/// The categories of analogous components:
+/// <https://drafts.csswg.org/css-color-4/#analogous-components>
+#[derive(PartialEq)]
+enum AnalogousCategory {
+    Reds,
+    Greens,
+    Blues,
+    Lightness,
+    Colorfulness,
+    Hue,
+    OpponentA,
+    OpponentB,
+}
+
 impl ColorSpace {
     /// Returns whether this is a `<rectangular-color-space>`.
     #[inline]
@@ -183,6 +197,27 @@ impl ColorSpace {
             | Self::XyzD50
             | Self::XyzD65 => true,
             _ => false,
+        }
+    }
+
+    /// The analogous category of each color component. `None` for components
+    /// that have no analog in other color spaces (whiteness and blackness).
+    fn analogous_categories(&self) -> [Option<AnalogousCategory>; 3] {
+        use AnalogousCategory as A;
+        match self {
+            Self::Srgb
+            | Self::SrgbLinear
+            | Self::DisplayP3
+            | Self::DisplayP3Linear
+            | Self::A98Rgb
+            | Self::ProphotoRgb
+            | Self::Rec2020
+            | Self::XyzD50
+            | Self::XyzD65 => [Some(A::Reds), Some(A::Greens), Some(A::Blues)],
+            Self::Hsl => [Some(A::Hue), Some(A::Colorfulness), Some(A::Lightness)],
+            Self::Hwb => [Some(A::Hue), None, None],
+            Self::Lab | Self::Oklab => [Some(A::Lightness), Some(A::OpponentA), Some(A::OpponentB)],
+            Self::Lch | Self::Oklch => [Some(A::Lightness), Some(A::Colorfulness), Some(A::Hue)],
         }
     }
 
@@ -629,9 +664,8 @@ impl AbsoluteColor {
             return *self;
         }
 
-        // Missing components are treated as 0 for the conversion math.
-        // Carry-forward of `none` to analogous channels is handled at call
-        // sites where needed.
+        // Missing components are treated as 0 for the conversion math. Use
+        // `to_color_space_with_missing` to carry them forward.
         macro_rules! missing_to_zero {
             ($c:expr) => {{ crate::values::normalize($c.unwrap_or(0.0)) }};
         }
@@ -711,6 +745,47 @@ impl AbsoluteColor {
             nan_to_missing!(result.2),
             self.alpha(),
         )
+    }
+
+    /// Convert this color to `color_space`, and carry forward its missing components:
+    /// <https://drafts.csswg.org/css-color-4/#interpolation-missing>
+    pub fn to_color_space_with_missing(&self, color_space: ColorSpace) -> Self {
+        const COMPONENT_IS_NONE: [ColorFlags; 3] = [
+            ColorFlags::C0_IS_NONE,
+            ColorFlags::C1_IS_NONE,
+            ColorFlags::C2_IS_NONE,
+        ];
+
+        let mut result = self.to_color_space(color_space);
+        if self.color_space == color_space {
+            return result;
+        }
+
+        // The components that are not analogous to a component of the other color
+        // space form an analogous set.
+        let mut source_set =
+            ColorFlags::C0_IS_NONE | ColorFlags::C1_IS_NONE | ColorFlags::C2_IS_NONE;
+        let mut target_set = source_set;
+
+        let source_categories = self.color_space.analogous_categories();
+        for (target_index, category) in color_space.analogous_categories().iter().enumerate() {
+            if category.is_none() {
+                continue;
+            }
+            let Some(source_index) = source_categories.iter().position(|c| c == category) else {
+                continue;
+            };
+            source_set.remove(COMPONENT_IS_NONE[source_index]);
+            target_set.remove(COMPONENT_IS_NONE[target_index]);
+            if self.flags.contains(COMPONENT_IS_NONE[source_index]) {
+                result.flags.insert(COMPONENT_IS_NONE[target_index]);
+            }
+        }
+
+        if self.flags.contains(source_set) {
+            result.flags.insert(target_set);
+        }
+        result
     }
 
     /// Convert a given `nscolor` to a Servo AbsoluteColor value.
