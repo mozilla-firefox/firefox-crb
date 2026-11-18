@@ -316,6 +316,11 @@ NS_IMETHODIMP MockWebTransportSessionEventListener::OnResetReceived(
   return NS_OK;
 }
 
+NS_IMETHODIMP MockWebTransportSessionEventListener::OnAtomicWriteResult(
+    uint64_t aStreamId, uint32_t aAtomicWriteId, nsresult aResult) {
+  return NS_OK;
+}
+
 NS_IMETHODIMP MockWebTransportSessionEventListener::OnStatsAvailable(
     nsIWebTransportSessionStats* aStats) {
   return NS_OK;

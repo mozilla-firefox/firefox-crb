@@ -61,9 +61,15 @@ void WebTransportChild::CloseAll() {
 
 ::mozilla::ipc::IPCResult WebTransportChild::RecvIncomingUnidirectionalStream(
     const uint64_t& aStreamId, const RefPtr<DataPipeReceiver>& aStream) {
+  LOG(
+      ("WebTransportChild::RecvIncomingUnidirectionalStream streamId=%llu, "
+       "mTransport=%p",
+       (unsigned long long)aStreamId, static_cast<void*>(mTransport)));
   if (mTransport) {
     RefPtr<WebTransport> self(mTransport);
     self->NewUnidirectionalStream(aStreamId, aStream);
+  } else {
+    LOG(("  WARNING: mTransport is null, dropping stream"));
   }
   return IPC_OK();
 }
@@ -100,6 +106,40 @@ void WebTransportChild::CloseAll() {
     self->OnDatagramCapacity(aCumulativeDatagrams, aCumulativeBytes, aSentDelta,
                              aExpiredDelta, aDroppedDelta,
                              aDatagramPrefixBytes);
+  }
+  return IPC_OK();
+}
+
+::mozilla::ipc::IPCResult WebTransportChild::RecvAtomicWriteResult(
+    const uint64_t& aStreamId, const uint32_t& aAtomicWriteId,
+    const nsresult& aResult) {
+  LOG(
+      ("WebTransportChild::RecvAtomicWriteResult streamId=%llu, "
+       "atomicWriteId=%u, result=0x%x",
+       (unsigned long long)aStreamId, aAtomicWriteId,
+       static_cast<uint32_t>(aResult)));
+
+  if (mTransport) {
+    RefPtr<WebTransportSendStream> stream =
+        mTransport->GetSendStream(aStreamId);
+
+    if (NS_SUCCEEDED(aResult)) {
+      if (stream) {
+        stream->UntrackAtomicWriteId(aAtomicWriteId);
+      }
+      RefPtr<Promise> promise =
+          mTransport->TakeAtomicWritePromise(aAtomicWriteId);
+      if (promise) {
+        promise->MaybeResolveWithUndefined();
+      }
+    } else {
+      // Atomic write failed due to insufficient flow control window.
+      // Per spec "write" step 8.1: abort all atomic write requests on
+      // the stream. This rejects all pending atomic write promises.
+      if (stream) {
+        stream->AbortAllAtomicWriteRequests();
+      }
+    }
   }
   return IPC_OK();
 }
