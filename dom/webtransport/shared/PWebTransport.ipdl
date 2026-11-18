@@ -95,9 +95,11 @@ async protocol PWebTransport
    */
   async Close(uint32_t code, nsCString reason)
       returns(WebTransportStatsData? stats);
-  async CreateUnidirectionalStream(int64_t sendOrder, uint64_t? sendGroupId)
+  async CreateUnidirectionalStream(int64_t sendOrder, uint64_t? sendGroupId,
+                                    bool waitUntilAvailable)
       returns(UnidirectionalStreamResponse response);
-  async CreateBidirectionalStream(int64_t sendOrder, uint64_t? sendGroupId)
+  async CreateBidirectionalStream(int64_t sendOrder, uint64_t? sendGroupId,
+                                   bool waitUntilAvailable)
       returns(BidirectionalStreamResponse response);
 
   /**

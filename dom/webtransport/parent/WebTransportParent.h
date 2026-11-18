@@ -74,11 +74,10 @@ class WebTransportParent : public PWebTransportParent,
 
   IPCResult RecvCreateUnidirectionalStream(
       int64_t aSendOrder, Maybe<uint64_t> aSendGroupId,
-      CreateUnidirectionalStreamResolver&& aResolver);
+      bool aWaitUntilAvailable, CreateUnidirectionalStreamResolver&& aResolver);
   IPCResult RecvCreateBidirectionalStream(
       int64_t aSendOrder, Maybe<uint64_t> aSendGroupId,
-      CreateBidirectionalStreamResolver&& aResolver);
-
+      bool aWaitUntilAvailable, CreateBidirectionalStreamResolver&& aResolver);
   ::mozilla::ipc::IPCResult RecvOutgoingDatagrams(
       nsTArray<OutgoingDatagram>&& aDatagrams);
 
