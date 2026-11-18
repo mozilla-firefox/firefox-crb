@@ -1278,6 +1278,14 @@ skip-if = [
   "os == 'win' && os_version == '11.26200' && arch == 'x86_64'",
 ]
 
+["test_http3_token_resumption_telemetry.js"]
+skip-if = [
+  "os == 'android' && os_version == '14' && arch == 'x86_64'", # Bug 1982955
+  "os == 'win' && os_version == '10.2009' && arch == 'x86_64'",
+  "os == 'win' && os_version == '11.26200' && arch == 'x86'",
+  "os == 'win' && os_version == '11.26200' && arch == 'x86_64'",
+]
+
 ["test_http3_trans_close.js"]
 run-sequentially = ["true"] # http3server
 skip-if = [
@@ -1853,6 +1861,12 @@ prefs = [
   "logging.SSLTokensCache=5",
   "logging.config.sync=true",
 ]
+skip-if = [
+  "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && msix", # Bug 2034343
+]
+
+["test_ssl_token_resumption_telemetry.js"]
+run-sequentially = ["true"] # tlsserver uses fixed port
 skip-if = [
   "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && msix", # Bug 2034343
 ]
