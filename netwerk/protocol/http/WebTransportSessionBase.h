@@ -6,6 +6,7 @@
 #define mozilla_net_WebTransportSessionBase_h
 
 #include <functional>
+#include <utility>
 
 #include "mozilla/Mutex.h"
 #include "mozilla/TimeStamp.h"
@@ -90,6 +91,16 @@ class WebTransportSessionBase {
   // Tell the listener the outgoing datagram queue has room again.
   void NotifyOutgoingDatagramSpaceAvailable();
 
+  // Ask for one NotifyOutgoingDatagramSpaceAvailable() after the next output
+  // pass.  neqo only signals space after rejecting a datagram, which a sender
+  // that stays within the credit it was granted never causes.  Socket thread.
+  void RequestOutgoingDatagramProgress() {
+    mOutgoingDatagramProgressRequested = true;
+  }
+  bool TakeOutgoingDatagramProgressRequest() {
+    return std::exchange(mOutgoingDatagramProgressRequested, false);
+  }
+
   // A snapshot of the outgoing datagram queue, and its cumulative
   // sent/expired/dropped counts, for WebTransportParent's DatagramCapacity
   // feedback.  False if the session cannot report them.
@@ -116,6 +127,7 @@ class WebTransportSessionBase {
   Mutex mListenerLock{"WebTransportSessionBase::mListenerLock"};
   RefPtr<WebTransportSessionEventListener> mListener
       MOZ_GUARDED_BY(mListenerLock);
+  bool mOutgoingDatagramProgressRequested = false;
 };
 
 }  // namespace mozilla::net
