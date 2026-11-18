@@ -3405,6 +3405,13 @@ nsresult Http3Session::RegisterWebTransportSendGroup(uint64_t aSessionId,
   return mHttp3Connection->RegisterWebTransportSendGroup(aSessionId, aGroupId);
 }
 
+bool Http3Session::GetWebTransportSendStreamStats(
+    uint64_t aStreamId, uint64_t* aBytesWritten, uint64_t* aBytesSent,
+    uint64_t* aBytesAcknowledged) {
+  return mHttp3Connection->GetWebTransportSendStreamStats(
+      aStreamId, aBytesWritten, aBytesSent, aBytesAcknowledged);
+}
+
 nsresult Http3Session::GetWebTransportSessionProtocol(uint64_t aSessionId,
                                                       nsACString& aProtocol) {
   return mHttp3Connection->GetWebTransportSessionProtocol(aSessionId,

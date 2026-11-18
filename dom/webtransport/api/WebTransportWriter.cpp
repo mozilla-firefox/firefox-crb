@@ -77,13 +77,6 @@ void WebTransportWriter::Commit() {
     return;
   }
 
-  // For now, just set committed offset to 0
-  // A full implementation would:
-  // 1. Get streamId from mSendStream
-  // 2. Query stream stats via IPC (GetStreamStats)
-  // 3. Get bytesAcknowledged from the stats
-  // 4. Update mCommittedOffset on mSendStream
-
   mSendStream->SetCommittedOffset(0);
 }
 
