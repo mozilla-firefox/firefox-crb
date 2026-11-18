@@ -92,9 +92,21 @@ class H3DatagramSetting(IntEnum):
     RFC = 0x33
 
 
+_SUPPORT_DRAFT07 = True
+_SUPPORT_DRAFT15 = True
+
+
 class WebTransportHttp3Setting(IntEnum):
     # https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3-07#section-8.2
     WEBTRANSPORT_MAX_SESSIONS_DRAFT07 = 0xc671706a
+    # https://datatracker.ietf.org/doc/html/draft-ietf-webtrans-http3-15#section-9.2
+    SETTINGS_WT_ENABLED = 0x2c7cf000
+    # TODO: the three INITIAL_MAX_* settings below are defined but not yet
+    # advertised; per-session flow control is left disabled for now (draft-15
+    # section 5.1). See the TODO in _get_local_settings.
+    SETTINGS_WT_INITIAL_MAX_DATA = 0x2b61
+    SETTINGS_WT_INITIAL_MAX_STREAMS_UNI = 0x2b64
+    SETTINGS_WT_INITIAL_MAX_STREAMS_BIDI = 0x2b65
 
 
 class H3ConnectionWithDatagram(H3Connection):
@@ -126,8 +138,20 @@ class H3ConnectionWithDatagram(H3Connection):
         settings[H3DatagramSetting.RFC] = 1
         settings[H3DatagramSetting.DRAFT04] = 1
         settings[H3ConnectionWithDatagram.ENABLE_CONNECT_PROTOCOL] = 1
-        # This connection can handle only one WebTransport session.
-        settings[WebTransportHttp3Setting.WEBTRANSPORT_MAX_SESSIONS_DRAFT07] = 1
+        # draft-ietf-webtrans-http3-15 section 3.1
+        # TODO: also negotiate reset_stream_at QUIC transport parameter
+        # (draft-ietf-quic-reliable-stream-reset-07) once aioquic supports it.
+        # TODO: per-session flow control is intentionally left disabled. Per
+        # draft-15 section 5.1 it is only enabled when both peers advertise a
+        # non-zero SETTINGS_WT_INITIAL_MAX_DATA / _MAX_STREAMS_UNI /
+        # _MAX_STREAMS_BIDI; we advertise none, so streams/data are bounded only
+        # by the QUIC connection limits. Advertising these (and implementing the
+        # WT_MAX_STREAMS / WT_MAX_DATA / *_BLOCKED capsules in section 5.6) is
+        # future work once aioquic supports it.
+        if _SUPPORT_DRAFT15:
+            settings[WebTransportHttp3Setting.SETTINGS_WT_ENABLED] = 1
+        if _SUPPORT_DRAFT07:
+            settings[WebTransportHttp3Setting.WEBTRANSPORT_MAX_SESSIONS_DRAFT07] = 1
         return settings
 
     @property
@@ -177,7 +201,12 @@ class WebTransportH3Protocol(QuicConnectionProtocol):
             protocol = headers.get(b":protocol")
             origin = headers.get(b"origin")
             # Accept any Origin but the client must send it.
-            if method == b"CONNECT" and protocol == b"webtransport" and origin:
+            accepted_protocols: tuple = ()
+            if _SUPPORT_DRAFT15:
+                accepted_protocols += (b"webtransport-h3",)
+            if _SUPPORT_DRAFT07:
+                accepted_protocols += (b"webtransport",)
+            if method == b"CONNECT" and protocol in accepted_protocols and origin:
                 self._session_stream_id = event.stream_id
                 self._handshake_webtransport(event, headers)
             else:
@@ -307,7 +336,6 @@ class WebTransportH3Protocol(QuicConnectionProtocol):
 
         response_headers = [
             (b"server", SERVER_NAME.encode()),
-            (b"sec-webtransport-http3-draft", b"draft02"),
         ]
         self._handler.connect_received(response_headers=response_headers)
 
@@ -564,16 +592,24 @@ class WebTransportH3Server:
     :param cert_path: Path to certificate file to use.
     :param key_path: Path to key file to use.
     :param logger: a Logger object for this server.
+    :param version: Which WebTransport draft version(s) to support:
+        "draft07" - only draft-07 (`:protocol: webtransport`)
+        "draft15" - only draft-15 (`:protocol: webtransport-h3`)
+        "both"    - both (default)
     """
 
     def __init__(self, host: str, port: int, doc_root: str, cert_path: str,
-                 key_path: str, logger: Optional[logging.Logger]) -> None:
+                 key_path: str, logger: Optional[logging.Logger],
+                 version: str = "both") -> None:
         self.host = host
         self.port = port
         self.doc_root = doc_root
         self.cert_path = cert_path
         self.key_path = key_path
         self.started = False
+        if version not in ("draft07", "draft15", "both"):
+            raise ValueError(f"version must be 'draft07', 'draft15', or 'both', got {version!r}")
+        self.version = version
         global _doc_root
         _doc_root = self.doc_root
         global _logger
@@ -588,6 +624,10 @@ class WebTransportH3Server:
         self.started = True
 
     def _start_on_server_thread(self) -> None:
+        global _SUPPORT_DRAFT07, _SUPPORT_DRAFT15
+        _SUPPORT_DRAFT07 = self.version in ("draft07", "both")
+        _SUPPORT_DRAFT15 = self.version in ("draft15", "both")
+
         secrets_log_file = None
         if "SSLKEYLOGFILE" in os.environ:
             try:
