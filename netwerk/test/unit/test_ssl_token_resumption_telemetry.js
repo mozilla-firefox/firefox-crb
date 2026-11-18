@@ -181,6 +181,22 @@ add_task(
 
 add_task(
   needsFaultyServer(),
+  async function test_plaintext_token_not_counted_as_wrapped() {
+    await resetTokensAndTelemetry();
+    Services.prefs.setBoolPref("network.ssl_tokens_cache_persistence", true);
+
+    let [, buf] = await openFreshConnection();
+    ok(buf, "connection succeeded");
+    Assert.equal(
+      Glean.network.sslTokenCacheWrappedNotPersisted.testGetValue(),
+      null
+    );
+    Services.prefs.clearUserPref("network.ssl_tokens_cache_persistence");
+  }
+);
+
+add_task(
+  needsFaultyServer(),
   async function test_session_token_failed_on_handshake_timeout() {
     await resetTokensAndTelemetry();
     let [, buf] = await openFreshConnection(kStallOnResumeHost);

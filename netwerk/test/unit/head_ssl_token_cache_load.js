@@ -35,7 +35,7 @@ function seedCacheRows(aKeys) {
   let conn = Services.storage.openUnsharedDatabase(getCacheFile());
   try {
     if (!conn.tableExists("ssl_tokens")) {
-      conn.schemaVersion = 1;
+      conn.schemaVersion = 2;
       conn.executeSimpleSQL(
         "CREATE TABLE ssl_tokens (key TEXT NOT NULL," +
           "expiration_time INTEGER NOT NULL," +
