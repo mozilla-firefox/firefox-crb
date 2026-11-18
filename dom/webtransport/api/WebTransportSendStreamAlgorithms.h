@@ -16,6 +16,8 @@ class WebTransportSendStream;
 
 // Custom underlying sink for WebTransportSendStream that frames
 // all writes before sending them to the DataPipe
+class AbortSignalImpl;
+
 class WebTransportSendStreamAlgorithms final
     : public UnderlyingSinkAlgorithmsWrapper {
  public:
@@ -42,6 +44,15 @@ class WebTransportSendStreamAlgorithms final
   // WriteCallbackImpl()'s null check reachable at all.
   void ReleaseObjects() override;
 
+  // Runs the abort steps "create a WebTransportSendStream" step 7 adds to the
+  // controller's signal: if a close() is still deferred, convert it into a
+  // reset on the same ordered channel and reject [[PendingOperation]].
+  void RunAbortSignalSteps(AbortSignalImpl* aSignal);
+
+  // Issues the FIN that CloseCallbackImpl deferred, unless an abort already
+  // preempted it.
+  void IssueDeferredClose();
+
  protected:
   ~WebTransportSendStreamAlgorithms() override = default;
 
@@ -53,6 +64,16 @@ class WebTransportSendStreamAlgorithms final
 
   nsCOMPtr<nsIGlobalObject> mGlobal;
   RefPtr<WebTransportSendStream> mStream;
+
+  // True between CloseCallbackImpl() and the microtask that actually closes
+  // the sender. While set, an abort can still preempt the FIN.
+  bool mCloseSenderPending = false;
+
+  // The sender to close once the deferral elapses, and the close() promise
+  // ([[PendingOperation]]) to settle. Held directly because ReleaseObjects()
+  // can null mStream before either the microtask or the abort steps run.
+  RefPtr<mozilla::ipc::DataPipeSender> mDeferredCloseSender;
+  RefPtr<Promise> mDeferredClosePromise;
 };
 
 }  // namespace mozilla::dom

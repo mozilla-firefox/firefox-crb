@@ -127,7 +127,14 @@ void Http2WebTransportStream::SendStopSending(uint64_t aErrorCode) {
   mRecvState = RECV_DONE;
 }
 
-void Http2WebTransportStream::SendFin() {}
+void Http2WebTransportStream::SendFin() {
+  // The HTTP/2 backend does not yet send a FIN: the sender always passes
+  // aFin=false in its WT_STREAM capsules.  The close is reported complete as
+  // soon as it is requested so the DOM can settle the close promise.
+  if (mWebTransportSession) {
+    mWebTransportSession->NotifyStreamCloseComplete(mStreamId);
+  }
+}
 
 void Http2WebTransportStream::Reset(uint64_t aErrorCode) {
   if (mSentReset || !mWebTransportSession || mSendState == SEND_DONE) {

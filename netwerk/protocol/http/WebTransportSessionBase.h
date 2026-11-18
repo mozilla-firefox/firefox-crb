@@ -123,6 +123,10 @@ class WebTransportSessionBase {
     return nullptr;
   }
 
+  // Tell the DOM that a send stream's FIN went out, so it can settle the
+  // close promise held as [[PendingOperation]].
+  void NotifyStreamCloseComplete(uint64_t aStreamId);
+
  protected:
   virtual ~WebTransportSessionBase() = default;
 

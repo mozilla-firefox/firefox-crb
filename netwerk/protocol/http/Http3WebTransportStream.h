@@ -107,6 +107,9 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
   // Looks up the owning Http3WebTransportSession and resolves the DOM-side
   // atomicWrite() promise for aAtomicWriteId.
   void ResolveAtomicWrite(uint32_t aAtomicWriteId, bool aSuccess);
+  // Looks up the owning Http3WebTransportSession and tells the DOM the FIN
+  // for this stream went out, settling its close() promise.
+  void NotifyCloseComplete();
   // Retries atomic writes deferred because regular data was still draining
   // ahead of them; called whenever mPendingRegularFrameData empties out.
   void TryDrainPendingAtomicWrites();
