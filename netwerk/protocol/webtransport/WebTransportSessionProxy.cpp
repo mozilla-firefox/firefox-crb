@@ -1847,6 +1847,38 @@ void WebTransportSessionProxy::NotifyDatagramsFlush() {
   listener->OnDatagramsFlush();
 }
 
+NS_IMETHODIMP WebTransportSessionProxy::OnAtomicWriteResult(
+    uint64_t aStreamId, uint32_t aAtomicWriteId, nsresult aResult) {
+  MOZ_ASSERT(OnSocketThread());
+
+  nsCOMPtr<WebTransportSessionEventListener> listener;
+  {
+    MutexAutoLock lock(mMutex);
+    if (!mStopRequestCalled) {
+      mPendingEvents.AppendElement(
+          [self = RefPtr{this}, aStreamId, aAtomicWriteId, aResult]() {
+            self->OnAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
+          });
+      return NS_OK;
+    }
+
+    if (!mTarget->IsOnCurrentThread()) {
+      return mTarget->Dispatch(NS_NewRunnableFunction(
+          "WebTransportSessionProxy::OnAtomicWriteResult",
+          [self = RefPtr{this}, aStreamId, aAtomicWriteId, aResult]() {
+            self->OnAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
+          }));
+    }
+    listener = mListener;
+  }
+
+  if (listener) {
+    listener->OnAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
+  }
+
+  return NS_OK;
+}
+
 NS_IMETHODIMP WebTransportSessionProxy::OnDatagramReceivedInternal(
     nsTArray<uint8_t>&& aData) {
   MOZ_ASSERT(OnSocketThread());

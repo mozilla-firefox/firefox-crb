@@ -188,6 +188,9 @@ interface WebTransportSessionEventListener : nsISupports {
   void onStopSending(in uint64_t aStreamId, in uint64_t aErrorCode);
   void onResetReceived(in uint64_t aStreamId, in uint64_t aErrorCode);
 
+  // When an atomic write completes (sent or rejected due to flow control).
+  void onAtomicWriteResult(in uint64_t aStreamId, in uint32_t aAtomicWriteId, in nsresult aResult);
+
   // When a new datagram has been received.
   void onDatagramReceived(in Array<uint8_t> aData);
 
