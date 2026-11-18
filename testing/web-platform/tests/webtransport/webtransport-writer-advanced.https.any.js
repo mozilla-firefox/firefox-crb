@@ -282,3 +282,37 @@ promise_test(async t => {
   await promise_rejects_dom(t, 'AbortError', writer.write(new Uint8Array([7])),
                             'write after abort should fail');
 }, 'abort() with interleaved atomic/non-atomic writes rejects all pending writes');
+
+// Per spec, if an atomicWrite() is rejected because its chunk doesn't fit the
+// current flow-control window, any write already queued behind it must also
+// be rejected, and the whole stream must error
+// (https://w3c.github.io/webtransport/#webtransportsendstream-abort-all-atomic-write-requests).
+// This is a genuine flow-control failure, not a user-initiated abort().
+promise_test(async t => {
+  const wt = new WebTransport(webtransport_url('echo.py'));
+  t.add_cleanup(() => wt.close());
+  await wt.ready;
+
+  const stream = await wt.createUnidirectionalStream();
+  const writer = stream.getWriter();
+
+  // The WPT server leaves aioquic's default 1 MiB max_data and
+  // max_stream_data in place, and raises them only after receiving data. This
+  // chunk exceeds both, and nothing is sent first, so the window cannot grow
+  // before the verdict.
+  const atomicPromise = writer.atomicWrite(new Uint8Array(1200 * 1000));
+
+  // Issued immediately after, without awaiting atomicPromise first: per
+  // spec this write is still "queued behind" the atomic write at the moment
+  // it fails, so it must be rejected too, not silently succeed.
+  const regularPromise = writer.write(new Uint8Array([1]));
+
+  await promise_rejects_dom(t, 'AbortError', atomicPromise,
+                            'atomicWrite() should reject: insufficient flow control window');
+  await promise_rejects_dom(t, 'AbortError', regularPromise,
+                            'write() queued behind the failed atomicWrite() should also reject');
+
+  // The whole stream must be left in an errored state.
+  await promise_rejects_dom(t, 'AbortError', writer.closed,
+                            'stream should be errored after the atomic write failure');
+}, 'atomicWrite() failure due to insufficient flow control rejects writes queued behind it and errors the stream');
