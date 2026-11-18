@@ -98,9 +98,14 @@ interface nsIWebTransport : nsISupports {
   void closeSession(in uint32_t aErrorCode,
                     in ACString aReason);
 
-  // Create and open a new WebTransport stream.
-  void createOutgoingBidirectionalStream(in nsIWebTransportStreamCallback aListener);
-  void createOutgoingUnidirectionalStream(in nsIWebTransportStreamCallback aListener);
+  // Create and open a new WebTransport stream. If aWaitUntilAvailable is
+  // true and the peer's stream-count quota is currently exhausted, the
+  // request is held and completed once quota becomes available, rather
+  // than failing immediately with QUOTA_EXCEEDED_ERROR.
+  void createOutgoingBidirectionalStream(in nsIWebTransportStreamCallback aListener,
+                                         in boolean aWaitUntilAvailable);
+  void createOutgoingUnidirectionalStream(in nsIWebTransportStreamCallback aListener,
+                                          in boolean aWaitUntilAvailable);
 
   void sendDatagram(in Array<uint8_t> aData, in uint64_t aSendGroupId,
                     in int64_t aSendOrder);

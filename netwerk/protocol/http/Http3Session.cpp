@@ -781,6 +781,13 @@ nsresult Http3Session::ProcessEvents() {
           CallCertVerification(Nothing());
         }
         break;
+      case Http3Event::Tag::StreamQuotaIncreased: {
+        LOG(("Http3Session::ProcessEvents - StreamQuotaIncreased"));
+        // Retry any WebTransport streams queued with waitUntilAvailable=true,
+        // since neqo signals WebTransport stream quota via this event rather
+        // than RequestsCreatable.
+        ProcessPending();
+      } break;
       case Http3Event::Tag::ZeroRttRejected:
         LOG(("Http3Session::ProcessEvents - ZeroRttRejected"));
         if (mState == ZERORTT) {
@@ -1916,9 +1923,23 @@ nsresult Http3Session::TryActivatingWebTransportStream(
       LOG3(
           ("Http3Session::TryActivatingWebTransportStream %p stream=%p no room "
            "for more "
-           "concurrent streams\n",
-           this, aStream));
-      QueueStream(aStream);
+           "concurrent streams, waitUntilAvailable=%d\n",
+           this, aStream, wtStream->WaitUntilAvailable()));
+      // Only queue the stream if waitUntilAvailable is true
+      if (wtStream->WaitUntilAvailable()) {
+        QueueStream(aStream);
+      } else {
+        // Remove the stream from the session's list since it won't be queued
+        RefPtr<Http3StreamBase> session =
+            mStreamIdHash.Get(wtStream->SessionId());
+        if (session) {
+          Http3WebTransportSession* wtSession =
+              session->GetHttp3WebTransportSession();
+          if (wtSession) {
+            wtSession->RemoveWebTransportStream(wtStream);
+          }
+        }
+      }
       return rv;
     }
 

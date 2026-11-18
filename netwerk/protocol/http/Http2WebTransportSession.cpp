@@ -233,9 +233,17 @@ void Http2WebTransportSessionImpl::ProcessPendingStreamCallbacks(
 
 void Http2WebTransportSessionImpl::CreateOutgoingBidirectionalStream(
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback) {
+        aCallback,
+    bool aWaitUntilAvailable) {
   auto id = mLocalStreamsFlowControl.TakeStreamId(WebTransportStreamType::BiDi);
   if (!id) {
+    // TODO: Implement aWaitUntilAvailable for Http2 in a future patch. No
+    // DOM-side notification is needed for this (see Http3's own
+    // waitUntilAvailable, which queues and retries entirely necko-side via
+    // Http3Session::QueueStream()/ProcessPending());
+    // mBidiPendingStreamCallbacks already exists as this backend's own queue,
+    // it just needs to stop queuing unconditionally once aWaitUntilAvailable is
+    // actually honored.
     mBidiPendingStreamCallbacks.Push(
         std::make_unique<PendingStreamCallback>(std::move(aCallback)));
     return;
@@ -246,10 +254,12 @@ void Http2WebTransportSessionImpl::CreateOutgoingBidirectionalStream(
 
 void Http2WebTransportSessionImpl::CreateOutgoingUnidirectionalStream(
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback) {
+        aCallback,
+    bool aWaitUntilAvailable) {
   auto id =
       mLocalStreamsFlowControl.TakeStreamId(WebTransportStreamType::UniDi);
   if (!id) {
+    // TODO: Implement aWaitUntilAvailable for Http2 in a future patch
     mUnidiPendingStreamCallbacks.Push(
         std::make_unique<PendingStreamCallback>(std::move(aCallback)));
     return;
