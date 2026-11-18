@@ -153,6 +153,12 @@ void Http2WebTransportStream::Reset(uint64_t aErrorCode) {
   mSendState = SEND_DONE;
 }
 
+void Http2WebTransportStream::AbortSending(uint32_t aErrorCode) {
+  mPartialFrameBuffer.Clear();
+  DropQueuedData();
+  Reset(aErrorCode);
+}
+
 already_AddRefed<nsIWebTransportSendStreamStats>
 Http2WebTransportStream::GetSendStreamStats() {
   return nullptr;
@@ -189,18 +195,6 @@ Http2WebTransportStream::OnInputStreamReady(nsIAsyncInputStream* aIn) {
   nsresult rv = mSendStreamPipeIn->ReadSegments(
       ReadRequestSegment, this, nsIOService::gDefaultSegmentSize, &sendBytes);
   ProcessFrames();
-
-  if (rv >= NS_ERROR_WEBTRANSPORT_CODE_BASE &&
-      rv <= NS_ERROR_WEBTRANSPORT_CODE_END) {
-    // The DOM side closed the outgoing pipe with a WebTransport error code
-    // (see WebTransportSendStreamAlgorithms::AbortCallbackImpl) to request a
-    // WT_RESET_STREAM capsule; decode and send it. Mirrors
-    // Http3WebTransportStream::ReadSegments()'s handling of the same
-    // encoding, which this HTTP/2 backend was missing.
-    uint8_t errorCode = GetWebTransportErrorFromNSResult(rv);
-    Reset(errorCode);
-    return NS_OK;
-  }
 
   return rv;
 }
@@ -398,6 +392,13 @@ void Http2WebTransportStream::ProcessFrames() {
       // covers what was already written.
       DropQueuedData();
       Reset(0x1);
+      return;
+    }
+
+    if (type == dom::WebTransportFrameType::Abort) {
+      // abort(): atomicWriteId carries the stream error code.
+      mPartialFrameBuffer.Clear();
+      Reset(atomicWriteId);
       return;
     }
 

@@ -31,10 +31,6 @@ using IPCResult = mozilla::ipc::IPCResult;
 
 namespace mozilla::dom {
 
-// Largest value encodable as a QUIC varint (RFC 9000 section 16). neqo's
-// Encoder::encode_varint() panics above this rather than returning an error.
-static constexpr uint64_t kMaxQuicVarint = (1ull << 62) - 1;
-
 NS_IMPL_ISUPPORTS(WebTransportParent, WebTransportSessionEventListener);
 
 using CreateWebTransportPromise =
@@ -1594,12 +1590,10 @@ mozilla::ipc::IPCResult WebTransportParent::RecvResetStream(
   LOG(("WebTransportParent::RecvResetStream streamId=%llu errorCode=%llu",
        (unsigned long long)aStreamId, (unsigned long long)aErrorCode));
 
-  // The error code comes from a content process and is handed to neqo
-  // unvalidated from here on; its varint encoder panics on anything that
-  // doesn't fit in a QUIC varint.
-  if (aErrorCode > kMaxQuicVarint) {
-    return IPC_FAIL(this,
-                    "WebTransport error code exceeds the QUIC varint range");
+  // This is the application code (a WebIDL unsigned long), mapped to the wire
+  // code by the stream.  It comes from a content process, so bound it here.
+  if (aErrorCode > std::numeric_limits<uint32_t>::max()) {
+    return IPC_FAIL(this, "WebTransport stream error code exceeds 32 bits");
   }
 
   // Aborting the writable side maps to "abort sending on the stream", which is
@@ -1607,11 +1601,11 @@ mozilla::ipc::IPCResult WebTransportParent::RecvResetStream(
   // that would close the receive direction the application may still read from.
   if (auto entry = mBidiStreamCallbackMap.Lookup(aStreamId)) {
     if (entry.Data().mStream) {
-      (void)entry.Data().mStream->Reset(aErrorCode);
+      (void)entry.Data().mStream->AbortSending(aErrorCode);
     }
   } else if (auto entry = mUniStreamCallbackMap.Lookup(aStreamId)) {
     if (entry.Data().mStream) {
-      (void)entry.Data().mStream->Reset(aErrorCode);
+      (void)entry.Data().mStream->AbortSending(aErrorCode);
     }
   } else {
     LOG(("  Stream %llu not found", (unsigned long long)aStreamId));

@@ -294,6 +294,12 @@ bool WebTransportSendStream::WriteBufferToDataPipe(const uint8_t* aBuffer,
       continue;
     }
 
+    // A pipe closed by the receiver reports success with nothing written;
+    // waiting for space on it would spin, as AsyncWait fires at once.
+    if (NS_SUCCEEDED(rv)) {
+      rv = mSender->StreamStatus();
+    }
+
     // No progress made: a hard error (anything other than WOULD_BLOCK)
     if (NS_FAILED(rv) && rv != NS_BASE_STREAM_WOULD_BLOCK) {
       LOG(("DataPipe write error during %s: rv=0x%x", aPhase,
@@ -360,9 +366,8 @@ void WebTransportSendStream::DrainQueue() {
       // so the atomic write stays the in-flight one and WritableStream
       // dispatches nothing behind it: a later failure can then reject the
       // whole pipeline, which is what the spec's "abort all atomic write
-      // requests" assumes. abort() waits on that round trip too, since a
-      // write request in flight blocks erroring; atomic writes are rare and
-      // small enough that the stall beats diverging from Streams.
+      // requests" assumes. abort() does not wait for it: the write is
+      // [[PendingOperation]], which the abort signal rejects.
       //
       // [[BytesWritten]] only counts it once confirmed.
       mUnconfirmedAtomicBytes = entry.mData.Length();
@@ -377,6 +382,33 @@ void WebTransportSendStream::DrainQueue() {
   }
 
   LOG(("DrainQueue complete, queue empty"));
+
+  if (mAbortCode) {
+    if (!WriteBufferToDataPipe(mAbortFrame, sizeof(mAbortFrame),
+                               mAbortFrameWritten, "abort")) {
+      return;
+    }
+    mAbortCode = Nothing();
+    (void)mSender->Close();
+  }
+}
+
+void WebTransportSendStream::AbortWithCode(uint32_t aCode) {
+  if (mAbortRequested) {
+    return;
+  }
+  mAbortRequested = true;
+  mAbortCode = Some(aCode);
+  nsTArray<uint8_t> noData;
+  FrameWebTransportChunkHeader(mAbortFrame, WebTransportFrameType::Abort, aCode,
+                               noData);
+  // The frame is ordered behind the data in the pipe, which flow control can
+  // stall indefinitely; the parent resets as soon as this arrives instead.
+  WebTransportChild* child = mTransport ? mTransport->SendChild() : nullptr;
+  if (child && child->CanSend()) {
+    child->SendResetStream(mStreamId, aCode);
+  }
+  DrainQueue();
 }
 
 void WebTransportSendStream::ResolveAtomicWriteRequest(uint32_t aId,

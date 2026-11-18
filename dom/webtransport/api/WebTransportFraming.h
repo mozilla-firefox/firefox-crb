@@ -30,6 +30,7 @@ struct PendingWriteEntry;  // Forward declaration
 enum class WebTransportFrameType : uint8_t {
   Regular = 0x00,  // Regular write() chunk
   Atomic = 0x01,   // atomicWrite() chunk
+  Abort = 0x02,    // abort(): 4-byte stream error code, then no more frames
 };
 
 // Result of attempting to parse a frame header out of the (untrusted,
@@ -45,7 +46,8 @@ enum class WebTransportFrameParseResult : uint8_t {
 
 // Frame a chunk for transmission over DataPipe
 // Frame format: [1 byte type][4 bytes length big-endian]{[4 bytes big-endian
-// Atomic Id]}[data]
+// Atomic Id or Abort code]}[data]
+// An Abort frame has no data; its length is 4.
 inline uint32_t FrameWebTransportChunkHeader(uint8_t (&aHeader)[9],
                                              WebTransportFrameType aType,
                                              uint32_t aAtomicId,
@@ -55,13 +57,13 @@ inline uint32_t FrameWebTransportChunkHeader(uint8_t (&aHeader)[9],
 
   // Length (4 bytes, big-endian)
   uint32_t length =
-      aData.Length() + (aType == WebTransportFrameType::Atomic ? 4 : 0);
+      aData.Length() + (aType != WebTransportFrameType::Regular ? 4 : 0);
   aHeader[1] = (length >> 24) & 0xFF;
   aHeader[2] = (length >> 16) & 0xFF;
   aHeader[3] = (length >> 8) & 0xFF;
   aHeader[4] = length & 0xFF;
 
-  if (aType == WebTransportFrameType::Atomic) {
+  if (aType != WebTransportFrameType::Regular) {
     aHeader[5] = (aAtomicId >> 24) & 0xFF;
     aHeader[6] = (aAtomicId >> 16) & 0xFF;
     aHeader[7] = (aAtomicId >> 8) & 0xFF;
@@ -71,7 +73,8 @@ inline uint32_t FrameWebTransportChunkHeader(uint8_t (&aHeader)[9],
   return 5;
 }
 
-// Parse frame header (first 5 or 9 bytes)
+// Parse frame header (first 5 or 9 bytes). aAtomicId receives the atomic write
+// id of an Atomic frame, or the stream error code of an Abort frame.
 WebTransportFrameParseResult ParseWebTransportFrameHeader(
     nsTArray<uint8_t>& aBuffer, WebTransportFrameType& aType,
     uint32_t& aAtomicId, nsTArray<uint8_t>& aPayload, size_t& aLength);

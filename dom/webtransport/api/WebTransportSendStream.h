@@ -111,6 +111,10 @@ class WebTransportSendStream final : public WritableStream,
   // Attempt to drain the write queue to the DataPipe
   void DrainQueue();
 
+  // Queues an Abort frame carrying aCode behind everything already queued,
+  // then closes the DataPipe once the frame is in it.
+  void AbortWithCode(uint32_t aCode);
+
   // [[InsideSynchronousAtomicWrite]] slot — set before delegating to write()
   // so WriteCallbackImpl can detect and configure the entry as atomic.
   Maybe<uint32_t> GetPendingAtomicWriteId() const {
@@ -219,6 +223,12 @@ class WebTransportSendStream final : public WritableStream,
 
   // Queue of pending write operations (both regular and atomic writes)
   mozilla::Queue<PendingWriteEntry> mPendingWrites;
+
+  // A stream is reset only once, so only the first AbortWithCode() counts.
+  bool mAbortRequested{false};
+  Maybe<uint32_t> mAbortCode;
+  uint8_t mAbortFrame[WEBTRANSPORT_FRAME_MAX_HEADER_SIZE];
+  uint32_t mAbortFrameWritten{0};
 
   // [[InsideSynchronousAtomicWrite]] — atomicWriteId set during AtomicWrite()
   // so WriteCallbackImpl (called synchronously from Write()) can read it.

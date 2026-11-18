@@ -78,6 +78,9 @@ class WebTransportStreamBase : public nsIInputStreamCallback,
   virtual void SendStopSending(uint64_t aErrorCode) = 0;
   virtual void SendFin() = 0;
   virtual void Reset(uint64_t aErrorCode) = 0;
+  // Resets with the application error code, discarding data that has not been
+  // handed to the transport yet instead of queueing behind it.
+  virtual void AbortSending(uint32_t aErrorCode) = 0;
   virtual void Commit() = 0;
   virtual already_AddRefed<nsIWebTransportSendStreamStats>
   GetSendStreamStats() = 0;

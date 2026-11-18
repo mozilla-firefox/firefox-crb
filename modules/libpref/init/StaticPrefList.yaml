@@ -17857,6 +17857,15 @@
   value: false
   mirror: always
 
+# Test only, debug builds: stop reading WebTransport send streams' pipes, as if
+# the peer had stopped granting flow control credit.
+#ifdef DEBUG
+- name: network.webtransport.test.stall_send_reads
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+#endif
+
 # WebTransport per-session initial flow control limits (draft-ietf-webtrans-http3-15).
 # These are advertised to peers in HTTP/3 SETTINGS. Per the spec, flow control is only
 # negotiated as enabled once *both* endpoints send a non-zero value for at least one of

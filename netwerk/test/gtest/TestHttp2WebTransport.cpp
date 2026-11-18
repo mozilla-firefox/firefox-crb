@@ -1472,6 +1472,56 @@ TEST(TestHttp2WebTransport, MalformedFrameDropsDataQueuedBeforeIt)
   server->Done();
 }
 
+// AbortSending() discards data queued but not yet written, and releases the
+// session credit set aside for it.
+TEST(TestHttp2WebTransport, AbortSendingDropsQueuedData)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 100;
+  settings.mInitialMaxStreamsBidi = 2;
+  settings.mInitialMaxStreamDataBidi = 100;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream1 = CreateOutgoingStream(client);
+  RefPtr<WebTransportStreamBase> stream2 = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream1 != nullptr);
+  ASSERT_TRUE(stream2 != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer1;
+  nsCOMPtr<nsIAsyncOutputStream> writer2;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream1->GetWriterAndReader(getter_AddRefs(writer1), getter_AddRefs(reader));
+  stream2->GetWriterAndReader(getter_AddRefs(writer2), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(100, data);
+  WriteFrame(writer1, data);
+  NS_ProcessPendingEvents(nullptr);
+
+  const uint32_t kErrorCode = 0x1234;
+  stream1->AbortSending(kErrorCode);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  ASSERT_EQ(received.Length(), 1u);
+  ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
+  WebTransportResetStreamCapsule& reset =
+      received[0].GetWebTransportResetStreamCapsule();
+  ASSERT_EQ(reset.mID, stream1->WebTransportStreamId());
+  ASSERT_EQ(reset.mErrorCode, kErrorCode);
+  ASSERT_EQ(reset.mReliableSize, 0u);
+
+  WriteFrame(writer2, data);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+  nsTArray<uint8_t> got;
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ValidateData(got, data);
+
+  client->Done();
+  server->Done();
+}
+
 TEST(TestHttp2WebTransport, OversizedFrameResetsStream)
 {
   Http2WebTransportInitialSettings settings;
@@ -1496,6 +1546,37 @@ TEST(TestHttp2WebTransport, OversizedFrameResetsStream)
   nsTArray<Capsule> received = server->GetReceivedCapsules();
   ASSERT_EQ(received.Length(), 1u);
   ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
+
+  client->Done();
+  server->Done();
+}
+
+TEST(TestHttp2WebTransport, AbortFrameResetsStreamWithItsCode)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 512;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  const uint32_t kErrorCode = 0xfffffffe;
+  WriteFrame(writer, nsTArray<uint8_t>(), dom::WebTransportFrameType::Abort,
+             kErrorCode);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  ASSERT_EQ(received.Length(), 1u);
+  ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
+  ASSERT_EQ(received[0].GetWebTransportResetStreamCapsule().mErrorCode,
+            kErrorCode);
 
   client->Done();
   server->Done();

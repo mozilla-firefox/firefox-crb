@@ -32,6 +32,7 @@ WebTransportFrameParseResult ParseWebTransportFrameHeader(
     switch (type) {
       case WebTransportFrameType::Regular:
       case WebTransportFrameType::Atomic:
+      case WebTransportFrameType::Abort:
         break;
       default:
         return WebTransportFrameParseResult::Malformed;
@@ -52,15 +53,18 @@ WebTransportFrameParseResult ParseWebTransportFrameHeader(
     // aLength includes the atomic id if it's Atomic, so anything under 4
     // contradicts the frame type.  Checked here, off the 5 header bytes we
     // already have, rather than after waiting for a 9th byte that cannot
-    // rescue the frame.
+    // rescue the frame.  An Abort frame is exactly its 4-byte code.
     if (aType == WebTransportFrameType::Atomic && aLength < 4) {
+      return WebTransportFrameParseResult::Malformed;
+    }
+    if (aType == WebTransportFrameType::Abort && aLength != 4) {
       return WebTransportFrameParseResult::Malformed;
     }
     if (aBuffer.Length() < aLength + 5) {
       // not enough data yet
       return WebTransportFrameParseResult::NeedMoreData;
     }
-    if (aType == WebTransportFrameType::Atomic) {
+    if (aType != WebTransportFrameType::Regular) {
       aAtomicId = (static_cast<uint32_t>(aBuffer[5]) << 24) |
                   (static_cast<uint32_t>(aBuffer[6]) << 16) |
                   (static_cast<uint32_t>(aBuffer[7]) << 8) |
