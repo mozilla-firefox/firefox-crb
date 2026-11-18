@@ -634,7 +634,8 @@ nsresult Http3WebTransportStream::ReadSegments() {
         return NS_ERROR_ABORT;
       }
       LOG(("Frame header: type=0x%02x len=%zu", frameType, payloadLength));
-      uint32_t totalFrameSize = 5 + payloadLength;  // regardless of type
+      uint32_t totalFrameSize =
+          WEBTRANSPORT_FRAME_PREFIX_SIZE + payloadLength;  // any type
 
       // Remove frame from buffer BEFORE processing to avoid buffer corruption
       // on early return

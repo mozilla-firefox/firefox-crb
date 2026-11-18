@@ -11,6 +11,7 @@
 #include "CapsuleEncoder.h"
 #include "Http2WebTransportSession.h"
 #include "HttpLog.h"
+#include "mozilla/dom/WebTransportFraming.h"
 #include "nsHttp.h"
 #include "nsIOService.h"
 
@@ -177,9 +178,17 @@ Http2WebTransportStream::OnInputStreamReady(nsIAsyncInputStream* aIn) {
     return NS_OK;
   }
 
+  if (mFramesBlocked) {
+    ProcessFrames();
+    if (mFramesBlocked) {
+      return NS_OK;
+    }
+  }
+
   uint32_t sendBytes = 0;
   nsresult rv = mSendStreamPipeIn->ReadSegments(
       ReadRequestSegment, this, nsIOService::gDefaultSegmentSize, &sendBytes);
+  ProcessFrames();
 
   if (rv >= NS_ERROR_WEBTRANSPORT_CODE_BASE &&
       rv <= NS_ERROR_WEBTRANSPORT_CODE_END) {
@@ -282,35 +291,139 @@ nsresult Http2WebTransportStream::ReadRequestSegment(
     return NS_ERROR_UNEXPECTED;
   }
 
-  uint64_t limit =
-      std::min(wtStream->mWebTransportSession->SessionDataFc().Available(),
-               wtStream->mFc.Available());
-  if (limit < count) {
-    if (wtStream->mWebTransportSession->SessionDataFc().Available() < count) {
-      LOG(("blocked by session level flow control"));
-      wtStream->mWebTransportSession->SessionDataFc().Blocked();
-    }
-    if (wtStream->mFc.Available() < count) {
-      LOG(("blocked by stream level flow control"));
-      wtStream->mFc.Blocked();
-    }
-    return NS_BASE_STREAM_WOULD_BLOCK;
-  }
-
-  nsTArray<uint8_t> data;
-  data.AppendElements(buf, count);
-  Capsule capsule = Capsule::WebTransportStreamData(wtStream->mStreamId, false,
-                                                    std::move(data));
-  auto encoder = std::make_unique<CapsuleEncoder>();
-  encoder->EncodeCapsule(capsule);
-  wtStream->mCapsuleQueue.Push(std::move(encoder));
+  wtStream->mPartialFrameBuffer.AppendElements(buf, count);
   *countRead = count;
   return NS_OK;
+}
+
+void Http2WebTransportStream::QueueStreamData(nsTArray<uint8_t>&& aData) {
+  mQueuedUnsentBytes += aData.Length();
+  mWebTransportSession->AddQueuedUnsentBytes(aData.Length());
+  Capsule capsule =
+      Capsule::WebTransportStreamData(mStreamId, false, std::move(aData));
+  auto encoder = std::make_unique<CapsuleEncoder>();
+  encoder->EncodeCapsule(capsule);
+  mCapsuleQueue.Push(std::move(encoder));
+}
+
+void Http2WebTransportStream::ReleaseQueuedCredit() {
+  if (mWebTransportSession) {
+    mWebTransportSession->SubQueuedUnsentBytes(mQueuedUnsentBytes);
+  }
+  mQueuedUnsentBytes = 0;
+}
+
+void Http2WebTransportStream::DropQueuedData() {
+  mCapsuleQueue.Clear();
+  ReleaseQueuedCredit();
+}
+
+void Http2WebTransportStream::ProcessFrames() {
+  mFramesBlocked = false;
+  while (mWebTransportSession && mSendState != SEND_DONE) {
+    // Credit already promised to queued capsules is not yet consumed from the
+    // flow controllers.  Session credit is shared, so every stream's queued
+    // data counts against it, not just this one's.
+    auto unspent = [](uint64_t aAvailable, uint64_t aQueued) {
+      return aAvailable > aQueued ? aAvailable - aQueued : 0;
+    };
+    uint64_t sessionAvailable =
+        unspent(mWebTransportSession->SessionDataFc().Available(),
+                mWebTransportSession->QueuedUnsentBytes());
+    uint64_t streamAvailable = unspent(mFc.Available(), mQueuedUnsentBytes);
+
+    // A Regular frame is forwarded as it arrives, as far as flow control
+    // allows, so a write larger than the peer's window cannot deadlock and
+    // only a window's worth of it is ever buffered.
+    if (mRegularPayloadRemaining == 0 && !mPartialFrameBuffer.IsEmpty() &&
+        mPartialFrameBuffer[0] ==
+            static_cast<uint8_t>(dom::WebTransportFrameType::Regular) &&
+        mPartialFrameBuffer.Length() >= WEBTRANSPORT_FRAME_PREFIX_SIZE) {
+      uint64_t length = (static_cast<uint32_t>(mPartialFrameBuffer[1]) << 24) |
+                        (static_cast<uint32_t>(mPartialFrameBuffer[2]) << 16) |
+                        (static_cast<uint32_t>(mPartialFrameBuffer[3]) << 8) |
+                        static_cast<uint32_t>(mPartialFrameBuffer[4]);
+      if (length > WEBTRANSPORT_FRAME_MAX_PAYLOAD) {
+        LOG(("Http2WebTransportStream %p oversized frame, resetting", this));
+        mPartialFrameBuffer.Clear();
+        DropQueuedData();
+        Reset(0x1);
+        return;
+      }
+      mPartialFrameBuffer.RemoveElementsAt(0, WEBTRANSPORT_FRAME_PREFIX_SIZE);
+      mRegularPayloadRemaining = length;
+    }
+    if (mRegularPayloadRemaining > 0) {
+      if (mPartialFrameBuffer.IsEmpty()) {
+        return;
+      }
+      uint64_t wanted = std::min<uint64_t>(mRegularPayloadRemaining,
+                                           mPartialFrameBuffer.Length());
+      size_t count = static_cast<size_t>(
+          std::min({wanted, sessionAvailable, streamAvailable}));
+      if (sessionAvailable < wanted) {
+        LOG(("blocked by session level flow control"));
+        mWebTransportSession->SessionDataFc().Blocked();
+      }
+      if (streamAvailable < wanted) {
+        LOG(("blocked by stream level flow control"));
+        mFc.Blocked();
+      }
+      if (count == 0) {
+        mFramesBlocked = true;
+        return;
+      }
+      nsTArray<uint8_t> data;
+      data.AppendElements(mPartialFrameBuffer.Elements(), count);
+      mPartialFrameBuffer.RemoveElementsAt(0, count);
+      mRegularPayloadRemaining -= count;
+      QueueStreamData(std::move(data));
+      continue;
+    }
+
+    dom::WebTransportFrameType type;
+    uint32_t atomicWriteId = 0;
+    size_t frameLength = 0;
+    nsTArray<uint8_t> payload;
+    // The buffer holds data from the content process.
+    auto result = dom::ParseWebTransportFrameHeader(
+        mPartialFrameBuffer, type, atomicWriteId, payload, frameLength);
+    if (result == dom::WebTransportFrameParseResult::NeedMoreData) {
+      return;
+    }
+    if (result == dom::WebTransportFrameParseResult::Malformed) {
+      LOG(("Http2WebTransportStream %p malformed frame, resetting", this));
+      mPartialFrameBuffer.Clear();
+      // Data queued from earlier frames is behind the reset, which only
+      // covers what was already written.
+      DropQueuedData();
+      Reset(0x1);
+      return;
+    }
+
+    mPartialFrameBuffer.RemoveElementsAt(
+        0, WEBTRANSPORT_FRAME_PREFIX_SIZE + frameLength);
+    if (type != dom::WebTransportFrameType::Atomic) {
+      continue;
+    }
+
+    // All or nothing: an atomic write that does not fit now is rejected
+    // rather than waited for.
+    bool fits = std::min(sessionAvailable, streamAvailable) >= payload.Length();
+    if (fits && !payload.IsEmpty()) {
+      QueueStreamData(std::move(payload));
+    }
+    mWebTransportSession->ResolveAtomicWrite(GetStreamId(), atomicWriteId,
+                                             fits ? NS_OK : NS_ERROR_ABORT);
+  }
 }
 
 void Http2WebTransportStream::TakeOutputCapsule(
     mozilla::Queue<UniquePtr<CapsuleEncoder>>& aOutput) {
   LOG(("Http2WebTransportStream::TakeOutputCapsule %p", this));
+  if (mFramesBlocked) {
+    ProcessFrames();
+  }
   if (mCapsuleQueue.IsEmpty()) {
     mSendStreamPipeIn->AsyncWait(this, 0, 0, mOwnerThread);
     return;
@@ -425,11 +538,14 @@ void Http2WebTransportStream::OnStreamDataSent(size_t aCount) {
     return;
   }
 
+  mQueuedUnsentBytes -= std::min<uint64_t>(aCount, mQueuedUnsentBytes);
+  mWebTransportSession->SubQueuedUnsentBytes(aCount);
   mFc.Consume(aCount);
   mWebTransportSession->SessionDataFc().Consume(aCount);
 }
 
 void Http2WebTransportStream::Close(nsresult aResult) {
+  ReleaseQueuedCredit();
   if (mSendStreamPipeIn) {
     mSendStreamPipeIn->AsyncWait(nullptr, 0, 0, nullptr);
     mSendStreamPipeIn->CloseWithStatus(aResult);

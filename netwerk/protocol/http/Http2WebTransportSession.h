@@ -123,6 +123,15 @@ class Http2WebTransportSessionImpl final : public WebTransportSessionBase,
   void PrepareCapsulesToSend(
       mozilla::Queue<UniquePtr<CapsuleEncoder>>& aOutput);
   SenderFlowControlSession& SessionDataFc() { return mSessionDataFc; }
+  // Stream data in capsules that are queued on any stream but not yet
+  // written.  SessionDataFc() is only consumed when the data is written, so
+  // a stream must subtract this, not just its own, from the session credit
+  // before queueing more.
+  uint64_t QueuedUnsentBytes() const { return mQueuedUnsentBytes; }
+  void AddQueuedUnsentBytes(uint64_t aCount) { mQueuedUnsentBytes += aCount; }
+  void SubQueuedUnsentBytes(uint64_t aCount) {
+    mQueuedUnsentBytes -= std::min(aCount, mQueuedUnsentBytes);
+  }
   ReceiverFlowControlSession& ReceiverFc() { return mReceiverFc; }
 
   void StreamHasCapsuleToSend();
@@ -200,6 +209,7 @@ class Http2WebTransportSessionImpl final : public WebTransportSessionBase,
   size_t mQueuedDatagramBytes = 0;
   uint64_t mSentDatagrams = 0;
   SenderFlowControlSession mSessionDataFc;
+  uint64_t mQueuedUnsentBytes = 0;
   ReceiverFlowControlSession mReceiverFc;
 };
 

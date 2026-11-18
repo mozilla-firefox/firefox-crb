@@ -4,6 +4,7 @@
 
 #include "WebTransportSessionBase.h"
 
+#include "HttpLog.h"
 #include "nsIWebTransport.h"
 
 namespace mozilla::net {
@@ -56,6 +57,19 @@ already_AddRefed<WebTransportSessionEventListener>
 WebTransportSessionBase::TakeListener() {
   MutexAutoLock lock(mListenerLock);
   return mListener.forget();
+}
+
+void WebTransportSessionBase::ResolveAtomicWrite(uint64_t aStreamId,
+                                                 uint32_t aAtomicWriteId,
+                                                 nsresult aResult) {
+  LOG(("WebTransportSessionBase::ResolveAtomicWrite streamId=%" PRIu64
+       " atomicWriteId=%u result=0x%x",
+       aStreamId, aAtomicWriteId, static_cast<uint32_t>(aResult)));
+  if (RefPtr<WebTransportSessionEventListener> listener = GetListener()) {
+    listener->OnAtomicWriteResult(aStreamId, aAtomicWriteId, aResult);
+  } else {
+    LOG(("  No listener"));
+  }
 }
 
 void WebTransportSessionBase::NotifyStreamCloseComplete(uint64_t aStreamId) {

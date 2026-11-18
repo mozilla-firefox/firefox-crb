@@ -15,6 +15,11 @@ struct PendingWriteEntry;  // Forward declaration
 
 #define WEBTRANSPORT_FRAME_MAX_HEADER_SIZE 9
 
+// The type byte and the 4-byte length that start every frame.  The length
+// counts everything after them, including an atomic id or abort code, so a
+// whole frame is this plus the length.
+#define WEBTRANSPORT_FRAME_PREFIX_SIZE 5
+
 // Upper bound on a single frame's payload length, as declared in the frame
 // header by the (untrusted) content process. Bounds the parent's reassembly
 // buffer and prevents the size arithmetic below from overflowing size_t on
