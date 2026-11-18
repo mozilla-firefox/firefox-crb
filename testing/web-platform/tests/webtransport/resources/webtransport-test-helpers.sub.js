@@ -83,10 +83,9 @@ function check_and_remove_standard_headers(headers) {
   delete headers[':authority'];
   assert_equals(headers[':path'], '/webtransport/handlers/echo-request-headers.py');
   delete headers[':path'];
-  // Firefox's HTTP/3 client currently always negotiates draft-07
-  // (":protocol: webtransport"), even against the "both" server which also
-  // accepts the draft-15 ("webtransport-h3") value.
-  assert_equals(headers[':protocol'], 'webtransport');
+  // The default server accepts both drafts ("webtransport-h3" and
+  // "webtransport"), so the client chooses.
+  assert_in_array(headers[':protocol'], ['webtransport', 'webtransport-h3']);
   delete headers[':protocol'];
   assert_equals(headers['origin'], 'https://{{location[host]}}');
   delete headers['origin'];
