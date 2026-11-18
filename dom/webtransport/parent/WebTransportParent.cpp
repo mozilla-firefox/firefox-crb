@@ -1650,4 +1650,30 @@ mozilla::ipc::IPCResult WebTransportParent::RecvStopSendingStream(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult WebTransportParent::RecvCommitStream(
+    uint64_t aStreamId) {
+  LOG(("WebTransportParent::RecvCommitStream streamId=%llu",
+       (unsigned long long)aStreamId));
+
+  // Copy the stream out and release the map lookup before calling Commit(),
+  // rather than holding an EntryHandle across it.
+  nsCOMPtr<nsIWebTransportBidirectionalStream> bidiStream;
+  nsCOMPtr<nsIWebTransportSendStream> uniStream;
+  if (auto entry = mBidiStreamCallbackMap.Lookup(aStreamId)) {
+    bidiStream = entry.Data().mStream;
+  } else if (auto entry = mUniStreamCallbackMap.Lookup(aStreamId)) {
+    uniStream = entry.Data().mStream;
+  } else {
+    LOG(("  Stream %llu not found", (unsigned long long)aStreamId));
+  }
+
+  if (bidiStream) {
+    bidiStream->Commit();
+  } else if (uniStream) {
+    uniStream->Commit();
+  }
+
+  return IPC_OK();
+}
+
 }  // namespace mozilla::dom

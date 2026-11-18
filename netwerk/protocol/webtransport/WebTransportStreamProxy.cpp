@@ -93,6 +93,18 @@ NS_IMETHODIMP WebTransportStreamProxy::Reset(uint64_t aErrorCode) {
   return NS_OK;
 }
 
+NS_IMETHODIMP WebTransportStreamProxy::Commit() {
+  if (!OnSocketThread()) {
+    RefPtr<WebTransportStreamProxy> self(this);
+    return gSocketTransportService->Dispatch(NS_NewRunnableFunction(
+        "WebTransportStreamProxy::Commit",
+        [self{std::move(self)}]() { self->mWebTransportStream->Commit(); }));
+  }
+
+  mWebTransportStream->Commit();
+  return NS_OK;
+}
+
 namespace {
 
 class StatsCallbackWrapper : public nsIWebTransportStreamStatsCallback {

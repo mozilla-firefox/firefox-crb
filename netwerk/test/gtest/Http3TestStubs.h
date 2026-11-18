@@ -161,6 +161,8 @@ class Http3SessionStub final : public Http3SessionBase {
   void ResetWebTransportStream(Http3WebTransportStream* aStream,
                                uint64_t aErrorCode) override {}
 
+  void CommitWebTransportStream(Http3WebTransportStream* aStream) override {}
+
   void StreamStopSending(Http3WebTransportStream* aStream,
                          uint64_t aErrorCode) override {}
 
