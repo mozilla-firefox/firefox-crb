@@ -15,6 +15,7 @@ namespace mozilla::dom {
 
 class WebTransport;
 class WebTransportSendGroup;
+class WebTransportWriter;
 
 class WebTransportSendStream final : public WritableStream {
  public:
@@ -43,6 +44,8 @@ class WebTransportSendStream final : public WritableStream {
   void SetSendGroup(WebTransportSendGroup* aSendGroup, ErrorResult& aRv);
 
   already_AddRefed<Promise> GetStats();
+
+  already_AddRefed<WebTransportWriter> GetWriter(ErrorResult& aRv);
 
  private:
   ~WebTransportSendStream() override;

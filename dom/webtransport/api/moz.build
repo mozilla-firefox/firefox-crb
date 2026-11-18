@@ -12,6 +12,7 @@ EXPORTS.mozilla.dom += [
     "WebTransportSendGroup.h",
     "WebTransportSendStream.h",
     "WebTransportStreams.h",
+    "WebTransportWriter.h",
 ]
 
 UNIFIED_SOURCES += [
@@ -24,6 +25,7 @@ UNIFIED_SOURCES += [
     "WebTransportSendGroup.cpp",
     "WebTransportSendStream.cpp",
     "WebTransportStreams.cpp",
+    "WebTransportWriter.cpp",
 ]
 
 FINAL_LIBRARY = "xul"

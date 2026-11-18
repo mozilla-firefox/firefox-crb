@@ -1128,6 +1128,7 @@ WEBIDL_FILES = [
     "WebTransportError.webidl",
     "WebTransportSendGroup.webidl",
     "WebTransportSendReceiveStream.webidl",
+    "WebTransportWriter.webidl",
     "WebXR.webidl",
     "WheelEvent.webidl",
     "WindowOrWorkerGlobalScope.webidl",
