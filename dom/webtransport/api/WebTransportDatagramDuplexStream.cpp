@@ -525,6 +525,9 @@ already_AddRefed<Promise> OutgoingDatagramStreamAlgorithms::WriteCallbackImpl(
   // Step 3: Let datagrams be transport.[[Datagrams]].
   // (mDatagrams is transport.[[Datagrams]])
 
+  // Step 6 (early): Let bytes be a copy of bytes which data represents.
+  // Copied here rather than in step order since the steps below need its
+  // length and then hand the buffer straight off.
   nsTArray<uint8_t> data;
   (void)AppendTypedArrayDataTo(arrayBuffer, data);
 
@@ -543,37 +546,46 @@ already_AddRefed<Promise> OutgoingDatagramStreamAlgorithms::WriteCallbackImpl(
 
   // mChild is set when we move to Connected
   if (mChild) {
-    // Step 7-8 (writeDatagrams): enqueue the chunk, then resolve the write
-    // promise immediately if the outgoing queue is below
-    // outgoingMaxBufferedDatagrams; otherwise withhold it so the
-    // WritableStream applies backpressure until a DatagramCapacity grant
-    // (or Cleanup()) resolves it. mInFlightCount approximates the length of
-    // [[OutgoingDatagramsQueue]] -- unlike mPendingDatagramPromises, it
-    // counts every datagram handed to the parent, resolved or not, until
-    // RetireInFlight() is told (in aggregate) that it has left neqo's queue.
-    // https://w3c.github.io/webtransport/#writedatagrams
+    // Step 7: Let chunk be (bytes, timestamp, promise).
+    // Step 8: Enqueue chunk to writable.[[OutgoingDatagramsQueue]].
+    //
+    // Not in spec: that queue lives in the parent process (and below it in
+    // neqo), so the chunk gets split here. bytes and timestamp go into the
+    // batch handed to the parent below; promise stays behind, and
+    // mInFlightCount stands in for the queue's length -- it counts every
+    // datagram handed to the parent, resolved or not, until RetireInFlight()
+    // is told (in aggregate) that it has left neqo's queue. Per-instance,
+    // like the spec's slot, which is per-writable.
+    mInFlightCount++;
+
+    // Step 9: If the length of writable.[[OutgoingDatagramsQueue]] is less
+    // than datagrams.[[OutgoingMaxBufferedDatagrams]], then resolve promise
+    // with undefined.
     //
     // Not in spec: neqo's queue also has a byte budget, which a large
     // outgoingMaxBufferedDatagrams can exceed, and it evicts rather than
     // refuses once full.  So the datagram must also fit in the byte credit
     // the parent grants from that budget.
-    mInFlightCount++;
     if (mInFlightCount < mDatagrams->mOutgoingMaxBufferedDatagrams &&
         mDatagrams->HasCreditBytesFor(dataLength)) {
       promise->MaybeResolveWithUndefined();
       mDatagrams->ChargeCredit(dataLength);
     } else {
-      // At or above outgoingMaxBufferedDatagrams, or out of byte credit:
-      // withhold the promise so the WritableStream applies backpressure.
-      // Resolved later by a DatagramCapacity grant
-      // (TryResolveOldestFromCredit()) or Cleanup().
+      // Withholding it is what makes the WritableStream apply backpressure.
+      // sendDatagrams resolves the promise once the datagram leaves the
+      // queue -- step 5.1.2.2 if it expired, step 5.3.4 once sent -- but
+      // datagrams are sent untracked, so nothing tells us which promise that
+      // was; TryResolveOldestFromCredit() resolves these in FIFO order as
+      // the parent's DatagramCapacity grants allow instead, and Cleanup()
+      // settles whatever is left at teardown.
       mPendingDatagramPromises.AppendElement(
           PendingDatagram{promise, dataLength});
     }
 
-    // Hand the datagram to the parent in an OutgoingDatagrams message,
-    // sent untracked. The OutgoingDatagramsQueue lives in parent/neqo, and
-    // steps 6-9 are implemented there.
+    // The bytes/timestamp half of step 8: hand the datagram to the parent
+    // in an OutgoingDatagrams message, sent untracked. The real
+    // [[OutgoingDatagramsQueue]] and all of sendDatagrams live in
+    // parent/neqo.
     uint64_t sendGroupId = mSendGroup ? mSendGroup->GetGroupId() : 0;
     LOG(("Queuing datagram size=%zu, sendGroup=%" PRIu64 ", sendOrder=%" PRId64,
          dataLength, sendGroupId, mSendOrder));
@@ -581,15 +593,16 @@ already_AddRefed<Promise> OutgoingDatagramStreamAlgorithms::WriteCallbackImpl(
         OutgoingDatagram(std::move(data), now, sendGroupId, mSendOrder));
   } else {
     LOG(("Queuing datagram for connect, size=%zu", dataLength));
-    // Queue locally until we can send it.
-    // Multiple datagrams can be queued if they arrive before connection.
+    // Steps 7-8 again, with nowhere to hand the chunk off to yet: until
+    // SetChild() connects us, mWaitConnectQueue is this writable's
+    // [[OutgoingDatagramsQueue]], holding all three parts of the chunk
+    // together. Multiple datagrams can be queued if they arrive before
+    // connection.
     mWaitConnectQueue.AppendElement(QueuedDatagram(
         std::make_unique<DatagramEntry>(std::move(data), now), promise));
 
-    // Same writeDatagrams backpressure rule before the session connects: the
-    // queued datagrams are the outgoing queue, so resolve immediately while
-    // under the limit; otherwise withhold until the datagram is sent after
-    // SetChild() flushes the queue.
+    // Step 9 measured against that queue instead, same rule as above:
+    // withhold at or above outgoingMaxBufferedDatagrams, resolve below it.
     if (mWaitConnectQueue.Length() >=
         mDatagrams->mOutgoingMaxBufferedDatagrams) {
       mPendingDatagramPromises.AppendElement(
@@ -609,10 +622,11 @@ void OutgoingDatagramStreamAlgorithms::SetChild(WebTransportChild* aChild) {
   LOG(("Setting child in datagrams, %zu queued datagrams",
        mWaitConnectQueue.Length()));
   mChild = aChild;
-  // Every queued datagram becomes in flight now, whether or not its promise
-  // was already resolved -- mirrors the mChild-set branch of
-  // WriteCallbackImpl, which counts a datagram as in flight the moment it
-  // is handed to the parent.
+  // The pre-connect stand-in queue drains into the real
+  // [[OutgoingDatagramsQueue]] in the parent, so every datagram in it becomes
+  // in flight now, whether or not step 9 already resolved its promise --
+  // mirrors the mChild-set branch of WriteCallbackImpl, which counts a
+  // datagram as in flight the moment it is handed to the parent.
   mInFlightCount += mWaitConnectQueue.Length();
   // Send all queued datagrams
   for (auto& queued : mWaitConnectQueue) {
@@ -646,6 +660,14 @@ void WebTransportDatagramDuplexStream::OnDatagramCapacity(
     uint64_t aCumulativeDatagrams, uint64_t aCumulativeBytes,
     uint64_t aSentDelta, uint64_t aExpiredDelta, uint64_t aDroppedDelta,
     uint64_t aDatagramPrefixBytes) {
+  // The parent's aggregate stand-in for sendDatagrams:
+  // https://w3c.github.io/webtransport/#senddatagrams
+  // Every datagram counted here has left [[OutgoingDatagramsQueue]] -- sent
+  // (step 5.3.2.2), expired (step 5.1.2) or dropped -- which both frees a
+  // writeDatagrams step 9 slot and, per steps 5.1.2.2/5.3.4, owes some
+  // promise its resolution. Sent untracked, so there is no way to tell which
+  // promise that was; the two obligations are handled separately below.
+
   // Writes charged before the first grant arrived (pre-connect ones) were
   // charged without the prefix, so make up the difference for them.
   if (aDatagramPrefixBytes > mDatagramPrefixBytes) {
@@ -655,16 +677,18 @@ void WebTransportDatagramDuplexStream::OnDatagramCapacity(
   }
 
   mSentOutgoing += aSentDelta;
+  // https://w3c.github.io/webtransport/#dom-webtransportdatagramstats-expiredoutgoing
   mExpiredOutgoing += aExpiredDelta;
   mDroppedOutgoing += aDroppedDelta;
 
-  // This many datagrams have left neqo's queue (sent, expired, or dropped)
-  // since the last message, freeing that many local pipeline slots. Applied
-  // to every writable independently (the default one plus every
-  // createWritable()-created one): the aggregate can't say which writable a
-  // given retirement belonged to, and crediting all of them the full amount
-  // is only ever too generous, never a correctness problem -- the common
-  // case is a single writable anyway, where it is exact.
+  // Step 9's slots: this many datagrams have left neqo's queue since the last
+  // message, so that many future write()s can resolve immediately again.
+  // Applied to every writable independently -- the default one plus every
+  // createWritable()-created one, i.e. the spec's [[Writables]] -- since the
+  // aggregate can't say which writable a given retirement belonged to, and
+  // crediting all of them the full amount is only ever too generous, never a
+  // correctness problem (step 9 bounds nothing but promise resolution). The
+  // common case is a single writable anyway, where it is exact.
   uint64_t retiredCount = aSentDelta + aExpiredDelta + aDroppedDelta;
   mOutgoingAlgorithms->RetireInFlight(retiredCount);
   for (auto& writable : mAllWritables) {
@@ -680,10 +704,11 @@ void WebTransportDatagramDuplexStream::OnDatagramCapacity(
   // made, before the parent has been told about them, so the used counts can
   // run ahead of the limits until its next grant.
 
-  // Round-robin across every writable's own backlog one promise at a time,
-  // so a single writable with a long backlog can't starve another's while
-  // credit lasts -- mirrors neqo's own round-robin across sessions sharing
-  // one connection's transport capacity.
+  // The resolutions steps 5.1.2.2/5.3.4 owe, paid out of that credit: each
+  // writable's [[OutgoingDatagramsQueue]] is its own FIFO, so go round-robin
+  // across them one promise at a time, keeping a writable with a long backlog
+  // from starving another's while credit lasts -- mirrors neqo's own
+  // round-robin across sessions sharing one connection's transport capacity.
   size_t resolvedCount = 0;
   bool resolvedAny = true;
   while (resolvedAny && mCreditDatagramsUsed < mCreditDatagramsLimit) {
