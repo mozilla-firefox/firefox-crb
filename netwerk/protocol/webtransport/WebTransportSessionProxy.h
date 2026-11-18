@@ -179,10 +179,11 @@ class WebTransportSessionProxy final
   WebTransportSessionProxyState mState MOZ_GUARDED_BY(mMutex) =
       WebTransportSessionProxyState::INIT;
   void ChangeState(WebTransportSessionProxyState newState);
-  void CreateStreamInternal(nsIWebTransportStreamCallback* callback,
-                            bool aBidi);
+  void CreateStreamInternal(nsIWebTransportStreamCallback* callback, bool aBidi,
+                            bool aWaitUntilAvailable);
   void DoCreateStream(WebTransportStreamCallbackWrapper* aCallback,
-                      WebTransportSessionBase* aSession, bool aBidi);
+                      WebTransportSessionBase* aSession, bool aBidi,
+                      bool aWaitUntilAvailable);
   void SendDatagramInternal(const RefPtr<WebTransportSessionBase>& aSession,
                             nsTArray<uint8_t>&& aData, uint64_t aSendGroupId,
                             int64_t aSendOrder, TimeStamp aTimestamp);

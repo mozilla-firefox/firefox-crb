@@ -724,7 +724,13 @@ class WebTransportStreamCallbackWrapper final {
 
     LOG(("WebTransportStreamCallbackWrapper::OnError aError=0x%" PRIx32,
          static_cast<uint32_t>(aError)));
-    (void)mCallback->OnError(nsIWebTransport::INVALID_STATE_ERROR);
+    uint8_t errorType;
+    if (aError == NS_BASE_STREAM_WOULD_BLOCK) {
+      errorType = nsIWebTransport::QUOTA_EXCEEDED_ERROR;
+    } else {
+      errorType = nsIWebTransport::INVALID_STATE_ERROR;
+    }
+    (void)mCallback->OnError(errorType);
   }
 
   void CallOnStreamReady(WebTransportStreamProxy* aStream) {
@@ -760,12 +766,13 @@ class WebTransportStreamCallbackWrapper final {
 };
 
 void WebTransportSessionProxy::CreateStreamInternal(
-    nsIWebTransportStreamCallback* callback, bool aBidi) {
+    nsIWebTransportStreamCallback* callback, bool aBidi,
+    bool aWaitUntilAvailable) {
   mMutex.AssertCurrentThreadOwns();
   LOG(
       ("WebTransportSessionProxy::CreateStreamInternal %p "
-       "mState=%d, bidi=%d",
-       this, mState, aBidi));
+       "mState=%d, bidi=%d, waitUntilAvailable=%d",
+       this, mState, aBidi, aWaitUntilAvailable));
   switch (mState) {
     case WebTransportSessionProxyState::INIT:
     case WebTransportSessionProxyState::NEGOTIATING:
@@ -775,21 +782,23 @@ void WebTransportSessionProxy::CreateStreamInternal(
           new WebTransportStreamCallbackWrapper(callback, aBidi);
       if (mState == WebTransportSessionProxyState::ACTIVE &&
           mWebTransportSession) {
-        DoCreateStream(wrapper, mWebTransportSession, aBidi);
+        DoCreateStream(wrapper, mWebTransportSession, aBidi,
+                       aWaitUntilAvailable);
       } else {
         LOG(
             ("WebTransportSessionProxy::CreateStreamInternal %p "
              " queue create stream event",
              this));
-        auto task = [self = RefPtr{this}, wrapper{std::move(wrapper)},
-                     bidi(aBidi)](nsresult aStatus) {
-          if (NS_FAILED(aStatus)) {
-            wrapper->CallOnError(aStatus);
-            return;
-          }
+        auto task =
+            [self = RefPtr{this}, wrapper{std::move(wrapper)}, bidi(aBidi),
+             waitUntilAvailable(aWaitUntilAvailable)](nsresult aStatus) {
+              if (NS_FAILED(aStatus)) {
+                wrapper->CallOnError(aStatus);
+                return;
+              }
 
-          self->DoCreateStream(wrapper, nullptr, bidi);
-        };
+              self->DoCreateStream(wrapper, nullptr, bidi, waitUntilAvailable);
+            };
         // TODO: we should do this properly in bug 1830362.
         mPendingCreateStreamEvents.AppendElement(std::move(task));
       }
@@ -809,19 +818,23 @@ void WebTransportSessionProxy::CreateStreamInternal(
 
 void WebTransportSessionProxy::DoCreateStream(
     WebTransportStreamCallbackWrapper* aCallback,
-    WebTransportSessionBase* aSession, bool aBidi) {
+    WebTransportSessionBase* aSession, bool aBidi, bool aWaitUntilAvailable) {
   if (!OnSocketThread()) {
     RefPtr<WebTransportSessionProxy> self(this);
     RefPtr<WebTransportStreamCallbackWrapper> wrapper(aCallback);
     (void)gSocketTransportService->Dispatch(NS_NewRunnableFunction(
         "WebTransportSessionProxy::DoCreateStream",
-        [self{std::move(self)}, wrapper{std::move(wrapper)}, bidi(aBidi)]() {
-          self->DoCreateStream(wrapper, nullptr, bidi);
+        [self{std::move(self)}, wrapper{std::move(wrapper)}, bidi(aBidi),
+         waitUntilAvailable(aWaitUntilAvailable)]() {
+          self->DoCreateStream(wrapper, nullptr, bidi, waitUntilAvailable);
         }));
     return;
   }
 
-  LOG(("WebTransportSessionProxy::DoCreateStream %p bidi=%d", this, aBidi));
+  LOG(
+      ("WebTransportSessionProxy::DoCreateStream %p bidi=%d "
+       "waitUntilAvailable=%d",
+       this, aBidi, aWaitUntilAvailable));
 
   RefPtr<WebTransportSessionBase> session = aSession;
   // Having no session here means that this is called by dispatching tasks.
@@ -869,33 +882,35 @@ void WebTransportSessionProxy::DoCreateStream(
       };
 
   if (aBidi) {
-    session->CreateOutgoingBidirectionalStream(std::move(callback));
+    session->CreateOutgoingBidirectionalStream(std::move(callback),
+                                               aWaitUntilAvailable);
   } else {
-    session->CreateOutgoingUnidirectionalStream(std::move(callback));
+    session->CreateOutgoingUnidirectionalStream(std::move(callback),
+                                                aWaitUntilAvailable);
   }
 }
 
 NS_IMETHODIMP
 WebTransportSessionProxy::CreateOutgoingUnidirectionalStream(
-    nsIWebTransportStreamCallback* callback) {
+    nsIWebTransportStreamCallback* callback, bool aWaitUntilAvailable) {
   if (!callback) {
     return NS_ERROR_INVALID_ARG;
   }
 
   MutexAutoLock lock(mMutex);
-  CreateStreamInternal(callback, false);
+  CreateStreamInternal(callback, false, aWaitUntilAvailable);
   return NS_OK;
 }
 
 NS_IMETHODIMP
 WebTransportSessionProxy::CreateOutgoingBidirectionalStream(
-    nsIWebTransportStreamCallback* callback) {
+    nsIWebTransportStreamCallback* callback, bool aWaitUntilAvailable) {
   if (!callback) {
     return NS_ERROR_INVALID_ARG;
   }
 
   MutexAutoLock lock(mMutex);
-  CreateStreamInternal(callback, true);
+  CreateStreamInternal(callback, true, aWaitUntilAvailable);
   return NS_OK;
 }
 
