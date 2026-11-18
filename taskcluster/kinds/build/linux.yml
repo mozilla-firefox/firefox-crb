@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ---
 task-defaults:
-    worker-type: b-linux-docker-amd
+    worker-type: &default-worker-type b-linux-docker-amd
 
 linux64/opt:
     description: "Linux64 Opt"
@@ -63,10 +63,21 @@ linux64-enterprise/opt:
     treeherder:
         platform: linux64-enterprise/opt
         symbol: Bent
-        tier: 2
+        tier:
+            by-project:
+                enterprise-firefox: 1
+                default: 2
+    worker-type:
+        by-project:
+            enterprise-firefox: b-linux-docker-xlarge-amd
+            default: *default-worker-type
     worker:
         max-run-time: 7200
         env:
+            MOZ_AUTOMATION_PACKAGE_TESTS:
+                by-project:
+                    enterprise-firefox: "1"
+                    default: null
             # bug 1690154 - enable full symbols on all branches, but only
             # upload them on the official set. In conjunction with
             # `enable-full-crashsymbols`.
@@ -82,7 +93,7 @@ linux64-enterprise/opt:
         script: "mozharness/scripts/fx_desktop_build.py"
         secrets: true
         tooltool-downloads: public
-    run-on-projects: ['mozilla-central']
+    run-on-projects: ['mozilla-central', 'enterprise-firefox']
     use-sccache: true
     use-python: "3.11"
     fetches:
@@ -502,10 +513,21 @@ linux64-enterprise/debug:
     treeherder:
         platform: linux64-enterprise/debug
         symbol: Bent
-        tier: 2
+        tier:
+            by-project:
+                enterprise-firefox: 1
+                default: 2
+    worker-type:
+        by-project:
+            enterprise-firefox: b-linux-docker-xlarge-amd
+            default: *default-worker-type
     worker:
         max-run-time: 5400
         env:
+            MOZ_AUTOMATION_PACKAGE_TESTS:
+                by-project:
+                    enterprise-firefox.*: "1"
+                    default: null
             # bug 1690154 - enable full symbols on all branches, but only
             # upload them on the official set. In conjunction with
             # `enable-full-crashsymbols`.
@@ -522,7 +544,7 @@ linux64-enterprise/debug:
         secrets: true
         custom-build-variant-cfg: debug
         tooltool-downloads: public
-    run-on-projects: ['mozilla-central']
+    run-on-projects: ['mozilla-central', 'enterprise-firefox']
     use-sccache: true
     use-python: "3.11"
     fetches:
@@ -1747,7 +1769,14 @@ linux64-aarch64-enterprise/opt:
     treeherder:
         platform: linux64-aarch64-enterprise/opt
         symbol: Bent
-        tier: 2
+        tier:
+            by-project:
+                enterprise-firefox: 1
+                default: 2
+    worker-type:
+        by-project:
+            enterprise-firefox: b-linux-docker-xlarge-amd
+            default: *default-worker-type
     worker:
         max-run-time: 7200
     mozconfig:
@@ -1762,7 +1791,7 @@ linux64-aarch64-enterprise/opt:
         script: "mozharness/scripts/fx_desktop_build.py"
         secrets: true
         tooltool-downloads: public
-    run-on-projects: ['mozilla-central']
+    run-on-projects: ['mozilla-central', 'enterprise-firefox']
     use-sccache: true
     fetches:
         toolchain:
@@ -1834,7 +1863,14 @@ linux64-aarch64-enterprise/debug:
     treeherder:
         platform: linux64-aarch64-enterprise/debug
         symbol: Bent
-        tier: 2
+        tier:
+            by-project:
+                enterprise-firefox: 1
+                default: 2
+    worker-type:
+        by-project:
+            enterprise-firefox: b-linux-docker-xlarge-amd
+            default: *default-worker-type
     worker:
         max-run-time: 7200
     mozconfig:
@@ -1850,7 +1886,7 @@ linux64-aarch64-enterprise/debug:
         custom-build-variant-cfg: debug
         secrets: true
         tooltool-downloads: public
-    run-on-projects: ['mozilla-central']
+    run-on-projects: ['mozilla-central', 'enterprise-firefox']
     use-sccache: true
     fetches:
         toolchain:
