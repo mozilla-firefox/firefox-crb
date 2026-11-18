@@ -31,6 +31,10 @@ using IPCResult = mozilla::ipc::IPCResult;
 
 namespace mozilla::dom {
 
+// Largest value encodable as a QUIC varint (RFC 9000 section 16). neqo's
+// Encoder::encode_varint() panics above this rather than returning an error.
+static constexpr uint64_t kMaxQuicVarint = (1ull << 62) - 1;
+
 NS_IMPL_ISUPPORTS(WebTransportParent, WebTransportSessionEventListener);
 
 using CreateWebTransportPromise =
@@ -1189,6 +1193,25 @@ WebTransportParent::OnIncomingBidirectionalStreamAvailable(
 
   LOG(("%p Sending BidirectionalStream pipe to content", this));
   // pass the DataPipeSender to the content process
+  // Register the stream in the map so Reset/StopSending can find it
+  // RESET_STREAM ends the receive half and STOP_SENDING the send half; each
+  // closes only its own pipe.
+  auto onResetOrStopSending = [inputSender =
+                                   RefPtr{inputSender}](nsresult aError) {
+    inputSender->CloseWithStatus(aError);
+  };
+
+  auto onStopSending = [outputReceiver =
+                            RefPtr{outputReceiver}](nsresult aError) {
+    outputReceiver->CloseWithStatus(aError);
+  };
+
+  mBidiStreamCallbackMap.InsertOrUpdate(
+      id, StreamHash<nsIWebTransportBidirectionalStream>{
+              OnResetOrStopSendingCallback(std::move(onResetOrStopSending),
+                                           std::move(onStopSending)),
+              aStream});
+
   (void)SendIncomingBidirectionalStream(id, inputReceiver, outputSender);
   return NS_OK;
 }
@@ -1522,6 +1545,67 @@ void WebTransportParent::ResolvePendingGetStats(
   for (auto& resolver : resolvers) {
     resolver(aStats);
   }
+}
+
+mozilla::ipc::IPCResult WebTransportParent::RecvResetStream(
+    uint64_t aStreamId, uint64_t aErrorCode) {
+  LOG(("WebTransportParent::RecvResetStream streamId=%llu errorCode=%llu",
+       (unsigned long long)aStreamId, (unsigned long long)aErrorCode));
+
+  // The error code comes from a content process and is handed to neqo
+  // unvalidated from here on; its varint encoder panics on anything that
+  // doesn't fit in a QUIC varint.
+  if (aErrorCode > kMaxQuicVarint) {
+    return IPC_FAIL(this,
+                    "WebTransport error code exceeds the QUIC varint range");
+  }
+
+  // Aborting the writable side maps to "abort sending on the stream", which is
+  // RESET_STREAM only. We must not also STOP_SENDING here: for a bidi stream
+  // that would close the receive direction the application may still read from.
+  if (auto entry = mBidiStreamCallbackMap.Lookup(aStreamId)) {
+    if (entry.Data().mStream) {
+      (void)entry.Data().mStream->Reset(aErrorCode);
+    }
+  } else if (auto entry = mUniStreamCallbackMap.Lookup(aStreamId)) {
+    if (entry.Data().mStream) {
+      (void)entry.Data().mStream->Reset(aErrorCode);
+    }
+  } else {
+    LOG(("  Stream %llu not found", (unsigned long long)aStreamId));
+  }
+
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult WebTransportParent::RecvStopSendingStream(
+    uint64_t aStreamId, uint64_t aErrorCode) {
+  LOG(("WebTransportParent::RecvStopSendingStream streamId=%llu errorCode=%llu",
+       (unsigned long long)aStreamId, (unsigned long long)aErrorCode));
+
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+
+  // This is the application code (a WebIDL unsigned long), mapped to an
+  // HTTP/3 code further down.  It comes from a content process, so bound it
+  // here.
+  if (aErrorCode > std::numeric_limits<uint32_t>::max()) {
+    return IPC_FAIL(this, "WebTransport stream error code exceeds 32 bits");
+  }
+
+  if (auto entry = mBidiStreamCallbackMap.Lookup(aStreamId)) {
+    if (entry.Data().mStream) {
+      (void)entry.Data().mStream->SendStopSending(aErrorCode);
+    }
+  } else if (auto entry = mIncomingUniStreamCallbackMap.Lookup(aStreamId)) {
+    if (entry.Data().mStream) {
+      (void)entry.Data().mStream->SendStopSending(aErrorCode);
+    }
+  } else {
+    LOG(("  Stream %llu not found in bidi or incoming-uni map",
+         (unsigned long long)aStreamId));
+  }
+
+  return IPC_OK();
 }
 
 }  // namespace mozilla::dom
