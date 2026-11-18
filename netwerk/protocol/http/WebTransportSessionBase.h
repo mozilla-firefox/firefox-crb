@@ -77,10 +77,12 @@ class WebTransportSessionBase {
   virtual nsresult RegisterSendGroup(uint64_t aGroupId) = 0;
   virtual void CreateOutgoingBidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) = 0;
+          aCallback,
+      bool aWaitUntilAvailable = false) = 0;
   virtual void CreateOutgoingUnidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) = 0;
+          aCallback,
+      bool aWaitUntilAvailable = false) = 0;
   virtual void StartReading() {}
 
   // Tells the listener that no further datagram will arrive until we return to
