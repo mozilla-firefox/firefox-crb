@@ -127,10 +127,13 @@ Http3WebTransportStream::Http3WebTransportStream(
     Http3SessionBase* aSession, uint64_t aSessionId,
     WebTransportStreamType aType,
     std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-        aCallback)
+        aCallback,
+    bool aWaitUntilAvailable)
     : WebTransportStreamBase(aSessionId, std::move(aCallback)),
-      Http3StreamBase(new DummyWebTransportStreamTransaction(), aSession) {
-  LOG(("Http3WebTransportStream outgoing ctor %p", this));
+      Http3StreamBase(new DummyWebTransportStreamTransaction(), aSession),
+      mWaitUntilAvailable(aWaitUntilAvailable) {
+  LOG(("Http3WebTransportStream outgoing ctor %p waitUntilAvailable=%d", this,
+       aWaitUntilAvailable));
   mStreamRole = OUTGOING;
   mStreamType = aType;
 }
@@ -225,6 +228,17 @@ nsresult Http3WebTransportStream::OnReadSegment(const char* buf, uint32_t count,
     case WAITING_TO_ACTIVATE: {
       rv = TryActivating();
       if (rv == NS_BASE_STREAM_WOULD_BLOCK) {
+        // If waitUntilAvailable is false, treat quota exhaustion as an error
+        if (!mWaitUntilAvailable) {
+          LOG3(
+              ("Http3WebTransportStream::OnReadSegment %p cannot activate, "
+               "quota exhausted, waitUntilAvailable=false.\n",
+               this));
+          mSendState = SEND_DONE;
+          mStreamReadyCallback(Err(rv));
+          mStreamReadyCallback = nullptr;
+          break;
+        }
         LOG3(
             ("Http3WebTransportStream::OnReadSegment %p cannot activate now. "
              "queued.\n",

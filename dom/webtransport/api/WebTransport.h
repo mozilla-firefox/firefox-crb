@@ -111,6 +111,7 @@ class WebTransport final : public nsISupports, public nsWrapperCache {
 
   void OnStreamResetOrStopSending(uint64_t aStreamId,
                                   const StreamResetOrStopSendingError& aError);
+
   // WebIDL Boilerplate
   nsIGlobalObject* GetParentObject() const;
 
