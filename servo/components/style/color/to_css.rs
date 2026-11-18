@@ -78,7 +78,14 @@ impl ToCss for AbsoluteColor {
     {
         match self.color_space {
             ColorSpace::Srgb if self.flags.contains(ColorFlags::IS_LEGACY_SRGB) => {
-                // The "none" keyword is not supported in the rgb/rgba legacy syntax.
+                // The legacy syntax cannot keep missing components, so use color(srgb ...):
+                // https://drafts.csswg.org/css-color-4/#css-serialization-of-srgb
+                if self.flags.intersects(ColorFlags::NONE_FLAGS) {
+                    let mut color = *self;
+                    color.flags.remove(ColorFlags::IS_LEGACY_SRGB);
+                    return color.to_css(dest);
+                }
+
                 let has_alpha = self.alpha != OPAQUE;
 
                 dest.write_str(if has_alpha { "rgba(" } else { "rgb(" })?;
@@ -88,7 +95,6 @@ impl ToCss for AbsoluteColor {
                 dest.write_str(", ")?;
                 clamp_unit_f32(self.components.2).to_css(dest)?;
 
-                // Legacy syntax does not allow none components.
                 serialize_color_alpha(dest, Some(self.alpha), true)?;
 
                 dest.write_char(')')
