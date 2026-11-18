@@ -440,3 +440,16 @@ gl_generator = { git = "https://github.com/jamienicol/gl-rs", rev = "71c792dbfe0
 
 # Implement mach2 0.4 in terms of 0.6
 mach2 = { path = "build/rust/mach2" }
+
+[patch."https://github.com/mozilla/neqo"]
+neqo-bin = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-bin" }
+neqo-http3 = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-http3" }
+neqo-transport = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-transport" }
+neqo-common = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-common" }
+neqo-qpack = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-qpack" }
+neqo-udp = { path = "/home/jesup/src/mozilla/neqo-transport-engine/neqo-udp" }
+#neqo-crypto = { path = "/home/jesup/src/mozilla/neqo/neqo-crypto" }
+
+[patch."https://github.com/mozilla/nss-rs"]
+nss-rs = { path = "/home/jesup/src/mozilla/nss-rs" }
+test-fixture = { path = "/home/jesup/src/mozilla/nss-rs/test-fixture" }

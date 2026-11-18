@@ -5481,7 +5481,6 @@ dependencies = [
 [[package]]
 name = "mtu"
 version = "0.4.1"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -5562,8 +5561,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-bin"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "cfg_aliases",
  "clap",
@@ -5590,8 +5588,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-common"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "enum-map",
  "libc",
@@ -5608,8 +5605,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-http3"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "enumset",
  "http",
@@ -5627,8 +5623,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-qpack"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "neqo-common",
  "neqo-transport",
@@ -5639,8 +5634,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-transport"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "enum-map",
  "enumset",
@@ -5660,8 +5654,7 @@ dependencies = [
 
 [[package]]
 name = "neqo-udp"
-version = "0.35.0"
-source = "git+https://github.com/mozilla/neqo?tag=v0.35.0#b500964cf4b7a39cceb029b8186123c58018dc19"
+version = "0.34.0"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -5851,7 +5844,6 @@ dependencies = [
 [[package]]
 name = "nss-rs"
 version = "0.16.2"
-source = "git+https://github.com/mozilla/nss-rs#bb8ed19e82679e613a636f530d15ddc823f1b040"
 dependencies = [
  "bindgen 0.72.999",
  "derive_more",
@@ -8212,7 +8204,6 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 [[package]]
 name = "test-fixture"
 version = "0.1.0"
-source = "git+https://github.com/mozilla/nss-rs#bb8ed19e82679e613a636f530d15ddc823f1b040"
 dependencies = [
  "log",
  "nss-rs",

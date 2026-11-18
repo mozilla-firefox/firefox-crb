@@ -54,6 +54,7 @@ if CONFIG["MOZ_FOLD_LIBS"]:
 elif not CONFIG["MOZ_SYSTEM_NSS"]:
     Library("nss")
     USE_LIBS += [
+        "freeblpriv3",
         "nss3",
         "nssutil3",
         "smime3",
