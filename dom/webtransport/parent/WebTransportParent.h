@@ -87,6 +87,7 @@ class WebTransportParent : public PWebTransportParent,
 
   IPCResult RecvResetStream(uint64_t aStreamId, uint64_t aErrorCode);
   IPCResult RecvStopSendingStream(uint64_t aStreamId, uint64_t aErrorCode);
+  IPCResult RecvCommitStream(uint64_t aStreamId);
 
   ::mozilla::ipc::IPCResult RecvOutgoingDatagrams(
       nsTArray<OutgoingDatagram>&& aDatagrams);

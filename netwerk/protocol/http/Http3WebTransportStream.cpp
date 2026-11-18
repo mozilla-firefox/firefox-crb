@@ -1095,6 +1095,49 @@ void Http3WebTransportStream::Reset(uint64_t aErrorCode) {
   }
 }
 
+void Http3WebTransportStream::Commit() {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  LOG(("Http3WebTransportStream::Commit [this=%p, mSendState=%d]", this,
+       mSendState));
+
+  if (mSendState == WAITING_TO_ACTIVATE || mResetError || !mSession ||
+      mSendFin) {
+    return;
+  }
+
+  switch (mSendState) {
+    case SENDING: {
+      // Defer until all data written so far has actually been handed to
+      // neqo's send buffer -- otherwise this could commit fewer bytes than
+      // stream.[[BytesWritten]] reflects. Mirrors Reset()'s SENDING case:
+      // committing before Http3Session::ProcessOutput has run risks neqo
+      // protecting less data than intended, and StreamHasDataToWrite()
+      // still needs to be called afterward to trigger ProcessOutput.
+      mPendingTasks.AppendElement([self = RefPtr{this}]() {
+        NS_DispatchToCurrentThread(
+            NS_NewRunnableFunction("Http3WebTransportStream::Commit", [self]() {
+              if (!self->mSession) {
+                return;
+              }
+              self->mSession->CommitWebTransportStream(self);
+              self->mSession->StreamHasDataToWrite(self);
+            }));
+      });
+    } break;
+    case WAITING_DATA:
+    // SEND_DONE without mSendFin: everything is handed to neqo but the stream
+    // is not finished, so there is still something to protect.
+    case SEND_DONE:
+      mSession->CommitWebTransportStream(this);
+      // StreamHasDataToWrite needs to be called to trigger ProcessOutput.
+      mSession->StreamHasDataToWrite(this);
+      break;
+    default:
+      MOZ_ASSERT_UNREACHABLE("invalid mSendState!");
+      break;
+  }
+}
+
 void Http3WebTransportStream::SendStopSending(uint64_t aErrorCode) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   LOG(

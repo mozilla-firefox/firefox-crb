@@ -2602,6 +2602,14 @@ void Http3Session::ResetWebTransportStream(Http3WebTransportStream* aStream,
   mHttp3Connection->ResetStream(aStream->StreamId(), aErrorCode);
 }
 
+void Http3Session::CommitWebTransportStream(Http3WebTransportStream* aStream) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  LOG3(("Http3Session::CommitWebTransportStream %p %p", this, aStream));
+  nsresult rv = mHttp3Connection->CommitStream(aStream->StreamId());
+  LOG3(("Http3Session::CommitWebTransportStream %p %p rv=0x%08x", this, aStream,
+        static_cast<uint32_t>(rv)));
+}
+
 void Http3Session::StreamStopSending(Http3WebTransportStream* aStream,
                                      uint64_t aErrorCode) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");

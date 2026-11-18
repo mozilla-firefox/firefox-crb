@@ -1992,6 +1992,22 @@ pub extern "C" fn neqo_http3conn_reset_stream(
     }
 }
 
+// Commit to reliably delivering the stream data written so far: if the
+// stream is later reset, this prefix is still delivered via RESET_STREAM_AT
+// (when the peer supports it) instead of being discarded by a plain
+// RESET_STREAM. Mirrors WebTransportWriter.commit()'s
+// [[CommittedOffset]] = [[BytesWritten]] step.
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_commit_stream(
+    conn: &mut NeqoHttp3Conn,
+    stream_id: u64,
+) -> nsresult {
+    match conn.conn.stream_commit(StreamId::from(stream_id), Instant::now()) {
+        Ok(()) => NS_OK,
+        Err(_) => NS_ERROR_INVALID_ARG,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn neqo_http3conn_stream_stop_sending(
     conn: &mut NeqoHttp3Conn,

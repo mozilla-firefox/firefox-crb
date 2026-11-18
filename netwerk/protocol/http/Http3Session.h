@@ -199,6 +199,7 @@ class Http3SessionBase {
       uint64_t* aStreamId, Http3StreamBase* aStream) = 0;
   virtual void ResetWebTransportStream(Http3WebTransportStream* aStream,
                                        uint64_t aErrorCode) = 0;
+  virtual void CommitWebTransportStream(Http3WebTransportStream* aStream) = 0;
   virtual void StreamStopSending(Http3WebTransportStream* aStream,
                                  uint64_t aErrorCode) = 0;
   virtual void SetSendOrder(Http3StreamBase* aStream, int64_t aSendOrder) = 0;
@@ -330,6 +331,7 @@ class Http3Session final : public Http3SessionBase,
   void StreamHasDataToWrite(Http3StreamBase* aStream) override;
   void ResetWebTransportStream(Http3WebTransportStream* aStream,
                                uint64_t aErrorCode) override;
+  void CommitWebTransportStream(Http3WebTransportStream* aStream) override;
   void StreamStopSending(Http3WebTransportStream* aStream,
                          uint64_t aErrorCode) override;
 

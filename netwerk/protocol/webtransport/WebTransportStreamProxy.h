@@ -25,6 +25,7 @@ class WebTransportStreamProxy final
   NS_IMETHOD SendStopSending(uint64_t aErrorCode) override;
   NS_IMETHOD SendFin() override;
   NS_IMETHOD Reset(uint64_t aErrorCode) override;
+  NS_IMETHOD Commit() override;
   NS_IMETHOD GetSendStreamStats(
       nsIWebTransportStreamStatsCallback* aCallback) override;
   NS_IMETHOD GetReceiveStreamStats(

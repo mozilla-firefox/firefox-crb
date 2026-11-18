@@ -142,6 +142,10 @@ class NeqoHttp3Conn final {
     neqo_http3conn_reset_stream(this, aStreamId, aError);
   }
 
+  nsresult CommitStream(uint64_t aStreamId) {
+    return neqo_http3conn_commit_stream(this, aStreamId);
+  }
+
   void StreamStopSending(uint64_t aStreamId, uint64_t aError) {
     neqo_http3conn_stream_stop_sending(this, aStreamId, aError);
   }

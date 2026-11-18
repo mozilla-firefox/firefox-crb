@@ -55,6 +55,9 @@ class Http2WebTransportStream final : public WebTransportStreamBase {
   void SendStopSending(uint64_t aErrorCode) override;
   void SendFin() override;
   void Reset(uint64_t aErrorCode) override;
+  // HTTP/2 WebTransport has no equivalent of QUIC's reliable-reset
+  // (RESET_STREAM_AT) extension, so committing has no wire effect here.
+  void Commit() override {}
   already_AddRefed<nsIWebTransportSendStreamStats> GetSendStreamStats()
       override;
   already_AddRefed<nsIWebTransportReceiveStreamStats> GetReceiveStreamStats()

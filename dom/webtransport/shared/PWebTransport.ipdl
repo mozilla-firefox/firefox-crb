@@ -128,6 +128,15 @@ async protocol PWebTransport
   async StopSendingStream(uint64_t streamId, uint64_t errorCode);
 
   /**
+   * Commit to reliably delivering the data written so far on a stream: if
+   * the stream is later reset, this prefix is still delivered via
+   * RESET_STREAM_AT (when the peer supports it and the backend is HTTP/3)
+   * instead of being discarded by a plain RESET_STREAM.
+   * @param streamId the stream to commit
+   */
+  async CommitStream(uint64_t streamId);
+
+  /**
    * Register a send group with a caller-provided ID
    */
   async CreateSendGroup(uint64_t groupId);

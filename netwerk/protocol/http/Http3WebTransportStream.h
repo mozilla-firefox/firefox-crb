@@ -71,6 +71,7 @@ class Http3WebTransportStream final : public WebTransportStreamBase,
 
   void SendFin() override;
   void Reset(uint64_t aErrorCode) override;
+  void Commit() override;
   void SendStopSending(uint64_t aErrorCode) override;
 
   already_AddRefed<nsIWebTransportSendStreamStats> GetSendStreamStats()

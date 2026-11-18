@@ -59,6 +59,12 @@ interface nsIWebTransportSendStream : nsISupports {
   // Reset the stream with the specified HTTP/3 error code.
   void reset(in uint64_t aErrorCode);
 
+  // Commit to reliably delivering the data written so far: if the stream is
+  // later reset, this prefix is still delivered via RESET_STREAM_AT (when
+  // the peer supports it and the backend is HTTP/3) instead of being
+  // discarded by a plain RESET_STREAM.
+  void commit();
+
   void getSendStreamStats(in nsIWebTransportStreamStatsCallback aCallback);
   readonly attribute nsIAsyncOutputStream outputStream;
   readonly attribute uint64_t streamId;
@@ -77,6 +83,12 @@ interface nsIWebTransportBidirectionalStream : nsISupports {
 
   // Reset the stream with the specified HTTP/3 error code.
   void reset(in uint64_t aErrorCode);
+
+  // Commit to reliably delivering the data written so far: if the stream is
+  // later reset, this prefix is still delivered via RESET_STREAM_AT (when
+  // the peer supports it and the backend is HTTP/3) instead of being
+  // discarded by a plain RESET_STREAM.
+  void commit();
 
   // When true, this indicates that FIN had been received.
   readonly attribute boolean hasReceivedFIN;

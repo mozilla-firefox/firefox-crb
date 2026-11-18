@@ -181,6 +181,11 @@ void WebTransportWriter::Commit() {
   // Step 1: Set stream.[[CommittedOffset]] to the value of
   // stream.[[BytesWritten]].
   mSendStream->SetCommittedOffset(mSendStream->GetBytesWritten());
+
+  // TODO(bug 2008673): send [[CommittedOffset]] to the parent so abort() can
+  // use RESET_STREAM_AT.  That needs an offset on the wire and an
+  // explicit-offset neqo API: the parent's buffered count lags
+  // [[BytesWritten]].
 }
 
 }  // namespace mozilla::dom
