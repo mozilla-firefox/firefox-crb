@@ -109,6 +109,13 @@ async protocol PWebTransport
       returns(BidirectionalStreamResponse response);
 
   /**
+   * Reset a stream with an error code
+   * @param streamId the stream to reset
+   * @param errorCode the HTTP/3 error code (varint up to 2^62-1)
+   */
+  async ResetStream(uint64_t streamId, uint64_t errorCode);
+
+  /**
    * Register a send group with a caller-provided ID
    */
   async CreateSendGroup(uint64_t groupId);
@@ -238,6 +245,14 @@ async protocol PWebTransport
   async DatagramCapacity(uint64_t cumulativeDatagrams, uint64_t cumulativeBytes,
                          uint64_t sentDelta, uint64_t expiredDelta,
                          uint64_t droppedDelta, uint64_t datagramPrefixBytes);
+
+  /**
+  * Notify child that an atomic write completed (sent or dropped due to flow control)
+  * @param streamId the ID of the stream
+  * @param atomicWriteId unique ID for this atomic write (from the 0x01 frame)
+  * @param result NS_OK if sent, error if dropped
+  */
+  async AtomicWriteResult(uint64_t streamId, uint32_t atomicWriteId, nsresult result);
 
   /**
   * Notify child of the negotiated protocol and HTTP response headers
