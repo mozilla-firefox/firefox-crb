@@ -14,6 +14,19 @@ promise_test(async t => {
 }, 'Connect to server supporting both draft-07 and draft-15 (default)');
 
 promise_test(async t => {
+  // Firefox prefers draft-15 when the server accepts both.
+  const wt = new WebTransport(webtransport_url('echo-request-headers.py'));
+  await wt.ready;
+  const streams = wt.incomingUnidirectionalStreams.getReader();
+  const {value: recv_stream} = await streams.read();
+  streams.releaseLock();
+  const headers = await read_stream_as_json(recv_stream);
+  assert_equals(headers[':protocol'], 'webtransport-h3');
+  wt.close();
+  await wt.closed.catch(() => {});
+}, 'The default server negotiates draft-15');
+
+promise_test(async t => {
   const wt = new WebTransport(webtransport_url_draft15('echo-request-headers.py'));
   await wt.ready;
   wt.close();
