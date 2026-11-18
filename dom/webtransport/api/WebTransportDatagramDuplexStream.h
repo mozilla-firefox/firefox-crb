@@ -5,7 +5,7 @@
 #ifndef DOM_WEBTRANSPORT_API_WEBTRANSPORTDATAGRAMDUPLEXSTREAM_H_
 #define DOM_WEBTRANSPORT_API_WEBTRANSPORTDATAGRAMDUPLEXSTREAM_H_
 
-#include "mozilla/dom/DatagramQueueCharge.h"
+#include "mozilla/dom/DatagramCredit.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ReadableStream.h"
 #include "mozilla/dom/TypedArray.h"
@@ -170,7 +170,7 @@ class OutgoingDatagramStreamAlgorithms final
   // mPendingDatagramPromises.Length() -- that array counts only deferred
   // promises, which says nothing about how many datagrams are actually queued
   // once they are sent untracked.
-  size_t mInFlightCount = 0;
+  OutgoingDatagramInFlight mInFlight;
 };
 
 class WebTransportDatagramDuplexStream final : public nsISupports,
@@ -354,35 +354,9 @@ class WebTransportDatagramDuplexStream final : public nsISupports,
   // for the next OutgoingDatagrams message.
   nsTArray<OutgoingDatagram> mPendingOutgoing;
 
-  // Mirrors neqo-transport's SenderFlowControl (limit/used/available),
-  // separately for each credit dimension. mCredit*Limit is the latest
-  // DatagramCapacity grant; mCredit*Used is how much of it has been spent
-  // resolving write() promises, immediately or from every
-  // OutgoingDatagramStreamAlgorithms instance's own mPendingDatagramPromises.
-  uint64_t mCreditDatagramsLimit = 0;
-  uint64_t mCreditDatagramsUsed = 0;
-  uint64_t mCreditBytesLimit = 0;
-  uint64_t mCreditBytesUsed = 0;
-  // From DatagramCapacity; 0 until the first grant.
-  uint64_t mDatagramPrefixBytes = 0;
-
-  // Charged when a write() promise resolves, immediately or not, which can be
-  // before the parent has been told about the datagram.  Bytes are charged the
-  // way neqo's queue charges them, payload plus a fixed overhead.
-  void ChargeCredit(uint64_t aPayloadBytes) {
-    mCreditDatagramsUsed++;
-    mCreditBytesUsed +=
-        DatagramQueueCharge(aPayloadBytes, mDatagramPrefixBytes);
-  }
-  uint64_t CreditBytesAvailable() const {
-    return mCreditBytesLimit > mCreditBytesUsed
-               ? mCreditBytesLimit - mCreditBytesUsed
-               : 0;
-  }
-  bool HasCreditBytesFor(uint64_t aPayloadBytes) const {
-    return DatagramQueueCharge(aPayloadBytes, mDatagramPrefixBytes) <=
-           CreditBytesAvailable();
-  }
+  // The latest DatagramCapacity grant and how much of it write() promises
+  // have used, across every OutgoingDatagramStreamAlgorithms instance.
+  OutgoingDatagramCredit mCredit;
 
  public:
   uint64_t GetDroppedIncoming() const { return mDroppedIncoming; }
