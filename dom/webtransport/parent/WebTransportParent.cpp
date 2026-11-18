@@ -688,7 +688,7 @@ IPCResult WebTransportParent::RecvGetStats(GetStatsResolver&& aResolver) {
 }
 
 IPCResult WebTransportParent::RecvCreateUnidirectionalStream(
-    int64_t aSendOrder, Maybe<uint64_t> aSendGroupId,
+    int64_t aSendOrder, Maybe<uint64_t> aSendGroupId, bool aWaitUntilAvailable,
     CreateUnidirectionalStreamResolver&& aResolver) {
   LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64,
        __func__, this, aSendOrder,
@@ -715,7 +715,7 @@ IPCResult WebTransportParent::RecvCreateUnidirectionalStream(
 }
 
 IPCResult WebTransportParent::RecvCreateBidirectionalStream(
-    int64_t aSendOrder, Maybe<uint64_t> aSendGroupId,
+    int64_t aSendOrder, Maybe<uint64_t> aSendGroupId, bool aWaitUntilAvailable,
     CreateBidirectionalStreamResolver&& aResolver) {
   LOG(("%s for %p received, sendOrder=%" PRIi64 ", sendGroupId=%" PRIu64,
        __func__, this, aSendOrder,
