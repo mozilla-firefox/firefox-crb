@@ -46,6 +46,7 @@ dictionary WebTransportSendOptions {
 
 /* https://w3c.github.io/webtransport/#uni-stream-options */
 dictionary WebTransportSendStreamOptions : WebTransportSendOptions {
+  boolean waitUntilAvailable = false;
 };
 
 /* https://w3c.github.io/webtransport/#web-transport-connection-stats */
