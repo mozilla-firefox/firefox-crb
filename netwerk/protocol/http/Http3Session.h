@@ -181,6 +181,9 @@ class Http3SessionBase {
                                               uint64_t* aBytesWritten,
                                               uint64_t* aBytesSent,
                                               uint64_t* aBytesAcknowledged) = 0;
+  virtual bool GetWebTransportRecvStreamStats(uint64_t aStreamId,
+                                              uint64_t* aBytesReceived,
+                                              uint64_t* aBytesRead) = 0;
   virtual bool WebTransportSendStreamAtomic(uint64_t aStreamId,
                                             nsTArray<uint8_t>&& aData) = 0;
   virtual nsresult GetWebTransportSessionProtocol(uint64_t aSessionId,
@@ -358,6 +361,9 @@ class Http3Session final : public Http3SessionBase,
                                       uint64_t* aBytesWritten,
                                       uint64_t* aBytesSent,
                                       uint64_t* aBytesAcknowledged) override;
+  bool GetWebTransportRecvStreamStats(uint64_t aStreamId,
+                                      uint64_t* aBytesReceived,
+                                      uint64_t* aBytesRead) override;
   bool WebTransportSendStreamAtomic(uint64_t aStreamId,
                                     nsTArray<uint8_t>&& aData) override;
   nsresult GetWebTransportSessionProtocol(uint64_t aSessionId,

@@ -42,6 +42,7 @@ class WebTransportReceiveStream final : public ReadableStream {
   // CC runs.   WebTransport::CleanUp() will destroy all the send and receive
   // streams, breaking the cycle.
   RefPtr<WebTransport> mTransport;
+  uint64_t mStreamId{0};
 };
 }  // namespace mozilla::dom
 

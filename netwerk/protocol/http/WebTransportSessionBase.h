@@ -59,6 +59,9 @@ class WebTransportSessionBase {
   virtual bool GetSendStreamStats(uint64_t aStreamId, uint64_t* aBytesWritten,
                                   uint64_t* aBytesSent,
                                   uint64_t* aBytesAcknowledged) = 0;
+  virtual bool GetReceiveStreamStats(uint64_t aStreamId,
+                                     uint64_t* aBytesReceived,
+                                     uint64_t* aBytesRead) = 0;
   virtual void GetResponseHeaders(nsTArray<nsCString>& aNames,
                                   nsTArray<nsCString>& aValues) {}
   virtual nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,

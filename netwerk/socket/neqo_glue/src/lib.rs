@@ -3216,6 +3216,28 @@ pub extern "C" fn neqo_http3conn_webtransport_send_stream_stats(
     }
 }
 
+#[repr(C)]
+pub struct WebTransportRecvStreamStats {
+    pub bytes_received: u64,
+    pub bytes_read: u64,
+}
+
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_recv_stream_stats(
+    conn: &mut NeqoHttp3Conn,
+    stream_id: u64,
+    stats: &mut WebTransportRecvStreamStats,
+) -> nsresult {
+    match conn.conn.webtransport_recv_stream_stats(StreamId::from(stream_id)) {
+        Ok(stream_stats) => {
+            stats.bytes_received = stream_stats.bytes_received();
+            stats.bytes_read = stream_stats.bytes_read();
+            NS_OK
+        }
+        Err(_) => NS_ERROR_INVALID_ARG,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn neqo_http3conn_webtransport_send_stream_atomic(
     conn: &mut NeqoHttp3Conn,

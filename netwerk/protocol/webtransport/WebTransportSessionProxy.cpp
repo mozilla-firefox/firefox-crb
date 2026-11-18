@@ -516,6 +516,30 @@ WebTransportSessionProxy::GetSendStreamStats(uint64_t aStreamId,
                                          aBytesAcknowledged);
   return NS_OK;
 }
+
+NS_IMETHODIMP
+WebTransportSessionProxy::GetReceiveStreamStats(uint64_t aStreamId,
+                                                uint64_t* aBytesReceived,
+                                                uint64_t* aBytesRead,
+                                                bool* aResult) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+
+  RefPtr<WebTransportSessionBase> session;
+  {
+    MutexAutoLock lock(mMutex);
+    if (mState != WebTransportSessionProxyState::ACTIVE ||
+        !mWebTransportSession) {
+      *aResult = false;
+      return NS_OK;
+    }
+    session = mWebTransportSession;
+  }
+
+  *aResult =
+      session->GetReceiveStreamStats(aStreamId, aBytesReceived, aBytesRead);
+  return NS_OK;
+}
+
 NS_IMETHODIMP
 WebTransportSessionProxy::RegisterSendGroup(uint64_t aGroupId) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");

@@ -121,6 +121,12 @@ bool Http2WebTransportSessionImpl::GetSendStreamStats(
   return false;
 }
 
+bool Http2WebTransportSessionImpl::GetReceiveStreamStats(
+    uint64_t aStreamId, uint64_t* aBytesReceived, uint64_t* aBytesRead) {
+  // TODO: Implement stream stats for HTTP/2 WebTransport
+  return false;
+}
+
 void Http2WebTransportSessionImpl::GetNegotiatedProtocol(
     nsACString& aProtocol) {
   // TODO: Implement protocol negotiation for HTTP/2 WebTransport

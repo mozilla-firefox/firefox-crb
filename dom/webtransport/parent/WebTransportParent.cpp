@@ -721,6 +721,36 @@ IPCResult WebTransportParent::RecvGetStreamStats(
   return IPC_OK();
 }
 
+IPCResult WebTransportParent::RecvGetReceiveStreamStats(
+    uint64_t aStreamId, GetReceiveStreamStatsResolver&& aResolver) {
+  LOG(("GetReceiveStreamStats for %p, streamId=%llu", this,
+       (unsigned long long)aStreamId));
+  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
+
+  if (!mWebTransport) {
+    aResolver(Nothing());
+    return IPC_OK();
+  }
+
+  uint64_t bytesReceived = 0;
+  uint64_t bytesRead = 0;
+  bool success = false;
+
+  nsresult rv = mWebTransport->GetReceiveStreamStats(aStreamId, &bytesReceived,
+                                                     &bytesRead, &success);
+  if (NS_FAILED(rv) || !success) {
+    aResolver(Nothing());
+    return IPC_OK();
+  }
+
+  ReceiveStreamStats stats;
+  stats.bytesReceived() = bytesReceived;
+  stats.bytesRead() = bytesRead;
+
+  aResolver(Some(stats));
+  return IPC_OK();
+}
+
 IPCResult WebTransportParent::RecvCreateSendGroup(uint64_t aGroupId) {
   LOG(("%s for %p received, groupId=%" PRIu64, __func__, this, aGroupId));
   MOZ_ASSERT(mSocketThread->IsOnCurrentThread());

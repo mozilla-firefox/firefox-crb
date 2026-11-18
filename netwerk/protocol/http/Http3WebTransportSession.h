@@ -149,6 +149,9 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
                           uint64_t* aBytesSent,
                           uint64_t* aBytesAcknowledged) override;
 
+  bool GetReceiveStreamStats(uint64_t aStreamId, uint64_t* aBytesReceived,
+                             uint64_t* aBytesRead) override;
+
   nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,
                                 const nsTArray<uint8_t>& aContext,
                                 uint32_t aOutputLength,

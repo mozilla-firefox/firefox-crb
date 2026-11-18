@@ -3412,6 +3412,13 @@ bool Http3Session::GetWebTransportSendStreamStats(
       aStreamId, aBytesWritten, aBytesSent, aBytesAcknowledged);
 }
 
+bool Http3Session::GetWebTransportRecvStreamStats(uint64_t aStreamId,
+                                                  uint64_t* aBytesReceived,
+                                                  uint64_t* aBytesRead) {
+  return mHttp3Connection->GetWebTransportRecvStreamStats(
+      aStreamId, aBytesReceived, aBytesRead);
+}
+
 bool Http3Session::WebTransportSendStreamAtomic(uint64_t aStreamId,
                                                 nsTArray<uint8_t>&& aData) {
   return mHttp3Connection->WebTransportSendStreamAtomic(aStreamId,
