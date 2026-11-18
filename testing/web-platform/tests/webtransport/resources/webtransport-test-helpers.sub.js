@@ -1,6 +1,14 @@
 // Wait for the given number of milliseconds (ms).
 function wait(ms) { return new Promise(res => step_timeout(res, ms)); }
 
+// A null outgoingMaxAge leaves the expiry implementation-defined
+// (https://w3c.github.io/webtransport/#senddatagrams step 4), and a slow test
+// machine can exceed it.  Tests that need their datagrams delivered, and are
+// not testing outgoingMaxAge itself, lift the limit so it can't be a factor.
+function disable_outgoing_datagram_expiry(wt) {
+  wt.datagrams.outgoingMaxAge = Infinity;
+}
+
 // Create URL for WebTransport session.
 function webtransport_url(handler) {
   return `https://{{host}}:{{ports[webtransport-h3][0]}}/webtransport/handlers/${handler}`;
