@@ -181,20 +181,36 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats(ErrorResult& aRv) {
     return nullptr;
   }
 
+  // Step 3: Run the following steps in parallel: step 3.1's gather is
+  // FetchStats() below; its callback is step 3.2, run once 3.1 completes.
+  RefPtr<WebTransportSendStream> self = this;
+  FetchStats([self, promise]() {
+    // Step 3.2.1: Let stats be a new WebTransportSendStreamStats object.
+    WebTransportSendStreamStats stats;
+    // Step 3.2.2: For each member of stats that the user agent wishes to
+    // expose, set member to the corresponding entry in gatheredStats.
+    stats.mBytesWritten.Construct(self->mBytesWritten);
+    stats.mBytesSent.Construct(self->mCachedBytesSent);
+    stats.mBytesAcknowledged.Construct(self->mCachedBytesAcknowledged);
+    // Step 3.2.3: Resolve p with stats.
+    promise->MaybeResolve(stats);
+  });
+
+  // Step 4: Return p.
+  return promise.forget();
+}
+
+void WebTransportSendStream::FetchStats(const std::function<void()>& aOnDone) {
   WebTransportChild* child = mTransport ? mTransport->SendChild() : nullptr;
   if (!child) {
-    // Not in spec: if the transport IPC actor is gone, resolve immediately
-    // with the local bytesWritten count and the last-known network-side
-    // stats, since there is no transport left to query.
-    WebTransportSendStreamStats stats;
-    stats.mBytesWritten.Construct(mBytesWritten);
-    stats.mBytesSent.Construct(mCachedBytesSent);
-    stats.mBytesAcknowledged.Construct(mCachedBytesAcknowledged);
-    promise->MaybeResolve(stats);
-    return promise.forget();
+    // Not in spec: if the transport IPC actor is gone, there is nothing
+    // left to query; leave the cache (last-known values, or the defaults
+    // if never sent) as-is.
+    aOnDone();
+    return;
   }
 
-  // Step 3: Run the following steps in parallel:
+  // https://w3c.github.io/webtransport/#dom-webtransportsendstream-getstats
   // Step 3.1: Let gatheredStats be the list of stats specific to this
   // WebTransportSendStream needed to populate the dictionary members of
   // WebTransportSendStreamStats accurately.
@@ -207,14 +223,8 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats(ErrorResult& aRv) {
   // increases; see https://w3c.github.io/webtransport/#send-stream-stats
   child->SendGetStreamStats(
       mStreamId,
-      [self = RefPtr{this}, promise](Maybe<StreamStats>&& aStats) {
-        // Step 3.2: Queue a network task with transport to run the following:
-        // Step 3.2.1: Let stats be a new WebTransportSendStreamStats object.
-        WebTransportSendStreamStats stats;
-        // Step 3.2.2: For each member of stats that the user agent wishes to
-        // expose, set member to the corresponding entry in gatheredStats.
+      [self = RefPtr{this}, onDone = aOnDone](Maybe<StreamStats>&& aStats) {
         uint64_t bytesWritten = self->mBytesWritten;
-        stats.mBytesWritten.Construct(bytesWritten);
         if (aStats) {
           // aStats was sampled in the socket process (from neqo) earlier than
           // this callback, and neqo lags mBytesWritten due to DataPipe
@@ -226,29 +236,16 @@ already_AddRefed<Promise> WebTransportSendStream::GetStats(ErrorResult& aRv) {
               std::min(aStats->bytesAcknowledged(), bytesSent);
           self->mCachedBytesSent = bytesSent;
           self->mCachedBytesAcknowledged = bytesAcknowledged;
-          stats.mBytesSent.Construct(bytesSent);
-          stats.mBytesAcknowledged.Construct(bytesAcknowledged);
-        } else {
-          // neqo has dropped its per-stream tracking (e.g. the stream is
-          // done). Report the last-known values instead of zero, since the
-          // spec requires bytesSent/bytesAcknowledged to only increase.
-          stats.mBytesSent.Construct(self->mCachedBytesSent);
-          stats.mBytesAcknowledged.Construct(self->mCachedBytesAcknowledged);
         }
-        // Step 3.2.3: Resolve p with stats.
-        promise->MaybeResolve(stats);
+        // else: neqo has dropped its per-stream tracking (e.g. the stream is
+        // done); leave the last-known cached values as-is, since the spec
+        // requires bytesSent/bytesAcknowledged to only increase.
+        onDone();
       },
-      [self = RefPtr{this}, promise](mozilla::ipc::ResponseRejectReason) {
-        // Not in spec: IPC channel failed; resolve with local/cached stats.
-        WebTransportSendStreamStats stats;
-        stats.mBytesWritten.Construct(self->mBytesWritten);
-        stats.mBytesSent.Construct(self->mCachedBytesSent);
-        stats.mBytesAcknowledged.Construct(self->mCachedBytesAcknowledged);
-        promise->MaybeResolve(stats);
+      [onDone = aOnDone](mozilla::ipc::ResponseRejectReason) {
+        // Not in spec: IPC channel failed; leave the cache as-is.
+        onDone();
       });
-
-  // Step 4: Return p.
-  return promise.forget();
 }
 
 // https://w3c.github.io/webtransport/#dom-webtransportsendstream-getwriter

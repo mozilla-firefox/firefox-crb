@@ -5,6 +5,8 @@
 #ifndef DOM_WEBTRANSPORT_API_WEBTRANSPORTSENDSTREAM_H_
 #define DOM_WEBTRANSPORT_API_WEBTRANSPORTSENDSTREAM_H_
 
+#include <functional>
+
 #include "WebTransportFraming.h"
 #include "mozilla/Queue.h"
 #include "mozilla/dom/AbortFollower.h"
@@ -75,6 +77,10 @@ class WebTransportSendStream final : public WritableStream,
   void SetSendGroup(WebTransportSendGroup* aSendGroup, ErrorResult& aRv);
 
   already_AddRefed<Promise> GetStats(ErrorResult& aRv);
+
+  // Refreshes mCachedBytesSent/mCachedBytesAcknowledged over IPC, then
+  // invokes aOnDone.  Used by GetStats() and WebTransportSendGroup::GetStats().
+  void FetchStats(const std::function<void()>& aOnDone);
 
   already_AddRefed<WebTransportWriter> GetWriter(ErrorResult& aRv);
 
