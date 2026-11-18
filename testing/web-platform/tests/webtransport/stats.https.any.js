@@ -222,6 +222,7 @@ promise_test(async t => {
 promise_test(async t => {
   const wt = new WebTransport(webtransport_url('echo.py'));
   await wt.ready;
+  disable_outgoing_datagram_expiry(wt);
 
   const numDatagrams = 64;
   wt.datagrams.incomingMaxBufferedDatagrams = 4;
