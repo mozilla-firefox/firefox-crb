@@ -298,6 +298,48 @@ function matchesLegacyRegionStoriesConfig(geo, locale) {
   );
 }
 
+const isPlainObject = value =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+function fillMissing(target, source) {
+  for (const [key, value] of Object.entries(source)) {
+    if (!Object.hasOwn(target, key)) {
+      target[key] = isPlainObject(value) ? fillMissing({}, value) : value;
+    } else if (isPlainObject(target[key]) && isPlainObject(value)) {
+      fillMissing(target[key], value);
+    }
+  }
+  return target;
+}
+
+/**
+ * Deep-merges newtabTrainhop enrollments into { [type]: payload }. Per key, an
+ * experiment beats a rollout, else the first wins. Arrays are not merged.
+ *
+ * @param {Array<object>} enrollments
+ * @returns {object}
+ */
+export function mergeTrainhopEnrollments(enrollments) {
+  const items = enrollments.flatMap(enrollment => {
+    const value = enrollment?.value;
+    const isRollout = !!enrollment?.meta?.isRollout;
+    const entries =
+      value?.type === "multi-payload" && Array.isArray(value.payload)
+        ? value.payload
+        : [value];
+    return entries
+      .filter(item => item?.type && item.payload)
+      .map(({ type, payload }) => ({ type, payload, isRollout }));
+  });
+  const merged = {};
+  for (const { type, payload } of items.toSorted(
+    (a, b) => a.isRollout - b.isRollout
+  )) {
+    fillMissing(merged, { [type]: payload });
+  }
+  return merged;
+}
+
 /**
  * The storiesRegionLocale payload from the newtabTrainhop feature.
  *
@@ -307,31 +349,11 @@ function matchesLegacyRegionStoriesConfig(geo, locale) {
  * @returns {?object} The payload, or null when nothing sets it.
  */
 function getStoriesTrainhopPayload() {
-  const enrollments =
-    lazy.NimbusFeatures.newtabTrainhop.getAllEnrollments() || [];
-  let payload = null;
-  let fromRollout = true;
-  for (const enrollment of enrollments) {
-    const value = enrollment?.value;
-    const items =
-      value?.type === "multi-payload" && Array.isArray(value.payload)
-        ? value.payload
-        : [value];
-    for (const item of items) {
-      // newtabTrainhop allows co-enrollment, so several enrollments may carry a
-      // storiesRegionLocale payload; an experiment wins over a rollout, matching
-      // PrefsFeed.
-      if (
-        item?.type === "storiesRegionLocale" &&
-        item.payload &&
-        (payload === null || (fromRollout && !enrollment.meta?.isRollout))
-      ) {
-        payload = item.payload;
-        fromRollout = !!enrollment.meta?.isRollout;
-      }
-    }
-  }
-  return payload;
+  return (
+    mergeTrainhopEnrollments(
+      lazy.NimbusFeatures.newtabTrainhop.getAllEnrollments() || []
+    ).storiesRegionLocale ?? null
+  );
 }
 
 /**

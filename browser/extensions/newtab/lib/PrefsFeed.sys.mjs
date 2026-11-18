@@ -21,6 +21,7 @@ import {
 } from "resource://newtab/common/Actions.mjs";
 import { Prefs } from "resource://newtab/lib/ActivityStreamPrefs.sys.mjs";
 import {
+  mergeTrainhopEnrollments,
   PREF_DEFAULT_VALUE_TOPSTORIES_ENABLED,
   PREF_DEFAULT_VALUE_TOPSITES_ENABLED,
   PREFS_CONFIG,
@@ -314,46 +315,9 @@ export class PrefsFeed {
    * Both formats output the same structure: { "feature": { "enabled": true, ... }}
    */
   _getTrainhopConfig() {
-    const allEnrollments =
-      lazy.NimbusFeatures.newtabTrainhop.getAllEnrollments() || [];
-
-    let enrollmentsToProcess = [];
-
-    allEnrollments.forEach(enrollment => {
-      if (
-        enrollment?.value?.type === "multi-payload" &&
-        Array.isArray(enrollment?.value?.payload)
-      ) {
-        enrollment.value.payload.forEach(item => {
-          if (item?.type && item?.payload) {
-            enrollmentsToProcess.push({
-              value: {
-                type: item.type,
-                payload: item.payload,
-              },
-              meta: enrollment.meta,
-            });
-          }
-        });
-      } else if (enrollment?.value?.type) {
-        enrollmentsToProcess.push(enrollment);
-      }
-    });
-
-    const valueObj = {};
-    enrollmentsToProcess.reduce((accumulator, currentValue) => {
-      if (currentValue?.value?.type) {
-        if (
-          !accumulator[currentValue.value.type] ||
-          (accumulator[currentValue.value.type].meta.isRollout &&
-            !currentValue.meta.isRollout)
-        ) {
-          accumulator[currentValue.value.type] = currentValue;
-          valueObj[currentValue.value.type] = currentValue.value.payload;
-        }
-      }
-      return accumulator;
-    }, {});
+    const valueObj = mergeTrainhopEnrollments(
+      lazy.NimbusFeatures.newtabTrainhop.getAllEnrollments() || []
+    );
 
     // Before any pref write below. Those fire the branch observer
     // synchronously, and its handler reads this to decide whether spaces is
