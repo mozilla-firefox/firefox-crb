@@ -15,14 +15,17 @@ def stream_data_received(session,
     # If a stream is unidirectional, create a new unidirectional stream and echo
     # back the data on that stream.
     if session.stream_is_unidirectional(stream_id):
-        if (session.session_id, stream_id) not in streams_dict.keys():
-            new_stream_id = session.create_unidirectional_stream()
-            streams_dict[(session.session_id, stream_id)] = new_stream_id
-        session.send_stream_data(streams_dict[(session.session_id, stream_id)],
-                                 data,
-                                 end_stream=stream_ended)
-        if (stream_ended):
-          del streams_dict[(session.session_id, stream_id)]
+        # Only create echo stream if there's data to send, or we already created one
+        # This prevents protocol violations when client streams close without data
+        if len(data) > 0 or (session.session_id, stream_id) in streams_dict:
+            if (session.session_id, stream_id) not in streams_dict.keys():
+                new_stream_id = session.create_unidirectional_stream()
+                streams_dict[(session.session_id, stream_id)] = new_stream_id
+            session.send_stream_data(streams_dict[(session.session_id, stream_id)],
+                                     data,
+                                     end_stream=stream_ended)
+            if (stream_ended):
+                del streams_dict[(session.session_id, stream_id)]
         return
     # Otherwise (e.g. if the stream is bidirectional), echo back the data on the
     # same stream.
