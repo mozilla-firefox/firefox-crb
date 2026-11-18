@@ -215,7 +215,7 @@ pub fn mix_many(
 
     // We can unwrap here, because we already checked for no items.
     let (first, rest) = items.split_first().unwrap();
-    let mut accumulated_color = convert_for_mix(&first.color, interpolation.space);
+    let mut accumulated_color = first.color.to_color_space_with_missing(interpolation.space);
     let mut accumulated_weight = first.weight * weight_scale;
 
     for item in rest {
@@ -225,7 +225,7 @@ pub fn mix_many(
             // If both are 0, this fold doesn't contribute anything to the result.
             continue;
         }
-        let right = convert_for_mix(&item.color, interpolation.space);
+        let right = item.color.to_color_space_with_missing(interpolation.space);
 
         let (left_weight, right_weight) = if normalize {
             (accumulated_weight / combined, weight / combined)
@@ -297,76 +297,6 @@ impl ComponentMixOutcome {
     }
 }
 
-impl AbsoluteColor {
-    /// Calculate the flags that should be carried forward a color before converting
-    /// it to the interpolation color space according to:
-    /// <https://drafts.csswg.org/css-color-4/#interpolation-missing>
-    fn carry_forward_analogous_missing_components(&mut self, source: &AbsoluteColor) {
-        use ColorFlags as F;
-        use ColorSpace as S;
-
-        if source.color_space == self.color_space {
-            return;
-        }
-
-        // Reds             r, x
-        // Greens           g, y
-        // Blues            b, z
-        if source.color_space.is_rgb_or_xyz_like() && self.color_space.is_rgb_or_xyz_like() {
-            return;
-        }
-
-        // Lightness        L
-        if matches!(source.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch) {
-            if matches!(self.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch) {
-                self.flags |= source.flags & F::C0_IS_NONE;
-            } else if matches!(self.color_space, S::Hsl) && source.flags.contains(F::C0_IS_NONE) {
-                self.flags.insert(F::C2_IS_NONE)
-            }
-        } else if matches!(source.color_space, S::Hsl)
-            && matches!(self.color_space, S::Lab | S::Lch | S::Oklab | S::Oklch)
-            && source.flags.contains(F::C2_IS_NONE)
-        {
-            self.flags.insert(F::C0_IS_NONE)
-        }
-
-        // Colorfulness     C, S
-        if matches!(source.color_space, S::Hsl | S::Lch | S::Oklch)
-            && matches!(self.color_space, S::Hsl | S::Lch | S::Oklch)
-        {
-            self.flags |= source.flags & F::C1_IS_NONE;
-        }
-
-        // Hue              H
-        if matches!(source.color_space, S::Hsl | S::Hwb) {
-            if matches!(self.color_space, S::Hsl | S::Hwb) {
-                self.flags |= source.flags & F::C0_IS_NONE;
-            } else if matches!(self.color_space, S::Lch | S::Oklch)
-                && source.flags.contains(F::C0_IS_NONE)
-            {
-                self.flags.insert(F::C2_IS_NONE)
-            }
-        } else if matches!(source.color_space, S::Lch | S::Oklch) {
-            if matches!(self.color_space, S::Hsl | S::Hwb) {
-                if source.flags.contains(F::C2_IS_NONE) {
-                    self.flags.insert(F::C0_IS_NONE)
-                }
-            } else if matches!(self.color_space, S::Lch | S::Oklch) {
-                self.flags |= source.flags & F::C2_IS_NONE;
-            }
-        }
-
-        // Opponent         a, a
-        // Opponent         b, b
-        if matches!(source.color_space, S::Lab | S::Oklab)
-            && matches!(self.color_space, S::Lab | S::Oklab)
-        {
-            self.flags |= source.flags & F::C1_IS_NONE;
-            self.flags |= source.flags & F::C2_IS_NONE;
-        }
-    }
-}
-
 /// Mix two colors already in the interpolation color space.
 fn mix_with_weights(
     left: &AbsoluteColor,
@@ -402,12 +332,6 @@ fn mix_with_weights(
     let mut result = AbsoluteColor::new(color_space, result[0], result[1], result[2], result[3]);
     result.flags = result_flags;
     result
-}
-
-fn convert_for_mix(color: &AbsoluteColor, color_space: ColorSpace) -> AbsoluteColor {
-    let mut converted = color.to_color_space(color_space);
-    converted.carry_forward_analogous_missing_components(color);
-    converted
 }
 
 fn interpolate_premultiplied_component(
