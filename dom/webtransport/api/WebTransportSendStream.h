@@ -79,6 +79,12 @@ class WebTransportSendStream final : public WritableStream,
   already_AddRefed<WebTransportWriter> GetWriter(ErrorResult& aRv);
 
   uint64_t GetBytesWritten() const { return mBytesWritten; }
+  // Last-known values from the network process, cached so that GetStats()
+  // (and WebTransportSendGroup::GetStats() aggregation) can still report
+  // accurate figures once neqo has dropped its per-stream tracking (see
+  // GetStats() below).
+  uint64_t GetBytesSent() const { return mCachedBytesSent; }
+  uint64_t GetBytesAcknowledged() const { return mCachedBytesAcknowledged; }
   uint64_t GetCommittedOffset() const { return mCommittedOffset; }
   void SetCommittedOffset(uint64_t aOffset) { mCommittedOffset = aOffset; }
 
@@ -202,6 +208,8 @@ class WebTransportSendStream final : public WritableStream,
   int64_t mSendOrder;
   uint64_t mBytesWritten{0};
   uint64_t mCommittedOffset{0};
+  uint64_t mCachedBytesSent{0};
+  uint64_t mCachedBytesAcknowledged{0};
 
   // Queue of pending write operations (both regular and atomic writes)
   mozilla::Queue<PendingWriteEntry> mPendingWrites;
