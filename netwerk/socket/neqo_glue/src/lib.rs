@@ -139,8 +139,10 @@ pub struct NeqoHttp3Conn {
     datagram_segments_sent: LocalCustomDistribution<'static>,
     datagram_segments_received: LocalCustomDistribution<'static>,
     would_block_counter: WouldBlockCounter,
-    /// Maps the child-minted WebTransport send-group id (assigned synchronously in the
-    /// content process) to the neqo-minted [`SendGroupId`].
+    /// Maps the child-minted WebTransport send-group id (assigned synchronously in the content
+    /// process) to the neqo-minted [`SendGroupId`]. neqo owns send-group id allocation, but the
+    /// child needs an id before the round-trip to neqo completes, so it mints a provisional id and
+    /// we translate here. The 0 sentinel ("no group") is never stored.
     webtransport_send_groups: HashMap<u64, SendGroupId>,
     /// Whether the connection-close reason has already been recorded to Glean.
     /// A connection may surface a `Closing` state change followed later by a
@@ -375,6 +377,18 @@ type BorrowedSocket = std::os::fd::BorrowedFd<'static>;
 type BorrowedSocket = std::os::windows::io::BorrowedSocket<'static>;
 
 impl NeqoHttp3Conn {
+    /// Translate a child-minted send-group id to the neqo-minted id, as a raw `u64`.
+    /// The 0 sentinel ("no group") passes through unchanged; an unknown id yields `None`.
+    fn neqo_send_group_id(&self, child_id: u64) -> Option<u64> {
+        if child_id == 0 {
+            Some(0)
+        } else {
+            self.webtransport_send_groups
+                .get(&child_id)
+                .map(|id| id.as_u64())
+        }
+    }
+
     /// Create a new [`NeqoHttp3Conn`].
     ///
     /// Note that [`NeqoHttp3Conn`] works under the assumption that the UDP
@@ -2726,6 +2740,13 @@ pub extern "C" fn neqo_http3conn_webtransport_send_datagram(
     } else {
         Some(tracking_id)
     };
+    // Translate the child-minted send-group id to the neqo-minted one, same
+    // as neqo_http3conn_webtransport_set_sendgroup does for streams; without
+    // this, datagrams are scheduled under a raw, unvalidated id that may
+    // collide with an unrelated stream's send-group.
+    let Some(translated_group_id) = conn.neqo_send_group_id(send_group_id) else {
+        return NS_ERROR_UNEXPECTED;
+    };
     // Gecko's TimeStamp and Instant need not share a clock, so the write time
     // comes across as an age.
     let now = Instant::now();
@@ -2737,7 +2758,7 @@ pub extern "C" fn neqo_http3conn_webtransport_send_datagram(
         data,
         id,
         written,
-        SendGroupId::new(send_group_id),
+        SendGroupId::new(translated_group_id),
         send_order,
     ) {
         Ok(DatagramQueueOutcome::Rejected) => NS_BASE_STREAM_WOULD_BLOCK,
