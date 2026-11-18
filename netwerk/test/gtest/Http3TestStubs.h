@@ -93,6 +93,17 @@ class Http3SessionStub final : public Http3SessionBase {
     return false;
   }
 
+  bool GetWebTransportSendStreamFlowControlInfo(
+      uint64_t aStreamId, uint64_t* aAvailableWindow,
+      uint64_t* aBytesBuffered) override {
+    return false;
+  }
+
+  bool WebTransportSendStreamAtomic(uint64_t aStreamId,
+                                    nsTArray<uint8_t>&& aData) override {
+    return false;
+  }
+
   void SetWebTransportAnticipatedConcurrentIncomingUnidirectionalStreams(
       uint64_t aSessionId, uint16_t aValue) override {}
 
