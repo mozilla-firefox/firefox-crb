@@ -38,6 +38,12 @@ struct PendingWriteEntry {
   uint32_t mDataBytesWritten{0};
 };
 
+inline void ImplCycleCollectionTraverse(
+    nsCycleCollectionTraversalCallback& aCallback, PendingWriteEntry& aEntry,
+    const char* aName, uint32_t aFlags = 0) {
+  ImplCycleCollectionTraverse(aCallback, aEntry.mPromise, aName, aFlags);
+}
+
 class WebTransportSendStream final : public WritableStream,
                                      public nsIOutputStreamCallback {
  public:
