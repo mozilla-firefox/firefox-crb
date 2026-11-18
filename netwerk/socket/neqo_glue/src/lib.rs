@@ -3216,6 +3216,44 @@ pub extern "C" fn neqo_http3conn_webtransport_send_stream_stats(
     }
 }
 
+#[repr(C)]
+pub struct WebTransportStreamFlowControlInfo {
+    pub available_window: u64,
+    pub bytes_buffered: u64,
+}
+
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_send_stream_flow_control_info(
+    conn: &NeqoHttp3Conn,
+    stream_id: u64,
+    info: &mut WebTransportStreamFlowControlInfo,
+) -> nsresult {
+    match conn.conn.webtransport_send_stream_flow_control_info(StreamId::from(stream_id)) {
+        Ok(sfc) => {
+            info.available_window = sfc.available as u64;
+            info.bytes_buffered = sfc.buffered as u64;
+            NS_OK
+        }
+        Err(_) => NS_ERROR_INVALID_ARG,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_send_stream_atomic(
+    conn: &mut NeqoHttp3Conn,
+    stream_id: u64,
+    data: &ThinVec<u8>,
+    result: &mut bool,
+) -> nsresult {
+    match conn.conn.webtransport_send_stream_atomic(StreamId::from(stream_id), data, Instant::now()) {
+        Ok(success) => {
+            *result = success;
+            NS_OK
+        }
+        Err(_) => NS_ERROR_INVALID_ARG,
+    }
+}
+
 /// Convert a [`std::io::Error`] into a [`nsresult`].
 ///
 /// Note that this conversion is specific to `neqo_glue`, i.e. does not aim to
