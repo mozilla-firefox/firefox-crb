@@ -248,7 +248,15 @@ promise_test(async t => {
 
   // Close immediately, before any network task can have dequeued a
   // datagram, so every withheld promise depends on cleanup settling it.
+  // Cleanup resolves the withheld write and errors the writable, which
+  // rejects the writes queued behind it.
   wt.close();
 
-  await Promise.all(promises);
+  const results = await Promise.allSettled(promises);
+  for (const result of results) {
+    if (result.status == 'rejected') {
+      assert_equals(result.reason.name, 'AbortError',
+                    'a rejected write() should carry close()\'s AbortError');
+    }
+  }
 }, 'Closing a session settles every deferred outgoing datagram write() promise');
