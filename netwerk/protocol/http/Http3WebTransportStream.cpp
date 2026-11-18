@@ -207,8 +207,8 @@ NS_IMETHODIMP Http3WebTransportStream::OnInputStreamReady(
     if (!mPartialFrameBuffer.IsEmpty()) {
       LOG(("Stream closed with %zu bytes of incomplete frame",
            mPartialFrameBuffer.Length()));
-      Reset(0x1);
       mSendState = SEND_DONE;
+      Reset(0x1);
       return NS_OK;
     }
 
@@ -496,25 +496,35 @@ nsresult Http3WebTransportStream::ReadSegments() {
     }
 
     // Process complete frames from the buffer
-    // this will return false if the full data for an entry isn't there
     while (true) {
       dom::WebTransportFrameType frameType;
       uint32_t atomicWriteId;
       size_t payloadLength;
       nsTArray<uint8_t> payload;  // Fresh payload for each frame
 
-      // This will return false unless we have a complete frame including
-      // all data.
-
       // XXX This means we need to receive and buffer the entire write
       // before passing any of it down to the lower level.  Better would be
       // to parse the header, then start forwarding data as received until
       // the entire entry has been received, then look for a new framing
       // header.
-      if (!ParseWebTransportFrameHeader(mPartialFrameBuffer, frameType,
-                                        atomicWriteId, payload,
-                                        payloadLength)) {
-        break;  // No more complete frames
+      auto parseResult =
+          ParseWebTransportFrameHeader(mPartialFrameBuffer, frameType,
+                                       atomicWriteId, payload, payloadLength);
+      if (parseResult == dom::WebTransportFrameParseResult::NeedMoreData) {
+        break;  // No more complete frames yet
+      }
+      if (parseResult == dom::WebTransportFrameParseResult::Malformed) {
+        LOG(
+            ("Http3WebTransportStream::ReadSegments streamId=%llu [this=%p] "
+             "malformed frame from content process (first byte 0x%02x), "
+             "resetting",
+             (unsigned long long)mStreamId, this, mPartialFrameBuffer[0]));
+        // SEND_DONE must be set before Reset(): from SENDING, Reset() only
+        // queues the reset into mPendingTasks, which is drained below the
+        // SEND_DONE guard at the top of this function and so would never run.
+        mSendState = SEND_DONE;
+        Reset(0x1);  // QUIC application error code
+        return NS_ERROR_ABORT;
       }
       LOG(("Frame header: type=0x%02x len=%zu", frameType, payloadLength));
       uint32_t totalFrameSize = 5 + payloadLength;  // regardless of type
@@ -652,12 +662,6 @@ nsresult Http3WebTransportStream::ReadSegments() {
                                           sendSuccess ? NS_OK : NS_ERROR_ABORT);
           }
         } break;
-        default:
-          // Unknown frame type - protocol error
-          LOG(("Unknown frame type: 0x%02x", frameType));
-          Reset(0x1);  // QUIC application error code
-          mSendState = SEND_DONE;
-          return NS_ERROR_ABORT;
       }
     }
 
@@ -684,8 +688,8 @@ nsresult Http3WebTransportStream::ReadSegments() {
       if (!mPartialFrameBuffer.IsEmpty()) {
         LOG(("Stream closed with %zu bytes of incomplete frame",
              mPartialFrameBuffer.Length()));
-        Reset(0x1);  // QUIC application error code
         mSendState = SEND_DONE;
+        Reset(0x1);  // QUIC application error code
         return NS_ERROR_ABORT;
       }
 

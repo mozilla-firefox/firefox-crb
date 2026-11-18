@@ -22,32 +22,24 @@ void InitializePendingWriteEntryHeader(PendingWriteEntry& aEntry) {
   }
 }
 
-// Returns true if successful and all the data is in the buffer, false otherwise
-bool ParseWebTransportFrameHeader(nsTArray<uint8_t>& aBuffer,
-                                  WebTransportFrameType& aType,
-                                  uint32_t& aAtomicId,
-                                  nsTArray<uint8_t>& aPayload,
-                                  size_t& aLength) {
+WebTransportFrameParseResult ParseWebTransportFrameHeader(
+    nsTArray<uint8_t>& aBuffer, WebTransportFrameType& aType,
+    uint32_t& aAtomicId, nsTArray<uint8_t>& aPayload, size_t& aLength) {
   // NOTE: be careful, this is data from a content process
   auto len = aBuffer.Length();
   if (len > 0) {
     WebTransportFrameType type = static_cast<WebTransportFrameType>(aBuffer[0]);
     switch (type) {
       case WebTransportFrameType::Regular:
-        if (len < 5) {
-          return false;
-        }
-        break;
       case WebTransportFrameType::Atomic:
-        if (len < 9) {
-          return false;
-        }
         break;
       default:
-        // Invalid frame type from content process - reject gracefully
-        return false;
+        return WebTransportFrameParseResult::Malformed;
     }
-    aType = static_cast<WebTransportFrameType>(type);
+    if (len < 5) {
+      return WebTransportFrameParseResult::NeedMoreData;
+    }
+    aType = type;
     aLength = (static_cast<uint32_t>(aBuffer[1]) << 24) |
               (static_cast<uint32_t>(aBuffer[2]) << 16) |
               (static_cast<uint32_t>(aBuffer[3]) << 8) |
@@ -55,22 +47,24 @@ bool ParseWebTransportFrameHeader(nsTArray<uint8_t>& aBuffer,
     // Reject implausibly large frames before using aLength in size arithmetic
     // (aLength + 5 could otherwise overflow size_t on 32-bit platforms).
     if (aLength > WEBTRANSPORT_FRAME_MAX_PAYLOAD) {
-      return false;
+      return WebTransportFrameParseResult::Malformed;
     }
-    // aLength includes atomic id if it's Atomic
+    // aLength includes the atomic id if it's Atomic, so anything under 4
+    // contradicts the frame type.  Checked here, off the 5 header bytes we
+    // already have, rather than after waiting for a 9th byte that cannot
+    // rescue the frame.
+    if (aType == WebTransportFrameType::Atomic && aLength < 4) {
+      return WebTransportFrameParseResult::Malformed;
+    }
     if (aBuffer.Length() < aLength + 5) {
       // not enough data yet
-      return false;
+      return WebTransportFrameParseResult::NeedMoreData;
     }
     if (aType == WebTransportFrameType::Atomic) {
       aAtomicId = (static_cast<uint32_t>(aBuffer[5]) << 24) |
                   (static_cast<uint32_t>(aBuffer[6]) << 16) |
                   (static_cast<uint32_t>(aBuffer[7]) << 8) |
                   static_cast<uint32_t>(aBuffer[8]);
-      // Atomic frame payload length must include 4-byte atomic ID
-      if (aLength < 4) {
-        return false;
-      }
       // Use Elements() + offset rather than &aBuffer[offset] to avoid the
       // bounds-check in ElementAt(): when aLength == 4 (zero-length payload)
       // the offset equals the array length, which ElementAt() rejects even
@@ -80,9 +74,9 @@ bool ParseWebTransportFrameHeader(nsTArray<uint8_t>& aBuffer,
       // Same reasoning as above for zero-length regular frames.
       aPayload.AppendElements(aBuffer.Elements() + 5, (size_t)aLength);
     }
-    return true;
+    return WebTransportFrameParseResult::Success;
   }
-  return false;
+  return WebTransportFrameParseResult::NeedMoreData;
 }
 
 }  // namespace mozilla::dom

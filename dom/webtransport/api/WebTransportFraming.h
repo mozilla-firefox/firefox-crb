@@ -27,6 +27,17 @@ enum class WebTransportFrameType : uint8_t {
   Atomic = 0x01,   // atomicWrite() chunk
 };
 
+// Result of attempting to parse a frame header out of the (untrusted,
+// content-process-supplied) reassembly buffer.
+enum class WebTransportFrameParseResult : uint8_t {
+  Success,       // A complete, well-formed frame was parsed.
+  NeedMoreData,  // The buffer doesn't yet hold a full header/frame; wait for
+                 // more bytes.
+  Malformed,     // The buffered bytes can never form a valid frame; the
+                 // caller must abort the stream rather than wait for more
+                 // data.
+};
+
 // Frame a chunk for transmission over DataPipe
 // Frame format: [1 byte type][4 bytes length big-endian]{[4 bytes big-endian
 // Atomic Id]}[data]
@@ -56,11 +67,9 @@ inline uint32_t FrameWebTransportChunkHeader(uint8_t (&aHeader)[9],
 }
 
 // Parse frame header (first 5 or 9 bytes)
-// Returns true if successful, false if invalid
-bool ParseWebTransportFrameHeader(nsTArray<uint8_t>& aBuffer,
-                                  WebTransportFrameType& aType,
-                                  uint32_t& aAtomicId,
-                                  nsTArray<uint8_t>& aPayload, size_t& aLength);
+WebTransportFrameParseResult ParseWebTransportFrameHeader(
+    nsTArray<uint8_t>& aBuffer, WebTransportFrameType& aType,
+    uint32_t& aAtomicId, nsTArray<uint8_t>& aPayload, size_t& aLength);
 
 // Initialize the header for a PendingWriteEntry
 // Should be called once when the entry is created
