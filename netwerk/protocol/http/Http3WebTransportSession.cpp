@@ -670,6 +670,12 @@ bool Http3WebTransportSession::GetDatagramSessionStats(uint64_t* aSent,
   return true;
 }
 
+void Http3WebTransportSession::RequestOutgoingDatagramProgress() {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  mOutgoingDatagramProgressRequested = true;
+  mSession->RequestOutgoingDatagramProgress();
+}
+
 void Http3WebTransportSession::GetStats() {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   RefPtr<WebTransportSessionEventListener> listener = GetListener();
