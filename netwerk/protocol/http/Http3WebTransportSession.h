@@ -170,11 +170,6 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
   void OnStreamStopSending(uint64_t aId, uint64_t aErrorCode);
   void OnStreamReset(uint64_t aId, uint64_t aErrorCode);
 
-  // Called when ReadSegments processes a 0x01 atomic write frame
-  // Sends AtomicWriteResult IPC to child to resolve/reject the promise
-  void ResolveAtomicWrite(uint64_t aStreamId, uint32_t aAtomicWriteId,
-                          nsresult aResult);
-
  private:
   virtual ~Http3WebTransportSession();
 

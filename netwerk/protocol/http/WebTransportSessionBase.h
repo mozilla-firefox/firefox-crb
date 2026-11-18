@@ -123,6 +123,12 @@ class WebTransportSessionBase {
     return nullptr;
   }
 
+  // Called when a stream has processed a 0x01 atomic write frame.  Tells the
+  // listener, which sends AtomicWriteResult to the child to resolve or reject
+  // the atomicWrite() promise.
+  void ResolveAtomicWrite(uint64_t aStreamId, uint32_t aAtomicWriteId,
+                          nsresult aResult);
+
   // Tell the DOM that a send stream's FIN went out, so it can settle the
   // close promise held as [[PendingOperation]].
   void NotifyStreamCloseComplete(uint64_t aStreamId);

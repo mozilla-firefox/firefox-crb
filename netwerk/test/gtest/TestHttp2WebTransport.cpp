@@ -12,6 +12,7 @@
 #include "TestCommon.h"
 #include "gtest/gtest.h"
 #include "mozilla/Queue.h"
+#include "mozilla/dom/WebTransportFraming.h"
 #include "mozilla/gtest/MozAssertions.h"
 #include "mozilla/net/NeqoHttp3Conn.h"
 #include "nsIWebTransport.h"
@@ -209,12 +210,17 @@ class MockWebTransportSessionEventListener
 
   Maybe<std::pair<uint64_t, uint64_t>> TakeReset() { return std::move(mReset); }
 
+  nsTArray<std::pair<uint32_t, nsresult>> TakeAtomicWriteResults() {
+    return std::move(mAtomicWriteResults);
+  }
+
  private:
   virtual ~MockWebTransportSessionEventListener() = default;
 
   nsTArray<RefPtr<WebTransportStreamBase>> mIncomingStreams;
   Maybe<std::pair<uint64_t, uint64_t>> mStopSending;
   Maybe<std::pair<uint64_t, uint64_t>> mReset;
+  nsTArray<std::pair<uint32_t, nsresult>> mAtomicWriteResults;
 };
 
 NS_IMPL_ISUPPORTS(MockWebTransportSessionEventListener,
@@ -323,6 +329,8 @@ NS_IMETHODIMP MockWebTransportSessionEventListener::OnResetReceived(
 
 NS_IMETHODIMP MockWebTransportSessionEventListener::OnAtomicWriteResult(
     uint64_t aStreamId, uint32_t aAtomicWriteId, nsresult aResult) {
+  mAtomicWriteResults.AppendElement(
+      std::pair<uint32_t, nsresult>(aAtomicWriteId, aResult));
   return NS_OK;
 }
 
@@ -463,6 +471,22 @@ static void ValidateData(nsIInputStream* aStream,
   ValidateData(outputData, aExpectedData);
 }
 
+// The content process frames what it writes to a send stream's pipe.
+static void WriteFrame(
+    nsIAsyncOutputStream* aWriter, const nsTArray<uint8_t>& aData,
+    dom::WebTransportFrameType aType = dom::WebTransportFrameType::Regular,
+    uint32_t aAtomicWriteId = 0) {
+  uint8_t header[WEBTRANSPORT_FRAME_MAX_HEADER_SIZE];
+  uint32_t headerLen =
+      dom::FrameWebTransportChunkHeader(header, aType, aAtomicWriteId, aData);
+  nsTArray<uint8_t> frame;
+  frame.AppendElements(header, headerLen);
+  frame.AppendElements(aData);
+  uint32_t numWritten = 0;
+  (void)aWriter->Write((const char*)frame.Elements(), frame.Length(),
+                       &numWritten);
+}
+
 static std::pair<nsCOMPtr<nsIAsyncOutputStream>, nsCOMPtr<nsIAsyncInputStream>>
 CreateStreamAndSendData(WebTransportStreamBase* aStream,
                         const nsTArray<uint8_t>& aData) {
@@ -470,9 +494,7 @@ CreateStreamAndSendData(WebTransportStreamBase* aStream,
   nsCOMPtr<nsIAsyncInputStream> reader;
   aStream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
 
-  uint32_t numWritten = 0;
-  (void)writer->Write((const char*)aData.Elements(), aData.Length(),
-                      &numWritten);
+  WriteFrame(writer, aData);
   NS_ProcessPendingEvents(nullptr);
   return std::make_pair(writer, reader);
 }
@@ -668,9 +690,7 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControl)
 
   nsTArray<uint8_t> inputData;
   CreateTestData(100, inputData);
-  uint32_t numWritten = 0;
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
 
@@ -687,9 +707,7 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControl)
   ASSERT_TRUE(id.IsBiDi());
   ValidateData(streamData.mData, inputData);
 
-  numWritten = 0;
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
@@ -706,18 +724,17 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControl)
   server->SendWebTransportMaxStreamDataCapsule(300, id);
   ClientProcessCapsules(server, client);
 
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
 
+  // The two frames held back go out as one capsule each.
   received = server->GetReceivedCapsules();
-  ASSERT_EQ(received.Length(), 1u);
-
-  WebTransportStreamDataCapsule& streamData1 =
-      received[0].GetWebTransportStreamDataCapsule();
-  ASSERT_EQ(streamData1.mData.Length(), 200u);
+  ASSERT_EQ(received.Length(), 2u);
+  for (auto& capsule : received) {
+    ASSERT_EQ(capsule.GetWebTransportStreamDataCapsule().mData.Length(), 100u);
+  }
 
   client->Done();
   server->Done();
@@ -742,9 +759,7 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControlMaxData)
 
   nsTArray<uint8_t> inputData;
   CreateTestData(100, inputData);
-  uint32_t numWritten = 0;
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
 
@@ -761,9 +776,7 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControlMaxData)
   ASSERT_TRUE(id.IsBiDi());
   ValidateData(streamData.mData, inputData);
 
-  numWritten = 0;
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
@@ -784,8 +797,7 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControlMaxData)
   server->SendWebTransportMaxStreamDataCapsule(500, id);
   ClientProcessCapsules(server, client);
 
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
@@ -796,18 +808,16 @@ TEST(TestHttp2WebTransport, StreamDataSenderFlowControlMaxData)
   server->SendWebTransportMaxDataCapsule(1024);
   ClientProcessCapsules(server, client);
 
-  (void)writer->Write((const char*)inputData.Elements(), inputData.Length(),
-                      &numWritten);
+  WriteFrame(writer, inputData);
 
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
 
   received = server->GetReceivedCapsules();
-  ASSERT_EQ(received.Length(), 1u);
-
-  WebTransportStreamDataCapsule& streamData1 =
-      received[0].GetWebTransportStreamDataCapsule();
-  ASSERT_EQ(streamData1.mData.Length(), 300u);
+  ASSERT_EQ(received.Length(), 3u);
+  for (auto& capsule : received) {
+    ASSERT_EQ(capsule.GetWebTransportStreamDataCapsule().mData.Length(), 100u);
+  }
 
   client->Done();
   server->Done();
@@ -1131,9 +1141,7 @@ TEST(TestHttp2WebTransport, SendHalfStaysWritableAfterPeerReset)
   CreateTestData(64, moreData);
   nsTArray<uint8_t> expectedData;
   expectedData.AppendElements(moreData);
-  uint32_t numWritten = 0;
-  (void)streams.first->Write((const char*)moreData.Elements(),
-                             moreData.Length(), &numWritten);
+  WriteFrame(streams.first, moreData);
   NS_ProcessPendingEvents(nullptr);
   ServerProcessCapsules(server, client);
 
@@ -1173,6 +1181,321 @@ TEST(TestHttp2WebTransport, SendAndReceiveDatagram)
   server->SendDatagramCapsule(std::move(parsedCapsule.mPayload));
   ClientProcessCapsules(server, client);
   ValidateData(listener->mReceivedDatagrams, expectedData);
+
+  client->Done();
+  server->Done();
+}
+
+static void ExpectNoStreamData(const nsTArray<Capsule>& aCapsules) {
+  for (const auto& capsule : aCapsules) {
+    ASSERT_NE(capsule.Type(), CapsuleType::WT_STREAM);
+  }
+}
+
+TEST(TestHttp2WebTransport, AtomicWriteWithinFlowControl)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 512;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+  RefPtr<MockWebTransportSessionEventListener> listener =
+      new MockWebTransportSessionEventListener();
+  client->Session()->SetWebTransportSessionEventListener(listener);
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(100, data);
+  WriteFrame(writer, data, dom::WebTransportFrameType::Atomic, 7);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  auto results = listener->TakeAtomicWriteResults();
+  ASSERT_EQ(results.Length(), 1u);
+  ASSERT_EQ(results[0].first, 7u);
+  ASSERT_EQ(results[0].second, NS_OK);
+  ValidateStreamCapsule(server, data, /* aExpectBidi = */ true);
+
+  client->Done();
+  server->Done();
+}
+
+TEST(TestHttp2WebTransport, AtomicWriteExceedingFlowControlIsRejected)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 100;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+  RefPtr<MockWebTransportSessionEventListener> listener =
+      new MockWebTransportSessionEventListener();
+  client->Session()->SetWebTransportSessionEventListener(listener);
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(200, data);
+  WriteFrame(writer, data, dom::WebTransportFrameType::Atomic, 9);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  auto results = listener->TakeAtomicWriteResults();
+  ASSERT_EQ(results.Length(), 1u);
+  ASSERT_EQ(results[0].first, 9u);
+  ASSERT_TRUE(NS_FAILED(results[0].second));
+  ExpectNoStreamData(server->GetReceivedCapsules());
+
+  client->Done();
+  server->Done();
+}
+
+TEST(TestHttp2WebTransport, MalformedFrameResetsStream)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 512;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  const char kGarbage[] = "\x7f\x00\x00\x00\x01x";
+  uint32_t numWritten = 0;
+  (void)writer->Write(kGarbage, sizeof(kGarbage) - 1, &numWritten);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  ASSERT_EQ(received.Length(), 1u);
+  ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
+  ASSERT_EQ(received[0].GetWebTransportResetStreamCapsule().mErrorCode, 1u);
+
+  client->Done();
+  server->Done();
+}
+
+static void AppendStreamData(const nsTArray<Capsule>& aCapsules,
+                             nsTArray<uint8_t>& aOut) {
+  for (const auto& capsule : aCapsules) {
+    if (capsule.Type() == CapsuleType::WT_STREAM) {
+      aOut.AppendElements(capsule.GetWebTransportStreamDataCapsule().mData);
+    }
+  }
+}
+
+// A write larger than the peer's window must go out as far as the window
+// allows and the rest when it grows, not wait for room for all of it.
+TEST(TestHttp2WebTransport, RegularFrameLargerThanWindowIsSentInPieces)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 100;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(250, data);
+  WriteFrame(writer, data);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  nsTArray<uint8_t> got;
+  AppendStreamData(received, got);
+  ASSERT_EQ(got.Length(), 100u);
+  StreamId id(stream->GetStreamId());
+
+  server->SendWebTransportMaxStreamDataCapsule(400, id);
+  ClientProcessCapsules(server, client);
+  ServerProcessCapsules(server, client);
+
+  received = server->GetReceivedCapsules();
+  AppendStreamData(received, got);
+  ValidateData(got, data);
+
+  client->Done();
+  server->Done();
+}
+
+// A Regular frame is forwarded as it arrives rather than buffered whole.
+TEST(TestHttp2WebTransport, RegularFrameIsForwardedAsItArrives)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 512;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(40, data);
+  uint8_t header[WEBTRANSPORT_FRAME_MAX_HEADER_SIZE];
+  uint32_t headerLen = dom::FrameWebTransportChunkHeader(
+      header, dom::WebTransportFrameType::Regular, 0, data);
+  nsTArray<uint8_t> first;
+  first.AppendElements(header, headerLen);
+  first.AppendElements(data.Elements(), 10);
+  uint32_t written = 0;
+  (void)writer->Write((const char*)first.Elements(), first.Length(), &written);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<uint8_t> got;
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ASSERT_EQ(got.Length(), 10u);
+
+  (void)writer->Write((const char*)data.Elements() + 10, 30, &written);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ValidateData(got, data);
+
+  client->Done();
+  server->Done();
+}
+
+// Streams share the session's credit, so one stream queueing data must reduce
+// what another may queue before either has been written.
+TEST(TestHttp2WebTransport, StreamsDoNotOvercommitSessionCredit)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 100;
+  settings.mInitialMaxStreamsBidi = 2;
+  settings.mInitialMaxStreamDataBidi = 100;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream1 = CreateOutgoingStream(client);
+  RefPtr<WebTransportStreamBase> stream2 = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream1 != nullptr);
+  ASSERT_TRUE(stream2 != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer1;
+  nsCOMPtr<nsIAsyncOutputStream> writer2;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream1->GetWriterAndReader(getter_AddRefs(writer1), getter_AddRefs(reader));
+  stream2->GetWriterAndReader(getter_AddRefs(writer2), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(100, data);
+  WriteFrame(writer1, data);
+  WriteFrame(writer2, data);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<uint8_t> got;
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ASSERT_EQ(got.Length(), 100u);
+
+  server->SendWebTransportMaxDataCapsule(300);
+  ClientProcessCapsules(server, client);
+  ServerProcessCapsules(server, client);
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ASSERT_EQ(got.Length(), 200u);
+
+  client->Done();
+  server->Done();
+}
+
+// Data queued from frames before a malformed one would go out after the
+// reset, and the credit set aside for it has to be released.
+TEST(TestHttp2WebTransport, MalformedFrameDropsDataQueuedBeforeIt)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 100;
+  settings.mInitialMaxStreamsBidi = 2;
+  settings.mInitialMaxStreamDataBidi = 100;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream1 = CreateOutgoingStream(client);
+  RefPtr<WebTransportStreamBase> stream2 = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream1 != nullptr);
+  ASSERT_TRUE(stream2 != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer1;
+  nsCOMPtr<nsIAsyncOutputStream> writer2;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream1->GetWriterAndReader(getter_AddRefs(writer1), getter_AddRefs(reader));
+  stream2->GetWriterAndReader(getter_AddRefs(writer2), getter_AddRefs(reader));
+
+  nsTArray<uint8_t> data;
+  CreateTestData(100, data);
+  WriteFrame(writer1, data);
+  const char kGarbage[] = "\x7f\x00\x00\x00\x01x";
+  uint32_t numWritten = 0;
+  (void)writer1->Write(kGarbage, sizeof(kGarbage) - 1, &numWritten);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  ASSERT_EQ(received.Length(), 1u);
+  ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
+  ASSERT_EQ(received[0].GetWebTransportResetStreamCapsule().mReliableSize, 0u);
+
+  // The session credit the dropped data had set aside is available again.
+  WriteFrame(writer2, data);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+  nsTArray<uint8_t> got;
+  AppendStreamData(server->GetReceivedCapsules(), got);
+  ValidateData(got, data);
+
+  client->Done();
+  server->Done();
+}
+
+TEST(TestHttp2WebTransport, OversizedFrameResetsStream)
+{
+  Http2WebTransportInitialSettings settings;
+  settings.mInitialMaxData = 1024;
+  settings.mInitialMaxStreamsBidi = 1;
+  settings.mInitialMaxStreamDataBidi = 512;
+  RefPtr<MockWebTransportClient> client = new MockWebTransportClient(settings);
+  RefPtr<MockWebTransportServer> server = new MockWebTransportServer();
+
+  RefPtr<WebTransportStreamBase> stream = CreateOutgoingStream(client);
+  ASSERT_TRUE(stream != nullptr);
+  nsCOMPtr<nsIAsyncOutputStream> writer;
+  nsCOMPtr<nsIAsyncInputStream> reader;
+  stream->GetWriterAndReader(getter_AddRefs(writer), getter_AddRefs(reader));
+
+  const char kHuge[] = "\x00\xff\xff\xff\xff";
+  uint32_t numWritten = 0;
+  (void)writer->Write(kHuge, sizeof(kHuge) - 1, &numWritten);
+  NS_ProcessPendingEvents(nullptr);
+  ServerProcessCapsules(server, client);
+
+  nsTArray<Capsule> received = server->GetReceivedCapsules();
+  ASSERT_EQ(received.Length(), 1u);
+  ASSERT_EQ(received[0].Type(), CapsuleType::WT_RESET_STREAM);
 
   client->Done();
   server->Done();

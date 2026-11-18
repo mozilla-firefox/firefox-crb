@@ -81,6 +81,16 @@ class Http2WebTransportStream final : public WebTransportStreamBase {
   static nsresult ReadRequestSegment(nsIInputStream*, void*, const char*,
                                      uint32_t, uint32_t, uint32_t*);
 
+  // Turns the frames the content process wrote (see WebTransportFraming.h)
+  // into capsules, as flow control allows.  A frame that does not fit is left
+  // in mPartialFrameBuffer and mFramesBlocked is set.
+  void ProcessFrames();
+  void QueueStreamData(nsTArray<uint8_t>&& aData);
+  // Releases the flow control credit set aside for capsules queued but not yet
+  // written, and DropQueuedData() also discards those capsules.
+  void ReleaseQueuedCredit();
+  void DropQueuedData();
+
   nsresult HandleStreamData(bool aFin, nsTArray<uint8_t>&& aData);
   nsresult HandleMaxStreamData(uint64_t aLimit);
   nsresult HandleStopSending(uint64_t aError);
@@ -88,6 +98,17 @@ class Http2WebTransportStream final : public WebTransportStreamBase {
   RefPtr<Http2WebTransportSessionImpl> mWebTransportSession;
   class StreamId mStreamId{0u};
   nsTArray<uint8_t> mBuffer;
+  // Bytes read from the send pipe that have not yet been processed.
+  nsTArray<uint8_t> mPartialFrameBuffer;
+  // Payload bytes of the Regular frame being forwarded that have not yet been
+  // taken out of mPartialFrameBuffer (they may not have arrived yet).
+  uint64_t mRegularPayloadRemaining = 0;
+  // Flow control cannot take the data at the head of mPartialFrameBuffer, so
+  // the pipe is not read until that changes.
+  bool mFramesBlocked = false;
+  // Bytes of stream data in capsules that are queued but not yet written, so
+  // flow control credit is not spent twice before OnStreamDataSent() runs.
+  uint64_t mQueuedUnsentBytes = 0;
   CheckedUint64 mTotalSent{0};
   uint64_t mTotalReceived = 0;
   Maybe<uint64_t> mReliableSize;
