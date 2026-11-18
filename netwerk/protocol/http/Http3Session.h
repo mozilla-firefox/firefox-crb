@@ -385,6 +385,7 @@ class Http3Session final : public Http3SessionBase,
                           bool justKidding);
 
   nsresult ProcessOutput(nsIUDPSocket* socket);
+  void NotifyOutgoingDatagramProgress();
   nsresult ProcessInput(nsIUDPSocket* socket);
   nsresult ProcessEvents();
 
