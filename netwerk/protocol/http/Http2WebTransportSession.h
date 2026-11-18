@@ -105,10 +105,12 @@ class Http2WebTransportSessionImpl final : public WebTransportSessionBase,
   nsresult RegisterSendGroup(uint64_t aGroupId) override;
   void CreateOutgoingBidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) override;
+          aCallback,
+      bool aWaitUntilAvailable = false) override;
   void CreateOutgoingUnidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
-          aCallback) override;
+          aCallback,
+      bool aWaitUntilAvailable = false) override;
   bool OnCapsule(Capsule&& aCapsule) override;
   void OnCapsuleParseFailure(nsresult aError) override;
   void StartReading() override;

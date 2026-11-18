@@ -2220,6 +2220,9 @@ pub enum Http3Event {
         local: bool,
     },
     RequestsCreatable,
+    StreamQuotaIncreased {
+        stream_type: WebTransportStreamType,
+    },
     AuthenticationNeeded,
     ZeroRttRejected,
     ConnectionConnected,
@@ -2320,8 +2323,12 @@ pub extern "C" fn neqo_http3conn_event(
                 local,
             },
             Http3ClientEvent::RequestsCreatable => Http3Event::RequestsCreatable,
-            // Not yet surfaced through this event path.
-            Http3ClientEvent::StreamCreatable { .. } => Http3Event::NoEvent,
+            Http3ClientEvent::StreamCreatable { stream_type } => Http3Event::StreamQuotaIncreased {
+                stream_type: match stream_type {
+                    StreamType::BiDi => WebTransportStreamType::BiDi,
+                    StreamType::UniDi => WebTransportStreamType::UniDi,
+                },
+            },
             Http3ClientEvent::OutgoingDatagramSpaceAvailable { .. } => {
                 Http3Event::OutgoingDatagramSpaceAvailable
             }
