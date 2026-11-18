@@ -54,8 +54,8 @@ def generate_metadata(output, cargo_config):
     # tree, so we want to let Cargo create lock files in this case. When built
     # within a tree, the Rust dependencies have been vendored in so Cargo won't
     # touch the lock file.
-    if not buildconfig.substs.get("JS_STANDALONE"):
-        args.append("--frozen")
+    #    if not buildconfig.substs.get("JS_STANDALONE"):
+    #        args.append("--frozen")
 
     stdout, returncode = _run_process(args)
 
