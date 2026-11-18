@@ -130,6 +130,11 @@ class WritableStream : public nsISupports, public nsWrapperCache {
   MOZ_CAN_RUN_SCRIPT void FinishInFlightWriteWithError(
       JSContext* aCX, JS::Handle<JS::Value> aError, ErrorResult& aR);
 
+  // https://streams.spec.whatwg.org/#writablestream-writerequests: queued
+  // write requests not yet processed by the underlying sink. Excludes the
+  // one currently in flight, which is tracked separately.
+  size_t WriteRequestCount() const { return mWriteRequests.Count(); }
+
   // WritableStreamHasOperationMarkedInFlight
   bool HasOperationMarkedInFlight() const {
     return mInFlightWriteRequest || mInFlightCloseRequest;

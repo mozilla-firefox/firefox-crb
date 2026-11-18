@@ -98,6 +98,14 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::WriteCallbackImpl(
     atomicId = mStream->GetPendingAtomicWriteId();
   }
 
+  if (atomicId.isSome() && mStream->TakeCancelledAtomicWriteId(*atomicId)) {
+    // Aborted while queued behind a failed atomic write (spec step 6 of
+    // "abort all atomic write requests"): consume the chunk without sending
+    // it, which keeps the stream open.
+    promise->MaybeResolveWithUndefined();
+    return promise.forget();
+  }
+
   entry.mAtomicWriteId = atomicId;
   if (atomicId.isSome()) {
     LOG(("Atomic write enqueued: streamId=%llu, atomicWriteId=%u, dataLen=%zu",

@@ -5,6 +5,7 @@
 #include "WebTransport.h"
 
 #include <memory>
+#include <type_traits>
 
 #include "WebTransportBidirectionalStream.h"
 #include "mozilla/Assertions.h"
@@ -1154,6 +1155,13 @@ void WebTransport::PropagateError(Stream* aStream, WebTransportError* aError) {
     return;
   }
 
+  if constexpr (std::is_same_v<Stream, WebTransportSendStream>) {
+    // An unconfirmed atomicWrite() holds its write request in flight, which
+    // ErrorNative() below does not touch and which blocks the stream from
+    // ever finishing erroring. No confirmation is coming now, so settle it.
+    aStream->RejectUnconfirmedAtomicWrites(errorValue);
+    aStream->RejectPendingWrites(errorValue);
+  }
   aStream->ErrorNative(cx, errorValue, IgnoreErrors());
 }
 
@@ -1642,6 +1650,11 @@ void WebTransport::Cleanup(DOMException* aError,
 
   for (const auto& stream : sendStreams.Values()) {
     // This MOZ_KnownLive is redundant, see bug 1620312
+    // An unconfirmed atomicWrite() holds its write request in flight, which
+    // ErrorNative() does not touch; no confirmation is coming for a
+    // torn-down session, so settle it here too.
+    MOZ_KnownLive(stream)->RejectUnconfirmedAtomicWrites(errorValue);
+    MOZ_KnownLive(stream)->RejectPendingWrites(errorValue);
     // Step 15.2: Error stream with error.
     MOZ_KnownLive(stream)->ErrorNative(cx, errorValue, IgnoreErrors());
   }
@@ -1700,12 +1713,15 @@ void WebTransport::Cleanup(DOMException* aError,
   // Step 15.1: If stream.[[PendingOperation]] is not null, reject
   // stream.[[PendingOperation]] with error.
   //
-  // [[PendingOperation]] is WriteCallbackImpl's own write-algorithm promise
-  // (WebTransportSendStream::DrainQueue's entry.mPromise), and it resolves
-  // as soon as the bytes reach the DataPipe -- for atomic writes too, since
-  // nothing here yet holds one open pending the parent's flow-control
-  // verdict.  By the time Cleanup can run it is therefore already settled,
-  // so there is nothing left to reject and no code for it here.
+  // For a regular write, [[PendingOperation]] (WriteCallbackImpl's own
+  // write-algorithm promise) resolves as soon as the bytes reach the
+  // DataPipe, long before Cleanup can run, so there is nothing left to
+  // reject there.  For an atomic write it is instead the promise parked in
+  // WebTransportSendStream::mUnconfirmedAtomicWrites until the parent's
+  // flow-control verdict arrives; RejectUnconfirmedAtomicWrites(), called
+  // above for each stream, is what rejects that one, and doing so already
+  // finishes erroring the stream through the normal in-flight-write path,
+  // which is why the ErrorNative() call above is then a no-op for it.
   //
   // atomicWrite()'s own return value is a second, different promise: per
   // spec step 7 it is a reaction *on* [[PendingOperation]], so it settles on

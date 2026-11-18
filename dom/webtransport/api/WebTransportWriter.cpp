@@ -85,24 +85,16 @@ already_AddRefed<Promise> WebTransportWriter::AtomicWrite(
   uint32_t atomicWriteId = sNextAtomicWriteId++;
 
   // Non-spec: create the user-facing promise resolved via IPC once flow
-  // control is confirmed. The spec's step 7.3 says "return undefined", but
-  // that assumes [[WriteAlgorithm]] resolves only after the network send
-  // completes (spec's webtransportsendstream-write step 9.2). Our
-  // [[WriteAlgorithm]] resolves as soon as bytes reach the DataPipe (before
-  // the network process sends them and before the flow-control window
-  // check), so we need a separate IPC notification to determine whether the
-  // atomic write actually succeeded.
+  // control is confirmed. Spec step 7.3 returns undefined, but that assumes
+  // the write request itself only settles once the send completes (write
+  // step 9.4), and rejecting a write request without erroring the stream --
+  // what "abort all atomic write requests" step 5 asks for -- is not
+  // something WritableStream lets us do. So the verdict rides on this
+  // separate promise instead.
   //
-  // This can't be fixed by making the write algorithm's own promise wait for
-  // that IPC confirmation instead of a separate one: doing so leaves this
-  // write's underlying sink-algorithm promise pending, but
-  // WritableStream::StartErroring() only finishes erroring -- which is what
-  // runs our AbortCallbackImpl -- once no operation is marked in-flight,
-  // i.e. once that promise settles. So writer.abort() would have to wait for
-  // the parent's flow-control response before it could even run our abort
-  // logic, instead of being able to preempt it; confirmed by
-  // webtransport-writer-advanced.https.any.js's abort tests failing when
-  // this was tried.
+  // The write request is still held unsettled until the parent's verdict
+  // arrives (see WebTransportSendStream::DrainQueue), so the atomic write
+  // stays the in-flight one and nothing is dispatched behind it.
   RefPtr<Promise> userPromise = Promise::Create(GetParentObject(), aRv);
   if (aRv.Failed()) {
     return nullptr;

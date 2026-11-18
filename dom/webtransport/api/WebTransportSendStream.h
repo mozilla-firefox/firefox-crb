@@ -9,6 +9,7 @@
 #include "mozilla/Queue.h"
 #include "mozilla/dom/WritableStream.h"
 #include "nsIAsyncOutputStream.h"
+#include "nsTHashMap.h"
 
 namespace mozilla::ipc {
 class DataPipeSender;
@@ -113,6 +114,25 @@ class WebTransportSendStream final : public WritableStream,
     return std::move(mPendingAtomicWriteIds);
   }
 
+  // The parent confirmed the atomic write fit the flow-control window:
+  // resolve the write request it has been holding in flight, which lets
+  // WritableStream dispatch whatever is queued behind it.
+  // aConfirmed is false when this only lets a failed write's request go, in
+  // which case its bytes never count towards [[BytesWritten]].
+  void ResolveAtomicWriteRequest(uint32_t aId, bool aConfirmed);
+
+  // Rejects the write requests of any atomic writes still awaiting
+  // confirmation, for teardown paths where no confirmation is coming.
+  // Without this the stream can never finish erroring, since an unsettled
+  // write request stays marked in flight.
+  void RejectUnconfirmedAtomicWrites(JS::Handle<JS::Value> aReason);
+
+  // Rejects the write requests still queued for the DataPipe, for the same
+  // teardown paths: one blocked on a full pipe is an unsettled
+  // [[PendingOperation]] that would otherwise keep the stream from erroring
+  // until the parent closes the pipe.
+  void RejectPendingWrites(JS::Handle<JS::Value> aReason);
+
   // Returns the atomicWriteId for aPromise (and removes the entry), or Nothing
   Maybe<uint32_t> TakeAtomicWriteId(Promise* aPromise) {
     for (size_t i = 0; i < mAtomicWriteReqPromises.Length(); i++) {
@@ -131,8 +151,21 @@ class WebTransportSendStream final : public WritableStream,
     mAtomicWriteReqIds.AppendElement(aId);
   }
 
+  // Whether the parent has yet to confirm aId, which is held as the in-flight
+  // write request.  A verdict for any other id is stale.
+  bool IsAtomicWriteUnconfirmed(uint32_t aId) const {
+    return mUnconfirmedAtomicWrites.Contains(aId);
+  }
+
+  // Consumes aId if AbortAllAtomicWriteRequests() cancelled it while it was
+  // still queued, in which case WriteCallbackImpl must not send it.
+  bool TakeCancelledAtomicWriteId(uint32_t aId) {
+    return mCancelledAtomicWriteIds.RemoveElement(aId);
+  }
+
   // https://w3c.github.io/webtransport/#webtransportsendstream-abort-all-atomic-write-requests
-  void AbortAllAtomicWriteRequests();
+  // aFailedId is the atomic write the parent rejected, the one held in flight.
+  void AbortAllAtomicWriteRequests(uint32_t aFailedId);
 
  private:
   ~WebTransportSendStream() override;
@@ -161,8 +194,20 @@ class WebTransportSendStream final : public WritableStream,
   // so WriteCallbackImpl (called synchronously from Write()) can read it.
   Maybe<uint32_t> mPendingAtomicWriteId;
 
-  // [[AtomicWriteRequests]] — IDs of all in-flight atomic writes
+  // [[AtomicWriteRequests]] — IDs of all in-flight atomic writes.
   nsTArray<uint32_t> mPendingAtomicWriteIds;
+
+  // Write requests of atomic writes whose bytes are fully in the DataPipe
+  // but which the parent has not confirmed yet, keyed by atomicWriteId.
+  // Holding these unsettled keeps the atomic write the in-flight write
+  // request, so nothing is dispatched behind it until its fate is known.
+  nsTHashMap<nsUint32HashKey, RefPtr<Promise>> mUnconfirmedAtomicWrites;
+  // Size of the unconfirmed atomic write, counted into mBytesWritten once the
+  // parent confirms it.
+  uint64_t mUnconfirmedAtomicBytes{0};
+
+  // Atomic writes cancelled while still queued behind the one that failed.
+  nsTArray<uint32_t> mCancelledAtomicWriteIds;
 
   // Maps write request promises → atomicWriteIds for writes queued by
   // WritableStream (async case: WriteCallbackImpl called after Write() returns)
