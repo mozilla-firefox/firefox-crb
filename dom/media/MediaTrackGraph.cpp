@@ -4029,12 +4029,16 @@ double MediaTrackGraphImpl::AudioOutputLatency() {
   if (mAudioOutputLatency != 0.0) {
     return mAudioOutputLatency;
   }
-  MonitorAutoLock lock(mMonitor);
-  if (CurrentDriver()->AsAudioCallbackDriver()) {
-    mAudioOutputLatency = CurrentDriver()
-                              ->AsAudioCallbackDriver()
-                              ->AudioOutputLatency()
-                              .ToSeconds();
+  RefPtr<AudioCallbackDriver> driver;
+  {
+    MonitorAutoLock lock(mMonitor);
+    driver = CurrentDriver()->AsAudioCallbackDriver();
+  }
+  // Query cubeb without mMonitor held: the backend can block on a lock that
+  // its audio thread holds while waiting for a data callback, and the graph
+  // iteration of that callback needs mMonitor.
+  if (driver) {
+    mAudioOutputLatency = driver->AudioOutputLatency().ToSeconds();
   } else {
     // Failure mode: return 0.0 if running on a normal thread.
     mAudioOutputLatency = 0.0;
