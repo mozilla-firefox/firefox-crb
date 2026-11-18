@@ -116,6 +116,13 @@ async protocol PWebTransport
   async ResetStream(uint64_t streamId, uint64_t errorCode);
 
   /**
+   * Send STOP_SENDING for a stream
+   * @param streamId the stream to stop
+   * @param errorCode the application error code (WebIDL unsigned long)
+   */
+  async StopSendingStream(uint64_t streamId, uint64_t errorCode);
+
+  /**
    * Register a send group with a caller-provided ID
    */
   async CreateSendGroup(uint64_t groupId);

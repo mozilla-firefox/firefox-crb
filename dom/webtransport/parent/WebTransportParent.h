@@ -83,6 +83,7 @@ class WebTransportParent : public PWebTransportParent,
       bool aWaitUntilAvailable, CreateBidirectionalStreamResolver&& aResolver);
 
   IPCResult RecvResetStream(uint64_t aStreamId, uint64_t aErrorCode);
+  IPCResult RecvStopSendingStream(uint64_t aStreamId, uint64_t aErrorCode);
 
   ::mozilla::ipc::IPCResult RecvOutgoingDatagrams(
       nsTArray<OutgoingDatagram>&& aDatagrams);

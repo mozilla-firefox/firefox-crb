@@ -6,6 +6,8 @@
 
 #include "mozilla/dom/WebTransportSendStreamAlgorithms.h"
 
+#include <algorithm>
+
 #include "mozilla/dom/BufferSourceBinding.h"
 #include "mozilla/dom/Promise-inl.h"
 #include "mozilla/dom/Promise.h"
@@ -13,7 +15,6 @@
 #include "mozilla/dom/WebTransport.h"
 #include "mozilla/dom/WebTransportChild.h"
 #include "mozilla/dom/WebTransportError.h"
-#include "mozilla/dom/WebTransportErrorCodeUtil.h"
 #include "mozilla/dom/WebTransportFraming.h"
 #include "mozilla/dom/WebTransportLog.h"
 #include "mozilla/dom/WebTransportSendStream.h"
@@ -188,17 +189,18 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::AbortCallbackImpl(
   LOG(("WebTransportSendStreamAlgorithms::AbortCallbackImpl [this=%p]", this));
 
   // Step 3: Let code be 0.
-  uint64_t http3ErrorCode = WebTransportErrorToHttp3(0);
+  uint32_t wtCode = 0;
 
   // Step 5: If reason is a WebTransportError and reason.[[StreamErrorCode]]
-  // is not null, set code to reason.[[StreamErrorCode]].
+  // is not null, then set code to reason.[[StreamErrorCode]].
   if (aReason.WasPassed() && aReason.Value().isObject()) {
     JS::Rooted<JSObject*> obj(aCx, &aReason.Value().toObject());
     RefPtr<WebTransportError> wtError;
     if (NS_SUCCEEDED(UNWRAP_OBJECT(WebTransportError, &obj, wtError))) {
       Nullable<uint32_t> streamErrorCode = wtError->GetStreamErrorCode();
       if (!streamErrorCode.IsNull()) {
-        http3ErrorCode = WebTransportErrorToHttp3(streamErrorCode.Value());
+        wtCode = streamErrorCode.Value();
+        LOG(("  Extracted stream error code: WT=%u", wtCode));
       }
     }
   }
@@ -222,24 +224,29 @@ already_AddRefed<Promise> WebTransportSendStreamAlgorithms::AbortCallbackImpl(
     }
   }
 
-  // Step 9: In parallel, abort sending on stream.[[InternalStream]]
-  // with code and committedOffset.
-  if (mStream) {
-    WebTransport* transport = mStream->GetTransport();
-    if (transport) {
-      WebTransportChild* child = transport->SendChild();
-      if (child) {
-        uint64_t streamId = mStream->GetStreamId();
-        LOG(("  Sending ResetStream via IPC: streamId=%llu errorCode=%llu",
-             (unsigned long long)streamId, (unsigned long long)http3ErrorCode));
-        (void)child->SendResetStream(streamId, http3ErrorCode);
-      }
-    }
-  }
-
+  // Step 9: Run the following steps in parallel:
+  // Step 9.1: Abort sending on stream.[[InternalStream]] with code and
+  // committedOffset.
+  // Not in spec: committedOffset isn't sent, since reliable reset
+  // (RESET_STREAM_AT) isn't used yet; the abort is a plain RESET_STREAM.
+  //
+  // Close the outgoing (framed) pipe with the WebTransport error code encoded
+  // as an nsresult; the parent (Http3WebTransportStream) decodes it and issues
+  // the RESET_STREAM. Routing the abort through the framed pipe keeps it
+  // ordered with the stream's data and avoids racing a separate SendResetStream
+  // IPC against the pipe-close teardown -- that race could cancel the stream
+  // with H3_REQUEST_CANCELLED before the intended code was applied.
+  //
+  // The nsresult carrier (NS_ERROR_WEBTRANSPORT_CODE_BASE..
+  // NS_ERROR_WEBTRANSPORT_CODE_END) only reserves 256 values, so a code above
+  // 255 must be clamped here rather than added unchecked -- otherwise it
+  // would overflow into an unrelated nsresult's namespace.
+  nsresult abortStatus = static_cast<nsresult>(
+      static_cast<uint32_t>(NS_ERROR_WEBTRANSPORT_CODE_BASE) +
+      std::min(wtCode, 255u));
   return CloseSenderHelper(
-      [](mozilla::ipc::DataPipeSender* sender) {
-        return sender->CloseWithStatus(NS_ERROR_ABORT);
+      [abortStatus](mozilla::ipc::DataPipeSender* sender) {
+        return sender->CloseWithStatus(abortStatus);
       },
       "AbortCallbackImpl");
 }

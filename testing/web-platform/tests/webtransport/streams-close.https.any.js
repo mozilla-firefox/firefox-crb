@@ -119,6 +119,12 @@ promise_test(async t => {
   assert_equals(info.code, HTTP_CODE, 'code');
 }, 'Abort unidirectional stream with WebTransportError');
 
+// Firefox Bug: This test currently fails in Firefox because the close_promise
+// is not rejected when abort() is called during a close() operation.
+// The test expects that calling abort() while close() is pending should reject
+// the close promise, but Firefox's WritableStream implementation currently
+// resolves it instead. This is related to the Streams spec discussion at
+// https://github.com/whatwg/streams/issues/1203.
 promise_test(async t => {
   const id = token();
   const wt = new WebTransport(webtransport_url(`client-close.py?token=${id}`));
