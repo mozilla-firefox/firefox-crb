@@ -319,6 +319,7 @@ internal object TabsTrayReducer {
                                         DEFAULT_SYNCED_TABS_EXPANDED_STATE
                                     }
                                 },
+                            syncError = action.error,
                         )
                 )
             }
@@ -329,6 +330,7 @@ internal object TabsTrayReducer {
                         currentSync.copy(
                             syncedTabs = tabs,
                             expandedSyncedTabs = tabs.map { DEFAULT_SYNCED_TABS_EXPANDED_STATE },
+                            syncError = action.error,
                         )
                 )
             }
@@ -339,6 +341,7 @@ internal object TabsTrayReducer {
                         currentSync.copy(
                             syncedTabs = tabs,
                             expandedSyncedTabs = emptyList(),
+                            syncError = action.error,
                         )
                 )
             }

@@ -5,8 +5,10 @@
 package org.mozilla.fenix.tabstray.redux.reducer
 
 import kotlin.test.assertEquals
+import mozilla.components.feature.syncedtabs.view.SyncedTabsView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mozilla.fenix.tabstray.data.TabStorageUpdate
@@ -252,6 +254,42 @@ class TabsTrayStoreReducerTest {
             )
 
         assertTrue(resultState.sync.expandedSyncedTabs.all { DEFAULT_SYNCED_TABS_EXPANDED_STATE })
+    }
+
+    @Test
+    fun `WHEN UpdateSyncedTabs is called with an error THEN syncError is updated`() {
+        val state =
+            TabsTrayReducer.reduce(
+                TabsTrayState(),
+                TabsTrayAction.UpdateSyncedTabs(
+                    tabs = listOf(SyncedTabsListItem.Error(errorText = "No Tabs")),
+                    error = SyncedTabsView.ErrorType.NO_TABS_AVAILABLE,
+                ),
+            )
+
+        assertEquals(SyncedTabsView.ErrorType.NO_TABS_AVAILABLE, state.sync.syncError)
+    }
+
+    @Test
+    fun `GIVEN a syncError WHEN UpdateSyncedTabs is called without an error THEN syncError is cleared`() {
+        val syncedTabsList = getFakeSyncedTabList()
+
+        val initialState =
+            TabsTrayState(
+                sync =
+                    TabsTrayState.SyncState(
+                        syncedTabs = listOf(SyncedTabsListItem.Error(errorText = "No Tabs")),
+                        syncError = SyncedTabsView.ErrorType.NO_TABS_AVAILABLE,
+                    )
+            )
+
+        val state =
+            TabsTrayReducer.reduce(
+                initialState,
+                TabsTrayAction.UpdateSyncedTabs(tabs = syncedTabsList),
+            )
+
+        assertNull(state.sync.syncError)
     }
 
     @Test
