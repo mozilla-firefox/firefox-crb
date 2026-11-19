@@ -355,6 +355,11 @@ class nsDocShell final : public nsDocLoader,
   StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
                                            uint32_t aLoadType);
 
+  // A javascript: URL's script has returned a string, which aChannel will load
+  // as the new document.
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY mozilla::Result<nsILoadGroup*, nsresult>
+  StartNavigationForJavascriptURLResult(nsIChannel* aChannel);
+
   // Ends the navigation StartNavigationForDownloadTurnedDocument started, for
   // when its channel could not be opened.
   void AbandonDownloadTurnedNavigation() {
@@ -1220,7 +1225,9 @@ class nsDocShell final : public nsDocLoader,
   // With docshell.navigation.new_load_group, starts a navigation in a load
   // group of its own, see nsDocLoader::BeginNavigationLoadGroup. Returns false
   // if script run meanwhile started a newer navigation or stopped this one.
-  MOZ_CAN_RUN_SCRIPT bool StopForNewNavigation(uint32_t aStopFlags);
+  MOZ_CAN_RUN_SCRIPT bool StopForNewNavigation(
+      uint32_t aStopFlags, UnsetOngoingNavigation aUnsetOngoingNavigation =
+                               UnsetOngoingNavigation::No);
 
   MOZ_CAN_RUN_SCRIPT
   void ResetOngoingNavigation(
