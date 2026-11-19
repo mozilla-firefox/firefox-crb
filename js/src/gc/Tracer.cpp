@@ -9,6 +9,7 @@
 #include "NamespaceImports.h"
 
 #include "gc/PublicIterators.h"
+#include "js/friend/CycleCollector.h"
 #include "jit/JitCode.h"
 #include "util/Memory.h"
 #include "util/Text.h"
@@ -96,6 +97,19 @@ void js::gc::TraceIncomingCCWs(JSTracer* trc,
 
 /*** Cycle Collector Helpers ************************************************/
 
+static bool sCCShapeScanCounting = false;
+static thread_local uint64_t sCCShapeMapsScanned = 0;
+static thread_local uint64_t sCCShapeKeysScanned = 0;
+
+JS_PUBLIC_API void JS_SetCCShapeScanCounting(bool enabled) {
+  sCCShapeScanCounting = enabled;
+}
+
+JS_PUBLIC_API void JS_GetCCShapeScanCounters(uint64_t* maps, uint64_t* keys) {
+  *maps = sCCShapeMapsScanned;
+  *keys = sCCShapeKeysScanned;
+}
+
 // This function is used by the Cycle Collector (CC) to trace through -- or in
 // CC parlance, traverse -- a Shape. The CC does not care about Shapes,
 // BaseShapes or PropMaps themselves, only things held live by them that can
@@ -107,6 +121,10 @@ void gc::TraceCycleCollectorChildren(JSTracer* trc, Shape* shape) {
   if (shape->isNative()) {
     PropMap* map = shape->asNative().propMap();
     while (map) {
+      if (sCCShapeScanCounting) {
+        sCCShapeMapsScanned++;
+        sCCShapeKeysScanned += PropMap::Capacity;
+      }
       for (uint32_t index = 0; index < PropMap::Capacity; index++) {
         PropertyKey key = map->getKey(index);
         if (key.isSymbol()) {
