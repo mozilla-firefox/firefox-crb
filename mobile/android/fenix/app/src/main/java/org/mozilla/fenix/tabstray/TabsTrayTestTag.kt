@@ -46,6 +46,10 @@ internal object TabsTrayTestTag {
     const val EMPTY_TAB_GROUPS_LIST = "$TAB_GROUPS_LIST.empty"
     const val COLLECTIONS_MIGRATION_CARD = "$TAB_GROUPS_LIST.collectionsMigrationCard"
     const val UNAUTHENTICATED_SYNCED_TABS_PAGE = "$SYNCED_TABS_LIST.unauthenticated"
+    const val NO_SYNCED_TABS_PAGE = "$SYNCED_TABS_LIST.noTabs"
+    const val SYNC_OFF_SYNCED_TABS_PAGE = "$SYNCED_TABS_LIST.syncOff"
+    const val TABS_SYNC_DISABLED_SYNCED_TABS_PAGE = "$SYNCED_TABS_LIST.tabsSyncDisabled"
+    const val ACCOUNT_ISSUE_SYNCED_TABS_PAGE = "$SYNCED_TABS_LIST.accountIssue"
 
     // Tab items
     const val TAB_ITEM_ROOT = "$TABS_TRAY.tabItem"

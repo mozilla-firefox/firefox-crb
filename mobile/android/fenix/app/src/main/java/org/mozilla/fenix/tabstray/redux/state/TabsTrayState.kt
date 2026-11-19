@@ -179,6 +179,7 @@ data class TabsTrayState(
      * @property isInDebugMode Whether the app is in a debug state or has secret menu enabled.
      * @property showTabAutoCloseBanner Whether the banner for the tab auto-closer feature is visible.
      * @property collectionsEnabled Whether the Collections feature is enabled.
+     * @property showNewSyncPageState Whether the redesigned Synced Tabs Page states are shown.
      */
     data class TabsTrayConfig(
         val displayTabsInGrid: Boolean = false,
@@ -190,6 +191,7 @@ data class TabsTrayState(
         val isInDebugMode: Boolean = false,
         val showTabAutoCloseBanner: Boolean = false,
         val collectionsEnabled: Boolean = true,
+        val showNewSyncPageState: Boolean = false,
     )
 
     /**
