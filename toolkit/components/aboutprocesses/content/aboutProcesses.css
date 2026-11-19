@@ -270,6 +270,9 @@ tr.site-header-row td.name {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 16px 16px;
+  /* No-op for real (non-context-fill) favicons; themes the globe. */
+  -moz-context-properties: fill;
+  fill: currentColor;
 }
 .site-tab-count {
   color: var(--text-color-deemphasized);

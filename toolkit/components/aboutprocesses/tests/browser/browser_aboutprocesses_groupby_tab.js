@@ -334,6 +334,41 @@ add_task(async function testSelectingUnloadedTabRefreshesItsRow() {
   BrowserTestUtils.removeTab(tab);
 });
 
+add_task(async function testFaviconUpdatesWithoutPoll() {
+  let tab = await setupTabWithOriginAndTitle("https://example.org", "Busy tab");
+  let { tabAboutProcesses, doc } = await openTabView();
+  // TabAttrModified alone must update the icon.
+  pauseTabViewPolling(doc);
+  let nameCell = findTabRow(doc, "Busy tab").querySelector(".name");
+
+  tab.removeAttribute("image");
+  tab.setAttribute("busy", "true");
+  gBrowser._tabAttrModified(tab, ["busy", "image"]);
+  Assert.equal(
+    nameCell.style.backgroundImage,
+    "",
+    "A tab loading without an icon shows none"
+  );
+
+  tab.setAttribute("image", "chrome://global/skin/icons/link.svg");
+  gBrowser._tabAttrModified(tab, ["image"]);
+  Assert.ok(
+    nameCell.style.backgroundImage.includes("link.svg"),
+    "...shows its icon as soon as it arrives, even while still loading"
+  );
+
+  tab.removeAttribute("image");
+  tab.removeAttribute("busy");
+  gBrowser._tabAttrModified(tab, ["busy", "image"]);
+  Assert.ok(
+    nameCell.style.backgroundImage.includes("defaultFavicon.svg"),
+    "...and the globe once it finishes without one"
+  );
+
+  BrowserTestUtils.removeTab(tabAboutProcesses);
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function testInitialSortIsVisible() {
   let { tabAboutProcesses, doc } = await openTabView();
 
@@ -477,6 +512,12 @@ add_task(async function testFaviconAndColumnSort() {
   Assert.ok(
     zebraRow.querySelector(".name").style.backgroundImage.includes("link.svg"),
     "The tab's favicon is rendered as the name cell's background image"
+  );
+  Assert.ok(
+    findTabRow(doc, "Apple tab")
+      .querySelector(".name")
+      .style.backgroundImage.includes("defaultFavicon.svg"),
+    "A tab with no favicon falls back to the globe"
   );
 
   info("Clicking the Name column header to sort ascending (alphabetical)");

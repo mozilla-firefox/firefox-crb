@@ -1976,6 +1976,14 @@ function sumTabCounters(tabCounters) {
   return { totalRamSize, slopeCpuOfTotal, hasUsageData, estimated };
 }
 
+function getTabFaviconBackground(tab) {
+  let image = tab.getAttribute("image");
+  if (!image && !tab.hasAttribute("busy")) {
+    image = "chrome://global/skin/icons/defaultFavicon.svg";
+  }
+  return image ? `url('${image}')` : "";
+}
+
 // "—" for tabs with no process to attribute usage from, "…" for CPU not yet
 // measured. Clears the l10n attributes so a locale-change re-translation
 // can't overwrite the text.
@@ -2229,8 +2237,9 @@ class ProcessesTabView extends RowSet {
     nameCell.className = "name";
     // The group's first tab stands in for the site; a real element rather than
     // td.favicon's background, which leaves no room for the caret.
-    let image = group.tabs[0].tab.getAttribute("image");
-    row.favicon.style.backgroundImage = image ? `url('${image}')` : "";
+    row.favicon.style.backgroundImage = getTabFaviconBackground(
+      group.tabs[0].tab
+    );
     row.label.textContent = group.siteLabel;
     document.l10n.setAttributes(
       row.tabCount,
@@ -2321,6 +2330,21 @@ class ProcessesTabView extends RowSet {
     }
   }
 
+  // Redraws the icons showing this tab between polls.
+  updateFavicon(tab) {
+    let row = this.getRow(tab);
+    if (!row) {
+      return;
+    }
+    let image = getTabFaviconBackground(tab);
+    row.children[1].style.backgroundImage = image;
+    for (let headerRow of this._rowsById.values()) {
+      if (headerRow.group?.tabs[0].tab == tab) {
+        headerRow.favicon.style.backgroundImage = image;
+      }
+    }
+  }
+
   setRowSelected(row, isSelected) {
     row.toggleAttribute("selected", isSelected);
     row.checkbox.checked = isSelected;
@@ -2346,10 +2370,7 @@ class ProcessesTabView extends RowSet {
     let [, nameCell, memoryCell, cpuCell] = row.children;
     nameCell.className = "name favicon";
     row.nameLink.textContent = tabData.title || tabData.uri?.spec || "";
-    // Rows are reused across polls, so a stale image needs clearing, not
-    // just skipping, when the current tab has none.
-    let image = tabData.tab.getAttribute("image");
-    nameCell.style.backgroundImage = image ? `url('${image}')` : "";
+    nameCell.style.backgroundImage = getTabFaviconBackground(tabData.tab);
 
     let counters = sumTabCounters([tabData]);
     fillTabMemoryCell(memoryCell, counters);
@@ -2543,11 +2564,20 @@ class ProcessesTabController {
         this._rerender();
       }
     };
+    let onTabAttrModified = event => {
+      if (
+        event.detail.changed.some(attr => attr == "busy" || attr == "image")
+      ) {
+        this._view.updateFavicon(event.target);
+      }
+    };
     let addListeners = win => {
       win.addEventListener("TabSelect", onTabSelect);
+      win.addEventListener("TabAttrModified", onTabAttrModified);
     };
     let removeListeners = win => {
       win.removeEventListener("TabSelect", onTabSelect);
+      win.removeEventListener("TabAttrModified", onTabAttrModified);
     };
     for (let win of Services.wm.getEnumerator("navigator:browser")) {
       addListeners(win);
