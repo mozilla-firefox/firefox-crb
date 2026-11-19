@@ -110,10 +110,9 @@ JS_PUBLIC_API void JS_GetCCShapeScanCounters(uint64_t* maps, uint64_t* keys) {
   *keys = sCCShapeKeysScanned;
 }
 
-// This function is used by the Cycle Collector (CC) to trace through -- or in
-// CC parlance, traverse -- a Shape. The CC does not care about Shapes,
-// BaseShapes or PropMaps themselves, only things held live by them that can
-// participate in cycles.
+// This function is used by the Cycle Collector (CC) to traverse a Shape. Shapes
+// are CC graph nodes, but the CC does not care about BaseShapes or PropMaps
+// themselves, only things held live by them that can participate in cycles.
 void gc::TraceCycleCollectorChildren(JSTracer* trc, Shape* shape) {
   shape->base()->traceChildren(trc);
 
