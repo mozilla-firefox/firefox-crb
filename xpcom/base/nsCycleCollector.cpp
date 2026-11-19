@@ -167,12 +167,13 @@
 #include "mozilla/Attributes.h"
 #include "mozilla/Likely.h"
 #include "mozilla/LinkedList.h"
-#include "mozilla/MemoryReporting.h"
 #include "mozilla/MathAlgorithms.h"
+#include "mozilla/MemoryReporting.h"
 
 #ifdef XP_LINUX
 #  include <sys/mman.h>
 #endif
+#include "CCBenchStats.h"
 #include "mozilla/PoisonIOInterposer.h"
 #include "mozilla/ProfilerLabels.h"
 #include "mozilla/ProfilerMarkers.h"
@@ -185,8 +186,6 @@
 #include "nsCycleCollectionNoteRootCallback.h"
 #include "nsCycleCollectionParticipant.h"
 #include "nsCycleCollector.h"
-
-#include "CCBenchStats.h"
 #include "nsDumpUtils.h"
 #include "nsExceptionHandler.h"
 #include "nsIConsoleService.h"
@@ -2425,9 +2424,8 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
       ResolvePendingEdge();
     }
     mGraph.mPtrInfoMap.Prefetch(aChild);
-    PendingEdge& p =
-        mPendingEdges[(mPendingEdgeHead + mPendingEdgeCount++) &
-                      (kMaxPendingEdges - 1)];
+    PendingEdge& p = mPendingEdges[(mPendingEdgeHead + mPendingEdgeCount++) &
+                                   (kMaxPendingEdges - 1)];
     p.mChild = aChild;
     p.mParticipant = aCp;
     p.mSlot = mEdgeBuilder.AddSlot();
@@ -2803,6 +2801,15 @@ MOZ_ALWAYS_INLINE void CCGraphBuilder::NoteGrayJSChild(JS::GCCellPtr aChild) {
 void NoteGrayJSChildForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
                                     JS::GCCellPtr aThing) {
   static_cast<CCGraphBuilder&>(aCb).NoteGrayJSChild(aThing);
+}
+
+void NoteGrayJSChildrenForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
+                                       const JS::GCCellPtr* aThings,
+                                       size_t aLength) {
+  auto& builder = static_cast<CCGraphBuilder&>(aCb);
+  for (size_t i = 0; i < aLength; i++) {
+    builder.NoteGrayJSChild(aThings[i]);
+  }
 }
 
 NS_IMETHODIMP_(void)
@@ -4055,8 +4062,8 @@ void nsCycleCollector::PrintCCBenchStats(double aTotalMs) {
           " distinct_shape_keys=%" PRIu64 "\n",
           st.edges, st.edgesToJS, st.edgesToNative, st.traverseGCThing,
           st.traverseGCThingBlack, st.xpcomChildCalls, st.xpcomChildNone,
-          st.shapeVisits, st.distinctShapes, st.shapeMaps,
-          st.distinctShapeMaps, st.shapeKeys, st.distinctShapeKeys);
+          st.shapeVisits, st.distinctShapes, st.shapeMaps, st.distinctShapeMaps,
+          st.shapeKeys, st.distinctShapeKeys);
   for (size_t i = 0; i < ccbench::kNumKinds; i++) {
     const auto& k = st.kinds[i];
     const auto& ks = st.kindsInShape[i];

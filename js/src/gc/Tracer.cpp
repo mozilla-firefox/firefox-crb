@@ -9,8 +9,8 @@
 #include "NamespaceImports.h"
 
 #include "gc/PublicIterators.h"
-#include "js/friend/CycleCollector.h"
 #include "jit/JitCode.h"
+#include "js/friend/CycleCollector.h"
 #include "util/Memory.h"
 #include "util/Text.h"
 #include "vm/BigIntType.h"
@@ -150,6 +150,60 @@ void gc::TraceCycleCollectorChildren(JSTracer* trc, Shape* shape) {
       }
     }
   }
+}
+
+static MOZ_ALWAYS_INLINE void AddGrayCCChildren(JSTracer* trc,
+                                                GrayCCChildSink* sink,
+                                                const HeapSlot* slots,
+                                                uint32_t length) {
+  for (const HeapSlot* vp = slots; vp != slots + length; vp++) {
+    const Value& v = vp->unbarrieredGet();
+    if (v.isObject()) {
+      JSObject* obj = &v.toObject();
+      if (JS::GCThingIsMarkedGrayInCC(obj)) {
+        sink->append(JS::GCCellPtr(obj));
+      }
+    } else if (v.isSymbol()) {
+      JS::Symbol* sym = v.toSymbol();
+      if (JS::GCThingIsMarkedGrayInCC(sym)) {
+        sink->append(JS::GCCellPtr(sym));
+      }
+    } else if (MOZ_UNLIKELY(v.isPrivateGCThing())) {
+      sink->flush();
+      Value copy = v;
+      TraceManuallyBarrieredEdge(trc, &copy, "private gcthing");
+      MOZ_ASSERT(copy == v);
+    }
+    // Strings and BigInts are not CC graph nodes and have no children that are.
+  }
+}
+
+JS_PUBLIC_API void js::TraceGrayCCChildren(JSTracer* trc, JSObject* obj,
+                                           GrayCCChildSink* sink) {
+  Shape* shape = obj->shape();
+  if (JS::GCThingIsMarkedGrayInCC(shape)) {
+    sink->append(JS::GCCellPtr(shape));
+  }
+
+  if (shape->isNative()) {
+    NativeObject* nobj = &obj->as<NativeObject>();
+    uint32_t nslots = nobj->slotSpan();
+    uint32_t nfixed = nobj->numFixedSlots();
+    AddGrayCCChildren(trc, sink, nobj->getSlotAddressUnchecked(0),
+                      std::min(nslots, nfixed));
+    if (nslots > nfixed) {
+      AddGrayCCChildren(trc, sink, nobj->getSlotsUnchecked(), nslots - nfixed);
+    }
+    AddGrayCCChildren(trc, sink, nobj->getDenseElements().begin(),
+                      nobj->getDenseInitializedLength());
+  }
+
+  const JSClass* clasp = shape->getObjectClass();
+  if (clasp->hasTrace()) {
+    sink->flush();
+    clasp->doTrace(trc, obj);
+  }
+  sink->flush();
 }
 
 /*** Traced Edge Printer ****************************************************/

@@ -53,11 +53,10 @@
 
 #include "mozilla/CycleCollectedJSRuntime.h"
 
-#include "CCBenchStats.h"
-
 #include <algorithm>
 #include <utility>
 
+#include "CCBenchStats.h"
 #include "js/Debug.h"
 #include "js/GCAPI.h"
 #include "js/HeapAPI.h"
@@ -1049,9 +1048,98 @@ void CycleCollectedJSRuntime::DescribeGCThing(
   aCb.DescribeGCedNode(aIsMarked, name, compartmentAddress);
 }
 
+namespace {
+struct GraphBuilderChildSink final : public js::GrayCCChildSink {
+  explicit GraphBuilderChildSink(nsCycleCollectionTraversalCallback& aCb)
+      : mCb(aCb) {}
+  void flush() override {
+    NoteGrayJSChildrenForGraphBuilder(mCb, mChildren, mLength);
+    mLength = 0;
+  }
+  nsCycleCollectionTraversalCallback& mCb;
+};
+}  // namespace
+
+// CCBENCH: records gray CC-kind children the way TraversalTracer reports them.
+struct RecordingTracer final : public JS::CallbackTracer {
+  RecordingTracer(JSRuntime* aRt,
+                  std::vector<std::pair<void*, std::string>>& aOut)
+      : JS::CallbackTracer(aRt, JS::TracerKind::Callback,
+                           JS::TraceOptions(JS::WeakMapTraceAction::Skip,
+                                            JS::WeakEdgeTraceAction::Trace)),
+        mOut(aOut) {}
+  std::vector<std::pair<void*, std::string>>& mOut;
+  bool onChild(JS::GCCellPtr aThing, const char* aName) override {
+    if (aThing.is<JSString>() || !JS::GCThingIsMarkedGrayInCC(aThing)) {
+      return true;
+    }
+    if (JS::IsCCTraceKind(aThing.kind())) {
+      char buf[200];
+      context().getEdgeName(aName, buf, sizeof(buf));
+      mOut.emplace_back(aThing.asCell(), std::string(buf));
+      return true;
+    }
+    JS::AutoClearTracingContext actc(this);
+    if (aThing.kind() == JS::TraceKind::Shape) {
+      JS_TraceShapeCycleCollectorChildren(this, &aThing.as<js::Shape>());
+    } else {
+      JS::TraceChildren(this, aThing);
+    }
+    return true;
+  }
+};
+
+struct RecordingSink final : public js::GrayCCChildSink {
+  explicit RecordingSink(std::vector<std::pair<void*, std::string>>& aOut)
+      : mOut(aOut) {}
+  void flush() override {
+    for (size_t i = 0; i < mLength; i++) {
+      mOut.emplace_back(mChildren[i].asCell(), "sink");
+    }
+    mLength = 0;
+  }
+  std::vector<std::pair<void*, std::string>>& mOut;
+};
+
+static void VerifySink(JSRuntime* aRt, JSObject* aObj) {
+  std::vector<std::pair<void*, std::string>> a, b;
+  {
+    RecordingTracer trcA(aRt, a);
+    RecordingSink sink(a);
+    js::TraceGrayCCChildren(&trcA, aObj, &sink);
+  }
+  {
+    RecordingTracer trcB(aRt, b);
+    JS::TraceChildren(&trcB, JS::GCCellPtr(aObj));
+  }
+  std::unordered_map<void*, int> counts;
+  for (auto& e : a) counts[e.first]++;
+  for (auto& e : b) counts[e.first]--;
+  for (auto& [p, c] : counts) {
+    if (!c) continue;
+    const char* name = "?";
+    for (auto& e : b) {
+      if (e.first == p) name = e.second.c_str();
+    }
+    printf_stderr("CCBENCH-SINKDIFF class=%s child=%p diff=%d edge=%s\n",
+                  JS::GetClass(aObj)->name, p, c, name);
+  }
+}
+
 void CycleCollectedJSRuntime::NoteGCThingJSChildren(
     JS::GCCellPtr aThing, nsCycleCollectionTraversalCallback& aCb) const {
   TraversalTracer trc(mJSRuntime, aCb);
+  static const bool sVerify = getenv("CCBENCH_VERIFY_SINK");
+  if (sVerify && aThing.is<JSObject>()) {
+    VerifySink(mJSRuntime, &aThing.as<JSObject>());
+  }
+  static const bool sNoSink = getenv("CCBENCH_NO_SINK");
+  if (aThing.is<JSObject>() && aCb.IsPlainCCGraphBuilder() && !sNoSink &&
+      !ccbench::Counting() && !ccbench::NoFastPath()) {
+    GraphBuilderChildSink sink(aCb);
+    js::TraceGrayCCChildren(&trc, &aThing.as<JSObject>(), &sink);
+    return;
+  }
   if (aThing.kind() == JS::TraceKind::Shape) {
     // Tracing a Shape's children directly would reach its PropMaps, which
     // are not CC graph nodes and form chains of unbounded length.

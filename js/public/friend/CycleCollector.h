@@ -57,6 +57,44 @@ extern JS_PUBLIC_API void JS_SetObjectsTenuredCallback(
 extern JS_PUBLIC_API void JS_TraceShapeCycleCollectorChildren(JSTracer* trc,
                                                               js::Shape* shape);
 
+namespace js {
+
+// Buffer of a GC thing's children that are cycle collector graph nodes.
+class GrayCCChildSink {
+ public:
+  static constexpr size_t Capacity = 64;
+
+  // Must consume the first mLength entries of mChildren and reset mLength.
+  virtual void flush() = 0;
+
+  void append(JS::GCCellPtr aChild) {
+    if (mLength == Capacity) {
+      flush();
+    }
+    mChildren[mLength++] = aChild;
+  }
+
+ protected:
+  GrayCCChildSink() {}
+
+  // In a union so that it is left uninitialized.
+  union {
+    JS::GCCellPtr mChildren[Capacity];
+  };
+  size_t mLength = 0;
+};
+
+/*
+ * Report the gray children of |obj| that are cycle collector graph nodes to
+ * |sink|, in the order JS::TraceChildren would trace them. Edges that this
+ * can't handle directly are traced with |trc| (after flushing |sink|), which
+ * must filter out non-gray things. |sink| is flushed before returning.
+ */
+extern JS_PUBLIC_API void TraceGrayCCChildren(JSTracer* trc, JSObject* obj,
+                                              GrayCCChildSink* sink);
+
+}  // namespace js
+
 // CCBENCH (local only): cumulative PropMaps and keys scanned by
 // JS_TraceShapeCycleCollectorChildren on this thread.
 extern JS_PUBLIC_API void JS_GetCCShapeScanCounters(uint64_t* maps,

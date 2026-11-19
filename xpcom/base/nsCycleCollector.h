@@ -31,6 +31,9 @@ bool nsCycleCollector_init();
 // when aCb.IsPlainCCGraphBuilder().
 void NoteGrayJSChildForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
                                     JS::GCCellPtr aThing);
+void NoteGrayJSChildrenForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
+                                       const JS::GCCellPtr* aThings,
+                                       size_t aLength);
 
 void nsCycleCollector_startup();
 
