@@ -114,7 +114,19 @@ JS_PUBLIC_API void JS_GetCCShapeScanCounters(uint64_t* maps, uint64_t* keys) {
 // are CC graph nodes, but the CC does not care about BaseShapes or PropMaps
 // themselves, only things held live by them that can participate in cycles.
 void gc::TraceCycleCollectorChildren(JSTracer* trc, Shape* shape) {
-  shape->base()->traceChildren(trc);
+  // If the proto is in the same realm, the realm's global is reachable from
+  // the proto's shape, so the edge to it would be redundant in the CC graph.
+  static const bool sSkipGlobal = !getenv("CCBENCH_NO_GLOBAL_SKIP");
+  BaseShape* base = shape->base();
+  TaggedProto proto = base->proto();
+  if (sSkipGlobal && proto.isObject() &&
+      proto.toObject()->shape()->realm() == base->realm()) {
+    JSObject* protoObj = proto.toObject();
+    TraceManuallyBarrieredEdge(trc, &protoObj, "baseshape_proto");
+    MOZ_ASSERT(protoObj == proto.toObject());
+  } else {
+    base->traceChildren(trc);
+  }
 
   // Trace symbols reachable through property maps.
   if (shape->isNative()) {
