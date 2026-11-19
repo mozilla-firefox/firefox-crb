@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 import buildconfig
+from mozfile import json
 from mozpack.executables import ELF, UNKNOWN, get_type
 from packaging.version import Version
 
@@ -316,6 +317,46 @@ def check_networking(binary):
     return retcode
 
 
+# run the Winchecksec tool (https://github.com/trailofbits/winchecksec)
+# against a given Windows binary.
+def check_winchecksec(binary):
+    try:
+        result = subprocess.check_output(
+            [buildconfig.substs["WINCHECKSEC"], "-j", binary], universal_newlines=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"Winchecksec returned error code {e.returncode}:\n{e.output}"
+        ) from e
+
+    result = json.loads(result)
+
+    checks = [
+        "aslr",
+        "cfg",
+        "dynamicBase",
+        "gs",
+        "isolation",
+        "nx",
+        "seh",
+    ]
+
+    if buildconfig.substs["TARGET_CPU"] == "x86":
+        checks += [
+            "safeSEH",
+        ]
+    else:
+        checks += [
+            "highEntropyVA",
+        ]
+
+    if failed := [c for c in checks if result.get(c) is False]:
+        raise RuntimeError(
+            f"Winchecksec reported {len(failed)} error(s), the following "
+            f"check(s) failed: {', '.join(failed)}"
+        )
+
+
 def checks(binary, prebuilt=False):
     # The clang-plugin is built as target but is really a host binary.
     # Cheat and pretend we weren't called.
@@ -336,6 +377,9 @@ def checks(binary, prebuilt=False):
             checks.append(check_mozglue_order)
             checks.append(check_android_megazord_mozglue)
             checks.append(check_android_megazord_bionic_allocations)
+
+    if buildconfig.substs.get("WINCHECKSEC") and not prebuilt:
+        checks.append(check_winchecksec)
 
     retcode = 0
     basename = os.path.basename(binary)

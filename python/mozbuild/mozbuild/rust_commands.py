@@ -137,6 +137,7 @@ CARGO_CONFIG_KEYS = {
     "RUST_PGO_LDFLAGS": _as_list,
     "RUST_SANCOV_FLAGS": _as_list,
     "RUST_TARGET": _as_str,
+    "WINCHECKSEC": _as_str,
 }
 
 # Serialized command filename for each Rust edge kind.
