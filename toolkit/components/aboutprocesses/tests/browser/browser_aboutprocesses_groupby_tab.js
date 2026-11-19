@@ -136,6 +136,73 @@ add_task(async function testTabCpuPrecisionAndIdleThreshold() {
   BrowserTestUtils.removeTab(tab);
 });
 
+add_task(async function testSharedProcessSharesAreMarkedEstimated() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["dom.ipc.processCount.webIsolated", 1]],
+  });
+  let sharedTabs = [
+    await setupTabWithOriginAndTitle("https://example.org", "Shared one"),
+    await setupTabWithOriginAndTitle("https://example.org", "Shared two"),
+  ];
+  let aloneTab = await setupTabWithOriginAndTitle(
+    "https://example.com",
+    "Alone"
+  );
+  let { tabAboutProcesses, doc } = await openTabView();
+
+  async function memoryCell(title) {
+    let cell = findTabRow(doc, title).querySelector(".memory");
+    await doc.l10n.translateElements([cell]);
+    return cell;
+  }
+
+  for (let title of ["Shared one", "Shared two"]) {
+    let cell = await memoryCell(title);
+    Assert.ok(cell.textContent.startsWith("~"), `${title} is marked`);
+    Assert.ok(cell.title, `${title} explains the estimate`);
+    Assert.ok(
+      cell.getAttribute("aria-label").startsWith("Estimated"),
+      `${title} is named as estimated`
+    );
+  }
+  let cell = await memoryCell("Alone");
+  Assert.ok(
+    !cell.textContent.includes("~"),
+    "A tab alone in its process isn't"
+  );
+  Assert.ok(!cell.title, "...and has no estimate tooltip");
+  Assert.ok(!cell.hasAttribute("aria-label"), "...or estimated name");
+
+  async function isMarked(summaryCell) {
+    await doc.l10n.translateElements([summaryCell]);
+    return summaryCell.textContent.startsWith("~");
+  }
+  let header = findSiteHeaderRow(doc, "example.org");
+  Assert.ok(
+    !(await isMarked(header.children[2])),
+    "A site holding every tab of its process sums to a measurement"
+  );
+  let bulkMemoryCell = doc.querySelector("#process-tfoot > tr.bulk-summary-row")
+    .children[2];
+  clickRow(header.caret);
+  clickCheckbox(doc, "Shared one");
+  Assert.ok(
+    await isMarked(bulkMemoryCell),
+    "One of two sharing tabs is a share"
+  );
+  clickCheckbox(doc, "Shared two");
+  Assert.ok(
+    !(await isMarked(bulkMemoryCell)),
+    "Both of them are the whole process"
+  );
+
+  BrowserTestUtils.removeTab(tabAboutProcesses);
+  for (let tab of [...sharedTabs, aloneTab]) {
+    BrowserTestUtils.removeTab(tab);
+  }
+  await SpecialPowers.popPrefEnv();
+});
+
 add_task(async function testAboutBlankTabIsIncluded() {
   // Regression test: the tab list used to silently drop about:blank tabs,
   // even though a genuinely open about:blank tab (e.g. a freshly opened
@@ -198,7 +265,7 @@ add_task(async function testCpuIsMeasuringBeforeSecondSample() {
     "...and so is any total including it"
   );
   let cell = doc.createElement("td");
-  win.fillTabCpuCell(cell, null);
+  win.fillTabCpuCell(cell, { slopeCpuOfTotal: null });
   Assert.equal(cell.textContent, "…", "Unknown CPU shows as measuring");
 
   await Services.fog.testFlushAllChildren();
