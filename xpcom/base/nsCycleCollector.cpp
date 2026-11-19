@@ -759,6 +759,19 @@ class NodePool {
       return mNext++;
     }
 
+    // The entry aDistance after the one GetNext() will return, if it is in
+    // the current block and has already been added.
+    PtrInfo* Peek(size_t aDistance) const {
+      uintptr_t p = uintptr_t(mNext + aDistance);
+      uintptr_t last = uintptr_t(mLast);
+      if (p >= uintptr_t(mBlockEnd) ||
+          (last >= uintptr_t(mNext) && last <= uintptr_t(mBlockEnd) &&
+           p >= last)) {
+        return nullptr;
+      }
+      return mNext + aDistance;
+    }
+
    private:
     // mFirstBlock is a reference to allow an Enumerator to be constructed
     // for an empty graph.
@@ -2476,6 +2489,15 @@ void CCGraphBuilder::DoneAddingRoots() {
   mCurrNode = std::make_unique<NodePool::Enumerator>(mGraph.mNodes);
 }
 
+// How many nodes ahead of the one being traversed to prefetch.
+static size_t PrefetchDistance() {
+  static const size_t sDistance = [] {
+    const char* env = getenv("CCBENCH_PREFETCH");
+    return env ? size_t(atoi(env)) : size_t(4);
+  }();
+  return sDistance;
+}
+
 MOZ_NEVER_INLINE bool CCGraphBuilder::BuildGraph(SliceBudget& aBudget) {
   MOZ_ASSERT(mCurrNode);
 
@@ -2488,6 +2510,13 @@ MOZ_NEVER_INLINE bool CCGraphBuilder::BuildGraph(SliceBudget& aBudget) {
     }
 
     mCurrPi = pi;
+
+    if (size_t distance = PrefetchDistance()) {
+      PtrInfo* ahead = mCurrNode->Peek(distance);
+      if (ahead && ahead->mPointer) {
+        __builtin_prefetch(ahead->mPointer);
+      }
+    }
 
     // We need to call SetFirstChild() even on deleted nodes, to set their
     // firstChild() that may be read by a prior non-deleted neighbor.
