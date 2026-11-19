@@ -8,6 +8,7 @@ import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,6 +22,7 @@ class CollectionsMigrationCardMiddlewareTest {
 
     @get:Rule val gleanTestRule = FenixGleanTestRule(testContext)
 
+    @Ignore("Bug 2095162: collections_migration probes expired in 163")
     @Test
     fun `WHEN ViewTabGroupsClicked action is dispatched THEN update card visibility preference and record promo click telemetry`() {
         val repository = FakeCollectionsMigrationRepository(cardVisible = true)
