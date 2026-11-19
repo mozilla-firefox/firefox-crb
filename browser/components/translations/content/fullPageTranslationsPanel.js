@@ -290,6 +290,7 @@ var FullPageTranslationsPanel = new (class {
         alwaysTranslateLanguageMenuItem: ".always-translate-language-menuitem",
         appMenuButton: "PanelUI-menu-button",
         cancelButton: "full-page-translations-panel-cancel",
+        companionButton: "full-page-translations-panel-companion-button",
         changeSourceLanguageButton:
           "full-page-translations-panel-change-source-language",
         dismissErrorButton: "full-page-translations-panel-dismiss-error",
@@ -439,16 +440,23 @@ var FullPageTranslationsPanel = new (class {
     ).languageState
   ) {
     const {
+      cancelButton,
+      companionButton,
+      fromMenuList,
       translateButton,
       toMenuList,
-      fromMenuList,
       header,
-      cancelButton,
       intro,
     } = this.elements;
     const { requestedLanguagePair, isEngineReady } = languageState;
 
+    companionButton.hidden =
+      !Services.prefs.getBoolPref("browser.tabs.splitView.enabled", false) ||
+      gBrowser.selectedTab?.splitview ||
+      gBrowser.selectedTab?.pinned;
+
     if (TranslationsPanelShared.getLangListsInitState(this) === "error") {
+      companionButton.hidden = true;
       translateButton.disabled = true;
       return;
     }
@@ -470,6 +478,7 @@ var FullPageTranslationsPanel = new (class {
       )
     ) {
       // A translation has been requested, but is not ready yet.
+      companionButton.hidden = true;
       document.l10n.setAttributes(
         translateButton,
         "translations-panel-translate-button-loading"
@@ -1316,6 +1325,40 @@ var FullPageTranslationsPanel = new (class {
   }
 
   /**
+   * A handler for opening about:translations in Companion mode.
+   */
+  async onCompanionButton() {
+    PanelMultiView.hidePopup(this.elements.panel);
+    const window =
+      gBrowser.selectedBrowser.browsingContext.top.embedderElement
+        .documentGlobal;
+    const { requestedLanguagePair, isEngineReady } =
+      TranslationsParent.getTranslationsActor(
+        gBrowser.selectedBrowser
+      ).languageState;
+    let sourceLanguage = this.elements.fromMenuList.value.split(",")[0];
+    let targetLanguage = this.elements.toMenuList.value.split(",")[0];
+
+    if (requestedLanguagePair && isEngineReady) {
+      sourceLanguage = requestedLanguagePair.targetLanguage;
+      targetLanguage = await TranslationsParent.getTopPreferredSupportedToLang({
+        excludeLangTags: [sourceLanguage],
+      });
+
+      if (TranslationsUtils.langTagsMatch(sourceLanguage, targetLanguage)) {
+        targetLanguage = "";
+      }
+    }
+
+    await TranslationsParent.openAboutTranslationsPage({
+      browserWindow: window,
+      preferSplitView: true,
+      sourceLanguage,
+      targetLanguage,
+    });
+  }
+
+  /**
    * Handle the cancel button being clicked.
    */
   onCancel() {
@@ -1569,6 +1612,9 @@ var FullPageTranslationsPanel = new (class {
       }
       case "click": {
         switch (id) {
+          case "full-page-translations-panel-companion-button":
+            this.onCompanionButton(event);
+            break;
           case "full-page-translations-panel-intro-learn-more-link":
           case "full-page-translations-panel-unsupported-learn-more-link":
             this.onLearnMoreLink();

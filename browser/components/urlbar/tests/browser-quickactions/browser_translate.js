@@ -12,10 +12,15 @@ Services.scriptloader.loadSubScript(
   this
 );
 
-const assertAction = async name => {
-  await TestUtils.waitForCondition(() =>
-    window.document.querySelector(`.urlbarView-action-btn[data-action=${name}]`)
+const isActionVisible = name => {
+  const action = window.document.querySelector(
+    `.urlbarView-action-btn[data-action=${name}]`
   );
+  return action && BrowserTestUtils.isVisible(action);
+};
+
+const assertAction = async name => {
+  await TestUtils.waitForCondition(() => isActionVisible(name));
   Assert.ok(true, `We found action "${name}"`);
 };
 
@@ -54,12 +59,10 @@ add_task(async function test_translate_disabled() {
     value: "translate",
   });
 
-  let hasTranslateAction = Boolean(
-    window.document.querySelector(
-      `.urlbarView-action-btn[data-action=translate]`
-    )
+  Assert.ok(
+    !isActionVisible("translate"),
+    "Translate action is not shown when disabled"
   );
-  Assert.ok(!hasTranslateAction, "Translate action is not shown when disabled");
 
   await UrlbarTestUtils.promisePopupClose(window, () => {
     EventUtils.synthesizeKey("KEY_Escape");
@@ -86,13 +89,8 @@ add_task(async function test_translate_ai_feature_toggle_from_disabled() {
     value: "translate",
   });
 
-  let hasTranslateAction = Boolean(
-    window.document.querySelector(
-      `.urlbarView-action-btn[data-action=translate]`
-    )
-  );
   Assert.ok(
-    !hasTranslateAction,
+    !isActionVisible("translate"),
     "Translate action is not shown when the AI feature is disabled"
   );
 
@@ -122,13 +120,8 @@ add_task(async function test_translate_ai_feature_toggle_from_disabled() {
     value: "translate",
   });
 
-  hasTranslateAction = Boolean(
-    window.document.querySelector(
-      `.urlbarView-action-btn[data-action=translate]`
-    )
-  );
   Assert.ok(
-    !hasTranslateAction,
+    !isActionVisible("translate"),
     "Translate action is not shown when the AI feature is disabled"
   );
 
@@ -171,13 +164,8 @@ add_task(async function test_translate_ai_feature_toggle_from_enabled() {
     value: "translate",
   });
 
-  let hasTranslateAction = Boolean(
-    window.document.querySelector(
-      `.urlbarView-action-btn[data-action=translate]`
-    )
-  );
   Assert.ok(
-    !hasTranslateAction,
+    !isActionVisible("translate"),
     "Translate action is not shown when the AI feature is disabled"
   );
 
@@ -426,6 +414,142 @@ add_task(async function test_translate_switches_to_existing_tab() {
   BrowserTestUtils.removeTab(translateTab);
 });
 
+/**
+ * This test case creates and then reuses a standalone translations page while
+ * preserving an existing companion in another Split View.
+ */
+add_task(async function test_translate_ignores_split_view_tabs() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.tabs.splitView.enabled", true]],
+  });
+
+  const tabs = [];
+  let splitView = null;
+
+  try {
+    const splitTranslationsTab = await BrowserTestUtils.openNewForegroundTab(
+      gBrowser,
+      "about:translations"
+    );
+    tabs.push(splitTranslationsTab);
+
+    const sourceTab = await BrowserTestUtils.openNewForegroundTab(
+      gBrowser,
+      "https://example.com"
+    );
+    tabs.push(sourceTab);
+    await SplitViewTranslationsTestUtils.addExistingTab(
+      sourceTab,
+      splitTranslationsTab
+    );
+    splitView = sourceTab.splitview;
+    Assert.ok(splitView, "The about:translations Split View was created");
+
+    info(
+      "The QuickAction opens a standalone page when only a companion exists"
+    );
+    const fullPageTranslationsTab = await BrowserTestUtils.openNewForegroundTab(
+      gBrowser,
+      "about:blank"
+    );
+    tabs.push(fullPageTranslationsTab);
+
+    await UrlbarTestUtils.promiseAutocompleteResultPopup({
+      window,
+      value: "translate",
+    });
+    Assert.ok(isActionVisible("translate"), 'We found action "translate"');
+    const translationsLoaded = BrowserTestUtils.browserLoaded(
+      fullPageTranslationsTab.linkedBrowser,
+      false,
+      url => url.startsWith("about:translations")
+    );
+    EventUtils.synthesizeMouseAtCenter(
+      window.document.querySelector(
+        ".urlbarView-action-btn[data-action=translate]"
+      ),
+      {},
+      window
+    );
+    await translationsLoaded;
+
+    Assert.equal(
+      gBrowser.selectedTab,
+      fullPageTranslationsTab,
+      "The QuickAction opened about:translations in the standalone tab"
+    );
+    Assert.ok(
+      !fullPageTranslationsTab.splitview,
+      "The new translations page is not in Split View"
+    );
+    Assert.equal(
+      splitTranslationsTab.splitview,
+      splitView,
+      "Opening the standalone page preserves the existing companion"
+    );
+    Assert.equal(
+      sourceTab.splitview,
+      splitView,
+      "The companion remains paired with its original source tab"
+    );
+
+    info("The QuickAction reuses the standalone page instead of the companion");
+    const otherTab = await BrowserTestUtils.openNewForegroundTab(
+      gBrowser,
+      "https://example.org"
+    );
+    tabs.push(otherTab);
+
+    await UrlbarTestUtils.promiseAutocompleteResultPopup({
+      window,
+      value: "translate",
+    });
+    Assert.ok(isActionVisible("translate"), 'We found action "translate"');
+    const tabSelected = BrowserTestUtils.waitForEvent(
+      fullPageTranslationsTab,
+      "TabSelect"
+    );
+    const tabCount = gBrowser.tabs.length;
+    EventUtils.synthesizeMouseAtCenter(
+      window.document.querySelector(
+        ".urlbarView-action-btn[data-action=translate]"
+      ),
+      {},
+      window
+    );
+
+    await tabSelected;
+    Assert.equal(
+      gBrowser.selectedTab,
+      fullPageTranslationsTab,
+      "The QuickAction selected the full-page about:translations tab"
+    );
+    Assert.equal(
+      splitTranslationsTab.splitview,
+      splitView,
+      "The about:translations tab in Split View was ignored"
+    );
+    Assert.equal(
+      gBrowser.tabs.length,
+      tabCount,
+      "Reusing the standalone translations page does not create another tab"
+    );
+  } finally {
+    if (UrlbarTestUtils.isPopupOpen(window)) {
+      await UrlbarTestUtils.promisePopupClose(window, () => {
+        EventUtils.synthesizeKey("KEY_Escape");
+      });
+    }
+    splitView?.unsplitTabs();
+    for (const tab of tabs) {
+      if (tab.isConnected) {
+        await BrowserTestUtils.removeTab(tab);
+      }
+    }
+    await SpecialPowers.popPrefEnv();
+  }
+});
+
 add_task(async function test_translate_reenabled() {
   info("Disable the translate quick action and ensure it is hidden");
   await SpecialPowers.pushPrefEnv({
@@ -439,9 +563,7 @@ add_task(async function test_translate_reenabled() {
   });
 
   Assert.ok(
-    !window.document.querySelector(
-      `.urlbarView-action-btn[data-action=translate]`
-    ),
+    !isActionVisible("translate"),
     "Translate action is not shown when disabled"
   );
 
@@ -457,12 +579,7 @@ add_task(async function test_translate_reenabled() {
     value: "tran",
   });
 
-  Assert.ok(
-    window.document.querySelector(
-      ".urlbarView-action-btn[data-action=translate]"
-    ),
-    "Translate action is now shown"
-  );
+  Assert.ok(isActionVisible("translate"), "Translate action is now shown");
 
   await UrlbarTestUtils.promisePopupClose(window, () => {
     EventUtils.synthesizeKey("KEY_Escape");

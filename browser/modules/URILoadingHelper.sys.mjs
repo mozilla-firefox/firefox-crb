@@ -952,7 +952,7 @@ export const URILoadingHelper = {
    *        If switching to this URI results in us opening a tab, aOpenParams
    *        will be the parameter object that gets passed to openTrustedLinkIn. Please
    *        see the documentation for openTrustedLinkIn to see what parameters can be
-   *        passed via this object. The four properties below are consumed here
+   *        passed via this object. The five properties below are consumed here
    *        rather than forwarded.
    * @param {string} [aOpenParams.ignoreFragment]
    *        ``"whenComparing"`` to exclude the fragment when comparing URIs,
@@ -965,6 +965,8 @@ export const URILoadingHelper = {
    *        requested URI into the tab that was found.
    * @param {boolean} [aOpenParams.adoptIntoActiveWindow]
    *        Adopt a tab found in another window into the current one.
+   * @param {function(MozTabbrowserTab): boolean} [aOpenParams.tabFilter]
+   *        Only select matching tabs for which this function returns true.
    * @param {number} [aUserContextId]
    *        If not null, will switch to the first found tab having the provided
    *        userContextId.
@@ -988,6 +990,7 @@ export const URILoadingHelper = {
     let ignoreQueryString = aOpenParams.ignoreQueryString;
     let replaceQueryString = aOpenParams.replaceQueryString;
     let adoptIntoActiveWindow = aOpenParams.adoptIntoActiveWindow;
+    let tabFilter = aOpenParams.tabFilter;
 
     // These properties are only used by switchToTabHavingURI and should
     // not be used as a parameter for the new load.
@@ -995,6 +998,7 @@ export const URILoadingHelper = {
     delete aOpenParams.ignoreQueryString;
     delete aOpenParams.replaceQueryString;
     delete aOpenParams.adoptIntoActiveWindow;
+    delete aOpenParams.tabFilter;
 
     let isBrowserWindow = !!window.gBrowser;
 
@@ -1052,6 +1056,13 @@ export const URILoadingHelper = {
           continue;
         }
         if (requestedCompare == browserCompare) {
+          if (
+            tabFilter &&
+            !tabFilter(aWindow.gBrowser.getTabForBrowser(browser))
+          ) {
+            continue;
+          }
+
           // If adoptIntoActiveWindow is set, and this is a cross-window switch,
           // adopt the tab into the current window, after the active tab.
           let doAdopt =

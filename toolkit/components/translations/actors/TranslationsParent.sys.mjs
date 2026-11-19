@@ -36,6 +36,8 @@ const TOPIC_MAYBE_UPDATE_USER_LANG_TAG =
   "translations:maybe-update-user-lang-tag";
 const TOPIC_APP_LOCALES_CHANGED = "intl:app-locales-changed";
 const USE_LEXICAL_SHORTLIST_PREF = "browser.translations.useLexicalShortlist";
+const SPLIT_VIEW_ENABLED_PREF = "browser.tabs.splitView.enabled";
+const ABOUT_TRANSLATIONS_SPLIT_VIEW_WIDTH_PERCENT = 33;
 
 /**
  * The decision table for Translations offer behavior after resolving the HTML lang
@@ -4984,13 +4986,30 @@ export class TranslationsParent extends JSWindowActorParent {
    *   top preferred supported target language {@link TranslationsParent.getTopPreferredSupportedToLang}.
    * @param {string} [options.text=""]
    *   The pre-populated text to translate.
+   * @param {boolean} [options.preferSplitView=false]
+   *   Prefer opening about:translations in Split View when supported by the
+   *   browser.
    */
   static async openAboutTranslationsPage({
     browserWindow,
+    preferSplitView = false,
     sourceLanguage = "detect",
     targetLanguage = "",
     text = "",
   }) {
+    const splitViewContext =
+      TranslationsParent.#getAboutTranslationsSplitViewContext({
+        browserWindow,
+        preferSplitView,
+      });
+
+    if (splitViewContext && sourceLanguage === "detect") {
+      sourceLanguage =
+        TranslationsParent.#getTabDocumentLanguageTagForAboutTranslations(
+          splitViewContext.selectedTab
+        ) ?? sourceLanguage;
+    }
+
     const url = new URL("about:translations");
     const searchParameters = new URLSearchParams();
 
@@ -5012,13 +5031,123 @@ export class TranslationsParent extends JSWindowActorParent {
     }
 
     url.hash = searchParameters.toString();
+
+    if (
+      splitViewContext &&
+      TranslationsParent.#openAboutTranslationsPageInSplitView(
+        splitViewContext,
+        url
+      )
+    ) {
+      return;
+    }
+
     browserWindow.switchToTabHavingURI(
       Services.io.newURI(url.href),
       /* aOpenNew */ true,
       {
         ignoreFragment: "whenComparing",
+        tabFilter: tab => !tab.splitview,
       }
     );
+  }
+
+  /**
+   * @param {object} options
+   * @param {ChromeWindow} options.browserWindow
+   * @param {boolean} options.preferSplitView
+   * @returns {{ browserWindow: ChromeWindow, gBrowser: MozTabbrowser, selectedTab: MozTabbrowserTab } | null}
+   */
+  static #getAboutTranslationsSplitViewContext({
+    browserWindow,
+    preferSplitView,
+  }) {
+    if (
+      !preferSplitView ||
+      !Services.prefs.getBoolPref(SPLIT_VIEW_ENABLED_PREF, false)
+    ) {
+      return null;
+    }
+
+    const gBrowser = browserWindow?.gBrowser;
+    const selectedTab = gBrowser?.selectedTab;
+    if (!gBrowser || !selectedTab || selectedTab.pinned) {
+      return null;
+    }
+
+    return { browserWindow, gBrowser, selectedTab };
+  }
+
+  /**
+   * @param {MozTabbrowserTab} tab
+   * @returns {string | null}
+   */
+  static #getTabDocumentLanguageTagForAboutTranslations(tab) {
+    try {
+      const detectedLanguages = TranslationsParent.getTranslationsActor(
+        tab.linkedBrowser
+      ).languageState?.detectedLanguages;
+      if (
+        detectedLanguages?.docLangTag &&
+        detectedLanguages.isDocLangTagSupported
+      ) {
+        return detectedLanguages.docLangTag;
+      }
+    } catch (error) {
+      lazy.console.log(
+        "Unable to get the selected tab's document language tag.",
+        error
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * @param {object} splitViewContext
+   * @param {ChromeWindow} splitViewContext.browserWindow
+   * @param {MozTabbrowser} splitViewContext.gBrowser
+   * @param {MozTabbrowserTab} splitViewContext.selectedTab
+   * @param {URL} url
+   * @returns {boolean}
+   */
+  static #openAboutTranslationsPageInSplitView(splitViewContext, url) {
+    const { browserWindow, gBrowser, selectedTab } = splitViewContext;
+    if (gBrowser.selectedTab !== selectedTab) {
+      return false;
+    }
+
+    if (selectedTab.splitview) {
+      browserWindow.openTrustedLinkIn(url.href, "current");
+      return true;
+    }
+
+    const aboutTranslationsTab = gBrowser.addTrustedTab(url.href, {
+      inBackground: true,
+      tabIndex: selectedTab._tPos + 1,
+    });
+    if (!aboutTranslationsTab) {
+      return false;
+    }
+
+    const splitview = gBrowser.addTabSplitView(
+      [aboutTranslationsTab, selectedTab],
+      {
+        firstPanelInitialWidthPercent:
+          ABOUT_TRANSLATIONS_SPLIT_VIEW_WIDTH_PERCENT,
+        insertBefore: selectedTab,
+        trigger: "translations_companion",
+      }
+    );
+
+    if (!splitview) {
+      gBrowser.removeTab(aboutTranslationsTab);
+      return false;
+    }
+
+    gBrowser.selectedTab = aboutTranslationsTab;
+    aboutTranslationsTab.linkedBrowser.focus();
+    return true;
   }
 
   /**
@@ -5079,7 +5208,8 @@ export class TranslationsParent extends JSWindowActorParent {
   }
 
   /**
-   * Returns the language tags used to decide whether full-page translation should be offered.
+   * Returns the lang tags that should be offered for translation. This is in the parent
+   * rather than the child to remove the per-content process memory allocation amount.
    *
    * @returns {Promise<LangTags | null>} - Returns null for restricted pages or if the
    *   actor was destroyed before the result could be resolved.
