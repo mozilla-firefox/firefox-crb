@@ -1071,11 +1071,20 @@ void CycleCollectedJSRuntime::NoteGCThingXPCOMChildren(
   MOZ_ASSERT(aClasp);
   MOZ_ASSERT(aClasp == JS::GetClass(aObj));
 
-  JS::Rooted<JSObject*> obj(RootingCx(), aObj);
-
   if (MOZ_UNLIKELY(ccbench::Counting())) {
     ccbench::Get().xpcomChildCalls++;
   }
+
+  if (!aClasp->slot0IsISupports() && !aClasp->isDOMClass() &&
+      !aClasp->isProxyObject() && !ccbench::NoXPCOMFilter()) {
+    if (MOZ_UNLIKELY(ccbench::Counting())) {
+      ccbench::Get().xpcomChildNone++;
+    }
+    NoteCustomGCThingXPCOMChildren(aClasp, aObj, aCb);
+    return;
+  }
+
+  JS::Rooted<JSObject*> obj(RootingCx(), aObj);
 
   if (NoteCustomGCThingXPCOMChildren(aClasp, obj, aCb)) {
     // Nothing else to do!
@@ -1114,7 +1123,12 @@ void CycleCollectedJSRuntime::NoteGCThingXPCOMChildren(
   }
 
   if (MOZ_UNLIKELY(ccbench::Counting())) {
-    ccbench::Get().xpcomChildNone++;
+    auto& st = ccbench::Get();
+    st.xpcomChildNone++;
+    if (!st.noneClasses) {
+      st.noneClasses = new std::unordered_map<const char*, uint64_t>();
+    }
+    (*st.noneClasses)[aClasp->name]++;
   }
 }
 

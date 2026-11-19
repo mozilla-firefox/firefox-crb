@@ -3755,6 +3755,12 @@ void nsCycleCollector::PrintCCBenchStats(double aTotalMs) {
             JS::GCTraceKindToAscii(JS::TraceKind(i)), k.calls, k.filtered,
             k.noted, k.recursed, ks.calls, ks.filtered, ks.noted, ks.recursed);
   }
+  if (st.noneClasses) {
+    for (const auto& [name, count] : *st.noneClasses) {
+      fprintf(stderr, "CCBENCH-NONECLASS count=%" PRIu64 " class=%s\n", count,
+              name);
+    }
+  }
 }
 
 void nsCycleCollector::CleanupAfterCollection() {
