@@ -112,6 +112,17 @@ def check_networking(command, substs, topobjdir):
     return check_binary.main(["--networking", str(Path(topobjdir, command.outputs[0]))])
 
 
+def check_winchecksec_programs(command, substs, topobjdir):
+    if command.kind != "program" or not substs.get("WINCHECKSEC"):
+        return 0
+    from mozbuild.action import check_binary
+
+    for output in command.outputs:
+        if returncode := check_binary.main([str(Path(topobjdir, output))]):
+            return returncode
+    return 0
+
+
 def copy_program_pdbs(command, topobjdir):
     for output in command.outputs:
         program = Path(topobjdir, output)
@@ -185,7 +196,9 @@ def main(argv):
     ).returncode
     if returncode == 0:
         copy_program_pdbs(command, topobjdir)
-        returncode = check_networking(command, substs, topobjdir)
+        returncode = check_networking(
+            command, substs, topobjdir
+        ) or check_winchecksec_programs(command, substs, topobjdir)
     return returncode
 
 

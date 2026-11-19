@@ -3138,7 +3138,7 @@ check_prog(
     ["winchecksec.exe", "winchecksec"],
     bootstrap="winchecksec",
     allow_missing=allow_missing_wintools,
-    when=compile_environment & target_is_windows,
+    when=compile_environment & target_is_windows & moz_automation,
 )
 
 

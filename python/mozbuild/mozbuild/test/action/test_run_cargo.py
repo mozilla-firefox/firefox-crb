@@ -372,6 +372,50 @@ class TestRunCargo(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertEqual(check.call_count, 0)
 
+    def _program_check(self, config=None, statuses=(0, 0), **overrides):
+        spec = self._spec(
+            config={"WINCHECKSEC": "/tools/winchecksec", **(config or {})},
+            **{
+                "kind": "program",
+                "outputs": ["release/a.exe", "release/b.exe"],
+                **overrides,
+            },
+        )
+        check_binary = mock.MagicMock()
+        check_binary.main.side_effect = statuses
+        with mock.patch.dict(
+            sys.modules, {"mozbuild.action.check_binary": check_binary}
+        ):
+            rc, _, _ = self._run(["--spec", spec])
+        return rc, [c.args[0] for c in check_binary.main.call_args_list]
+
+    def test_program_check(self):
+        self.assertEqual(
+            self._program_check(),
+            (
+                0,
+                [
+                    [str(Path("/obj", "release/a.exe"))],
+                    [str(Path("/obj", "release/b.exe"))],
+                ],
+            ),
+        )
+
+    def test_program_check_failure(self):
+        self.assertEqual(
+            self._program_check(statuses=(3, 0)),
+            (3, [[str(Path("/obj", "release/a.exe"))]]),
+        )
+
+    def test_program_check_skipped(self):
+        for config, overrides in (
+            ({"WINCHECKSEC": ""}, {}),
+            ({}, {"kind": "host-program"}),
+        ):
+            self.assertEqual(
+                self._program_check(config, **overrides), (0, []), (config, overrides)
+            )
+
     def test_env_rustflags_not_recomposed(self):
         configured = {
             "MOZ_RUST_DEFAULT_FLAGS": "-C debuginfo=2 -Dwarnings",

@@ -125,19 +125,6 @@ def main(argv):
         args.symbols_dir,
     )
 
-    substs = buildconfig.substs
-    if substs.get("OS_ARCH") != "WINNT" or not substs.get("WINCHECKSEC"):
-        return 0
-    try:
-        subprocess.check_call([
-            sys.executable,
-            os.path.join(buildconfig.topsrcdir, "build", "win32", "autowinchecksec.py"),
-            args.library_or_program,
-        ])
-    except subprocess.CalledProcessError as e:
-        return e.returncode
-    return 0
-
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

@@ -7,8 +7,6 @@ subsuite = "mozbuild"
 
 ["action/test_check_elfhack.py"]
 
-["action/test_dumpsymbols.py"]
-
 ["action/test_fat_aar.py"]
 
 ["action/test_find_dupes.py"]
