@@ -1360,7 +1360,8 @@ void nsDocShell::BeginDeferredOutboundCrossDocumentViewTransition(
   }
 
   // Capture in the next rendering update. The new document takes the params
-  // at its reveal, and StopInternal drops them if the navigation is aborted.
+  // at its reveal, and StopInternal or StopForNewNavigation drop them if the
+  // navigation is aborted.
   const bool isTop = mBrowsingContext->IsTop();
   const uint64_t browserId = mBrowsingContext->BrowserId();
   RefPtr<nsDocShell> self = this;
@@ -4401,13 +4402,83 @@ void nsDocShell::StopActiveDocument(uint32_t aStopFlags) {
     }
   }
 
-  if ((nsIWebNavigation::STOP_NETWORK & aStopFlags) && mRefreshURIList) {
-    // Suspend any timers that were set for this loader.  We'll clear
-    // them out for good in CreateDocumentViewer.
-    SuspendRefreshURIs();
-    mSavedRefreshURIList.swap(mRefreshURIList);
-    mRefreshURIList = nullptr;
+  if (nsIWebNavigation::STOP_NETWORK & aStopFlags) {
+    if (mRefreshURIList) {
+      // Suspend any timers that were set for this loader.  We'll clear
+      // them out for good in CreateDocumentViewer.
+      SuspendRefreshURIs();
+      mSavedRefreshURIList.swap(mRefreshURIList);
+      mRefreshURIList = nullptr;
+    }
+
+    // A later part of a multipart response would replace the document that a
+    // pending navigation is about to replace.
+    if (nsCOMPtr<nsIMultiPartChannel> multiPart =
+            do_QueryInterface(GetCurrentDocChannel())) {
+      bool isLastPart = false;
+      nsCOMPtr<nsIChannel> base;
+      if (NS_SUCCEEDED(multiPart->GetIsLastPart(&isLastPart)) && !isLastPart &&
+          NS_SUCCEEDED(multiPart->GetBaseChannel(getter_AddRefs(base))) &&
+          base) {
+        base->Cancel(NS_BINDING_ABORTED);
+      }
+    }
   }
+}
+
+bool nsDocShell::StopForNewNavigation(uint32_t aStopFlags) {
+  RefPtr kungFuDeathGrip = this;
+
+  // nsDocLoader::Stop() used to do this as a side effect of cancelling
+  // mLoadGroup. That cancel is deferred to commit now so that the displayed
+  // document keeps its subresources.
+  const uint32_t stopGeneration = ++mStopGeneration;
+
+  // This navigation supersedes one that is still pending.
+  CancelNavigationLoadGroup();
+
+  ResetNavigationStateForStop(UnsetOngoingNavigation::No);
+
+  // Cancelling mLoadGroup used to cancel javascript: URLs whose script is
+  // still running; now they are cancelled explicitly, so that they do not go
+  // on to load their result.
+  StopPendingJavascriptURLNavigations();
+
+  // A new navigation only aborts the active document's parser and load.
+  StopActiveDocument(aStopFlags);
+  AbortActiveDocumentLoad();
+
+  // Still not in the spec, but it follows other browsers' behaviour:
+  // https://github.com/whatwg/html/issues/12609
+  CancelPlannedFormNavigation();
+
+  // Any channel to disconnect belonged to the navigation cancelled above.
+  mChannelToDisconnectOnPageHide = 0;
+
+  // Script run above may have started a newer navigation.
+  if (mIsBeingDestroyed || mStopGeneration != stopGeneration) {
+    return false;
+  }
+
+  return BeginNavigationLoadGroup(mBrowsingContext->GetRequestContextId());
+}
+
+Result<nsILoadGroup*, nsresult>
+nsDocShell::StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
+                                                     uint32_t aLoadType) {
+  if (!StaticPrefs::docshell_navigation_new_load_group() || mIsBeingDestroyed) {
+    return nullptr;
+  }
+
+  RefPtr kungFuDeathGrip = this;
+  if (!StopForNewNavigation(nsIWebNavigation::STOP_NETWORK)) {
+    return Err(NS_BINDING_ABORTED);
+  }
+
+  // A navigation that started after the download set mLoadType.
+  mLoadType = aLoadType;
+  aChannel->SetLoadGroup(mLoadGroup);
+  return mLoadGroup.get();
 }
 
 NS_IMETHODIMP
@@ -7144,6 +7215,13 @@ nsresult nsDocShell::CreateDocumentViewer(const nsACString& aContentType,
   }
   mLoadingURI = nullptr;
 
+  // The outgoing document has run its pagehide and unload handlers, so this is
+  // where it loses its network activity, including anything those handlers
+  // started.
+  if (HasPendingNavigationLoadGroup()) {
+    CommitNavigationLoadGroup();
+  }
+
   // Set mFiredUnloadEvent = false so that the unload handler for the
   // *new* document will fire.
   mFiredUnloadEvent = false;
@@ -9146,34 +9224,53 @@ nsresult nsDocShell::InternalLoad(nsDocShellLoadState* aLoadState,
     ClearNavigationAPIOngoingNavigationForHistoryStep();
   }
 
-  // Don't stop current network activity for javascript: URL's since they might
-  // not result in any data, and thus nothing should be stopped in those cases.
-  // In the case where they do result in data, the javascript: URL channel takes
-  // care of stopping current network activity. Similarly, downloads don't
-  // unload this document...
-  if (!isJavaScript && !isDownload && !isExternalProtocol) {
-    // Stop any current network activity.
-    // Also stop content if this is a zombie doc. otherwise
-    // the onload will be delayed by other loads initiated in the
-    // background by the first document that
-    // didn't fully load before the next load was initiated.
-    // If not a zombie, don't stop content until data
-    // starts arriving from the new URI...
-    if ((mDocumentViewer && mDocumentViewer->GetPreviousViewer()) ||
-        LOAD_TYPE_HAS_FLAGS(aLoadState->LoadType(), LOAD_FLAGS_STOP_CONTENT)) {
-      rv = StopInternal(nsIWebNavigation::STOP_ALL, UnsetOngoingNavigation::No);
-    } else {
-      rv = StopInternal(nsIWebNavigation::STOP_NETWORK,
-                        UnsetOngoingNavigation::No);
-    }
+  // Also stop content if this is a zombie doc. otherwise
+  // the onload will be delayed by other loads initiated in the
+  // background by the first document that
+  // didn't fully load before the next load was initiated.
+  // If not a zombie, don't stop content until data
+  // starts arriving from the new URI...
+  const uint32_t stopFlags =
+      (mDocumentViewer && mDocumentViewer->GetPreviousViewer()) ||
+              LOAD_TYPE_HAS_FLAGS(aLoadState->LoadType(),
+                                  LOAD_FLAGS_STOP_CONTENT)
+          ? nsIWebNavigation::STOP_ALL
+          : nsIWebNavigation::STOP_NETWORK;
 
+  // A navigation that returns before opening a channel in its load group ends
+  // here.
+  bool beganNavigation = false;
+  auto cancelUnusedNavigation = MakeScopeExit([&]() {
+    if (beganNavigation) {
+      CancelNavigationLoadGroupIfUnused();
+    }
+  });
+
+  if (StaticPrefs::docshell_navigation_new_load_group()) {
+    // A javascript: URL is not a navigation until its script returns a
+    // document, and a download does not replace this document unless the
+    // parent turns it into one, see StartNavigationForDownloadTurnedDocument.
+    // An external protocol is a navigation that never commits, like a 204.
+    if (!isJavaScript && !isDownload) {
+      if (!StopForNewNavigation(stopFlags)) {
+        return NS_OK;
+      }
+      beganNavigation = true;
+    }
+  } else if (!isJavaScript && !isDownload && !isExternalProtocol) {
+    // Don't stop current network activity for javascript: URL's since they
+    // might not result in any data, and thus nothing should be stopped in
+    // those cases. In the case where they do result in data, the javascript:
+    // URL channel takes care of stopping current network activity. Similarly,
+    // downloads and external protocols don't unload this document.
+    rv = StopInternal(stopFlags, UnsetOngoingNavigation::No);
     if (NS_FAILED(rv)) {
       return rv;
     }
   }
 
-  // StopInternal cleared the flag, but a traversal that starts again as a new
-  // load already fired pageswap.
+  // StopInternal or StopForNewNavigation cleared the flag, but a traversal that
+  // starts again as a new load already fired pageswap.
   if (aLoadState->PageSwapFired()) {
     mFiredCrossDocPageSwap = true;
   }
@@ -10213,6 +10310,10 @@ nsresult nsDocShell::DoURILoad(nsDocShellLoadState* aLoadState,
   RefPtr<WindowContext> context = mBrowsingContext->GetCurrentWindowContext();
 
   if (doInitialSyncLoad) {
+    // This completes the active document's load rather than replacing it, so
+    // it is not a navigation, and that document's onload blockers are in its
+    // own load group.
+    CancelNavigationLoadGroupIfUnused();
     // Stay on the eagerly created document and adjust it to match what we would
     // be loading.
     return CompleteInitialAboutBlankLoad(aLoadState, loadInfo);
@@ -13371,14 +13472,16 @@ void nsDocShell::RecordSingleChannelId(bool aStartRequest,
         identChannel = do_QueryInterface(aRequest);
       } else {
         // aChannel is the channel that's being removed, but we need to check if
-        // the remaining channel in the loadgroup has an id.
-        nsCOMPtr<nsISimpleEnumerator> requests;
-        mLoadGroup->GetRequests(getter_AddRefs(requests));
-        for (const auto& request : SimpleEnumerator<nsIRequest>(requests)) {
-          if (!IsFaviconLoad(request) &&
-              !!(identChannel = do_QueryInterface(request))) {
-            break;
+        // the remaining channel in the loadgroups has an id.
+        for (nsILoadGroup* group :
+             {mLoadGroup.get(), mOutgoingLoadGroup.get()}) {
+          if (!group || identChannel) {
+            continue;
           }
+          group->VisitRequests([&](nsIRequest* aRemaining) {
+            return IsFaviconLoad(aRemaining) ||
+                   !(identChannel = do_QueryInterface(aRemaining));
+          });
         }
       }
 
