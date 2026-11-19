@@ -92,7 +92,7 @@ struct MapTypeToTraceKind {
   D(Scope,        js::Scope,           true,      true)        \
   D(Object,       JSObject,            true,      true)        \
   D(Script,       js::BaseScript,      true,      true)        \
-  D(Shape,        js::Shape,           true,      false)       \
+  D(Shape,        js::Shape,           true,      true)        \
   D(String,       JSString,            false,     false)       \
   D(Symbol,       JS::Symbol,          true,      true)        \
   D(BigInt,       JS::BigInt,          false,     false)       \
