@@ -78,7 +78,12 @@ class SyncedTabsIntegration(
         // We may still be displaying a "loading" spinner, hide it.
         stopLoading()
 
-        store.dispatch(TabsTrayAction.UpdateSyncedTabs(listOf(error.toSyncedTabsListItem(context, navController))))
+        store.dispatch(
+            TabsTrayAction.UpdateSyncedTabs(
+                tabs = listOf(error.toSyncedTabsListItem(context, navController)),
+                error = error,
+            )
+        )
     }
 
     override fun startLoading() {

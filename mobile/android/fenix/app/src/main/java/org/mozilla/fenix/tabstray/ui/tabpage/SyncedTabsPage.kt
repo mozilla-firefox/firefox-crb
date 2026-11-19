@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import mozilla.components.compose.base.annotation.FlexibleWindowLightDarkPreview
 import mozilla.components.compose.base.button.TextButton
+import mozilla.components.feature.syncedtabs.view.SyncedTabsView
 import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.core.Action
@@ -58,16 +59,23 @@ internal fun SyncedTabsPage(
     onSectionExpansionToggled: OnSectionExpansionToggled,
 ) {
     if (config.showNewSyncPageState) {
-        if (!state.isSignedIn) {
-            SyncedTabsEmptyState(
-                state =
+        val emptyState =
+            when {
+                !state.isSignedIn ->
                     SyncedTabsEmptyStateType.SignedOut(
                         Action(
                             label = stringResource(R.string.tab_manager_synced_tabs_page_sign_in_button),
                             onClick = onSignInClick,
                         )
                     )
-            )
+                state.syncError == SyncedTabsView.ErrorType.MULTIPLE_DEVICES_UNAVAILABLE ||
+                    state.syncError == SyncedTabsView.ErrorType.NO_TABS_AVAILABLE ->
+                    SyncedTabsEmptyStateType.NoSyncedTabs
+                else -> null
+            }
+
+        if (emptyState != null) {
+            SyncedTabsEmptyState(state = emptyState)
         } else {
             SyncedTabsList(
                 syncedTabs = state.syncedTabs,

@@ -6,6 +6,7 @@ package org.mozilla.fenix.tabstray.redux.state
 
 import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Immutable
+import mozilla.components.feature.syncedtabs.view.SyncedTabsView
 import mozilla.components.lib.state.State
 import org.mozilla.fenix.tabgroups.TabGroupTelemetry
 import org.mozilla.fenix.tabstray.data.TabsTrayItem
@@ -157,6 +158,7 @@ data class TabsTrayState(
      * @property isSyncing Whether a sync operation is currently in progress.
      * @property syncedTabs The list of tabs retrieved from other synced devices.
      * @property expandedSyncedTabs A list of booleans representing the expansion state of each device section.
+     * @property syncError The reason synced tabs could not be retrieved, or null if they were retrieved.
      */
     @Immutable
     data class SyncState(
@@ -164,6 +166,7 @@ data class TabsTrayState(
         val isSyncing: Boolean = false,
         val syncedTabs: List<SyncedTabsListItem> = emptyList(),
         val expandedSyncedTabs: List<Boolean> = emptyList(),
+        val syncError: SyncedTabsView.ErrorType? = null,
     )
 
     /**

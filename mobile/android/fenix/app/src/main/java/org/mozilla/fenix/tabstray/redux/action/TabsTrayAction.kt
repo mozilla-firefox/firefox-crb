@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.tabstray.redux.action
 
+import mozilla.components.feature.syncedtabs.view.SyncedTabsView
 import mozilla.components.lib.state.Action
 import org.mozilla.fenix.tabstray.data.TabStorageUpdate
 import org.mozilla.fenix.tabstray.data.TabsTrayItem
@@ -66,8 +67,16 @@ sealed interface TabsTrayAction : Action {
      */
     data class UpdateInactiveExpanded(val expanded: Boolean) : TabsTrayAction
 
-    /** Updates the list of synced tabs in [org.mozilla.fenix.tabstray.redux.state.TabsTrayState.syncedTabs]. */
-    data class UpdateSyncedTabs(val tabs: List<SyncedTabsListItem>) : TabsTrayAction
+    /**
+     * Updates the list of synced tabs in [org.mozilla.fenix.tabstray.redux.state.TabsTrayState.SyncState].
+     *
+     * @property tabs The synced tab items to display.
+     * @property error The reason synced tabs could not be retrieved, or null if they were retrieved successfully.
+     */
+    data class UpdateSyncedTabs(
+        val tabs: List<SyncedTabsListItem>,
+        val error: SyncedTabsView.ErrorType? = null,
+    ) : TabsTrayAction
 
     /**
      * Updates the selected tab id.
