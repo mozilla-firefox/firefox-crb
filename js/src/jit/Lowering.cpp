@@ -7191,6 +7191,21 @@ void LIRGenerator::visitWasmStoreRef(MWasmStoreRef* ins) {
       ins);
 }
 
+void LIRGenerator::visitWasmArrayCopyCanInline(MWasmArrayCopyCanInline* ins) {
+  define(new (alloc()) LWasmArrayCopyCanInline(
+             useRegister(ins->instance()), useRegister(ins->dstArray()),
+             useRegister(ins->numElements()), temp()),
+         ins);
+}
+
+void LIRGenerator::visitWasmArrayCopyInline(MWasmArrayCopyInline* ins) {
+  add(new (alloc()) LWasmArrayCopyInline(
+          useRegister(ins->dstData()), useRegister(ins->dstIndex()),
+          useRegister(ins->srcData()), useRegister(ins->srcIndex()),
+          useRegister(ins->numElements()), temp(), temp(), temp(), temp()),
+      ins);
+}
+
 void LIRGenerator::visitWasmPostWriteBarrierWholeCell(
     MWasmPostWriteBarrierWholeCell* ins) {
   // No post-write barrier needed for null stores.

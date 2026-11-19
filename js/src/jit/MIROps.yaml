@@ -4835,6 +4835,12 @@
 - name: WasmPostWriteBarrierWholeCell
   gen_boilerplate: false
 
+- name: WasmArrayCopyCanInline
+  gen_boilerplate: false
+
+- name: WasmArrayCopyInline
+  gen_boilerplate: false
+
 - name: WasmPostWriteBarrierEdgeAtIndex
   gen_boilerplate: false
 

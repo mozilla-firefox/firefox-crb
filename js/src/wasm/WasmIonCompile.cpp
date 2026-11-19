@@ -5457,6 +5457,42 @@ class FunctionCompiler {
     curBlock_->end(test);
     curBlock_ = copyBlock;
 
+#ifdef JS_64BIT
+    // Copy up to 64 bytes inline when no GC barrier is needed. A reference
+    // copy into an array that isn't freshly allocated usually needs one, so
+    // it always calls the builtin. 32-bit targets lack the registers.
+    const uint32_t maxInlineBytes = 64;
+    if (!elemsAreRefTyped || dstArrayObject->isWasmNewArrayObject()) {
+      uint32_t maxElements = maxInlineBytes / uint32_t(elemSize);
+      auto* canInline = MWasmArrayCopyCanInline::New(
+          alloc(), instancePointer_, dstArrayObject, numElements, maxElements,
+          elemsAreRefTyped);
+      curBlock_->add(canInline);
+      MBasicBlock* inlineBlock = nullptr;
+      MBasicBlock* callBlock = nullptr;
+      if (!newBlock(curBlock_, &inlineBlock) ||
+          !newBlock(curBlock_, &callBlock)) {
+        return false;
+      }
+      curBlock_->end(MTest::New(alloc(), canInline, inlineBlock, callBlock));
+
+      curBlock_ = inlineBlock;
+      MDefinition* dstData = getWasmArrayObjectData(dstArrayObject);
+      MDefinition* srcData = getWasmArrayObjectData(srcArrayObject);
+      if (!dstData || !srcData) {
+        return false;
+      }
+      curBlock_->add(MWasmArrayCopyInline::New(alloc(), dstData, dstArrayIndex,
+                                               srcData, srcArrayIndex,
+                                               numElements, elemSize));
+      curBlock_->end(MGoto::New(alloc(), joinBlock));
+      if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
+        return false;
+      }
+      curBlock_ = callBlock;
+    }
+#endif
+
     if (elemsAreRefTyped) {
       MOZ_RELEASE_ASSERT(elemSize == sizeof(void*));
 
@@ -5486,6 +5522,8 @@ class FunctionCompiler {
     if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
       return false;
     }
+    // The inline and call blocks were created after the join block.
+    mirGraph().moveBlockToEnd(joinBlock);
     curBlock_ = joinBlock;
     return true;
   }

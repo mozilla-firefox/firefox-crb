@@ -1504,6 +1504,64 @@ class MWasmPostWriteBarrierWholeCell : public MTernaryInstruction,
   ALLOW_CLONE(MWasmPostWriteBarrierWholeCell)
 };
 
+// Whether an array.copy of |numElements| into |dstArray| can be done inline:
+// it copies at most |maxElements|, and for reference elements no GC barrier
+// is needed (no incremental marking, and |dstArray| is in the nursery).
+class MWasmArrayCopyCanInline : public MTernaryInstruction,
+                                public NoTypePolicy::Data {
+  uint32_t maxElements_;
+  bool refs_;
+
+  MWasmArrayCopyCanInline(MDefinition* instance, MDefinition* dstArray,
+                          MDefinition* numElements, uint32_t maxElements,
+                          bool refs)
+      : MTernaryInstruction(classOpcode, instance, dstArray, numElements),
+        maxElements_(maxElements),
+        refs_(refs) {
+    setResultType(MIRType::Int32);
+  }
+
+ public:
+  INSTRUCTION_HEADER(WasmArrayCopyCanInline)
+  TRIVIAL_NEW_WRAPPERS
+  NAMED_OPERANDS((0, instance), (1, dstArray), (2, numElements))
+
+  uint32_t maxElements() const { return maxElements_; }
+  bool refs() const { return refs_; }
+  AliasSet getAliasSet() const override {
+    return AliasSet::Load(AliasSet::Any);
+  }
+};
+
+// Copies |numElements| (> 0) elements of |elemSize| bytes between array data,
+// with memmove semantics.
+class MWasmArrayCopyInline : public MAryInstruction<5>,
+                             public NoTypePolicy::Data {
+  uint32_t elemSize_;
+
+  MWasmArrayCopyInline(MDefinition* dstData, MDefinition* dstIndex,
+                       MDefinition* srcData, MDefinition* srcIndex,
+                       MDefinition* numElements, uint32_t elemSize)
+      : MAryInstruction<5>(classOpcode), elemSize_(elemSize) {
+    initOperand(0, dstData);
+    initOperand(1, dstIndex);
+    initOperand(2, srcData);
+    initOperand(3, srcIndex);
+    initOperand(4, numElements);
+  }
+
+ public:
+  INSTRUCTION_HEADER(WasmArrayCopyInline)
+  TRIVIAL_NEW_WRAPPERS
+  NAMED_OPERANDS((0, dstData), (1, dstIndex), (2, srcData), (3, srcIndex),
+                 (4, numElements))
+
+  uint32_t elemSize() const { return elemSize_; }
+  AliasSet getAliasSet() const override {
+    return AliasSet::Store(AliasSet::WasmArrayDataArea);
+  }
+};
+
 // Given a value being written to another object, update the generational store
 // buffer if the value is in the nursery and object is in the tenured heap.
 class MWasmPostWriteBarrierEdgeAtIndex : public MAryInstruction<5>,
