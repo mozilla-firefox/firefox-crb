@@ -45,7 +45,12 @@ from rich.live import Live
 from rich.text import Text
 
 from ..backend import get_backend_class
-from ..base import MozbuildObject, build_environment, mozconfig_exports
+from ..base import (
+    MozbuildObject,
+    build_environment,
+    mozconfig_exports,
+    split_job_flags,
+)
 from ..compilation.warnings import (
     RE_STRIP_COLORS,
     WarningsCollector,
@@ -62,6 +67,7 @@ from ..util import (
     resolve_target_to_make,
 )
 from .clobber import Clobberer
+from .jobserver import jobserver
 
 RE_BUILD_OUTPUT = re.compile(
     r"""
@@ -1738,15 +1744,16 @@ class BuildDriver(MozbuildObject):
             elif status is None:
                 # If the backend doesn't specify a build() method, then just
                 # call client.mk directly.
-                status = self._run_client_mk(
-                    line_handler=output.on_stdout_line,
-                    stderr_line_handler=output.on_stderr_line,
-                    jobs=jobs,
-                    job_size=job_size,
-                    verbose=verbose,
-                    keep_going=keep_going,
-                    append_env=append_env,
-                )
+                with jobserver(jobs, substs["GMAKE"]) as makeflags:
+                    status = self._run_client_mk(
+                        line_handler=output.on_stdout_line,
+                        stderr_line_handler=output.on_stderr_line,
+                        jobs=jobs,
+                        job_size=job_size,
+                        verbose=verbose,
+                        keep_going=keep_going,
+                        append_env={**(append_env or {}), "MAKEFLAGS": makeflags},
+                    )
 
             self.log(
                 logging.WARNING,
@@ -2250,10 +2257,9 @@ class BuildDriver(MozbuildObject):
         for arg in mozconfig["make_extra"] or []:
             mozconfig_make_lines.append(arg)
 
-        if mozconfig["make_flags"]:
-            mozconfig_make_lines.append(
-                "MOZ_MAKE_FLAGS=%s" % " ".join(mozconfig["make_flags"])
-            )
+        _, make_flags = split_job_flags(mozconfig["make_flags"])
+        if make_flags:
+            mozconfig_make_lines.append(f"MOZ_MAKE_FLAGS={' '.join(make_flags)}")
         objdir = mozpath.normsep(self.topobjdir)
         mozconfig_make_lines.append("MOZ_OBJDIR=%s" % objdir)
         mozconfig_make_lines.append("OBJDIR=%s" % objdir)
