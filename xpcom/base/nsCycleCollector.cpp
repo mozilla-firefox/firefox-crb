@@ -830,8 +830,10 @@ class PtrInfoMap {
                     aShift);
   }
 
+  // Reserve room for aCount entries at no more than 60% load, so that a table
+  // presized from a slightly low estimate need not be rehashed.
   [[nodiscard]] bool Reserve(uint32_t aCount) {
-    uint64_t cap = std::max<uint64_t>(16, uint64_t(aCount) * 4 / 3 + 1);
+    uint64_t cap = std::max<uint64_t>(16, uint64_t(aCount) * 5 / 3 + 1);
     cap = mozilla::RoundUpPow2(cap);
     return cap <= mCapacity || Rehash(cap);
   }
@@ -2481,7 +2483,7 @@ CCGraphBuilder::CCGraphBuilder(CCGraph& aGraph, CycleCollectorResults& aResults,
   if (!mLogger) {
     static const uint32_t sLimit = [] {
       const char* env = getenv("CCBENCH_DEFER");
-      return std::min<uint32_t>(env ? atoi(env) : 16, kMaxPendingEdges);
+      return std::min<uint32_t>(env ? atoi(env) : 8, kMaxPendingEdges);
     }();
     mPendingEdgeLimit = sLimit;
   }
