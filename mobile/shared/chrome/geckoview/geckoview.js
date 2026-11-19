@@ -846,57 +846,14 @@ function startup() {
     );
 
     // Let the extension code know it can start loading things that were delayed
-    // while GeckoView started up.
+    // while GeckoView started up. The remaining tasks compete with an applink
+    // page load for the CPU, so they wait for it too.
     InitLater(() => {
       window.moduleManager._maybeDeferForApplink(() => {
         Services.obs.notifyObservers(window, "extensions-late-startup");
+        scheduleLateStartupTasks();
       });
     });
-
-    InitLater(() => {
-      // TODO bug 1730026: this runs too often. It should run once.
-      RemoteSecuritySettings.init();
-    });
-
-    InitLater(() => {
-      // Initialize safe browsing module. This is required for content
-      // blocking features and manages blocklist downloads and updates.
-      SafeBrowsing.init();
-    });
-
-    InitLater(() => {
-      // It's enough to run this once to set up FOG.
-      // (See also bug 1730026.)
-      Services.fog.registerCustomPings();
-    });
-
-    InitLater(() => {
-      // Initialize the blocklist module.
-      // TODO bug 1730026: this runs too often. It should run once.
-      Blocklist.loadBlocklistAsync();
-    });
-
-    InitLater(() => {
-      // Call the init function for the CaptchaDetectionPingUtils module.
-      // This function adds pref observers that flushes the ping. It also
-      // submits the ping if it has data and has been about 24 hours since the
-      // last submission.
-      CaptchaDetectionPingUtils.init();
-    });
-
-    // This should always go last, since the idle tasks (except for the ones with
-    // timeouts) should execute in order. Note that this observer notification is
-    // not guaranteed to fire, since the window could close before we get here.
-
-    // This notification in particular signals the ScriptPreloader that we have
-    // finished startup, so it can now stop recording script usage and start
-    // updating the startup cache for faster script loading.
-    InitLater(() =>
-      Services.obs.notifyObservers(
-        window,
-        "browser-idle-startup-tasks-finished"
-      )
-    );
   });
 
   // Move focus to the content window at the end of startup,
@@ -904,6 +861,50 @@ function startup() {
   ModuleManager.browser.focus();
 
   InitializationTracker.onInitialized(ChromeUtils.now());
+}
+
+function scheduleLateStartupTasks() {
+  InitLater(() => {
+    // TODO bug 1730026: this runs too often. It should run once.
+    RemoteSecuritySettings.init();
+  });
+
+  InitLater(() => {
+    // Initialize safe browsing module. This is required for content
+    // blocking features and manages blocklist downloads and updates.
+    SafeBrowsing.init();
+  });
+
+  InitLater(() => {
+    // It's enough to run this once to set up FOG.
+    // (See also bug 1730026.)
+    Services.fog.registerCustomPings();
+  });
+
+  InitLater(() => {
+    // Initialize the blocklist module.
+    // TODO bug 1730026: this runs too often. It should run once.
+    Blocklist.loadBlocklistAsync();
+  });
+
+  InitLater(() => {
+    // Call the init function for the CaptchaDetectionPingUtils module.
+    // This function adds pref observers that flushes the ping. It also
+    // submits the ping if it has data and has been about 24 hours since the
+    // last submission.
+    CaptchaDetectionPingUtils.init();
+  });
+
+  // This should always go last, since the idle tasks (except for the ones with
+  // timeouts) should execute in order. Note that this observer notification is
+  // not guaranteed to fire, since the window could close before we get here.
+
+  // This notification in particular signals the ScriptPreloader that we have
+  // finished startup, so it can now stop recording script usage and start
+  // updating the startup cache for faster script loading.
+  InitLater(() =>
+    Services.obs.notifyObservers(window, "browser-idle-startup-tasks-finished")
+  );
 }
 
 window.addEventListener("DOMContentLoaded", startup, { once: true });
