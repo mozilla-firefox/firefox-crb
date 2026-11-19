@@ -532,6 +532,15 @@ class EdgePool {
       (mCurrent++)->ptrInfo = aEdge;
     }
 
+    // Reserve space for an edge that will be filled in later.
+    PtrInfo** AddSlot() {
+      if (mCurrent == mBlockEnd) {
+        Add(nullptr);
+        return &(mCurrent - 1)->ptrInfo;
+      }
+      return &(mCurrent++)->ptrInfo;
+    }
+
    private:
     // mBlockEnd points to space for null sentinel
     PtrInfoOrBlock* mCurrent;
@@ -843,6 +852,12 @@ class PtrInfoMap {
 
   uint32_t Count() const { return mCount; }
   bool IsEmpty() const { return mCount == 0; }
+
+  void Prefetch(const void* aKey) const {
+    if (mEntries) {
+      __builtin_prefetch(&mEntries[Hash(aKey, mShift)]);
+    }
+  }
 
   PtrInfo* Lookup(void* aKey) const {
     if (!mEntries) {
@@ -2259,6 +2274,21 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
   static constexpr uint32_t kGraphCacheShift = 64 - 7;
   PtrInfoMap::Entry mGraphCache[1 << (64 - kGraphCacheShift)] = {};
 
+  // Edges whose child has not been looked up yet. The map slot for each is
+  // prefetched when it is queued, and the lookup happens once
+  // mPendingEdgeLimit more edges have been queued (or at the end of a slice).
+  struct PendingEdge {
+    void* mChild;
+    nsCycleCollectionParticipant* mParticipant;
+    PtrInfo** mSlot;
+    PtrInfo* mParent;
+  };
+  static constexpr uint32_t kMaxPendingEdges = 32;
+  PendingEdge mPendingEdges[kMaxPendingEdges];
+  uint32_t mPendingEdgeHead = 0;
+  uint32_t mPendingEdgeCount = 0;
+  uint32_t mPendingEdgeLimit = 0;
+
  public:
   CCGraphBuilder(CCGraph& aGraph, CycleCollectorResults& aResults,
                  CycleCollectedJSRuntime* aCCRuntime,
@@ -2291,6 +2321,13 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
   PtrInfo* AddNode(void* aPtr, nsCycleCollectionParticipant* aParticipant);
   PtrInfo* AddWeakMapNode(JS::GCCellPtr aThing);
   PtrInfo* AddWeakMapNode(JSObject* aObject);
+
+  void ResolvePendingEdge();
+  void ResolvePendingEdges() {
+    while (mPendingEdgeCount) {
+      ResolvePendingEdge();
+    }
+  }
 
   void SetFirstChild() { mCurrPi->SetFirstChild(mEdgeBuilder.Mark()); }
 
@@ -2345,10 +2382,6 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
   NS_IMETHOD_(void)
   NoteChild(void* aChild, nsCycleCollectionParticipant* aCp,
             nsCString& aEdgeName) {
-    PtrInfo* childPi = AddNode(aChild, aCp);
-    if (!childPi) {
-      return;
-    }
     if (MOZ_UNLIKELY(ccbench::Counting())) {
       auto& st = ccbench::Get();
       st.edges++;
@@ -2358,11 +2391,45 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
         st.edgesToNative++;
       }
     }
+    if (mPendingEdgeLimit) {
+      NoteChildDeferred(aChild, aCp);
+      return;
+    }
+    PtrInfo* childPi = AddNode(aChild, aCp);
+    if (!childPi) {
+      return;
+    }
     mEdgeBuilder.Add(childPi);
     if (mLogger) {
       mLogger->NoteEdge((uint64_t)aChild, aEdgeName.get());
     }
     ++childPi->mInternalRefs;
+  }
+
+  MOZ_ALWAYS_INLINE void NoteChildDeferred(void* aChild,
+                                           nsCycleCollectionParticipant* aCp) {
+    if (mGraph.mOutOfMemory) {
+      return;
+    }
+    PtrInfoMap::Entry& cached =
+        mGraphCache[PtrInfoMap::Hash(aChild, kGraphCacheShift)];
+    if (cached.mKey == aChild) {
+      MOZ_ASSERT(cached.mValue->mParticipant == aCp);
+      mEdgeBuilder.Add(cached.mValue);
+      ++cached.mValue->mInternalRefs;
+      return;
+    }
+    if (mPendingEdgeCount == mPendingEdgeLimit) {
+      ResolvePendingEdge();
+    }
+    mGraph.mPtrInfoMap.Prefetch(aChild);
+    PendingEdge& p =
+        mPendingEdges[(mPendingEdgeHead + mPendingEdgeCount++) &
+                      (kMaxPendingEdges - 1)];
+    p.mChild = aChild;
+    p.mParticipant = aCp;
+    p.mSlot = mEdgeBuilder.AddSlot();
+    p.mParent = mCurrPi;
   }
 
   JS::Zone* MergeZone(JS::GCCellPtr aGcthing) {
@@ -2410,6 +2477,14 @@ CCGraphBuilder::CCGraphBuilder(CCGraph& aGraph, CycleCollectorResults& aResults,
   }
 
   mMergeZones = mMergeZones && MOZ_LIKELY(!WantAllTraces());
+
+  if (!mLogger) {
+    static const uint32_t sLimit = [] {
+      const char* env = getenv("CCBENCH_DEFER");
+      return std::min<uint32_t>(env ? atoi(env) : 16, kMaxPendingEdges);
+    }();
+    mPendingEdgeLimit = sLimit;
+  }
 
   MOZ_ASSERT(nsCycleCollectionNoteRootCallback::WantAllTraces() ==
              nsCycleCollectionTraversalCallback::WantAllTraces());
@@ -2468,6 +2543,22 @@ PtrInfo* CCGraphBuilder::AddNode(void* aPtr,
   return result;
 }
 
+void CCGraphBuilder::ResolvePendingEdge() {
+  MOZ_ASSERT(mPendingEdgeCount);
+  PendingEdge& p = mPendingEdges[mPendingEdgeHead];
+  mPendingEdgeHead = (mPendingEdgeHead + 1) & (kMaxPendingEdges - 1);
+  mPendingEdgeCount--;
+  PtrInfo* childPi = AddNode(p.mChild, p.mParticipant);
+  if (!childPi) {
+    // The slot can't be left empty, but a self edge that isn't counted in
+    // mInternalRefs has no effect.
+    *p.mSlot = p.mParent;
+    return;
+  }
+  *p.mSlot = childPi;
+  ++childPi->mInternalRefs;
+}
+
 bool CCGraphBuilder::AddPurpleRoot(void* aRoot,
                                    nsCycleCollectionParticipant* aParti) {
   ToParticipant(aRoot, &aParti);
@@ -2501,7 +2592,15 @@ static size_t PrefetchDistance() {
 MOZ_NEVER_INLINE bool CCGraphBuilder::BuildGraph(SliceBudget& aBudget) {
   MOZ_ASSERT(mCurrNode);
 
-  while (!aBudget.isOverBudget() && !mCurrNode->IsDone()) {
+  while (!aBudget.isOverBudget()) {
+    if (mCurrNode->IsDone()) {
+      if (!mPendingEdgeCount) {
+        break;
+      }
+      ResolvePendingEdges();
+      continue;
+    }
+
     mNoteChildCount = 0;
 
     PtrInfo* pi = mCurrNode->GetNext();
@@ -2534,6 +2633,8 @@ MOZ_NEVER_INLINE bool CCGraphBuilder::BuildGraph(SliceBudget& aBudget) {
 
     aBudget.step(mNoteChildCount + 1);
   }
+
+  ResolvePendingEdges();
 
   if (!mCurrNode->IsDone()) {
     return false;
