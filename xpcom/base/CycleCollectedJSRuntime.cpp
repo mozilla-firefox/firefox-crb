@@ -483,7 +483,11 @@ bool TraversalTracer::onEdge(T** aThingPtr, const char* aName) {
     if (bench) {
       bench->noted++;
     }
-    mCb.NoteJSChild(JS::GCCellPtr(thing));
+    if (MOZ_LIKELY(mCb.IsPlainCCGraphBuilder()) && !ccbench::NoFastPath()) {
+      NoteGrayJSChildForGraphBuilder(mCb, JS::GCCellPtr(thing));
+    } else {
+      mCb.NoteJSChild(JS::GCCellPtr(thing));
+    }
     return true;
   }
 
