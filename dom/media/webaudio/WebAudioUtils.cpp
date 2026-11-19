@@ -4,7 +4,6 @@
 
 #include "WebAudioUtils.h"
 
-#include "blink/HRTFDatabaseLoader.h"
 #include "mozilla/SchedulerGroup.h"
 #include "nsComponentManagerUtils.h"
 #include "nsContentUtils.h"
@@ -18,8 +17,6 @@ namespace mozilla {
 LazyLogModule gWebAudioAPILog("WebAudioAPI");
 
 namespace dom {
-
-void WebAudioUtils::Shutdown() { WebCore::HRTFDatabaseLoader::shutdown(); }
 
 int WebAudioUtils::SpeexResamplerProcess(SpeexResamplerState* aResampler,
                                          uint32_t aChannel, const float* aIn,
