@@ -823,6 +823,9 @@ struct CCGraph {
 
   static const uint32_t kInitialMapLength = 16384;
 
+  // Slowly decaying maximum of recent graph sizes, used to presize the map.
+  uint32_t mSizeHint = 0;
+
  public:
   CCGraph() : mRootCount(0), mOutOfMemory(false) {}
 
@@ -834,7 +837,8 @@ struct CCGraph {
     // This can fail if we're running low on memory, but we can still grow the
     // hashtable normally at the cost of performance. The process might still
     // be in an unrecoverably bad state.
-    DebugOnly<bool> ok = mPtrInfoMap.reserve(kInitialMapLength);
+    DebugOnly<bool> ok =
+        mPtrInfoMap.reserve(std::max(kInitialMapLength, mSizeHint));
     MOZ_ASSERT(ok, "initial reserve should succeed");
   }
 
@@ -843,7 +847,11 @@ struct CCGraph {
     mEdges.Clear();
     mWeakMaps.Clear();
     mRootCount = 0;
-    mPtrInfoMap.clearAndCompact();
+    if (getenv("CCBENCH_KEEP_TABLE")) {
+      mPtrInfoMap.clear();
+    } else {
+      mPtrInfoMap.clearAndCompact();
+    }
     mOutOfMemory = false;
   }
 
@@ -856,6 +864,12 @@ struct CCGraph {
   void RemoveObjectFromMap(void* aObject);
 
   uint32_t MapCount() const { return mPtrInfoMap.count(); }
+
+  void NoteBuildingDone() {
+    mSizeHint = getenv("CCBENCH_NO_PRESIZE")
+                    ? 0
+                    : std::max(MapCount(), mSizeHint - mSizeHint / 8);
+  }
 
   size_t SizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const {
     size_t n = 0;
@@ -2967,6 +2981,7 @@ MOZ_NEVER_INLINE void nsCycleCollector::MarkRoots(SliceBudget& aBudget) {
     return;
   }
 
+  mGraph.NoteBuildingDone();
   ccbench::Get().graphNodes = mGraph.MapCount();
   ccbench::Get().graphRoots = mGraph.mRootCount;
 
