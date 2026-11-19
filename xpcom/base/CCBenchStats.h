@@ -11,13 +11,16 @@
 #ifndef xpcom_base_CCBenchStats_h
 #define xpcom_base_CCBenchStats_h
 
-#include <cstdint>
-#include <cstring>
-#include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "mozilla/TimeStamp.h"
 
