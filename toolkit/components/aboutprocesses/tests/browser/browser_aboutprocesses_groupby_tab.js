@@ -741,28 +741,43 @@ add_task(async function testUnloadButtonAndKeyboardActivation() {
   BrowserTestUtils.removeTab(tabTwo);
 });
 
-add_task(async function testUnloadButtonDoesNotLeaveIneligibleTabBusy() {
-  let tab = BrowserTestUtils.addTab(gBrowser, "about:robots", {
-    forceNotRemote: true,
-  });
-  await BrowserTestUtils.browserLoaded(tab.linkedBrowser, true, "about:robots");
+add_task(async function testNoUnloadButtonForParentProcessTabs() {
+  let tabs = [];
+  for (let i = 0; i < 2; i++) {
+    let tab = BrowserTestUtils.addTab(gBrowser, "about:robots", {
+      forceNotRemote: true,
+    });
+    await BrowserTestUtils.browserLoaded(
+      tab.linkedBrowser,
+      true,
+      "about:robots"
+    );
+    tabs.push(tab);
+  }
 
   let { tabAboutProcesses, doc } = await openTabView();
-  let row = findTabRow(doc, tab.label);
-  Assert.ok(!!row, "Found the non-remote tab in the tab view");
-
-  row.querySelector(".unload-icon").click();
-  await TestUtils.waitForCondition(
-    () => !row.classList.contains("killing") && !row.hasAttribute("aria-busy"),
-    "A tab that cannot be unloaded is not left in a fake busy state"
-  );
+  let header = findSiteHeaderRow(doc, "about:robots");
+  Assert.ok(!!header, "The two non-remote tabs share a site header");
   Assert.ok(
-    !tab.hasAttribute("discarded"),
-    "The ineligible tab remains loaded"
+    header.querySelector(".action-icon").hidden,
+    "A site whose tabs can't be unloaded offers no unload button"
+  );
+  for (let row of childRowsOf(header)) {
+    Assert.ok(
+      row.querySelector(".action-icon").hidden,
+      "A tab that can't be unloaded offers no unload button"
+    );
+  }
+  clickRow(header.checkbox);
+  Assert.ok(
+    doc.getElementById("bulk-unload-button").hidden,
+    "Bulk Unload isn't offered when no selected tab can be unloaded"
   );
 
   BrowserTestUtils.removeTab(tabAboutProcesses);
-  BrowserTestUtils.removeTab(tab);
+  for (let tab of tabs) {
+    BrowserTestUtils.removeTab(tab);
+  }
 });
 
 add_task(async function testPrivateWindowTabsExcludedFromNonPrivateView() {

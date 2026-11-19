@@ -263,6 +263,8 @@ class TabAttribution {
           // Discarded or never loaded. Not !outerWindowID, which stays unset
           // for a moment after a reload re-inserts the browser.
           discarded: !browser.isConnected,
+          // Parent-process tabs (e.g. about:config) can't be unloaded.
+          unloadable: browser.isRemoteBrowser,
         });
       }
     }
@@ -347,6 +349,7 @@ class TabAttribution {
         siteKey,
         siteLabel: getSiteLabel(tab.uri, siteKey),
         discarded: tab.discarded,
+        unloadable: tab.unloadable,
         // False for discarded/never-loaded tabs and ones whose process
         // isn't in `counters` at all -- shown as "—", not a misleading 0.
         hasUsageData,
@@ -2233,6 +2236,9 @@ class ProcessesTabView extends RowSet {
         : "about-processes-unload-site",
       { site: group.siteLabel }
     );
+    row.unloadButton.hidden =
+      !allDiscarded &&
+      !tabs.some(tabData => !tabData.discarded && tabData.unloadable);
     let [, nameCell, memoryCell, cpuCell] = row.children;
     nameCell.className = "name";
     // The group's first tab stands in for the site; a real element rather than
@@ -2359,6 +2365,7 @@ class ProcessesTabView extends RowSet {
     if (tabData.discarded) {
       row.classList.remove("killing");
     }
+    row.unloadButton.hidden = !tabData.discarded && !tabData.unloadable;
     this._updateUnloadButton(
       row,
       !!tabData.discarded,
@@ -2718,8 +2725,8 @@ class ProcessesTabController {
       return;
     }
 
-    this._bulkUnloadButton.hidden = selectedTabData.every(
-      tabData => tabData.discarded
+    this._bulkUnloadButton.hidden = !selectedTabData.some(
+      tabData => !tabData.discarded && tabData.unloadable
     );
 
     let [, countCell, memoryCell, cpuCell] = document.querySelector(
@@ -2762,7 +2769,9 @@ class ProcessesTabController {
   async _unloadOrReloadSelectedTabs(reload) {
     let eligible = this._getSelectedTabData();
     if (!reload) {
-      eligible = eligible.filter(tabData => !tabData.discarded);
+      eligible = eligible.filter(
+        tabData => !tabData.discarded && tabData.unloadable
+      );
     }
     if (eligible.length) {
       this._recordTabAction(eligible, reload ? "reload" : "unload", "bulk_bar");
@@ -2838,7 +2847,10 @@ class ProcessesTabController {
     let eligible = this._view
       .getShownChildRows(row)
       .map(childRow => childRow.tabData)
-      .filter(tabData => !!tabData.discarded == reload);
+      .filter(
+        tabData =>
+          !!tabData.discarded == reload && (reload || tabData.unloadable)
+      );
     if (eligible.length) {
       this._recordTabAction(
         eligible,
