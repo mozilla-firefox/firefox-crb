@@ -169,6 +169,10 @@
 #include "mozilla/LinkedList.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/MathAlgorithms.h"
+
+#ifdef XP_LINUX
+#  include <sys/mman.h>
+#endif
 #include "mozilla/PoisonIOInterposer.h"
 #include "mozilla/ProfilerLabels.h"
 #include "mozilla/ProfilerMarkers.h"
@@ -797,7 +801,7 @@ class PtrInfoMap {
   PtrInfoMap() = default;
   PtrInfoMap(const PtrInfoMap&) = delete;
   PtrInfoMap& operator=(const PtrInfoMap&) = delete;
-  ~PtrInfoMap() { free(mEntries); }
+  ~PtrInfoMap() { FreeEntries(mEntries, mCapacity); }
 
   static uint32_t Hash(const void* aKey, uint32_t aShift) {
     return uint32_t((uint64_t(uintptr_t(aKey)) * 0x9E3779B97F4A7C15ULL) >>
@@ -811,7 +815,7 @@ class PtrInfoMap {
   }
 
   void Clear() {
-    free(mEntries);
+    FreeEntries(mEntries, mCapacity);
     mEntries = nullptr;
     mCapacity = 0;
     mCount = 0;
@@ -891,6 +895,9 @@ class PtrInfoMap {
   }
 
   size_t ShallowSizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const {
+    if (IsHuge(mCapacity)) {
+      return mCapacity * sizeof(Entry);
+    }
     return aMallocSizeOf(mEntries);
   }
 
@@ -899,7 +906,7 @@ class PtrInfoMap {
     if (aCapacity > (uint64_t(1) << 31)) {
       return false;
     }
-    auto* entries = static_cast<Entry*>(calloc(aCapacity, sizeof(Entry)));
+    auto* entries = AllocEntries(uint32_t(aCapacity));
     if (!entries) {
       return false;
     }
@@ -914,12 +921,61 @@ class PtrInfoMap {
         entries[i] = mEntries[k];
       }
     }
-    free(mEntries);
+    FreeEntries(mEntries, mCapacity);
     mEntries = entries;
     mCapacity = uint32_t(aCapacity);
     mShift = shift;
     return true;
   }
+
+#ifdef XP_LINUX
+  // Large tables are mapped directly and backed by transparent huge pages:
+  // the table is freed after every CC, and faulting it back in 4K pages costs
+  // more than the lookups themselves, besides the TLB misses.
+  static constexpr size_t kHugePageSize = 2 * 1024 * 1024;
+
+  static bool IsHuge(uint32_t aCapacity) {
+    static const bool sEnabled = !getenv("CCBENCH_NO_HUGE");
+    return sEnabled && aCapacity * sizeof(Entry) >= kHugePageSize;
+  }
+
+  static Entry* AllocEntries(uint32_t aCapacity) {
+    if (!IsHuge(aCapacity)) {
+      return static_cast<Entry*>(calloc(aCapacity, sizeof(Entry)));
+    }
+    size_t bytes = aCapacity * sizeof(Entry);
+    void* p = mmap(nullptr, bytes + kHugePageSize, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED) {
+      return nullptr;
+    }
+    uintptr_t start = uintptr_t(p);
+    uintptr_t aligned = (start + kHugePageSize - 1) & ~(kHugePageSize - 1);
+    if (aligned > start) {
+      munmap(p, aligned - start);
+    }
+    uintptr_t end = start + bytes + kHugePageSize;
+    if (end > aligned + bytes) {
+      munmap(reinterpret_cast<void*>(aligned + bytes), end - aligned - bytes);
+    }
+    madvise(reinterpret_cast<void*>(aligned), bytes, MADV_HUGEPAGE);
+    return reinterpret_cast<Entry*>(aligned);
+  }
+
+  static void FreeEntries(Entry* aEntries, uint32_t aCapacity) {
+    if (aEntries && IsHuge(aCapacity)) {
+      munmap(aEntries, aCapacity * sizeof(Entry));
+    } else {
+      free(aEntries);
+    }
+  }
+#else
+  static bool IsHuge(uint32_t) { return false; }
+  static Entry* AllocEntries(uint32_t aCapacity) {
+    return static_cast<Entry*>(calloc(aCapacity, sizeof(Entry)));
+  }
+  static void FreeEntries(Entry* aEntries, uint32_t) { free(aEntries); }
+#endif
 
   Entry* mEntries = nullptr;
   uint32_t mCapacity = 0;
