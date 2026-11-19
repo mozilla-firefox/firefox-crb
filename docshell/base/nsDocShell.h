@@ -1076,10 +1076,6 @@ class nsDocShell final : public nsDocLoader,
   // Called when the Private Browsing state of a nsDocShell changes.
   void NotifyPrivateBrowsingChanged();
 
-  // Internal helpers for BrowsingContext to pass update values to nsIDocShell's
-  // LoadGroup.
-  void SetLoadGroupDefaultLoadFlags(nsLoadFlags aLoadFlags);
-
   void SetTitleOnHistoryEntry(bool aUpdateEntryInSessionHistory);
 
   void SetScrollRestorationIsManualOnHistoryEntry(bool aIsManual);
