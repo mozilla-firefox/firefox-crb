@@ -97,7 +97,7 @@ struct MapTypeToTraceKind {
   D(Symbol,       JS::Symbol,          true,      true)        \
   D(BigInt,       JS::BigInt,          false,     false)       \
   D(RegExpShared, js::RegExpShared,    true,      true)        \
-  D(GetterSetter, js::GetterSetter,    true,      true)        \
+  D(GetterSetter, js::GetterSetter,    true,      false)       \
   D(PropMap,      js::PropMap,         true,      false)
 // clang-format on
 
