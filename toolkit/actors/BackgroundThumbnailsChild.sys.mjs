@@ -44,9 +44,7 @@ export class BackgroundThumbnailsChild extends JSWindowActorChild {
 
         // We want a low network priority for this service - lower than b/g tabs
         // etc - so set it to the lowest priority available.
-        docShell
-          .QueryInterface(Ci.nsIDocumentLoader)
-          .loadGroup.QueryInterface(Ci.nsISupportsPriority).priority =
+        docShell.QueryInterface(Ci.nsISupportsPriority).priority =
           Ci.nsISupportsPriority.PRIORITY_LOWEST;
 
         docShell.allowMedia = false;

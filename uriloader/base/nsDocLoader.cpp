@@ -115,14 +115,28 @@ nsresult nsDocLoader::SetDocLoaderParent(nsDocLoader* aParent) {
   return NS_OK;
 }
 
-nsresult nsDocLoader::Init() {
+already_AddRefed<nsILoadGroup> nsDocLoader::CreateLoadGroup(
+    uint64_t aRequestContextId) {
   RefPtr loadGroup = MakeRefPtr<net::nsLoadGroup>();
-  nsresult rv = loadGroup->Init();
-  if (NS_FAILED(rv)) return rv;
+  nsresult rv = aRequestContextId
+                    ? loadGroup->InitWithRequestContextId(aRequestContextId)
+                    : loadGroup->Init();
+  if (NS_FAILED(rv)) {
+    return nullptr;
+  }
 
   loadGroup->SetGroupObserver(this, mNotifyAboutBackgroundRequests);
+  loadGroup->SetNotificationCallbacks(mLoadGroupCallbacks);
+  loadGroup->SetDefaultLoadFlags(mLoadGroupDefaultLoadFlags);
+  loadGroup->SetPriority(mPriority);
+  return loadGroup.forget();
+}
 
-  mLoadGroup = loadGroup;
+nsresult nsDocLoader::Init() {
+  mLoadGroup = CreateLoadGroup(0);
+  if (!mLoadGroup) {
+    return NS_ERROR_FAILURE;
+  }
 
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: load group %p.\n", this, mLoadGroup.get()));
@@ -132,22 +146,37 @@ nsresult nsDocLoader::Init() {
 
 nsresult nsDocLoader::InitWithBrowsingContext(
     BrowsingContext* aBrowsingContext) {
-  RefPtr loadGroup = MakeRefPtr<net::nsLoadGroup>();
   if (!aBrowsingContext->GetRequestContextId()) {
     return NS_ERROR_NOT_AVAILABLE;
   }
-  nsresult rv = loadGroup->InitWithRequestContextId(
-      aBrowsingContext->GetRequestContextId());
-  if (NS_FAILED(rv)) return rv;
-
-  loadGroup->SetGroupObserver(this, mNotifyAboutBackgroundRequests);
-
-  mLoadGroup = loadGroup;
+  mLoadGroup = CreateLoadGroup(aBrowsingContext->GetRequestContextId());
+  if (!mLoadGroup) {
+    return NS_ERROR_FAILURE;
+  }
 
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: load group %p.\n", this, mLoadGroup.get()));
 
   return NS_OK;
+}
+
+void nsDocLoader::SetLoadGroupCallbacks(nsIInterfaceRequestor* aCallbacks) {
+  mLoadGroupCallbacks = aCallbacks;
+  MOZ_ASSERT(mLoadGroup);
+  mLoadGroup->SetNotificationCallbacks(aCallbacks);
+}
+
+void nsDocLoader::SetLoadGroupDefaultLoadFlags(nsLoadFlags aLoadFlags) {
+  mLoadGroupDefaultLoadFlags = aLoadFlags;
+  MOZ_ASSERT(mLoadGroup);
+  mLoadGroup->SetDefaultLoadFlags(aLoadFlags);
+}
+
+void nsDocLoader::AdjustLoadGroupPriority(int32_t aDelta) {
+  mPriority += aDelta;
+  if (nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup)) {
+    p->SetPriority(mPriority);
+  }
 }
 
 nsDocLoader::~nsDocLoader() {
@@ -1643,10 +1672,7 @@ void nsDocLoader::OnSecurityChange(nsISupports* aContext, uint32_t aState) {
  */
 
 NS_IMETHODIMP nsDocLoader::GetPriority(int32_t* aPriority) {
-  nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup);
-  if (p) return p->GetPriority(aPriority);
-
-  *aPriority = 0;
+  *aPriority = mPriority;
   return NS_OK;
 }
 
@@ -1654,8 +1680,7 @@ NS_IMETHODIMP nsDocLoader::SetPriority(int32_t aPriority) {
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: SetPriority(%d) called\n", this, aPriority));
 
-  nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup);
-  if (p) p->SetPriority(aPriority);
+  AdjustLoadGroupPriority(aPriority - mPriority);
 
   NS_OBSERVER_ARRAY_NOTIFY_XPCOM_OBSERVERS(mChildList, SetPriority,
                                            (aPriority));
@@ -1667,8 +1692,7 @@ NS_IMETHODIMP nsDocLoader::AdjustPriority(int32_t aDelta) {
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: AdjustPriority(%d) called\n", this, aDelta));
 
-  nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup);
-  if (p) p->AdjustPriority(aDelta);
+  AdjustLoadGroupPriority(aDelta);
 
   NS_OBSERVER_ARRAY_NOTIFY_XPCOM_OBSERVERS(mChildList, AdjustPriority,
                                            (aDelta));

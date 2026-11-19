@@ -507,7 +507,7 @@ already_AddRefed<nsDocShell> nsDocShell::Create(
   // We want to hold a strong ref to the loadgroup, so it better hold a weak
   // ref to us...  use an InterfaceRequestorProxy to do this.
   RefPtr proxy = MakeRefPtr<InterfaceRequestorProxy>(ds);
-  ds->mLoadGroup->SetNotificationCallbacks(proxy);
+  ds->SetLoadGroupCallbacks(proxy);
 
   // XXX(nika): We have our BrowsingContext, so we might be able to skip this.
   // It could be nice to directly set up our DocLoader tree?
@@ -2654,9 +2654,8 @@ nsresult nsDocShell::SetDocLoaderParent(nsDocLoader* aParent) {
   nsresult rv = nsDocLoader::SetDocLoaderParent(aParent);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  nsCOMPtr<nsISupportsPriority> priorityGroup = do_QueryInterface(mLoadGroup);
-  if (wasFrame != IsSubframe() && priorityGroup) {
-    priorityGroup->AdjustPriority(wasFrame ? -1 : 1);
+  if (wasFrame != IsSubframe()) {
+    AdjustLoadGroupPriority(wasFrame ? -1 : 1);
   }
 
   // Curse ambiguous nsISupports inheritance!
@@ -3040,16 +3039,6 @@ NS_IMETHODIMP nsDocShell::SynchronizeLayoutHistoryState() {
   }
 
   return NS_OK;
-}
-
-void nsDocShell::SetLoadGroupDefaultLoadFlags(nsLoadFlags aLoadFlags) {
-  if (mLoadGroup) {
-    mLoadGroup->SetDefaultLoadFlags(aLoadFlags);
-  } else {
-    NS_WARNING(
-        "nsDocShell::SetLoadGroupDefaultLoadFlags has no loadGroup to "
-        "propagate the mode to");
-  }
 }
 
 nsIScriptGlobalObject* nsDocShell::GetScriptGlobalObject() {
