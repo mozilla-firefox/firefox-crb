@@ -392,6 +392,23 @@ body.tab-view #process-tbody > tr[selected] {
 body.tab-view tr[selected] > td {
   background-color: transparent;
 }
+/* An accent bar: bold already marks site headers. */
+body.tab-view tr[active-tab] {
+  position: relative;
+}
+body.tab-view tr[active-tab]::before {
+  content: "";
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 0;
+  width: 2px;
+  background-color: var(--color-accent-primary);
+
+  @media (forced-colors) {
+    forced-color-adjust: none;
+    background-color: SelectedItem;
+  }
+}
 #process-tbody > tr:hover {
   background-color: var(--background-color-list-item-hover);
   color: var(--text-color-list-item-hover);

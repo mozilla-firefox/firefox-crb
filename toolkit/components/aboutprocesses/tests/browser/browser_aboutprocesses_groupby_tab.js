@@ -222,6 +222,118 @@ add_task(async function testAboutBlankTabIsIncluded() {
   BrowserTestUtils.removeTab(tab);
 });
 
+add_task(async function testActiveTabMarkerFollowsTabSelect() {
+  let tabOne = await setupTabWithOriginAndTitle(
+    "https://example.org",
+    "Active tab marker 1"
+  );
+  let tabSibling = await setupTabWithOriginAndTitle(
+    "https://example.org",
+    "Active tab marker sibling"
+  );
+  let win = await BrowserTestUtils.openNewBrowserWindow();
+  let otherWindowTab = await setupTabWithOriginAndTitle(
+    "https://example.net",
+    "Active tab marker other window",
+    win
+  );
+  win.gBrowser.selectedTab = otherWindowTab;
+  await SimpleTest.promiseFocus(window);
+
+  let { tabAboutProcesses, doc } = await openTabView();
+  // TabSelect alone must move the marker.
+  pauseTabViewPolling(doc);
+  keepViewVisible(doc);
+  let header = findSiteHeaderRow(doc, "example.org");
+  let rowOne = findTabRow(doc, "Active tab marker 1");
+  let otherRow = findTabRow(doc, "Active tab marker other window");
+
+  gBrowser.selectedTab = tabOne;
+  Assert.ok(
+    rowOne.hasAttribute("active-tab"),
+    "This window's selected tab carries the active-tab marker"
+  );
+  Assert.equal(rowOne.getAttribute("aria-current"), "true");
+  Assert.ok(
+    header.hasAttribute("active-tab"),
+    "...and so does its collapsed group's header"
+  );
+  Assert.equal(header.getAttribute("aria-current"), "true");
+  Assert.ok(
+    !otherRow.hasAttribute("active-tab"),
+    "Another window's selected tab doesn't"
+  );
+
+  gBrowser.selectedTab = tabAboutProcesses;
+  Assert.ok(
+    !rowOne.hasAttribute("active-tab") &&
+      !rowOne.hasAttribute("aria-current") &&
+      !header.hasAttribute("active-tab") &&
+      !header.hasAttribute("aria-current"),
+    "The marker moves off the tab that's no longer selected"
+  );
+
+  clickRow(header.caret);
+  gBrowser.selectedTab = tabOne;
+  Assert.ok(
+    rowOne.hasAttribute("active-tab") && !header.hasAttribute("active-tab"),
+    "An expanded group's header leaves the marker to the tab"
+  );
+  Assert.ok(!header.hasAttribute("aria-current"));
+
+  gBrowser.selectedTab = tabAboutProcesses;
+  BrowserTestUtils.removeTab(tabAboutProcesses);
+  BrowserTestUtils.removeTab(tabOne);
+  BrowserTestUtils.removeTab(tabSibling);
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function testSelectingUnloadedTabRefreshesItsRow() {
+  let tab = await setupTabWithOriginAndTitle(
+    "https://example.org",
+    "Select unloaded"
+  );
+  let { tabAboutProcesses, doc } = await openTabView();
+  let poll = pauseTabViewPolling(doc);
+  let row = findTabRow(doc, "Select unloaded");
+  let control = doc.defaultView.TabControl;
+  let rerenders = 0;
+  let rerender = control._rerender.bind(control);
+  control._rerender = (...args) => {
+    rerenders++;
+    return rerender(...args);
+  };
+
+  gBrowser.discardBrowser(tab);
+  await poll();
+  Assert.ok(row.classList.contains("killed"), "The unloaded row is dimmed");
+
+  let hidden = BrowserTestUtils.waitForEvent(doc, "visibilitychange");
+  gBrowser.selectedTab = tab;
+  await hidden;
+  rerenders = 0;
+  gBrowser.selectedTab = gBrowser.tabs[0];
+  Assert.equal(rerenders, 0, "A tab switch doesn't re-render a hidden view");
+
+  let visible = BrowserTestUtils.waitForEvent(doc, "visibilitychange");
+  gBrowser.selectedTab = tabAboutProcesses;
+  await visible;
+  gBrowser.discardBrowser(tab);
+  await poll();
+  Assert.ok(row.classList.contains("killed"), "The row is dimmed again");
+  keepViewVisible(doc);
+  gBrowser.selectedTab = tab;
+  Assert.ok(
+    !row.classList.contains("killed") &&
+      row.unloadButton.classList.contains("unload-icon"),
+    "Selecting the tab undims its row and offers unload, before any poll"
+  );
+
+  gBrowser.selectedTab = tabAboutProcesses;
+  BrowserTestUtils.removeTab(tabAboutProcesses);
+  BrowserTestUtils.removeTab(tab);
+});
+
 add_task(async function testInitialSortIsVisible() {
   let { tabAboutProcesses, doc } = await openTabView();
 

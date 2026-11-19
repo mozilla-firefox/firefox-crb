@@ -2049,6 +2049,9 @@ function fillTabCpuCell(
 class ProcessesTabView extends RowSet {
   #nextRowId = 0;
   #searching = false;
+  get #hostTabbrowser() {
+    return window.browsingContext.topChromeWindow.gBrowser;
+  }
 
   // groups drives the rows; tabCounters is only for the flat totals-bar sum.
   // During a search, rows outside group.shownTabs are hidden, not removed, so
@@ -2189,6 +2192,7 @@ class ProcessesTabView extends RowSet {
     for (let tabData of row.group.tabs) {
       this.getRow(tabData.tab).classList.toggle("collapsed", !shownExpanded);
     }
+    this.updateHeaderActive(row);
   }
 
   getShownChildRows(row) {
@@ -2291,6 +2295,32 @@ class ProcessesTabView extends RowSet {
     return row;
   }
 
+  // [selected] is checkbox selection; this marks the selected tab of the
+  // window showing this view.
+  updateRowActive(row) {
+    this.#markActive(row, row.tabData.tab == this.#hostTabbrowser.selectedTab);
+  }
+
+  // A collapsed group's header stands in for its active tab.
+  updateHeaderActive(row) {
+    this.#markActive(
+      row,
+      row.caret.getAttribute("aria-expanded") == "false" &&
+        this.getShownChildRows(row).some(childRow =>
+          childRow.hasAttribute("active-tab")
+        )
+    );
+  }
+
+  #markActive(row, isActive) {
+    row.toggleAttribute("active-tab", isActive);
+    if (isActive) {
+      row.setAttribute("aria-current", "true");
+    } else {
+      row.removeAttribute("aria-current");
+    }
+  }
+
   setRowSelected(row, isSelected) {
     row.toggleAttribute("selected", isSelected);
     row.checkbox.checked = isSelected;
@@ -2300,6 +2330,7 @@ class ProcessesTabView extends RowSet {
     row.tabData = tabData;
     row.classList.remove("departed");
     row.inert = false;
+    this.updateRowActive(row);
 
     if (tabData.discarded) {
       row.classList.remove("killing");
@@ -2492,6 +2523,66 @@ class ProcessesTabController {
     // Match the real initial sort (memory, descending) with a visible
     // indicator -- otherwise the first click on Memory looks like a no-op.
     this._setSortIndicator("column-memory-resident", false);
+
+    this._initTabListeners();
+  }
+
+  // Keeps what the rows show of each tab current between polls.
+  // Services.wm, not EveryWindow, which is browser/-owned.
+  _initTabListeners() {
+    let disposed = false;
+    // A selected tab is never unloaded, so re-reading each tab's state here
+    // also drops a just-selected row's dimmed look and reload button.
+    let onTabSelect = () => {
+      // Removing this view's own tab selects another one before unload.
+      if (
+        !document.hidden &&
+        this._lastTabCounters &&
+        window.browsingContext.embedderElement
+      ) {
+        this._rerender();
+      }
+    };
+    let addListeners = win => {
+      win.addEventListener("TabSelect", onTabSelect);
+    };
+    let removeListeners = win => {
+      win.removeEventListener("TabSelect", onTabSelect);
+    };
+    for (let win of Services.wm.getEnumerator("navigator:browser")) {
+      addListeners(win);
+    }
+    let listener = {
+      onOpenWindow(appWindow) {
+        let win = appWindow.docShell.domWindow;
+        win.addEventListener(
+          "load",
+          () => {
+            if (
+              !disposed &&
+              win.document.documentElement.getAttribute("windowtype") ==
+                "navigator:browser"
+            ) {
+              addListeners(win);
+            }
+          },
+          { once: true }
+        );
+      },
+      onCloseWindow() {},
+    };
+    Services.wm.addListener(listener);
+    window.addEventListener(
+      "unload",
+      () => {
+        disposed = true;
+        Services.wm.removeListener(listener);
+        for (let win of Services.wm.getEnumerator("navigator:browser")) {
+          removeListeners(win);
+        }
+      },
+      { once: true }
+    );
   }
 
   _setSortIndicator(columnId, ascending) {
