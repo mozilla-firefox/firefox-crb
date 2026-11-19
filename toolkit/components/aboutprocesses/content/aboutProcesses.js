@@ -320,6 +320,7 @@ class TabAttribution {
       let totalRamSize = 0;
       let slopeCpuOneCore = 0;
       let hasUsageData = false;
+      let processWeights = new Map();
       if (weights) {
         for (let [pid, weight] of weights) {
           let totalWeight = weightsByPid.get(pid);
@@ -327,6 +328,7 @@ class TabAttribution {
             continue;
           }
           hasUsageData = true;
+          processWeights.set(pid, { weight, totalWeight });
           let share = weight / totalWeight;
           totalRamSize += (ramByPid.get(pid) ?? 0) * share;
           let slopeCpu = cpuByPid.get(pid);
@@ -348,6 +350,9 @@ class TabAttribution {
         // False for discarded/never-loaded tabs and ones whose process
         // isn't in `counters` at all -- shown as "—", not a misleading 0.
         hasUsageData,
+        // pid -> this tab's frame weight in the process and the process's
+        // total, to tell a measurement from a share (see sumTabCounters).
+        processWeights,
         totalRamSize,
         slopeCpuOfTotal:
           slopeCpuOneCore == null ? null : slopeCpuOneCore / this._cpuCount,
@@ -1944,18 +1949,31 @@ class ProcessesController {
 const TAB_CPU_ROUNDS_TO_ZERO_THRESHOLD = 0.00005;
 
 // slopeCpuOfTotal is summable across tabs (see TabAttribution.getTabCounters),
-// and null if any tab's is still null.
+// and null if any tab's is still null. The sum is `estimated` unless these
+// tabs hold all the frame weight of every process they use; only then do
+// their shares add back up to a measurement.
 function sumTabCounters(tabCounters) {
   let totalRamSize = 0;
   let slopeCpuOfTotal = 0;
+  let hasUsageData = false;
+  let weightByPid = new Map();
+  let totalWeightByPid = new Map();
   for (let tabData of tabCounters) {
     totalRamSize += tabData.totalRamSize;
+    hasUsageData ||= tabData.hasUsageData;
+    for (let [pid, { weight, totalWeight }] of tabData.processWeights) {
+      weightByPid.set(pid, (weightByPid.get(pid) ?? 0) + weight);
+      totalWeightByPid.set(pid, totalWeight);
+    }
     slopeCpuOfTotal =
       tabData.slopeCpuOfTotal == null || slopeCpuOfTotal == null
         ? null
         : slopeCpuOfTotal + tabData.slopeCpuOfTotal;
   }
-  return { totalRamSize, slopeCpuOfTotal };
+  let estimated = [...weightByPid].some(
+    ([pid, weight]) => weight < totalWeightByPid.get(pid)
+  );
+  return { totalRamSize, slopeCpuOfTotal, hasUsageData, estimated };
 }
 
 // "—" for tabs with no process to attribute usage from, "…" for CPU not yet
@@ -1968,18 +1986,28 @@ function fillNoDataCell(cell, className, text = "—") {
   cell.textContent = text;
 }
 
-function fillTabMemoryCell(cell, totalRamSize, hasUsageData = true) {
+// Both take a tab's counters or a sumTabCounters() result.
+function fillTabMemoryCell(
+  cell,
+  { totalRamSize, hasUsageData = true, estimated = false }
+) {
   if (!hasUsageData) {
     fillNoDataCell(cell, "memory");
     return;
   }
   let formatted = formatMemory(totalRamSize);
+  let isGb = formatted.unit == "GB";
+  let fluentName = isGb
+    ? "about-processes-tab-memory-gb"
+    : "about-processes-total-memory-size-no-change";
+  if (estimated) {
+    fluentName = isGb
+      ? "about-processes-tab-memory-gb-estimated"
+      : "about-processes-tab-memory-mb-estimated";
+  }
   fillCell(cell, {
     classes: ["memory"],
-    fluentName:
-      formatted.unit == "GB"
-        ? "about-processes-tab-memory-gb"
-        : "about-processes-total-memory-size-no-change",
+    fluentName,
     fluentArgs: {
       total: formatted.amount,
       totalUnit: gLocalizedUnits.memory[formatted.unit],
@@ -1987,7 +2015,10 @@ function fillTabMemoryCell(cell, totalRamSize, hasUsageData = true) {
   });
 }
 
-function fillTabCpuCell(cell, slopeCpuOfTotal, hasUsageData = true) {
+function fillTabCpuCell(
+  cell,
+  { slopeCpuOfTotal, hasUsageData = true, estimated = false }
+) {
   if (!hasUsageData) {
     fillNoDataCell(cell, "cpu");
     return;
@@ -1996,7 +2027,9 @@ function fillTabCpuCell(cell, slopeCpuOfTotal, hasUsageData = true) {
     fillNoDataCell(cell, "cpu", "…");
     return;
   }
-  let fluentName = "about-processes-tab-cpu2";
+  let fluentName = estimated
+    ? "about-processes-tab-cpu-estimated"
+    : "about-processes-tab-cpu2";
   let fluentArgs = { percent: slopeCpuOfTotal };
   if (slopeCpuOfTotal == 0) {
     fluentName = "about-processes-tab-cpu-fully-idle";
@@ -2201,10 +2234,9 @@ class ProcessesTabView extends RowSet {
       { count: tabs.length }
     );
     // A fully-discarded group has nothing to sum, which reads as "—", not "0B".
-    let hasUsageData = tabs.some(tabData => tabData.hasUsageData);
-    let { totalRamSize, slopeCpuOfTotal } = sumTabCounters(tabs);
-    fillTabMemoryCell(memoryCell, totalRamSize, hasUsageData);
-    fillTabCpuCell(cpuCell, slopeCpuOfTotal, hasUsageData);
+    let counters = sumTabCounters(tabs);
+    fillTabMemoryCell(memoryCell, counters);
+    fillTabCpuCell(cpuCell, counters);
   }
 
   _updateTotals(tabCounters) {
@@ -2214,10 +2246,10 @@ class ProcessesTabView extends RowSet {
     document.l10n.setAttributes(countCell, "about-processes-tab-count", {
       count: tabCounters.length,
     });
-    let { totalRamSize, slopeCpuOfTotal } = sumTabCounters(tabCounters);
-    let hasUsageData = tabCounters.some(tabData => tabData.hasUsageData);
-    fillTabMemoryCell(memoryCell, totalRamSize, hasUsageData);
-    fillTabCpuCell(cpuCell, slopeCpuOfTotal, hasUsageData);
+    let { totalRamSize, slopeCpuOfTotal, hasUsageData } =
+      sumTabCounters(tabCounters);
+    fillTabMemoryCell(memoryCell, { totalRamSize, hasUsageData });
+    fillTabCpuCell(cpuCell, { slopeCpuOfTotal, hasUsageData });
   }
 
   // Unlike ProcessesView.discardUpdate(), appends new rows immediately (no
@@ -2288,8 +2320,9 @@ class ProcessesTabView extends RowSet {
     let image = tabData.tab.getAttribute("image");
     nameCell.style.backgroundImage = image ? `url('${image}')` : "";
 
-    fillTabMemoryCell(memoryCell, tabData.totalRamSize, tabData.hasUsageData);
-    fillTabCpuCell(cpuCell, tabData.slopeCpuOfTotal, tabData.hasUsageData);
+    let counters = sumTabCounters([tabData]);
+    fillTabMemoryCell(memoryCell, counters);
+    fillTabCpuCell(cpuCell, counters);
   }
 }
 
@@ -2331,14 +2364,14 @@ class ProcessesTabController {
     // clarifying that, since the visible header text stays the same.
     document.l10n.setAttributes(
       document.getElementById("column-cpu-total"),
-      "about-processes-column-cpu-total-tab"
+      "about-processes-column-cpu-total-tab2"
     );
 
     // Shortened here rather than renaming the shared "Memory" string, to
     // reclaim width in this narrower view without changing the default one.
     document.l10n.setAttributes(
       document.getElementById("column-memory-resident"),
-      "about-processes-column-memory-resident-tab"
+      "about-processes-column-memory-resident-tab2"
     );
 
     this._selectAllCheckbox = document.getElementById("select-all-checkbox");
@@ -2576,10 +2609,9 @@ class ProcessesTabController {
       "about-processes-bulk-selected-count",
       { count: selectedCount }
     );
-    let { totalRamSize, slopeCpuOfTotal } = sumTabCounters(selectedTabData);
-    let hasUsageData = selectedTabData.some(tabData => tabData.hasUsageData);
-    fillTabMemoryCell(memoryCell, totalRamSize, hasUsageData);
-    fillTabCpuCell(cpuCell, slopeCpuOfTotal, hasUsageData);
+    let counters = sumTabCounters(selectedTabData);
+    fillTabMemoryCell(memoryCell, counters);
+    fillTabCpuCell(cpuCell, counters);
   }
 
   // Tab actions are per-tabbrowser, so cross-window selections must be grouped.

@@ -73,10 +73,11 @@ about-processes-column-name = Name
 about-processes-column-memory-resident = Memory
 about-processes-column-cpu-total = CPU
 # Same visible header as about-processes-column-cpu-total, but the tooltip clarifies a different meaning here.
-about-processes-column-cpu-total-tab = CPU
-    .title = % of total CPU capacity across all cores
+about-processes-column-cpu-total-tab2 = CPU
+    .title = % of total CPU capacity across all cores. Tabs that run together show an estimated share.
 # Shortened from the shared "Memory" to reclaim column width in the narrower view shown in a sidebar.
-about-processes-column-memory-resident-tab = RAM
+about-processes-column-memory-resident-tab2 = RAM
+    .title = Tabs that run together show an estimated share of their memory.
 
 ## Process names
 ## Variables:
@@ -281,6 +282,24 @@ about-processes-total-memory-size-no-change = { NUMBER($total, maximumFractionDi
 
 # A tab’s memory of a gigabyte or more, shown to one decimal place.
 about-processes-tab-memory-gb = { NUMBER($total, minimumFractionDigits: 1, maximumFractionDigits: 1) }{ $totalUnit }
+
+# Tooltip for a CPU or memory figure that is an estimated share of a process.
+about-processes-tab-estimate-tooltip = Estimated. Tabs that run together can only be measured as a group, so this figure is approximate.
+
+# As about-processes-tab-cpu2, for an estimated share. The leading "~" marks it as approximate.
+about-processes-tab-cpu-estimated = ~{ about-processes-tab-cpu2 }
+    .title = { about-processes-tab-estimate-tooltip }
+    .aria-label = Estimated { about-processes-tab-cpu2 }
+
+# As about-processes-total-memory-size-no-change, for an estimated share. The leading "~" marks it as approximate.
+about-processes-tab-memory-mb-estimated = ~{ about-processes-total-memory-size-no-change }
+    .title = { about-processes-tab-estimate-tooltip }
+    .aria-label = Estimated { about-processes-total-memory-size-no-change }
+
+# As about-processes-tab-memory-gb, for an estimated share. The leading "~" marks it as approximate.
+about-processes-tab-memory-gb-estimated = ~{ about-processes-tab-memory-gb }
+    .title = { about-processes-tab-estimate-tooltip }
+    .aria-label = Estimated { about-processes-tab-memory-gb }
 
 ## Duration units
 
