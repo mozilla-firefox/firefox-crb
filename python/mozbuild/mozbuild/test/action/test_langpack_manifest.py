@@ -227,7 +227,7 @@ langpack-contributors = { "" }
             version = langpack_manifest.get_version_maybe_buildid(app_version)
             self.assertEqual(version, expected_version)
 
-    def test_main(self):
+    def test_langpack_manifest(self):
         # We set this env variable so that the manifest.json version string
         # uses a "buildid", see: `get_version_maybe_buildid()` for more
         # information.
@@ -263,49 +263,40 @@ langpack-contributors = { "" }
 
         tmpdir = tempfile.mkdtemp()
         try:
-            # These files are required by the `main()` function.
+            # These files are required by the `langpack_manifest()` function.
             for file in ["chrome.manifest", "empty-metadata.ftl"]:
-                langpack_manifest.write_file(os.path.join(tmpdir, file), "")
+                with open(os.path.join(tmpdir, file), "w", encoding="utf-8") as fh:
+                    fh.write("\n")
 
             for tc in TEST_CASES:
                 extension_id = "some@extension-id"
                 locale = "fr"
 
-                args = [
-                    "--input",
-                    tmpdir,
-                    # This file has been created right above.
-                    "--metadata",
-                    "empty-metadata.ftl",
-                    "--app-name",
-                    "Firefox",
-                    "--l10n-basedir",
-                    "/var/vcs/l10n-central",
-                    "--locales",
-                    locale,
-                    "--langpack-eid",
-                    extension_id,
-                    "--app-version",
-                    tc["app_version"],
-                    "--max-app-ver",
-                    tc["max_app_version"],
-                ]
-                langpack_manifest.main(args)
-
-                with open(os.path.join(tmpdir, "manifest.json")) as manifest_file:
-                    manifest = json.load(manifest_file)
-                    self.assertEqual(manifest["version"], tc["expected_version"])
-                    self.assertEqual(manifest["langpack_id"], locale)
-                    self.assertEqual(
-                        manifest["browser_specific_settings"],
-                        {
-                            "gecko": {
-                                "id": extension_id,
-                                "strict_min_version": tc["expected_min_version"],
-                                "strict_max_version": tc["expected_max_version"],
-                            }
-                        },
+                manifest = json.loads(
+                    langpack_manifest.langpack_manifest(
+                        input=tmpdir,
+                        # This file has been created right above.
+                        metadata="empty-metadata.ftl",
+                        app_name="Firefox",
+                        l10n_basedir="/var/vcs/l10n-central",
+                        locales=locale,
+                        langpack_eid=extension_id,
+                        app_version=tc["app_version"],
+                        max_app_ver=tc["max_app_version"],
                     )
+                )
+                self.assertEqual(manifest["version"], tc["expected_version"])
+                self.assertEqual(manifest["langpack_id"], locale)
+                self.assertEqual(
+                    manifest["browser_specific_settings"],
+                    {
+                        "gecko": {
+                            "id": extension_id,
+                            "strict_min_version": tc["expected_min_version"],
+                            "strict_max_version": tc["expected_max_version"],
+                        }
+                    },
+                )
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
             del os.environ["MOZ_BUILD_DATE"]

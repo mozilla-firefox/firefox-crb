@@ -2,8 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Per-locale langpack packaging action. Wraps `langpack_manifest`
-and the `zip` action.
+"""Per-locale langpack packaging action. Writes the staged files and the
+`langpack_manifest` manifest.json into the .xpi.
 
 Invoked in make via $(call py_action,package_langpack,...).
 """
@@ -14,8 +14,14 @@ import argparse
 import sys
 from pathlib import Path
 
+from mozpack.copier import Jarrer
+from mozpack.errors import errors
+from mozpack.files import FileFinder, GeneratedFile
+from mozpack.path import match
+
 from mozbuild.action import langpack_manifest
-from mozbuild.action import zip as action_zip
+
+EXCLUDES = ("**/*.manifest", "**/*.js", "**/*.ini")
 
 
 def package_langpack(
@@ -32,40 +38,27 @@ def package_langpack(
 ) -> int:
     Path(output).parent.mkdir(parents=True, exist_ok=True)
 
-    if result := langpack_manifest.main([
-        "--locales",
-        locale,
-        "--app-version",
-        app_version,
-        "--max-app-ver",
-        max_app_ver,
-        "--app-name",
-        app_name,
-        "--l10n-basedir",
-        l10n_basedir,
-        "--metadata",
-        metadata,
-        "--langpack-eid",
-        eid,
-        "--input",
-        xpi_stage,
-    ]):
-        return result
-
-    return action_zip.main(
-        [
-            "-C",
-            xpi_stage,
-            "-x",
-            "**/*.manifest",
-            "-x",
-            "**/*.js",
-            "-x",
-            "**/*.ini",
-            output,
-        ]
-        + list(includes)
+    manifest = langpack_manifest.langpack_manifest(
+        locales=locale,
+        app_version=app_version,
+        max_app_ver=max_app_ver,
+        app_name=app_name,
+        l10n_basedir=l10n_basedir,
+        langpack_eid=eid,
+        metadata=metadata,
+        input=xpi_stage,
     )
+
+    jarrer = Jarrer()
+    with errors.accumulate():
+        finder = FileFinder(xpi_stage)
+        for include in includes:
+            for path, file in finder.find(include):
+                if not any(match(path, exclude) for exclude in EXCLUDES):
+                    jarrer.add(path, file)
+        jarrer.add("manifest.json", GeneratedFile(f"{manifest}\n"))
+        jarrer.copy(output)
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -96,7 +89,7 @@ def main(argv: list[str]) -> int:
         action="append",
         default=[],
         help="Files or directories from <xpi-stage> to include in the .xpi "
-        "(e.g. chrome, localization, manifest.json). Repeatable.",
+        "(e.g. chrome, localization). Repeatable.",
     )
     args = parser.parse_args(argv)
 

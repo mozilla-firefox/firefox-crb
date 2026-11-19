@@ -640,7 +640,6 @@ class TestLangpack(_PackageApplicationTestCase):
             "--include=chrome",
             "--include=localization",
             "--include=browser",
-            "--include=manifest.json",
         ]
 
     def test_langpack(self):
