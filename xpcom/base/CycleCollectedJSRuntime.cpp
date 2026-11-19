@@ -402,10 +402,11 @@ struct TraversalTracer : public js::GenericTracerImpl<TraversalTracer> {
         mCb(aCb) {}
   nsCycleCollectionTraversalCallback& mCb;
 
+  void TraceShapeCounted(js::Shape* aShape);
+
  private:
   template <typename T>
   bool onEdge(T** aThingPtr, const char* aName);
-  void TraceShapeCounted(js::Shape* aShape);
   friend class js::GenericTracerImpl<TraversalTracer>;
 };
 
@@ -498,18 +499,7 @@ bool TraversalTracer::onEdge(T** aThingPtr, const char* aName) {
   // Allow re-use of this tracer inside trace callback.
   JS::AutoClearTracingContext actc(this);
 
-  if constexpr (std::is_same_v<T, js::Shape>) {
-    if (MOZ_UNLIKELY(bench)) {
-      TraceShapeCounted(thing);
-      return true;
-    }
-    // The maximum depth of traversal when tracing a Shape is unbounded, due to
-    // the parent pointers on the shape.
-    JS_TraceShapeCycleCollectorChildren(this, thing);
-  } else {
-    JS::TraceChildren(this, JS::GCCellPtr(thing));
-  }
-
+  JS::TraceChildren(this, JS::GCCellPtr(thing));
   return true;
 }
 
@@ -1062,6 +1052,17 @@ void CycleCollectedJSRuntime::DescribeGCThing(
 void CycleCollectedJSRuntime::NoteGCThingJSChildren(
     JS::GCCellPtr aThing, nsCycleCollectionTraversalCallback& aCb) const {
   TraversalTracer trc(mJSRuntime, aCb);
+  if (aThing.kind() == JS::TraceKind::Shape) {
+    // Tracing a Shape's children directly would reach its PropMaps, which
+    // are not CC graph nodes and form chains of unbounded length.
+    js::Shape* shape = &aThing.as<js::Shape>();
+    if (MOZ_UNLIKELY(ccbench::Counting())) {
+      trc.TraceShapeCounted(shape);
+      return;
+    }
+    JS_TraceShapeCycleCollectorChildren(&trc, shape);
+    return;
+  }
   JS::TraceChildren(&trc, aThing);
 }
 
