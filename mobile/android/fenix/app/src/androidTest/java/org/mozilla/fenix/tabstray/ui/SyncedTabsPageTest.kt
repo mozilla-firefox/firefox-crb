@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import mozilla.components.feature.syncedtabs.view.SyncedTabsView
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -64,6 +65,79 @@ class SyncedTabsPageTest {
     }
 
     @Test
+    fun givenReauthErrorThenAccountIssueStateIsShown() {
+        setContent(
+            state =
+                TabsTrayState.SyncState(
+                    isSignedIn = true,
+                    syncedTabs = listOf(SyncedTabsListItem.Error(errorText = "Please re-authenticate")),
+                    expandedSyncedTabs = listOf(true),
+                    syncError = SyncedTabsView.ErrorType.SYNC_NEEDS_REAUTHENTICATION,
+                ),
+            showNewSyncPageState = true,
+        )
+
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.ACCOUNT_ISSUE_SYNCED_TABS_PAGE).assertExists()
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.SYNCED_TABS_LIST).assertDoesNotExist()
+    }
+
+    @Test
+    fun givenReauthErrorWhenSignInIsClickedThenReauthenticateCallbackIsInvoked() {
+        var reauthenticateClicked = false
+        var signInClicked = false
+        setContent(
+            state =
+                TabsTrayState.SyncState(
+                    isSignedIn = true,
+                    syncError = SyncedTabsView.ErrorType.SYNC_NEEDS_REAUTHENTICATION,
+                ),
+            showNewSyncPageState = true,
+            onSignInClick = { signInClicked = true },
+            onReauthenticateClick = { reauthenticateClicked = true },
+        )
+
+        composeTestRule.onNodeWithText(getString(R.string.tab_manager_synced_tabs_page_sign_in_button)).performClick()
+
+        assertTrue(reauthenticateClicked)
+        assertFalse(signInClicked)
+    }
+
+    @Test
+    fun givenSyncEngineUnavailableErrorThenTabsSyncDisabledStateIsShown() {
+        setContent(
+            state =
+                TabsTrayState.SyncState(
+                    isSignedIn = true,
+                    syncError = SyncedTabsView.ErrorType.SYNC_ENGINE_UNAVAILABLE,
+                ),
+            showNewSyncPageState = true,
+        )
+
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.TABS_SYNC_DISABLED_SYNCED_TABS_PAGE).assertExists()
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.SYNCED_TABS_LIST).assertDoesNotExist()
+    }
+
+    @Test
+    fun givenSyncEngineUnavailableErrorWhenTurnOnTabSyncingIsClickedThenAccountSettingsCallbackIsInvoked() {
+        var accountSettingsClicked = false
+        setContent(
+            state =
+                TabsTrayState.SyncState(
+                    isSignedIn = true,
+                    syncError = SyncedTabsView.ErrorType.SYNC_ENGINE_UNAVAILABLE,
+                ),
+            showNewSyncPageState = true,
+            onAccountSettingsClick = { accountSettingsClicked = true },
+        )
+
+        composeTestRule
+            .onNodeWithText(getString(R.string.tab_manager_synced_tabs_page_turn_on_tab_syncing_button))
+            .performClick()
+
+        assertTrue(accountSettingsClicked)
+    }
+
+    @Test
     fun givenNewSyncPageDisabledAndSignedOutThenOldSignedOutPageIsShown() {
         setContent(state = TabsTrayState.SyncState(isSignedIn = false), showNewSyncPageState = false)
 
@@ -77,6 +151,8 @@ class SyncedTabsPageTest {
         state: TabsTrayState.SyncState,
         showNewSyncPageState: Boolean,
         onSignInClick: () -> Unit = {},
+        onAccountSettingsClick: () -> Unit = {},
+        onReauthenticateClick: () -> Unit = {},
     ) {
         composeTestRule.setContent {
             SyncedTabsPage(
@@ -85,6 +161,8 @@ class SyncedTabsPageTest {
                 onTabClick = {},
                 onTabClose = { _, _ -> },
                 onSignInClick = onSignInClick,
+                onAccountSettingsClick = onAccountSettingsClick,
+                onReauthenticateClick = onReauthenticateClick,
                 onSectionExpansionToggled = {},
             )
         }

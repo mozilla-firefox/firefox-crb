@@ -81,6 +81,7 @@ import org.mozilla.fenix.theme.FirefoxTheme
  * @param onSyncedTabClick Invoked when the user clicks on a synced tab.
  * @param onSyncedTabClose Invoked when the user clicks on a synced tab's close button.
  * @param onSignInClick Invoked when an unauthenticated user clicks to sign-in.
+ * @param onReauthenticateClick Invoked when a user whose account needs to be re-authenticated clicks to sign in.
  * @param onSaveToCollectionClick Invoked when the user clicks on the save to collection button from the multi select
  *   banner.
  * @param onShareSelectedTabsClick Invoked when the user clicks on the share button from the multi select banner.
@@ -132,6 +133,7 @@ fun TabsTray(
     onSyncedTabClick: OnSyncedTabClick,
     onSyncedTabClose: OnSyncedTabClose,
     onSignInClick: () -> Unit,
+    onReauthenticateClick: () -> Unit,
     onSaveToCollectionClick: () -> Unit,
     onShareSelectedTabsClick: () -> Unit,
     onTabSettingsClick: () -> Unit,
@@ -301,6 +303,8 @@ fun TabsTray(
                             onTabClick = onSyncedTabClick,
                             onTabClose = onSyncedTabClose,
                             onSignInClick = onSignInClick,
+                            onAccountSettingsClick = onAccountSettingsClick,
+                            onReauthenticateClick = onReauthenticateClick,
                             onSectionExpansionToggled = { i ->
                                 onAction(TabsTrayAction.SyncedTabsHeaderToggled(i))
                             },
@@ -442,6 +446,7 @@ private fun TabsTrayPreview(
                 }
             },
             onSignInClick = {},
+            onReauthenticateClick = {},
             onSaveToCollectionClick = {},
             onShareSelectedTabsClick = {},
             onTabSettingsClick = {},

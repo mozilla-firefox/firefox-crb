@@ -60,6 +60,7 @@ import org.junit.runner.RunWith
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.TabsTray
 import org.mozilla.fenix.GleanMetrics.TrackingProtection
+import org.mozilla.fenix.NavGraphDirections
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
@@ -3037,6 +3038,17 @@ class DefaultTabManagerControllerTest {
         verify {
             navController.navigate(
                 TabManagementFragmentDirections.actionGlobalTurnOnSync(entrypoint = FenixFxAEntryPoint.SyncedTabsMenu)
+            )
+        }
+    }
+
+    @Test
+    fun `WHEN the reauthenticate button is clicked THEN navigate the user to the account problem screen`() {
+        createController().handleReauthenticateClicked()
+
+        verify {
+            navController.navigate(
+                NavGraphDirections.actionGlobalAccountProblemFragment(entrypoint = FenixFxAEntryPoint.SyncedTabsMenu)
             )
         }
     }
