@@ -153,7 +153,6 @@
 #include "mozilla/CycleCollectedJSRuntime.h"
 #include "mozilla/CycleCollectorStats.h"
 #include "mozilla/HashFunctions.h"
-#include "mozilla/HashTable.h"
 #include "mozilla/HoldDropJSObjects.h"
 #include "mozilla/Maybe.h"
 /* This must occur *after* base/process_util.h to avoid typedefs conflicts. */
@@ -169,7 +168,7 @@
 #include "mozilla/Likely.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/MemoryReporting.h"
-#include "mozilla/MruCache.h"
+#include "mozilla/MathAlgorithms.h"
 #include "mozilla/PoisonIOInterposer.h"
 #include "mozilla/ProfilerLabels.h"
 #include "mozilla/ProfilerMarkers.h"
@@ -785,17 +784,147 @@ class NodePool {
   PtrInfo* mLast;
 };
 
-struct PtrToNodeHashPolicy {
-  using Key = PtrInfo*;
-  using Lookup = void*;
+// Map from object pointer to PtrInfo. Linear probing with the key stored
+// inline, so that a lookup usually touches a single cache line and never
+// dereferences the PtrInfo.
+class PtrInfoMap {
+ public:
+  struct Entry {
+    void* mKey;
+    PtrInfo* mValue;
+  };
 
-  static js::HashNumber hash(const Lookup& aLookup) {
-    return mozilla::HashGeneric(aLookup);
+  PtrInfoMap() = default;
+  PtrInfoMap(const PtrInfoMap&) = delete;
+  PtrInfoMap& operator=(const PtrInfoMap&) = delete;
+  ~PtrInfoMap() { free(mEntries); }
+
+  static uint32_t Hash(const void* aKey, uint32_t aShift) {
+    return uint32_t((uint64_t(uintptr_t(aKey)) * 0x9E3779B97F4A7C15ULL) >>
+                    aShift);
   }
 
-  static bool match(const Key& aKey, const Lookup& aLookup) {
-    return aKey->mPointer == aLookup;
+  [[nodiscard]] bool Reserve(uint32_t aCount) {
+    uint64_t cap = std::max<uint64_t>(16, uint64_t(aCount) * 4 / 3 + 1);
+    cap = mozilla::RoundUpPow2(cap);
+    return cap <= mCapacity || Rehash(cap);
   }
+
+  void Clear() {
+    free(mEntries);
+    mEntries = nullptr;
+    mCapacity = 0;
+    mCount = 0;
+  }
+
+  void ClearKeepingStorage() {
+    if (mEntries) {
+      memset(mEntries, 0, mCapacity * sizeof(Entry));
+    }
+    mCount = 0;
+  }
+
+  uint32_t Count() const { return mCount; }
+  bool IsEmpty() const { return mCount == 0; }
+
+  PtrInfo* Lookup(void* aKey) const {
+    if (!mEntries) {
+      return nullptr;
+    }
+    for (uint32_t i = Hash(aKey, mShift);; i = (i + 1) & (mCapacity - 1)) {
+      const Entry& e = mEntries[i];
+      if (e.mKey == aKey) {
+        return e.mValue;
+      }
+      if (!e.mKey) {
+        return nullptr;
+      }
+    }
+  }
+
+  // Returns the entry for aKey, adding one with a null mValue if aKey is not
+  // present, or null on OOM. A new entry must be filled in or Remove()d.
+  Entry* LookupOrAdd(void* aKey) {
+    MOZ_ASSERT(aKey);
+    if (uint64_t(mCount + 1) * 4 > uint64_t(mCapacity) * 3 &&
+        !Rehash(mCapacity ? uint64_t(mCapacity) * 2 : 16)) {
+      return nullptr;
+    }
+    for (uint32_t i = Hash(aKey, mShift);; i = (i + 1) & (mCapacity - 1)) {
+      Entry& e = mEntries[i];
+      if (e.mKey == aKey) {
+        return &e;
+      }
+      if (!e.mKey) {
+        e.mKey = aKey;
+        e.mValue = nullptr;
+        mCount++;
+        return &e;
+      }
+    }
+  }
+
+  void Remove(void* aKey) {
+    if (!mEntries) {
+      return;
+    }
+    uint32_t mask = mCapacity - 1;
+    uint32_t i = Hash(aKey, mShift);
+    while (mEntries[i].mKey != aKey) {
+      if (!mEntries[i].mKey) {
+        return;
+      }
+      i = (i + 1) & mask;
+    }
+    // Backward-shift deletion: move later entries of the probe run into the
+    // hole when their home slot does not lie strictly between the hole and
+    // their current position.
+    for (uint32_t j = (i + 1) & mask; mEntries[j].mKey; j = (j + 1) & mask) {
+      uint32_t home = Hash(mEntries[j].mKey, mShift);
+      if (((j - home) & mask) >= ((j - i) & mask)) {
+        mEntries[i] = mEntries[j];
+        i = j;
+      }
+    }
+    mEntries[i] = Entry{};
+    mCount--;
+  }
+
+  size_t ShallowSizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const {
+    return aMallocSizeOf(mEntries);
+  }
+
+ private:
+  bool Rehash(uint64_t aCapacity) {
+    if (aCapacity > (uint64_t(1) << 31)) {
+      return false;
+    }
+    auto* entries = static_cast<Entry*>(calloc(aCapacity, sizeof(Entry)));
+    if (!entries) {
+      return false;
+    }
+    uint32_t shift = 64 - mozilla::CeilingLog2(aCapacity);
+    uint32_t mask = uint32_t(aCapacity) - 1;
+    for (uint32_t k = 0; k < mCapacity; k++) {
+      if (void* key = mEntries[k].mKey) {
+        uint32_t i = Hash(key, shift);
+        while (entries[i].mKey) {
+          i = (i + 1) & mask;
+        }
+        entries[i] = mEntries[k];
+      }
+    }
+    free(mEntries);
+    mEntries = entries;
+    mCapacity = uint32_t(aCapacity);
+    mShift = shift;
+    return true;
+  }
+
+  Entry* mEntries = nullptr;
+  uint32_t mCapacity = 0;
+  uint32_t mCount = 0;
+  uint32_t mShift = 64;
 };
 
 struct WeakMapping {
@@ -817,7 +946,7 @@ struct CCGraph {
  private:
   friend CCGraphBuilder;
 
-  mozilla::HashSet<PtrInfo*, PtrToNodeHashPolicy> mPtrInfoMap;
+  PtrInfoMap mPtrInfoMap;
 
   bool mOutOfMemory;
 
@@ -838,7 +967,7 @@ struct CCGraph {
     // hashtable normally at the cost of performance. The process might still
     // be in an unrecoverably bad state.
     DebugOnly<bool> ok =
-        mPtrInfoMap.reserve(std::max(kInitialMapLength, mSizeHint));
+        mPtrInfoMap.Reserve(std::max(kInitialMapLength, mSizeHint));
     MOZ_ASSERT(ok, "initial reserve should succeed");
   }
 
@@ -848,22 +977,22 @@ struct CCGraph {
     mWeakMaps.Clear();
     mRootCount = 0;
     if (getenv("CCBENCH_KEEP_TABLE")) {
-      mPtrInfoMap.clear();
+      mPtrInfoMap.ClearKeepingStorage();
     } else {
-      mPtrInfoMap.clearAndCompact();
+      mPtrInfoMap.Clear();
     }
     mOutOfMemory = false;
   }
 
   bool IsEmpty() {
     return mNodes.IsEmpty() && mEdges.IsEmpty() && mWeakMaps.IsEmpty() &&
-           mRootCount == 0 && mPtrInfoMap.empty();
+           mRootCount == 0 && mPtrInfoMap.IsEmpty();
   }
 
   PtrInfo* FindNode(void* aPtr);
   void RemoveObjectFromMap(void* aObject);
 
-  uint32_t MapCount() const { return mPtrInfoMap.count(); }
+  uint32_t MapCount() const { return mPtrInfoMap.Count(); }
 
   void NoteBuildingDone() {
     mSizeHint = getenv("CCBENCH_NO_PRESIZE")
@@ -881,24 +1010,19 @@ struct CCGraph {
     // pointers are non-owning.
     n += mWeakMaps.ShallowSizeOfExcludingThis(aMallocSizeOf);
 
-    n += mPtrInfoMap.shallowSizeOfExcludingThis(aMallocSizeOf);
+    n += mPtrInfoMap.ShallowSizeOfExcludingThis(aMallocSizeOf);
 
     return n;
   }
 };
 
-PtrInfo* CCGraph::FindNode(void* aPtr) {
-  auto p = mPtrInfoMap.lookup(aPtr);
-  return p ? *p : nullptr;
-}
+PtrInfo* CCGraph::FindNode(void* aPtr) { return mPtrInfoMap.Lookup(aPtr); }
 
 void CCGraph::RemoveObjectFromMap(void* aObj) {
-  auto p = mPtrInfoMap.lookup(aObj);
-  if (p) {
-    PtrInfo* pinfo = *p;
+  if (PtrInfo* pinfo = mPtrInfoMap.Lookup(aObj)) {
     pinfo->mPointer = nullptr;
     pinfo->mParticipant = nullptr;
-    mPtrInfoMap.remove(p);
+    mPtrInfoMap.Remove(aObj);
   }
 }
 
@@ -2062,14 +2186,9 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
   uint32_t mNoteChildCount;
   const bool& mFreeingSnowWhite;
 
-  struct PtrInfoCache : public MruCache<void*, PtrInfo*, PtrInfoCache, 256> {
-    static HashNumber Hash(const void* aKey) { return HashGeneric(aKey); }
-    static bool Match(const void* aKey, const PtrInfo* aVal) {
-      return aVal->mPointer == aKey;
-    }
-  };
-
-  PtrInfoCache mGraphCache;
+  // Direct-mapped cache of recent AddNode results, in front of mPtrInfoMap.
+  static constexpr uint32_t kGraphCacheShift = 64 - 7;
+  PtrInfoMap::Entry mGraphCache[1 << (64 - kGraphCacheShift)] = {};
 
  public:
   CCGraphBuilder(CCGraph& aGraph, CycleCollectorResults& aResults,
@@ -2092,7 +2211,12 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
   // building is finished.
   bool BuildGraph(SliceBudget& aBudget);
 
-  void RemoveCachedEntry(void* aPtr) { mGraphCache.Remove(aPtr); }
+  void RemoveCachedEntry(void* aPtr) {
+    auto& e = mGraphCache[PtrInfoMap::Hash(aPtr, kGraphCacheShift)];
+    if (e.mKey == aPtr) {
+      e = PtrInfoMap::Entry{};
+    }
+  }
 
  private:
   PtrInfo* AddNode(void* aPtr, nsCycleCollectionParticipant* aParticipant);
@@ -2230,11 +2354,12 @@ PtrInfo* CCGraphBuilder::AddNode(void* aPtr,
     return nullptr;
   }
 
-  PtrInfoCache::Entry cached = mGraphCache.Lookup(aPtr);
-  if (cached) {
+  PtrInfoMap::Entry& cached =
+      mGraphCache[PtrInfoMap::Hash(aPtr, kGraphCacheShift)];
+  if (cached.mKey == aPtr) {
 #ifdef DEBUG
-    if (cached.Data()->mParticipant != aParticipant) {
-      auto* parti1 = cached.Data()->mParticipant;
+    if (cached.mValue->mParticipant != aParticipant) {
+      auto* parti1 = cached.mValue->mParticipant;
       auto* parti2 = aParticipant;
       NS_WARNING(
           nsPrintfCString("cached participant: %s; AddNode participant: %s\n",
@@ -2243,35 +2368,33 @@ PtrInfo* CCGraphBuilder::AddNode(void* aPtr,
               .get());
     }
 #endif
-    MOZ_ASSERT(cached.Data()->mParticipant == aParticipant,
+    MOZ_ASSERT(cached.mValue->mParticipant == aParticipant,
                "nsCycleCollectionParticipant shouldn't change!");
-    return cached.Data();
+    return cached.mValue;
   }
 
-  PtrInfo* result;
-  auto p = mGraph.mPtrInfoMap.lookupForAdd(aPtr);
-  if (!p) {
-    // New entry
+  PtrInfoMap::Entry* entry = mGraph.mPtrInfoMap.LookupOrAdd(aPtr);
+  if (!entry) {
+    mGraph.mOutOfMemory = true;
+    MOZ_ASSERT(false, "OOM while building cycle collector graph");
+    return nullptr;
+  }
+
+  PtrInfo* result = entry->mValue;
+  if (!result) {
     result = mNodeBuilder.Add(aPtr, aParticipant);
     if (!result) {
+      mGraph.mPtrInfoMap.Remove(aPtr);
       return nullptr;
     }
-
-    if (!mGraph.mPtrInfoMap.add(p, result)) {
-      // `result` leaks here, but we can't free it because it's
-      // pool-allocated within NodePool.
-      mGraph.mOutOfMemory = true;
-      MOZ_ASSERT(false, "OOM while building cycle collector graph");
-      return nullptr;
-    }
-
+    entry->mValue = result;
   } else {
-    result = *p;
     MOZ_ASSERT(result->mParticipant == aParticipant,
                "nsCycleCollectionParticipant shouldn't change!");
   }
 
-  cached.Set(result);
+  cached.mKey = aPtr;
+  cached.mValue = result;
 
   return result;
 }
