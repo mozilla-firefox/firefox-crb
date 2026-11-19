@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import argparse
 import os
 import sys
 
@@ -12,12 +11,14 @@ from mozpack.archive import create_tar_gz_from_files
 from mozpack.files import BaseFile
 
 from mozbuild.generated_sources import get_generated_sources
+from mozbuild.packaging import configured_package_paths
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(description="Produce archive of generated sources")
-    parser.add_argument("outputfile", help="File to write output to")
-    args = parser.parse_args(argv)
+    paths = configured_package_paths(
+        substs=buildconfig.substs, topobjdir=buildconfig.topobjdir
+    )
+    outputfile = mozpath.join(paths.pkg_output_dir, paths.generated_source_file_package)
 
     objdir_abspath = mozpath.abspath(buildconfig.topobjdir)
 
@@ -47,7 +48,7 @@ def main(argv):
         return True
 
     files = dict(filter(is_valid_entry, get_generated_sources()))
-    with open(args.outputfile, "wb") as fh:
+    with open(outputfile, "wb") as fh:
         create_tar_gz_from_files(fh, files, compresslevel=5)
 
 
