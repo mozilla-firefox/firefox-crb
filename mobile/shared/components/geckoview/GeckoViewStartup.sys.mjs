@@ -119,6 +119,18 @@ export class GeckoViewStartup {
   // getAppPermissions() has no in-flight deduplication of its own.
   #localNetworkPermissionPending = false;
 
+  // Tasks that wait for the first "browser-idle-startup-tasks-finished"
+  // notification. Null once it has fired.
+  #idleStartupTasks = [];
+
+  #initAfterIdleStartup(fn) {
+    if (this.#idleStartupTasks) {
+      this.#idleStartupTasks.push(fn);
+    } else {
+      InitLater(fn);
+    }
+  }
+
   /**
    * Asks the app to request the OS ACCESS_LOCAL_NETWORK permission, in response
    * to networking being about to connect to the local network. Fire and forget:
@@ -400,6 +412,10 @@ export class GeckoViewStartup {
         // Notify the start up crash tracker that the browser has successfully
         // started up so the startup cache isn't rebuilt on next startup.
         Services.startup.trackStartupCrashEnd();
+        for (const fn of this.#idleStartupTasks) {
+          InitLater(fn);
+        }
+        this.#idleStartupTasks = null;
         break;
       }
       case "handlersvc-store-initialized": {
@@ -498,7 +514,7 @@ export class GeckoViewStartup {
       }
 
       case "GeckoView:StorageDelegate:Attached":
-        InitLater(() => {
+        this.#initAfterIdleStartup(() => {
           const loginDetection = Cc[
             "@mozilla.org/login-detection-service;1"
           ].getService(Ci.nsILoginDetectionService);
@@ -514,7 +530,7 @@ export class GeckoViewStartup {
           GeckoViewUtils.addLazyGetter(this, "crashPullCallback", {
             module: "resource://gre/modules/ChildCrashHandler.sys.mjs",
           });
-          InitLater(() =>
+          this.#initAfterIdleStartup(() =>
             this.RemoteSettingsCrashPull.start(this.crashPullCallback)
           );
         }
