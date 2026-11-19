@@ -26,7 +26,9 @@ import mozilla.components.compose.base.annotation.FlexibleWindowLightDarkPreview
 import mozilla.components.compose.base.button.TextButton
 import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.R
+import org.mozilla.fenix.compose.core.Action
 import org.mozilla.fenix.tabstray.TabsTrayTestTag
+import org.mozilla.fenix.tabstray.redux.state.TabsTrayState
 import org.mozilla.fenix.tabstray.redux.state.TabsTrayState.SyncState
 import org.mozilla.fenix.tabstray.syncedtabs.OnSectionExpansionToggled
 import org.mozilla.fenix.tabstray.ui.syncedtabs.OnTabClick as OnSyncedTabClick
@@ -40,6 +42,7 @@ private val EmptyPageWidth = 200.dp
  * UI for displaying the Synced Tabs Page in the Tab Manager.
  *
  * @param state The current snapshot of [SyncState].
+ * @param config The current [TabsTrayState.TabsTrayConfig].
  * @param onTabClick Invoked when the user clicks on a tab.
  * @param onTabClose Invoked when the user clicks to close a tab.
  * @param onSignInClick Invoked when an unauthenticated user clicks to sign-in.
@@ -48,21 +51,44 @@ private val EmptyPageWidth = 200.dp
 @Composable
 internal fun SyncedTabsPage(
     state: SyncState,
+    config: TabsTrayState.TabsTrayConfig,
     onTabClick: OnSyncedTabClick,
     onTabClose: OnSyncedTabClose,
     onSignInClick: () -> Unit,
     onSectionExpansionToggled: OnSectionExpansionToggled,
 ) {
-    if (state.isSignedIn) {
-        SyncedTabsList(
-            syncedTabs = state.syncedTabs,
-            onTabClick = onTabClick,
-            onTabCloseClick = onTabClose,
-            expandedState = state.expandedSyncedTabs,
-            onSectionExpansionToggled = onSectionExpansionToggled,
-        )
+    if (config.showNewSyncPageState) {
+        if (!state.isSignedIn) {
+            SyncedTabsEmptyState(
+                state =
+                    SyncedTabsEmptyStateType.SignedOut(
+                        Action(
+                            label = stringResource(R.string.tab_manager_synced_tabs_page_sign_in_button),
+                            onClick = onSignInClick,
+                        )
+                    )
+            )
+        } else {
+            SyncedTabsList(
+                syncedTabs = state.syncedTabs,
+                onTabClick = onTabClick,
+                onTabCloseClick = onTabClose,
+                expandedState = state.expandedSyncedTabs,
+                onSectionExpansionToggled = onSectionExpansionToggled,
+            )
+        }
     } else {
-        UnauthenticatedSyncedTabsPage(onSignInClick = onSignInClick)
+        if (state.isSignedIn) {
+            SyncedTabsList(
+                syncedTabs = state.syncedTabs,
+                onTabClick = onTabClick,
+                onTabCloseClick = onTabClose,
+                expandedState = state.expandedSyncedTabs,
+                onSectionExpansionToggled = onSectionExpansionToggled,
+            )
+        } else {
+            UnauthenticatedSyncedTabsPage(onSignInClick = onSignInClick)
+        }
     }
 }
 

@@ -804,6 +804,7 @@ class TabManagementFragment : Fragment() {
                         showTabAutoCloseBanner =
                             settings.shouldShowAutoCloseTabsBanner && settings.canShowCfr && settings.cfrPopupsEnabled,
                         collectionsEnabled = settings.collections,
+                        showNewSyncPageState = settings.syncDecouplingEnabled,
                     ),
             )
 

@@ -297,6 +297,7 @@ fun TabsTray(
                     Page.SyncedTabs -> {
                         SyncedTabsPage(
                             state = state.sync,
+                            config = state.config,
                             onTabClick = onSyncedTabClick,
                             onTabClose = onSyncedTabClose,
                             onSignInClick = onSignInClick,

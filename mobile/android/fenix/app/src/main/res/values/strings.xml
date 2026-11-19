@@ -57,6 +57,36 @@
     <!-- Text for the button used to show all stories -->
     <string name="homepage_all_stories">All stories</string>
 
+    <!-- Tab Tray - Synced Tab Screens -->
+    <!-- Synced tabs: Title of the empty state screen displayed when user is not signed in (explains what tab syncing is and invites user to sign in in order to enable the feature) -->
+    <string name="tab_manager_synced_tabs_page_signed_out_title">Grab tabs from any device</string>
+    <!-- Synced Tabs: Body of the empty state screen displayed when user is not signed in (explains what tab syncing is and invites user to sign in in order to enable the feature) -->
+    <string name="tab_manager_synced_tabs_page_signed_out_description">Sign in to manage synced tabs from all your devices.</string>
+    <!-- Synced Tabs: Title of the empty state screen displayed when the user is signed in and has enabled tab syncing, but there are no tabs to display from other devices. -->
+    <string name="tab_manager_synced_tabs_page_no_synced_tabs_title">Tabs from your devices will appear here</string>
+    <!-- Synced Tabs: Body of the empty state screen displayed when the user is signed in and has enabled tab syncing, but there are no tabs to display from other devices. %s is the name of the app (for example "Firefox"). -->
+    <string name="tab_manager_synced_tabs_page_no_synced_tabs_description" tools:ignore="BrandUsage">Open Firefox on another device to start syncing tabs.</string>
+    <!-- Synced Tabs: Title of the empty state screen displayed when the user is signed in but has not enabled the sync feature for their account. -->
+    <string name="tab_manager_synced_tabs_page_sync_off_title">Turn on sync to access tabs from your other devices</string>
+    <!-- Synced Tabs: Title of the empty state screen displayed when the user is signed in, and has enabled general sync on their account but not enabled sync for tabs specifically. -->
+    <string name="tab_manager_synced_tabs_page_tabs_sync_disabled_title">Turn on tab syncing to access tabs from your other devices</string>
+    <!-- Synced Tabs: Body of the empty state screen displayed when the user is signed in, and has enabled general sync on their account but not enabled sync for tabs specifically. -->
+    <string name="tab_manager_synced_tabs_page_tabs_sync_disabled_description">Your account is syncing other data, but open tabs are currently only stored on this device.</string>
+    <!-- Synced Tabs: Title of the error screen when there sync is enabled but there is a problem syncing tabs  -->
+    <string name="tab_manager_synced_tabs_page_account_issue_sync_on_title">There was a problem accessing tabs from your other devices</string>
+    <!-- Synced Tabs: Body of the error screen when there sync is enabled but there is a problem syncing tabs (sync needs to be re-enabled and requires user to authenticate) -->
+    <string name="tab_manager_synced_tabs_page_account_issue_sync_on_description">Sign in to re-enable sync on your account.</string>
+    <!-- Synced Tabs: Title of the error screen when sync is disabled and there is a problem syncing tabs -->
+    <string name="tab_manager_synced_tabs_page_account_issue_sync_off_title">There was a problem accessing tabs from your other devices</string>
+    <!-- Synced Tabs: Body of the error screen when sync is disabled and there is a problem syncing tabs (user needs to authenticate to enable syncing) -->
+    <string name="tab_manager_synced_tabs_page_account_issue_sync_off_description">Sign in to enable sync on your account</string>
+    <!-- Synced tabs: Button text inviting the user to sign in -->
+    <string name="tab_manager_synced_tabs_page_sign_in_button">Sign in</string>
+    <!-- Synced tabs: Button text inviting the user to turn on sync -->
+    <string name="tab_manager_synced_tabs_page_turn_on_sync_button">Turn on sync</string>
+    <!-- Synced tabs: Button text inviting the user to turn on syncing for tabs specifically, when general sync is already enabled on their account -->
+    <string name="tab_manager_synced_tabs_page_turn_on_tab_syncing_button">Turn on tab syncing</string>
+
     <!-- Home - Bookmarks -->
     <!-- Title for the home screen section with bookmarks. -->
     <string name="home_bookmarks_title">Bookmarks</string>
