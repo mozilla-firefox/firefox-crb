@@ -645,6 +645,7 @@ class TabManagementFragment : Fragment() {
             onSyncedTabClick = tabManagerInteractor::onSyncedTabClicked,
             onSyncedTabClose = tabManagerInteractor::onSyncedTabClosed,
             onSignInClick = tabManagerInteractor::onSignInClicked,
+            onReauthenticateClick = tabManagerController::handleReauthenticateClicked,
             onSaveToCollectionClick = tabManagerInteractor::onAddSelectedTabsToCollectionClicked,
             onShareSelectedTabsClick = tabManagerInteractor::onShareSelectedTabs,
             onTabSettingsClick = tabManagerController::onTabSettingsClicked,

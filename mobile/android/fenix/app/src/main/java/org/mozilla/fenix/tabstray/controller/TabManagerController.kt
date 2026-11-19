@@ -37,6 +37,7 @@ import org.mozilla.fenix.GleanMetrics.Collections
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.TabsTray
 import org.mozilla.fenix.GleanMetrics.TrackingProtection
+import org.mozilla.fenix.NavGraphDirections
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
@@ -173,6 +174,9 @@ interface TabManagerController : SyncedTabsController, InactiveTabsController, T
 
     /** Navigates to the sign into Sync flow */
     fun handleSignInClicked()
+
+    /** Opens the sign-in page for re-authenticating an account that needs to sign in again. */
+    fun handleReauthenticateClicked()
 
     /** Called when clicking the account settings button. */
     fun onAccountSettingsClicked()
@@ -735,6 +739,12 @@ class DefaultTabManagerController(
     override fun handleSignInClicked() {
         navController.navigate(
             TabManagementFragmentDirections.actionGlobalTurnOnSync(entrypoint = FenixFxAEntryPoint.SyncedTabsMenu)
+        )
+    }
+
+    override fun handleReauthenticateClicked() {
+        navController.navigate(
+            NavGraphDirections.actionGlobalAccountProblemFragment(entrypoint = FenixFxAEntryPoint.SyncedTabsMenu)
         )
     }
 

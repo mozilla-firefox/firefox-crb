@@ -47,8 +47,11 @@ private val EmptyPageWidth = 200.dp
  * @param onTabClick Invoked when the user clicks on a tab.
  * @param onTabClose Invoked when the user clicks to close a tab.
  * @param onSignInClick Invoked when an unauthenticated user clicks to sign-in.
+ * @param onAccountSettingsClick Invoked when the user clicks to turn on tab syncing.
+ * @param onReauthenticateClick Invoked when a user whose account needs to be re-authenticated clicks to sign in.
  * @param onSectionExpansionToggled Invoked when a user toggles the section expansion.
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun SyncedTabsPage(
     state: SyncState,
@@ -56,12 +59,14 @@ internal fun SyncedTabsPage(
     onTabClick: OnSyncedTabClick,
     onTabClose: OnSyncedTabClose,
     onSignInClick: () -> Unit,
+    onAccountSettingsClick: () -> Unit,
+    onReauthenticateClick: () -> Unit,
     onSectionExpansionToggled: OnSectionExpansionToggled,
 ) {
     if (config.showNewSyncPageState) {
         val emptyState =
             when {
-                !state.isSignedIn ->
+                !state.isSignedIn || state.syncError == SyncedTabsView.ErrorType.SYNC_UNAVAILABLE ->
                     SyncedTabsEmptyStateType.SignedOut(
                         Action(
                             label = stringResource(R.string.tab_manager_synced_tabs_page_sign_in_button),
@@ -71,6 +76,20 @@ internal fun SyncedTabsPage(
                 state.syncError == SyncedTabsView.ErrorType.MULTIPLE_DEVICES_UNAVAILABLE ||
                     state.syncError == SyncedTabsView.ErrorType.NO_TABS_AVAILABLE ->
                     SyncedTabsEmptyStateType.NoSyncedTabs
+                state.syncError == SyncedTabsView.ErrorType.SYNC_ENGINE_UNAVAILABLE ->
+                    SyncedTabsEmptyStateType.TabsSyncDisabled(
+                        Action(
+                            label = stringResource(R.string.tab_manager_synced_tabs_page_turn_on_tab_syncing_button),
+                            onClick = onAccountSettingsClick,
+                        )
+                    )
+                state.syncError == SyncedTabsView.ErrorType.SYNC_NEEDS_REAUTHENTICATION ->
+                    SyncedTabsEmptyStateType.AccountIssueSyncOn(
+                        Action(
+                            label = stringResource(R.string.tab_manager_synced_tabs_page_sign_in_button),
+                            onClick = onReauthenticateClick,
+                        )
+                    )
                 else -> null
             }
 
