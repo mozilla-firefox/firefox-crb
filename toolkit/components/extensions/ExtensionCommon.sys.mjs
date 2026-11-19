@@ -1803,7 +1803,14 @@ class SchemaAPIManager extends EventEmitter {
       return false;
     }
 
-    if (!lazy.Schemas.checkPermissions(module.namespaceName, extension)) {
+    // Startup-blocking modules are loaded to prime listeners before the first
+    // page load. If they declare the same permissions as their schema namespace,
+    // the check above is enough, and checking the schema would parse all API
+    // schemas.
+    if (
+      !(module.startupBlocking && module.permissions) &&
+      !lazy.Schemas.checkPermissions(module.namespaceName, extension)
+    ) {
       return false;
     }
 

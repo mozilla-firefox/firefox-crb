@@ -195,6 +195,7 @@
     "schema": "chrome://extensions/content/schemas/web_request.json",
     "scopes": ["addon_parent"],
     "paths": [["webRequest"]],
+    "permissions": ["webRequest"],
     "startupBlocking": true
   }
 }
