@@ -27,6 +27,11 @@ class CycleCollectedJSContext;
 
 bool nsCycleCollector_init();
 
+// Equivalent to aCb.NoteJSChild(aThing) for a non-null, gray, CC-kind aThing
+// when aCb.IsPlainCCGraphBuilder().
+void NoteGrayJSChildForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
+                                    JS::GCCellPtr aThing);
+
 void nsCycleCollector_startup();
 
 typedef void (*CC_BeforeUnlinkCallback)(void);

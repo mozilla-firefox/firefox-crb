@@ -32,6 +32,11 @@ inline int Level() {
 
 inline bool Counting() { return Level() >= 2; }
 
+inline bool NoFastPath() {
+  static const bool sNo = getenv("CCBENCH_NO_FASTPATH");
+  return sNo;
+}
+
 constexpr size_t kNumKinds = 16;
 
 struct KindStats {
