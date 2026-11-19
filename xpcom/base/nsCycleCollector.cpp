@@ -2132,6 +2132,7 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
 
   NS_IMETHOD_(void) NoteXPCOMChild(nsISupports* aChild) override;
   NS_IMETHOD_(void) NoteJSChild(JS::GCCellPtr aThing) override;
+  void NoteGrayJSChild(JS::GCCellPtr aThing);
   NS_IMETHOD_(void)
   NoteNativeChild(void* aChild,
                   nsCycleCollectionParticipant* aParticipant) override;
@@ -2206,6 +2207,7 @@ CCGraphBuilder::CCGraphBuilder(CCGraph& aGraph, CycleCollectorResults& aResults,
     mJSZoneParticipant = aCCRuntime->ZoneParticipant();
   }
 
+  mFlags |= nsCycleCollectionTraversalCallback::IS_CC_GRAPH_BUILDER;
   if (mLogger) {
     mFlags |= nsCycleCollectionTraversalCallback::WANT_DEBUG_INFO;
     if (mLogger->IsAllTraces()) {
@@ -2473,6 +2475,23 @@ CCGraphBuilder::NoteJSChild(JS::GCCellPtr aChild) {
       NoteChild(aChild.asCell(), mJSParticipant, edgeName);
     }
   }
+}
+
+MOZ_ALWAYS_INLINE void CCGraphBuilder::NoteGrayJSChild(JS::GCCellPtr aChild) {
+  MOZ_ASSERT(IsPlainCCGraphBuilder());
+  MOZ_ASSERT(GCThingIsGrayCCThing(aChild));
+  ++mNoteChildCount;
+  nsCString edgeName;
+  if (JS::Zone* zone = MergeZone(aChild)) {
+    NoteChild(zone, mJSZoneParticipant, edgeName);
+  } else {
+    NoteChild(aChild.asCell(), mJSParticipant, edgeName);
+  }
+}
+
+void NoteGrayJSChildForGraphBuilder(nsCycleCollectionTraversalCallback& aCb,
+                                    JS::GCCellPtr aThing) {
+  static_cast<CCGraphBuilder&>(aCb).NoteGrayJSChild(aThing);
 }
 
 NS_IMETHODIMP_(void)

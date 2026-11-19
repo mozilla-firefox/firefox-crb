@@ -54,11 +54,16 @@ class NS_NO_VTABLE nsCycleCollectionTraversalCallback {
 
     // Caller should not skip objects that we know will be
     // uncollectable.
-    WANT_ALL_TRACES = (1 << 1)
+    WANT_ALL_TRACES = (1 << 1),
+
+    // Set only by the cycle collector's graph builder; lets
+    // NoteGrayJSChildForGraphBuilder be used instead of NoteJSChild.
+    IS_CC_GRAPH_BUILDER = (1 << 2)
   };
   uint32_t Flags() const { return mFlags; }
   bool WantDebugInfo() const { return (mFlags & WANT_DEBUG_INFO) != 0; }
   bool WantAllTraces() const { return (mFlags & WANT_ALL_TRACES) != 0; }
+  bool IsPlainCCGraphBuilder() const { return mFlags == IS_CC_GRAPH_BUILDER; }
 
  protected:
   nsCycleCollectionTraversalCallback() : mFlags(0) {}
