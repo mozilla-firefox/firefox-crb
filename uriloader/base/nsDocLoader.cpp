@@ -5,6 +5,7 @@
 #include "nspr.h"
 #include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/AutoRestore.h"
 #include "mozilla/BasicEvents.h"
 #include "mozilla/Components.h"
 #include "mozilla/EventDispatcher.h"
@@ -170,12 +171,18 @@ void nsDocLoader::SetLoadGroupDefaultLoadFlags(nsLoadFlags aLoadFlags) {
   mLoadGroupDefaultLoadFlags = aLoadFlags;
   MOZ_ASSERT(mLoadGroup);
   mLoadGroup->SetDefaultLoadFlags(aLoadFlags);
+  // Devtools can change these during a pending navigation.
+  if (mOutgoingLoadGroup) {
+    mOutgoingLoadGroup->SetDefaultLoadFlags(aLoadFlags);
+  }
 }
 
 void nsDocLoader::AdjustLoadGroupPriority(int32_t aDelta) {
   mPriority += aDelta;
-  if (nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup)) {
-    p->SetPriority(mPriority);
+  for (nsILoadGroup* group : {mLoadGroup.get(), mOutgoingLoadGroup.get()}) {
+    if (nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(group)) {
+      p->SetPriority(mPriority);
+    }
   }
 }
 
@@ -268,6 +275,8 @@ MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHODIMP nsDocLoader::Stop() {
 
   NS_OBSERVER_ARRAY_NOTIFY_XPCOM_OBSERVERS(mChildList, Stop, ());
 
+  CancelNavigationLoadGroup();
+
   if (mLoadGroup) {
     rv = mLoadGroup->CancelWithReason(NS_BINDING_ABORTED,
                                       "nsDocLoader::Stop"_ns);
@@ -309,6 +318,89 @@ MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHODIMP nsDocLoader::Stop() {
   return rv;
 }
 
+bool nsDocLoader::BeginNavigationLoadGroup(uint64_t aRequestContextId) {
+  MOZ_ASSERT(!mOutgoingLoadGroup);
+  nsCOMPtr<nsILoadGroup> navigation = CreateLoadGroup(aRequestContextId);
+  if (!navigation) {
+    return false;
+  }
+  mOutgoingLoadGroup = std::exchange(mLoadGroup, navigation);
+  return true;
+}
+
+void nsDocLoader::CommitNavigationLoadGroup() {
+  nsCOMPtr<nsILoadGroup> outgoing = std::move(mOutgoingLoadGroup);
+  if (!outgoing) {
+    return;
+  }
+  NS_OBSERVER_ARRAY_NOTIFY_XPCOM_OBSERVERS(mChildList, Stop, ());
+  // Tag the cancellation as navigation-caused so that XHR can suppress abort
+  // events (bug 1505389).
+  outgoing->SetCanceledReason("navigation"_ns);
+  outgoing->CancelWithReason(NS_BINDING_ABORTED,
+                             "nsDocLoader::CommitNavigationLoadGroup"_ns);
+  outgoing->SetGroupObserver(nullptr);
+}
+
+void nsDocLoader::CancelNavigationLoadGroup() {
+  if (!mOutgoingLoadGroup) {
+    return;
+  }
+  // If the navigation's document load has started, ending it restores the
+  // outgoing group, see DocLoaderIsEmpty.
+  nsCOMPtr<nsILoadGroup> navigation = mLoadGroup;
+  navigation->CancelWithReason(NS_BINDING_ABORTED,
+                               "nsDocLoader::CancelNavigationLoadGroup"_ns);
+  if (mLoadGroup == navigation) {
+    RestoreOutgoingLoadGroup();
+    NotifyParentIfAwaitingNavigation();
+  }
+}
+
+static bool HasRequests(nsILoadGroup* aLoadGroup) {
+  bool hasRequests = false;
+  aLoadGroup->VisitRequests([&](nsIRequest*) {
+    hasRequests = true;
+    return false;
+  });
+  return hasRequests;
+}
+
+void nsDocLoader::CancelNavigationLoadGroupIfUnused() {
+  if (mOutgoingLoadGroup && !HasRequests(mLoadGroup)) {
+    RestoreOutgoingLoadGroup();
+    NotifyParentIfAwaitingNavigation();
+  }
+}
+
+void nsDocLoader::NotifyParentIfAwaitingNavigation() {
+  if (!std::exchange(mParentAwaitsNavigation, false)) {
+    return;
+  }
+  // Asynchronously, since the parent may fire its load event, and this can be
+  // reached from teardown or the middle of a navigation.
+  NS_DispatchToCurrentThread(NS_NewRunnableFunction(
+      "nsDocLoader::NotifyParentIfAwaitingNavigation",
+      [self = RefPtr{this}]() MOZ_CAN_RUN_SCRIPT_BOUNDARY_LAMBDA {
+        RefPtr<nsDocLoader> parent = self->mParent;
+        self->NotifyDoneWithOnload(parent);
+      }));
+}
+
+void nsDocLoader::RestoreOutgoingLoadGroup() {
+  if (!mOutgoingLoadGroup) {
+    return;
+  }
+  nsCOMPtr<nsILoadGroup> navigation =
+      std::exchange(mLoadGroup, std::move(mOutgoingLoadGroup));
+  // The group stays observed, so that requests still in it, which this may be
+  // called while they are being cancelled, are reported as they stop.
+  if (HasRequests(navigation)) {
+    navigation->CancelWithReason(NS_BINDING_ABORTED,
+                                 "nsDocLoader::RestoreOutgoingLoadGroup"_ns);
+  }
+}
+
 bool nsDocLoader::IsBusy() {
   nsresult rv;
 
@@ -321,6 +413,17 @@ bool nsDocLoader::IsBusy() {
   //      loading, or has a busy child docloader.
   //   3. It's currently flushing layout in DocLoaderIsEmpty().
   //
+
+  if (mAbortingActiveDocumentLoad) {
+    return false;
+  }
+
+  // https://html.spec.whatwg.org/#beginning-navigation:delaying-load-events-mode
+  if (mOutgoingLoadGroup) {
+    bool busy = false;
+    return IsBlockingLoadEvent() &&
+           NS_SUCCEEDED(mLoadGroup->IsPending(&busy)) && busy;
+  }
 
   nsCOMPtr<nsIDocShell> ds = do_QueryInterface(GetAsSupports(this));
   Document* doc = ds ? ds->GetExtantDocument() : nullptr;
@@ -849,9 +952,21 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
       //
       mLoadGroup->SetDefaultLoadRequest(nullptr);
 
+      // A navigation that ends here has not committed, so the active document
+      // gets its load group back.
+      RestoreOutgoingLoadGroup();
+
       // Take a ref to our parent now so that we can call ChildDoneWithOnload()
       // on it even if our onload handler removes us from the docloader tree.
       RefPtr<nsDocLoader> parent = mParent;
+
+      if (mAbortingActiveDocumentLoad) {
+        // The navigation that aborts this load takes it over, so the parent
+        // keeps waiting.
+        mParentAwaitsNavigation = true;
+        doStopDocumentLoad(docRequest, loadGroupStatus);
+        return;
+      }
 
       // Note that if calling ChildEnteringOnload() on the parent returns false
       // then calling our onload handler is not safe.  That can only happen on
@@ -879,8 +994,17 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
         }
       }
 
-      mDocumentOpenedButNotLoaded = false;
+      const bool wasOpened = std::exchange(mDocumentOpenedButNotLoaded, false);
       mIsLoadingJavascriptURI = false;
+
+      // An aborted javascript: URL load is taken over by the navigation that
+      // aborts it, so the parent keeps waiting. A document.open() load has
+      // nothing to hand over to, so the parent is told now (via
+      // NotifyDoneWithOnload).
+      if (mAbortingActiveDocumentLoad && !wasOpened) {
+        mParentAwaitsNavigation = true;
+        return;
+      }
 
       // Make sure we do the ChildEnteringOnload/ChildDoneWithOnload even if we
       // plan to skip firing our own load event, because otherwise we might
@@ -888,7 +1012,11 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
       RefPtr<nsDocLoader> parent = mParent;
       if (!parent || parent->ChildEnteringOnload(this)) {
         nsresult loadGroupStatus = NS_OK;
-        mLoadGroup->GetStatus(&loadGroupStatus);
+        if (aOverrideStatus) {
+          loadGroupStatus = *aOverrideStatus;
+        } else {
+          mLoadGroup->GetStatus(&loadGroupStatus);
+        }
         // Make sure we're not canceling the loadgroup.  If we are, then just
         // like the normal navigation case we should not fire a load event.
         if (NS_SUCCEEDED(loadGroupStatus) ||
@@ -945,7 +1073,18 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
   }
 }
 
+MOZ_CAN_RUN_SCRIPT void nsDocLoader::AbortActiveDocumentLoad() {
+  if (!IsBlockingLoadEvent()) {
+    return;
+  }
+
+  AutoRestore<bool> guard(mAbortingActiveDocumentLoad);
+  mAbortingActiveDocumentLoad = true;
+  DocLoaderIsEmpty(false, Some(NS_BINDING_ABORTED));
+}
+
 void nsDocLoader::NotifyDoneWithOnload(nsDocLoader* aParent) {
+  mParentAwaitsNavigation = false;
   if (aParent) {
     // In-process parent:
     aParent->ChildDoneWithOnload(this);
