@@ -104,8 +104,8 @@ UPLOAD_FILES= \
 
 ifneq ($(filter-out en-US,$(AB_CD)),)
   UPLOAD_FILES += \
-    $(call QUOTED_WILDCARD,$(topobjdir)/$(MOZ_BUILD_APP)/installer/windows/l10ngen/setup.exe) \
-    $(call QUOTED_WILDCARD,$(topobjdir)/$(MOZ_BUILD_APP)/installer/windows/l10ngen/setup-stub.exe)
+    $(call QUOTED_WILDCARD,$(topobjdir)/$(MOZ_BUILD_APP)/installer/windows/l10ngen/$(AB_CD)/setup.exe) \
+    $(call QUOTED_WILDCARD,$(topobjdir)/$(MOZ_BUILD_APP)/installer/windows/l10ngen/$(AB_CD)/setup-stub.exe)
 endif
 
 ifdef MOZ_CODE_COVERAGE

@@ -42,7 +42,7 @@ class TestBuildUninstaller(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         installer_dir = Path("/obj/browser/installer/windows")
-        config_dir = installer_dir / "l10ngen"
+        config_dir = installer_dir / "l10ngen" / "de"
 
         stage.assert_called_once_with(
             spec_path=installer_dir / "nsis-stage.json",
