@@ -62,6 +62,7 @@ struct Stats {
   uint32_t buildSlices = 0;
   uint32_t graphNodes = 0;
   uint32_t graphRoots = 0;
+  uint32_t freedShapes = 0;
 
   uint64_t edges = 0;
   uint64_t edgesToJS = 0;

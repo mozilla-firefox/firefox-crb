@@ -3409,6 +3409,11 @@ bool nsCycleCollector::CollectWhite() {
         if (pinfo->IsGrayJS()) {
           MOZ_ASSERT(mCCJSRuntime);
           ++numWhiteGCed;
+          if (MOZ_UNLIKELY(ccbench::Counting()) &&
+              pinfo->mParticipant != zoneParticipant &&
+              JS::GCThingTraceKind(pinfo->mPointer) == JS::TraceKind::Shape) {
+            ccbench::Get().freedShapes++;
+          }
           JS::Zone* zone;
           if (MOZ_UNLIKELY(pinfo->mParticipant == zoneParticipant)) {
             ++numWhiteJSZones;
@@ -3719,13 +3724,13 @@ void nsCycleCollector::PrintCCBenchStats(double aTotalMs) {
           "CCBENCH pid=%d main=%d reason=%s manual=%d merged=%d "
           "total_ms=%.3f fixgray_ms=%.3f roots_ms=%.3f build_ms=%.3f "
           "build_slices=%u scan_ms=%.3f white_ms=%.3f nodes=%u roots=%u "
-          "rc=%u gc=%u freed_rc=%u freed_gc=%u\n",
+          "rc=%u gc=%u freed_rc=%u freed_gc=%u freed_shapes=%u\n",
           int(base::GetCurrentProcId()), int(NS_IsMainThread()), st.reason,
           int(mResults.mAnyManual), int(mResults.mMergedZones), aTotalMs,
           st.fixGrayMs, st.rootsMs, st.buildMs, st.buildSlices, st.scanMs,
           st.collectWhiteMs, st.graphNodes, st.graphRoots,
           mResults.mVisitedRefCounted, mResults.mVisitedGCed,
-          mResults.mFreedRefCounted, mResults.mFreedGCed);
+          mResults.mFreedRefCounted, mResults.mFreedGCed, st.freedShapes);
   if (!ccbench::Counting()) {
     return;
   }
