@@ -10,6 +10,7 @@
 
 #include "gc/PublicIterators.h"
 #include "jit/JitCode.h"
+#include "jit/JitScript.h"
 #include "js/friend/CycleCollector.h"
 #include "util/Memory.h"
 #include "util/Text.h"
@@ -204,6 +205,72 @@ JS_PUBLIC_API void js::TraceGrayCCChildren(JSTracer* trc, JSObject* obj,
     clasp->doTrace(trc, obj);
   }
   sink->flush();
+}
+
+template <typename T>
+static MOZ_ALWAYS_INLINE void AddGrayCCChild(GrayCCChildSink* sink, T* thing) {
+  if (thing && JS::GCThingIsMarkedGrayInCC(thing)) {
+    sink->append(JS::GCCellPtr(thing));
+  }
+}
+
+static void TraceGrayCCScriptChildren(JSTracer* trc, BaseScript* script,
+                                      GrayCCChildSink* sink) {
+  AddGrayCCChild(sink, script->function());
+  AddGrayCCChild(sink, script->sourceObject());
+  for (JS::GCCellPtr thing : script->gcthings()) {
+    if (thing && JS::IsCCTraceKind(thing.kind()) &&
+        JS::GCThingIsMarkedGrayInCC(thing)) {
+      sink->append(thing);
+    }
+  }
+  const ScriptWarmUpData& warmUp = script->warmUpDataForTracing();
+  if (warmUp.isEnclosingScript()) {
+    AddGrayCCChild(sink, warmUp.toEnclosingScript());
+  } else if (warmUp.isEnclosingScope()) {
+    AddGrayCCChild(sink, warmUp.toEnclosingScope());
+  } else if (warmUp.isJitScript()) {
+    sink->flush();
+    warmUp.toJitScript()->trace(trc);
+  }
+}
+
+static void TraceGrayCCScopeChildren(Scope* scope, GrayCCChildSink* sink) {
+  AddGrayCCChild(sink, scope->environmentShape());
+  AddGrayCCChild(sink, scope->enclosing());
+  // Binding names are atoms, which are not CC graph nodes.
+  switch (scope->kind()) {
+    case ScopeKind::Function:
+      AddGrayCCChild(sink, scope->as<FunctionScope>().canonicalFunction());
+      break;
+    case ScopeKind::Module:
+      AddGrayCCChild(sink, scope->as<ModuleScope>().module());
+      break;
+    case ScopeKind::WasmInstance:
+      AddGrayCCChild(sink, scope->as<WasmInstanceScope>().instance());
+      break;
+    default:
+      break;
+  }
+}
+
+JS_PUBLIC_API bool js::TraceGrayCCChildren(JSTracer* trc, JS::GCCellPtr thing,
+                                           GrayCCChildSink* sink) {
+  switch (thing.kind()) {
+    case JS::TraceKind::Object:
+      TraceGrayCCChildren(trc, &thing.as<JSObject>(), sink);
+      return true;
+    case JS::TraceKind::Script:
+      TraceGrayCCScriptChildren(trc, &thing.as<BaseScript>(), sink);
+      break;
+    case JS::TraceKind::Scope:
+      TraceGrayCCScopeChildren(&thing.as<Scope>(), sink);
+      break;
+    default:
+      return false;
+  }
+  sink->flush();
+  return true;
 }
 
 /*** Traced Edge Printer ****************************************************/

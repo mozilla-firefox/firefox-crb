@@ -1884,6 +1884,7 @@ class BaseScript : public gc::TenuredCellWithNonGCPointer<uint8_t> {
   }
 
   Scope* enclosingScope() const;
+  const ScriptWarmUpData& warmUpDataForTracing() const { return warmUpData_; }
   void setEnclosingScope(Scope* enclosingScope);
   Scope* releaseEnclosingScope();
 

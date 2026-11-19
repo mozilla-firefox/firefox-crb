@@ -1101,16 +1101,18 @@ struct RecordingSink final : public js::GrayCCChildSink {
   std::vector<std::pair<void*, std::string>>& mOut;
 };
 
-static void VerifySink(JSRuntime* aRt, JSObject* aObj) {
+static void VerifySink(JSRuntime* aRt, JS::GCCellPtr aThing) {
   std::vector<std::pair<void*, std::string>> a, b;
   {
     RecordingTracer trcA(aRt, a);
     RecordingSink sink(a);
-    js::TraceGrayCCChildren(&trcA, aObj, &sink);
+    if (!js::TraceGrayCCChildren(&trcA, aThing, &sink)) {
+      return;
+    }
   }
   {
     RecordingTracer trcB(aRt, b);
-    JS::TraceChildren(&trcB, JS::GCCellPtr(aObj));
+    JS::TraceChildren(&trcB, aThing);
   }
   std::unordered_map<void*, int> counts;
   for (auto& e : a) counts[e.first]++;
@@ -1122,7 +1124,10 @@ static void VerifySink(JSRuntime* aRt, JSObject* aObj) {
       if (e.first == p) name = e.second.c_str();
     }
     printf_stderr("CCBENCH-SINKDIFF class=%s child=%p diff=%d edge=%s\n",
-                  JS::GetClass(aObj)->name, p, c, name);
+                  aThing.is<JSObject>()
+                      ? JS::GetClass(&aThing.as<JSObject>())->name
+                      : JS::GCTraceKindToAscii(aThing.kind()),
+                  p, c, name);
   }
 }
 
@@ -1130,15 +1135,21 @@ void CycleCollectedJSRuntime::NoteGCThingJSChildren(
     JS::GCCellPtr aThing, nsCycleCollectionTraversalCallback& aCb) const {
   TraversalTracer trc(mJSRuntime, aCb);
   static const bool sVerify = getenv("CCBENCH_VERIFY_SINK");
-  if (sVerify && aThing.is<JSObject>()) {
-    VerifySink(mJSRuntime, &aThing.as<JSObject>());
+  if (sVerify) {
+    VerifySink(mJSRuntime, aThing);
   }
   static const bool sNoSink = getenv("CCBENCH_NO_SINK");
-  if (aThing.is<JSObject>() && aCb.IsPlainCCGraphBuilder() && !sNoSink &&
-      !ccbench::Counting() && !ccbench::NoFastPath()) {
+  static const bool sNoScriptSink = getenv("CCBENCH_NO_SCRIPT_SINK");
+  if (aCb.IsPlainCCGraphBuilder() && !sNoSink && !ccbench::Counting() &&
+      !ccbench::NoFastPath()) {
     GraphBuilderChildSink sink(aCb);
-    js::TraceGrayCCChildren(&trc, &aThing.as<JSObject>(), &sink);
-    return;
+    if (aThing.is<JSObject>()) {
+      js::TraceGrayCCChildren(&trc, &aThing.as<JSObject>(), &sink);
+      return;
+    }
+    if (!sNoScriptSink && js::TraceGrayCCChildren(&trc, aThing, &sink)) {
+      return;
+    }
   }
   if (aThing.kind() == JS::TraceKind::Shape) {
     // Tracing a Shape's children directly would reach its PropMaps, which

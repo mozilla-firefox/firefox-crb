@@ -93,6 +93,14 @@ class GrayCCChildSink {
 extern JS_PUBLIC_API void TraceGrayCCChildren(JSTracer* trc, JSObject* obj,
                                               GrayCCChildSink* sink);
 
+/*
+ * As above for an object, script or scope. Returns false without doing
+ * anything for other kinds.
+ */
+extern JS_PUBLIC_API bool TraceGrayCCChildren(JSTracer* trc,
+                                              JS::GCCellPtr thing,
+                                              GrayCCChildSink* sink);
+
 }  // namespace js
 
 // CCBENCH (local only): cumulative PropMaps and keys scanned by
