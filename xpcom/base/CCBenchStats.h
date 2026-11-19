@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "mozilla/TimeStamp.h"
@@ -31,6 +32,11 @@ inline int Level() {
 }
 
 inline bool Counting() { return Level() >= 2; }
+
+inline bool NoXPCOMFilter() {
+  static const bool sNo = getenv("CCBENCH_NO_XPCOM_FILTER");
+  return sNo;
+}
 
 inline bool NoFastPath() {
   static const bool sNo = getenv("CCBENCH_NO_FASTPATH");
@@ -77,13 +83,19 @@ struct Stats {
   uint64_t distinctShapeKeys = 0;
   uint32_t shapeDepth = 0;
   std::unordered_set<const void*>* seenShapes = nullptr;
+  std::unordered_map<const char*, uint64_t>* noneClasses = nullptr;
 
   void Reset() {
     auto* seen = seenShapes;
+    auto* none = noneClasses;
     *this = Stats();
     seenShapes = seen;
+    noneClasses = none;
     if (seenShapes) {
       seenShapes->clear();
+    }
+    if (noneClasses) {
+      noneClasses->clear();
     }
   }
 };
