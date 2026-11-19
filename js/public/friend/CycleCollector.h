@@ -57,6 +57,12 @@ extern JS_PUBLIC_API void JS_SetObjectsTenuredCallback(
 extern JS_PUBLIC_API void JS_TraceShapeCycleCollectorChildren(JSTracer* trc,
                                                               js::Shape* shape);
 
+// CCBENCH (local only): cumulative PropMaps and keys scanned by
+// JS_TraceShapeCycleCollectorChildren on this thread.
+extern JS_PUBLIC_API void JS_GetCCShapeScanCounters(uint64_t* maps,
+                                                    uint64_t* keys);
+extern JS_PUBLIC_API void JS_SetCCShapeScanCounting(bool enabled);
+
 namespace JS {
 
 using DoCycleCollectionCallback = void (*)(JSContext* cx);
