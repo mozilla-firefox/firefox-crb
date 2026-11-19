@@ -74,6 +74,38 @@ def split_job_flags(make_flags):
     return num_jobs, other_flags
 
 
+# In automation, the sccache daemon only reads its configuration from the
+# environment when it starts, so it needs the sccache variables in its
+# environment.
+BUILD_ENVIRONMENT_SUBSTS = (
+    "BUILDCACHE_DIR",
+    "CCACHE_DIR",
+    "LIB",
+    "SCCACHE_BASEDIRS",
+    "SCCACHE_CLIENT_SIDE",
+    "SCCACHE_DIR",
+    "SCCACHE_MAX_FRAME_LENGTH",
+)
+
+
+def mozconfig_exports(make_extra):
+    exports = {}
+    for line in make_extra or []:
+        if line.startswith("export "):
+            k, eq, v = line[len("export ") :].partition("=")
+            if eq == "=":
+                exports[k] = v
+    return exports
+
+
+def build_environment(make_extra, substs, append_env):
+    return {
+        **(append_env or {}),
+        **{name: substs[name] for name in BUILD_ENVIRONMENT_SUBSTS if substs.get(name)},
+        **mozconfig_exports(make_extra),
+    }
+
+
 class BadEnvironmentException(Exception):
     """Base class for errors raised when the build environment is not sane."""
 
