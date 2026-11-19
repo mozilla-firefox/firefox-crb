@@ -138,11 +138,26 @@ class nsDocLoader : public nsIDocumentLoader,
   void FireOnLocationChange(nsIWebProgress* aWebProgress, nsIRequest* aRequest,
                             nsIURI* aUri, uint32_t aFlags);
 
+  // Applied to every load group this docloader owns, now and later.
+  void SetLoadGroupDefaultLoadFlags(nsLoadFlags aLoadFlags);
+
  protected:
   explicit nsDocLoader(bool aNotifyAboutBackgroundRequests);
   virtual ~nsDocLoader();
 
   [[nodiscard]] virtual nsresult SetDocLoaderParent(nsDocLoader* aLoader);
+
+  // Creates a load group observed by this docloader and carrying its
+  // notification callbacks, default load flags and priority. A zero
+  // aRequestContextId makes the group mint its own request context.
+  already_AddRefed<nsILoadGroup> CreateLoadGroup(uint64_t aRequestContextId);
+
+  // Applied to every load group this docloader owns, now and later.
+  void SetLoadGroupCallbacks(nsIInterfaceRequestor* aCallbacks);
+
+  // Adjusts the priority of this docloader's own load groups, not its
+  // children's.
+  void AdjustLoadGroupPriority(int32_t aDelta);
 
   bool IsBusy();
 
@@ -280,6 +295,12 @@ class nsDocLoader : public nsIDocumentLoader,
   ListenerArray mListenerInfoList;
 
   nsCOMPtr<nsILoadGroup> mLoadGroup;
+
+  // Configuration stamped onto every load group by CreateLoadGroup.
+  nsCOMPtr<nsIInterfaceRequestor> mLoadGroupCallbacks;
+  nsLoadFlags mLoadGroupDefaultLoadFlags = nsIRequest::LOAD_NORMAL;
+  int32_t mPriority = nsISupportsPriority::PRIORITY_NORMAL;
+
   // We hold weak refs to all our kids
   nsTObserverArray<nsDocLoader*> mChildList;
 
