@@ -56,6 +56,8 @@ skip-if = ["os == 'win'"] # The action and its tests create symlinks, which Wind
 
 ["action/test_run_cargo.py"]
 
+["action/test_wine_exe.py"]
+
 ["action/test_xpi_archive.py"]
 
 ["action/test_zip.py"]
