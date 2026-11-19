@@ -1135,6 +1135,15 @@ function pauseTabViewPolling(doc) {
 }
 
 // Unload/reload buttons ignore clicks until their row's action is done.
+// A view hosted in a sidebar stays visible while other tabs are selected; one
+// hosted in a tab doesn't.
+function keepViewVisible(doc) {
+  Object.defineProperty(doc, "hidden", {
+    get: () => false,
+    configurable: true,
+  });
+}
+
 function promiseRowActionDone(row) {
   return BrowserTestUtils.waitForMutationCondition(
     row,
