@@ -182,6 +182,8 @@
 #include "nsCycleCollectionNoteRootCallback.h"
 #include "nsCycleCollectionParticipant.h"
 #include "nsCycleCollector.h"
+
+#include "CCBenchStats.h"
 #include "nsDumpUtils.h"
 #include "nsExceptionHandler.h"
 #include "nsIConsoleService.h"
@@ -1279,6 +1281,7 @@ class nsCycleCollector : public nsIMemoryReporter {
 #endif
 
   void PrepareForGarbageCollection();
+  void PrintCCBenchStats(double aTotalMs);
   void FinishAnyCurrentCollection();
 
   bool Collect(CCReason aReason, ccIsManual aIsManual, SliceBudget& aBudget,
@@ -2138,6 +2141,15 @@ class CCGraphBuilder final : public nsCycleCollectionTraversalCallback,
     if (!childPi) {
       return;
     }
+    if (MOZ_UNLIKELY(ccbench::Counting())) {
+      auto& st = ccbench::Get();
+      st.edges++;
+      if (aCp == mJSParticipant || aCp == mJSZoneParticipant) {
+        st.edgesToJS++;
+      } else {
+        st.edgesToNative++;
+      }
+    }
     mEdgeBuilder.Add(childPi);
     if (mLogger) {
       mLogger->NoteEdge((uint64_t)aChild, aEdgeName.get());
@@ -2942,12 +2954,21 @@ MOZ_NEVER_INLINE void nsCycleCollector::MarkRoots(SliceBudget& aBudget) {
 
   AUTO_PROFILER_LABEL_CATEGORY_PAIR(GCCC_BuildGraph);
   JS::AutoEnterCycleCollection autocc(Runtime()->Runtime());
-  bool doneBuilding = mBuilder->BuildGraph(aBudget);
+  bool doneBuilding;
+  {
+    ccbench::AutoTimer bt(ccbench::Get().buildMs);
+    ccbench::PerfScope ps(NS_IsMainThread(), "build");
+    doneBuilding = mBuilder->BuildGraph(aBudget);
+  }
+  ccbench::Get().buildSlices++;
 
   if (!doneBuilding) {
     timeLog.Checkpoint("MarkRoots()");
     return;
   }
+
+  ccbench::Get().graphNodes = mGraph.MapCount();
+  ccbench::Get().graphRoots = mGraph.mRootCount;
 
   mBuilder = nullptr;
   mIncrementalPhase = ScanAndCollectWhitePhase;
@@ -3658,6 +3679,50 @@ void nsCycleCollector::FinishAnyIncrementalGCInProgress() {
   }
 }
 
+void nsCycleCollector::PrintCCBenchStats(double aTotalMs) {
+  auto& st = ccbench::Get();
+  fprintf(stderr,
+          "CCBENCH pid=%d main=%d reason=%s manual=%d merged=%d "
+          "total_ms=%.3f fixgray_ms=%.3f roots_ms=%.3f build_ms=%.3f "
+          "build_slices=%u scan_ms=%.3f white_ms=%.3f nodes=%u roots=%u "
+          "rc=%u gc=%u freed_rc=%u freed_gc=%u\n",
+          int(base::GetCurrentProcId()), int(NS_IsMainThread()), st.reason,
+          int(mResults.mAnyManual), int(mResults.mMergedZones), aTotalMs,
+          st.fixGrayMs, st.rootsMs, st.buildMs, st.buildSlices, st.scanMs,
+          st.collectWhiteMs, st.graphNodes, st.graphRoots,
+          mResults.mVisitedRefCounted, mResults.mVisitedGCed,
+          mResults.mFreedRefCounted, mResults.mFreedGCed);
+  if (!ccbench::Counting()) {
+    return;
+  }
+  fprintf(stderr,
+          "CCBENCH-COUNTS edges=%" PRIu64 " edges_js=%" PRIu64
+          " edges_native=%" PRIu64 " traverse_gcthing=%" PRIu64
+          " traverse_gcthing_black=%" PRIu64 " xpcom_child_calls=%" PRIu64
+          " xpcom_child_none=%" PRIu64 " shape_visits=%" PRIu64
+          " distinct_shapes=%" PRIu64 " shape_maps=%" PRIu64
+          " distinct_shape_maps=%" PRIu64 " shape_keys=%" PRIu64
+          " distinct_shape_keys=%" PRIu64 "\n",
+          st.edges, st.edgesToJS, st.edgesToNative, st.traverseGCThing,
+          st.traverseGCThingBlack, st.xpcomChildCalls, st.xpcomChildNone,
+          st.shapeVisits, st.distinctShapes, st.shapeMaps,
+          st.distinctShapeMaps, st.shapeKeys, st.distinctShapeKeys);
+  for (size_t i = 0; i < ccbench::kNumKinds; i++) {
+    const auto& k = st.kinds[i];
+    const auto& ks = st.kindsInShape[i];
+    if (!k.calls && !ks.calls) {
+      continue;
+    }
+    fprintf(stderr,
+            "CCBENCH-KIND kind=%s calls=%" PRIu64 " filtered=%" PRIu64
+            " noted=%" PRIu64 " recursed=%" PRIu64 " shape_calls=%" PRIu64
+            " shape_filtered=%" PRIu64 " shape_noted=%" PRIu64
+            " shape_recursed=%" PRIu64 "\n",
+            JS::GCTraceKindToAscii(JS::TraceKind(i)), k.calls, k.filtered,
+            k.noted, k.recursed, ks.calls, ks.filtered, ks.noted, ks.recursed);
+  }
+}
+
 void nsCycleCollector::CleanupAfterCollection() {
   TimeLog timeLog;
   MOZ_ASSERT(mIncrementalPhase == CleanupPhase);
@@ -3669,6 +3734,9 @@ void nsCycleCollector::CleanupAfterCollection() {
 
   TimeStamp endTime = TimeStamp::Now();
   TimeDuration interval = endTime - mCollectionStart;
+  if (ccbench::Level()) {
+    PrintCCBenchStats(interval.ToMilliseconds());
+  }
 #ifdef COLLECT_TIME_DEBUG
   printf("cc: total cycle collector time was %ums in %u slices\n",
          (uint32_t)interval.ToMilliseconds(), mResults.mNumSlices);
@@ -3860,11 +3928,15 @@ bool nsCycleCollector::Collect(CCReason aReason, ccIsManual aIsManual,
         {
           AUTO_PROFILER_LABEL_CATEGORY_PAIR(GCCC_ScanRoots);
           PrintPhase("ScanRoots");
+          ccbench::AutoTimer bt(ccbench::Get().scanMs);
+          ccbench::PerfScope ps(NS_IsMainThread(), "scan");
           ScanRoots(startedIdle);
         }
         {
           AUTO_PROFILER_LABEL_CATEGORY_PAIR(GCCC_CollectWhite);
           PrintPhase("CollectWhite");
+          ccbench::AutoTimer bt(ccbench::Get().collectWhiteMs);
+          ccbench::PerfScope ps(NS_IsMainThread(), "white");
           collectedAny = CollectWhite();
         }
         break;
@@ -3993,6 +4065,12 @@ void nsCycleCollector::BeginCollection(
 
   mCollectionStart = TimeStamp::Now();
 
+  if (ccbench::Level()) {
+    ccbench::Get().Reset();
+    ccbench::Get().reason = CCReasonToString(aReason);
+    JS_SetCCShapeScanCounting(ccbench::Counting());
+  }
+
   if (mCCJSRuntime) {
     mCCJSRuntime->BeginCycleCollectionCallback(aReason);
     timeLog.Checkpoint("BeginCycleCollectionCallback()");
@@ -4033,7 +4111,11 @@ void nsCycleCollector::BeginCollection(
 
   MaybeInitLogger(isShutdown, /* aForGC = */ true);
 
-  FixGrayBits(isShutdown, timeLog);
+  {
+    ccbench::AutoTimer bt(ccbench::Get().fixGrayMs);
+    ccbench::PerfScope ps(NS_IsMainThread(), "fixgray");
+    FixGrayBits(isShutdown, timeLog);
+  }
   if (mCCJSRuntime) {
     mCCJSRuntime->CheckGrayBits();
   }
@@ -4066,6 +4148,8 @@ void nsCycleCollector::BeginCollection(
       mGraph, mResults, mCCJSRuntime, mLogger, mergeZones, mFreeingSnowWhite);
   timeLog.Checkpoint("BeginCollection prepare graph builder");
 
+  ccbench::AutoTimer rootsTimer(ccbench::Get().rootsMs);
+  ccbench::PerfScope rootsPerf(NS_IsMainThread(), "roots");
   if (mCCJSRuntime) {
     mCCJSRuntime->TraverseRoots(*mBuilder);
     timeLog.Checkpoint("mJSContext->TraverseRoots()");

@@ -53,6 +53,8 @@
 
 #include "mozilla/CycleCollectedJSRuntime.h"
 
+#include "CCBenchStats.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -403,25 +405,65 @@ struct TraversalTracer : public js::GenericTracerImpl<TraversalTracer> {
  private:
   template <typename T>
   bool onEdge(T** aThingPtr, const char* aName);
+  void TraceShapeCounted(js::Shape* aShape);
   friend class js::GenericTracerImpl<TraversalTracer>;
 };
 
+void TraversalTracer::TraceShapeCounted(js::Shape* aShape) {
+  auto& st = ccbench::Get();
+  if (!st.seenShapes) {
+    st.seenShapes = new std::unordered_set<const void*>();
+  }
+  bool isNew = st.seenShapes->insert(aShape).second;
+  uint64_t maps0, keys0, maps1, keys1;
+  JS_GetCCShapeScanCounters(&maps0, &keys0);
+  st.shapeDepth++;
+  JS_TraceShapeCycleCollectorChildren(this, aShape);
+  st.shapeDepth--;
+  JS_GetCCShapeScanCounters(&maps1, &keys1);
+  st.shapeVisits++;
+  st.shapeMaps += maps1 - maps0;
+  st.shapeKeys += keys1 - keys0;
+  if (isNew) {
+    st.distinctShapes++;
+    st.distinctShapeMaps += maps1 - maps0;
+    st.distinctShapeKeys += keys1 - keys0;
+  }
+}
+
 template <typename T>
 bool TraversalTracer::onEdge(T** aThingPtr, const char* aName) {
+  ccbench::KindStats* bench = nullptr;
+  if (MOZ_UNLIKELY(ccbench::Counting())) {
+    constexpr size_t kind = size_t(JS::MapTypeToTraceKind<T>::kind);
+    auto& st = ccbench::Get();
+    bench = st.shapeDepth ? &st.kindsInShape[kind] : &st.kinds[kind];
+    bench->calls++;
+  }
+
   // Strings can never be gray and don't participate in the CC graph.
   if constexpr (std::is_same_v<T, JSString>) {
+    if (bench) {
+      bench->filtered++;
+    }
     return true;
   }
 
   // Skip null edges.
   T* thing = *aThingPtr;
   if (!thing) {
+    if (bench) {
+      bench->filtered++;
+    }
     return true;
   }
 
   // Don't traverse non-gray objects, unless we want all traces.
   if (!JS::GCThingIsMarkedGrayInCC(js::gc::ToCell(thing)) &&
       !mCb.WantAllTraces()) {
+    if (bench) {
+      bench->filtered++;
+    }
     return true;
   }
 
@@ -438,14 +480,25 @@ bool TraversalTracer::onEdge(T** aThingPtr, const char* aName) {
       context().getEdgeName(aName, buffer, sizeof(buffer));
       mCb.NoteNextEdgeName(buffer);
     }
+    if (bench) {
+      bench->noted++;
+    }
     mCb.NoteJSChild(JS::GCCellPtr(thing));
     return true;
+  }
+
+  if (bench) {
+    bench->recursed++;
   }
 
   // Allow re-use of this tracer inside trace callback.
   JS::AutoClearTracingContext actc(this);
 
   if constexpr (std::is_same_v<T, js::Shape>) {
+    if (MOZ_UNLIKELY(bench)) {
+      TraceShapeCounted(thing);
+      return true;
+    }
     // The maximum depth of traversal when tracing a Shape is unbounded, due to
     // the parent pointers on the shape.
     JS_TraceShapeCycleCollectorChildren(this, thing);
@@ -1016,6 +1069,10 @@ void CycleCollectedJSRuntime::NoteGCThingXPCOMChildren(
 
   JS::Rooted<JSObject*> obj(RootingCx(), aObj);
 
+  if (MOZ_UNLIKELY(ccbench::Counting())) {
+    ccbench::Get().xpcomChildCalls++;
+  }
+
   if (NoteCustomGCThingXPCOMChildren(aClasp, obj, aCb)) {
     // Nothing else to do!
     return;
@@ -1051,12 +1108,24 @@ void CycleCollectedJSRuntime::NoteGCThingXPCOMChildren(
         static_cast<const RemoteObjectProxyBase*>(js::GetProxyHandler(obj));
     return handler->NoteChildren(obj, aCb);
   }
+
+  if (MOZ_UNLIKELY(ccbench::Counting())) {
+    ccbench::Get().xpcomChildNone++;
+  }
 }
 
 void CycleCollectedJSRuntime::TraverseGCThing(
     TraverseSelect aTs, JS::GCCellPtr aThing,
     nsCycleCollectionTraversalCallback& aCb) {
   bool isMarkedGray = JS::GCThingIsMarkedGrayInCC(aThing);
+
+  if (MOZ_UNLIKELY(ccbench::Counting()) && aTs == TRAVERSE_FULL) {
+    auto& st = ccbench::Get();
+    st.traverseGCThing++;
+    if (!isMarkedGray) {
+      st.traverseGCThingBlack++;
+    }
+  }
 
   if (aTs == TRAVERSE_FULL) {
     DescribeGCThing(!isMarkedGray, aThing, aCb);
