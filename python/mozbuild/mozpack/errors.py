@@ -128,17 +128,21 @@ class ErrorCollector:
     def context(self, file, line):
         if file and line:
             self._context.append((file, line))
-        yield
-        if file and line:
-            self._context.pop()
+        try:
+            yield
+        finally:
+            if file and line:
+                self._context.pop()
 
     @contextmanager
     def accumulate(self):
         assert self._count is None
         self._count = 0
-        yield
-        count = self._count
-        self._count = None
+        try:
+            yield
+            count = self._count
+        finally:
+            self._count = None
         if count:
             raise AccumulatedErrors()
 
