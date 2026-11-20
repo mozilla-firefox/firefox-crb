@@ -298,3 +298,11 @@ export const phoneIT = regionalPhone(
   "IT",
   /(?<![\w+-])3\d{2}[ -](?:\d{6,7}|\d{3}[ -]\d{3,4})(?![\w-])/g
 );
+
+// The UK: 07 and 3 digits, then 6 digits whole or as 3-3: "07700 900123",
+// "07700 900 123".
+export const phoneGB = regionalPhone(
+  "phoneGB",
+  "GB",
+  /(?<![\w+-])07\d{3}[ -]?(?:\d{6}|\d{3}[ -]\d{3})(?![\w-])/g
+);
