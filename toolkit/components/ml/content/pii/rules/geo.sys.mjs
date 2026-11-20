@@ -401,3 +401,9 @@ export const postcodeES = regionalPostcode(
   "ES",
   POSTCODE_BEFORE_PLACE
 );
+
+export const postcodeIT = regionalPostcode(
+  "postcodeIT",
+  "IT",
+  POSTCODE_BEFORE_PLACE
+);
