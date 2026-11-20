@@ -389,3 +389,9 @@ export const postcodeDE = regionalPostcode(
   (postcode, text, start) =>
     STARTS_ADDRESS_LINE.test(text.slice(Math.max(0, start - 2), start))
 );
+
+export const postcodeFR = regionalPostcode(
+  "postcodeFR",
+  "FR",
+  POSTCODE_BEFORE_PLACE
+);
