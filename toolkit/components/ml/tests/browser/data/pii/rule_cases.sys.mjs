@@ -81,8 +81,83 @@ const KEY = {
   hf: joinParts("hf_", "AbCdEfGhIjKlMnOpQrStUvWxYz01234567"),
 };
 
+/**
+ * @param {string} label - Such as "RSA PRIVATE KEY".
+ * @param {string} [body]
+ * @param {string} [newline]
+ * @returns {string} A PEM block, built here so that none appears whole in the
+ *   source for secret scanners to flag.
+ */
+const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
+  joinParts("-----BEGIN ", label, "-----", newline, body, newline) +
+  joinParts("-----END ", label, "-----");
+
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  privateKey: {
+    type: "API_KEY",
+    source:
+      "PEM private key blocks (RFC 7468), OpenSSH keys and PGP private key blocks (RFC 4880)",
+    finds: [
+      `[[${pem("RSA PRIVATE KEY")}]]`,
+      `[[${pem("PRIVATE KEY")}]]`,
+      `[[${pem("EC PRIVATE KEY")}]]`,
+      `[[${pem("DSA PRIVATE KEY")}]]`,
+      `[[${pem("ENCRYPTED PRIVATE KEY")}]]`,
+      `[[${pem("OPENSSH PRIVATE KEY", "b3BlbnNzaC1rZXktdjEAAAAA")}]]`,
+      `here is my key:\n[[${pem("RSA PRIVATE KEY")}]]\ncan you fix it?`,
+      `[[${pem("PRIVATE KEY", "MIIEvQIBADANBgkqhkiG9w0B", "\r\n")}]]`,
+      // Escaped newlines, as in JSON or an .env file.
+      `{"key": "[[${pem("PRIVATE KEY", "MIIEvQIBADAN", "\\n")}]]"}`,
+      `one [[${pem("EC PRIVATE KEY")}]] two [[${pem("PRIVATE KEY")}]]`,
+      // A header pasted twice belongs to the same key.
+      `[[-----BEGIN PRIVATE KEY-----\n${pem("PRIVATE KEY")}]]`,
+      `[[${pem("PGP PRIVATE KEY BLOCK", "lQOYBF4sYnQBCAC5rP0a")}]]`,
+      // With no footer, the key runs to the last line of key text.
+      "[[-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0B]]",
+      "my key:\n[[-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAx8f3\nQk9vQm4xTwZk9vQm4xTw]]\nwhy won't ssh accept it?",
+      // Newlines lost on paste.
+      "[[-----BEGIN RSA PRIVATE KEY----- MIIEowIBAAKCAQEAx8f3 Qk9vQm4xTwZk9vQm4x]] thanks",
+    ],
+    ignores: [
+      [pem("PUBLIC KEY"), "a public key"],
+      [pem("RSA PUBLIC KEY"), "a public key"],
+      [pem("CERTIFICATE"), "a certificate"],
+      [pem("PGP PUBLIC KEY BLOCK"), "a public key"],
+      [
+        "the first line is -----BEGIN OPENSSH PRIVATE KEY----- and then",
+        "a header with no footer and no key text after it",
+      ],
+      [
+        "-----BEGIN PRIVATE KEY-----\nMIIE\nabc",
+        "a header with no footer and only short lines after it",
+      ],
+      ["MIIEvQIBADAN\n-----END PRIVATE KEY-----", "a footer with no header"],
+      ["the file starts with BEGIN PRIVATE KEY", "no dashes around the header"],
+      [pem("private key"), "lower case, PEM labels are upper case"],
+      [
+        "----BEGIN PRIVATE KEY----\nMIIE\n----END PRIVATE KEY----",
+        "four dashes, PEM uses five",
+      ],
+      [
+        "-----END PRIVATE KEY----- then -----BEGIN PRIVATE KEY-----",
+        "the footer comes before the header",
+      ],
+    ],
+    adversarial: {
+      "headers with no footer": length =>
+        repeatTo("-----BEGIN PRIVATE KEY-----\nMIIE\n", length),
+      "footers with no header": length =>
+        repeatTo("MIIE\n-----END PRIVATE KEY-----\n", length),
+      dashes: length => repeatTo("-", length),
+      "headers cut before the label ends": length =>
+        repeatTo("-----BEGIN RSA PRIVATE ", length),
+      "a header then spaces": length =>
+        `-----BEGIN PRIVATE KEY-----${" ".repeat(length - 27)}`,
+      "a header then lines one character short": length =>
+        `-----BEGIN PRIVATE KEY-----${repeatTo("\nMIIEvQIBADANBgk", length - 27)}`,
+    },
+  },
   apiKey: {
     type: "API_KEY",
     source: "prefixes and lengths each vendor documents for its keys",
