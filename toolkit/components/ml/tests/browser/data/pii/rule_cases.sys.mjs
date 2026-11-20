@@ -94,6 +94,48 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneNorthAmerican: {
+    type: "PHONE",
+    source:
+      "North American Numbering Plan NXX-NXX-XXXX, where N is 2 to 9, unless it is a toll-free number",
+    finds: [
+      "[[(415) 555-0134]]",
+      "[[415-555-0134]]",
+      "[[415.555.0134]]",
+      "[[415 555 0134]]",
+      "[[(415)555-0134]]",
+      "call me at [[(212) 555-0199]] tonight",
+      "office: [[617-555-0123]], ext 4",
+      "[[604-555-0177]]",
+      "My number is [[312.555.0110]].",
+      "[[202-555-0187]] or [[202-555-0188]]",
+      "Text [[713 555 0145]]",
+      "[[1-415-555-0134]]",
+      "call [[1 (212) 555-0199]]",
+    ],
+    ignores: [
+      ["800-555-0123", "a toll-free number"],
+      ["(888) 555-0100", "a toll-free number"],
+      ["123-456-7890", "an area code cannot start with 1"],
+      ["023-456-7890", "an area code cannot start with 0"],
+      ["212-123-4567", "an exchange cannot start with 1"],
+      ["415-555-01345", "a fifth digit at the end"],
+      ["4415-555-0134", "inside a longer number"],
+      ["SKU-415-555-0134", "after a dash"],
+      ["415-555-0134-2", "followed by a dash"],
+      ["415-555-0134abc", "followed by letters"],
+      ["415_555_0134", "underscores"],
+      ["11-415-555-0134", "a country code longer than 1"],
+      ["1-800-555-0123", "a toll-free number"],
+    ],
+    adversarial: {
+      "area codes in a row": length => repeatTo("415-", length),
+      "one digit short": length => wholeUnits("415-555-013 ", length),
+      "toll-free numbers": length => wholeUnits("800-555-0123 ", length),
+      "parentheses around area codes": length => repeatTo("(415)", length),
+      "three-digit groups": length => repeatTo("415 555 ", length),
+    },
+  },
   phoneInternational: {
     type: "PHONE",
     source:
