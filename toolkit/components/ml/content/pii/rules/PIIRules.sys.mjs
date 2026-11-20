@@ -25,6 +25,7 @@ import {
   poBox,
   postcodeCanada,
   postcodeUK,
+  zipAfterState,
 } from "./geo.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
@@ -107,6 +108,7 @@ export const RULES = [
   poBox,
   postcodeUK,
   postcodeCanada,
+  zipAfterState,
 ];
 
 /**
