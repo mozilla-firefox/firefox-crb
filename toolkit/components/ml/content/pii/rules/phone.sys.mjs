@@ -267,3 +267,11 @@ export const phoneDE = regionalPhone(
   "DE",
   /(?<![\w+-])01[567]\d[ /-]?\d{3,4}[ -]?\d{3,4}(?![\w-])/g
 );
+
+// Spain: 9 digits starting with 6 to 9, in groups 3-3-3 or 3-2-2-2:
+// "612 345 678", "612 34 56 78".
+export const phoneES = regionalPhone(
+  "phoneES",
+  "ES",
+  /(?<![\w+-])[6-9]\d{2}(?:[ -]\d{3}[ -]\d{3}|(?:[ -]\d{2}){3})(?![\w-])/g
+);
