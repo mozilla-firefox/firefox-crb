@@ -227,3 +227,71 @@ export const nhsUK = {
     return spans;
   },
 };
+
+// Dihedral group D5 multiplication and the position permutation of the
+// Verhoeff check (Verhoeff, 1969).
+const VERHOEFF_MULTIPLY = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const VERHOEFF_PERMUTE = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+
+/**
+ * @param {string} digits
+ * @returns {boolean} Whether the last digit is the Verhoeff check digit.
+ */
+function verhoeff(digits) {
+  let check = 0;
+  for (let i = 0; i < digits.length; i++) {
+    const digit = Number(digits[digits.length - 1 - i]);
+    check = VERHOEFF_MULTIPLY[check][VERHOEFF_PERMUTE[i % 8][digit]];
+  }
+  return check === 0;
+}
+
+// "2739 3903 6552": 12 digits in groups of 4, never starting with 0 or 1.
+const AADHAAR = /(?<![\w.-])[2-9]\d{3}([ -]?)\d{4}\1\d{4}(?![\w-]|\.\d)/g;
+// "Aadhaar" and its common spellings "adhar", "adhaar" and "aadhar", and
+// "UID" only in capitals, as "uid" is common in code.
+const AADHAAR_CUE = /\b(?:[Aa]a?dha{1,2}r|AA?DHAA?R|uidai|UIDAI|UID)\b/;
+
+/** @type {Rule} */
+export const aadhaarIN = {
+  name: "aadhaarIN",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(AADHAAR, text)) {
+      if (
+        verhoeff(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, AADHAAR_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "IN_AADHAAR",
+        });
+      }
+    }
+    return spans;
+  },
+};
