@@ -32,6 +32,46 @@ const repeatTo = (unit, length) =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ipv6: {
+    type: "IP",
+    source: "what the URL parser accepts as an IPv6 host (RFC 4291)",
+    finds: [
+      "ipv6 [[2001:0db8:85a3:0000:0000:8a2e:0370:7334]]",
+      "link-local [[fe80::1]] only",
+      "loopback [[::1]] here",
+      "[[2001:db8::ff00:42:8329]]",
+      "server [[2001:db8::1]]",
+      "ssh to [[2001:db8::2]] on port 22",
+      "unique local [[fd00::abcd]]",
+      "multicast [[ff02::1]]",
+      "[[2001:DB8:0:0:8:800:200C:417A]]", // published (RFC 4291); upper case
+      "gateway [[fe80::1ff:fe23:4567:890a]]%eth0", // the zone stays out
+    ],
+    ignores: [
+      ["time 10:30:45", "a time: three groups and no ::"],
+      ["ratio 3:1", "one colon"],
+      ["score 12:45", "one colon"],
+      ["12:30:00 pm", "a time: three groups and no ::"],
+      ["a:b:c", "three groups and no ::"],
+      ["deadbeef:cafe::1", "an 8-digit group, a group has at most 4"],
+      [":::", "three colons in a row"],
+      ["1::2::3", "two ::, an address has at most one"],
+      [
+        "2001:db8:85a3:0:0:8a2e:370:7334:1234",
+        "nine groups, an address has at most eight",
+      ],
+      ["std::vector<int>", "the C++ scope operator, glued to a word"],
+      ["MAC 00:1A:2B:3C:4D:5E", "a MAC address: six groups and no ::"],
+      ["g001:db8::1", "g is not a hex digit"],
+      ["x :: Int", '"::" alone, a Haskell type'],
+    ],
+    adversarial: {
+      "colons only": length => ":".repeat(length),
+      "times in a row": length => repeatTo("10:30:45 ", length),
+      "hex groups with no end": length => repeatTo("ab:", length),
+      "double colons in a row": length => repeatTo("1::", length),
+    },
+  },
   ipv4: {
     type: "IP",
     source: "four dotted groups of 0 to 255, as in RFC 791",
