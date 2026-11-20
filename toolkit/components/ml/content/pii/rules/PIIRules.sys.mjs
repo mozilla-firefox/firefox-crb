@@ -39,6 +39,7 @@ import {
 import {
   aadhaarIN,
   itinUS,
+  medicareAU,
   nhsUK,
   ninoUK,
   panIN,
@@ -145,6 +146,7 @@ export const RULES = [
   aadhaarIN,
   panIN,
   tfnAU,
+  medicareAU,
 ];
 
 /**
