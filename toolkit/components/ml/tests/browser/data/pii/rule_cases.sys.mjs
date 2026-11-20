@@ -94,6 +94,53 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  passwordAssigned: {
+    type: "SECRET_IN_CONTEXT",
+    source:
+      "a value after a password or PIN cue and ':', '=' or 'is', in 8 languages",
+    finds: [
+      "password is [[Firefox123]] for Firefox Sync",
+      "password: [[P@ssw0rd!]] for Gmail",
+      "my wifi password is [[correcthorsebattery]]",
+      "The Windows PIN is [[482915]]",
+      "PIN: [[4821]]",
+      "the password is [[hunter2]].",
+      "password = '[[hunter22]]'",
+      "the password for the wifi is [[Kiwi2024]]",
+      "the password for Zoom meeting 8821 3345 998 is [[abc123]]",
+      "Passwort: [[Sommer2024!]]",
+      "mot de passe est [[Fraise99]]",
+      "contraseña: [[Sol2024]]",
+      "a senha é [[Praia#7]]",
+      "hasło: [[Kot123]]",
+      "wachtwoord is [[Fiets2024!]]",
+    ],
+    ignores: [
+      ["I forgot my password", "no value"],
+      ["password reset link", "no ':', '=' or 'is' after the cue"],
+      ["password manager is Bitwarden", "no ':', '=' or 'is' after the cue"],
+      ["passwordless login is great", "no ':', '=' or 'is' after the cue"],
+      ["password is required", "a word about the password"],
+      ["password is too short", "a word about the password"],
+      ["the password is not working", "a word about the password"],
+      ["my password is secret", "a word about the password"],
+      ["Is the password wrong?", "no value after the cue"],
+      ["your password must contain a number", "no value after the cue"],
+      ["password: ab", "shorter than 3 characters"],
+      ["spin is 4821", "pin inside a word"],
+    ],
+    adversarial: {
+      "a cue then spaces": length => `password${" ".repeat(length - 8)}`,
+      "a cue, for, then spaces": length =>
+        `password for${" ".repeat(length - 12)}`,
+      "cues with no value": length => repeatTo("password ", length),
+      "cues with 'for' and no 'is'": length =>
+        repeatTo("password for the account ", length),
+      "cues with words about the password": length =>
+        wholeUnits("password is required ", length),
+      "cues with short values": length => repeatTo("pin: ab ", length),
+    },
+  },
   urlToken: {
     type: "URL_TOKEN",
     source:
