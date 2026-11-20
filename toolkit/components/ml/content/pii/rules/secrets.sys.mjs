@@ -85,3 +85,46 @@ export const apiKey = {
     return spans;
   },
 };
+
+// A PEM private key runs from its BEGIN line to the next END line. PGP
+// armor adds " BLOCK" to the label.
+const PEM_BEGIN = /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----/g;
+const PEM_END = /-----END (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----/g;
+// Without a footer, as when a paste is cut short, the key runs over the
+// base64 lines after the header. Lines are 64 characters long, so a run of 16
+// stops at the first ordinary word. A line break lost on paste is a space.
+const KEY_TEXT = /(?:\s+[A-Za-z0-9+/=]{16,})+/y;
+
+/** @type {Rule} */
+export const privateKey = {
+  name: "privateKey",
+  type: "API_KEY",
+  detect({ text }) {
+    // Headers and footers are found once each: a lazy BEGIN...END regex
+    // rescans the rest of the text for every header, which is quadratic on
+    // many headers with no footer.
+    const ends = [...matches(PEM_END, text)];
+    const spans = [];
+    let next = 0;
+    for (const begin of matches(PEM_BEGIN, text)) {
+      while (next < ends.length && ends[next].start < begin.end) {
+        next++;
+      }
+      let end = ends[next]?.end;
+      if (end === undefined) {
+        KEY_TEXT.lastIndex = begin.end;
+        if (!KEY_TEXT.test(text)) {
+          continue;
+        }
+        end = KEY_TEXT.lastIndex;
+      }
+      spans.push({
+        start: begin.start,
+        end,
+        type: "API_KEY",
+        evidence: EVIDENCE.CHECKSUM,
+      });
+    }
+    return spans;
+  },
+};
