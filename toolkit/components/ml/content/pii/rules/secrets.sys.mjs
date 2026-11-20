@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { EVIDENCE, matches } from "./util.sys.mjs";
+import { EVIDENCE, matches, trimTail } from "./util.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
 
@@ -124,6 +124,172 @@ export const privateKey = {
         type: "API_KEY",
         evidence: EVIDENCE.CHECKSUM,
       });
+    }
+    return spans;
+  },
+};
+
+// Finds URL-like text only. What is a password or a parameter in it is decided
+// by the URL parser and by splitting the raw text, not by this pattern.
+const URL_CANDIDATE = /\b[a-z][a-z0-9+.-]{1,12}:\/\/[^\s<>"'`]+/gi;
+
+// Parameter names whose value is a credential.
+const CREDENTIAL_PARAMS = new Set([
+  "access_token",
+  "access-token",
+  "accesstoken",
+  "id_token",
+  "id-token",
+  "idtoken",
+  "refresh_token",
+  "refresh-token",
+  "refreshtoken",
+  "auth_token",
+  "auth-token",
+  "authtoken",
+  "token",
+  "api_key",
+  "api-key",
+  "apikey",
+  "api_secret",
+  "api-secret",
+  "apisecret",
+  "secret_key",
+  "secret-key",
+  "secretkey",
+  "access_key",
+  "access-key",
+  "accesskey",
+  "private_key",
+  "private-key",
+  "privatekey",
+  "secret",
+  "client_secret",
+  "client-secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "pwd",
+  "sig",
+  "signature",
+  "x-amz-signature",
+  "x-amz-security-token",
+  "x-amz-credential",
+  "x-goog-signature",
+  "sessionid",
+  "session_id",
+  "session-id",
+  "sid",
+  "auth",
+  "bearer",
+  "private_token",
+  "private-token",
+  "privatetoken",
+]);
+// Short names that are credentials only when the value looks random.
+const AMBIGUOUS_PARAMS = new Set(["key", "code", "k", "t", "s"]);
+
+/**
+ * @param {string} value
+ * @returns {boolean} Whether `value` is long and mixes letters and digits.
+ */
+function looksRandom(value) {
+  return value.length >= 12 && /[A-Za-z]/.test(value) && /\d/.test(value);
+}
+
+/**
+ * @param {string} text
+ * @param {string} chars
+ * @param {number} from
+ * @returns {number} The index of the first of `chars` at or after `from`, or
+ *   `text.length`.
+ */
+function indexOfAny(text, chars, from) {
+  for (let i = from; i < text.length; i++) {
+    if (chars.includes(text[i])) {
+      return i;
+    }
+  }
+  return text.length;
+}
+
+/**
+ * Decodes each "%XX" escape as one character. Enough for the ASCII names in
+ * CREDENTIAL_PARAMS, and unlike decodeURIComponent it never throws, which
+ * made text full of malformed escapes slow.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function decodeEscapes(text) {
+  return text.replace(/%([0-9a-f]{2})/gi, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+/** @type {Rule} */
+export const urlToken = {
+  name: "urlToken",
+  type: "URL_TOKEN",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(URL_CANDIDATE, text)) {
+      const url = match.text.slice(
+        0,
+        trimTail(match.text, 0, match.text.length)
+      );
+      // The parser decides what is a password, the way the browser reads the
+      // URL. Offsets come from the raw text, as the parser's values are
+      // decoded and no longer line up with it.
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch {
+        continue;
+      }
+      const authorityStart = url.indexOf("://") + 3;
+      if (parsed.password) {
+        const authority = url.slice(
+          authorityStart,
+          indexOfAny(url, "/?#", authorityStart)
+        );
+        const at = authority.lastIndexOf("@");
+        const colon = authority.indexOf(":");
+        if (colon >= 0 && colon < at - 1) {
+          spans.push({
+            start: match.start + authorityStart + colon + 1,
+            end: match.start + authorityStart + at,
+            type: "URL_TOKEN",
+            evidence: EVIDENCE.CHECKSUM,
+          });
+        }
+      }
+      // name=value pairs in the query and the fragment, separated by ? & # ;
+      for (
+        let separator = indexOfAny(url, "?#", authorityStart);
+        separator < url.length;
+      ) {
+        const next = indexOfAny(url, "?&#;", separator + 1);
+        const pair = url.slice(separator + 1, next);
+        const equals = pair.indexOf("=");
+        if (equals > 0) {
+          const name = decodeEscapes(pair.slice(0, equals)).toLowerCase();
+          const value = pair.slice(equals + 1);
+          const isCredential =
+            CREDENTIAL_PARAMS.has(name) ||
+            (AMBIGUOUS_PARAMS.has(name) && looksRandom(value));
+          if (isCredential && value.length >= 6) {
+            const start = match.start + separator + 1 + equals + 1;
+            spans.push({
+              start,
+              end: start + value.length,
+              type: "URL_TOKEN",
+              evidence: EVIDENCE.FORMAT,
+            });
+          }
+        }
+        separator = next;
+      }
     }
     return spans;
   },
