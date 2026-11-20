@@ -32,6 +32,42 @@ const repeatTo = (unit, length) =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  mac: {
+    type: "MAC",
+    source:
+      "six hex pairs with one separator, or Cisco's three dotted groups (IEEE 802)",
+    finds: [
+      "[[00:1A:2B:3C:4D:5E]]",
+      "mac [[00-1a-2b-3c-4d-5e]]",
+      "[[aa:bb:cc:dd:ee:ff]]",
+      "cisco [[0012.3456.789a]]",
+      "device [[AA:BB:CC:11:22:33]] online",
+      "wifi: [[DE:AD:BE:EF:00:01]].", // the period stays out
+      "([[f0:18:98:5a:6b:7c]])",
+      "ether [[52-54-00-12-34-56]]",
+      "both [[00:11:22:33:44:55]] and [[66:77:88:99:aa:bb]]",
+      "bt [[3c:5a:b4:00:01:02]]",
+    ],
+    ignores: [
+      ["12:34:56", "a time: three pairs"],
+      ["10:30:45:12", "four pairs, an address has six"],
+      ["ab:cd:ef", "three pairs, an address has six"],
+      ["00:1A:2B:3C:4D", "five pairs, an address has six"],
+      ["1234.5678", "two dotted groups, Cisco's format has three"],
+      ["zz:zz:zz:zz:zz:zz", "z is not a hex digit"],
+      ["00:1A:2B:3C:4D:5E:6F", "seven pairs, an address has six"],
+      ["aa-bb-cc-dd-ee", "five pairs, an address has six"],
+      ["time 12:00:00 sharp", "a time: three pairs"],
+      ["00:1A:2B:3C:4D:5", "the last group has one digit"],
+      ["00:1A-2B:3C-4D:5E", "colons and dashes mixed"],
+    ],
+    adversarial: {
+      "colon-separated pairs with no end": length => repeatTo("ab:", length),
+      "dash-separated pairs with no end": length => repeatTo("ab-", length),
+      "dotted groups with no end": length => repeatTo("abcd.", length),
+      "mixed separators": length => repeatTo("00:1A-", length),
+    },
+  },
   ipv6: {
     type: "IP",
     source: "what the URL parser accepts as an IPv6 host (RFC 4291)",
@@ -46,6 +82,7 @@ export const RULE_CASES = {
       "multicast [[ff02::1]]",
       "[[2001:DB8:0:0:8:800:200C:417A]]", // published (RFC 4291); upper case
       "gateway [[fe80::1ff:fe23:4567:890a]]%eth0", // the zone stays out
+      "MAC [[MAC: 00:1A:2B:3C:4D:5E]]", // a MAC address, not IPv6
     ],
     ignores: [
       ["time 10:30:45", "a time: three groups and no ::"],
@@ -61,7 +98,6 @@ export const RULE_CASES = {
         "nine groups, an address has at most eight",
       ],
       ["std::vector<int>", "the C++ scope operator, glued to a word"],
-      ["MAC 00:1A:2B:3C:4D:5E", "a MAC address: six groups and no ::"],
       ["g001:db8::1", "g is not a hex digit"],
       ["x :: Int", '"::" alone, a Haskell type'],
     ],
