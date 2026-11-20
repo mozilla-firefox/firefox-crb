@@ -188,3 +188,26 @@ export const postcodeUK = {
     return spans;
   },
 };
+
+// A Canadian postal code in capitals: "K1A 0B1". D, F, I, O, Q and U are not
+// used, nor W and Z as the first letter.
+const CANADA_POSTCODE =
+  /(?<![A-Za-z0-9])[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d(?![A-Za-z0-9])/g;
+
+/** @type {Rule} */
+export const postcodeCanada = {
+  name: "postcodeCanada",
+  type: "POSTCODE",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(CANADA_POSTCODE, text)) {
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "POSTCODE",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};

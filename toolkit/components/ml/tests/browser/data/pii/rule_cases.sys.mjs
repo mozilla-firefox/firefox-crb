@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeCanada: {
+    type: "POSTCODE",
+    source:
+      "a Canadian postal code in capitals, A1A 1A1 with the letters Canada Post allows in each position",
+    finds: [
+      "[[K1A 0B1]]",
+      "[[M5V 3L9]] Toronto",
+      "[[H2X 1Y4]]",
+      "[[V6B 4Y8]]",
+      "[[T2P-2M5]]",
+      "[[K1A0B1]]",
+      "Ottawa ON [[K2P 1L4]]",
+      "([[R3C 4T3]])",
+      "[[X0A 0H0]]",
+      "[[B3H 1Z5]].",
+      "[[E1C 4M3]]",
+    ],
+    ignores: [
+      ["D1A 0B1", "D starts no Canadian postal code"],
+      ["W1A 0B1", "W starts no Canadian postal code"],
+      ["K1D 0B1", "D is not used"],
+      ["K1A 0O1", "O is not used"],
+      ["k1a 0b1", "lower case"],
+      ["1KA 0B1", "starts with a digit"],
+      ["K1A 0B", "no last digit"],
+      ["K1A  0B1", "two spaces"],
+      ["K1A.0B1", "a dot"],
+      ["XK1A 0B1", "inside a word"],
+      ["K1A 0B1X", "followed by a letter"],
+      ["K1A 0B12", "followed by a digit"],
+    ],
+    adversarial: {
+      "letter-digit pairs": length => repeatTo("K1", length),
+      "half codes": length => wholeUnits("K1A ", length),
+      "codes with a letter not used": length => wholeUnits("K1A 0O1 ", length),
+      "dashes after a half code": length => `K1A${"-".repeat(length - 3)}`,
+      "lower-case codes": length => wholeUnits("k1a 0b1 ", length),
+    },
+  },
   postcodeUK: {
     type: "POSTCODE",
     source:
