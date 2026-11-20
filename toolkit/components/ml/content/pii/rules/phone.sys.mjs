@@ -251,3 +251,11 @@ export const phoneFR = regionalPhone(
   "FR",
   /(?<![\w+-])0[1-9](?:[ .-]?\d{2}){4}(?![\w-])/g
 );
+
+// The Netherlands: 06 and 8 digits, whole or in pairs: "06 12345678",
+// "06-12 34 56 78".
+export const phoneNL = regionalPhone(
+  "phoneNL",
+  "NL",
+  /(?<![\w+-])06(?:[ -]?\d{8}|[ -]\d{2}(?:[ -]?\d{2}){3})(?![\w-])/g
+);
