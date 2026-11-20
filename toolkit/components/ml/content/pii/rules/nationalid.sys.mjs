@@ -15,6 +15,19 @@ function digitsOf(text) {
 }
 
 /**
+ * @param {string} digits
+ * @param {number[]} weights
+ * @returns {number} The sum of the first digits, each times its weight.
+ */
+function weighted(digits, weights) {
+  let sum = 0;
+  for (let i = 0; i < weights.length; i++) {
+    sum += Number(digits[i]) * weights[i];
+  }
+  return sum;
+}
+
+/**
  * @param {string} text
  * @param {number} start
  * @param {number} end
@@ -170,6 +183,44 @@ export const ninoUK = {
           type: "NATIONAL_ID",
           evidence: EVIDENCE.FORMAT,
           country: "UK_NINO",
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// "943 476 5919", in groups of 3, 3 and 4 with the same separator or none.
+const NHS_NUMBER = /(?<![\w.-])\d{3}([ -]?)\d{3}\1\d{4}(?![\w-]|\.\d)/g;
+const NHS_CUE = /\bnhs\b|\bnational\s+health\b|\bhealth\s+service\b/i;
+
+/**
+ * @param {string} digits - Ten digits.
+ * @returns {boolean} Whether the modulus 11 check digit holds.
+ */
+function isNHSNumber(digits) {
+  const remainder = weighted(digits, [10, 9, 8, 7, 6, 5, 4, 3, 2]) % 11;
+  // A check of 10 matches no digit: such numbers are never issued.
+  return (11 - remainder) % 11 === Number(digits[9]);
+}
+
+/** @type {Rule} */
+export const nhsUK = {
+  name: "nhsUK",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NHS_NUMBER, text)) {
+      if (
+        isNHSNumber(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, NHS_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "UK_NHS",
         });
       }
     }
