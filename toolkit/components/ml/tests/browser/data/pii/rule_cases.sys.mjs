@@ -96,6 +96,44 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ninoUK: {
+    type: "NATIONAL_ID",
+    source:
+      "a UK National Insurance number, two allocatable prefix letters, 6 digits and a suffix A to D (HMRC National Insurance Manual NIM39110)",
+    finds: [
+      "NI number [[AB123456C]]",
+      "ni: [[ab 12 34 56 c]]",
+      "[[YZ 12 34 56 A]]",
+      "my NINO is [[JG-10-37-26-D]].",
+      "([[CE123456B]])",
+      "[[AA 123456 A]]",
+      "national insurance [[ZY987654A]]",
+      "[[WZ 11 22 33 D]] and [[HP 99 88 77 C]]",
+      "[[TP123456A]]",
+      "[[Sk 00 00 00 b]]",
+    ],
+    ignores: [
+      ["AB 12 34 56 F", "a suffix after D"],
+      ["DN123456C", "first letter D"],
+      ["QQ 12 34 56 C", "first letter Q, the prefix of HMRC's examples"],
+      ["AO123456C", "second letter O"],
+      ["AV123456C", "second letter V"],
+      ["BG123456C", "prefix BG not allocated"],
+      ["GB123456C", "prefix GB not allocated"],
+      ["NK123456C", "prefix NK not allocated"],
+      ["ZZ123456C", "prefix ZZ not allocated"],
+      ["AB12345C", "5 digits"],
+      ["AB1234567C", "7 digits"],
+      ["XAB123456C", "inside a word"],
+      ["AB123456CD", "followed by a letter"],
+      ["AB  123456C", "two spaces"],
+    ],
+    adversarial: {
+      "unallocated prefixes": length => wholeUnits("BG123456C ", length),
+      "letters and digits": length => repeatTo("AB12", length),
+      "separators and digits": length => repeatTo("AB 12 -", length),
+    },
+  },
   itinUS: {
     type: "NATIONAL_ID",
     source:
