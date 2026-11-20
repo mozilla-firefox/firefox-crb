@@ -240,15 +240,31 @@ add_task(function test_empty_and_invalid_input() {
   );
 });
 
+add_task(function test_national_layout_needs_its_region() {
+  const text = "06 12 34 56 78";
+  Assert.deepEqual(detectRules(text), [], "No region");
+  Assert.deepEqual(detectRules(text, { region: "DE" }), [], "Another region");
+  Assert.deepEqual(
+    detectRules(text, { region: "FR" }).map(({ start, end }) => ({
+      start,
+      end,
+    })),
+    [{ start: 0, end: 14 }],
+    "Its own region"
+  );
+});
+
 add_task(function test_finds() {
   for (const [name, cases] of Object.entries(RULE_CASES)) {
     for (const marked of cases.finds) {
       const { text, spans } = parseMarked(marked, cases.type);
-      const found = detectRules(text).map(({ start, end, type }) => ({
-        start,
-        end,
-        type,
-      }));
+      const found = detectRules(text, { region: cases.region }).map(
+        ({ start, end, type }) => ({
+          start,
+          end,
+          type,
+        })
+      );
       Assert.deepEqual(found, spans, `${name} finds ${marked}`);
     }
   }
@@ -258,7 +274,7 @@ add_task(function test_ignores() {
   for (const [name, cases] of Object.entries(RULE_CASES)) {
     for (const [text, reason] of cases.ignores) {
       Assert.deepEqual(
-        detectRules(text),
+        detectRules(text, { region: cases.region }),
         [],
         `${name} ignores ${JSON.stringify(text)}: ${reason}`
       );
@@ -277,7 +293,7 @@ add_task(function test_adversarial_inputs() {
       for (const [input, build] of Object.entries(cases.adversarial)) {
         const text = build(length);
         const start = ChromeUtils.now();
-        const spans = detectRules(text);
+        const spans = detectRules(text, { region: cases.region });
         const ms = (ChromeUtils.now() - start).toFixed(2);
         info(`${name}, ${input}, ${text.length} characters: ${ms} ms`);
         Assert.deepEqual(spans, [], `${name} finds nothing in ${input}`);
@@ -308,7 +324,7 @@ add_task(
         const times = [];
         for (let i = 0; i < runs; i++) {
           const start = ChromeUtils.now();
-          detectRules(text);
+          detectRules(text, { region: cases.region });
           times.push(ChromeUtils.now() - start);
         }
         times.sort((a, b) => a - b);

@@ -21,6 +21,7 @@ import { email } from "./email.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
+  phoneFR,
   phoneInternational,
   phoneNorthAmerican,
 } from "./phone.sys.mjs";
@@ -77,6 +78,7 @@ export const RULES = [
   phoneInternational,
   phoneNorthAmerican,
   phoneCued,
+  phoneFR,
 ];
 
 /**
@@ -127,13 +129,17 @@ export function resolveOverlaps(candidates) {
  * Finds the identifiers the rules own in `text`.
  *
  * @param {string} text
+ * @param {object} [options]
+ * @param {string} [options.region] - The user's region as an upper-case ISO
+ *   3166-1 code, such as "FR". Some layouts are only phone numbers in their
+ *   own country, so they are found only when it is given.
  * @returns {RuleSpan[]} Non-overlapping spans, sorted by start. Offsets are
  *   UTF-16 code units.
  */
-export function detectRules(text) {
+export function detectRules(text, { region } = {}) {
   if (typeof text !== "string") {
     throw new TypeError("detectRules expects a string.");
   }
-  const context = { text };
+  const context = { text, region };
   return resolveOverlaps(RULES.flatMap(rule => rule.detect(context)));
 }
