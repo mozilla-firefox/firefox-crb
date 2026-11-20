@@ -361,3 +361,46 @@ export const tfnAU = {
     return spans;
   },
 };
+
+// "6215 57417 3": an Australian Medicare card number, 4, 5 and 1 digits with
+// the same separator or none, and optionally the 1-digit reference number of
+// the person on the card.
+const MEDICARE =
+  /(?<![\w.-])[2-6]\d{3}([ -]?)\d{5}\1\d(?:\1\d)?(?![\w-]|\.\d)/g;
+const MEDICARE_CUE = /\bmedicare\b/i;
+
+/**
+ * @param {string} digits - Ten or eleven digits.
+ * @returns {boolean} Whether the ninth digit is the weighted check digit and
+ *   the issue number, the tenth, is not 0.
+ */
+function isMedicareNumber(digits) {
+  return (
+    digits[9] !== "0" &&
+    weighted(digits, [1, 3, 7, 9, 1, 3, 7, 9]) % 10 === Number(digits[8])
+  );
+}
+
+/** @type {Rule} */
+export const medicareAU = {
+  name: "medicareAU",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(MEDICARE, text)) {
+      if (
+        isMedicareNumber(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, MEDICARE_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "AU_MEDICARE",
+        });
+      }
+    }
+    return spans;
+  },
+};
