@@ -380,4 +380,60 @@ export const RULE_CASES = {
         repeatTo(`0x${"1".repeat(41)} `, length),
     },
   },
+  routing: {
+    type: "ROUTING_NUMBER",
+    source:
+      "ABA 3-7-1 checksum and Federal Reserve prefixes, after or before a routing cue",
+    finds: [
+      "routing number [[021000021]]", // published (Chase NY)
+      "Routing: [[011000015]]", // published (Federal Reserve Boston)
+      "my routing no. is [[121000358]]",
+      "ABA [[026009593]]",
+      "ABA number: [[111000025]]",
+      "RTN [[322271627]]",
+      "routing transit number [[063100277]].", // the period stays out
+      "use [[071000013]] (routing) for the transfer", // the cue comes after
+      "[[044000037]] is the ABA", // the cue comes after
+      "numéro de routage : [[091000019]]",
+      "the bank's routing # is [[256074974]]",
+    ],
+    ignores: [
+      [
+        "routing number 021000022",
+        "the last digit changed, so the checksum fails",
+      ],
+      ["order 021000021", "a valid routing number, but no cue"],
+      [
+        "routing 921000008",
+        "passes the checksum, but no Federal Reserve district starts with 92",
+      ],
+      ["ABA 500000005", "no routing number starts with 50"],
+      ["routing 0210000210", "10 digits, a routing number has 9"],
+      ["RTN 123456789", "a counting sequence that fails the checksum"],
+      ["routing 02100002", "8 digits, a routing number has 9"],
+      [
+        "ABA 2024 conference in 021000021 rooms",
+        "another number comes between the cue and this one",
+      ],
+      [
+        "routing table has 3 entries; 021000021",
+        "another number comes between the cue and this one",
+      ],
+      [
+        "the routing slip, then 2 more: 021000021",
+        "another number comes between the cue and this one",
+      ],
+      ["account 021000021", "an account cue, not a routing cue"],
+    ],
+    adversarial: {
+      "valid routing numbers with no cue": length =>
+        repeatTo("021000021 ", length),
+      "routing cues before numbers that fail the checksum": length =>
+        repeatTo("routing 021000022 ", length),
+      "a routing cue, then a gap longer than 24 characters": length =>
+        repeatTo(`routing ${"x".repeat(25)} 021000021. `, length),
+      "a cue just too far after the number": length =>
+        repeatTo(`021000021 ${"x".repeat(9)} aba. `, length),
+    },
+  },
 };
