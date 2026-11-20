@@ -4,7 +4,7 @@
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 import { EVIDENCE, matches } from "./util.sys.mjs";
-import { luhn, mod97 } from "./checks.sys.mjs";
+import { base58check, luhn, mod97 } from "./checks.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
 
@@ -240,6 +240,31 @@ export const cvv = {
           start: match.start,
           end: match.end,
           type: "CVV",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// A legacy (1...) or P2SH (3...) Bitcoin address: 26 to 35 Base58
+// characters, which leave out 0, O, I and l.
+const BITCOIN_LEGACY =
+  /(?<![A-Za-z0-9])[13][1-9A-HJ-NP-Za-km-z]{25,34}(?![A-Za-z0-9])/g;
+
+/** @type {Rule} */
+export const bitcoinLegacy = {
+  name: "bitcoinLegacy",
+  type: "CRYPTO_WALLET",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(BITCOIN_LEGACY, text)) {
+      if (base58check(match.text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "CRYPTO_WALLET",
           evidence: EVIDENCE.CHECKSUM,
         });
       }

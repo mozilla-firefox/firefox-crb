@@ -200,4 +200,74 @@ export const RULE_CASES = {
       "numbers glued to cue fragments": length => repeatTo("cvv.123.", length),
     },
   },
+  bitcoinLegacy: {
+    type: "CRYPTO_WALLET",
+    source:
+      "Base58Check, as in Bitcoin's legacy (1...) and P2SH (3...) formats",
+    finds: [
+      "btc [[1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2]]",
+      "genesis [[1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa]]", // published
+      "p2sh [[3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy]]", // published
+      "([[1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2]])",
+      "send it to [[1b3DbGNVjzAYFZz5YTrwMmt1Qpa7xs9mV]] please", // 33 characters
+      "my wallet: [[15wXkBRt2EGPGuWwZr1GHw83tJ3GHuvGa7]].", // the period stays out
+      "[[1CPbWziZFBvpRhuWUMirA6Zv9zWJeZ2NJS]]",
+      "Adresse: [[1EScSbtpB3g5R2TwEpUX7eMhRHUZ8JTrko]]",
+      "pay to [[3CHdM5inGD9FPFbmV1Ld4fSotxw2zbcQNX]], thanks",
+      "[[38m81wHYmVTBpZrDrtKYjBfnnrAvnPBd7L]] or [[3EvPgZERGiiQwreHrthffrBJKLFTVu2Wge]]",
+    ],
+    ignores: [
+      [
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN3",
+        "the last character changed, so Base58Check fails",
+      ],
+      [
+        "tx 3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLz",
+        "the last character of a P2SH address changed",
+      ],
+      [
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNNV2",
+        "two characters swapped, so Base58Check fails",
+      ],
+      ["3Jabc", "5 characters, an address has at least 26"],
+      ["1 apple", "a number and a word"],
+      ["1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN0", "0 is not a Base58 character"],
+      ["x1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2", "glued to a letter before it"],
+      [
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN20",
+        "glued to a 0 after it, so part of a longer code",
+      ],
+      [
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2x",
+        "one letter added, so Base58Check fails",
+      ],
+      [
+        "2BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+        "starts with 2, not a legacy or P2SH address",
+      ],
+      [
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2abcd",
+        "38 characters, longer than any address",
+      ],
+      [
+        "licence key 1A2B3C4D5E6F7G8H9JAKBMCNDPEQFRGS",
+        "a key shaped like an address that fails Base58Check",
+      ],
+      [
+        "tx 4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+        "a 64-character hex transaction hash",
+      ],
+    ],
+    adversarial: {
+      "address-shaped words that fail Base58Check": length =>
+        repeatTo("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN3 ", length),
+      "addresses glued to a 0": length =>
+        repeatTo("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN20 ", length),
+      "one long run of Base58 characters": length =>
+        `1${"A".repeat(length - 1)}`,
+      "one long run of 1s": length => "1".repeat(length),
+      "shortest address-shaped words": length =>
+        repeatTo(`3${"J".repeat(25)} `, length),
+    },
+  },
 };
