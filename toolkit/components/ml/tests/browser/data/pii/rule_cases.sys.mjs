@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneGB: {
+    type: "PHONE",
+    source:
+      "the UK mobile layout, 07 and 9 more digits as 5-6 or 5-3-3 (Ofcom numbering plan), in region GB; the numbers are from Ofcom's range for TV and radio",
+    region: "GB",
+    finds: [
+      "[[07700 900123]]",
+      "[[07700900123]]",
+      "[[07700-900123]]",
+      "[[07700 900 123]]",
+      "[[07700-900-777]]",
+      "my mobile is [[07700 900982]]",
+      "text me on [[07700 900321]]",
+      "ring [[07700900555]] tomorrow",
+      "([[07700 900111]])",
+      "[[07700 900123]] or [[07700 900124]].",
+      "[[07700 900 456]]!",
+    ],
+    ignores: [
+      ["020 7946 0958", "a landline, not a mobile"],
+      ["08700 900123", "does not start with 07"],
+      ["0770 900123", "a four-digit prefix"],
+      ["07700 90012", "5 digits after the prefix"],
+      ["07700 9001234", "7 digits after the prefix"],
+      ["07700 90 01 23", "pairs"],
+      ["107700 900123", "inside a longer number"],
+      ["a07700 900123", "inside a word"],
+      ["07700 900123x", "followed by a letter"],
+      ["07700.900123", "a dot separator"],
+      ["07700  900123", "two spaces"],
+      ["06 12 34 56 78", "a French layout"],
+    ],
+    adversarial: {
+      "07 in a row": length => repeatTo("07", length),
+      "a prefix and a long run of digits": length =>
+        `07700${"9".repeat(length - 5)}`,
+      "one digit short": length => wholeUnits("07700 90012 ", length),
+      "dashes after a prefix": length => `07700${"-".repeat(length - 5)}`,
+      "short groups": length => wholeUnits("07700 900 12 ", length),
+    },
+  },
   phoneIT: {
     type: "PHONE",
     source:
