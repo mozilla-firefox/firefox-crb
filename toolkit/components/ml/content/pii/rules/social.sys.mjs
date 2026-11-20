@@ -109,3 +109,27 @@ export const atHandle = {
     return spans;
   },
 };
+
+// "u/name" or "/u/name": Reddit allows 3 to 20 letters, digits, "_" and "-".
+const REDDIT_USER = /(?<![\w/])\/?u\/[A-Za-z0-9_-]{3,20}(?![\w-])/g;
+
+/** @type {Rule} */
+export const redditUser = {
+  name: "redditUser",
+  type: "USERNAME",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(REDDIT_USER, text)) {
+      if (hasSelfCue(text, match.start)) {
+        // As for atHandle, the cue stands in for a checksum.
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "USERNAME",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
