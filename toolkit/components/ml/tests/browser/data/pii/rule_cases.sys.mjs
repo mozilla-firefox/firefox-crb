@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  gpsLabeled: {
+    type: "GPS",
+    source:
+      "a latitude of at most 90 and a longitude of at most 180, each after its label",
+    finds: [
+      "[[lat 48.8584 lon 2.2945]]",
+      "[[Latitude: -16.4197445, Longitude: 160.329054]]",
+      "[[lat: 40.7128 long: -74.0060]]",
+      "[[lat=51.5074, lon=-0.1278]]",
+      "[[lat: 37.7749, lng: -122.4194]]",
+      "my home: [[latitude 35.6762 longitude 139.6503]]",
+      "[[lat 52.52°, lon 13.405]]",
+      "[[LAT 33.8688; LON 151.2093]]",
+      "[[lat 0 lon 0]]",
+      "[[lat 90 lon 180]]",
+      "[[lat -90 lon -180]]",
+      "[[lat 52.52 lon 13.405]].",
+      "[[lat48.8584 lon2.2945]]",
+    ],
+    ignores: [
+      ["lat 95.1 lon 2.3", "a latitude above 90"],
+      ["lat 45 lon 181", "a longitude above 180"],
+      ["lat 45 lon 1800", "a four-digit longitude"],
+      ["lat 123 lon 45", "a latitude above 90"],
+      ["lat 1.2 lon 3.4.5", "a version number"],
+      ["latitude is high", "no number"],
+      ["lat 48.8584", "no longitude"],
+      ["flat 48.1 long 2.2", "lat inside a word"],
+      ["lat 48.8584 lonely 2.2945", "lon inside a word"],
+      ["lat 48.8584 and lon 2.2945", "a word between"],
+      ["lat 48. lon 2", "a dot after the latitude"],
+    ],
+    adversarial: {
+      "labels in a row": length => repeatTo("lat ", length),
+      "a label and spaces": length => `lat${" ".repeat(length - 3)}`,
+      "values out of range": length => wholeUnits("lat 95 lon 2 ", length),
+      "separators after a latitude": length =>
+        `lat 48${repeatTo(" ,;°", length - 6)}`,
+      "a long decimal": length => `lat 1.${"1".repeat(length - 6)}`,
+    },
+  },
   phoneGB: {
     type: "PHONE",
     source:
