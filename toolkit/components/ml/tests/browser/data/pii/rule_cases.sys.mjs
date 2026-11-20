@@ -96,6 +96,41 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  codiceFiscaleIT: {
+    type: "NATIONAL_ID",
+    source:
+      "an Italian codice fiscale, 6 letters, 2 digits, a month letter, a day of 01 to 31 or 41 to 71, a letter, 3 digits and a check letter (Agenzia delle Entrate)",
+    finds: [
+      // Published (Agenzia delle Entrate).
+      "codice fiscale [[RSSMRA85T10A562S]]",
+      "cf: [[WOOEKD19S44V612C]]",
+      "il mio CF è [[ZMHMUC64H63Y282R]].",
+      "([[DCBPLJ17A65I461J]])",
+      "[[pzwcel68d25t818t]]",
+      "CF [[QMYBYX95E03E985W]] e [[DGESRV09T60J403V]]",
+      "[[NYIRTQ19T45D815E]],",
+      "cf=[[CXFSDC59A65B683L]]",
+      "[[DIXVBS54T47E065Z]]",
+      "[[RSSMRA85T31A562T]]",
+    ],
+    ignores: [
+      ["RSSMRA85T10A562A", "a wrong check letter"],
+      ["RSSMRA85T32A562Y", "day 32"],
+      ["RSSMRA85T40A562V", "day 40"],
+      ["RSSMRA85T72A562C", "day 72"],
+      ["RSSMRA85T00A562R", "day 00"],
+      ["RSSMRA85N10A562Y", "month letter N"],
+      ["RSSMR85T10A562S", "5 letters"],
+      ["XRSSMRA85T10A562S", "inside a word"],
+      ["RSSMRA85T10A562SX", "followed by a letter"],
+      ["RSSMRA 85T10A562S", "a space inside"],
+    ],
+    adversarial: {
+      "wrong check letters": length => wholeUnits("RSSMRA85T10A562A ", length),
+      "letters in a row": length => repeatTo("RSSMRA", length),
+      "letters and digits": length => repeatTo("RSSMRA85", length),
+    },
+  },
   nieES: {
     type: "NATIONAL_ID",
     source:

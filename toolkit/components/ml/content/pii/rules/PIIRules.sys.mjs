@@ -38,6 +38,7 @@ import {
 } from "./geo.sys.mjs";
 import {
   aadhaarIN,
+  codiceFiscaleIT,
   dniES,
   idZA,
   irdNZ,
@@ -161,6 +162,7 @@ export const RULES = [
   nricSG,
   dniES,
   nieES,
+  codiceFiscaleIT,
 ];
 
 /**

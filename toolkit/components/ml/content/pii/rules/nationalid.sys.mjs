@@ -681,3 +681,67 @@ export const nieES = {
     return spans;
   },
 };
+
+// "RSSMRA85T10A562S": an Italian codice fiscale, 3 surname and 3 name
+// letters, the year of birth, a month letter, the day (plus 40 for women), a
+// place code and a check letter. Codes whose digits were replaced by letters
+// to resolve a collision (omocodia) are not covered.
+const CODICE_FISCALE = new RegExp(
+  [
+    // The name letters are read backwards from the year, so that matching
+    // only starts at a digit.
+    "(?<=(?<![\\w-])(?<name>[A-Z]{6}))",
+    "\\d{2}[A-EHLMPR-T]",
+    "(?<day>\\d{2})",
+    "[A-Z]\\d{3}[A-Z]",
+    "(?![\\w-])",
+  ].join(""),
+  "gi"
+);
+// What a character in an odd position, 1st, 3rd and so on, adds to the
+// check: digits 0 to 9 count like letters A to J.
+const CODICE_FISCALE_ODD = [
+  1, 0, 5, 7, 9, 13, 15, 17, 19, 21, 2, 4, 18, 20, 11, 3, 6, 8, 12, 14, 16, 10,
+  22, 25, 24, 23,
+];
+
+/**
+ * @param {string} code - Sixteen characters in upper case.
+ * @returns {boolean} Whether the last letter is the check letter.
+ */
+function isCodiceFiscale(code) {
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    const char = code.charCodeAt(i);
+    // Digits and letters both count from 0.
+    const value = char <= 57 ? char - 48 : char - 65;
+    sum += i % 2 === 0 ? CODICE_FISCALE_ODD[value] : value;
+  }
+  return String.fromCharCode(65 + (sum % 26)) === code[15];
+}
+
+/** @type {Rule} */
+export const codiceFiscaleIT = {
+  name: "codiceFiscaleIT",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(CODICE_FISCALE, text)) {
+      const day = Number(match.groups.day);
+      const { name } = match.groups;
+      if (
+        ((day >= 1 && day <= 31) || (day >= 41 && day <= 71)) &&
+        isCodiceFiscale(`${name}${match.text}`.toUpperCase())
+      ) {
+        spans.push({
+          start: match.start - name.length,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "IT_CF",
+        });
+      }
+    }
+    return spans;
+  },
+};
