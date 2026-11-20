@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phonePT: {
+    type: "PHONE",
+    source:
+      "the Portuguese mobile layout, 91, 92, 93 or 96 and 7 more digits in groups 3-3-3 (ANACOM numbering plan), in region PT",
+    region: "PT",
+    finds: [
+      "[[912 345 678]]",
+      "[[912-345-678]]",
+      "[[921 234 567]]",
+      "[[931 234 567]]",
+      "[[961 234 567]]",
+      "[[925-111-222]]",
+      "o meu telemóvel é [[912 345 678]]",
+      "liga-me para o [[936 123 456]]",
+      "([[912 345 678]])",
+      "[[912 345 678]] ou [[962 345 678]]",
+      "[[919 876 543]].",
+    ],
+    ignores: [
+      ["942 345 678", "94 is not a mobile prefix"],
+      ["212 345 678", "a landline, not a mobile"],
+      ["912345678", "no separators"],
+      ["912 345 67", "8 digits"],
+      ["912 145 6789", "10 digits"],
+      ["1912 345 678", "inside a longer number"],
+      ["a912 345 678", "inside a word"],
+      ["912 345 678b", "followed by a letter"],
+      ["912.345.678", "dot separators"],
+      ["912  345 678", "two spaces"],
+      ["912 34 56 78", "pairs, as in Spain"],
+      ["612 345 678", "a Spanish layout"],
+    ],
+    adversarial: {
+      "a 9 and a long run of digits": length => `9${"1".repeat(length - 1)}`,
+      "one digit short": length => wholeUnits("912 345 67 ", length),
+      "prefixes in a row": length => repeatTo("91 ", length),
+      "numbers with a wrong prefix": length =>
+        wholeUnits("942 345 678 ", length),
+      "dashes after a prefix": length => `912${"-".repeat(length - 3)}`,
+    },
+  },
   phoneES: {
     type: "PHONE",
     source:
