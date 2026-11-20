@@ -270,4 +270,66 @@ export const RULE_CASES = {
         repeatTo(`3${"J".repeat(25)} `, length),
     },
   },
+  bitcoinSegwit: {
+    type: "CRYPTO_WALLET",
+    source:
+      "Bech32 (BIP 173) and Bech32m (BIP 350), as in Bitcoin's bc1 format",
+    finds: [
+      "bech32 [[bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq]]", // published
+      "wallet: [[bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq]], thanks",
+      "[[BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4]]", // published; upper case
+      "script [[bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3]]", // published; 62 characters
+      "taproot [[bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y]]", // published; Bech32m
+      "send to [[bc1q7ytkjfayyz3g7mednamugyxzn9n266g9tzntgr]] please",
+      "([[bc1qpxk6fx7wzzjch3m2gvvsxns4arsxtpk38qagug]])",
+      "Adresse: [[bc1qywe23j2qsf4ez2whe5t0weufdzu06fqauz46r0cmuwyrzumh5nlqtfmlpw]].", // the period stays out
+      "pay [[bc1p72tgg5xhrwhzlqrvm8sca0dpms2d0slgrmk28r982qq53kw38z5q4jn4s7]] now", // Bech32m
+      "[[bc1pkg5r3x9njdhdg069ucw3ll43wjfhvcfw5hwzepnzpg7kftc33c0qh2cak4]] or [[1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2]]",
+    ],
+    ignores: [
+      [
+        "address bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdr",
+        "the last character changed, so Bech32 fails",
+      ],
+      [
+        "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mqd",
+        "the last two characters swapped",
+      ],
+      ["bc1qinvalid", "8 characters after bc1, an address has at least 11"],
+      [
+        "bc1qAr0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+        "upper and lower case mixed, which Bech32 never allows",
+      ],
+      [
+        "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdo",
+        "o is not a Bech32 character",
+      ],
+      [
+        "xbc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+        "glued to a letter before it",
+      ],
+      [
+        "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w",
+        "a Lightning invoice (BOLT 11), which starts with lnbc",
+      ],
+      [
+        "testnet tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+        "a testnet address (tb1), not real money",
+      ],
+      ["bc1 is the prefix", "the prefix alone"],
+      [
+        "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T5",
+        "an upper-case address with its last character changed",
+      ],
+    ],
+    adversarial: {
+      "address-shaped words that fail Bech32": length =>
+        repeatTo("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdr ", length),
+      "mixed-case address-shaped words": length =>
+        repeatTo("bc1qAr0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq ", length),
+      "one long run after bc1": length => `bc1${"q".repeat(length - 3)}`,
+      "bc1 prefixes in a row": length => repeatTo("bc1", length),
+      "short words after bc1": length => repeatTo("bc1qqqqqqqqqqqq ", length),
+    },
+  },
 };
