@@ -49,6 +49,7 @@ import {
   ninoUK,
   nricSG,
   panIN,
+  peselPL,
   ppsIE,
   sinCA,
   ssnCued,
@@ -163,6 +164,7 @@ export const RULES = [
   dniES,
   nieES,
   codiceFiscaleIT,
+  peselPL,
 ];
 
 /**

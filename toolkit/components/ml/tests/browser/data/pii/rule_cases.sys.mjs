@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  peselPL: {
+    type: "NATIONAL_ID",
+    source:
+      "a Polish PESEL, 11 digits starting with a real date of birth whose month carries the century, and a weighted check digit (Ministerstwo Cyfryzacji), within 48 characters after or 16 before 'PESEL'",
+    finds: [
+      // Published (Ministerstwo Cyfryzacji).
+      "PESEL [[44051401359]]",
+      "pesel: [[22121728245]]",
+      "mój PESEL to [[59011789048]].",
+      "PESEL [[43112134139]] i [[75121509389]]",
+      "[[32030385721]] (PESEL)",
+      "nr PESEL [[61050420598]]",
+      "pesel=[[32091969320]]",
+      "PESEL: [[58102967109]]",
+      "born 1890, PESEL [[90850539225]]",
+      "born 29 February 2000, PESEL [[00222938549]]",
+    ],
+    ignores: [
+      ["44051401359", "no cue"],
+      ["PESEL 44051401358", "a wrong check digit"],
+      ["PESEL 00022912343", "29 February 1900"],
+      ["PESEL 44130112347", "month 13"],
+      ["PESEL 44053212340", "day 32"],
+      ["PESEL 4405140135", "10 digits"],
+      ["PESEL 440514013599", "12 digits"],
+      ["PESEL 44051401359.5", "a decimal"],
+      ["PESELs 44051401359", "a longer word than the cue"],
+      [
+        "44051401359 is not my number, the PESEL",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong check digits after a cue": length =>
+        wholeUnits("PESEL 44051401358 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("44051401359 ", length),
+      "a long run of digits after a cue": length =>
+        `PESEL ${"4".repeat(length - 6)}`,
+    },
+  },
   codiceFiscaleIT: {
     type: "NATIONAL_ID",
     source:

@@ -745,3 +745,52 @@ export const codiceFiscaleIT = {
     return spans;
   },
 };
+
+// "44051401359": a Polish PESEL, 11 digits starting with the date of birth.
+const ELEVEN_DIGITS = /(?<![\w.-])\d{11}(?![\w-]|\.\d)/g;
+// About one random 11-digit number in 55 passes the checks, and Chinese
+// mobile numbers have 11 digits, so a PESEL needs its name next to it.
+const PESEL_CUE = /\bpesel\b/i;
+// The century for each 20 added to the month: 0 for the 1900s, 20 for the
+// 2000s, 40, 60, and 80 for the 1800s.
+const PESEL_CENTURIES = [1900, 2000, 2100, 2200, 1800];
+
+/**
+ * @param {string} digits - Eleven digits.
+ * @returns {boolean} Whether the date of birth exists and the last digit is
+ *   the weighted check digit.
+ */
+function isPESEL(digits) {
+  const month = Number(digits.slice(2, 4));
+  const offset = month - ((month - 1) % 20) - 1;
+  const year = PESEL_CENTURIES[offset / 20] + Number(digits.slice(0, 2));
+  return (
+    isRealDate(year, month - offset, Number(digits.slice(4, 6))) &&
+    (10 - (weighted(digits, [1, 3, 7, 9, 1, 3, 7, 9, 1, 3]) % 10)) % 10 ===
+      Number(digits[10])
+  );
+}
+
+/** @type {Rule} */
+export const peselPL = {
+  name: "peselPL",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(ELEVEN_DIGITS, text)) {
+      if (
+        isPESEL(match.text) &&
+        hasCueNear(text, match.start, match.end, PESEL_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "PL_PESEL",
+        });
+      }
+    }
+    return spans;
+  },
+};
