@@ -54,3 +54,35 @@ export const gpsLabeled = {
     return spans;
   },
 };
+
+// "48.8584, 2.2945": decimal degrees with at least 3 decimals each, joined by
+// a comma.
+const GPS_PAIR_COMMA =
+  /(?<![\w.-])(?<lat>-?\d{1,2}\.\d{3,})\s*,\s*(?<lon>-?\d{1,3}\.\d{3,})(?!\w|\.\d)/g;
+// An unsigned number with exactly 3 decimals, which is also how "1.500"
+// groups thousands in many European languages.
+const MAY_BE_THOUSANDS = /^\d+\.\d{3}$/;
+
+/** @type {Rule} */
+export const gpsPairComma = {
+  name: "gpsPairComma",
+  type: "GPS",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(GPS_PAIR_COMMA, text)) {
+      const { lat, lon } = match.groups;
+      if (
+        inRange(match) &&
+        !(MAY_BE_THOUSANDS.test(lat) && MAY_BE_THOUSANDS.test(lon))
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "GPS",
+          evidence: EVIDENCE.FORMAT,
+        });
+      }
+    }
+    return spans;
+  },
+};

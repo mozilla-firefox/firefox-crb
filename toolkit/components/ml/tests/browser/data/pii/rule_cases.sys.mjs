@@ -96,6 +96,51 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  gpsPairComma: {
+    type: "GPS",
+    source:
+      "a latitude and a longitude in decimal degrees with at least 3 decimals each, joined by a comma, unless both are unsigned with exactly 3",
+    finds: [
+      "[[48.8584, 2.2945]]",
+      "[[37.7749,-122.4194]]",
+      "[[51.5074, -0.1278]]",
+      "coords ([[35.6762, 139.6503]])",
+      "home is [[52.5200, 13.4050]].",
+      "[[-33.8688, 151.2093]]",
+      "[[40.712, -74.006]]",
+      "meet at [[48.858370 , 2.294481]] tonight",
+      "[[0.0000, 0.000]]",
+      "[[89.999, -179.999]]",
+      "[[-1.500, 2.300]]",
+      "[[-16.4197445,160.329054]]",
+      "[[1.290270, 103.851959]]",
+    ],
+    ignores: [
+      ["95.1234, 2.3456", "a latitude above 90"],
+      ["45.1234, 181.5000", "a longitude above 180"],
+      ["181.5000, 20.1234", "a three-digit latitude"],
+      ["48.8, 2.2", "fewer than 3 decimals"],
+      ["48.8584, 2.29", "a longitude with 2 decimals"],
+      ["price 12.99, 14.99", "prices with 2 decimals"],
+      ["1.5, 2.25, 3.125", "fewer than 3 decimals"],
+      ["12.3456.7890, 1.234", "a version number"],
+      ["48.8584, 2.2945.1", "a version number after"],
+      ["v2.3456, 7.8910", "after a letter"],
+      ["48.8584, 2.2945x", "followed by a letter"],
+      ["48.858 2.294", "no comma"],
+      ["1.500, 2.300", "may be thousands"],
+      ["Preise: 12.500, 14.900 und 16.000 Euro", "may be thousands"],
+      ["89.999, 179.999", "may be thousands"],
+    ],
+    adversarial: {
+      "a long decimal": length => `1.${"1".repeat(length - 2)}`,
+      "pairs joined by a semicolon": length =>
+        wholeUnits("48.8584 ; 2.2945 ", length),
+      "commas and spaces": length => `48.858${repeatTo(" , ", length - 6)}`,
+      "pairs out of range": length => wholeUnits("95.1234, 2.3456 ", length),
+      "pairs with 2 decimals": length => wholeUnits("48.85, 2.29 ", length),
+    },
+  },
   gpsLabeled: {
     type: "GPS",
     source:
