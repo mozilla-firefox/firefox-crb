@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { EVIDENCE, matches } from "./util.sys.mjs";
+import { EVIDENCE, WORD_END, WORD_START, matches } from "./util.sys.mjs";
 
 /** @import { Rule, RegexMatch } from "./util.sys.mjs" */
 
@@ -236,6 +236,78 @@ export const zipAfterState = {
         type: "POSTCODE",
         evidence: EVIDENCE.FORMAT,
       });
+    }
+    return spans;
+  },
+};
+
+// A postcode cue right before the number, in 8 languages: "zip code",
+// "PLZ", "code postal", "kod pocztowy".
+const POSTCODE_CUE = new RegExp(
+  [
+    WORD_START,
+    "(?:zip(?:\\s?code)?|post(?:al)?\\s?code|postcode|plz|postleitzahl",
+    "|code\\s+postal|c\\.p\\.|c[óo]digo\\s+postal|kod\\s+pocztowy",
+    "|kod\\s+pocz\\.?|postnummer|codice\\s+postale)",
+    // A word edge that also works after the dot of "C.P.".
+    WORD_END,
+    // An optional "is" in one of the languages: "my zip code is 94105".
+    "(?:\\s+(?:is|ist|est|es|è|é)(?![\\p{L}\\p{N}_]))?",
+    // Up to 6 separator characters before the number.
+    "[\\s:.=#-]{0,6}$",
+  ].join(""),
+  "iu"
+);
+// Short cues that are also ordinary words ("price cap 5000") only count in
+// capitals.
+const POSTCODE_CUE_UPPERCASE = /\b(?:CAP|CEP|CP)\b[\s:.=#-]{0,6}$/;
+
+/**
+ * @param {string} text
+ * @param {number} start
+ * @returns {boolean} Whether a postcode cue ends right before `start`.
+ */
+function hasPostcodeCue(text, start) {
+  const before = text.slice(Math.max(0, start - 24), start);
+  return POSTCODE_CUE.test(before) || POSTCODE_CUE_UPPERCASE.test(before);
+}
+
+// Postcode shapes that look like ordinary numbers, so they only count after a
+// cue or in their own region.
+// 4 or 5 digits standing alone, not followed by a decimal part.
+const PLAIN_POSTCODE = /(?<![\w.-])\d{4,5}(?![\w-]|\.\d)/g;
+// US ZIP+4: "94105-1234".
+const ZIP_PLUS_4 = /(?<![\w.-])\d{5}-\d{4}(?![\w-])/g;
+// The Netherlands: "1012 AB".
+const DUTCH_POSTCODE = /(?<![\w.-])[1-9]\d{3} ?[A-Z]{2}(?![A-Za-z0-9])/g;
+// Poland: "00-950".
+const POLISH_POSTCODE = /(?<![\w.-])\d{2}-\d{3}(?![\w-])/g;
+// Portugal: "1000-001".
+const PORTUGUESE_POSTCODE = /(?<![\w.-])\d{4}-\d{3}(?![\w-])/g;
+
+/** @type {Rule} */
+export const postcodeCued = {
+  name: "postcodeCued",
+  type: "POSTCODE",
+  detect({ text }) {
+    const spans = [];
+    for (const pattern of [
+      PLAIN_POSTCODE,
+      ZIP_PLUS_4,
+      DUTCH_POSTCODE,
+      POLISH_POSTCODE,
+      PORTUGUESE_POSTCODE,
+    ]) {
+      for (const match of matches(pattern, text)) {
+        if (hasPostcodeCue(text, match.start)) {
+          spans.push({
+            start: match.start,
+            end: match.end,
+            type: "POSTCODE",
+            evidence: EVIDENCE.FORMAT,
+          });
+        }
+      }
     }
     return spans;
   },

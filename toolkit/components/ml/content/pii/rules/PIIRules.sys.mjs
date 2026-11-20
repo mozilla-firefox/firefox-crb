@@ -24,6 +24,7 @@ import {
   gpsPairSpace,
   poBox,
   postcodeCanada,
+  postcodeCued,
   postcodeUK,
   zipAfterState,
 } from "./geo.sys.mjs";
@@ -109,6 +110,7 @@ export const RULES = [
   postcodeUK,
   postcodeCanada,
   zipAfterState,
+  postcodeCued,
 ];
 
 /**
