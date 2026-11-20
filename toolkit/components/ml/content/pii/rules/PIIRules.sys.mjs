@@ -26,6 +26,7 @@ import {
   passwordAssigned,
   passwordBare,
   privateKey,
+  secretKey,
   urlToken,
 } from "./secrets.sys.mjs";
 
@@ -53,6 +54,7 @@ export const RULES = [
   passwordAssigned,
   passwordBare,
   passphrase,
+  secretKey,
 ];
 
 /**

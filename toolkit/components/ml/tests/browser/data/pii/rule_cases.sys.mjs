@@ -94,6 +94,59 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  secretKey: {
+    type: "SECRET_IN_CONTEXT",
+    source:
+      "a long value that mixes letters with digits or both cases, after a key, token or secret cue",
+    finds: [
+      // Published (AWS docs).
+      "AWS secret key [[wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY]]",
+      // Published (AWS docs).
+      "secret access key: [[je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY]]",
+      "client secret: [[AbCdEf1234567890xyz]]",
+      "access token = [[a1b2c3d4e5f6g7h8i9]]",
+      'api_key: "[[Zm9vYmFyYmF6cXV4MTIz]]"',
+      "my private key is [[MHcCAQEEIBkg4LVWM9nuwN]]",
+      "auth token [[ya29.A0ARrdaM-abc123XYZ]]",
+      "session_token=[[Xy7Zk9Lm2Qp4Rs6Tu8Vw]].",
+      "api secret [[AbcdefGhijklMnopQ]]",
+      "SECRET_KEY = '[[django-insecure-k3y9x2m7]]'",
+      "bearer token: [[f7d6s5a4q3w2e1r0t9y8]]",
+      // URL parameters are left to urlToken.
+      "https://x.com/?client_secret=[[URL_TOKEN: Ab12Cd34Ef56Gh78Ij]]",
+    ],
+    ignores: [
+      ["key management is hard", "no cue"],
+      ["public key: Ab12Cd34Ef56Gh78Ij", "a public key"],
+      [
+        "the api is great, token: Ab12Cd34Ef56Gh78",
+        "'token' alone is not a cue",
+      ],
+      ["mysecret key Ab12Cd34Ef56Gh78Ij", "secret inside a word"],
+      ["the secret key to success is hard work", "no value of 16 characters"],
+      ["access token: ghijkl", "shorter than 16 characters"],
+      ["private key file", "no value of 16 characters"],
+      ["session key exchange happens first", "no value of 16 characters"],
+      ["secret token", "no value"],
+      ["api key: lowercaseonlyletters", "one case and no digit"],
+      ["secret key: 1234567890123456", "digits only"],
+      [
+        "const apiKeyValidationMiddleware = require(x)",
+        "an identifier in code, with no separator after the cue",
+      ],
+    ],
+    adversarial: {
+      "a cue word then separators": length =>
+        `secret${repeatTo(" _-", length - 6)}`,
+      "a cue then spaces": length => `secret key${" ".repeat(length - 10)}`,
+      "cues with one-case values": length =>
+        wholeUnits("secret key: lowercaseonlyletters ", length),
+      "cues with a long one-case value": length =>
+        `api key ${"a".repeat(length - 8)}`,
+      "cue words glued with dashes": length =>
+        repeatTo("secret-access-api-session-", length),
+    },
+  },
   passphrase: {
     type: "SECRET_IN_CONTEXT",
     source:
