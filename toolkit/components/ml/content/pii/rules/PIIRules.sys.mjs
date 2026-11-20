@@ -29,7 +29,7 @@ import {
   secretKey,
   urlToken,
 } from "./secrets.sys.mjs";
-import { atHandle } from "./social.sys.mjs";
+import { atHandle, redditUser } from "./social.sys.mjs";
 
 /** @import { Rule, RuleSpan } from "./util.sys.mjs" */
 
@@ -57,6 +57,7 @@ export const RULES = [
   passphrase,
   secretKey,
   atHandle,
+  redditUser,
 ];
 
 /**
