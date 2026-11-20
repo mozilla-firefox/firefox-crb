@@ -4603,6 +4603,7 @@ void Document::StopDocumentLoad() {
   if (mParser) {
     mParserAborted = true;
     mParser->Terminate();
+    DisallowBFCaching(BFCacheStatus::PARSER_ABORTED);
   }
 }
 
