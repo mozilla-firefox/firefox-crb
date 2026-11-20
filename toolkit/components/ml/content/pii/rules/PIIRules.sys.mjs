@@ -44,6 +44,7 @@ import {
   panIN,
   ssnCued,
   ssnSeparated,
+  tfnAU,
 } from "./nationalid.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
@@ -143,6 +144,7 @@ export const RULES = [
   nhsUK,
   aadhaarIN,
   panIN,
+  tfnAU,
 ];
 
 /**

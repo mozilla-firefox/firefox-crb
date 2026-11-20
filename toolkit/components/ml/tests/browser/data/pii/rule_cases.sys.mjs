@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  tfnAU: {
+    type: "NATIONAL_ID",
+    source:
+      "an Australian Tax File Number, 9 digits (or 8 for older ones) whose weighted sum is a multiple of 11 (ATO), within 48 characters after or 16 before a TFN cue",
+    finds: [
+      // Published (ATO).
+      "TFN [[123 456 782]]",
+      "tax file number [[393 854 878]]",
+      "my TFN is [[445759529]]",
+      "TFN: [[175-163-195]].",
+      "[[219 063 349]] (TFN)",
+      "Tax File No. [[296478275]]",
+      "tfn=[[609007769]]",
+      "TFN [[367 117 739]] and [[147 199 643]]",
+      "old TFN [[883 315 47]]",
+      "TFN [[45304497]]",
+    ],
+    ignores: [
+      ["123 456 782", "no cue"],
+      ["tfn 123 456 783", "a wrong check"],
+      ["order 123 456 782", "another word before it"],
+      ["TFN 72427252", "8 digits with a wrong check"],
+      ["TFN 123-456 782", "two different separators"],
+      ["TFN 1234567821", "10 digits"],
+      ["TFN 1234567", "7 digits"],
+      ["TFNs 123456782", "a longer word than the cue"],
+      ["TFN x123456782", "inside a word"],
+      ["TFN 123456782.5", "a decimal"],
+      [
+        "123456782 is not what the letter said my TFN was",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong checks after a cue": length =>
+        wholeUnits("TFN 123456783 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("123 456 782 ", length),
+      "digits in groups of 3": length => repeatTo("123 ", length),
+    },
+  },
   panIN: {
     type: "NATIONAL_ID",
     source:
