@@ -37,6 +37,7 @@ import {
   zipAfterState,
 } from "./geo.sys.mjs";
 import {
+  aadhaarIN,
   itinUS,
   nhsUK,
   ninoUK,
@@ -139,6 +140,7 @@ export const RULES = [
   itinUS,
   ninoUK,
   nhsUK,
+  aadhaarIN,
 ];
 
 /**
