@@ -97,3 +97,55 @@ export function base58check(address) {
   const checksum = sha256(sha256(payload)).slice(0, 4);
   return checksum.every((byte, i) => byte === bytes[bytes.length - 4 + i]);
 }
+
+const BECH32_ALPHABET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+const BECH32_GENERATOR = [
+  0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3,
+];
+const BECH32_CONSTANT = 1;
+const BECH32M_CONSTANT = 0x2bc830a3;
+
+/**
+ * Bech32 (BIP 173) or Bech32m (BIP 350) checksum of a "bc1..." Bitcoin
+ * address. Either constant is accepted for any witness version, which is
+ * looser than the spec but enough to tell an address from a look-alike.
+ *
+ * @param {string} address
+ * @returns {boolean}
+ */
+export function bech32(address) {
+  const lower = address.toLowerCase();
+  if (lower !== address && address.toUpperCase() !== address) {
+    return false;
+  }
+  const separator = lower.lastIndexOf("1");
+  if (separator < 1 || separator + 7 > lower.length) {
+    return false;
+  }
+  const prefix = [...lower.slice(0, separator)].map(char => char.charCodeAt(0));
+  const data = [];
+  for (const char of lower.slice(separator + 1)) {
+    const index = BECH32_ALPHABET.indexOf(char);
+    if (index < 0) {
+      return false;
+    }
+    data.push(index);
+  }
+  let checksum = 1;
+  const values = [
+    ...prefix.map(code => code >> 5),
+    0,
+    ...prefix.map(code => code & 31),
+    ...data,
+  ];
+  for (const value of values) {
+    const top = checksum >>> 25;
+    checksum = ((checksum & 0x1ffffff) << 5) ^ value;
+    for (let i = 0; i < 5; i++) {
+      if ((top >>> i) & 1) {
+        checksum ^= BECH32_GENERATOR[i];
+      }
+    }
+  }
+  return checksum === BECH32_CONSTANT || checksum === BECH32M_CONSTANT;
+}
