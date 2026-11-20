@@ -171,3 +171,73 @@ export const discordTag = {
     return spans;
   },
 };
+
+// The account name in a home directory path, up to the next separator. The
+// name excludes characters no file system allows in it.
+const HOME_PATHS = [
+  // macOS
+  /(?<![\w.-])\/Users\/(?<name>[^/\s\\:*?"<>|]+)(?=\/|\s|$)/g,
+  // Linux
+  /(?<![\w.-])\/home\/(?<name>[^/\s\\:*?"<>|]+)(?=\/|\s|$)/g,
+  // Windows, which ignores case.
+  /(?<![\w.-])[A-Za-z]:\\Users\\(?<name>[^\\\s/:*?"<>|]+)(?=\\|\s|$)/gi,
+];
+// Shared, system and placeholder accounts, which identify no one.
+const SYSTEM_ACCOUNTS = new Set([
+  "shared",
+  "public",
+  "default",
+  "guest",
+  "root",
+  "runner",
+  "ubuntu",
+  "ec2-user",
+  "admin",
+  "administrator",
+  "user",
+  "username",
+  "you",
+  "yourname",
+  "your-name",
+  "name",
+  "me",
+  "docker",
+  "vagrant",
+  "node",
+  "appuser",
+  "app",
+  "www-data",
+  "nobody",
+  "defaultuser0",
+  "{user}",
+  "$user",
+  "%username%",
+]);
+
+/** @type {Rule} */
+export const homePath = {
+  name: "homePath",
+  type: "USERNAME",
+  detect({ text }) {
+    const spans = [];
+    for (const pattern of HOME_PATHS) {
+      for (const match of matches(pattern, text)) {
+        // A path at the end of a sentence: "my home is /home/anna."
+        const start = match.end - match.groups.name.length;
+        const end = trimTail(text, start, match.end);
+        const name = text.slice(start, end);
+        if (name && !SYSTEM_ACCOUNTS.has(name.toLowerCase())) {
+          // A path has no checksum: its shape makes the name as specific as
+          // one.
+          spans.push({
+            start,
+            end,
+            type: "USERNAME",
+            evidence: EVIDENCE.CHECKSUM,
+          });
+        }
+      }
+    }
+    return spans;
+  },
+};
