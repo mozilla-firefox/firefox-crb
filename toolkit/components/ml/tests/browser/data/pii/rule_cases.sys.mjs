@@ -94,6 +94,57 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  atHandle: {
+    type: "USERNAME",
+    source:
+      "an @handle of 2 to 30 characters after a first-person cue such as 'my insta' or 'follow me'",
+    finds: [
+      "follow me on instagram [[@maria.lopez99]]",
+      "my twitter is [[@jsmith_42]]",
+      "my handle is [[@danny.k]]",
+      "find me on tiktok [[@coolcat]]",
+      "DM me [[@sam_w]]",
+      "add me on snapchat [[@ed99]]",
+      "my github is [[@octo-dev7]] and I pushed",
+      "my old twitter account was [[@jsmith_42]]",
+      "mein Instagram ist [[@anna.k]]",
+      "folge mir auf Insta: [[@lena.b]]",
+      "mon insta c'est [[@lucie_m]]",
+      "sígueme en [[@pedro88]]",
+      "seguimi su instagram [[@giulia.r]]",
+      "śledź mnie [[@kasia_w99]]",
+      "volg mij op [[@jan_dekker]]",
+      // A trailing dot or dash is punctuation.
+      "my insta is [[@kim.lee]]- thanks",
+      "my insta is [[@kim.lee]].",
+    ],
+    ignores: [
+      ["What did @elonmusk tweet today?", "no first-person cue"],
+      ["follow @nytimes for news", "'follow' without 'me'"],
+      ["contact @support", "no first-person cue"],
+      ["my twitter is cool", "no @name"],
+      ["follow me at 5 @ the gym", "no name after the @"],
+      ["follow me @a", "a single character is too short"],
+      [`my insta is @${"a".repeat(31)}`, "longer than 30 characters"],
+      ["in my github repo I use @Override", "a Java annotation"],
+      ["my profile CSS has @media screen", "a CSS at-rule"],
+      ["my github project uses @angular/core", "a scoped package"],
+      ["my insta login is anna@coolcat", "an @ inside a word"],
+      [
+        `my twitter is great and I post long threads about my two cats, ${"so ".repeat(4)}@coolcat`,
+        "the cue is more than 70 characters before",
+      ],
+    ],
+    adversarial: {
+      "@ starts glued together": length => repeatTo("@a", length),
+      "a cue and a long handle-like run": length =>
+        `my insta @${"a".repeat(length - 10)}`,
+      "many handles with no cue": length => wholeUnits("@coolcat ", length),
+      "possessives with no platform before handles": length =>
+        wholeUnits("my my my my my my @coolcat ", length),
+      "dots and dashes after @": length => repeatTo("@a.-.-.-.-.-.-", length),
+    },
+  },
   secretKey: {
     type: "SECRET_IN_CONTEXT",
     source:
