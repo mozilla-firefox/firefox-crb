@@ -22,6 +22,7 @@ import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   apiKey,
   jwt,
+  passphrase,
   passwordAssigned,
   passwordBare,
   privateKey,
@@ -51,6 +52,7 @@ export const RULES = [
   urlToken,
   passwordAssigned,
   passwordBare,
+  passphrase,
 ];
 
 /**
