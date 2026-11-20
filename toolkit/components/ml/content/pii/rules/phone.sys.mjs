@@ -259,3 +259,11 @@ export const phoneNL = regionalPhone(
   "NL",
   /(?<![\w+-])06(?:[ -]?\d{8}|[ -]\d{2}(?:[ -]?\d{2}){3})(?![\w-])/g
 );
+
+// Germany: a 015x, 016x or 017x prefix, then 6 to 8 digits in one or two
+// groups: "0171 2345678", "0176 1234 5678".
+export const phoneDE = regionalPhone(
+  "phoneDE",
+  "DE",
+  /(?<![\w+-])01[567]\d[ /-]?\d{3,4}[ -]?\d{3,4}(?![\w-])/g
+);
