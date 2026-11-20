@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneIT: {
+    type: "PHONE",
+    source:
+      "the Italian mobile layout, 3 and 2 digits, then 6 or 7 digits whole or in groups (AGCOM numbering plan), in region IT",
+    region: "IT",
+    finds: [
+      "[[333 1234567]]",
+      "[[333-1234567]]",
+      "[[347 123456]]",
+      "[[320 123 4567]]",
+      "[[391 123 456]]",
+      "[[388 1234567]]",
+      "[[366-123-4567]]",
+      "il mio cellulare è [[333 1234567]]",
+      "scrivimi al [[349 7654321]]",
+      "([[333 1234567]])",
+      "[[333 1234567]] o [[340 7654321]].",
+    ],
+    ignores: [
+      ["06 1234567", "a landline, not a mobile"],
+      ["433 1234567", "does not start with 3"],
+      ["33 1234567", "a two-digit prefix"],
+      ["3331234567", "no separator after the prefix"],
+      ["333 12345", "5 digits after the prefix"],
+      ["333 12345678", "8 digits after the prefix"],
+      ["333 123 45", "5 digits in groups"],
+      ["1333 1234567", "inside a longer number"],
+      ["a333 1234567", "inside a word"],
+      ["333 1234567b", "followed by a letter"],
+      ["333.1234567", "a dot separator"],
+      ["333  1234567", "two spaces"],
+    ],
+    adversarial: {
+      "a 3 and a long run of digits": length => `3${"3".repeat(length - 1)}`,
+      "prefixes and short numbers": length => wholeUnits("333 12345 ", length),
+      "two-digit groups": length => repeatTo("33 ", length),
+      "dashes after a prefix": length => `333${"-".repeat(length - 3)}`,
+      "short groups after a prefix": length =>
+        wholeUnits("333 123 45 ", length),
+    },
+  },
   phonePL: {
     type: "PHONE",
     source:
