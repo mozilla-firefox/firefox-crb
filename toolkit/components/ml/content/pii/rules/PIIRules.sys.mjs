@@ -36,7 +36,7 @@ import {
   postcodeUS,
   zipAfterState,
 } from "./geo.sys.mjs";
-import { ssnCued, ssnSeparated } from "./nationalid.sys.mjs";
+import { itinUS, ssnCued, ssnSeparated } from "./nationalid.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
@@ -130,6 +130,7 @@ export const RULES = [
   postcodeIT,
   ssnSeparated,
   ssnCued,
+  itinUS,
 ];
 
 /**
