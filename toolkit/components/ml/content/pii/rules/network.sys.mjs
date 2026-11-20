@@ -1,0 +1,53 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+import { EVIDENCE, matches } from "./util.sys.mjs";
+
+/** @import { Rule } from "./util.sys.mjs" */
+
+const IPV4 = new RegExp(
+  [
+    // Not inside a longer number, word or dotted name.
+    "(?<![\\w.-])",
+    // Four groups of 1 to 3 digits separated by dots.
+    "(?:\\d{1,3}\\.){3}\\d{1,3}",
+    // Not followed by more of a word, or by a fifth group.
+    "(?![\\w-]|\\.\\d)",
+  ].join(""),
+  "g"
+);
+
+// "v1.2.3.4" or "version 10.0.0.1" is a version number, not an address.
+const VERSION_CUE =
+  /(?:\bv(?:ersion|er)?\.?\s*|\bversion\s+|\bapp\s+|\bpython\s+|\bnode\s+|\bsdk\s+)$/i;
+
+/** @type {Rule} */
+export const ipv4 = {
+  name: "ipv4",
+  type: "IP",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(IPV4, text)) {
+      const parts = match.text.split(".");
+      if (parts.some(part => Number(part) > 255)) {
+        continue;
+      }
+      if (
+        VERSION_CUE.test(text.slice(Math.max(0, match.start - 14), match.start))
+      ) {
+        continue;
+      }
+      if (parts.some(part => part.length > 1 && part.startsWith("0"))) {
+        continue;
+      }
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "IP",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};
