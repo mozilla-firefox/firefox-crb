@@ -110,3 +110,45 @@ export const gpsPairSpace = {
     return spans;
   },
 };
+
+// A PO box keyword (8 languages) and the box number; the whole phrase is
+// replaced. Words that are ambiguous on their own are left out: a bare "BP"
+// (also a company) and Spanish "apartado" without "de correos" or "postal"
+// (also "section of a document").
+const PO_BOX = new RegExp(
+  [
+    "(?<![\\p{L}\\p{N}])",
+    "(?:p\\.?\\s?o\\.?\\s?box|post\\s+office\\s+box",
+    // A bare "POB" must not touch the digits: "POB268787" is a Polish ID card
+    // number, not a box.
+    "|pob(?![\\p{N}])",
+    "|postfach|bo[iî]te\\s+postale|b\\.p\\.",
+    "|apartado\\s+(?:de\\s+correos|postal)|apdo\\.?|caixa\\s+postal",
+    "|casella\\s+postale|postbus|skrytka\\s+pocztowa|skr\\.\\s?poczt\\.)",
+    // An optional "No.", "Nr.", "nº" or "#", each owning the spaces after it.
+    "\\s*(?:(?:no\\.?|nr\\.?|n[º°o]\\.?|#)\\s*)?",
+    // The box number, possibly grouped: "Postfach 12 34 56".
+    "\\d{1,6}(?:[ -]\\d{2,4}){0,2}",
+    "(?![\\p{N}])",
+  ].join(""),
+  "giu"
+);
+
+/** @type {Rule} */
+export const poBox = {
+  name: "poBox",
+  type: "PO_BOX",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PO_BOX, text)) {
+      // A keyword and a number is as strong as a cued checksum.
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "PO_BOX",
+        evidence: EVIDENCE.CHECKSUM,
+      });
+    }
+    return spans;
+  },
+};
