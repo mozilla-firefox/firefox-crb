@@ -282,3 +282,11 @@ export const phonePT = regionalPhone(
   "PT",
   /(?<![\w+-])9[1236]\d[ -]\d{3}[ -]\d{3}(?![\w-])/g
 );
+
+// Poland: a mobile prefix, then 7 digits in groups 3-3-3: "512 345 678".
+// Landlines are written 2-3-2-2 instead.
+export const phonePL = regionalPhone(
+  "phonePL",
+  "PL",
+  /(?<![\w+-])(?:45|5[0137]|6[069]|7[2389]|88)\d[ -]\d{3}[ -]\d{3}(?![\w-])/g
+);
