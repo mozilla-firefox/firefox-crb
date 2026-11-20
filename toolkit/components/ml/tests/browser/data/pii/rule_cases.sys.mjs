@@ -94,6 +94,50 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  redditUser: {
+    type: "USERNAME",
+    source:
+      "u/name with Reddit's 3 to 20 username characters, after a first-person cue",
+    finds: [
+      "my reddit is [[u/throwaway_8812]]",
+      "follow me on reddit: [[/u/cat_lover-22]]",
+      "my reddit account [[u/Ann_K]]",
+      "find me at [[u/abc]]",
+      "DM me, [[u/abcdefghij0123456789]]",
+      "mein Reddit ist [[u/max_m]]",
+      "mon reddit c'est [[u/lucie-m]]",
+      "mi usuario de reddit es [[u/pedro_88]]",
+      "message me: [[u/night_owl]].",
+      "seguimi su reddit [[u/giulia_r]]",
+      "volg mij: [[u/jan-dekker]]",
+      "my old reddit account was [[u/old_acc_1]] (banned)",
+    ],
+    ignores: [
+      ["check out u/spez's post", "no first-person cue"],
+      ["follow u/spez", "'follow' without 'me'"],
+      ["my reddit is u/ab", "shorter than 3 characters"],
+      ["my reddit is u/abcdefghij0123456789x", "longer than 20 characters"],
+      ["my reddit: r/firefox", "a subreddit"],
+      [
+        "my reddit is https://reddit.com/u/spez_fan",
+        "inside a URL path, an accepted gap",
+      ],
+      ["my reddit cache is in src/u/tmp_files", "inside a path"],
+      ["my reddit is au/thor", "u/ inside a word"],
+      ["my reddit karma is high", "no u/name"],
+      ["my reddit is u/ spez", "a space after u/"],
+      ["follow me, I post as u_spez", "no slash"],
+    ],
+    adversarial: {
+      "u/ in a row": length => repeatTo("u/", length),
+      "a cue and a long name-like run": length =>
+        `my reddit u/${"a".repeat(length - 12)}`,
+      "many names with no cue": length =>
+        wholeUnits("u/throwaway_8812 ", length),
+      "slashes and u": length => repeatTo("/u/u/u/", length),
+      "dashes after u/": length => `u/${"-".repeat(length - 2)}`,
+    },
+  },
   atHandle: {
     type: "USERNAME",
     source:
