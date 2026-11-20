@@ -96,6 +96,42 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nricSG: {
+    type: "NATIONAL_ID",
+    source:
+      "a Singapore NRIC or FIN, S, T, F or G, 7 digits and a modulus 11 check letter (Immigration and Checkpoints Authority)",
+    finds: [
+      // Published (ICA).
+      "NRIC [[S1234567D]]",
+      "fin [[T9433014E]]",
+      "my IC is [[S1167649I]].",
+      "([[S6794302C]])",
+      "NRIC: [[T4027211E]]",
+      "FIN [[F7436906P]] and [[G8225807N]]",
+      "[[F3605268Q]]",
+      "[[G0975302N]],",
+      "nric=[[T9029371G]]",
+      "[[F1234567N]]",
+    ],
+    ignores: [
+      ["S1234567A", "a wrong check letter"],
+      ["T1234567D", "the S check letter for a T number"],
+      ["G1234567D", "the S table for a G number"],
+      ["F1234567D", "the S table for an F number"],
+      ["A1234567D", "prefix A"],
+      ["S123456D", "6 digits"],
+      ["S12345678D", "8 digits"],
+      ["XS1234567D", "inside a word"],
+      ["S1234567DX", "followed by a letter"],
+      ["S 1234567D", "a space inside"],
+      ["f3605268q", "lower case"],
+    ],
+    adversarial: {
+      "wrong check letters": length => wholeUnits("S1234567A ", length),
+      "prefixes and digits": length => repeatTo("S1234567", length),
+      "prefix letters in a row": length => repeatTo("STFG", length),
+    },
+  },
   idZA: {
     type: "NATIONAL_ID",
     source:

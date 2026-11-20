@@ -584,3 +584,43 @@ export const idZA = {
     return spans;
   },
 };
+
+// "S1234567D": a Singapore NRIC (S and T, for citizens and permanent
+// residents born before and since 2000) or FIN (F and G, for foreigners), 7
+// digits and a check letter.
+const NRIC =
+  /(?<![\w-])(?<prefix>[STFG])(?<digits>\d{7})(?<check>[A-Z])(?![\w-])/g;
+
+/**
+ * @param {Record<string, string>} groups - "prefix", "digits" and "check".
+ * @returns {boolean} Whether the check letter matches the weighted digits.
+ */
+function isNRIC({ prefix, digits, check }) {
+  // T and G numbers, issued since 2000, add 4 to the sum.
+  const offset = prefix === "T" || prefix === "G" ? 4 : 0;
+  const remainder = (weighted(digits, [2, 7, 6, 5, 4, 3, 2]) + offset) % 11;
+  const letters =
+    prefix === "S" || prefix === "T" ? "JZIHGFEDCBA" : "XWUTRQPNMLK";
+  return letters[remainder] === check;
+}
+
+/** @type {Rule} */
+export const nricSG = {
+  name: "nricSG",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NRIC, text)) {
+      if (isNRIC(match.groups)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "SG_NRIC",
+        });
+      }
+    }
+    return spans;
+  },
+};

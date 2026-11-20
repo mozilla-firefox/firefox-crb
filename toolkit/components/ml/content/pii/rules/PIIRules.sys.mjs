@@ -44,6 +44,7 @@ import {
   medicareAU,
   nhsUK,
   ninoUK,
+  nricSG,
   panIN,
   ppsIE,
   sinCA,
@@ -155,6 +156,7 @@ export const RULES = [
   ppsIE,
   irdNZ,
   idZA,
+  nricSG,
 ];
 
 /**
