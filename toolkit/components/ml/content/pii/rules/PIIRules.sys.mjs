@@ -21,6 +21,7 @@ import { email } from "./email.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
+  phoneDE,
   phoneFR,
   phoneInternational,
   phoneNL,
@@ -81,6 +82,7 @@ export const RULES = [
   phoneCued,
   phoneFR,
   phoneNL,
+  phoneDE,
 ];
 
 /**
