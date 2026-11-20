@@ -22,6 +22,7 @@ import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
   phoneDE,
+  phoneES,
   phoneFR,
   phoneInternational,
   phoneNL,
@@ -83,6 +84,7 @@ export const RULES = [
   phoneFR,
   phoneNL,
   phoneDE,
+  phoneES,
 ];
 
 /**
