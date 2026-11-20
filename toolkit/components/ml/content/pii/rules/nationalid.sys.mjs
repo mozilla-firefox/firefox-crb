@@ -15,6 +15,21 @@ function digitsOf(text) {
 }
 
 /**
+ * @param {string} text
+ * @param {number} start
+ * @param {number} end
+ * @param {RegExp} cue - Without the g flag.
+ * @returns {boolean} Whether `cue` appears in the 48 characters before
+ *   `start` or the 16 after `end`.
+ */
+function hasCueNear(text, start, end, cue) {
+  return (
+    cue.test(text.slice(Math.max(0, start - 48), start)) ||
+    cue.test(text.slice(end, end + 16))
+  );
+}
+
+/**
  * @param {string} digits - Nine digits.
  * @returns {boolean} Whether the Social Security Administration could have
  *   issued the number: not area 000, 666 or 900-999, group 00 or serial 0000.
@@ -45,6 +60,34 @@ export const ssnSeparated = {
           end: match.end,
           type: "SSN",
           evidence: EVIDENCE.FORMAT,
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// Nine digits pass the issuable check most of the time, so without separators
+// they need a cue.
+const SSN_CUE = /\bssn\b|\bsocial\s+security\b/i;
+const NINE_DIGITS = /(?<![\w.-])\d{9}(?![\w-]|\.\d)/g;
+
+/** @type {Rule} */
+export const ssnCued = {
+  name: "ssnCued",
+  type: "SSN",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NINE_DIGITS, text)) {
+      if (
+        isIssuableSSN(match.text) &&
+        hasCueNear(text, match.start, match.end, SSN_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "SSN",
+          evidence: EVIDENCE.CHECKSUM_CUE,
         });
       }
     }
