@@ -275,3 +275,10 @@ export const phoneES = regionalPhone(
   "ES",
   /(?<![\w+-])[6-9]\d{2}(?:[ -]\d{3}[ -]\d{3}|(?:[ -]\d{2}){3})(?![\w-])/g
 );
+
+// Portugal: 91, 92, 93 or 96, then 7 digits in groups 3-3-3: "912 345 678".
+export const phonePT = regionalPhone(
+  "phonePT",
+  "PT",
+  /(?<![\w+-])9[1236]\d[ -]\d{3}[ -]\d{3}(?![\w-])/g
+);
