@@ -96,6 +96,43 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  idZA: {
+    type: "NATIONAL_ID",
+    source:
+      "a South African ID number, 13 digits with a real YYMMDD date of birth, a citizenship digit of 0 or 1 and a Luhn check digit (Department of Home Affairs)",
+    finds: [
+      // Published (Home Affairs).
+      "ID [[8001015009087]]",
+      "id number [[5605094637189]]",
+      "born in the 1940s, a 13-digit Visa ties and wins: [[CARD: 4605094637180]]",
+      "my ID is [[6212228172180]].",
+      "([[8611182152187]])",
+      "[[0504297808082]]",
+      "ID: [[7406162500088]] and [[0207217935189]]",
+      "[[6706263413185]],",
+      "born 29 Feb: [[0402296409087]]",
+      "id=[[9910275614080]]",
+      "born 29 February 2000: [[0002295123018]]",
+      "SA ID [[9307043554088]]",
+    ],
+    ignores: [
+      ["8001015009088", "fails Luhn"],
+      ["8002305796086", "30 February"],
+      ["8013016575180", "month 13"],
+      ["9808226819289", "citizenship digit 2"],
+      ["800101500908", "12 digits"],
+      ["80010150090871", "14 digits"],
+      ["x8001015009087", "inside a word"],
+      ["8001015009087.5", "a decimal"],
+      ["1.8001015009087", "after a decimal point"],
+      ["8001015009087-1", "followed by a dash"],
+    ],
+    adversarial: {
+      "Luhn failures": length => wholeUnits("8001015009088 ", length),
+      "a long run of digits": length => repeatTo("8001015009087", length),
+      "impossible dates": length => wholeUnits("8002305796086 ", length),
+    },
+  },
   irdNZ: {
     type: "NATIONAL_ID",
     source:

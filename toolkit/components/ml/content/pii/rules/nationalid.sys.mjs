@@ -29,6 +29,17 @@ function weighted(digits, weights) {
 }
 
 /**
+ * @param {number} year
+ * @param {number} month - From 1.
+ * @param {number} day
+ * @returns {boolean} Whether the date exists.
+ */
+function isRealDate(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/**
  * @param {string} text
  * @param {number} start
  * @param {number} end
@@ -526,6 +537,47 @@ export const irdNZ = {
           type: "NATIONAL_ID",
           evidence: EVIDENCE.CHECKSUM_CUE,
           country: "NZ_IRD",
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// "8001015009087": a South African ID number, 13 digits: date of birth as
+// YYMMDD, 4 digits, a citizenship digit, a digit and a Luhn check digit.
+const SOUTH_AFRICAN_ID = /(?<![\w.-])\d{13}(?![\w-]|\.\d)/g;
+
+/**
+ * @param {string} digits - Thirteen digits.
+ * @returns {boolean} Whether the date of birth exists, the citizenship digit
+ *   is 0 or 1 and the number passes Luhn.
+ */
+function isSouthAfricanID(digits) {
+  // The century is not encoded, so any year divisible by 4 allows 29
+  // February.
+  const year = 2000 + Number(digits.slice(0, 2));
+  return (
+    isRealDate(year, Number(digits.slice(2, 4)), Number(digits.slice(4, 6))) &&
+    (digits[10] === "0" || digits[10] === "1") &&
+    luhn(digits)
+  );
+}
+
+/** @type {Rule} */
+export const idZA = {
+  name: "idZA",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(SOUTH_AFRICAN_ID, text)) {
+      if (isSouthAfricanID(match.text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "ZA_ID",
         });
       }
     }
