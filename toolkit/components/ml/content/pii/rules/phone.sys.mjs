@@ -53,3 +53,40 @@ export const phoneInternational = {
     return spans;
   },
 };
+
+// North American NXX-NXX-XXXX, where N is 2 to 9: "(415) 555-0134",
+// "(415)555-0134", "415.555.0134" or "1-415-555-0134".
+const NORTH_AMERICAN = new RegExp(
+  [
+    "(?<![\\w+-])",
+    // An optional country code 1.
+    "(?:1[ .-])?",
+    // The area code, in parentheses or followed by a separator.
+    "(?:\\([2-9]\\d{2}\\)[ .-]?|[2-9]\\d{2}[ .-])",
+    // The exchange and the line number.
+    "[2-9]\\d{2}[ .-]\\d{4}",
+    "(?![\\w-])",
+  ].join(""),
+  "g"
+);
+
+/** @type {Rule} */
+export const phoneNorthAmerican = {
+  name: "phoneNorthAmerican",
+  type: "PHONE",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NORTH_AMERICAN, text)) {
+      if (!isTollFree(digitsOf(match.text))) {
+        // The shape alone, which a reference number can share.
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "PHONE",
+          evidence: EVIDENCE.FORMAT,
+        });
+      }
+    }
+    return spans;
+  },
+};
