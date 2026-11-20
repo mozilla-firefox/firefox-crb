@@ -324,3 +324,50 @@ export const loginUser = {
     return spans;
   },
 };
+
+// "Instagram @paris.vibes": a platform name right before "@name".
+const PLATFORM_AT = new RegExp(
+  [
+    // The platform is read backwards from the "@", so that matching only
+    // starts at an "@".
+    `(?<=${WORD_START}(?:${PLATFORM})`,
+    // An optional ":" or "-", owning the spaces after it.
+    "\\s*(?:[:-]\\s*)?)",
+    "@(?<value>[A-Za-z0-9_][A-Za-z0-9_.-]{1,29})",
+    "(?![\\w@]|/)",
+  ].join(""),
+  "giu"
+);
+// Discord mentions that notify a group, not one person.
+const GROUP_MENTIONS = new Set(["everyone", "here"]);
+
+/** @type {Rule} */
+export const platformAt = {
+  name: "platformAt",
+  type: "USERNAME",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PLATFORM_AT, text)) {
+      const start = match.end - match.groups.value.length - 1;
+      // The first character after the "@" is never a dot or a dash, so at
+      // least one stays.
+      const end = trimTail(text, start + 1, match.end, ".-");
+      const name = text.slice(start + 1, end);
+      const lowerName = name.toLowerCase();
+      // A letter keeps out prices such as "3 x @2.99".
+      if (
+        /[A-Za-z]/.test(name) &&
+        !CODE_AT_WORDS.has(lowerName) &&
+        !GROUP_MENTIONS.has(lowerName)
+      ) {
+        spans.push({
+          start,
+          end,
+          type: "USERNAME",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+        });
+      }
+    }
+    return spans;
+  },
+};
