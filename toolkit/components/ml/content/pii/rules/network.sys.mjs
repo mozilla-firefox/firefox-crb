@@ -51,3 +51,52 @@ export const ipv4 = {
     return spans;
   },
 };
+
+const IPV6_CANDIDATE = new RegExp(
+  [
+    // The first group, read backwards from the first colon so that matching
+    // only starts at a colon, and not inside a longer word, address or
+    // dotted name.
+    "(?<=(?<head>(?<![\\w:.])[0-9a-f]{0,4})):",
+    // 3 to 8 groups in all of up to 4 hex digits separated by colons. Groups
+    // can be empty for "::"; validIPv6 checks the structure.
+    "(?:[0-9a-f]{0,4}:){1,6}[0-9a-f]{0,4}",
+    "(?![\\w:])",
+  ].join(""),
+  "gi"
+);
+
+/**
+ * Whether the URL parser accepts `candidate` as an IPv6 host: 8 groups, or
+ * fewer with a single "::". Times such as 10:30:45 have neither.
+ *
+ * @param {string} candidate
+ * @returns {boolean}
+ */
+function validIPv6(candidate) {
+  return URL.canParse(`http://[${candidate}]/`);
+}
+
+/** @type {Rule} */
+export const ipv6 = {
+  name: "ipv6",
+  type: "IP",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(IPV6_CANDIDATE, text)) {
+      const { head } = match.groups;
+      const candidate = `${head}${match.text}`;
+      // "::" alone, as in Haskell's "x :: Int", has no address in it.
+      if (!/[0-9a-f]/i.test(candidate) || !validIPv6(candidate)) {
+        continue;
+      }
+      spans.push({
+        start: match.start - head.length,
+        end: match.end,
+        type: "IP",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};
