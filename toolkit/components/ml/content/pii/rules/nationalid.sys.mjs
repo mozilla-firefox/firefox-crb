@@ -624,3 +624,31 @@ export const nricSG = {
     return spans;
   },
 };
+
+// The check letter of a Spanish DNI or NIE for each remainder modulo 23.
+const DNI_CHECK_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+// "12345678Z": a Spanish DNI, 8 digits and a check letter.
+// As for PPS, the first digit comes before the check in front of it.
+const DNI = /(?<digits>\d(?<![\w.-]\d)\d{7})[ -]?(?<check>[A-Z])(?![\w-])/g;
+
+/** @type {Rule} */
+export const dniES = {
+  name: "dniES",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(DNI, text)) {
+      const { digits, check } = match.groups;
+      if (DNI_CHECK_LETTERS[Number(digits) % 23] === check) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "ES_DNI",
+        });
+      }
+    }
+    return spans;
+  },
+};

@@ -96,6 +96,43 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  dniES: {
+    type: "NATIONAL_ID",
+    source:
+      "a Spanish DNI, 8 digits and a modulus 23 check letter (Ministerio del Interior)",
+    finds: [
+      // Published (Ministerio del Interior).
+      "DNI [[12345678Z]]",
+      "mi DNI es [[99545119S]].",
+      "DNI: [[62594626-B]]",
+      "([[92556111 V]])",
+      "[[67213694N]]",
+      "NIF [[14895118L]] y [[81430752B]]",
+      "[[77815839P]],",
+      "dni=[[32664059B]]",
+      "[[57964249V]]",
+      "[[00000000T]]",
+    ],
+    ignores: [
+      ["12345678A", "a wrong check letter"],
+      ["12345678I", "a letter never used"],
+      ["1234567Z", "7 digits"],
+      ["123456789Z", "9 digits"],
+      ["x12345678Z", "inside a word"],
+      ["12345678ZX", "followed by a letter"],
+      ["1.12345678Z", "after a decimal point"],
+      ["12345678  Z", "two spaces"],
+      ["12345678-Z-1", "followed by a dash"],
+      ["12345678Z9", "followed by a digit"],
+      ["67213694n", "a lower-case check letter"],
+      ["unos 24000000 y más", 'a word after 8 digits, Spanish for "and"'],
+    ],
+    adversarial: {
+      "wrong check letters": length => wholeUnits("12345678A ", length),
+      "a long run of digits": length => repeatTo("1", length),
+      "digits and letters": length => repeatTo("12345678 ", length),
+    },
+  },
   nricSG: {
     type: "NATIONAL_ID",
     source:
