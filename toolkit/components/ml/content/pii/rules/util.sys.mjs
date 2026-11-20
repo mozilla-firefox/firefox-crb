@@ -38,6 +38,11 @@
  */
 export const EVIDENCE = { FORMAT: 1, CHECKSUM: 2, CHECKSUM_CUE: 3 };
 
+// Word edges for regular expressions with the u flag. \b only knows ASCII
+// letters, so it fails around the "é" in "senha é".
+export const WORD_START = "(?<![\\p{L}\\p{N}_])";
+export const WORD_END = "(?![\\p{L}\\p{N}_])";
+
 /**
  * Every match of a global regular expression in `text`.
  *
