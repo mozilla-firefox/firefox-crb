@@ -365,3 +365,9 @@ export const postcodeNL = regionalPostcode(
 );
 
 export const postcodePL = regionalPostcode("postcodePL", "PL", POLISH_POSTCODE);
+
+export const postcodePT = regionalPostcode(
+  "postcodePT",
+  "PT",
+  PORTUGUESE_POSTCODE
+);
