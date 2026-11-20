@@ -241,3 +241,86 @@ export const homePath = {
     return spans;
   },
 };
+
+// "username: firefox_fan99", "log in as admin_kyle": the model reads a product
+// word inside a handle ("firefox", "pixel8pro") as a product, so a handle after
+// a login cue is found here.
+const LOGIN_CUE =
+  "user\\s?name|user(?:\\s?id)?|login(?:\\s?(?:name|id))?|log\\s?in\\s+as" +
+  "|logged\\s+in\\s+as|sign(?:ed)?\\s?in\\s+as|screen\\s?name|gamertag" +
+  "|steam\\s?id|psn(?:\\s?id)?|nick(?:name)?|benutzername|nutzername" +
+  "|utilisateur|usuario|gebruikersnaam|u[żz]ytkownik";
+const LOGIN_USER = new RegExp(
+  [
+    // The word start is checked after the cue, against the cue just matched,
+    // so that matching does not test it at every character.
+    `(?<cue>${LOGIN_CUE})(?<![\\p{L}\\p{N}_]\\k<cue>)`,
+    // Not part of a longer word or an email address.
+    "(?![\\p{L}\\p{N}_@])",
+    // An optional "is", "as", ":" or "=", owning the spaces after it. A word
+    // must end, so that "isabel_99" keeps its "is".
+    `\\s*(?:(?:(?:is|as|ist|est|es)${WORD_END}|:|=)\\s*)?`,
+    // An optional "@", then the handle.
+    "@?(?<value>[A-Za-z0-9][A-Za-z0-9_.-]{2,31})",
+  ].join(""),
+  "giu"
+);
+// Example and placeholder names that identify no one.
+const PLACEHOLDER_USERS = new Set([
+  "user",
+  "user_",
+  "userid",
+  "user_id",
+  "username",
+  "user_name",
+  "yourname",
+  "your_name",
+  "yourusername",
+  "your_username",
+  "example",
+  "testuser",
+  "test_user",
+  "johndoe",
+  "john_doe",
+  "name",
+  "null",
+  "none",
+  "undefined",
+  "admin",
+  "root",
+]);
+
+/** @type {Rule} */
+export const loginUser = {
+  name: "loginUser",
+  type: "USERNAME",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(LOGIN_USER, text)) {
+      const start = match.end - match.groups.value.length;
+      const end = trimTail(text, start, match.end, ".-");
+      const value = text.slice(start, end);
+      if (value.length < 3 || PLACEHOLDER_USERS.has(value.toLowerCase())) {
+        continue;
+      }
+      // Code such as user_id(...) or user = ...
+      if (text[end] === "(" || text[end] === "=") {
+        continue;
+      }
+      // A handle mixes a letter with an underscore or a digit, or follows an
+      // "@": "user John" and "login page" are left alone.
+      const afterAt = text[start - 1] === "@";
+      if (!/[A-Za-z]/.test(value) || !(afterAt || /[_\d]/.test(value))) {
+        continue;
+      }
+      spans.push({
+        // The "@" is part of the handle, as in atHandle.
+        start: afterAt ? start - 1 : start,
+        end,
+        type: "USERNAME",
+        evidence: EVIDENCE.CHECKSUM_CUE,
+      });
+    }
+    return spans;
+  },
+};

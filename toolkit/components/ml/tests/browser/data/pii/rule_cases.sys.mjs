@@ -94,6 +94,60 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  loginUser: {
+    type: "USERNAME",
+    source:
+      "a handle that mixes a letter with an underscore or a digit, or follows an @, after a login cue such as 'username:' or 'log in as'",
+    finds: [
+      "username: [[firefox_fan99]] on Reddit",
+      "Log in as [[admin_kyle]] to open Jira",
+      "user [[mozilla_dev]] pushed to main",
+      "Username [[pixel8pro]] bought a phone",
+      "Steam id [[xX_Jordan23_Xx]] plays often",
+      "Benutzername: [[max_mustermann]]",
+      "my username is [[sam_k]]",
+      "login: [[@jdoe]]",
+      "signed in as [[kim_lee]].",
+      "gamertag = [[NightOwl77]]",
+      "nom d'utilisateur : [[lucie_m]]",
+      "usuario es [[pedro_88]]",
+      "gebruikersnaam is [[jan_dekker]]",
+      "PSN ID: [[Sam-Plays-42]]",
+      // A handle that starts like "is" or "as" keeps its first letters.
+      "username [[isabel_99]]",
+      "user [[asif_khan]]",
+    ],
+    ignores: [
+      ["username: John", "no underscore or digit"],
+      ["login page", "no underscore or digit"],
+      ["user agent", "no underscore or digit"],
+      ["login failed", "no underscore or digit"],
+      ["the user 42 clicked", "no letter"],
+      ["my user is 2024", "no letter"],
+      ["enter your username", "no value"],
+      ["username: ab", "shorter than 3 characters"],
+      ["username: your_username", "a placeholder"],
+      ["username: john_doe", "a placeholder"],
+      ["username: test_user", "a placeholder"],
+      ["username = get_user()", "code: a call"],
+      ["username foo_bar=3", "code: an assignment"],
+      ["user_id = 5", "user inside an identifier"],
+      ["superuser abc_1", "user inside a word"],
+      ["you need to handle err_timeout here", 'the verb "handle"'],
+    ],
+    adversarial: {
+      "a cue then spaces": length => `username${" ".repeat(length - 8)}`,
+      "cues in a row": length => repeatTo("user login nick ", length),
+      "a cue then separators": length =>
+        `username${repeatTo(": = : = ", length - 8)}`,
+      "cues with placeholder values": length =>
+        wholeUnits("username: your_username ", length),
+      "a cue and a long run of underscores": length =>
+        `username ${"_".repeat(length - 9)}`,
+      "is and as after a cue": length =>
+        `user ${repeatTo("is as is as ", length - 5)}`,
+    },
+  },
   homePath: {
     type: "USERNAME",
     source:
