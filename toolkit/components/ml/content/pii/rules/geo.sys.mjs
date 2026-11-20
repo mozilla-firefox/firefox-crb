@@ -86,3 +86,27 @@ export const gpsPairComma = {
     return spans;
   },
 };
+
+// "48.8584 2.2945": without a comma, at least 4 decimals each, on one line.
+const GPS_PAIR_SPACE =
+  /(?<![\w.-])(?<lat>-?\d{1,2}\.\d{4,})[ \t]+(?<lon>-?\d{1,3}\.\d{4,})(?!\w|\.\d)/g;
+
+/** @type {Rule} */
+export const gpsPairSpace = {
+  name: "gpsPairSpace",
+  type: "GPS",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(GPS_PAIR_SPACE, text)) {
+      if (inRange(match)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "GPS",
+          evidence: EVIDENCE.FORMAT,
+        });
+      }
+    }
+    return spans;
+  },
+};
