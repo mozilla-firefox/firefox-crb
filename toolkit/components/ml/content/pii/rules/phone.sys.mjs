@@ -2,14 +2,31 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { EVIDENCE, matches } from "./util.sys.mjs";
+import { EVIDENCE, WORD_END, WORD_START, matches } from "./util.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
 
 // Free helplines belong to a business, not a person, so they are left alone.
+// The patterns match the national form, and for North America also the
+// number after a 1.
 const TOLL_FREE = [
   /^1?8(?:00|33|44|55|66|77|88)\d{7}$/, // North America: 1-800 and similar.
+  /^0?800\d{6,7}$|^0808\d{7}$|^080[0-5]\d{6}$/, // UK, Germany, Netherlands, France.
+  /^(?:900|800)\d{6}$/, // Spain 900, Italy, Portugal and Poland 800.
 ];
+// The national prefix that takes the place of each country code above, so
+// that "+44 800 ..." is checked as "0800 ...".
+/** @type {Record<string, string>} */
+const TRUNK_PREFIX = {
+  31: "0",
+  33: "0",
+  34: "",
+  39: "",
+  44: "0",
+  48: "",
+  49: "0",
+  351: "",
+};
 
 /**
  * @param {string} text
@@ -20,11 +37,21 @@ function digitsOf(text) {
 }
 
 /**
- * @param {string} digits
+ * @param {string} digits - A national number, or "00" and a country code
+ *   before it.
  * @returns {boolean}
  */
 function isTollFree(digits) {
-  return TOLL_FREE.some(pattern => pattern.test(digits));
+  let national = digits;
+  if (digits.startsWith("00")) {
+    const rest = digits.slice(2);
+    const code = Object.keys(TRUNK_PREFIX).find(prefix =>
+      rest.startsWith(prefix)
+    );
+    national =
+      code === undefined ? rest : TRUNK_PREFIX[code] + rest.slice(code.length);
+  }
+  return TOLL_FREE.some(pattern => pattern.test(national));
 }
 
 // "+" and a digit, then 6 to 18 digits or separators, ending in a digit.
@@ -41,7 +68,11 @@ export const phoneInternational = {
       // A plus sign and 8 to 15 digits is strong on its own. At CHECKSUM, a
       // phone number that also passes Luhn ties with a card and wins as the
       // longer match.
-      if (digits.length >= 8 && digits.length <= 15 && !isTollFree(digits)) {
+      if (
+        digits.length >= 8 &&
+        digits.length <= 15 &&
+        !isTollFree(`00${digits}`)
+      ) {
         spans.push({
           start: match.start,
           end: match.end,
@@ -84,6 +115,95 @@ export const phoneNorthAmerican = {
           end: match.end,
           type: "PHONE",
           evidence: EVIDENCE.FORMAT,
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// A cue word right before the number: "call me on", "Tel.:", "📞".
+const PHONE_CUE_BEFORE = new RegExp(
+  [
+    `(?:${WORD_START}(?:`,
+    // English
+    "call|phone|tel|telephone|mobile|cell(?:phone)?|whatsapp|signal|sms",
+    "|text\\s+me|dial|fax|gsm|reach\\s+me|phone\\s+number|mobile\\s+number",
+    "|cell\\s+number",
+    // German
+    "|telefon|handy|rufnummer|anrufen|rufen|erreichen|telefonnummer",
+    "|handynummer",
+    // French
+    "|t[ée]l[ée]phone|t[ée]l|portable|appelle[rz]?|joignable",
+    "|num[ée]ro\\s+de\\s+t[ée]l[ée]phone",
+    // Spanish and Portuguese
+    "|tel[ée]fono|m[óo]vil|celular|llama|ligue|ligar|telefone|contacto",
+    "|contato|n[úu]mero\\s+de\\s+tel[ée]fono|n[úu]mero\\s+de\\s+telefone",
+    // Polish
+    "|zadzwo[ńn]|dzwo[ńn]|kom[óo]rka|kontakt|numer\\s+telefonu",
+    // Italian
+    "|chiama|cellulare|contatto|numero\\s+di\\s+telefono",
+    // Dutch
+    "|bel|mobiel|belt|bereikbaar|telefoon(?:nummer)?",
+    `)${WORD_END}|☎|📞)`,
+    // Then up to 3 short words with punctuation around them, up to the
+    // number: "call me on", "tel. (mobile):".
+    "(?:[\\s:.=#()?!¿-]+(?:\\p{L}{1,8}[\\s:.=#()?!¿-]+){0,3})?$",
+  ].join(""),
+  "iu"
+);
+// A cue right after the number: "... is my phone", "... anrufen".
+const PHONE_CUE_AFTER = new RegExp(
+  [
+    "^\\s*(?:",
+    "(?:is\\s+my|ist\\s+meine|c'est\\s+mon|es\\s+mi|é\\s+o\\s+meu)",
+    "\\s+(?:phone|tel|number|handy|numéro|número|numero|mobile|cell)",
+    "|(?:bellen|anrufen|appeler|llamar|ligar|chiamare|zadzwoni[ćc]",
+    `|dzwoni[ćc]|call)${WORD_END}`,
+    ")",
+  ].join(""),
+  "iu"
+);
+// Dates such as 2024-01-15 or 15.01.2024 are not phone numbers.
+const LOOKS_LIKE_DATE =
+  /^(?:\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
+// An optional "(", a digit, then 5 to 16 digits or separators, ending in a
+// digit, and not followed by a decimal part.
+const NATIONAL = /(?<![\w+-])\(?\d[\d ()./-]{5,16}\d(?![\w-]|[.,]\d)/g;
+
+/** @type {Rule} */
+export const phoneCued = {
+  name: "phoneCued",
+  type: "PHONE",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NATIONAL, text)) {
+      const digits = digitsOf(match.text);
+      const maxDigits = digits.startsWith("00") ? 15 : 12;
+      if (
+        digits.length < 7 ||
+        digits.length > maxDigits ||
+        isTollFree(digits)
+      ) {
+        continue;
+      }
+      // Dates, and times such as "10 30 45:12", are not phone numbers.
+      if (
+        LOOKS_LIKE_DATE.test(match.text) ||
+        (text[match.end] === ":" && /\d/.test(text[match.end + 1] ?? ""))
+      ) {
+        continue;
+      }
+      const before = text.slice(Math.max(0, match.start - 30), match.start);
+      const after = text.slice(match.end, match.end + 30);
+      if (PHONE_CUE_BEFORE.test(before) || PHONE_CUE_AFTER.test(after)) {
+        // A phone number has no checksum: it is labelled CHECKSUM because its
+        // cue makes it as specific as one.
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "PHONE",
+          evidence: EVIDENCE.CHECKSUM,
         });
       }
     }
