@@ -395,3 +395,9 @@ export const postcodeFR = regionalPostcode(
   "FR",
   POSTCODE_BEFORE_PLACE
 );
+
+export const postcodeES = regionalPostcode(
+  "postcodeES",
+  "ES",
+  POSTCODE_BEFORE_PLACE
+);
