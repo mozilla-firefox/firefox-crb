@@ -96,6 +96,54 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  poBox: {
+    type: "PO_BOX",
+    source:
+      "a PO box keyword in one of 8 languages and the box number, as postal services write them",
+    finds: [
+      "[[P.O. Box 1234]], Springfield",
+      "send it to [[PO Box 77]].",
+      "[[POB 4521]]",
+      "[[Post Office Box 9]]",
+      "[[Postfach 12 34 56]]",
+      "[[Boîte postale 54]]",
+      "[[B.P. 1203]] Dakar",
+      "[[Apartado de Correos 1234]]",
+      "[[Apdo. 77]], Madrid",
+      "[[Caixa Postal 1234]]",
+      "[[Casella Postale 12]]",
+      "[[Postbus 2500]]",
+      "[[skrytka pocztowa 15]]",
+      "[[PO Box #42]]",
+      "[[Postfach Nr. 1234]]",
+    ],
+    ignores: [
+      ["PO Box", "no number"],
+      ["Postfach", "no number"],
+      ["PO Box 1234567", "a box number of more than 6 digits"],
+      ["the box 12", "no PO box keyword"],
+      ["box 7 of the shipment", "no PO box keyword"],
+      ["Xbox 360", "box inside a word"],
+      ["inbox 42 messages", "box inside a word"],
+      ["Dropbox 2", "box inside a word"],
+      ["tipo box 5", "no PO box keyword"],
+      ["PO number 4521", "a purchase order"],
+      ["BP 2023 results", "a bare BP is also a company"],
+      ["apartado 3 del contrato", "a bare apartado is also a section"],
+      [
+        "Numer dowodu osobistego: POB268787",
+        "POB glued to digits is a Polish ID card number",
+      ],
+    ],
+    adversarial: {
+      "keywords in a row": length => repeatTo("PO Box ", length),
+      "a keyword then spaces": length => `Postfach${" ".repeat(length - 8)}`,
+      "a keyword and number signs": length =>
+        `PO Box${repeatTo(" #", length - 6)}`,
+      "partial keywords": length => repeatTo("P.O. Bo ", length),
+      "keywords glued to digits": length => wholeUnits("POB268787 ", length),
+    },
+  },
   gpsPairSpace: {
     type: "GPS",
     source:
