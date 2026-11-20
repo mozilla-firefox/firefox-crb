@@ -162,6 +162,7 @@ support-files = [
 ["browser_page_load_event_telemetry.js"]
 skip-if = [
   "!nightly_build", # Page load events are only consistently sent in nightly.
+  "repeat", # Bug 2095753
 ]
 
 ["browser_prefetch_delivery_type.js"]

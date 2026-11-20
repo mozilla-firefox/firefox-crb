@@ -6,3 +6,6 @@ run-if = [
 support-files = ["page_private_ls.html"]
 
 ["browser_private_ls.js"]
+skip-if = [
+  "os == 'linux' && opt && repeat", # Bug 2049638
+]

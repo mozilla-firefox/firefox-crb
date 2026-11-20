@@ -61,6 +61,9 @@ skip-if = [
 ["browser_genai_init.js"]
 
 ["browser_link_preview.js"]
+skip-if = [
+  "repeat", # Bug 2095742
+]
 support-files = [
   "data/readableFr.html",
   "data/readableEn.html",
