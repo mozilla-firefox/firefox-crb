@@ -78,4 +78,63 @@ export const RULE_CASES = {
       "digits after an IBAN start": length => `DE89${"1".repeat(length - 4)}`,
     },
   },
+  card: {
+    type: "CARD",
+    source:
+      "Luhn and issuer prefixes from CreditCard.sys.mjs; Visa lengths 13, 16, 19",
+    finds: [
+      "my card [[4111 1111 1111 1111]] expired", // published test number
+      "visa [[4012-8888-8888-1881]]", // published
+      "mc [[5555555555554444]]", // published
+      "mc2 [[5105 1051 0510 5100]]", // published
+      "amex [[3782 822463 10005]]", // published; grouped 4-6-5
+      "discover [[6011111111111117]]", // published
+      "jcb [[3530111333300000]]", // published
+      "diners [[30569309025904]]", // published
+      "unionpay [[6200000000000005]]", // published
+      "my card [[4532015112830366]]",
+      "pay with [[4111111111111111]].", // the period stays out
+      "credit debit card [[4920 0727 1234 5678]] and", // Luhn fails, card cue
+      "Kreditkarte: [[5312-3456-7890-1234]]", // Luhn fails, card cue
+      "maestro [[6759649826438453]]", // published; Maestro is found by its cue
+    ],
+    ignores: [
+      ["4111 1111 1111 1112", "one digit off, so Luhn fails"],
+      ["1090203012303930", "Luhn fails, and no network starts with 1"],
+      ["timestamp 1696118400123", "a 13-digit timestamp that fails Luhn"],
+      ["1234 5678 9012 3456", "a counting sequence that fails Luhn"],
+      ["ref 4155550134", "10 digits, cards have at least 13"],
+      ["0000 0000 0000 0000", "passes Luhn, but no network starts with 0"],
+      ["12 digits 123456789012", "12 digits, cards have at least 13"],
+      ["IMEI 490154203237518", "15 digits, Visa issues 13, 16 or 19"],
+      ["ISBN 9780306406157", "an ISBN, which uses a different checksum"],
+      ["order 4111-1111", "8 digits"],
+      ["id 411111111111", "12 digits"],
+      ["order 635-5506281-3168090", "grouped 3-7-7, not how cards are written"],
+      [
+        "reference 4920 0727 1234 5678 ok",
+        "fails Luhn and has no card word before it",
+      ],
+      [
+        "serial 4111 1111 1111 111 1",
+        "grouped 4-4-4-3-1, not how cards are written",
+      ],
+      [
+        "pay 6759649826438453",
+        "a Maestro number without a card word: CreditCard does not know Maestro",
+      ],
+    ],
+    adversarial: {
+      "one long run of digits": length => "1".repeat(length),
+      "a separator between every digit": length => repeatTo("1 ", length),
+      "19-digit blocks glued to letters": length =>
+        repeatTo("1234567890123456789x", length),
+      "card words before numbers no network starts with": length =>
+        repeatTo("card 7111111111111112 ", length),
+      "a card word, then a long run without digits": length =>
+        `card${"x".repeat(length - 4)}`,
+      "dashes and spaces only": length => repeatTo("- ", length),
+      "digits between dashes": length => repeatTo("1-", length),
+    },
+  },
 };
