@@ -14,6 +14,8 @@
  * @typedef {object} RuleCases
  * @property {string} type - The type the rule returns.
  * @property {string} source - Where the format and its check come from.
+ * @property {string} [region] - The region every case is detected in, for a
+ *   rule that only runs in one.
  * @property {string[]} finds - Texts with every expected span marked.
  * @property {Array<[string, string]>} ignores - Look-alikes that must produce
  *   no span, each with the reason the rule rejects it.
@@ -94,6 +96,46 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneFR: {
+    type: "PHONE",
+    source:
+      "the French national layout, 0 and 9 digits in pairs (ARCEP numbering plan), in region FR, unless it is a toll-free number",
+    region: "FR",
+    finds: [
+      "[[06 12 34 56 78]]",
+      "[[0612345678]]",
+      "[[06.12.34.56.78]]",
+      "[[07-12-34-56-78]]",
+      "[[01 23 45 67 89]]",
+      "[[04 91 12 34 56]]",
+      "mon numéro : [[06 12 34 56 78]]",
+      "Rappelle-moi au [[07 81 23 45 67]] stp",
+      "([[06 12 34 56 78]])",
+      "[[09 87 65 43 21]].",
+      "[[06 12 34 56 78]] ou [[07 12 34 56 78]]",
+    ],
+    ignores: [
+      ["08 00 12 34 56", "a toll-free number"],
+      ["0800 12 34 56", "a toll-free number"],
+      ["00 12 34 56 78", "0 then 0 starts no French number"],
+      ["16 12 34 56 78", "does not start with 0"],
+      ["06 12 34 56 7", "9 digits"],
+      ["06 12 34 56 789", "11 digits"],
+      ["a06 12 34 56 78", "inside a word"],
+      ["06 12 34 56 78a", "followed by a letter"],
+      ["06 12 34 56 78-9", "followed by a dash"],
+      ["06_12_34_56_78", "underscores"],
+      ["0171 2345678", "a German layout"],
+      ["612 345 678", "a Spanish layout"],
+    ],
+    adversarial: {
+      "zeros in a row": length => repeatTo("0", length),
+      "a 0 and a long run of digits": length => `0${"6".repeat(length - 1)}`,
+      "one digit short": length => wholeUnits("06 12 34 56 7 ", length),
+      "doubled separators": length => repeatTo("06 .-", length),
+      "toll-free numbers": length => wholeUnits("08 00 12 34 56 ", length),
+    },
+  },
   phoneCued: {
     type: "PHONE",
     source:
