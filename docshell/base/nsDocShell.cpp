@@ -76,6 +76,7 @@
 #include "mozilla/dom/PolicyContainer.h"
 #include "mozilla/dom/PopupBlocker.h"
 #include "mozilla/dom/ScreenOrientation.h"
+#include "mozilla/dom/ScriptLoader.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/ServiceWorkerInterceptController.h"
 #include "mozilla/dom/ServiceWorkerUtils.h"
@@ -4323,7 +4324,7 @@ nsresult nsDocShell::StopInternal(
   RefPtr kungFuDeathGrip = this;
 
   ResetNavigationStateForStop(aUnsetOngoingNavigation);
-  StopActiveDocument(aStopFlags);
+  StopActiveDocument(aStopFlags, /* aKeepScriptsNotOwnedByParser */ false);
 
   if (nsIWebNavigation::STOP_NETWORK & aStopFlags) {
     // XXXbz We could also pass |this| to nsIURILoader::Stop.  That will
@@ -4396,7 +4397,20 @@ void nsDocShell::ResetNavigationStateForStop(
   }
 }
 
-void nsDocShell::StopActiveDocument(uint32_t aStopFlags) {
+void nsDocShell::StopActiveDocument(uint32_t aStopFlags,
+                                    bool aKeepScriptsNotOwnedByParser) {
+  RefPtr<ScriptLoader> scriptLoader;
+  if (RefPtr<Document> doc = GetExtantDocument();
+      doc && aKeepScriptsNotOwnedByParser) {
+    scriptLoader = doc->GetScriptLoader();
+  }
+
+  if (scriptLoader) {
+    scriptLoader->SetKeepScriptsNotOwnedByParser(true);
+  }
+
+  const bool stopNetwork = (nsIWebNavigation::STOP_NETWORK & aStopFlags);
+
   if (nsIWebNavigation::STOP_CONTENT & aStopFlags) {
     // Stop the document loading and animations
     if (mDocumentViewer) {
@@ -4413,7 +4427,11 @@ void nsDocShell::StopActiveDocument(uint32_t aStopFlags) {
     }
   }
 
-  if (nsIWebNavigation::STOP_NETWORK & aStopFlags) {
+  if (scriptLoader) {
+    scriptLoader->SetKeepScriptsNotOwnedByParser(false);
+  }
+
+  if (stopNetwork) {
     if (mRefreshURIList) {
       // Suspend any timers that were set for this loader.  We'll clear
       // them out for good in CreateDocumentViewer.
@@ -4456,7 +4474,7 @@ bool nsDocShell::StopForNewNavigation(uint32_t aStopFlags) {
   StopPendingJavascriptURLNavigations();
 
   // A new navigation only aborts the active document's parser and load.
-  StopActiveDocument(aStopFlags);
+  StopActiveDocument(aStopFlags, /* aKeepScriptsNotOwnedByParser */ true);
   AbortActiveDocumentLoad();
 
   // Still not in the spec, but it follows other browsers' behaviour:
