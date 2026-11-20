@@ -296,3 +296,22 @@ export const bitcoinSegwit = {
     return spans;
   },
 };
+
+// An Ethereum address: "0x" and 40 hex digits. The mixed-case EIP-55 checksum
+// needs Keccak-256, and lower-case addresses carry none, so only the format is
+// checked.
+const ETHEREUM = /(?<![A-Za-z0-9])0x[0-9a-fA-F]{40}(?![A-Za-z0-9])/g;
+
+/** @type {Rule} */
+export const ethereum = {
+  name: "ethereum",
+  type: "CRYPTO_WALLET",
+  detect({ text }) {
+    return [...matches(ETHEREUM, text)].map(match => ({
+      start: match.start,
+      end: match.end,
+      type: "CRYPTO_WALLET",
+      evidence: EVIDENCE.FORMAT,
+    }));
+  },
+};
