@@ -133,3 +133,41 @@ export const redditUser = {
     return spans;
   },
 };
+
+// "name#1234", the legacy Discord tag: 2 to 32 name characters and 4 digits.
+// The name is read backwards from the "#", so that matching only starts at a
+// "#".
+const DISCORD_TAG = /(?<=(?<![\w.@])(?<name>[A-Za-z0-9_.]{2,32}))#\d{4}(?!\d)/g;
+const DISCORD_CUE = new RegExp(`${WORD_START}discord${WORD_END}`, "iu");
+// Words that number things rather than name someone: "issue#1234".
+const NOT_DISCORD_NAMES = new Set(
+  "issue issues bug bugs pr pull ticket case order item task step page room build commit version no nr".split(
+    " "
+  )
+);
+
+/** @type {Rule} */
+export const discordTag = {
+  name: "discordTag",
+  type: "USERNAME",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(DISCORD_TAG, text)) {
+      const start = match.start - match.groups.name.length;
+      const before = text.slice(Math.max(0, start - 60), start);
+      if (
+        !NOT_DISCORD_NAMES.has(match.groups.name.toLowerCase()) &&
+        DISCORD_CUE.test(before)
+      ) {
+        // As for atHandle, the cue stands in for a checksum.
+        spans.push({
+          start,
+          end: match.end,
+          type: "USERNAME",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
