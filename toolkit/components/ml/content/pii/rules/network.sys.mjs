@@ -100,3 +100,36 @@ export const ipv6 = {
     return spans;
   },
 };
+
+const MAC = new RegExp(
+  [
+    // Each form is matched from its first separator, with the hex digits
+    // before it read backwards, so that matching only starts at a separator.
+    // Six pairs of hex digits, all separated by the same ":" or "-"
+    // (captured, then repeated with \\k<separator>).
+    "(?<=(?<pairHead>(?<![\\w:.-])[0-9a-f]{2}))(?<separator>[:-])",
+    "(?:[0-9a-f]{2}\\k<separator>){4}[0-9a-f]{2}(?![\\w:-])",
+    // Or three dotted groups of four, as Cisco writes them.
+    "|(?<=(?<dotHead>(?<![\\w.])[0-9a-f]{4}))\\.[0-9a-f]{4}\\.[0-9a-f]{4}(?![\\w.])",
+  ].join(""),
+  "gi"
+);
+
+/** @type {Rule} */
+export const mac = {
+  name: "mac",
+  type: "MAC",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(MAC, text)) {
+      const head = match.groups.pairHead ?? match.groups.dotHead;
+      spans.push({
+        start: match.start - head.length,
+        end: match.end,
+        type: "MAC",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};
