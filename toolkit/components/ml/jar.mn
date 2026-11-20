@@ -19,6 +19,7 @@ toolkit.jar:
     content/global/ml/NLPUtils.sys.mjs                    (content/nlp/Utils.sys.mjs)
     content/global/ml/OPFS.sys.mjs             	          (content/OPFS.sys.mjs)
     content/global/ml/pii/rules/checks.sys.mjs            (content/pii/rules/checks.sys.mjs)
+    content/global/ml/pii/rules/email.sys.mjs             (content/pii/rules/email.sys.mjs)
     content/global/ml/pii/rules/finance.sys.mjs           (content/pii/rules/finance.sys.mjs)
     content/global/ml/pii/rules/PIIRules.sys.mjs          (content/pii/rules/PIIRules.sys.mjs)
     content/global/ml/pii/rules/util.sys.mjs              (content/pii/rules/util.sys.mjs)
