@@ -23,6 +23,7 @@ import {
   gpsPairComma,
   gpsPairSpace,
   poBox,
+  postcodeCanada,
   postcodeUK,
 } from "./geo.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
@@ -105,6 +106,7 @@ export const RULES = [
   gpsPairSpace,
   poBox,
   postcodeUK,
+  postcodeCanada,
 ];
 
 /**
