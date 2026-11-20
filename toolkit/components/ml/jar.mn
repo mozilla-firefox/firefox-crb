@@ -18,6 +18,8 @@ toolkit.jar:
     content/global/ml/StopWords.sys.mjs                   (content/nlp/StopWords.sys.mjs)
     content/global/ml/NLPUtils.sys.mjs                    (content/nlp/Utils.sys.mjs)
     content/global/ml/OPFS.sys.mjs             	          (content/OPFS.sys.mjs)
+    content/global/ml/pii/rules/PIIRules.sys.mjs          (content/pii/rules/PIIRules.sys.mjs)
+    content/global/ml/pii/rules/util.sys.mjs              (content/pii/rules/util.sys.mjs)
     content/global/ml/ort.webgpu.mjs            	        (vendor/ort.webgpu.mjs)
     content/global/ml/ort-wasm-simd-threaded.jsep.mjs 	  (vendor/ort-wasm-simd-threaded.jsep.mjs)
     content/global/ml/transformers.js           	        (vendor/transformers.js)
