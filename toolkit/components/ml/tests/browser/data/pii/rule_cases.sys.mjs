@@ -30,6 +30,15 @@
 const repeatTo = (unit, length) =>
   unit.repeat(Math.ceil(length / unit.length)).slice(0, length);
 
+/**
+ * @param {string} unit
+ * @param {number} length
+ * @returns {string} Only whole copies of `unit`, padded with spaces to
+ *   `length`, for inputs whose cut-off last copy could be valid.
+ */
+const wholeUnits = (unit, length) =>
+  unit.repeat(Math.floor(length / unit.length)).padEnd(length);
+
 // Published (jwt.io): {"alg":"HS256","typ":"JWT"} with a "John Doe" payload.
 const JWT_HS =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
@@ -37,8 +46,89 @@ const JWT_HS =
 const JWT_RS =
   "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhY21lIiwic3ViIjoiYW5uYSJ9.c2lnbmF0dXJlLWJ5dGVzLWhlcmU";
 
+/**
+ * @param {...string} parts
+ * @returns {string} The parts joined, so that no key appears whole in the
+ *   source for secret scanners to flag.
+ */
+const joinParts = (...parts) => parts.join("");
+
+const KEY = {
+  openai: joinParts("sk-", "Ab3dE5gH7jK9mN1pQ3sT5vW7yZ9bC2eF4hJ6kL8n"),
+  openaiProject: joinParts("sk-proj-", "Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1Gg0Ff9Ee"),
+  anthropic: joinParts(
+    "sk-ant-api03-",
+    "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCd"
+  ),
+  ghp: joinParts("ghp_", "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"),
+  ghpat: joinParts(
+    "github_pat_",
+    "11ABCDEFG0abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV"
+  ),
+  // Published (AWS docs).
+  aws: "AKIAIOSFODNN7EXAMPLE",
+  slack: joinParts("xoxb-", "1234567890-0987654321-AbCdEfGhIjKlMnOpQrStUvWx"),
+  google: joinParts("AIza", "SyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"),
+  gitlab: joinParts("glpat-", "AbCdEfGhIjKlMnOpQrSt"),
+  stripe: joinParts("sk_live_", "AbCdEfGhIjKlMnOpQrStUvWx"),
+  sendgrid: joinParts(
+    "SG.",
+    "AbCdEfGhIjKlMnOpQrStUv",
+    ".",
+    "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfG"
+  ),
+  npm: joinParts("npm_", "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"),
+  hf: joinParts("hf_", "AbCdEfGhIjKlMnOpQrStUvWxYz01234567"),
+};
+
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  apiKey: {
+    type: "API_KEY",
+    source: "prefixes and lengths each vendor documents for its keys",
+    finds: [
+      `key [[${KEY.openai}]]`,
+      `OPENAI_API_KEY=[[${KEY.openaiProject}]]`,
+      `ANTHROPIC_API_KEY=[[${KEY.anthropic}]]`,
+      `token [[${KEY.ghp}]] leaked`,
+      `pat [[${KEY.ghpat}]]`,
+      `aws [[${KEY.aws}]]`,
+      `slack [[${KEY.slack}]]`,
+      `google [[${KEY.google}]].`,
+      `gitlab [[${KEY.gitlab}]]`,
+      `stripe [[${KEY.stripe}]]`,
+      `sendgrid [[${KEY.sendgrid}]]`,
+      `npm [[${KEY.npm}]]`,
+      `hf [[${KEY.hf}]]`,
+      `short [[${joinParts("ghp_", "1qF05S2lxVRRVYrAzhgDdrWdwa")}]] token`,
+      `"[[${KEY.openai}]]"`,
+    ],
+    ignores: [
+      ["sk-short", "too short after the prefix"],
+      ["ghp_tooshort", "too short after the prefix"],
+      ["hf_short", "too short after the prefix"],
+      ["xox-12", "a Slack prefix needs a letter after xox"],
+      ["SG.abc.def", "both SendGrid parts are too short"],
+      ["the AKIA prefix is for AWS", "a prefix alone"],
+      ["github_pat_ is a prefix", "a prefix alone"],
+      ["npm_install", "an npm token has 36 characters after the prefix"],
+      [`${KEY.aws}X`, "17 characters after AKIA, an AWS key id has 16"],
+      ["ask-me-anything", "sk- inside a word"],
+      ["task-1234567890123456789012345", "sk- inside a word"],
+      ["risk-assessment-framework-2024-final-version", "sk- inside a word"],
+      ["my password is secret", "no vendor prefix"],
+    ],
+    adversarial: {
+      "every prefix glued, each too short": length =>
+        repeatTo("ghp_xoxb-AIzaSG.npm_hf_glpat-sk-ab ", length),
+      "AWS key ids one character too long": length =>
+        wholeUnits(`${KEY.aws}X `, length),
+      "npm tokens one character too long": length =>
+        wholeUnits(`${KEY.npm}X `, length),
+      "SendGrid keys with a short second part": length =>
+        repeatTo(`${KEY.sendgrid.slice(0, -2)} `, length),
+    },
+  },
   jwt: {
     type: "JWT",
     source: "three base64url parts whose header decodes to JSON (RFC 7519)",
