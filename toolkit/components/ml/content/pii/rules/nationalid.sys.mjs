@@ -295,3 +295,28 @@ export const aadhaarIN = {
     return spans;
   },
 };
+
+// "ABCPE1234F": an Indian Permanent Account Number, in capitals as it is
+// always written. Three letters, the holder type (P for a person, C for a
+// company and so on), the first letter of the name, 4 digits and a check
+// letter whose algorithm is not published.
+const PAN = /(?<![\w-])[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z](?![\w-])/g;
+
+/** @type {Rule} */
+export const panIN = {
+  name: "panIN",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PAN, text)) {
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "NATIONAL_ID",
+        evidence: EVIDENCE.FORMAT,
+        country: "IN_PAN",
+      });
+    }
+    return spans;
+  },
+};
