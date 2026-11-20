@@ -14,8 +14,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
  * that changes. It also starts the sign-in flow and tracks it while it runs.
  */
 export class AuthenticationController {
-  /** @type {boolean} whether the user is signed in */
-  authenticated = false;
+  /** @type {boolean} whether the sign-in status has been known in this session */
+  static statusKnown = false;
+
+  /** @type {?boolean} whether the user is signed in, null until the status is known */
+  authenticated = null;
 
   /** @type {boolean} whether a sign-in flow is running */
   pending = false;
@@ -28,9 +31,28 @@ export class AuthenticationController {
     host.addController(this);
   }
 
+  get isStatusPending() {
+    return this.authenticated === null;
+  }
+
   hostConnected() {
     Services.obs.addObserver(this, lazy.UIState.ON_UPDATE);
     this.observe();
+    if (this.isStatusPending) {
+      this.#refreshStatus();
+    }
+  }
+
+  async #refreshStatus() {
+    try {
+      await lazy.UIState.refresh();
+      AuthenticationController.statusKnown = true;
+    } catch (e) {
+      console.error("Error refreshing the sign-in status:", e);
+    }
+    this.#setAuthenticated(
+      lazy.UIState.get().status == lazy.UIState.STATUS_SIGNED_IN
+    );
   }
 
   hostDisconnected() {
@@ -38,9 +60,20 @@ export class AuthenticationController {
   }
 
   observe() {
-    let authenticated =
-      lazy.UIState.get().status == lazy.UIState.STATUS_SIGNED_IN;
-    if (authenticated != this.authenticated) {
+    let { status } = lazy.UIState.get();
+    if (status != lazy.UIState.STATUS_NOT_CONFIGURED) {
+      AuthenticationController.statusKnown = true;
+    }
+    if (this.isStatusPending && !AuthenticationController.statusKnown) {
+      // UIState reports not_configured both before its first refresh and
+      // when signed out, so wait for refresh() to settle.
+      return;
+    }
+    this.#setAuthenticated(status == lazy.UIState.STATUS_SIGNED_IN);
+  }
+
+  #setAuthenticated(authenticated) {
+    if (authenticated !== this.authenticated) {
       this.authenticated = authenticated;
       this.host.requestUpdate();
     }
