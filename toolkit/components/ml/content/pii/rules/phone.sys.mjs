@@ -290,3 +290,11 @@ export const phonePL = regionalPhone(
   "PL",
   /(?<![\w+-])(?:45|5[0137]|6[069]|7[2389]|88)\d[ -]\d{3}[ -]\d{3}(?![\w-])/g
 );
+
+// Italy: 3 and 2 digits, then 6 or 7 digits whole or in groups:
+// "333 1234567", "320 123 4567".
+export const phoneIT = regionalPhone(
+  "phoneIT",
+  "IT",
+  /(?<![\w+-])3\d{2}[ -](?:\d{6,7}|\d{3}[ -]\d{3,4})(?![\w-])/g
+);
