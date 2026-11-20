@@ -44,6 +44,15 @@ export type EngineRequests = EnsureAllFeatures<{
   "formfill-classification": UntypedEngineRequest;
   chat: UntypedEngineRequest;
 
+  "pii-redactor": {
+    /**
+     * The text to label, as a single element.
+     */
+    args: [string];
+    options: {};
+    streamerOptions?: {};
+  };
+
   "suggest-intent-classification": {
     /**
      * The list of classification requests. Often just one.
@@ -82,6 +91,7 @@ export type EngineFeatureIds =
   | "smart-tab-embedding"
   | "smart-tab-topic"
   | "formfill-classification"
+  | "pii-redactor"
   | "suggest-intent-classification"
   | "suggest-NER";
 
@@ -111,6 +121,7 @@ export type EngineCreateOptions = EnsureAllFeatures<{
   "smart-tab-embedding": BasicEngineOptions;
   "smart-tab-topic": BasicEngineOptions;
   "formfill-classification": BasicEngineOptions;
+  "pii-redactor": BasicEngineOptions;
   "suggest-intent-classification": BasicEngineOptions;
   "suggest-NER": BasicEngineOptions;
 }>;
@@ -460,6 +471,13 @@ export type EngineResponses = EnsureAllFeatures<{
   "smart-tab-embedding": UntypedEngineResponse;
   "smart-tab-topic": UntypedEngineResponse;
   "formfill-classification": UntypedEngineResponse;
+  "pii-redactor": {
+    /**
+     * One entry per piece of the text, in order. `start` and `end` are UTF-16
+     * offsets and `label` is a BIO tag such as "B-PERSON".
+     */
+    output: Array<{ start: number; end: number; label: string }>;
+  };
   "suggest-intent-classification": Array<{
     label: string;
     score: number;

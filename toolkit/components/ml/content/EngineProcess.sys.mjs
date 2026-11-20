@@ -270,6 +270,9 @@ export const FEATURES = {
   "widget-generation": {
     engineId: "smart-openai",
   },
+  "pii-redactor": {
+    engineId: "pii-redactor",
+  },
   // see dom/media/webspeech/recognition/SpeechRecognition.cpp
   "speech-recognition": {
     engineId: "parakeet-gguf",
