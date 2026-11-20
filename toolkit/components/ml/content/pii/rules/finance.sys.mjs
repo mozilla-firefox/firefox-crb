@@ -4,7 +4,7 @@
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 import { EVIDENCE, matches } from "./util.sys.mjs";
-import { base58check, luhn, mod97 } from "./checks.sys.mjs";
+import { base58check, bech32, luhn, mod97 } from "./checks.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
 
@@ -261,6 +261,30 @@ export const bitcoinLegacy = {
     const spans = [];
     for (const match of matches(BITCOIN_LEGACY, text)) {
       if (base58check(match.text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "CRYPTO_WALLET",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// A SegWit Bitcoin address: "bc1" and 11 to 71 more characters.
+const BITCOIN_SEGWIT =
+  /(?<![A-Za-z0-9])(?:bc1|BC1)[0-9a-zA-Z]{11,71}(?![A-Za-z0-9])/g;
+
+/** @type {Rule} */
+export const bitcoinSegwit = {
+  name: "bitcoinSegwit",
+  type: "CRYPTO_WALLET",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(BITCOIN_SEGWIT, text)) {
+      if (bech32(match.text)) {
         spans.push({
           start: match.start,
           end: match.end,
