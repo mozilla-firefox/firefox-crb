@@ -1504,6 +1504,50 @@ class MWasmPostWriteBarrierWholeCell : public MTernaryInstruction,
   ALLOW_CLONE(MWasmPostWriteBarrierWholeCell)
 };
 
+// Copies |numElements| (> 0) elements of |elemSize| bytes between array data,
+// with memmove semantics, when that can be done inline: there are at most
+// |maxElements| of them, and for reference elements no GC barrier is needed
+// (no incremental marking, and |dstArray| is in the nursery). Returns whether
+// it copied; otherwise nothing was copied.
+class MWasmArrayCopyInlineIfSmall : public MAryInstruction<7>,
+                                    public NoTypePolicy::Data {
+  uint32_t elemSize_;
+  uint32_t maxElements_;
+  bool refs_;
+
+  MWasmArrayCopyInlineIfSmall(MDefinition* instance, MDefinition* dstArray,
+                              MDefinition* dstData, MDefinition* dstIndex,
+                              MDefinition* srcData, MDefinition* srcIndex,
+                              MDefinition* numElements, uint32_t elemSize,
+                              uint32_t maxElements, bool refs)
+      : MAryInstruction<7>(classOpcode),
+        elemSize_(elemSize),
+        maxElements_(maxElements),
+        refs_(refs) {
+    initOperand(0, instance);
+    initOperand(1, dstArray);
+    initOperand(2, dstData);
+    initOperand(3, dstIndex);
+    initOperand(4, srcData);
+    initOperand(5, srcIndex);
+    initOperand(6, numElements);
+    setResultType(MIRType::Int32);
+  }
+
+ public:
+  INSTRUCTION_HEADER(WasmArrayCopyInlineIfSmall)
+  TRIVIAL_NEW_WRAPPERS
+  NAMED_OPERANDS((0, instance), (1, dstArray), (2, dstData), (3, dstIndex),
+                 (4, srcData), (5, srcIndex), (6, numElements))
+
+  uint32_t elemSize() const { return elemSize_; }
+  uint32_t maxElements() const { return maxElements_; }
+  bool refs() const { return refs_; }
+  AliasSet getAliasSet() const override {
+    return AliasSet::Store(AliasSet::WasmArrayDataArea);
+  }
+};
+
 // Given a value being written to another object, update the generational store
 // buffer if the value is in the nursery and object is in the tenured heap.
 class MWasmPostWriteBarrierEdgeAtIndex : public MAryInstruction<5>,

@@ -11521,6 +11521,101 @@ void CodeGenerator::visitWasmStoreElementRef(LWasmStoreElementRef* ins) {
   // The postbarrier is handled separately.
 }
 
+void CodeGenerator::visitWasmArrayCopyInlineIfSmall(
+    LWasmArrayCopyInlineIfSmall* lir) {
+  const MWasmArrayCopyInlineIfSmall* mir = lir->mir();
+  uint32_t elemSize = mir->elemSize();
+  uint32_t shift = mozilla::FloorLog2(elemSize);
+  Register numElements = ToRegister(lir->numElements());
+  Register dst = ToRegister(lir->temp0());
+  Register src = ToRegister(lir->temp1());
+  Register count = ToRegister(lir->temp2());
+  // Also the scratch register for the checks and the copied values.
+  Register output = ToRegister(lir->output());
+
+  Label notCopied, copied;
+  masm.branch32(Assembler::Above, numElements, Imm32(mir->maxElements()),
+                &notCopied);
+  if (mir->refs()) {
+    masm.loadPtr(
+        Address(ToRegister(lir->instance()),
+                wasm::Instance::offsetOfAddressOfNeedsMarkingBarrier()),
+        output);
+    masm.branchTest32(Assembler::NonZero, Address(output, 0), Imm32(0x1),
+                      &notCopied);
+    masm.branchPtrInNurseryChunk(
+        Assembler::NotEqual, ToRegister(lir->dstArray()), output, &notCopied);
+  }
+  masm.move32ZeroExtendToPtr(ToRegister(lir->dstIndex()), dst);
+  masm.lshiftPtr(Imm32(shift), dst);
+  masm.addPtr(ToRegister(lir->dstData()), dst);
+  masm.move32ZeroExtendToPtr(ToRegister(lir->srcIndex()), src);
+  masm.lshiftPtr(Imm32(shift), src);
+  masm.addPtr(ToRegister(lir->srcData()), src);
+  masm.move32ZeroExtendToPtr(numElements, count);
+
+  auto copyElement = [&](int32_t offset) {
+    for (uint32_t done = 0; done < elemSize;) {
+      uint32_t chunk = std::min<uint32_t>(elemSize - done, sizeof(void*));
+      Address from(src, offset + int32_t(done));
+      Address to(dst, offset + int32_t(done));
+      switch (chunk) {
+        case 1:
+          masm.load8ZeroExtend(from, output);
+          masm.store8(output, to);
+          break;
+        case 2:
+          masm.load16ZeroExtend(from, output);
+          masm.store16(output, to);
+          break;
+        case 4:
+          masm.load32(from, output);
+          masm.store32(output, to);
+          break;
+        default:
+          masm.loadPtr(from, output);
+          masm.storePtr(output, to);
+          break;
+      }
+      done += chunk;
+    }
+  };
+
+  // memmove: copy backward when the destination is above the source.
+  Label backward;
+  masm.branchPtr(Assembler::Above, dst, src, &backward);
+  {
+    Label loop;
+    masm.bind(&loop);
+    copyElement(0);
+    masm.addPtr(Imm32(elemSize), dst);
+    masm.addPtr(Imm32(elemSize), src);
+    masm.branchSubPtr(Assembler::NonZero, Imm32(1), count, &loop);
+    masm.jump(&copied);
+  }
+  masm.bind(&backward);
+  {
+    masm.movePtr(count, output);
+    masm.lshiftPtr(Imm32(shift), output);
+    masm.addPtr(output, dst);
+    masm.addPtr(output, src);
+    Label loop;
+    masm.bind(&loop);
+    copyElement(-int32_t(elemSize));
+    masm.subPtr(Imm32(elemSize), dst);
+    masm.subPtr(Imm32(elemSize), src);
+    masm.branchSubPtr(Assembler::NonZero, Imm32(1), count, &loop);
+  }
+
+  Label done;
+  masm.bind(&copied);
+  masm.move32(Imm32(1), output);
+  masm.jump(&done);
+  masm.bind(&notCopied);
+  masm.move32(Imm32(0), output);
+  masm.bind(&done);
+}
+
 void CodeGenerator::visitWasmPostWriteBarrierWholeCell(
     LWasmPostWriteBarrierWholeCell* lir) {
   Register object = ToRegister(lir->object());

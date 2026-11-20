@@ -5457,6 +5457,35 @@ class FunctionCompiler {
     curBlock_->end(test);
     curBlock_ = copyBlock;
 
+#ifdef JS_64BIT
+    // Copy up to 64 bytes inline when no GC barrier is needed, otherwise call
+    // the builtin. A reference copy into an array that isn't freshly allocated
+    // usually needs a barrier, so it always calls the builtin. 32-bit targets
+    // lack the registers.
+    if (!elemsAreRefTyped || dstArrayObject->isWasmNewArrayObject()) {
+      const uint32_t maxInlineBytes = 64;
+      MDefinition* dstData = getWasmArrayObjectData(dstArrayObject);
+      MDefinition* srcData = getWasmArrayObjectData(srcArrayObject);
+      if (!dstData || !srcData) {
+        return false;
+      }
+      auto* copied = MWasmArrayCopyInlineIfSmall::New(
+          alloc(), instancePointer_, dstArrayObject, dstData, dstArrayIndex,
+          srcData, srcArrayIndex, numElements, elemSize,
+          maxInlineBytes / uint32_t(elemSize), elemsAreRefTyped);
+      curBlock_->add(copied);
+      MBasicBlock* callBlock = nullptr;
+      if (!newBlock(curBlock_, &callBlock)) {
+        return false;
+      }
+      curBlock_->end(MTest::New(alloc(), copied, joinBlock, callBlock));
+      if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
+        return false;
+      }
+      curBlock_ = callBlock;
+    }
+#endif
+
     if (elemsAreRefTyped) {
       MOZ_RELEASE_ASSERT(elemSize == sizeof(void*));
 
@@ -5486,6 +5515,8 @@ class FunctionCompiler {
     if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
       return false;
     }
+    // The call block was created after the join block.
+    mirGraph().moveBlockToEnd(joinBlock);
     curBlock_ = joinBlock;
     return true;
   }
