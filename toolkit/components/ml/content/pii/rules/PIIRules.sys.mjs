@@ -8,14 +8,14 @@
  * up to the caller.
  */
 
-import { card, cvv, iban } from "./finance.sys.mjs";
+import { bitcoinLegacy, card, cvv, iban } from "./finance.sys.mjs";
 
 /** @import { Rule, RuleSpan } from "./util.sys.mjs" */
 
 export { EVIDENCE } from "./util.sys.mjs";
 
 /** @type {Rule[]} */
-export const RULES = [iban, card, cvv];
+export const RULES = [iban, card, cvv, bitcoinLegacy];
 
 /**
  * Keeps one span wherever candidates overlap: the more specific evidence
