@@ -23,6 +23,7 @@ import {
   phoneCued,
   phoneFR,
   phoneInternational,
+  phoneNL,
   phoneNorthAmerican,
 } from "./phone.sys.mjs";
 import {
@@ -79,6 +80,7 @@ export const RULES = [
   phoneNorthAmerican,
   phoneCued,
   phoneFR,
+  phoneNL,
 ];
 
 /**
