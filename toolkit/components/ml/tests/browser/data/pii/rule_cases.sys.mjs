@@ -96,6 +96,50 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ssnSeparated: {
+    type: "SSN",
+    source:
+      "a US Social Security number, 3-2-4 digits with the same dash or space twice, in an issuable range",
+    finds: [
+      "ssn [[123-45-6789]]",
+      "my social security number is [[219-09-9999]]",
+      "SSN: [[457 55 5462]]",
+      "([[078-05-1121]])",
+      "social security [[321-54-9876]].",
+      "it is [[612-34-5678]] ok",
+      "both [[123-45-6789]] and 987-12-4321?",
+      "SSN#: [[301-22-8765]]",
+      "[[665-12-3456]]",
+      "[[899-99-9999]]",
+      "[[001-01-0001]]",
+    ],
+    ignores: [
+      ["000-12-3456", "area 000"],
+      ["666-12-3456", "area 666"],
+      ["900-12-3456", "area 900-999"],
+      ["123-00-4567", "group 00"],
+      ["123-45-0000", "serial 0000"],
+      ["123-45 6789", "two different separators"],
+      ["123 45-6789", "two different separators"],
+      ["123--45-6789", "a double dash"],
+      ["123456789", "no separators"],
+      ["date 2024-01-15", "a date"],
+      ["ISBN 0-306-40615-2", "an ISBN"],
+      ["1123-45-6789", "a longer first group"],
+      ["123-45-67890", "a longer last group"],
+      ["x123-45-6789", "inside a word"],
+      ["123-45-6789.5", "a decimal"],
+      ["1.123-45-6789", "after a decimal point"],
+      ["123-45-6789-1", "followed by a dash"],
+    ],
+    adversarial: {
+      "dashes in a row": length => repeatTo("-", length),
+      "digits and dashes": length => repeatTo("123-45-", length),
+      "spaces and digits": length => repeatTo("123 45 ", length),
+      "unissued numbers": length => wholeUnits("000-12-3456 ", length),
+      "a long run of digits": length => repeatTo("1", length),
+    },
+  },
   postcodeIT: {
     type: "POSTCODE",
     source:
