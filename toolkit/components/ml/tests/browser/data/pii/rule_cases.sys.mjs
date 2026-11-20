@@ -96,6 +96,48 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phonePL: {
+    type: "PHONE",
+    source:
+      "the Polish mobile layout, a mobile prefix such as 50 or 60 and 7 more digits in groups 3-3-3 (UKE numbering plan), in region PL",
+    region: "PL",
+    finds: [
+      "[[512 345 678]]",
+      "[[512-345-678]]",
+      "[[501 234 567]]",
+      "[[600 123 456]]",
+      "[[691 234 567]]",
+      "[[781 234 567]]",
+      "[[881 234 567]]",
+      "[[451 234 567]]",
+      "mój numer to [[530 123 456]]",
+      "napisz na [[668 123 456]]!",
+      "([[722 123 456]])",
+      "[[512 345 678]] lub [[798 765 432]].",
+    ],
+    ignores: [
+      ["123 456 789", "1 starts no mobile number"],
+      ["220 123 456", "22 is a landline prefix"],
+      ["555 123 456", "55 is not a mobile prefix"],
+      ["512345678", "no separators"],
+      ["512 345 67", "8 digits"],
+      ["512 145 6789", "10 digits"],
+      ["1512 345 678", "inside a longer number"],
+      ["a512 345 678", "inside a word"],
+      ["512 345 678b", "followed by a letter"],
+      ["512.345.678", "dot separators"],
+      ["512  345 678", "two spaces"],
+      ["22 123 45 67", "a landline layout"],
+    ],
+    adversarial: {
+      "a 5 and a long run of digits": length => `5${"1".repeat(length - 1)}`,
+      "one digit short": length => wholeUnits("512 345 67 ", length),
+      "numbers with a landline prefix": length =>
+        wholeUnits("123 456 789, ", length),
+      "prefixes in a row": length => repeatTo("51 ", length),
+      "dashes after a prefix": length => `512${"-".repeat(length - 3)}`,
+    },
+  },
   phonePT: {
     type: "PHONE",
     source:
