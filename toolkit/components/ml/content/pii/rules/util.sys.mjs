@@ -62,3 +62,20 @@ export function* matches(regex, text) {
     };
   }
 }
+
+/**
+ * Moves `end` back over trailing sentence punctuation that is not part of a
+ * value, such as the ")." after a URL at the end of a sentence.
+ *
+ * @param {string} text
+ * @param {number} start
+ * @param {number} end
+ * @param {string} [chars] - The characters to drop.
+ * @returns {number} The new end.
+ */
+export function trimTail(text, start, end, chars = ".,;:!?)]}'\"") {
+  while (end > start && chars.includes(text[end - 1])) {
+    end--;
+  }
+  return end;
+}
