@@ -49,6 +49,7 @@ import {
   nieES,
   ninoUK,
   nirFR,
+  nirFRCued,
   nricSG,
   panIN,
   peselPL,
@@ -169,6 +170,7 @@ export const RULES = [
   peselPL,
   bsnNL,
   nirFR,
+  nirFRCued,
 ];
 
 /**

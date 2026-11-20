@@ -837,7 +837,9 @@ export const bsnNL = {
 const NIR = new RegExp(
   [
     "(?<![\\w.-])",
-    "(?<sex>[12])([ -]?)",
+    // 1 or 2, or 3 or 4 for a temporary number and 7 or 8 for someone born
+    // abroad.
+    "(?<sex>[1-478])([ -]?)",
     "\\d{2}\\2\\d{2}\\2(?:\\d{2}|2[AB])\\2\\d{3}\\2\\d{3}\\2\\d{2}",
     "(?![\\w-]|\\.\\d)",
   ].join(""),
@@ -864,12 +866,42 @@ export const nirFR = {
   detect({ text }) {
     const spans = [];
     for (const match of matches(NIR, text)) {
-      if (isNIR(match.text)) {
+      if ("12".includes(match.groups.sex) && isNIR(match.text)) {
         spans.push({
           start: match.start,
           end: match.end,
           type: "NATIONAL_ID",
           evidence: EVIDENCE.CHECKSUM,
+          country: "FR_NIR",
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// Any 15-digit number, such as an IMEI, passes the key one time in 97, so a
+// NIR that does not start with 1 or 2 needs a cue.
+const NIR_CUE =
+  /\bs[ée]cu(?:rit[ée]\s+sociale)?\b|\bnir\b|\binsee\b|\bcarte\s+vitale\b/i;
+
+/** @type {Rule} */
+export const nirFRCued = {
+  name: "nirFRCued",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NIR, text)) {
+      if (
+        !"12".includes(match.groups.sex) &&
+        isNIR(match.text) &&
+        hasCueNear(text, match.start, match.end, NIR_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
           country: "FR_NIR",
         });
       }

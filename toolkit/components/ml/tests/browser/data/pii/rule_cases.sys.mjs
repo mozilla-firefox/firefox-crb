@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nirFRCued: {
+    type: "NATIONAL_ID",
+    source:
+      "a French NIR starting with 3 or 4 (temporary) or 7 or 8 (born abroad) whose key holds, within 48 characters after or 16 before a social security, NIR, INSEE or carte Vitale cue",
+    finds: [
+      "NIR [[7 85 05 99 123 456 95]]",
+      "numéro de sécurité sociale [[3 85 01 75 120 046 21]]",
+      "mon numéro de sécu : [[3 78 09 99 327 124 55]].",
+      "carte Vitale [[4 39 03 75 360 123 24]]",
+      "INSEE [[756081345717564]]",
+      "[[8 40 05 99 706 527 15]] (NIR)",
+      "NIR [[7-05-03-75-449-160-94]]",
+      "sécurité sociale [[8 76 07 75 276 262 68]] et [[3 84 07 99 565 208 71]]",
+      "nir=[[484039975422392]]",
+      "securite sociale [[4 84 03 99 754 223 92]]",
+    ],
+    ignores: [
+      ["Device Identifier: 432490148100277", "the key holds, but no cue"],
+      ["7 85 05 99 123 456 95", "no cue"],
+      ["NIR 7 85 05 99 123 456 96", "a wrong key"],
+      ["NIR 5 85 01 75 120 046 18", "sex digit 5"],
+      ["NIR 6 85 01 75 120 046 18", "sex digit 6"],
+      ["NIRS 7 85 05 99 123 456 95", "a longer word than the cue"],
+      ["sécurisé 7 85 05 99 123 456 95", "a longer word than the cue"],
+      ["NIR 7 85 05-99 123 456 95", "two different separators"],
+      ["NIR 785059912345695.5", "a decimal"],
+      [
+        "7 85 05 99 123 456 95 was printed somewhere near the NIR",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong keys after a cue": length =>
+        wholeUnits("NIR 7 85 05 99 123 456 96 ", length),
+      "IMEI-like numbers without a cue": length =>
+        wholeUnits("432490148100277 ", length),
+      "cues without numbers": length => repeatTo("sécu ", length),
+    },
+  },
   nirFR: {
     type: "NATIONAL_ID",
     source:
