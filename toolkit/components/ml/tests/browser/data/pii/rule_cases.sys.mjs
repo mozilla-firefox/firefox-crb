@@ -96,6 +96,50 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ssnCued: {
+    type: "SSN",
+    source:
+      "a US Social Security number of 9 digits without separators, in an issuable range, within 48 characters after or 16 before an 'SSN' or 'social security' cue",
+    finds: [
+      "SSN [[123456789]]",
+      "my ssn is [[219099999]]",
+      "Social Security number: [[457555462]]",
+      "social security no. [[078051121]].",
+      "SSN#[[301228765]]",
+      "[[612345678]] is my SSN",
+      "ssn=[[555123456]]",
+      "my social   security number is [[665123456]]",
+      "SSN ([[899999999]])",
+      "SSN: [[123-45-6789]] or [[123456789]]",
+    ],
+    ignores: [
+      ["order 123456789", "no cue"],
+      ["SSN 000123456", "area 000"],
+      ["SSN 666123456", "area 666"],
+      ["SSN 912345678", "area 900-999"],
+      ["SSN 123004567", "group 00"],
+      ["SSN 123450000", "serial 0000"],
+      ["SSN 12345678", "8 digits"],
+      ["SSN 1234567890", "10 digits"],
+      ["SSN 123456789.5", "a decimal"],
+      ["SSNs 123456789", "a longer word than the cue"],
+      ["classnames 123456789", "the cue inside a word"],
+      ["social securityholder 123456789", "a longer word than the cue"],
+      [
+        `SSN ${"x".repeat(60)} 123456789`,
+        "the cue more than 48 characters before",
+      ],
+      ["123456789 and then the SSN", "the cue more than 16 characters after"],
+    ],
+    adversarial: {
+      "a long run of digits after a cue": length =>
+        `SSN ${"1".repeat(length - 4)}`,
+      "nine digits without a cue": length => wholeUnits("123456789 ", length),
+      "cues without digits": length => repeatTo("SSN ", length),
+      "unissued numbers after cues": length =>
+        wholeUnits("SSN 000123456 ", length),
+    },
+  },
   ssnSeparated: {
     type: "SSN",
     source:
