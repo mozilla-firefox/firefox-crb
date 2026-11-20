@@ -24,6 +24,7 @@ import {
   phoneDE,
   phoneES,
   phoneFR,
+  phoneGB,
   phoneInternational,
   phoneIT,
   phoneNL,
@@ -91,6 +92,7 @@ export const RULES = [
   phonePT,
   phonePL,
   phoneIT,
+  phoneGB,
 ];
 
 /**
