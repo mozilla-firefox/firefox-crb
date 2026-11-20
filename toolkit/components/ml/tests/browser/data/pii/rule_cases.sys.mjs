@@ -94,6 +94,54 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  platformAt: {
+    type: "USERNAME",
+    source:
+      "an @handle with a letter in it right after a platform name such as Instagram or GitHub",
+    finds: [
+      "Instagram [[@paris.vibes]] photos of Paris",
+      "twitter: [[@jsmith_42]]",
+      "TikTok - [[@dance.queen]]",
+      "on Threads [[@zuck_fan]]",
+      "GitHub [[@octo-dev7]]",
+      "Mastodon [[@anna_k]]",
+      "Bluesky:[[@sky.walker]]",
+      "Telegram [[@night_owl]]",
+      "YouTube [[@cooking_with_ann]]",
+      "Snap [[@ed99]]",
+      // A trailing dot or dash is punctuation.
+      "insta [[@kim.lee]].",
+      "Twitch [[@gamer4life]]-",
+    ],
+    ignores: [
+      ["Instagram @Override", "a Java annotation"],
+      ["Facebook @media screen", "a CSS at-rule"],
+      ["GitHub @angular/core", "a scoped package"],
+      ["Instagram @a", "a single character"],
+      [`Instagram @${"a".repeat(31)}`, "longer than 30 characters"],
+      ["twitter @ 5pm", "no name after the @"],
+      ["Instagrammer @kim", "the platform inside a word"],
+      ["netflix @anna_k", "x at the end of a word"],
+      ["Instagram stories @kim", "a word between the platform and the @"],
+      ["telegram:: @anna", "two separators"],
+      ["fb @@anna", "a doubled @"],
+      ["3 x @2.99 each", "a price: no letter"],
+      ["profile @2024", "no letter"],
+      ["discord @everyone", "a mention of a whole server"],
+      ["Discord @here", "a mention of everyone online"],
+    ],
+    adversarial: {
+      "a platform then spaces": length => `twitter${" ".repeat(length - 7)}`,
+      "platforms in a row": length => repeatTo("insta twitter x fb ", length),
+      "a platform and a long handle-like run": length =>
+        `twitter @${"a".repeat(length - 9)}`,
+      "platforms before code words": length =>
+        wholeUnits("GitHub @Override ", length),
+      "separators after a platform": length =>
+        `x${repeatTo(" - : -", length - 1)}`,
+      "prices after x": length => wholeUnits("3 x @2.99 ", length),
+    },
+  },
   loginUser: {
     type: "USERNAME",
     source:

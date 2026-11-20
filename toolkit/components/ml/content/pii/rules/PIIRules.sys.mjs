@@ -34,6 +34,7 @@ import {
   discordTag,
   homePath,
   loginUser,
+  platformAt,
   redditUser,
 } from "./social.sys.mjs";
 
@@ -67,6 +68,7 @@ export const RULES = [
   discordTag,
   homePath,
   loginUser,
+  platformAt,
 ];
 
 /**
