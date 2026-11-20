@@ -485,3 +485,53 @@ export const passphrase = {
     return spans;
   },
 };
+
+// "AWS secret key wJalr...", "client secret: ...": a random-looking value
+// after a key cue.
+const KEY_CUE = new RegExp(
+  [
+    // "secret key", "access token", "api_secret", "client secret"...
+    "(?<cue>(?:secret|private|access|auth|api|bearer|session)[\\s_-]*",
+    "(?:access[\\s_-]*)?(?:key|token|secret)|client[\\s_-]*secret)",
+    // As for PASSWORD_ASSIGNED, the word start is checked after the cue.
+    "(?<![\\p{L}\\p{N}_]\\k<cue>)",
+    // A separator, so that "apiKeyValidation" in code is one identifier.
+    "(?=[\\s:=\"'`])",
+    // An optional "is", "=" or ":", and an optional opening quote.
+    "\\s*(?:(?:is|=|:)\\s*)?[\"'`]?",
+    // The value: 16 to 200 characters of base64 and token alphabets.
+    "(?<value>[A-Za-z0-9][A-Za-z0-9+/=_.-]{15,199})",
+  ].join(""),
+  "giu"
+);
+
+/** @type {Rule} */
+export const secretKey = {
+  name: "secretKey",
+  type: "SECRET_IN_CONTEXT",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(KEY_CUE, text)) {
+      if (startsUrlParameter(text, match.start)) {
+        continue;
+      }
+      const value = match.groups.value;
+      // Random-looking: letters and digits, or both cases, so that "key
+      // management" never matches.
+      const mixed =
+        (/\d/.test(value) && /[A-Za-z]/.test(value)) ||
+        (/[a-z]/.test(value) && /[A-Z]/.test(value));
+      if (!mixed) {
+        continue;
+      }
+      const start = match.end - value.length;
+      spans.push({
+        start,
+        end: trimTail(text, start, match.end),
+        type: "SECRET_IN_CONTEXT",
+        evidence: EVIDENCE.CHECKSUM_CUE,
+      });
+    }
+    return spans;
+  },
+};
