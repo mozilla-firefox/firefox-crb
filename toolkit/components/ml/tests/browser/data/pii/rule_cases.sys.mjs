@@ -96,6 +96,44 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  gpsPairSpace: {
+    type: "GPS",
+    source:
+      "a latitude and a longitude in decimal degrees with at least 4 decimals each, on one line with spaces between",
+    finds: [
+      "at [[-62.315136 47.886046]] now",
+      "[[48.8584 2.2945]]",
+      "[[51.5074 -0.1278]]",
+      "[[40.7128   -74.0060]]",
+      "loc: [[35.6762 139.6503]]",
+      "[[52.5200 13.4050]].",
+      "[[-33.8688 151.2093]]",
+      "([[37.7749 -122.4194]])",
+      "[[0.0000 0.0000]]",
+      "[[89.9999 179.9999]]",
+      "[[1.290270\t103.851959]]",
+    ],
+    ignores: [
+      ["95.1234 2.3456", "a latitude above 90"],
+      ["45.1234 181.5000", "a longitude above 180"],
+      ["181.5000 20.1234", "a three-digit latitude"],
+      ["48.858 2.294", "fewer than 4 decimals"],
+      ["48.8584 2.294", "a longitude with 3 decimals"],
+      ["48.858 2.2945", "a latitude with 3 decimals"],
+      ["0.1234\n0.5678", "two numbers on separate lines"],
+      ["scores 12.3456 and 65.4321", "a word between"],
+      ["v2.3456 7.8910", "after a letter"],
+      ["48.8584 2.2945x", "followed by a letter"],
+      ["48.8584 2.2945.1", "a version number after"],
+    ],
+    adversarial: {
+      "a long decimal": length => `1.${"1".repeat(length - 2)}`,
+      "a decimal then spaces": length => `48.8584${" ".repeat(length - 7)}`,
+      "pairs with 3 decimals": length => wholeUnits("48.858 2.294 ", length),
+      "pairs out of range": length => wholeUnits("95.1234 181.5000 ", length),
+      "one number per line": length => wholeUnits("0.1234\n", length),
+    },
+  },
   gpsPairComma: {
     type: "GPS",
     source:
@@ -135,9 +173,9 @@ export const RULE_CASES = {
     adversarial: {
       "a long decimal": length => `1.${"1".repeat(length - 2)}`,
       "pairs joined by a semicolon": length =>
-        wholeUnits("48.8584 ; 2.2945 ", length),
+        wholeUnits("48.8584 ; 2.2945; ", length),
       "commas and spaces": length => `48.858${repeatTo(" , ", length - 6)}`,
-      "pairs out of range": length => wholeUnits("95.1234, 2.3456 ", length),
+      "pairs out of range": length => wholeUnits("95.1234, 2.3456; ", length),
       "pairs with 2 decimals": length => wholeUnits("48.85, 2.29 ", length),
     },
   },
