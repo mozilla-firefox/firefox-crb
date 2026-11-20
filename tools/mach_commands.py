@@ -56,6 +56,40 @@ def busted_default(command_context):
         print("No known tooling issues found.")
 
 
+def _bug_component(command_context, against):
+    if against == "general":
+        return "Firefox Build System", "General"
+
+    import inspect
+
+    import mozpack.path as mozpath
+
+    # Look up the file implementing that command, then cross-refernce
+    # moz.build files to get the product/component.
+    handler = command_context._mach_context.commands.command_handlers[against]
+    sourcefile = mozpath.relpath(
+        inspect.getsourcefile(handler.func), command_context.topsrcdir
+    )
+    reader = command_context.mozbuild_reader(config_mode="empty")
+    try:
+        res = reader.files_info([sourcefile])[sourcefile]["BUG_COMPONENT"]
+        return res.product, res.component
+    except TypeError:
+        # The file might not have a bug set.
+        return "Firefox Build System", "General"
+
+
+def _open_bug_form(command_context, against):
+    import webbrowser
+
+    product, component = _bug_component(command_context, against)
+    uri = (
+        "https://bugzilla.mozilla.org/enter_bug.cgi?"
+        "product=%s&component=%s&blocked=1543241" % (product, component)
+    )
+    webbrowser.open_new_tab(uri)
+
+
 @SubCommand("busted", "file", description="File a bug for busted tooling.")
 @CommandArgument(
     "against",
@@ -67,8 +101,6 @@ def busted_default(command_context):
     ),
 )
 def busted_file(command_context, against):
-    import webbrowser
-
     if (
         against != "general"
         and against not in command_context._mach_context.commands.command_handlers
@@ -80,34 +112,7 @@ def busted_file(command_context, against):
         )
         return 1
 
-    if against == "general":
-        product = "Firefox Build System"
-        component = "General"
-    else:
-        import inspect
-
-        import mozpack.path as mozpath
-
-        # Look up the file implementing that command, then cross-refernce
-        # moz.build files to get the product/component.
-        handler = command_context._mach_context.commands.command_handlers[against]
-        sourcefile = mozpath.relpath(
-            inspect.getsourcefile(handler.func), command_context.topsrcdir
-        )
-        reader = command_context.mozbuild_reader(config_mode="empty")
-        try:
-            res = reader.files_info([sourcefile])[sourcefile]["BUG_COMPONENT"]
-            product, component = res.product, res.component
-        except TypeError:
-            # The file might not have a bug set.
-            product = "Firefox Build System"
-            component = "General"
-
-    uri = (
-        "https://bugzilla.mozilla.org/enter_bug.cgi?"
-        "product=%s&component=%s&blocked=1543241" % (product, component)
-    )
-    webbrowser.open_new_tab(uri)
+    _open_bug_form(command_context, against)
 
 
 def pastebin_create_parser():
