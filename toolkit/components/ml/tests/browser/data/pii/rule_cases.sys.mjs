@@ -96,6 +96,57 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeCued: {
+    type: "POSTCODE",
+    source:
+      "4 or 5 digits, or a US ZIP+4, Dutch, Polish or Portuguese postcode, right after a postcode cue such as 'zip code', 'PLZ' or 'code postal' in one of 8 languages",
+    finds: [
+      "zip code [[94105]]",
+      "ZIP: [[10001]]",
+      "PLZ [[10115]] Berlin",
+      "code postal [[75008]]",
+      "CAP [[00184]] Roma",
+      "Postleitzahl: [[80331]]",
+      "postcode [[2000]]",
+      "código postal [[28013]]",
+      "C.P. [[06600]]",
+      "CP [[28013]] Madrid",
+      "postnummer [[11122]]",
+      "codice postale [[20121]]",
+      "zip#[[90210]]",
+      "my zip code is [[94105]]",
+      "zip [[94105-1234]]",
+      "postcode [[1012 AB]] Amsterdam",
+      "postcode [[1012AB]]",
+      "kod pocztowy [[00-950]]",
+      "código postal [[1000-001]] Lisboa",
+    ],
+    ignores: [
+      ["order 12345", "no cue"],
+      ["ZIP file 12345", "a word between the cue and the number"],
+      ["price cap 5000", "a lower-case cap is an ordinary word"],
+      ["CAPS 12345", "CAP inside a word"],
+      ["HANDICAP 12345", "CAP at the end of a word"],
+      ["zippy 12345", "zip inside a word"],
+      ["zip code 123", "3 digits"],
+      ["zip code 123456", "6 digits"],
+      ["zip code 12345.6", "a decimal"],
+      ["zip code 1234x", "followed by a letter"],
+      ["zip code: v12345", "after a letter"],
+      ["zip code - - - - 12345", "more than 6 separators"],
+      ["94105-1234 is a ZIP+4", "no cue"],
+      ["1012 AB Amsterdam", "no cue"],
+      ["00-950 items", "no cue"],
+      ["1000-001 is an id", "no cue"],
+    ],
+    adversarial: {
+      "cues in a row": length => repeatTo("zip ", length),
+      "a cue and separators": length => `zip${repeatTo(" :.=#-", length - 3)}`,
+      "cues and short numbers": length => wholeUnits("zip 123 ", length),
+      "cues and long numbers": length => wholeUnits("zip 123456 ", length),
+      "numbers without a cue": length => wholeUnits("order 12345 ", length),
+    },
+  },
   zipAfterState: {
     type: "POSTCODE",
     source:
