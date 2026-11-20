@@ -94,6 +94,56 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  passphrase: {
+    type: "SECRET_IN_CONTEXT",
+    source:
+      "the rest of the line after a passphrase or seed phrase cue and ':', '=' or 'is'",
+    finds: [
+      "Passphrase: [[blue monkey eats banana]] (KeePass)",
+      "seed phrase: [[abandon ability able about above absent absorb abstract absurd abuse access accident]]",
+      "recovery phrase = [[correct horse battery staple]]",
+      "pass phrase: [[my dog has fleas]]",
+      "passphrase=[[Tr0ub4dor&3]]",
+      "Seed Phrase: [[zoo zoo zoo zoo wrong]].",
+      "my passphrase: [[purple rain falls]]; the rest is fine",
+      "passphrase:\t[[sunny day today]]",
+      "recovery phrase: [[apple banana cherry date]]\nThanks!",
+      "PASSPHRASE : [[open sesame now]]!",
+      "seed phrase:  [[one two three four five six]]?",
+      // 24 words, about 160 characters.
+      "seed phrase: [[abandon ability able about above absent absorb abstract absurd abuse access accident account accuse achieve acid acoustic acquire across act action actor actress actual]]",
+      "my passphrase is [[purple rain falls]]",
+      "the recovery phrase is [[apple banana cherry date]].",
+      "seed phrase: [[correct horse battery staple]]. Then I went to the store",
+    ],
+    ignores: [
+      ["what is a seed phrase?", "no ':' or '='"],
+      ["my passphrase is too long to remember", "a word about the passphrase"],
+      ["the passphrase is required", "a word about the passphrase"],
+      ["the passphrase isn't working", "isn't is not 'is'"],
+      ["never share your recovery phrase", "no ':' or '='"],
+      ["passphrase; alpha beta", "';' is not ':' or '='"],
+      ["pass: alpha beta gamma", "'pass' alone is not a passphrase cue"],
+      ["passphrase:", "no value"],
+      ["seed phrase: abc", "shorter than 5 characters"],
+      ["seed phrase: (hidden)", "the value cannot start with a bracket"],
+      ["Passphrase: ;;;;;;", "the value cannot start with ';'"],
+      [`seed phrase =${" ".repeat(10)}`, "only spaces"],
+      ["recovery phrase: !!!!!", "only punctuation, which is trimmed"],
+      ["bypass phrase: hold shift at boot", "pass phrase inside a word"],
+    ],
+    adversarial: {
+      "a cue, ':' then spaces": length =>
+        `seed phrase:${" ".repeat(length - 12)}`,
+      "cues with no ':'": length =>
+        repeatTo("seed phrase recovery phrase ", length),
+      "cues with short values": length => repeatTo("passphrase: abc;", length),
+      "cues with punctuation values": length =>
+        repeatTo("passphrase: !!!!!\n", length),
+      "cues with 'is' and a word about the passphrase": length =>
+        repeatTo("passphrase is too short\n", length),
+    },
+  },
   passwordBare: {
     type: "SECRET_IN_CONTEXT",
     source:
