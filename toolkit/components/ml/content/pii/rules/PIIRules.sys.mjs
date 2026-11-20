@@ -27,6 +27,7 @@ import {
   phoneInternational,
   phoneNL,
   phoneNorthAmerican,
+  phonePT,
 } from "./phone.sys.mjs";
 import {
   apiKey,
@@ -85,6 +86,7 @@ export const RULES = [
   phoneNL,
   phoneDE,
   phoneES,
+  phonePT,
 ];
 
 /**
