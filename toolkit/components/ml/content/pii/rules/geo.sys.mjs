@@ -211,3 +211,32 @@ export const postcodeCanada = {
     return spans;
   },
 };
+
+// USPS abbreviations of the 50 states and DC.
+const US_STATES =
+  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN " +
+  "MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA " +
+  "WV WI WY";
+// "Springfield, IL 62704": a ZIP code after a comma and a state.
+const ZIP_AFTER_STATE = new RegExp(
+  `(?<=,\\s?(?:${US_STATES.split(" ").join("|")}),?\\s)\\d{5}(?:-\\d{4})?(?![\\w-])`,
+  "g"
+);
+
+/** @type {Rule} */
+export const zipAfterState = {
+  name: "zipAfterState",
+  type: "POSTCODE",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(ZIP_AFTER_STATE, text)) {
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "POSTCODE",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};
