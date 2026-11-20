@@ -320,3 +320,44 @@ export const panIN = {
     return spans;
   },
 };
+
+// "123 456 782": an Australian Tax File Number of 9 digits, or of 8 for some
+// issued before 1990, in groups of 3 with the same separator or none.
+const TFN = /(?<![\w.-])\d{3}([ -]?)\d{3}\1\d{2,3}(?![\w-]|\.\d)/g;
+const TFN_CUE = /\btfn\b|\btax\s+file\b/i;
+
+/**
+ * @param {string} digits - Eight or nine digits.
+ * @returns {boolean} Whether the weighted sum is a multiple of 11.
+ */
+function isTFN(digits) {
+  const weights =
+    digits.length === 9
+      ? [1, 4, 3, 7, 5, 8, 6, 9, 10]
+      : [10, 7, 8, 4, 6, 3, 5, 1];
+  return weighted(digits, weights) % 11 === 0;
+}
+
+/** @type {Rule} */
+export const tfnAU = {
+  name: "tfnAU",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(TFN, text)) {
+      if (
+        isTFN(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, TFN_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "AU_TFN",
+        });
+      }
+    }
+    return spans;
+  },
+};
