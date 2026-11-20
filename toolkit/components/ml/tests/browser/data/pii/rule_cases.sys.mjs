@@ -96,6 +96,48 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneES: {
+    type: "PHONE",
+    source:
+      "the Spanish layout, 9 digits starting with 6 to 9 in groups 3-3-3 or 3-2-2-2 (CNMC numbering plan), in region ES, unless it is a toll-free number",
+    region: "ES",
+    finds: [
+      "[[612 345 678]]",
+      "[[612-345-678]]",
+      "[[712 345 678]]",
+      "[[912 345 678]]",
+      "[[612 34 56 78]]",
+      "[[933 12 34 56]]",
+      "mi móvil es [[612 345 678]]",
+      "escríbeme al [[699 123 456]]",
+      "([[612 345 678]])",
+      "[[612 345 678]] o [[623 456 789]]",
+      "[[876 543 210]].",
+    ],
+    ignores: [
+      ["900 100 200", "a toll-free number"],
+      ["800 123 456", "a toll-free number"],
+      ["512 345 678", "does not start with 6 to 9"],
+      ["612345678", "no separators"],
+      ["612 345 67", "8 digits"],
+      ["612 145 6789", "10 digits"],
+      ["612 34 56 7", "8 digits in pairs"],
+      ["1612 345 678", "inside a longer number"],
+      ["a612 345 678", "inside a word"],
+      ["612 345 678b", "followed by a letter"],
+      ["612.345.678", "dot separators"],
+      ["612  345 678", "two spaces"],
+      ["06 12 34 56 78", "a French layout"],
+    ],
+    adversarial: {
+      "a digit and a long run of digits": length =>
+        `6${"1".repeat(length - 1)}`,
+      "one digit short": length => wholeUnits("612 345 67 ", length),
+      "two-digit groups": length => repeatTo("61 ", length),
+      "toll-free numbers": length => wholeUnits("900 100 200 ", length),
+      "dashes after a group": length => `612${"-".repeat(length - 3)}`,
+    },
+  },
   phoneDE: {
     type: "PHONE",
     source:
