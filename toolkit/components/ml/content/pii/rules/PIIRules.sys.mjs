@@ -48,6 +48,7 @@ import {
   nhsUK,
   nieES,
   ninoUK,
+  nirFR,
   nricSG,
   panIN,
   peselPL,
@@ -167,6 +168,7 @@ export const RULES = [
   codiceFiscaleIT,
   peselPL,
   bsnNL,
+  nirFR,
 ];
 
 /**

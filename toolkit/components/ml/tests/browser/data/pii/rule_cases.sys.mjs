@@ -96,6 +96,40 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nirFR: {
+    type: "NATIONAL_ID",
+    source:
+      "a French NIR of someone born in France, 13 digits starting with 1 or 2 (or with the Corsican department 2A or 2B) and a key of 97 minus their remainder modulo 97 (INSEE)",
+    finds: [
+      "numéro de sécurité sociale [[1 82 12 37 308 743 80]]",
+      "NIR [[1 99 01 04 513 073 11]]",
+      "[[189091498700578]]",
+      "mon numéro de sécu est [[2 56 02 88 779 522 20]].",
+      "([[2-74-05-68-903-563-39]])",
+      "NIR : [[235028299441212]]",
+      "[[2 15 09 2B 188 473 82]]",
+      "[[1 57 02 2A 422 799 95]] et [[2 75 02 2A 531 513 59]]",
+      "carte Vitale [[1 53 06 2A 511 567 51]]",
+      "[[1 03 04 2A 726 051 27]],",
+    ],
+    ignores: [
+      ["1 82 12 37 308 743 81", "a wrong key"],
+      ["5 85 01 75 120 046 18", "sex digit 5"],
+      ["1 82 12 37 308 743 801", "a 3-digit key"],
+      ["1 82 12-37 308 743 80", "two different separators"],
+      ["1 82 12 37 308 74 80", "a 2-digit serial"],
+      ["1 82 12 2C 308 743 80", "department 2C"],
+      ["1 57 02 2a 422 799 95", "a lower-case Corsican department"],
+      ["x182123730874380", "inside a word"],
+      ["182123730874380.5", "a decimal"],
+      ["1.182123730874380", "after a decimal point"],
+    ],
+    adversarial: {
+      "wrong keys": length => wholeUnits("1 82 12 37 308 743 81 ", length),
+      "digits in pairs": length => repeatTo("1 82 ", length),
+      "a long run of digits": length => repeatTo("1", length),
+    },
+  },
   bsnNL: {
     type: "NATIONAL_ID",
     source:

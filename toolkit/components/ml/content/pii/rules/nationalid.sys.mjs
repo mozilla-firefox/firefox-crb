@@ -830,3 +830,50 @@ export const bsnNL = {
     return spans;
   },
 };
+
+// "1 82 12 37 308 743 80": a French social security number (NIR), the sex
+// digit, year and month of birth, department (2A and 2B for Corsica), commune,
+// a serial number and a 2-digit key, with the same separator or none.
+const NIR = new RegExp(
+  [
+    "(?<![\\w.-])",
+    "(?<sex>[12])([ -]?)",
+    "\\d{2}\\2\\d{2}\\2(?:\\d{2}|2[AB])\\2\\d{3}\\2\\d{3}\\2\\d{2}",
+    "(?![\\w-]|\\.\\d)",
+  ].join(""),
+  "g"
+);
+
+/**
+ * @param {string} text - The matched NIR.
+ * @returns {boolean} Whether the key is 97 minus the first 13 digits modulo
+ *   97, with the Corsican departments 2A and 2B counting as 19 and 18.
+ */
+function isNIR(text) {
+  const digits = text
+    .replace(/[ -]/g, "")
+    .replace("2A", "19")
+    .replace("2B", "18");
+  return 97 - (Number(digits.slice(0, 13)) % 97) === Number(digits.slice(13));
+}
+
+/** @type {Rule} */
+export const nirFR = {
+  name: "nirFR",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NIR, text)) {
+      if (isNIR(match.text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "FR_NIR",
+        });
+      }
+    }
+    return spans;
+  },
+};
