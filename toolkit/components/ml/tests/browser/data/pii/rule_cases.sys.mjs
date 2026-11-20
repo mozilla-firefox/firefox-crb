@@ -94,6 +94,55 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  discordTag: {
+    type: "USERNAME",
+    source:
+      "Discord's legacy name#1234 tag within 60 characters after 'discord'",
+    finds: [
+      "my discord is [[coolcat#1234]]",
+      "add me on discord: [[Ann_K#0420]]",
+      "discord [[sam.w#9999]]",
+      "Discord: [[xX_Gamer_Xx#0001]]",
+      "my old discord tag was [[luna#4821]] before the change",
+      "mein Discord ist [[max_m#1234]]",
+      "mon discord c'est [[lucie#5678]]",
+      "on Discord I am [[ab#0000]]",
+      `discord: [[${"a".repeat(32)}#1234]]`,
+      "my discord is [[coolcat#1234]].",
+      "ping me on discord, [[kim.lee#3141]]!",
+    ],
+    ignores: [
+      ["coolcat#1234 is a tag", "no cue"],
+      ["see bug#1234 in the tracker", "no cue"],
+      ["discord: coolcat#12345", "five digits"],
+      ["discord: coolcat#123", "three digits"],
+      ["discord: a#1234", "a single character before the #"],
+      [`discord: ${"a".repeat(33)}#1234`, "longer than 32 characters"],
+      ["discord: anna@cool#1234", "after an @"],
+      ["discord: color #1234", "a space before the #"],
+      ["discordant notes: coolcat#1234", "'discord' inside a word"],
+      ["discord server: #general", "a channel"],
+      ["add me night_owl#7777", "no 'discord' before it"],
+      ["my github: see repo#1234", "an issue reference: no 'discord'"],
+      [
+        `I talked about discord a lot, ${"so ".repeat(16)}coolcat#1234`,
+        "'discord' is more than 60 characters before",
+      ],
+      ["Our discord bot crashed, see issue#1234", "an issue number"],
+      ["discord PR#4821 is merged", "a pull request number"],
+    ],
+    adversarial: {
+      "a cue and a long name-like run": length =>
+        `discord ${"a".repeat(length - 8)}`,
+      "many tags with no cue": length => wholeUnits("coolcat#1234 ", length),
+      "dots and underscores before short tags": length =>
+        `discord ${repeatTo("._._._#123", length - 8)}`,
+      "names too long for a tag": length =>
+        `discord ${repeatTo(`${"a".repeat(40)}#1234 `, length - 8)}`,
+      "five-digit tags after a cue": length =>
+        `discord ${wholeUnits("coolcat#12345 ", length - 8)}`,
+    },
+  },
   redditUser: {
     type: "USERNAME",
     source:
