@@ -96,6 +96,51 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  sinCA: {
+    type: "NATIONAL_ID",
+    source:
+      "a Canadian Social Insurance Number, 9 digits in groups of 3 that pass Luhn (Employment and Social Development Canada), within 48 characters after or 16 before a SIN cue",
+    finds: [
+      // Published (ESDC).
+      "SIN [[046 454 286]]",
+      "social insurance number [[548-066-596]]",
+      "my SIN is [[670505056]]",
+      "numéro d'assurance sociale [[247 162 522]]",
+      "[[707 953 246]] (SIN)",
+      "SIN: [[104-163-779]].",
+      "SIN=[[292065562]]",
+      "SIN [[615 282 787]] and [[596 566 661]]",
+      "Social Insurance No. [[369422498]]",
+      "my SIN number [[560 564 502]]",
+    ],
+    ignores: [
+      ["ref 046454286", "no cue"],
+      ["SIN 046 454 287", "fails Luhn"],
+      ["SIN 046-454 286", "two different separators"],
+      ["SIN 04645428", "8 digits"],
+      ["SIN 0464542861", "10 digits"],
+      ["SINs 046454286", "a longer word than the cue"],
+      ["casino 046454286", "the cue inside a word"],
+      ["SIN x046454286", "inside a word"],
+      ["SIN 046454286.5", "a decimal"],
+      [
+        "046454286 is on the letter, not my SIN",
+        "the cue more than 16 characters after",
+      ],
+      ["sin 046454286", 'a lower-case sin, also Spanish for "without"'],
+      [
+        "llámame sin falta al 612 345 678",
+        'Spanish "sin", without, before a Luhn-valid number',
+      ],
+    ],
+    adversarial: {
+      "Luhn failures after a cue": length =>
+        wholeUnits("SIN 046454287 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("046 454 286 ", length),
+      "digits in groups of 3": length => repeatTo("046 ", length),
+    },
+  },
   medicareAU: {
     type: "NATIONAL_ID",
     source:
