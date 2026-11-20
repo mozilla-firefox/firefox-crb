@@ -96,6 +96,41 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  panIN: {
+    type: "NATIONAL_ID",
+    source:
+      "an Indian PAN in capitals, 3 letters, a holder-type letter (A, B, C, F, G, H, J, L, P or T), a letter, 4 digits and a letter (Income Tax Department)",
+    finds: [
+      "PAN [[ABCPE1234F]]",
+      "PAN: [[AAAPL1234C]]",
+      "my pan card is [[BNZPM2501F]].",
+      "([[AAACR5055K]])",
+      "[[AABFT9876Q]] and [[XYZHK0001Z]]",
+      "company PAN [[AAACB1234G]]",
+      "trust [[AAATJ4321L]]",
+      "[[ZZZAZ9999A]]",
+      "PAN=[[QWEGR1111B]]",
+      "[[MNOJD5678E]],",
+    ],
+    ignores: [
+      ["abcpe1234f", "lower case"],
+      ["Abcpe1234F", "mixed case"],
+      ["ABCDE1234F", "holder type D"],
+      ["ABCKE1234F", "holder type K"],
+      ["ABCPE123F", "3 digits"],
+      ["ABCPE12345F", "5 digits"],
+      ["ABCPE1234", "no last letter"],
+      ["ABCP1234F", "4 letters"],
+      ["XABCPE1234F", "inside a word"],
+      ["ABCPE1234FX", "followed by a letter"],
+      ["ABCPE 1234F", "a space inside"],
+    ],
+    adversarial: {
+      "capitals in a row": length => repeatTo("A", length),
+      "the wrong holder type": length => wholeUnits("ABCDE1234F ", length),
+      "letters and digits": length => repeatTo("ABCPE1234", length),
+    },
+  },
   aadhaarIN: {
     type: "NATIONAL_ID",
     source:
