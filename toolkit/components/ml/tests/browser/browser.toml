@@ -141,6 +141,8 @@ support-files = [
 
 ["browser_ml_perf_test_utils.js"]
 
+["browser_ml_pii_rules.js"]
+
 ["browser_ml_pipeline.js"]
 
 ["browser_ml_smart_tab_topic_idle.js"]
