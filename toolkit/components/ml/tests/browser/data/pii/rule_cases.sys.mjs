@@ -137,4 +137,67 @@ export const RULE_CASES = {
       "digits between dashes": length => repeatTo("1-", length),
     },
   },
+  cvv: {
+    type: "CVV",
+    source:
+      "3 or 4 digits after a security-code cue, as card networks name it in 8 languages",
+    finds: [
+      "my CVV is [[208]]",
+      "CVV: [[123]]",
+      "the cvv2 [[745]] is on the back",
+      "CVC [[612]]",
+      "security code on the back is [[987]]",
+      "card security code: [[4321]]", // 4 digits: American Express
+      "card verification value [[551]] please",
+      "has a CVV of [[260]], then",
+      "keep your CVV, which is [[899]], secret",
+      "Der CVV-Code meiner Karte ist [[842]].",
+      "Sicherheitscode: [[119]]",
+      "le code de sécurité est [[523]].",
+      "kod CVV to [[459]]",
+      "Mi código de seguridad es [[731]]",
+      "Il codice di sicurezza è [[265]]",
+      "Meu código de segurança é [[318]]",
+      "Mijn veiligheidscode is [[902]]",
+      "card [[CARD: 4111 1111 1111 1111]], CVV [[123]], exp 12/27",
+      "The app is asking for my CVV. It's [[289]]. Is that safe?",
+      "they want my CVV! That's [[556]]",
+      "Meine CVV. Es ist [[127]]",
+    ],
+    ignores: [
+      ["CVV. It's on the back of the card", "a cue but no number"],
+      ["CVV. It's 12345 miles away", "5 digits, a security code has 3 or 4"],
+      ["What is a CVV?", "a question about CVVs, no number"],
+      ["CVV stands for card verification value", "a definition, no number"],
+      ["my CVV is 12", "2 digits, a security code has 3 or 4"],
+      ["CVV is 12345", "5 digits, a security code has 3 or 4"],
+      ["CVV is 3 digits on the back", "1 digit, a security code has 3 or 4"],
+      ["the code is 1234", "'code' alone is not a security-code cue"],
+      ["pin 4821", "a PIN, not a security code"],
+      ["verification code 4821", "a one-time verification code, not a card's"],
+      ["area code 415", "a phone area code"],
+      ["country code 351", "a phone country code"],
+      ["order 123", "a number with no cue"],
+      ["123 Main Street, my CVV is hidden", "the cue comes after the number"],
+      ["the cvv number is on the back of the card", "a cue but no number"],
+      [
+        "ask for the CVV. 208 Elm Street",
+        "a new sentence that starts with a house number",
+      ],
+    ],
+    adversarial: {
+      "many 3-digit numbers, no cue": length => repeatTo("123 ", length),
+      "a cue, a 33-character gap, then a number": length =>
+        repeatTo(`cvv ${"x".repeat(33)} 123 `, length),
+      "a cue, then a sentence starting with a number": length =>
+        repeatTo("CVV. 208 ", length),
+      "a cue, many spaces, then a number": length =>
+        repeatTo(`cvv${" ".repeat(40)}123 `, length),
+      "cue words packed before 5-digit numbers": length =>
+        repeatTo("cvv cvc csc security code sicherheitscode 12345 ", length),
+      "sentence ends and intro words, then a long number": length =>
+        repeatTo("my cvv. it's it's it's 12345 ", length),
+      "numbers glued to cue fragments": length => repeatTo("cvv.123.", length),
+    },
+  },
 };
