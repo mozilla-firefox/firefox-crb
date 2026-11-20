@@ -30,8 +30,68 @@
 const repeatTo = (unit, length) =>
   unit.repeat(Math.ceil(length / unit.length)).slice(0, length);
 
+// Published (jwt.io): {"alg":"HS256","typ":"JWT"} with a "John Doe" payload.
+const JWT_HS =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+// {"alg":"RS256"}, {"iss":"acme","sub":"anna"}, "signature-bytes-here".
+const JWT_RS =
+  "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhY21lIiwic3ViIjoiYW5uYSJ9.c2lnbmF0dXJlLWJ5dGVzLWhlcmU";
+
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  jwt: {
+    type: "JWT",
+    source: "three base64url parts whose header decodes to JSON (RFC 7519)",
+    finds: [
+      `[[${JWT_HS}]]`,
+      `Authorization: Bearer [[${JWT_HS}]]`,
+      `token=[[${JWT_HS}]] end`,
+      `cookie: session=[[${JWT_RS}]];`,
+      `https://app.com/cb#id_token=[[${JWT_HS}]]`,
+      `{"jwt": "[[${JWT_RS}]]"}`,
+      `my token is [[${JWT_HS}]], please decode`,
+      `curl -H 'x-auth: [[${JWT_RS}]]' https://a.b`,
+      `two: [[${JWT_HS}]] and [[${JWT_RS}]]`,
+      // Neither the signature nor the payload is checked.
+      `JWT [[${JWT_HS.slice(0, -5)}abcde]]`,
+      "[[eyJhbGciOiJIUzI1NiJ9.Zm9vYmFy.abc]]",
+    ],
+    ignores: [
+      ["eyJabcde.defghi.ghijkl", "the header decodes to garbage, not JSON"],
+      ["eyJfoobar.bazqux.quux", "the header decodes to garbage, not JSON"],
+      ["eyJhbGciOi.eyJzdWIiOiJ4In0.c2ln", 'the header is cut off: {"alg":'],
+      [
+        "eyJhbGciOiJIUzI1NiI.eyJzdWIiOiJ4In0.c2ln",
+        'the header has no closing brace: {"alg":"HS256"',
+      ],
+      [
+        "eyJhbGcifQ.eyJzdWIiOiJ4In0.c2ln",
+        'the header is not JSON: {"alg"} has no value',
+      ],
+      ["eyJ", "a header prefix alone"],
+      ["eyJzdWIiOiJ4In0", "one part, a token has three"],
+      ["eyJhbGciOi.abc", "two parts, a token has three"],
+      ["eyJhbGciOiJIUzI1NiJ9.e30", "two parts, a token has three"],
+      ["eyJhbGciOiJIUzI1NiJ9..c2ln", "the payload is empty"],
+      ["eyJ not base64!.x.y", "spaces are not base64url"],
+      ["www.example.com/eyJhbGci", "no parts after the header"],
+      [`abc${JWT_HS}`, "glued to a word, so part of a longer token"],
+      ["a.b.c", "does not start with eyJ"],
+      ["file.name.ext", "does not start with eyJ"],
+      ["version 1.2.3", "does not start with eyJ"],
+      ["token.token.token", "does not start with eyJ"],
+    ],
+    adversarial: {
+      "eyJ repeated": length => repeatTo("eyJ", length),
+      "a header with no dot": length => `eyJ${"a".repeat(length - 3)}`,
+      "a header and payload with no second dot": length =>
+        repeatTo(" eyJaaaaa.bbbbbbb", length),
+      "tokens whose header is not JSON": length =>
+        repeatTo("eyJaaaaa.", length),
+      "one long token whose header is not JSON": length =>
+        `eyJ${"a".repeat(length - 11)}.aaaaa.b`,
+    },
+  },
   mac: {
     type: "MAC",
     source:
