@@ -143,6 +143,15 @@ support-files = [
 
 ["browser_ml_pii_rules.js"]
 
+["browser_ml_pii_token_labels.js"]
+# Uses the native onnxruntime, so it skips the same builds as browser_ml_native.js.
+skip-if = [
+  "asan",
+  "debug",
+  "os == 'android'",
+  "tsan",
+]
+
 ["browser_ml_pipeline.js"]
 
 ["browser_ml_smart_tab_topic_idle.js"]

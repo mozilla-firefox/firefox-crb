@@ -486,6 +486,189 @@ async function fusionHead(
   return { output: result, metrics };
 }
 
+// The text window the smart-pii-redactor model was trained with: 256 positions,
+// two of which hold <s> and </s>, with 32 pieces shared by consecutive windows.
+const PII_WINDOW_PIECES = 254;
+const PII_WINDOW_OVERLAP = 32;
+// Bounds peak memory on long inputs.
+const PII_WINDOWS_PER_BATCH = 4;
+
+/**
+ * Splits text into SentencePiece pieces with their offsets in the text.
+ *
+ * The tokenizer splits on whitespace before it tokenizes, so each
+ * whitespace-separated chunk is tokenized on its own and its pieces are laid
+ * out over the chunk. When normalization changes the chunk length (a ligature,
+ * "…"), the piece offsets are scaled to fit the chunk.
+ *
+ * @param {object} tokenizer - XLM-R SentencePiece tokenizer.
+ * @param {string} text - The text to split.
+ * @returns {{ids: number[], starts: number[], ends: number[]}} Piece ids and
+ *   UTF-16 offsets, in text order.
+ */
+function encodePiiPieces(tokenizer, text) {
+  const ids = [];
+  const starts = [];
+  const ends = [];
+  for (const match of text.matchAll(/\S+/gu)) {
+    const chunk = match[0];
+    const tokens = tokenizer.tokenize(chunk);
+    const tokenIds = tokenizer.model.convert_tokens_to_ids(tokens);
+    const lengths = tokens.map(token => {
+      if (token === tokenizer.unk_token) {
+        return 1;
+      }
+      return token.startsWith("▁") ? token.length - 1 : token.length;
+    });
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    const scale = total > 0 ? chunk.length / total : 1;
+    let position = 0;
+    for (let i = 0; i < tokens.length; i++) {
+      ids.push(tokenIds[i]);
+      starts.push(match.index + Math.round(position * scale));
+      position += lengths[i];
+      ends.push(match.index + Math.round(position * scale));
+    }
+  }
+  return { ids, starts, ends };
+}
+
+/**
+ * Labels each SentencePiece piece of a text with the smart-pii-redactor
+ * token classifier.
+ *
+ * Text longer than one window is read in overlapping windows, so nothing is
+ * truncated. A piece seen by two windows keeps the label from the window where
+ * it has more context on both sides.
+ *
+ * @param {object} request - The input request to the pipeline.
+ * @param {Array} request.args - `args[0]` is the text to label.
+ * @param {object} model - Loaded with AutoModelForTokenClassification.
+ * @param {object} tokenizer - XLM-R SentencePiece tokenizer.
+ * @param {object} _processor - Unused.
+ * @param {object} config - The engine configuration options.
+ * @returns {Promise<{output: Array<{start: number, end: number, label: string}>, metrics: PipelineMetrics}>}
+ *   One entry per non-empty piece, in text order. `start` and `end` are UTF-16
+ *   offsets into the text and `label` is a BIO tag such as "B-PERSON".
+ */
+async function piiTokenLabels(request, model, tokenizer, _processor, config) {
+  const metrics = {
+    preprocessingTime: 0,
+    inferenceTime: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  };
+
+  const text = request.args?.[0];
+  if (typeof text !== "string") {
+    throw new TypeError("moz-pii-token-labels expects a string argument.");
+  }
+
+  const startPre = ChromeUtils.now();
+  const pieces = encodePiiPieces(tokenizer, text);
+  metrics.preprocessingTime = ChromeUtils.now() - startPre;
+  const pieceCount = pieces.ids.length;
+  metrics.inputTokens = pieceCount;
+  if (!pieceCount) {
+    return { output: [], metrics };
+  }
+
+  const windowStarts = [];
+  for (let start = 0; ; start += PII_WINDOW_PIECES - PII_WINDOW_OVERLAP) {
+    windowStarts.push(start);
+    if (start + PII_WINDOW_PIECES >= pieceCount) {
+      break;
+    }
+  }
+
+  const { bos_token_id, eos_token_id, pad_token_id, id2label } = model.config;
+  const tensorFactory =
+    config.backend === WASM_BACKEND ? transformers.Tensor : globalThis.Tensor;
+  const session = model.sessions.model;
+  const labelIds = new Int32Array(pieceCount);
+  const margins = new Int32Array(pieceCount).fill(-1);
+
+  const startInfer = ChromeUtils.now();
+  for (let b = 0; b < windowStarts.length; b += PII_WINDOWS_PER_BATCH) {
+    const batch = windowStarts.slice(b, b + PII_WINDOWS_PER_BATCH);
+    const lengths = batch.map(
+      start => Math.min(PII_WINDOW_PIECES, pieceCount - start) + 2
+    );
+    const seqLength = Math.max(...lengths);
+
+    // Shorter windows are padded and masked out, which leaves the logits of
+    // their real positions unchanged.
+    const inputIds = new BigInt64Array(batch.length * seqLength).fill(
+      BigInt(pad_token_id)
+    );
+    const attentionMask = new BigInt64Array(batch.length * seqLength);
+    batch.forEach((start, row) => {
+      const offset = row * seqLength;
+      const length = lengths[row];
+      inputIds[offset] = BigInt(bos_token_id);
+      for (let i = 0; i < length - 2; i++) {
+        inputIds[offset + 1 + i] = BigInt(pieces.ids[start + i]);
+      }
+      inputIds[offset + length - 1] = BigInt(eos_token_id);
+      attentionMask.fill(1n, offset, offset + length);
+    });
+
+    const output = await session.run({
+      input_ids: new tensorFactory("int64", inputIds, [
+        batch.length,
+        seqLength,
+      ]),
+      attention_mask: new tensorFactory("int64", attentionMask, [
+        batch.length,
+        seqLength,
+      ]),
+    });
+    const logits = output[session.outputNames[0]];
+    const numLabels = logits.dims[2];
+    const data = logits.data;
+
+    batch.forEach((start, row) => {
+      const length = lengths[row];
+      for (let i = 0; i < length - 2; i++) {
+        // Distance to the nearer window edge; on a tie the earlier window wins.
+        const margin = Math.min(i + 1, length - 2 - i);
+        const piece = start + i;
+        if (margin <= margins[piece]) {
+          continue;
+        }
+        const base = (row * seqLength + 1 + i) * numLabels;
+        let best = 0;
+        for (let c = 1; c < numLabels; c++) {
+          if (data[base + c] > data[base + best]) {
+            best = c;
+          }
+        }
+        margins[piece] = margin;
+        labelIds[piece] = best;
+      }
+    });
+  }
+  metrics.inferenceTime = ChromeUtils.now() - startInfer;
+  ChromeUtils.addProfilerMarker(
+    "MLEngine:ONNX",
+    { startTime: startInfer },
+    "piiTokenLabels"
+  );
+
+  const result = [];
+  for (let i = 0; i < pieceCount; i++) {
+    if (pieces.starts[i] === pieces.ends[i]) {
+      continue;
+    }
+    result.push({
+      start: pieces.starts[i],
+      end: pieces.ends[i],
+      label: id2label[labelIds[i]],
+    });
+  }
+  return { output: result, metrics };
+}
+
 /**
  * Configuration for engine. Each task has a configuration object that
  * gets merged at runtime with the options from PipelineOptions.
@@ -539,6 +722,15 @@ const ENGINE_CONFIGURATION = {
     processorId: null,
     processorClass: null,
     pipelineFunction: fusionHead,
+  },
+  "moz-pii-token-labels": {
+    modelId: "mozilla/smart-pii-redactor",
+    modelClass: "AutoModelForTokenClassification",
+    tokenizerId: "mozilla/smart-pii-redactor",
+    tokenizerClass: "AutoTokenizer",
+    processorId: null,
+    processorClass: null,
+    pipelineFunction: piiTokenLabels,
   },
 };
 
