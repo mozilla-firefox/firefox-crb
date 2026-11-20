@@ -363,3 +363,5 @@ export const postcodeNL = regionalPostcode(
   DUTCH_POSTCODE,
   postcode => !NOT_DUTCH_POSTCODE_LETTERS.has(postcode.slice(-2))
 );
+
+export const postcodePL = regionalPostcode("postcodePL", "PL", POLISH_POSTCODE);
