@@ -8,11 +8,17 @@
  * pass the check.
  *
  * In `finds`, each expected span is marked in place as "[[value]]", or as
- * "[[TYPE: value]]" when another rule's type is expected.
+ * "[[TYPE: value]]" when another rule's type is expected. A span of the
+ * block's own type must also have the block's evidence and country. A marker
+ * can name other evidence, as in "[[/CHECKSUM: value]]" or
+ * "[[CARD/CHECKSUM: value]]".
  * A value right next to a bracket cannot be marked this way.
  *
  * @typedef {object} RuleCases
  * @property {string} type - The type the rule returns.
+ * @property {"FORMAT" | "CHECKSUM" | "CHECKSUM_CUE"} evidence - The
+ *   evidence of its spans, an EVIDENCE name.
+ * @property {string} [country] - The country of its spans, for a national ID.
  * @property {string} source - Where the format and its check come from.
  * @property {string} [region] - The region every case is detected in, for a
  *   rule that only runs in one.
@@ -98,19 +104,21 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 export const RULE_CASES = {
   steuerIdDE: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "DE_STEUERID",
     source:
       "a German tax ID, 11 digits not starting with 0, exactly one of the first ten repeated twice or three times but not three in a row, and an ISO 7064 MOD 11,10 check digit (Bundeszentralamt für Steuern), in 2-3-3-3 groups or within 48 characters after or 16 before a Steuer-ID cue",
     finds: [
       "Steuer-ID [[65 929 970 489]]",
       "steuerliche id [[75 846 808 133]]",
-      "[[80 351 373 644]]",
+      "[[/CHECKSUM: 80 351 373 644]]",
       "meine Steuer-ID ist [[78165535248]].",
       "IdNr: [[50379124265]]",
       "Steueridentifikationsnummer [[65980134789]]",
-      "[[46/321/044/796]]",
-      "[[69 117 240 511]] und [[83 512 116 706]]",
+      "[[/CHECKSUM: 46/321/044/796]]",
+      "[[/CHECKSUM: 69 117 240 511]] und [[/CHECKSUM: 83 512 116 706]]",
       "SteuerID=[[41950553867]]",
-      "([[67 912 841 538]])",
+      "([[/CHECKSUM: 67 912 841 538]])",
     ],
     ignores: [
       ["65929970489", "no separators and no cue"],
@@ -135,6 +143,8 @@ export const RULE_CASES = {
   },
   nifPT: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "PT_NIF",
     source:
       "a Portuguese NIF, 9 digits starting with 1, 2, 3, 5, 6, 8 or 9 whose last is the modulus 11 check digit (Autoridade Tributária), within 48 characters after or 16 before a NIF, NIPC or contribuinte cue",
     finds: [
@@ -174,6 +184,8 @@ export const RULE_CASES = {
   },
   nirFRCued: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "FR_NIR",
     source:
       "a French NIR starting with 3 or 4 (temporary) or 7 or 8 (born abroad) whose key holds, within 48 characters after or 16 before a social security, NIR, INSEE or carte Vitale cue",
     finds: [
@@ -213,6 +225,8 @@ export const RULE_CASES = {
   },
   nirFR: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "FR_NIR",
     source:
       "a French NIR of someone born in France, 13 digits starting with 1 or 2 (or with the Corsican department 2A or 2B) and a key of 97 minus their remainder modulo 97 (INSEE)",
     finds: [
@@ -247,6 +261,8 @@ export const RULE_CASES = {
   },
   bsnNL: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "NL_BSN",
     source:
       "a Dutch burgerservicenummer, 9 digits that pass the 11-test (Rijksdienst voor Identiteitsgegevens), within 48 characters after or 16 before a BSN cue",
     finds: [
@@ -286,6 +302,8 @@ export const RULE_CASES = {
   },
   peselPL: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "PL_PESEL",
     source:
       "a Polish PESEL, 11 digits starting with a real date of birth whose month carries the century, and a weighted check digit (Ministerstwo Cyfryzacji), within 48 characters after or 16 before 'PESEL'",
     finds: [
@@ -327,6 +345,8 @@ export const RULE_CASES = {
   },
   codiceFiscaleIT: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "IT_CF",
     source:
       "an Italian codice fiscale, 6 letters, 2 digits, a month letter, a day of 01 to 31 or 41 to 71, a letter, 3 digits and a check letter (Agenzia delle Entrate)",
     finds: [
@@ -362,6 +382,8 @@ export const RULE_CASES = {
   },
   nieES: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "ES_NIE",
     source:
       "a Spanish NIE, X, Y or Z (counting as 0, 1 or 2), 7 digits and the DNI check letter (Ministerio del Interior)",
     finds: [
@@ -397,6 +419,8 @@ export const RULE_CASES = {
   },
   dniES: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "ES_DNI",
     source:
       "a Spanish DNI, 8 digits and a modulus 23 check letter (Ministerio del Interior)",
     finds: [
@@ -434,6 +458,8 @@ export const RULE_CASES = {
   },
   nricSG: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "SG_NRIC",
     source:
       "a Singapore NRIC or FIN, S, T, F or G, 7 digits and a modulus 11 check letter (Immigration and Checkpoints Authority)",
     finds: [
@@ -470,6 +496,8 @@ export const RULE_CASES = {
   },
   idZA: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "ZA_ID",
     source:
       "a South African ID number, 13 digits with a real YYMMDD date of birth, a citizenship digit of 0 or 1 and a Luhn check digit (Department of Home Affairs)",
     finds: [
@@ -507,6 +535,8 @@ export const RULE_CASES = {
   },
   irdNZ: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "NZ_IRD",
     source:
       "a New Zealand IRD number, 8 or 9 digits from 10,000,000 to 150,000,000 whose last is the modulus 11 check digit (Inland Revenue), within 48 characters after or 16 before an IRD cue",
     finds: [
@@ -546,6 +576,8 @@ export const RULE_CASES = {
   },
   ppsIE: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM",
+    country: "IE_PPSN",
     source:
       "an Irish PPS number, 7 digits and a modulus 23 check letter, optionally with a second letter A to I or W (Revenue)",
     finds: [
@@ -583,6 +615,8 @@ export const RULE_CASES = {
   },
   sinCA: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "CA_SIN",
     source:
       "a Canadian Social Insurance Number, 9 digits in groups of 3 that pass Luhn (Employment and Social Development Canada), within 48 characters after or 16 before a SIN cue",
     finds: [
@@ -628,6 +662,8 @@ export const RULE_CASES = {
   },
   medicareAU: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "AU_MEDICARE",
     source:
       "an Australian Medicare card number, 10 digits starting with 2 to 6 whose ninth is the weighted check digit and tenth (the issue number) is not 0, optionally with an 11th reference digit, within 48 characters after or 16 before a Medicare cue",
     finds: [
@@ -669,6 +705,8 @@ export const RULE_CASES = {
   },
   tfnAU: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "AU_TFN",
     source:
       "an Australian Tax File Number, 9 digits (or 8 for older ones) whose weighted sum is a multiple of 11 (ATO), within 48 characters after or 16 before a TFN cue",
     finds: [
@@ -710,6 +748,8 @@ export const RULE_CASES = {
   },
   panIN: {
     type: "NATIONAL_ID",
+    evidence: "FORMAT",
+    country: "IN_PAN",
     source:
       "an Indian PAN in capitals, 3 letters, a holder-type letter (A, B, C, F, G, H, J, L, P or T), a letter, 4 digits and a letter (Income Tax Department)",
     finds: [
@@ -745,6 +785,8 @@ export const RULE_CASES = {
   },
   aadhaarIN: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "IN_AADHAAR",
     source:
       "an Aadhaar number, 12 digits not starting with 0 or 1 whose last is the Verhoeff check digit (UIDAI), within 48 characters after or 16 before an Aadhaar or UIDAI cue",
     finds: [
@@ -788,6 +830,8 @@ export const RULE_CASES = {
   },
   nhsUK: {
     type: "NATIONAL_ID",
+    evidence: "CHECKSUM_CUE",
+    country: "UK_NHS",
     source:
       "an NHS number, 10 digits whose last is the modulus 11 check digit (NHS Data Dictionary), within 48 characters after or 16 before an NHS cue",
     finds: [
@@ -836,6 +880,8 @@ export const RULE_CASES = {
   },
   ninoUK: {
     type: "NATIONAL_ID",
+    evidence: "FORMAT",
+    country: "UK_NINO",
     source:
       "a UK National Insurance number, two allocatable prefix letters, 6 digits and a suffix A to D (HMRC National Insurance Manual NIM39110)",
     finds: [
@@ -874,6 +920,8 @@ export const RULE_CASES = {
   },
   itinUS: {
     type: "NATIONAL_ID",
+    evidence: "FORMAT",
+    country: "US_ITIN",
     source:
       "a US Individual Taxpayer Identification Number, 9xx-xx-xxxx with the same dash or space twice and a group the IRS issues (50-65, 70-88, 90-92, 94-99)",
     finds: [
@@ -912,6 +960,7 @@ export const RULE_CASES = {
   },
   ssnCued: {
     type: "SSN",
+    evidence: "CHECKSUM_CUE",
     source:
       "a US Social Security number of 9 digits without separators, in an issuable range, within 48 characters after or 16 before an 'SSN' or 'social security' cue",
     finds: [
@@ -924,7 +973,7 @@ export const RULE_CASES = {
       "ssn=[[555123456]]",
       "my social   security number is [[665123456]]",
       "SSN ([[899999999]])",
-      "SSN: [[123-45-6789]] or [[123456789]]",
+      "SSN: [[/FORMAT: 123-45-6789]] or [[123456789]]",
     ],
     ignores: [
       ["order 123456789", "no cue"],
@@ -956,6 +1005,7 @@ export const RULE_CASES = {
   },
   ssnSeparated: {
     type: "SSN",
+    evidence: "FORMAT",
     source:
       "a US Social Security number, 3-2-4 digits with the same dash or space twice, in an issuable range",
     finds: [
@@ -1000,6 +1050,7 @@ export const RULE_CASES = {
   },
   postcodeIT: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a Poste Italiane postcode, 5 digits before a capitalized place name, in region IT",
     region: "IT",
@@ -1041,6 +1092,7 @@ export const RULE_CASES = {
   },
   postcodeES: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a Correos postcode, 5 digits before a capitalized place name, in region ES",
     region: "ES",
@@ -1082,6 +1134,7 @@ export const RULE_CASES = {
   },
   postcodeFR: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a La Poste postcode, 5 digits before a capitalized place name, in region FR",
     region: "FR",
@@ -1123,6 +1176,7 @@ export const RULE_CASES = {
   },
   postcodeDE: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       'a Deutsche Post postcode, 5 digits before a capitalized place name, starting a line or after a comma or "(", in region DE',
     region: "DE",
@@ -1168,6 +1222,7 @@ export const RULE_CASES = {
   },
   postcodePT: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source: "a CTT postcode, 4 digits, a dash and 3 digits, in region PT",
     region: "PT",
     finds: [
@@ -1206,6 +1261,7 @@ export const RULE_CASES = {
   },
   postcodePL: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a Poczta Polska postcode, 2 digits, a dash and 3 digits, in region PL",
     region: "PL",
@@ -1245,6 +1301,7 @@ export const RULE_CASES = {
   },
   postcodeNL: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a PostNL postcode, 4 digits not starting with 0 and 2 capitals, in region NL, unless the letters are a unit or not issued",
     region: "NL",
@@ -1285,6 +1342,7 @@ export const RULE_CASES = {
   },
   postcodeUS: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source: "a USPS ZIP+4 code, 5 digits, a dash and 4 digits, in region US",
     region: "US",
     finds: [
@@ -1323,6 +1381,7 @@ export const RULE_CASES = {
   },
   postcodeCued: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "4 or 5 digits, or a US ZIP+4, Dutch, Polish or Portuguese postcode, right after a postcode cue such as 'zip code', 'PLZ' or 'code postal' in one of 8 languages",
     finds: [
@@ -1374,6 +1433,7 @@ export const RULE_CASES = {
   },
   zipAfterState: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a 5-digit US ZIP code or ZIP+4 right after a comma and a USPS state abbreviation",
     finds: [
@@ -1415,6 +1475,7 @@ export const RULE_CASES = {
   },
   postcodeCanada: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a Canadian postal code in capitals, A1A 1A1 with the letters Canada Post allows in each position",
     finds: [
@@ -1454,6 +1515,7 @@ export const RULE_CASES = {
   },
   postcodeUK: {
     type: "POSTCODE",
+    evidence: "FORMAT",
     source:
       "a UK postcode in capitals, with the letters Royal Mail allows in each position",
     finds: [
@@ -1497,6 +1559,7 @@ export const RULE_CASES = {
   },
   poBox: {
     type: "PO_BOX",
+    evidence: "CHECKSUM",
     source:
       "a PO box keyword in one of 8 languages and the box number, as postal services write them",
     finds: [
@@ -1545,6 +1608,7 @@ export const RULE_CASES = {
   },
   gpsPairSpace: {
     type: "GPS",
+    evidence: "FORMAT",
     source:
       "a latitude and a longitude in decimal degrees with at least 4 decimals each, on one line with spaces between",
     finds: [
@@ -1583,6 +1647,7 @@ export const RULE_CASES = {
   },
   gpsPairComma: {
     type: "GPS",
+    evidence: "FORMAT",
     source:
       "a latitude and a longitude in decimal degrees with at least 3 decimals each, joined by a comma, unless both are unsigned with exactly 3",
     finds: [
@@ -1628,6 +1693,7 @@ export const RULE_CASES = {
   },
   gpsLabeled: {
     type: "GPS",
+    evidence: "FORMAT",
     source:
       "a latitude of at most 90 and a longitude of at most 180, each after its label",
     finds: [
@@ -1669,6 +1735,7 @@ export const RULE_CASES = {
   },
   phoneGB: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the UK mobile layout, 07 and 9 more digits as 5-6 or 5-3-3 (Ofcom numbering plan), in region GB; the numbers are from Ofcom's range for TV and radio",
     region: "GB",
@@ -1678,8 +1745,8 @@ export const RULE_CASES = {
       "[[07700-900123]]",
       "[[07700 900 123]]",
       "[[07700-900-777]]",
-      "my mobile is [[07700 900982]]",
-      "text me on [[07700 900321]]",
+      "my mobile is [[/CHECKSUM: 07700 900982]]",
+      "text me on [[/CHECKSUM: 07700 900321]]",
       "ring [[07700900555]] tomorrow",
       "([[07700 900111]])",
       "[[07700 900123]] or [[07700 900124]].",
@@ -1710,6 +1777,7 @@ export const RULE_CASES = {
   },
   phoneIT: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the Italian mobile layout, 3 and 2 digits, then 6 or 7 digits whole or in groups (AGCOM numbering plan), in region IT",
     region: "IT",
@@ -1721,7 +1789,7 @@ export const RULE_CASES = {
       "[[391 123 456]]",
       "[[388 1234567]]",
       "[[366-123-4567]]",
-      "il mio cellulare è [[333 1234567]]",
+      "il mio cellulare è [[/CHECKSUM: 333 1234567]]",
       "scrivimi al [[349 7654321]]",
       "([[333 1234567]])",
       "[[333 1234567]] o [[340 7654321]].",
@@ -1751,6 +1819,7 @@ export const RULE_CASES = {
   },
   phonePL: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the Polish mobile layout, a mobile prefix such as 50 or 60 and 7 more digits in groups 3-3-3 (UKE numbering plan), in region PL",
     region: "PL",
@@ -1793,6 +1862,7 @@ export const RULE_CASES = {
   },
   phonePT: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the Portuguese mobile layout, 91, 92, 93 or 96 and 7 more digits in groups 3-3-3 (ANACOM numbering plan), in region PT",
     region: "PT",
@@ -1834,6 +1904,7 @@ export const RULE_CASES = {
   },
   phoneES: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the Spanish layout, 9 digits starting with 6 to 9 in groups 3-3-3 or 3-2-2-2 (CNMC numbering plan), in region ES, unless it is a toll-free number",
     region: "ES",
@@ -1844,7 +1915,7 @@ export const RULE_CASES = {
       "[[912 345 678]]",
       "[[612 34 56 78]]",
       "[[933 12 34 56]]",
-      "mi móvil es [[612 345 678]]",
+      "mi móvil es [[/CHECKSUM: 612 345 678]]",
       "escríbeme al [[699 123 456]]",
       "([[612 345 678]])",
       "[[612 345 678]] o [[623 456 789]]",
@@ -1876,6 +1947,7 @@ export const RULE_CASES = {
   },
   phoneDE: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the German mobile layout, a 015x, 016x or 017x prefix and 6 to 8 digits (Bundesnetzagentur numbering plan), in region DE",
     region: "DE",
@@ -1888,7 +1960,7 @@ export const RULE_CASES = {
       "[[0160 1234567]]",
       "[[0176 1234 5678]]",
       "[[0171 234 5678]]",
-      "mein Handy: [[0171 2345678]]",
+      "mein Handy: [[/CHECKSUM: 0171 2345678]]",
       "Ruf mich unter [[0157 12345678]] an",
       "([[0171 2345678]])",
       "[[0162 9876543]].",
@@ -1917,6 +1989,7 @@ export const RULE_CASES = {
   },
   phoneNL: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the Dutch mobile layout, 06 and 8 digits (ACM numbering plan), in region NL",
     region: "NL",
@@ -1928,7 +2001,7 @@ export const RULE_CASES = {
       "[[06-12 34 56 78]]",
       "[[06 1234 5678]]",
       "mijn nummer is [[06 12345678]]",
-      "bel me op [[06-87654321]]!",
+      "bel me op [[/CHECKSUM: 06-87654321]]!",
       "([[0612345678]])",
       "[[06 12345678]] of [[06 87654321]]",
       "[[06 98765432]].",
@@ -1958,6 +2031,7 @@ export const RULE_CASES = {
   },
   phoneFR: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "the French national layout, 0 and 9 digits in pairs (ARCEP numbering plan), in region FR, unless it is a toll-free number",
     region: "FR",
@@ -1998,6 +2072,7 @@ export const RULE_CASES = {
   },
   phoneCued: {
     type: "PHONE",
+    evidence: "CHECKSUM",
     source:
       "7 to 12 digits, or up to 15 after 00, next to a phone cue word in one of 8 languages, unless it is a toll-free number or a date",
     finds: [
@@ -2050,6 +2125,7 @@ export const RULE_CASES = {
   },
   phoneNorthAmerican: {
     type: "PHONE",
+    evidence: "FORMAT",
     source:
       "North American Numbering Plan NXX-NXX-XXXX, where N is 2 to 9, unless it is a toll-free number",
     finds: [
@@ -2058,14 +2134,14 @@ export const RULE_CASES = {
       "[[415.555.0134]]",
       "[[415 555 0134]]",
       "[[(415)555-0134]]",
-      "call me at [[(212) 555-0199]] tonight",
+      "call me at [[/CHECKSUM: (212) 555-0199]] tonight",
       "office: [[617-555-0123]], ext 4",
       "[[604-555-0177]]",
       "My number is [[312.555.0110]].",
       "[[202-555-0187]] or [[202-555-0188]]",
       "Text [[713 555 0145]]",
       "[[1-415-555-0134]]",
-      "call [[1 (212) 555-0199]]",
+      "call [[/CHECKSUM: 1 (212) 555-0199]]",
     ],
     ignores: [
       ["800-555-0123", "a toll-free number"],
@@ -2092,6 +2168,7 @@ export const RULE_CASES = {
   },
   phoneInternational: {
     type: "PHONE",
+    evidence: "CHECKSUM",
     source:
       "'+' and a country code, 8 to 15 digits in all (ITU-T E.164), unless it is a toll-free number",
     finds: [
@@ -2141,6 +2218,7 @@ export const RULE_CASES = {
   },
   platformAt: {
     type: "USERNAME",
+    evidence: "CHECKSUM_CUE",
     source:
       "an @handle with a letter in it right after a platform name such as Instagram or GitHub",
     finds: [
@@ -2189,6 +2267,7 @@ export const RULE_CASES = {
   },
   loginUser: {
     type: "USERNAME",
+    evidence: "CHECKSUM_CUE",
     source:
       "a handle that mixes a letter with an underscore or a digit, or follows an @, after a login cue such as 'username:' or 'log in as'",
     finds: [
@@ -2243,6 +2322,7 @@ export const RULE_CASES = {
   },
   homePath: {
     type: "USERNAME",
+    evidence: "CHECKSUM",
     source:
       "the account name in a macOS /Users/, Linux /home/ or Windows C:\\Users\\ home directory path",
     finds: [
@@ -2294,6 +2374,7 @@ export const RULE_CASES = {
   },
   discordTag: {
     type: "USERNAME",
+    evidence: "CHECKSUM",
     source:
       "Discord's legacy name#1234 tag within 60 characters after 'discord'",
     finds: [
@@ -2343,6 +2424,7 @@ export const RULE_CASES = {
   },
   redditUser: {
     type: "USERNAME",
+    evidence: "CHECKSUM",
     source:
       "u/name with Reddit's 3 to 20 username characters, after a first-person cue",
     finds: [
@@ -2387,22 +2469,23 @@ export const RULE_CASES = {
   },
   atHandle: {
     type: "USERNAME",
+    evidence: "CHECKSUM",
     source:
       "an @handle of 2 to 30 characters after a first-person cue such as 'my insta' or 'follow me'",
     finds: [
-      "follow me on instagram [[@maria.lopez99]]",
+      "follow me on instagram [[/CHECKSUM_CUE: @maria.lopez99]]",
       "my twitter is [[@jsmith_42]]",
       "my handle is [[@danny.k]]",
-      "find me on tiktok [[@coolcat]]",
+      "find me on tiktok [[/CHECKSUM_CUE: @coolcat]]",
       "DM me [[@sam_w]]",
-      "add me on snapchat [[@ed99]]",
+      "add me on snapchat [[/CHECKSUM_CUE: @ed99]]",
       "my github is [[@octo-dev7]] and I pushed",
       "my old twitter account was [[@jsmith_42]]",
       "mein Instagram ist [[@anna.k]]",
-      "folge mir auf Insta: [[@lena.b]]",
+      "folge mir auf Insta: [[/CHECKSUM_CUE: @lena.b]]",
       "mon insta c'est [[@lucie_m]]",
       "sígueme en [[@pedro88]]",
-      "seguimi su instagram [[@giulia.r]]",
+      "seguimi su instagram [[/CHECKSUM_CUE: @giulia.r]]",
       "śledź mnie [[@kasia_w99]]",
       "volg mij op [[@jan_dekker]]",
       // A trailing dot or dash is punctuation.
@@ -2438,6 +2521,7 @@ export const RULE_CASES = {
   },
   secretKey: {
     type: "SECRET_IN_CONTEXT",
+    evidence: "CHECKSUM_CUE",
     source:
       "a long value that mixes letters with digits or both cases, after a key, token or secret cue",
     finds: [
@@ -2491,6 +2575,7 @@ export const RULE_CASES = {
   },
   passphrase: {
     type: "SECRET_IN_CONTEXT",
+    evidence: "CHECKSUM_CUE",
     source:
       "the rest of the line after a passphrase or seed phrase cue and ':', '=' or 'is'",
     finds: [
@@ -2541,6 +2626,7 @@ export const RULE_CASES = {
   },
   passwordBare: {
     type: "SECRET_IN_CONTEXT",
+    evidence: "CHECKSUM_CUE",
     source:
       "a value with a digit or a symbol right after a short password or PIN cue",
     finds: [
@@ -2584,6 +2670,7 @@ export const RULE_CASES = {
   },
   passwordAssigned: {
     type: "SECRET_IN_CONTEXT",
+    evidence: "CHECKSUM_CUE",
     source:
       "a value after a password or PIN cue and ':', '=' or 'is', in 8 languages",
     finds: [
@@ -2631,6 +2718,7 @@ export const RULE_CASES = {
   },
   urlToken: {
     type: "URL_TOKEN",
+    evidence: "FORMAT",
     source:
       "the password in a URL, as the URL parser reads it, and query or fragment values whose name is a credential",
     finds: [
@@ -2639,7 +2727,7 @@ export const RULE_CASES = {
       "https://app.com/cb#access_token=[[abc123def456]]&token_type=bearer",
       "https://x.com/?api_key=[[SECRET123456]]",
       "https://b.s3.amazonaws.com/f.pdf?X-Amz-Signature=[[ab12cd34ef56ab12]]",
-      "https://u:[[p4ssw0rd]]@host.com/",
+      "https://u:[[/CHECKSUM: p4ssw0rd]]@host.com/",
       "https://x.com/login?user=a&password=[[hunter22]]",
       "https://x.com/a?sessionid=[[9f8e7d6c5b4a]]",
       "https://x.com/a?key=[[a1b2c3d4e5f6g7h8]]",
@@ -2695,6 +2783,7 @@ export const RULE_CASES = {
   },
   privateKey: {
     type: "API_KEY",
+    evidence: "CHECKSUM",
     source:
       "PEM private key blocks (RFC 7468), OpenSSH keys and PGP private key blocks (RFC 4880)",
     finds: [
@@ -2759,6 +2848,7 @@ export const RULE_CASES = {
   },
   apiKey: {
     type: "API_KEY",
+    evidence: "CHECKSUM",
     source: "prefixes and lengths each vendor documents for its keys",
     finds: [
       `key [[${KEY.openai}]]`,
@@ -2805,6 +2895,7 @@ export const RULE_CASES = {
   },
   jwt: {
     type: "JWT",
+    evidence: "CHECKSUM",
     source: "three base64url parts whose header decodes to JSON (RFC 7519)",
     finds: [
       `[[${JWT_HS}]]`,
@@ -2858,6 +2949,7 @@ export const RULE_CASES = {
   },
   mac: {
     type: "MAC",
+    evidence: "FORMAT",
     source:
       "six hex pairs with one separator, or Cisco's three dotted groups (IEEE 802)",
     finds: [
@@ -2894,6 +2986,7 @@ export const RULE_CASES = {
   },
   ipv6: {
     type: "IP",
+    evidence: "FORMAT",
     source: "what the URL parser accepts as an IPv6 host (RFC 4291)",
     finds: [
       "ipv6 [[2001:0db8:85a3:0000:0000:8a2e:0370:7334]]",
@@ -2934,6 +3027,7 @@ export const RULE_CASES = {
   },
   ipv4: {
     type: "IP",
+    evidence: "FORMAT",
     source: "four dotted groups of 0 to 255, as in RFC 791",
     finds: [
       "ip [[192.168.1.10]]",
@@ -2972,6 +3066,7 @@ export const RULE_CASES = {
   },
   email: {
     type: "EMAIL",
+    evidence: "FORMAT",
     source: "the common subset of RFC 5322 addresses, in any script",
     finds: [
       "email me at [[drrana@mozilla.com]]",
@@ -3025,6 +3120,7 @@ export const RULE_CASES = {
   },
   iban: {
     type: "IBAN",
+    evidence: "CHECKSUM",
     source:
       "ISO 13616 mod-97 check; length per country from the SWIFT IBAN registry",
     finds: [
@@ -3071,6 +3167,7 @@ export const RULE_CASES = {
   },
   card: {
     type: "CARD",
+    evidence: "CHECKSUM",
     source:
       "Luhn and issuer prefixes from CreditCard.sys.mjs; Visa lengths 13, 16, 19",
     finds: [
@@ -3130,6 +3227,7 @@ export const RULE_CASES = {
   },
   cvv: {
     type: "CVV",
+    evidence: "CHECKSUM",
     source:
       "3 or 4 digits after a security-code cue, as card networks name it in 8 languages",
     finds: [
@@ -3194,6 +3292,7 @@ export const RULE_CASES = {
   },
   bitcoinLegacy: {
     type: "CRYPTO_WALLET",
+    evidence: "CHECKSUM",
     source:
       "Base58Check, as in Bitcoin's legacy (1...) and P2SH (3...) formats",
     finds: [
@@ -3264,6 +3363,7 @@ export const RULE_CASES = {
   },
   bitcoinSegwit: {
     type: "CRYPTO_WALLET",
+    evidence: "CHECKSUM",
     source:
       "Bech32 (BIP 173) and Bech32m (BIP 350), as in Bitcoin's bc1 format",
     finds: [
@@ -3326,6 +3426,7 @@ export const RULE_CASES = {
   },
   ethereum: {
     type: "CRYPTO_WALLET",
+    evidence: "FORMAT",
     source: "0x and 40 hex digits; the EIP-55 checksum is not checked",
     finds: [
       "eth [[0x71C7656EC7ab88b098defB751B7401B5f6d8976F]]",
@@ -3337,7 +3438,7 @@ export const RULE_CASES = {
       "pay [[0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb]] now", // published (EIP-55)
       "[[0x8617E340B3D01FA5F11F306F4090FD50E238070D]]", // published (EIP-55); upper case
       "Adresse: [[0x27b1fdb04752bbc536007a920d24acb045561c26]]", // published (EIP-55)
-      "[[0x71C7656EC7ab88b098defB751B7401B5f6d8976F]] or [[1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa]]",
+      "[[0x71C7656EC7ab88b098defB751B7401B5f6d8976F]] or [[/CHECKSUM: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa]]",
     ],
     ignores: [
       ["0x123", "3 hex digits, an address has 40"],
@@ -3374,6 +3475,7 @@ export const RULE_CASES = {
   },
   routing: {
     type: "ROUTING_NUMBER",
+    evidence: "CHECKSUM_CUE",
     source:
       "ABA 3-7-1 checksum and Federal Reserve prefixes, after or before a routing cue",
     finds: [

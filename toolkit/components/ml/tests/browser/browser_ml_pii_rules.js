@@ -23,8 +23,9 @@ const LENGTHS = [2000, 10000, 32000];
 const MARKER = new RegExp(
   [
     "\\[\\[",
-    // An optional type such as "PHONE: ".
-    "(?:(?<type>[A-Z_]+): )?",
+    // An optional type, evidence or both, such as "PHONE: ", "/CHECKSUM: " or
+    // "CARD/CHECKSUM: ".
+    "(?:(?<type>[A-Z_]+)?(?:/(?<evidence>[A-Z_]+))?: )?",
     // The expected value, up to the first closing brackets. The s flag lets
     // it span lines, as a PEM key does.
     "(?<value>.+?)",
@@ -34,12 +35,14 @@ const MARKER = new RegExp(
 );
 
 /**
- * Reads the "[[value]]" and "[[TYPE: value]]" markers out of a fixture.
+ * Reads the "[[value]]", "[[TYPE: value]]" and "[[TYPE/EVIDENCE: value]]"
+ * markers out of a fixture.
  *
  * @param {string} marked
  * @param {string} type - The type of a marker that names none.
- * @returns {{text: string, spans: {start: number, end: number, type: string}[]}}
- *   The text without markers, and the marked spans in it.
+ * @returns {{text: string, spans: {start: number, end: number, type: string, evidence?: number}[]}}
+ *   The text without markers, and the marked spans in it, with an evidence
+ *   only where the marker names one.
  */
 function parseMarked(marked, type) {
   let text = "";
@@ -49,7 +52,14 @@ function parseMarked(marked, type) {
     text += marked.slice(last, match.index);
     const start = text.length;
     text += match.groups.value;
-    spans.push({ start, end: text.length, type: match.groups.type ?? type });
+    const span = { start, end: text.length, type: match.groups.type ?? type };
+    if (match.groups.evidence) {
+      if (!(match.groups.evidence in EVIDENCE)) {
+        throw new Error(`Unknown evidence in ${marked}`);
+      }
+      span.evidence = EVIDENCE[match.groups.evidence];
+    }
+    spans.push(span);
     last = match.index + match[0].length;
   }
   return { text: text + marked.slice(last), spans };
@@ -125,6 +135,14 @@ add_task(function test_parse_marked() {
       marked: "key [[a\nb]] end",
       text: "key a\nb end",
       spans: [{ start: 4, end: 7, type: "IBAN" }],
+    },
+    {
+      marked: "[[/FORMAT: DE89]] [[CARD/CHECKSUM: 4111]]",
+      text: "DE89 4111",
+      spans: [
+        { start: 0, end: 4, type: "IBAN", evidence: EVIDENCE.FORMAT },
+        { start: 5, end: 9, type: "CARD", evidence: EVIDENCE.CHECKSUM },
+      ],
     },
   ];
   for (const { marked, text, spans } of cases) {
@@ -254,18 +272,59 @@ add_task(function test_national_layout_needs_its_region() {
   );
 });
 
+/**
+ * The spans a fixture expects: those of the rule's own type also have its
+ * evidence, unless the marker names another, and its country.
+ *
+ * @param {string} marked
+ * @param {object} cases - The rule's RuleCases.
+ * @returns {{text: string, spans: object[]}}
+ */
+function expectedSpans(marked, cases) {
+  const { text, spans } = parseMarked(marked, cases.type);
+  return {
+    text,
+    spans: spans.map(span =>
+      span.type === cases.type
+        ? {
+            ...span,
+            evidence: span.evidence ?? EVIDENCE[cases.evidence],
+            country: cases.country ?? null,
+          }
+        : span
+    ),
+  };
+}
+
+/**
+ * @param {object[]} found - The spans detectRules returned.
+ * @param {object[]} expected - From expectedSpans.
+ * @returns {object[]} The found spans with only the fields the expected span
+ *   at the same position checks.
+ */
+function comparable(found, expected) {
+  return found.map((span, i) => {
+    const result = { start: span.start, end: span.end, type: span.type };
+    if (expected[i] && "evidence" in expected[i]) {
+      result.evidence = span.evidence;
+    }
+    if (expected[i] && "country" in expected[i]) {
+      result.country = span.country ?? null;
+    }
+    return result;
+  });
+}
+
 add_task(function test_finds() {
   for (const [name, cases] of Object.entries(RULE_CASES)) {
     for (const marked of cases.finds) {
-      const { text, spans } = parseMarked(marked, cases.type);
-      const found = detectRules(text, { region: cases.region }).map(
-        ({ start, end, type }) => ({
-          start,
-          end,
-          type,
-        })
+      const { text, spans } = expectedSpans(marked, cases);
+      const found = detectRules(text, { region: cases.region });
+      Assert.deepEqual(
+        comparable(found, spans),
+        spans,
+        `${name} finds ${marked}`
       );
-      Assert.deepEqual(found, spans, `${name} finds ${marked}`);
     }
   }
 });
@@ -302,39 +361,56 @@ add_task(function test_adversarial_inputs() {
   }
 });
 
+// Ordinary chat text to put the finds in.
+const PROSE =
+  "Hi! I'm planning a trip with a friend next month and need help with " +
+  "the budget, a packing list and where to stay.";
+
 /**
- * Logs how long the rules take on ordinary chat text that contains each
- * rule's finds, at each length, for each rule's commit message. It only runs
- * locally: it asserts nothing, and timing in CI belongs in a perftest.
+ * Each find is found the same inside chat text, on a line of its own. Also
+ * logs, outside automation, how long the rules take on chat text full of each
+ * rule's finds, at each length, for each rule's commit message: timing in CI
+ * belongs in a perftest.
  */
-add_task(
-  { skip_if: () => !!Services.env.get("MOZ_AUTOMATION") },
-  function test_log_chat_timings() {
-    const prose =
-      "Hi! I'm planning a trip with a friend next month and need help with " +
-      "the budget, a packing list and where to stay. ";
-    const runs = 10;
-    for (const [name, cases] of Object.entries(RULE_CASES)) {
-      const finds = cases.finds.map(marked => parseMarked(marked).text);
-      const unit = `${prose}${finds.join(" ")} `;
-      for (const length of LENGTHS) {
-        const text = unit
-          .repeat(Math.ceil(length / unit.length))
-          .slice(0, length);
-        const times = [];
-        for (let i = 0; i < runs; i++) {
-          const start = ChromeUtils.now();
-          detectRules(text, { region: cases.region });
-          times.push(ChromeUtils.now() - start);
-        }
-        times.sort((a, b) => a - b);
-        const median = times[runs >> 1].toFixed(2);
-        info(`${name}, chat text, ${length} characters: median ${median} ms`);
-      }
+add_task(function test_finds_inside_chat_text() {
+  const timed = !Services.env.get("MOZ_AUTOMATION");
+  for (const [name, cases] of Object.entries(RULE_CASES)) {
+    const texts = [];
+    for (const marked of cases.finds) {
+      const { text, spans } = parseMarked(marked, cases.type);
+      texts.push(text);
+      const before = `${PROSE}\n`;
+      const found = detectRules(`${before}${text}\n${PROSE}`, {
+        region: cases.region,
+      }).map(({ start, end, type }) => ({ start, end, type }));
+      const shifted = spans.map(({ start, end, type }) => ({
+        start: start + before.length,
+        end: end + before.length,
+        type,
+      }));
+      Assert.deepEqual(found, shifted, `${name} finds ${marked} in chat text`);
     }
-    Assert.ok(true, "Chat timings are logged, not asserted");
+    if (!timed) {
+      continue;
+    }
+    const unit = `${PROSE} ${texts.join(" ")} `;
+    const runs = 10;
+    for (const length of LENGTHS) {
+      const text = unit
+        .repeat(Math.ceil(length / unit.length))
+        .slice(0, length);
+      const times = [];
+      for (let i = 0; i < runs; i++) {
+        const start = ChromeUtils.now();
+        detectRules(text, { region: cases.region });
+        times.push(ChromeUtils.now() - start);
+      }
+      times.sort((a, b) => a - b);
+      const median = times[runs >> 1].toFixed(2);
+      info(`${name}, chat text, ${length} characters: median ${median} ms`);
+    }
   }
-);
+});
 
 add_task(function test_every_rule_has_enough_cases() {
   Assert.deepEqual(
@@ -345,6 +421,10 @@ add_task(function test_every_rule_has_enough_cases() {
   for (const rule of RULES) {
     const cases = RULE_CASES[rule.name];
     Assert.equal(cases?.type, rule.type, `${rule.name} cases test its type`);
+    Assert.ok(
+      cases?.evidence in EVIDENCE,
+      `${rule.name} cases name its evidence`
+    );
     Assert.greaterOrEqual(cases?.finds.length ?? 0, 10, `${rule.name} finds`);
     Assert.greaterOrEqual(
       cases?.ignores.length ?? 0,
