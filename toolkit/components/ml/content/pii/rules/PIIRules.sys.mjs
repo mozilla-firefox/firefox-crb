@@ -18,6 +18,7 @@ import {
   routing,
 } from "./finance.sys.mjs";
 import { email } from "./email.sys.mjs";
+import { gpsLabeled } from "./geo.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
@@ -93,6 +94,7 @@ export const RULES = [
   phonePL,
   phoneIT,
   phoneGB,
+  gpsLabeled,
 ];
 
 /**
