@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeFR: {
+    type: "POSTCODE",
+    source:
+      "a La Poste postcode, 5 digits before a capitalized place name, in region FR",
+    region: "FR",
+    finds: [
+      "12 rue des Lilas, [[69003]] Lyon",
+      "[[75008]] Paris",
+      "[[13001]] Marseille",
+      "[[31000]] Toulouse",
+      "[[06000]] Nice",
+      "[[33000]] Bordeaux",
+      "[[59000]] Lille",
+      "([[67000]] Strasbourg)",
+      "[[44000]] Nantes et [[35000]] Rennes",
+      "[[34000]] Montpellier.",
+      "[[97400]] Saint-Denis",
+    ],
+    ignores: [
+      ["75008 lyon", "a lower-case place"],
+      ["75008 Ly", "a word of 2 letters"],
+      ["75008 L3on", "a digit in the word"],
+      ["7500 Lyon", "4 digits"],
+      ["750081 Lyon", "6 digits"],
+      ["75008  Lyon", "two spaces"],
+      ["75008, Lyon", "a comma"],
+      ["75008-Lyon", "a dash"],
+      ["a75008 Lyon", "inside a word"],
+      ["1.75008 Lyon", "after a dot"],
+      ["Lyon 75008", "the place before the number"],
+    ],
+    adversarial: {
+      "numbers and lower-case words": length =>
+        wholeUnits("75008 lyon ", length),
+      "numbers and short words": length => wholeUnits("75008 Ly ", length),
+      "a long run of digits before a word": length =>
+        `${"1".repeat(length - 5)} Lyon`,
+      "capitals in a row": length => repeatTo("L", length),
+      "words with digits": length => wholeUnits("75008 L3on ", length),
+    },
+  },
   postcodeDE: {
     type: "POSTCODE",
     source:
