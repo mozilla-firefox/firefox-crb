@@ -18,7 +18,7 @@ import {
   routing,
 } from "./finance.sys.mjs";
 import { email } from "./email.sys.mjs";
-import { ipv4 } from "./network.sys.mjs";
+import { ipv4, ipv6 } from "./network.sys.mjs";
 
 /** @import { Rule, RuleSpan } from "./util.sys.mjs" */
 
@@ -35,6 +35,7 @@ export const RULES = [
   ethereum,
   routing,
   ipv4,
+  ipv6,
 ];
 
 /**
