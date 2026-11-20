@@ -345,6 +345,22 @@ const PASSWORD_BARE = new RegExp(
   "giu"
 );
 
+// "seed phrase: correct horse battery staple".
+const PASSPHRASE = new RegExp(
+  [
+    WORD_START,
+    "(?:pass\\s?phrase|seed\\s+phrase|recovery\\s+phrase)",
+    // ":", "=" or "is".
+    `(?:\\s*[:=]|\\s+(?<is>is)${WORD_END})\\s*`,
+    // The value: 5 to 300 characters, enough for 24 words, up to the end of
+    // the line, a ";" or a bracket.
+    // A sentence end stops it too: a "." or "!" inside a passphrase is
+    // followed by more of it.
+    "(?<value>(?:[^\\n;().!?]|[.!?](?=[^\\s.!?])){5,300})",
+  ].join(""),
+  "giu"
+);
+
 // "password is required" is a sentence about a password, not a password.
 const NOT_A_SECRET = new Set(
   (
@@ -441,6 +457,30 @@ export const passwordBare = {
           evidence: EVIDENCE.CHECKSUM_CUE,
         });
       }
+    }
+    return spans;
+  },
+};
+
+/** @type {Rule} */
+export const passphrase = {
+  name: "passphrase",
+  type: "SECRET_IN_CONTEXT",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PASSPHRASE, text)) {
+      const { is, value } = match.groups;
+      // "passphrase is too long" is a sentence about the passphrase.
+      if (is && NOT_A_SECRET.has(value.split(/\s/)[0].toLowerCase())) {
+        continue;
+      }
+      const start = match.end - value.length;
+      spans.push({
+        start,
+        end: trimTail(text, start, match.end, " .,;:!?"),
+        type: "SECRET_IN_CONTEXT",
+        evidence: EVIDENCE.CHECKSUM_CUE,
+      });
     }
     return spans;
   },
