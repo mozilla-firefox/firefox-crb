@@ -94,6 +94,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneInternational: {
+    type: "PHONE",
+    source:
+      "'+' and a country code, 8 to 15 digits in all (ITU-T E.164), unless it is a toll-free number",
+    finds: [
+      "[[+31 6 12345678]]",
+      "[[+1 (415) 555-0134]]",
+      "reach [[+44 20 7946 0958]] today",
+      "[[+49 30 901820]]",
+      "[[+33 6 12 34 56 78]]",
+      "WhatsApp: [[+34 612 345 678]]",
+      "[[+48 512 345 678]].",
+      "[[+39 312 345 6789]]",
+      "call [[+351 912 345 678]]",
+      "[[+1.415.555.0134]]",
+      "([[+49 89 1234567]])",
+      "[[+86 138 0013 8000]]",
+      "[[+442079460958]]",
+    ],
+    ignores: [
+      ["call +1 877 555 0123", "a toll-free number"],
+      ["+1 800 280 4331", "a toll-free number"],
+      ["+1", "no number"],
+      ["+12 34 56 7", "fewer than 8 digits"],
+      ["+1234567890123456", "more than 15 digits"],
+      ["temperature +12.5 / 13.7 today", "fewer than 8 digits"],
+      ["a+49 30 901820", "a + inside a word"],
+      ["++49 30 901820", "a doubled +"],
+      ["+49 30 901820abc", "followed by letters"],
+      ["score 3+4 5678 9012", "a + between numbers"],
+      ["UTC+05:30", "a time zone"],
+    ],
+    adversarial: {
+      "+ signs in a row": length => repeatTo("+1", length),
+      "a + and a long run of digits": length => `+${"1".repeat(length - 1)}`,
+      "separators after a +": length => `+1${repeatTo(" ()./-", length - 2)}`,
+      "short international numbers": length =>
+        wholeUnits("+12 34 56 7 ", length),
+      "toll-free numbers": length => wholeUnits("+1 800 280 4331 ", length),
+    },
+  },
   platformAt: {
     type: "USERNAME",
     source:
