@@ -26,6 +26,7 @@ import {
   postcodeCanada,
   postcodeCued,
   postcodeDE,
+  postcodeFR,
   postcodeNL,
   postcodePL,
   postcodePT,
@@ -121,6 +122,7 @@ export const RULES = [
   postcodePL,
   postcodePT,
   postcodeDE,
+  postcodeFR,
 ];
 
 /**
