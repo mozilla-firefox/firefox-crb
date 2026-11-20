@@ -332,4 +332,52 @@ export const RULE_CASES = {
       "short words after bc1": length => repeatTo("bc1qqqqqqqqqqqq ", length),
     },
   },
+  ethereum: {
+    type: "CRYPTO_WALLET",
+    source: "0x and 40 hex digits; the EIP-55 checksum is not checked",
+    finds: [
+      "eth [[0x71C7656EC7ab88b098defB751B7401B5f6d8976F]]",
+      "send to [[0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe]].", // published; the period stays out
+      "lowercase [[0x52908400098527886e0f7030069857d2e4169ee7]]", // published (EIP-55)
+      "[[0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed]]", // published (EIP-55)
+      "wallet: [[0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359]], thanks", // published (EIP-55)
+      "([[0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB]])", // published (EIP-55)
+      "pay [[0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb]] now", // published (EIP-55)
+      "[[0x8617E340B3D01FA5F11F306F4090FD50E238070D]]", // published (EIP-55); upper case
+      "Adresse: [[0x27b1fdb04752bbc536007a920d24acb045561c26]]", // published (EIP-55)
+      "[[0x71C7656EC7ab88b098defB751B7401B5f6d8976F]] or [[1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa]]",
+    ],
+    ignores: [
+      ["0x123", "3 hex digits, an address has 40"],
+      ["0x" + "G".repeat(40), "G is not a hex digit"],
+      ["hash 0x" + "ab".repeat(32), "64 hex digits: a transaction hash"],
+      ["0x" + "1".repeat(39), "39 hex digits, an address has 40"],
+      ["0x" + "1".repeat(41), "41 hex digits, an address has 40"],
+      [
+        "a0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+        "glued to a letter before it",
+      ],
+      [
+        "0x71C7656EC7ab88b098defB751B7401B5f6d8976Fg",
+        "glued to a letter after it",
+      ],
+      [
+        "0X71C7656EC7ab88b098defB751B7401B5f6d8976F",
+        "0X with a capital X is not how addresses are written",
+      ],
+      [
+        "commit 71c7656ec7ab88b098defb751b7401b5f6d8976f",
+        "40 hex digits without 0x: a Git commit hash",
+      ],
+      ["color 0xFF00FF", "a 6-digit hex colour"],
+    ],
+    adversarial: {
+      "one long run of hex digits": length => `0x${"a".repeat(length - 2)}`,
+      "0x prefixes in a row": length => repeatTo("0x", length),
+      "39 hex digits after each 0x": length =>
+        repeatTo(`0x${"1".repeat(39)} `, length),
+      "41 hex digits after each 0x": length =>
+        repeatTo(`0x${"1".repeat(41)} `, length),
+    },
+  },
 };
