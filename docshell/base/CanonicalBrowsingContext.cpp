@@ -826,6 +826,44 @@ CanonicalBrowsingContext::ReplaceLoadingSessionHistoryEntryForLoad(
   return nullptr;
 }
 
+UniquePtr<LoadingSessionHistoryInfo>
+CanonicalBrowsingContext::AdoptLoadingSessionHistoryEntry(
+    CanonicalBrowsingContext* aSource, const LoadingSessionHistoryInfo& aInfo) {
+  MOZ_ASSERT(aSource);
+  MOZ_ASSERT(aSource != this);
+  MOZ_ASSERT(!mActiveEntry);
+
+  RefPtr<SessionHistoryEntry> entry;
+  for (size_t i = 0; i < aSource->mLoadingEntries.Length(); ++i) {
+    if (aSource->mLoadingEntries[i].mLoadId == aInfo.mLoadId) {
+      entry = std::move(aSource->mLoadingEntries[i].mEntry);
+      aSource->mLoadingEntries.RemoveElementAt(i);
+      break;
+    }
+  }
+  if (!entry) {
+    return nullptr;
+  }
+
+  entry->SetDocshellID(GetHistoryID());
+  entry->SetIsDynamicallyAdded(CreatedDynamically());
+  entry->SetNavigationKey(nsID::GenerateUUID());
+  mLoadingEntries.AppendElement(
+      LoadingSessionHistoryEntry{aInfo.mLoadId, entry});
+
+  auto result = std::make_unique<LoadingSessionHistoryInfo>(entry, &aInfo);
+  if (result->mTriggeringNavigationType) {
+    result->mPreviousEntry = Some(PreviousSessionHistoryInfo{});
+    result->mTriggeringNavigationType = Some(NavigationType::Replace);
+  } else {
+    result->mPreviousEntry.reset();
+  }
+  if (Navigation::IsAPIEnabled() && result->mTriggeringNavigationType) {
+    GetContiguousEntriesForLoad(*result, entry);
+  }
+  return result;
+}
+
 void CanonicalBrowsingContext::GetContiguousEntriesForLoad(
     LoadingSessionHistoryInfo& aLoadingInfo,
     const RefPtr<SessionHistoryEntry>& aEntry) {

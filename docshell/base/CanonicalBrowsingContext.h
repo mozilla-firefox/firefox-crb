@@ -141,6 +141,13 @@ class CanonicalBrowsingContext final : public BrowsingContext {
   UniquePtr<LoadingSessionHistoryInfo> ReplaceLoadingSessionHistoryEntryForLoad(
       LoadingSessionHistoryInfo* aInfo, nsIChannel* aNewChannel);
 
+  // Moves the loading entry of aInfo from aSource to this context, for a load
+  // retargeted into a new tab. Returns the info the load must commit with, or
+  // null if aSource no longer has the entry.
+  UniquePtr<LoadingSessionHistoryInfo> AdoptLoadingSessionHistoryEntry(
+      CanonicalBrowsingContext* aSource,
+      const LoadingSessionHistoryInfo& aInfo);
+
   using PrintPromise =
       MozPromise<MaybeDiscardedBrowsingContext, nsresult, false>;
   MOZ_CAN_RUN_SCRIPT RefPtr<PrintPromise> Print(nsIPrintSettings*);

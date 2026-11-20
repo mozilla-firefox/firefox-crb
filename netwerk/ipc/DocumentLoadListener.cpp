@@ -2396,6 +2396,15 @@ bool DocumentLoadListener::MaybeTriggerProcessSwitch(
 
                   MOZ_LOG(gProcessIsolationLog, LogLevel::Verbose,
                           ("Process Switch: Redirected load to new tab"));
+                  if (self->mLoadingSessionHistoryInfo) {
+                    if (auto adopted =
+                            aBrowsingContext->Canonical()
+                                ->AdoptLoadingSessionHistoryEntry(
+                                    startedIn,
+                                    *self->mLoadingSessionHistoryInfo)) {
+                      self->mLoadingSessionHistoryInfo = std::move(adopted);
+                    }
+                  }
                   if (switchedContainer) {
                     BounceTrackingState::OnLoadRetargeted(
                         startedIn, aBrowsingContext->Canonical(),
