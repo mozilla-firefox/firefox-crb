@@ -96,6 +96,44 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  itinUS: {
+    type: "NATIONAL_ID",
+    source:
+      "a US Individual Taxpayer Identification Number, 9xx-xx-xxxx with the same dash or space twice and a group the IRS issues (50-65, 70-88, 90-92, 94-99)",
+    finds: [
+      "ITIN [[912-70-1234]]",
+      "my itin is [[900-50-0001]]",
+      "[[999-99-9999]]",
+      "ITIN: [[945 65 4321]]",
+      "([[987-88-1234]])",
+      "[[912-90-5678]].",
+      "[[912-92-5678]] and [[912-94-5678]]",
+      "taxpayer id [[955-77-1234]]",
+      "[[903-60-0000]]",
+      "itin=[[911-81-2222]]",
+      "area 8 is an SSN: [[SSN: 812-70-1234]]",
+    ],
+    ignores: [
+      ["912-49-1234", "group 49"],
+      ["912-66-1234", "group 66"],
+      ["912-69-1234", "group 69"],
+      ["912-89-1234", "group 89"],
+      ["912-93-1234", "group 93"],
+      ["912-00-1234", "group 00"],
+      ["666-70-1234", "area 666, neither an ITIN nor an SSN"],
+      ["000-70-1234", "area 000, neither an ITIN nor an SSN"],
+      ["912-70 1234", "two different separators"],
+      ["912701234", "no separators"],
+      ["x912-70-1234", "inside a word"],
+      ["912-70-12345", "a longer last group"],
+    ],
+    adversarial: {
+      "numbers with unissued groups": length =>
+        wholeUnits("912-66-1234 ", length),
+      "digits and dashes": length => repeatTo("912-70-", length),
+      "a long run of nines": length => repeatTo("9", length),
+    },
+  },
   ssnCued: {
     type: "SSN",
     source:
