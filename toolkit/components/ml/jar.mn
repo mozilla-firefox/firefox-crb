@@ -24,6 +24,7 @@ toolkit.jar:
     content/global/ml/pii/rules/PIIRules.sys.mjs          (content/pii/rules/PIIRules.sys.mjs)
     content/global/ml/pii/rules/network.sys.mjs           (content/pii/rules/network.sys.mjs)
     content/global/ml/pii/rules/secrets.sys.mjs           (content/pii/rules/secrets.sys.mjs)
+    content/global/ml/pii/rules/social.sys.mjs            (content/pii/rules/social.sys.mjs)
     content/global/ml/pii/rules/util.sys.mjs              (content/pii/rules/util.sys.mjs)
     content/global/ml/ort.webgpu.mjs            	        (vendor/ort.webgpu.mjs)
     content/global/ml/ort-wasm-simd-threaded.jsep.mjs 	  (vendor/ort-wasm-simd-threaded.jsep.mjs)
