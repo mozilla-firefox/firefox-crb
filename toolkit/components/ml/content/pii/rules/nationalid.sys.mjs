@@ -131,3 +131,48 @@ export const itinUS = {
     return spans;
   },
 };
+
+// "AB 12 34 56 C": two prefix letters, never D, F, I, Q, U or V and O not
+// second, three pairs of digits and a suffix A to D, each part optionally
+// after a space or dash.
+const NINO = new RegExp(
+  [
+    "(?<![\\w-])",
+    "(?<prefix>[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z])",
+    "(?:[ -]?\\d{2}){3}",
+    "[ -]?[A-D]",
+    "(?![\\w-])",
+  ].join(""),
+  "gi"
+);
+// Prefixes that are not allocated.
+const NINO_UNUSED_PREFIXES = new Set([
+  "BG",
+  "GB",
+  "KN",
+  "NK",
+  "NT",
+  "TN",
+  "ZZ",
+]);
+
+/** @type {Rule} */
+export const ninoUK = {
+  name: "ninoUK",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NINO, text)) {
+      if (!NINO_UNUSED_PREFIXES.has(match.groups.prefix.toUpperCase())) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.FORMAT,
+          country: "UK_NINO",
+        });
+      }
+    }
+    return spans;
+  },
+};
