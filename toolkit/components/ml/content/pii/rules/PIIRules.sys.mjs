@@ -19,7 +19,7 @@ import {
 } from "./finance.sys.mjs";
 import { email } from "./email.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
-import { phoneInternational } from "./phone.sys.mjs";
+import { phoneInternational, phoneNorthAmerican } from "./phone.sys.mjs";
 import {
   apiKey,
   jwt,
@@ -71,6 +71,7 @@ export const RULES = [
   loginUser,
   platformAt,
   phoneInternational,
+  phoneNorthAmerican,
 ];
 
 /**
