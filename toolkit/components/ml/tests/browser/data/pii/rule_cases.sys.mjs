@@ -96,6 +96,44 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodePT: {
+    type: "POSTCODE",
+    source: "a CTT postcode, 4 digits, a dash and 3 digits, in region PT",
+    region: "PT",
+    finds: [
+      "[[1000-001]] Lisboa",
+      "[[4000-322]] Porto",
+      "Rua Augusta 10, [[1100-053]] Lisboa",
+      "[[3000-214]] Coimbra",
+      "[[8000-001]] Faro",
+      "([[4700-035]])",
+      "[[2750-642]].",
+      "[[1000-001]] e [[1050-099]]",
+      "código [[9000-018]] Funchal",
+      "[[6000-084]] Castelo Branco",
+    ],
+    ignores: [
+      ["1000001", "no dash"],
+      ["1000 001", "a space instead of a dash"],
+      ["100-001", "3 digits before the dash"],
+      ["10000-001", "5 digits before the dash"],
+      ["1000-01", "2 digits after the dash"],
+      ["1000-0011", "4 digits after the dash"],
+      ["a1000-001", "inside a word"],
+      ["1.1000-001", "after a dot"],
+      ["1000-001x", "followed by a letter"],
+      ["1000-001-2", "followed by a dash"],
+      ["00-950", "a Polish layout"],
+      ["94105-1234", "a ZIP+4"],
+    ],
+    adversarial: {
+      "digits and dashes": length => repeatTo("1000-", length),
+      "short tails": length => wholeUnits("1000-01 ", length),
+      "long tails": length => wholeUnits("1000-0011 ", length),
+      "dashes after 4 digits": length => `1000${"-".repeat(length - 4)}`,
+      "a long run of digits": length => "1".repeat(length),
+    },
+  },
   postcodePL: {
     type: "POSTCODE",
     source:
