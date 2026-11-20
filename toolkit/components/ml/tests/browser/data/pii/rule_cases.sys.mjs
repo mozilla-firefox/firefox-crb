@@ -94,6 +94,51 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  passwordBare: {
+    type: "SECRET_IN_CONTEXT",
+    source:
+      "a value with a digit or a symbol right after a short password or PIN cue",
+    finds: [
+      "pw [[Chase2024!]] for my Chase account",
+      "passcode [[8821]] for the iPhone",
+      "pwd [[hunter2]]",
+      "passwd [[s3cret!]]",
+      "PW [[Kiwi_77]]",
+      "wifi pw '[[Tr0ub4dor]]'",
+      "my pin [[0000]] is easy",
+      "the pw [[a1b2c3]], thanks",
+      "pwd [[x9y8z7]].",
+      "passcode [[#4521]]",
+      "PIN [[908172]] for the card",
+      "pwd [[S@fe-Word]]",
+    ],
+    ignores: [
+      ["pw hunter", "no digit or symbol"],
+      ["pin numbers", "no digit or symbol"],
+      ["passcode required", "no digit or symbol"],
+      ["pwd command prints the directory", "no digit or symbol"],
+      ["pin the tail", "no digit or symbol"],
+      ["pin 3 of the connector", "shorter than 3 characters"],
+      ["pin 12", "shorter than 3 characters"],
+      ["pin it to the top", "shorter than 3 characters"],
+      ["spin 4821", "pin inside a word"],
+      ["pinned 4821", "pin inside a word"],
+      [
+        "I ran pwd /home/anna/project and it says permission denied",
+        "a path, as the pwd command prints",
+      ],
+      ["pwd ~/code/app", "a path, as the pwd command prints"],
+      ["connect pin GPIO17 to ground", "a connector pin, not 4 to 8 digits"],
+      ["the pin 5V-tolerant input", "a connector pin, not 4 to 8 digits"],
+    ],
+    adversarial: {
+      "a cue then spaces": length => `pw${" ".repeat(length - 2)}`,
+      "cues with letter-only values": length =>
+        wholeUnits("pw hunter ", length),
+      "cues one after another": length => repeatTo("pin pw pwd ", length),
+      "cues with short values": length => repeatTo("pin 12 ", length),
+    },
+  },
   passwordAssigned: {
     type: "SECRET_IN_CONTEXT",
     source:
@@ -666,6 +711,8 @@ export const RULE_CASES = {
       "The app is asking for my CVV. It's [[289]]. Is that safe?",
       "they want my CVV! That's [[556]]",
       "Meine CVV. Es ist [[127]]",
+      // A PIN, not a security code.
+      "pin [[SECRET_IN_CONTEXT: 4821]]",
     ],
     ignores: [
       ["CVV. It's on the back of the card", "a cue but no number"],
@@ -676,7 +723,6 @@ export const RULE_CASES = {
       ["CVV is 12345", "5 digits, a security code has 3 or 4"],
       ["CVV is 3 digits on the back", "1 digit, a security code has 3 or 4"],
       ["the code is 1234", "'code' alone is not a security-code cue"],
-      ["pin 4821", "a PIN, not a security code"],
       ["verification code 4821", "a one-time verification code, not a card's"],
       ["area code 415", "a phone area code"],
       ["country code 351", "a phone country code"],

@@ -23,6 +23,7 @@ import {
   apiKey,
   jwt,
   passwordAssigned,
+  passwordBare,
   privateKey,
   urlToken,
 } from "./secrets.sys.mjs";
@@ -49,6 +50,7 @@ export const RULES = [
   privateKey,
   urlToken,
   passwordAssigned,
+  passwordBare,
 ];
 
 /**

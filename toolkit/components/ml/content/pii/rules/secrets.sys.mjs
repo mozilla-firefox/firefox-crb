@@ -333,6 +333,18 @@ const PASSWORD_ASSIGNED = new RegExp(
   "giu"
 );
 
+// "pw hunter2" with no "is": the value must also contain a digit or a symbol.
+const PASSWORD_BARE = new RegExp(
+  [
+    WORD_START,
+    "(?<cue>pw|pwd|passcode|pin|passwd)",
+    // Spaces, then an optional opening quote.
+    "\\s+[\"'`]?",
+    PASSWORD_VALUE,
+  ].join(""),
+  "giu"
+);
+
 // "password is required" is a sentence about a password, not a password.
 const NOT_A_SECRET = new Set(
   (
@@ -388,6 +400,41 @@ export const passwordAssigned = {
       }
       const span = secretSpan(text, match);
       if (span) {
+        spans.push({
+          ...span,
+          type: "SECRET_IN_CONTEXT",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+/** @type {Rule} */
+export const passwordBare = {
+  name: "passwordBare",
+  type: "SECRET_IN_CONTEXT",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PASSWORD_BARE, text)) {
+      const span = secretSpan(text, match);
+      if (!span) {
+        continue;
+      }
+      const value = text.slice(span.start, span.end);
+      // "pwd /home/anna" is the shell command and the path it prints.
+      if (value.startsWith("/") || value.startsWith("~")) {
+        continue;
+      }
+      // A bare "pin" is also a connector pin ("pin GPIO17"): only digits count.
+      if (
+        match.groups.cue.toLowerCase() === "pin" &&
+        !/^\d{4,8}$/.test(value)
+      ) {
+        continue;
+      }
+      if (/\d/.test(value) || /[^\p{L}\p{N}]/u.test(value)) {
         spans.push({
           ...span,
           type: "SECRET_IN_CONTEXT",
