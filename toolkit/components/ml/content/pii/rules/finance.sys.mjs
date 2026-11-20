@@ -315,3 +315,62 @@ export const ethereum = {
     }));
   },
 };
+
+// Nine digits pass the 3-7-1 checksum about one time in ten, so a routing cue
+// must come right before or after the number with no other digit in between:
+// "routing number: 021000021", "021000021 (ABA)".
+const ROUTING_CUE =
+  "(?:routing(?:\\s+transit)?(?:\\s+(?:number|num|no\\.?|nr\\.?))?" +
+  "|aba(?:\\s+(?:number|num|no\\.?))?|rtn" +
+  "|num[ée]ro\\s+de\\s+routage|n°\\s*de\\s+routage)";
+// The cue, then up to 24 characters with no digit or sentence end.
+const ROUTING_BEFORE = new RegExp(`\\b${ROUTING_CUE}[^\\d\\n.!?]{0,24}$`, "i");
+// Up to 8 characters with no digit or sentence end, then the cue.
+const ROUTING_AFTER = new RegExp(`^[^\\d\\n.!?]{0,8}\\b${ROUTING_CUE}\\b`, "i");
+const ROUTING_DIGITS = new RegExp(
+  [
+    "(?<![\\w.-])",
+    // A Federal Reserve district (00-12), a thrift (21-32), an
+    // electronic-transfer code (61-72) or traveler's checks (80).
+    "(?:0\\d|1[0-2]|2[1-9]|3[0-2]|6[1-9]|7[0-2]|80)",
+    "\\d{7}",
+    "(?![\\w-]|\\.\\d)",
+  ].join(""),
+  "g"
+);
+
+/**
+ * @param {string} digits - Nine digits.
+ * @returns {boolean} Whether the ABA 3-7-1 checksum holds.
+ */
+function abaChecksum(digits) {
+  const d = [...digits].map(Number);
+  const sum =
+    3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + (d[2] + d[5] + d[8]);
+  return sum % 10 === 0;
+}
+
+/** @type {Rule} */
+export const routing = {
+  name: "routing",
+  type: "ROUTING_NUMBER",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(ROUTING_DIGITS, text)) {
+      if (!abaChecksum(match.text)) {
+        continue;
+      }
+      const before = text.slice(Math.max(0, match.start - 48), match.start);
+      const after = text.slice(match.end, match.end + 24);
+      if (ROUTING_BEFORE.test(before) || ROUTING_AFTER.test(after)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "ROUTING_NUMBER",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+        });
+      }
+    }
+    return spans;
+  },
+};
