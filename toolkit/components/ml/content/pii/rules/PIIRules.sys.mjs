@@ -41,6 +41,7 @@ import {
   itinUS,
   nhsUK,
   ninoUK,
+  panIN,
   ssnCued,
   ssnSeparated,
 } from "./nationalid.sys.mjs";
@@ -141,6 +142,7 @@ export const RULES = [
   ninoUK,
   nhsUK,
   aadhaarIN,
+  panIN,
 ];
 
 /**
