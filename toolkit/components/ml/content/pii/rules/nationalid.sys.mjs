@@ -652,3 +652,32 @@ export const dniES = {
     return spans;
   },
 };
+
+// "X1234567L": a Spanish NIE for foreigners, X, Y or Z, 7 digits and a check
+// letter, with the same separator or none.
+const NIE =
+  /(?<![\w-])(?<prefix>[XYZ])([ -]?)(?<digits>\d{7})\2(?<check>[A-Z])(?![\w-])/g;
+
+/** @type {Rule} */
+export const nieES = {
+  name: "nieES",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NIE, text)) {
+      const { prefix, digits, check } = match.groups;
+      // X, Y and Z stand for 0, 1 and 2 in the DNI check.
+      const number = Number(`${"XYZ".indexOf(prefix)}${digits}`);
+      if (DNI_CHECK_LETTERS[number % 23] === check) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "ES_NIE",
+        });
+      }
+    }
+    return spans;
+  },
+};

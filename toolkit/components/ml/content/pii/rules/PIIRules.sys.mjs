@@ -44,6 +44,7 @@ import {
   itinUS,
   medicareAU,
   nhsUK,
+  nieES,
   ninoUK,
   nricSG,
   panIN,
@@ -159,6 +160,7 @@ export const RULES = [
   idZA,
   nricSG,
   dniES,
+  nieES,
 ];
 
 /**

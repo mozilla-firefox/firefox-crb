@@ -96,6 +96,41 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nieES: {
+    type: "NATIONAL_ID",
+    source:
+      "a Spanish NIE, X, Y or Z (counting as 0, 1 or 2), 7 digits and the DNI check letter (Ministerio del Interior)",
+    finds: [
+      "NIE [[Z6525475N]]",
+      "mi NIE es [[Y4454226Z]].",
+      "NIE: [[Z-5526440-M]]",
+      "([[Y 9281709 G]])",
+      "[[Y2794443A]]",
+      "[[Z2078392W]] y [[X9155952C]]",
+      "nie=[[Z8086386M]]",
+      "[[X5745449A]],",
+      "[[X1566808W]]",
+      "[[X0000000T]]",
+    ],
+    ignores: [
+      ["Z6525475A", "a wrong check letter"],
+      ["X6525475N", "the check letter of another prefix"],
+      ["W6525475N", "prefix W"],
+      ["Z-6525475 N", "two different separators"],
+      ["Z652547N", "6 digits"],
+      ["Z65254751N", "8 digits"],
+      ["AZ6525475N", "inside a word"],
+      ["Z6525475NX", "followed by a letter"],
+      ["Z6525475N-1", "followed by a dash"],
+      ["Z  6525475N", "two spaces"],
+      ["y2794443a", "lower case"],
+    ],
+    adversarial: {
+      "wrong check letters": length => wholeUnits("Z6525475A ", length),
+      "prefixes and digits": length => repeatTo("Z6525475", length),
+      "separators in a row": length => `Z${repeatTo("- ", length - 1)}`,
+    },
+  },
   dniES: {
     type: "NATIONAL_ID",
     source:
