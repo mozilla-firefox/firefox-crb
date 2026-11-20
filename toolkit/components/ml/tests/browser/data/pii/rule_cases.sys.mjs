@@ -32,6 +32,44 @@ const repeatTo = (unit, length) =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ipv4: {
+    type: "IP",
+    source: "four dotted groups of 0 to 255, as in RFC 791",
+    finds: [
+      "ip [[192.168.1.10]]",
+      "server [[10.0.0.1]] is down",
+      "connect to [[8.8.8.8]]:53",
+      "[[255.255.255.255]]",
+      "ping [[127.0.0.1]]",
+      "from [[203.0.113.42]], then",
+      "([[172.16.254.1]])",
+      "gateway [[192.168.0.1]].", // the period stays out
+      "IP: [[0.0.0.0]]",
+      "from [[100.64.0.1]] to [[100.64.0.2]]",
+    ],
+    ignores: [
+      ["version 1.2.3.4", "a version number after 'version'"],
+      ["ver. 10.0.0.1", "a version number after 'ver.'"],
+      ["app 1.2.3.4", "a version number after 'app'"],
+      ["python 3.11.2.1", "a version number after 'python'"],
+      ["999.1.1.1", "999 is over 255"],
+      ["256.1.1.1", "256 is over 255"],
+      ["01.02.03.04", "leading zeros are not how addresses are written"],
+      ["1.2.3", "three groups, an address has four"],
+      ["see 1.2.3.4.5", "five groups, an address has four"],
+      ["date 2024.01.15.10", "a 4-digit group"],
+      ["v2.10.3.1", "glued to v, a version number"],
+      ["host-10.0.0.1", "glued to a hostname before it"],
+      ["1.2.3.4a", "glued to a letter after it"],
+    ],
+    adversarial: {
+      "dotted digits with no end": length => repeatTo("1.", length),
+      "groups over 255": length => repeatTo("999.999.999.999 ", length),
+      "version cues before addresses": length =>
+        repeatTo("version 1.2.3.4 ", length),
+      "five-group numbers": length => repeatTo("1.2.3.4.5 ", length),
+    },
+  },
   email: {
     type: "EMAIL",
     source: "the common subset of RFC 5322 addresses, in any script",
