@@ -96,6 +96,46 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeNL: {
+    type: "POSTCODE",
+    source:
+      "a PostNL postcode, 4 digits not starting with 0 and 2 capitals, in region NL, unless the letters are a unit or not issued",
+    region: "NL",
+    finds: [
+      "[[1012 AB]] Amsterdam",
+      "[[1012AB]]",
+      "[[3011 CK]] Rotterdam",
+      "[[2511 BT]] Den Haag",
+      "Postcode: [[9711 LM]]",
+      "[[5611 AZ]] Eindhoven",
+      "Damrak 1, [[1012 LG]] Amsterdam",
+      "([[3511 AX]])",
+      "[[6211 CD]].",
+      "[[7511 JE]] Enschede",
+      "[[1012 JS]] en [[1017 CT]]",
+    ],
+    ignores: [
+      ["2024 AD", "a year and an era"],
+      ["1000 KB", "a unit"],
+      ["1012 SS", "SS is not issued"],
+      ["0123 AB", "starts with 0"],
+      ["1012 ab", "lower case"],
+      ["101 AB", "3 digits"],
+      ["10123 AB", "5 digits"],
+      ["1012 ABC", "3 letters"],
+      ["1012  AB", "two spaces"],
+      ["1012-AB", "a dash"],
+      ["a1012 AB", "inside a word"],
+      ["1012 AB1", "followed by a digit"],
+    ],
+    adversarial: {
+      "numbers and units": length => wholeUnits("1000 KB ", length),
+      "capitals in a row": length => `1012 ${"A".repeat(length - 5)}`,
+      "years and eras": length => wholeUnits("2024 AD ", length),
+      "four digits in a row": length => repeatTo("1012", length),
+      "codes with 3 letters": length => wholeUnits("1012 ABC ", length),
+    },
+  },
   postcodeUS: {
     type: "POSTCODE",
     source: "a USPS ZIP+4 code, 5 digits, a dash and 4 digits, in region US",
