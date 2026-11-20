@@ -199,3 +199,51 @@ export const card = {
     return spans;
   },
 };
+
+// Three or four digits mean nothing on their own, so the code must come after
+// a security-code cue (8 languages), not before it: then the last group of a
+// card number written just before "CVV" is not taken for the code. A 4-digit
+// code is the American Express CID.
+const CVV_CUE = new RegExp(
+  [
+    "\\b(?:cvv2?|cvc2?|csc|card\\s+verification\\s+(?:code|value|number)",
+    "|(?:card\\s+)?security\\s+code|sicherheitscode|kartenpr[üu]fnummer",
+    "|pr[üu]fziffer|code\\s+de\\s+s[ée]curit[ée]|cryptogramme(?:\\s+visuel)?",
+    "|c[óo]digo\\s+de\\s+seguridad|c[óo]digo\\s+de\\s+seguran[çc]a",
+    "|codice\\s+di\\s+sicurezza|kod\\s+bezpiecze[ńn]stwa|veiligheidscode",
+    "|beveiligingscode)",
+    "(?:[-\\s]?(?:code|kod|nummer|number|numero))?",
+    // In the same sentence with no digit in between, or in a short follow-up
+    // sentence that introduces the number ("my CVV. It's 289.").
+    "(?:[^\\d\\n.!?]{0,32}",
+    "|[^\\d\\n.!?]{0,20}[.!]\\s*",
+    "(?:it['’]?s|it\\s+is|that['’]?s|es\\s+ist|c['’]est|è|é|es|to)\\s+)$",
+  ].join(""),
+  "iu"
+);
+// 3 or 4 digits standing alone.
+const CVV_DIGITS = /(?<![\w.-])\d{3,4}(?![\w-]|\.\d)/g;
+
+/** @type {Rule} */
+export const cvv = {
+  name: "cvv",
+  type: "CVV",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(CVV_DIGITS, text)) {
+      if (
+        CVV_CUE.test(text.slice(Math.max(0, match.start - 64), match.start))
+      ) {
+        // A security code has no checksum: it is labelled CHECKSUM because
+        // its cue makes it as specific as one.
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "CVV",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
