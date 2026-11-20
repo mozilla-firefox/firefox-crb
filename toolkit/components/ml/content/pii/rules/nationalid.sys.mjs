@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { luhn } from "./checks.sys.mjs";
 import { EVIDENCE, matches } from "./util.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
@@ -398,6 +399,37 @@ export const medicareAU = {
           type: "NATIONAL_ID",
           evidence: EVIDENCE.CHECKSUM_CUE,
           country: "AU_MEDICARE",
+        });
+      }
+    }
+    return spans;
+  },
+};
+
+// "046 454 286": a Canadian Social Insurance Number, 9 digits in groups of 3
+// with the same separator or none.
+const SIN = /(?<![\w.-])\d{3}([ -]?)\d{3}\1\d{3}(?![\w-]|\.\d)/g;
+// "SIN" only in capitals: in Spanish "sin" means "without".
+const SIN_CUE =
+  /\bSIN\b|\b(?:[Ss]ocial|SOCIAL)\s+(?:[Ii]nsurance|INSURANCE)\b|\b(?:[Aa]ssurance|ASSURANCE)\s+(?:[Ss]ociale|SOCIALE)\b/;
+
+/** @type {Rule} */
+export const sinCA = {
+  name: "sinCA",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(SIN, text)) {
+      if (
+        luhn(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, SIN_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "CA_SIN",
         });
       }
     }
