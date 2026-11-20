@@ -319,8 +319,9 @@ export const postcodeCued = {
  * @param {string} name
  * @param {string} region - Upper-case ISO 3166-1 code, such as "NL".
  * @param {RegExp} pattern - Must have the g flag.
- * @param {(text: string) => boolean} [isPostcode] - A further check of the
- *   matched text.
+ * @param {(postcode: string, text: string, start: number) => boolean} [isPostcode]
+ *   - A further check of the matched postcode, given the whole text and where
+ *   the postcode starts in it.
  * @returns {Rule}
  */
 function regionalPostcode(name, region, pattern, isPostcode = () => true) {
@@ -333,7 +334,7 @@ function regionalPostcode(name, region, pattern, isPostcode = () => true) {
       }
       const spans = [];
       for (const match of matches(pattern, text)) {
-        if (isPostcode(match.text)) {
+        if (isPostcode(match.text, text, match.start)) {
           spans.push({
             start: match.start,
             end: match.end,
@@ -370,4 +371,21 @@ export const postcodePT = regionalPostcode(
   "postcodePT",
   "PT",
   PORTUGUESE_POSTCODE
+);
+
+// "10115 Berlin": 5 digits before a capitalized place name, as addresses are
+// written in Germany, France, Spain and Italy. Elsewhere "50000 People" would
+// match.
+const POSTCODE_BEFORE_PLACE = /(?<![\w.-])\d{5}(?= \p{Lu}[\p{L}'’-]{2,})/gu;
+
+// German capitalizes every noun, so "50000 Leute" has the same shape. There a
+// postcode must also start a line or follow a comma or "(", as in an address.
+const STARTS_ADDRESS_LINE = /(?:^|[\n(]|, ?)$/;
+
+export const postcodeDE = regionalPostcode(
+  "postcodeDE",
+  "DE",
+  POSTCODE_BEFORE_PLACE,
+  (postcode, text, start) =>
+    STARTS_ADDRESS_LINE.test(text.slice(Math.max(0, start - 2), start))
 );
