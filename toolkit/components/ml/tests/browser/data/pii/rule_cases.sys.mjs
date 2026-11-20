@@ -32,6 +32,59 @@ const repeatTo = (unit, length) =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  email: {
+    type: "EMAIL",
+    source: "the common subset of RFC 5322 addresses, in any script",
+    finds: [
+      "email me at [[drrana@mozilla.com]]",
+      "contact: [[first.last+tag@sub.example.co.uk]].", // the period stays out
+      "Mail [[jsmith@mozilla.com]] or [[anna.k@gmail.com]]",
+      "([[bob_smith@company.org]])",
+      "écrire à [[émile@exemple.fr]]",
+      "Kontakt: [[m.müller@uni-bonn.de]], danke",
+      "<[[jane@doe.io]]>",
+      "my email is [[sam1998@gmail.com]]",
+      "send to [[a@b.co]]",
+      "https://site.com/unsubscribe?email=[[anna.k@gmail.com]]",
+      "[[USER@EXAMPLE.COM]] is my login",
+      "write to [[jane.support@acme.com]]", // only an exact role name is left alone
+    ],
+    ignores: [
+      ["price is 5@3 each", "a top-level domain made of digits"],
+      ["@mention only", "nothing before the @"],
+      ["email me", "no @"],
+      ["name@localhost", "no domain with a dot"],
+      ["v1.2@3.4", "a top-level domain made of digits"],
+      ["a@b", "no domain with a dot"],
+      ["meet @ 5pm", "spaces around the @"],
+      ["tweet @jack hello", "a handle, nothing before the @"],
+      ["foo@bar", "no domain with a dot"],
+      ["100@200.5", "a top-level domain made of digits"],
+      ["see section@2", "no domain with a dot"],
+      ["user @ example dot com", "an address spelled out in words"],
+      [
+        "Should I email support@amazon.com",
+        "a company's support mailbox, not a person's",
+      ],
+      ["write to privacy@spotify.com", "a company's privacy mailbox"],
+      ["cc support@zalando.de.", "a company's support mailbox"],
+      ["billing@netflix.com", "a company's billing mailbox"],
+      [
+        "escribe a atencioncliente@renfe.es",
+        "a company's customer service mailbox, in Spanish",
+      ],
+    ],
+    adversarial: {
+      "a long dotted domain": length => `y@${"a.".repeat(length / 2)}1`,
+      "many at signs": length => "a@".repeat(length / 2),
+      "a long local part with no domain": length =>
+        `${"a".repeat(length - 1)}@`,
+      "domain labels with hyphens at both ends": length =>
+        repeatTo("x@-a-.", length),
+      "role mailboxes in a row": length =>
+        repeatTo("support@example.com ", length),
+    },
+  },
   iban: {
     type: "IBAN",
     source:

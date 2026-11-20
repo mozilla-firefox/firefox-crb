@@ -17,6 +17,7 @@ import {
   iban,
   routing,
 } from "./finance.sys.mjs";
+import { email } from "./email.sys.mjs";
 
 /** @import { Rule, RuleSpan } from "./util.sys.mjs" */
 
@@ -24,6 +25,7 @@ export { EVIDENCE } from "./util.sys.mjs";
 
 /** @type {Rule[]} */
 export const RULES = [
+  email,
   iban,
   card,
   cvv,
