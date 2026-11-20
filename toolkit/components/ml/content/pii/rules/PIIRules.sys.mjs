@@ -36,7 +36,13 @@ import {
   postcodeUS,
   zipAfterState,
 } from "./geo.sys.mjs";
-import { itinUS, ninoUK, ssnCued, ssnSeparated } from "./nationalid.sys.mjs";
+import {
+  itinUS,
+  nhsUK,
+  ninoUK,
+  ssnCued,
+  ssnSeparated,
+} from "./nationalid.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
 import {
   phoneCued,
@@ -132,6 +138,7 @@ export const RULES = [
   ssnCued,
   itinUS,
   ninoUK,
+  nhsUK,
 ];
 
 /**

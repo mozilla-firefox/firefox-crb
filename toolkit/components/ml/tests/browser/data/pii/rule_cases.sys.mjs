@@ -96,6 +96,54 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nhsUK: {
+    type: "NATIONAL_ID",
+    source:
+      "an NHS number, 10 digits whose last is the modulus 11 check digit (NHS Data Dictionary), within 48 characters after or 16 before an NHS cue",
+    finds: [
+      // Published (NHS Digital).
+      "NHS number [[943 476 5919]]",
+      "my NHS no is [[090 656 2015]]",
+      "NHS: [[9333037659]]",
+      "nhs number [[447-964-9107]].",
+      "National Health Service number [[737 178 6505]]",
+      "[[124 024 4290]] (NHS)",
+      "health service no. [[3044178940]]",
+      "NHS [[393 799 1212]] and [[745 774 7214]]",
+      "NHS#[[2083040031]]",
+      "my national health number is [[911 070 8472]]",
+      "without a cue, a phone: [[PHONE: 943 476 5919]]",
+      "a wrong check digit is a phone: NHS [[PHONE: 943 476 5918]]",
+      "mixed separators are a phone: NHS [[PHONE: 943-476 5919]]",
+    ],
+    ignores: [
+      ["ref 9434765919", "no cue"],
+      ["NHS 715 086 9670", "a check digit of 10 is never issued"],
+      ["NHS 715 086 9671", "a check digit of 10 is never issued"],
+      ["NHS 2083040032", "a wrong check digit"],
+      ["NHS 94347659199", "11 digits"],
+      ["NHS 943476591", "9 digits"],
+      ["NHSX 9434765919", "a longer word than the cue"],
+      ["NHS a9434765919", "inside a word"],
+      ["NHS 943  476 5919", "two spaces"],
+      ["NHS 9434765919.5", "a decimal"],
+      [
+        `NHS ${"x".repeat(50)} 9434765919`,
+        "the cue more than 48 characters before",
+      ],
+      [
+        "9434765919 is not the one on my NHS card",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong check digits after a cue": length =>
+        wholeUnits("NHS 2083040032 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("9434765919 ", length),
+      "digits and spaces": length => repeatTo("943 ", length),
+    },
+  },
   ninoUK: {
     type: "NATIONAL_ID",
     source:
