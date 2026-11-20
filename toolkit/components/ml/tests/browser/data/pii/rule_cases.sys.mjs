@@ -94,6 +94,58 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneCued: {
+    type: "PHONE",
+    source:
+      "7 to 12 digits, or up to 15 after 00, next to a phone cue word in one of 8 languages, unless it is a toll-free number or a date",
+    finds: [
+      "call me on [[0612 345 678]]",
+      "tel: [[020 7946 0958]]",
+      "phone [[06 12 34 56 78]]",
+      "WhatsApp [[0171 2345678]]",
+      "appelle-moi au [[06 12 34 56 78]]",
+      "mein Handy [[0171 2345678]]",
+      "Bei Fragen erreichen Sie uns unter [[040 1234567]].",
+      "moet ik [[(0357) 478774]] bellen?",
+      "para entrar em contato? [[94 7644-5204]]",
+      "Mijn telefoonnummer is [[(0808) 273054]].",
+      "My new phone number is [[001-915-679-9022]].",
+      "[[0612 345 678]] is my phone",
+      "zadzwoń [[512 345 678]]",
+      "chiama il [[333 1234567]]",
+      "📞 [[030 901820]]",
+    ],
+    ignores: [
+      ["call 1-800-280-4331", "a toll-free number"],
+      ["call 001 800 280 4331", "a toll-free number after 00 1"],
+      ["call 0044 800 123 4567", "a UK toll-free number after 00 44"],
+      ["llama al 900 100 200", "a toll-free number"],
+      ["telefon 0800 330 1000", "a toll-free number"],
+      ["ligar para o 0800 727 0101", "a toll-free number"],
+      ["tel 0808 157 0192", "a toll-free number"],
+      ["order 12345678", "no phone cue"],
+      ["call 911", "fewer than 7 digits"],
+      ["call me at 12 34 56", "fewer than 7 digits"],
+      ["phone 1234567890123", "more than 12 digits"],
+      ["call me on 2024-01-15", "a date"],
+      ["phone: on 12/03/1990", "a date"],
+      ["tel 2024 10 30 14:30", "followed by a time"],
+    ],
+    adversarial: {
+      "a cue and a long run of digits": length =>
+        `call ${"1".repeat(length - 5)}`,
+      "a cue then separators": length =>
+        `call ${repeatTo("(-./ ", length - 5)}`,
+      "cues and short numbers": length => wholeUnits("call 911 ", length),
+      "dates after cues": length => wholeUnits("phone: on 12/03/1990 ", length),
+      "toll-free numbers after cues": length =>
+        wholeUnits("call 1-800-280-4331 ", length),
+      "cue words without numbers": length =>
+        repeatTo("call phone tel mobile ", length),
+      "long numbers after cues": length =>
+        wholeUnits("phone 1234567890123 ", length),
+    },
+  },
   phoneNorthAmerican: {
     type: "PHONE",
     source:
@@ -158,6 +210,14 @@ export const RULE_CASES = {
     ignores: [
       ["call +1 877 555 0123", "a toll-free number"],
       ["+1 800 280 4331", "a toll-free number"],
+      ["+44 800 123 4567", "a UK toll-free number"],
+      ["+34 900 100 200", "a Spanish toll-free number"],
+      ["+49 800 1234567", "a German toll-free number"],
+      ["+31 800 1234567", "a Dutch toll-free number"],
+      ["+33 800 12 34 56", "a French toll-free number"],
+      ["+39 800 123456", "an Italian toll-free number"],
+      ["+48 800 123 456", "a Polish toll-free number"],
+      ["+351 800 123 456", "a Portuguese toll-free number"],
       ["+1", "no number"],
       ["+12 34 56 7", "fewer than 8 digits"],
       ["+1234567890123456", "more than 15 digits"],
