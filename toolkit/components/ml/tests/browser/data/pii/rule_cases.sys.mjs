@@ -94,6 +94,57 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  homePath: {
+    type: "USERNAME",
+    source:
+      "the account name in a macOS /Users/, Linux /home/ or Windows C:\\Users\\ home directory path",
+    finds: [
+      "/Users/[[jsmith]]/projects/app.py",
+      "cat /home/[[maria]]/.ssh/id_rsa",
+      "C:\\Users\\[[John]]\\Documents\\x.docx",
+      "Error in /Users/[[anna.k]]/Library/Logs/app.log",
+      "cd /home/[[dev-ops]]/src",
+      'File "/home/[[pedro_88]]/venv/lib/python3.12/site.py", line 3',
+      "D:\\Users\\[[Kim]]\\Desktop\\notes.txt",
+      "open '/Users/[[lucie]]/Desktop/cv.pdf'",
+      "(/home/[[jan]]/.bashrc)",
+      "/Users/[[Ann]]/a and /Users/[[Bob]]/b",
+      "path: /home/[[user42]]/",
+      "C:\\Users\\[[Müller]]\\AppData",
+      "c:\\users\\[[john]]\\docs",
+      "/Users/[[jsmith]]",
+      "cd C:\\Users\\[[anna]]",
+      "my home is /home/[[anna]].",
+      "C:\\Users\\[[John]] Smith\\Documents", // a gap: only the first word of a name with a space,
+    ],
+    ignores: [
+      ["/Users/Shared/Documents", "a shared account"],
+      ["/home/runner/work", "a CI account"],
+      ["/home/ubuntu/app", "a cloud image's default account"],
+      ["/home/admin/www", "an admin account"],
+      ["C:\\Users\\Public\\Desktop", "a shared account"],
+      ["C:\\Users\\Default\\NTUSER.DAT", "the default profile"],
+      ["/Users/<username>/Library", "'<' cannot be in an account name"],
+      ["/home/$USER/.config", "a shell variable"],
+      ["C:\\Users\\%USERNAME%\\AppData", "a Windows variable"],
+      ["/var/lib/docker/home/app/x", "/home inside a longer path"],
+      ["see https://example.com/home/jsmith/page", "inside a URL"],
+      ["see https://example.com/Users/jsmith/page", "inside a URL"],
+      [
+        "the files are under /Users/ and /home/ folders",
+        "no account name after the folder",
+      ],
+    ],
+    adversarial: {
+      "a home prefix and a long name before a colon": length =>
+        `/Users/${"a".repeat(length - 8)}:`,
+      "home prefixes in a row": length => repeatTo("/home/", length),
+      "Windows names before a colon": length =>
+        wholeUnits("C:\\Users\\John: ", length),
+      "shared accounts": length => wholeUnits("/Users/Shared/x ", length),
+      "drive letters in a row": length => repeatTo("C:\\", length),
+    },
+  },
   discordTag: {
     type: "USERNAME",
     source:
@@ -358,6 +409,8 @@ export const RULE_CASES = {
       "passcode [[#4521]]",
       "PIN [[908172]] for the card",
       "pwd [[S@fe-Word]]",
+      // A path is not a password, but homePath finds the account in it.
+      "I ran pwd /home/[[USERNAME: anna]]/project and it says permission denied",
     ],
     ignores: [
       ["pw hunter", "no digit or symbol"],
@@ -370,10 +423,6 @@ export const RULE_CASES = {
       ["pin it to the top", "shorter than 3 characters"],
       ["spin 4821", "pin inside a word"],
       ["pinned 4821", "pin inside a word"],
-      [
-        "I ran pwd /home/anna/project and it says permission denied",
-        "a path, as the pwd command prints",
-      ],
       ["pwd ~/code/app", "a path, as the pwd command prints"],
       ["connect pin GPIO17 to ground", "a connector pin, not 4 to 8 digits"],
       ["the pin 5V-tolerant input", "a connector pin, not 4 to 8 digits"],
