@@ -14,6 +14,8 @@
 /**
  * @typedef {object} RuleContext
  * @property {string} text - The text to scan.
+ * @property {string} [region] - The user's region as an upper-case ISO 3166-1
+ *   code, such as "FR".
  */
 
 /**

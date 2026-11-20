@@ -210,3 +210,44 @@ export const phoneCued = {
     return spans;
   },
 };
+
+/**
+ * A rule for the usual layout of phone numbers in one region. On its own the
+ * layout is too common elsewhere, so the rule only runs in that region.
+ *
+ * @param {string} name
+ * @param {string} region - Upper-case ISO 3166-1 code, such as "FR".
+ * @param {RegExp} layout - Must have the g flag.
+ * @returns {Rule}
+ */
+function regionalPhone(name, region, layout) {
+  return {
+    name,
+    type: "PHONE",
+    detect({ text, region: userRegion }) {
+      if (userRegion !== region) {
+        return [];
+      }
+      const spans = [];
+      for (const match of matches(layout, text)) {
+        if (!isTollFree(digitsOf(match.text))) {
+          // The layout alone, which a reference number can share.
+          spans.push({
+            start: match.start,
+            end: match.end,
+            type: "PHONE",
+            evidence: EVIDENCE.FORMAT,
+          });
+        }
+      }
+      return spans;
+    },
+  };
+}
+
+// France: 0, then 9 digits in pairs: "06 12 34 56 78", "0612345678".
+export const phoneFR = regionalPhone(
+  "phoneFR",
+  "FR",
+  /(?<![\w+-])0[1-9](?:[ .-]?\d{2}){4}(?![\w-])/g
+);
