@@ -96,6 +96,49 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  aadhaarIN: {
+    type: "NATIONAL_ID",
+    source:
+      "an Aadhaar number, 12 digits not starting with 0 or 1 whose last is the Verhoeff check digit (UIDAI), within 48 characters after or 16 before an Aadhaar or UIDAI cue",
+    finds: [
+      "Aadhaar [[2739 3903 6552]]",
+      "my aadhar is [[296451646664]]",
+      "AADHAAR: [[9671-6658-0788]]",
+      "aadhaar no. [[9419 8786 2755]].",
+      "UID [[326692325891]]",
+      "UIDAI number [[4321 6733 7094]]",
+      "[[9355 6989 6887]] (Aadhar)",
+      "Aadhaar card [[2690 3432 5866]] and [[5655 1727 4307]]",
+      "my adhar is [[948107299648]]",
+      "aadhaar=[[811934539019]]",
+      "Adhaar [[574728853180]]",
+    ],
+    ignores: [
+      ["2739 3903 6552", "no cue"],
+      ["aadhaar 2739 3903 6553", "a wrong check digit"],
+      ["aadhaar 1801 9418 1320", "starting with 1"],
+      ["aadhaar 2739-3903 6552", "two different separators"],
+      ["aadhaar 2739 39036552", "a separator only once"],
+      ["aadhaar 27393903655", "11 digits"],
+      ["aadhaar 2739390365522", "13 digits"],
+      ["uid 296451646664", "a lower-case uid, as in code"],
+      ["UUID 296451646664", "a longer word than the cue"],
+      ["aaadhaar 296451646664", "three a's"],
+      ["aadhaar x296451646664", "inside a word"],
+      ["aadhaar 296451646664.5", "a decimal"],
+      [
+        "296451646664 is the number printed above the Aadhaar",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong check digits after a cue": length =>
+        wholeUnits("aadhaar 2739 3903 6553 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("296451646664 ", length),
+      "digits in groups": length => repeatTo("2739 ", length),
+    },
+  },
   nhsUK: {
     type: "NATIONAL_ID",
     source:
