@@ -50,3 +50,38 @@ export const jwt = {
     return spans;
   },
 };
+
+// Vendor prefixes are distinctive enough to be replaced on sight.
+const API_KEYS = [
+  /\bsk-[\w-]{20,}/g, // OpenAI, Anthropic and compatible APIs
+  /\bgh[pousr]_[A-Za-z0-9]{20,}/g, // GitHub tokens
+  /\bgithub_pat_\w{40,}/g, // GitHub fine-grained tokens
+  /\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[0-9A-Z]{16}\b/g, // AWS access key ids
+  /\bxox[abeprs]-[A-Za-z0-9-]{10,}/g, // Slack
+  /\bAIza[\w-]{35}\b/g, // Google
+  /\bglpat-[\w-]{20,}/g, // GitLab
+  /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}/g, // Stripe secret and restricted
+  /\bSG\.[\w-]{22}\.[\w-]{43}\b/g, // SendGrid
+  /\bnpm_[A-Za-z0-9]{36}\b/g, // npm
+  /\bhf_[A-Za-z0-9]{30,}/g, // Hugging Face
+];
+
+/** @type {Rule} */
+export const apiKey = {
+  name: "apiKey",
+  type: "API_KEY",
+  detect({ text }) {
+    const spans = [];
+    for (const pattern of API_KEYS) {
+      for (const match of matches(pattern, text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "API_KEY",
+          evidence: EVIDENCE.CHECKSUM,
+        });
+      }
+    }
+    return spans;
+  },
+};
