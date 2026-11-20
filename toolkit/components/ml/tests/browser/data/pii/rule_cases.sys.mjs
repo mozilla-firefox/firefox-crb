@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  zipAfterState: {
+    type: "POSTCODE",
+    source:
+      "a 5-digit US ZIP code or ZIP+4 right after a comma and a USPS state abbreviation",
+    finds: [
+      "San Francisco, CA [[94105]]",
+      "Houston, TX, [[77036]].",
+      "Antioch, CA, [[94509]], USA",
+      "Springfield, IL [[62704]]",
+      "Austin, TX [[78701-1234]]",
+      "New York,NY [[10001]]",
+      "Portland, OR [[97201]]",
+      "Boston, MA [[02108]]",
+      "Honolulu, HI [[96813]]",
+      "Washington, DC [[20500]]",
+      "Miami, FL [[33101]] and Tampa, FL [[33602]]",
+    ],
+    ignores: [
+      ["Seattle WA 98101", "no comma before the state"],
+      ["my IN 12345 form", "no comma before the state"],
+      ["Order ID 12345", "no state"],
+      ["Paris, FR 75008", "FR is not a state"],
+      ["Austin, TXX 78701", "not a state abbreviation"],
+      ["Austin, tx 78701", "a lower-case state"],
+      ["Austin, TX 7870", "4 digits"],
+      ["Austin, TX 787011", "6 digits"],
+      ["Austin, TX 78701-12", "a short ZIP+4 tail"],
+      ["Austin, TX 78701abc", "followed by letters"],
+      ["Austin, TX  78701", "two spaces"],
+      ["Austin,  TX 78701", "two spaces after the comma"],
+    ],
+    adversarial: {
+      "states and short numbers": length => wholeUnits(", TX 1234 ", length),
+      "commas and states": length => repeatTo(", CA", length),
+      "a state and a long run of digits": length =>
+        `, CA ${"1".repeat(length - 5)}`,
+      "states without a comma": length =>
+        wholeUnits("Seattle WA 98101 ", length),
+      "a state then spaces": length => `, CA${" ".repeat(length - 4)}`,
+    },
+  },
   postcodeCanada: {
     type: "POSTCODE",
     source:
