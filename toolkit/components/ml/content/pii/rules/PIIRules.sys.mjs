@@ -58,6 +58,7 @@ import {
   sinCA,
   ssnCued,
   ssnSeparated,
+  steuerIdDE,
   tfnAU,
 } from "./nationalid.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
@@ -173,6 +174,7 @@ export const RULES = [
   nirFR,
   nirFRCued,
   nifPT,
+  steuerIdDE,
 ];
 
 /**

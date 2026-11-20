@@ -96,6 +96,43 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  steuerIdDE: {
+    type: "NATIONAL_ID",
+    source:
+      "a German tax ID, 11 digits not starting with 0, exactly one of the first ten repeated twice or three times but not three in a row, and an ISO 7064 MOD 11,10 check digit (Bundeszentralamt für Steuern), in 2-3-3-3 groups or within 48 characters after or 16 before a Steuer-ID cue",
+    finds: [
+      "Steuer-ID [[65 929 970 489]]",
+      "steuerliche id [[75 846 808 133]]",
+      "[[80 351 373 644]]",
+      "meine Steuer-ID ist [[78165535248]].",
+      "IdNr: [[50379124265]]",
+      "Steueridentifikationsnummer [[65980134789]]",
+      "[[46/321/044/796]]",
+      "[[69 117 240 511]] und [[83 512 116 706]]",
+      "SteuerID=[[41950553867]]",
+      "([[67 912 841 538]])",
+    ],
+    ignores: [
+      ["65929970489", "no separators and no cue"],
+      ["Steuer-ID 65929970488", "a wrong check digit"],
+      ["Steuer-ID 12345678903", "no repeated digit"],
+      ["Steuer-ID 11234567881", "two repeated digits"],
+      ["Steuer-ID 12131415168", "a digit four times"],
+      ["Steuer-ID 11123456786", "a digit three times in a row"],
+      ["Steuer-ID 01123456782", "a leading 0"],
+      ["65 929 970/489", "two different separators"],
+      ["65 929 970 48", "a 2-digit last group"],
+      ["Steuer-ID 65929970489.5", "a decimal"],
+      ["Steuer-IDs 65929970489", "a longer word than the cue"],
+    ],
+    adversarial: {
+      "wrong check digits in groups": length =>
+        wholeUnits("65 929 970 488 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("65929970489 ", length),
+      "digits in groups of 3": length => repeatTo("929 ", length),
+    },
+  },
   nifPT: {
     type: "NATIONAL_ID",
     source:

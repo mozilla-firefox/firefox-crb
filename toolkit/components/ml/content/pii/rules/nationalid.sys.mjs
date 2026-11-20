@@ -949,3 +949,65 @@ export const nifPT = {
     return spans;
   },
 };
+
+// "65 929 970 489": a German tax ID, 11 digits, in groups of 2, 3, 3 and 3
+// with the same separator, or none.
+const STEUER_ID =
+  /(?<![\w.\/-])\d{2}(?<separator>[ /]?)\d{3}\k<separator>\d{3}\k<separator>\d{3}(?![\w\/-]|\.\d)/g;
+// About one random 11-digit number in 260 passes the checks, so one without
+// separators needs a cue.
+const STEUER_ID_CUE =
+  /\bsteuer-?id(?:nr)?\b|\bsteueridentifikationsnummer\b|\bsteuerliche\s+id|\bidnr\b/i;
+
+/**
+ * @param {string} digits - Eleven digits.
+ * @returns {boolean} Whether the first digit is not 0, exactly one digit of
+ *   the first ten repeats, twice or three times but not three times in a row,
+ *   and the last is the ISO 7064 MOD 11,10 check digit (Bundeszentralamt für
+ *   Steuern).
+ */
+function isSteuerID(digits) {
+  // The check digit first: it rejects nine numbers in ten most cheaply.
+  let product = 10;
+  for (let i = 0; i < 10; i++) {
+    const sum = (Number(digits[i]) + product) % 10 || 10;
+    product = (2 * sum) % 11;
+  }
+  if ((11 - product) % 10 !== Number(digits[10]) || digits[0] === "0") {
+    return false;
+  }
+  const counts = new Array(10).fill(0);
+  for (let i = 0; i < 10; i++) {
+    if (i >= 2 && digits[i] === digits[i - 1] && digits[i] === digits[i - 2]) {
+      return false;
+    }
+    counts[Number(digits[i])]++;
+  }
+  const repeated = counts.filter(count => count > 1);
+  return repeated.length === 1 && repeated[0] <= 3;
+}
+
+/** @type {Rule} */
+export const steuerIdDE = {
+  name: "steuerIdDE",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(STEUER_ID, text)) {
+      if (!isSteuerID(digitsOf(match.text))) {
+        continue;
+      }
+      const cued = hasCueNear(text, match.start, match.end, STEUER_ID_CUE);
+      if (cued || match.groups.separator) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: cued ? EVIDENCE.CHECKSUM_CUE : EVIDENCE.CHECKSUM,
+          country: "DE_STEUERID",
+        });
+      }
+    }
+    return spans;
+  },
+};
