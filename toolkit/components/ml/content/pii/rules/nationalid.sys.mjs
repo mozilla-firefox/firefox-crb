@@ -94,3 +94,40 @@ export const ssnCued = {
     return spans;
   },
 };
+
+/**
+ * @param {string} digits - Nine digits.
+ * @returns {boolean} Whether the IRS issues ITINs in the number's range: area
+ *   900-999 and group 50-65, 70-88, 90-92 or 94-99.
+ */
+function isIssuableITIN(digits) {
+  const group = Number(digits.slice(3, 5));
+  return (
+    digits[0] === "9" &&
+    ((group >= 50 && group <= 65) ||
+      (group >= 70 && group <= 88) ||
+      (group >= 90 && group <= 92) ||
+      group >= 94)
+  );
+}
+
+/** @type {Rule} */
+export const itinUS = {
+  name: "itinUS",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(SSN_SEPARATED, text)) {
+      if (isIssuableITIN(digitsOf(match.text))) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.FORMAT,
+          country: "US_ITIN",
+        });
+      }
+    }
+    return spans;
+  },
+};
