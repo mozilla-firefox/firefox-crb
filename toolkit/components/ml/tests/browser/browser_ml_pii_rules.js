@@ -25,11 +25,12 @@ const MARKER = new RegExp(
     "\\[\\[",
     // An optional type such as "PHONE: ".
     "(?:(?<type>[A-Z_]+): )?",
-    // The expected value, up to the first closing brackets.
+    // The expected value, up to the first closing brackets. The s flag lets
+    // it span lines, as a PEM key does.
     "(?<value>.+?)",
     "\\]\\]",
   ].join(""),
-  "g"
+  "gs"
 );
 
 /**
@@ -119,6 +120,11 @@ add_task(function test_parse_marked() {
       marked: "😀 [[DE89]]",
       text: "😀 DE89",
       spans: [{ start: 3, end: 7, type: "IBAN" }],
+    },
+    {
+      marked: "key [[a\nb]] end",
+      text: "key a\nb end",
+      spans: [{ start: 4, end: 7, type: "IBAN" }],
     },
   ];
   for (const { marked, text, spans } of cases) {
