@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodePL: {
+    type: "POSTCODE",
+    source:
+      "a Poczta Polska postcode, 2 digits, a dash and 3 digits, in region PL",
+    region: "PL",
+    finds: [
+      "[[00-950]] Warszawa",
+      "[[31-042]] Kraków",
+      "ul. Marszałkowska 1, [[00-624]] Warszawa",
+      "[[80-001]] Gdańsk",
+      "[[50-370]] Wrocław",
+      "([[61-701]])",
+      "[[90-001]].",
+      "[[00-950]] i [[02-797]]",
+      "kod [[44-100]] Gliwice",
+      "[[70-952]] Szczecin",
+    ],
+    ignores: [
+      ["00950", "no dash"],
+      ["00 950", "a space instead of a dash"],
+      ["0-950", "1 digit before the dash"],
+      ["000-950", "3 digits before the dash"],
+      ["00-95", "2 digits after the dash"],
+      ["00-9500", "4 digits after the dash"],
+      ["a00-950", "inside a word"],
+      ["1.00-950", "after a dot"],
+      ["00-950x", "followed by a letter"],
+      ["00-950-1", "followed by a dash"],
+      ["1000-001", "a Portuguese layout"],
+      ["94105-1234", "a ZIP+4"],
+    ],
+    adversarial: {
+      "digit pairs and dashes": length => repeatTo("00-", length),
+      "short tails": length => wholeUnits("00-95 ", length),
+      "long tails": length => wholeUnits("00-9500 ", length),
+      "dashes after 2 digits": length => `00${"-".repeat(length - 2)}`,
+      "a long run of digits": length => "1".repeat(length),
+    },
+  },
   postcodeNL: {
     type: "POSTCODE",
     source:
