@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  medicareAU: {
+    type: "NATIONAL_ID",
+    source:
+      "an Australian Medicare card number, 10 digits starting with 2 to 6 whose ninth is the weighted check digit and tenth (the issue number) is not 0, optionally with an 11th reference digit, within 48 characters after or 16 before a Medicare cue",
+    finds: [
+      "Medicare [[6215 57417 3]]",
+      "my medicare card number is [[4950788942]]",
+      "Medicare: [[6213 74528 9]].",
+      "medicare no [[3204-21073-8]]",
+      "[[6059 23155 9]] (Medicare)",
+      "Medicare [[5909 64551 8 1]]",
+      "medicare=[[24496394742]]",
+      "MEDICARE [[3909 99308 3]] and [[3215 77434 6]]",
+      "my Medicare is [[6252686527]]",
+      "Medicare card [[5058 81100 8]]",
+    ],
+    ignores: [
+      ["6215 57417 3", "no cue"],
+      ["medicare 6215 57417 0", "issue number 0"],
+      ["medicare 6215 57418 3", "a wrong check digit"],
+      ["medicare 1215 57412 3", "starting with 1"],
+      ["medicare 7215 57418 3", "starting with 7"],
+      ["medicare 6215-57417 3", "two different separators"],
+      ["medicare 6215 5741 3", "too few digits"],
+      ["medicare 6215 57417 31 2", "a 2-digit group"],
+      ["medicares 6215574173", "a longer word than the cue"],
+      ["medicare x6215574173", "inside a word"],
+      ["medicare 6215574173.5", "a decimal"],
+      [
+        "6215574173 is printed under my name on the Medicare",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong checks after a cue": length =>
+        wholeUnits("medicare 6215 57418 3 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("6215 57417 3 ", length),
+      "digits in groups of 5": length => repeatTo("57417 ", length),
+    },
+  },
   tfnAU: {
     type: "NATIONAL_ID",
     source:
