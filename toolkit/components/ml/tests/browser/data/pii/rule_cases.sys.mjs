@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneNL: {
+    type: "PHONE",
+    source:
+      "the Dutch mobile layout, 06 and 8 digits (ACM numbering plan), in region NL",
+    region: "NL",
+    finds: [
+      "[[06 12345678]]",
+      "[[0612345678]]",
+      "[[06-12345678]]",
+      "[[06 12 34 56 78]]",
+      "[[06-12 34 56 78]]",
+      "[[06 1234 5678]]",
+      "mijn nummer is [[06 12345678]]",
+      "bel me op [[06-87654321]]!",
+      "([[0612345678]])",
+      "[[06 12345678]] of [[06 87654321]]",
+      "[[06 98765432]].",
+    ],
+    ignores: [
+      ["020 123 4567", "a landline, not a mobile"],
+      ["05 12345678", "does not start with 06"],
+      ["06 1234567", "7 digits after 06"],
+      ["06 123456789", "9 digits after 06"],
+      ["106 12345678", "inside a longer number"],
+      ["a0612345678", "inside a word"],
+      ["0612345678b", "followed by a letter"],
+      ["0612345678-1", "followed by a dash"],
+      ["06.12345678", "a dot separator"],
+      ["06_12345678", "an underscore"],
+      ["06  12345678", "two spaces"],
+      ["0171 2345678", "a German layout"],
+    ],
+    adversarial: {
+      "06 in a row": length => repeatTo("06", length),
+      "06 and a long run of digits": length => `06${"1".repeat(length - 2)}`,
+      "one digit short": length => wholeUnits("06 1234567 ", length),
+      "pairs with a doubled space": length =>
+        wholeUnits("06 12  34 56 78 ", length),
+      "dashes after 06": length => `06${"-".repeat(length - 2)}`,
+    },
+  },
   phoneFR: {
     type: "PHONE",
     source:
