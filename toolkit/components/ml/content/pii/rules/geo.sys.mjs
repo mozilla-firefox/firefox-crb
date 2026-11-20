@@ -319,9 +319,11 @@ export const postcodeCued = {
  * @param {string} name
  * @param {string} region - Upper-case ISO 3166-1 code, such as "NL".
  * @param {RegExp} pattern - Must have the g flag.
+ * @param {(text: string) => boolean} [isPostcode] - A further check of the
+ *   matched text.
  * @returns {Rule}
  */
-function regionalPostcode(name, region, pattern) {
+function regionalPostcode(name, region, pattern, isPostcode = () => true) {
   return {
     name,
     type: "POSTCODE",
@@ -331,12 +333,14 @@ function regionalPostcode(name, region, pattern) {
       }
       const spans = [];
       for (const match of matches(pattern, text)) {
-        spans.push({
-          start: match.start,
-          end: match.end,
-          type: "POSTCODE",
-          evidence: EVIDENCE.FORMAT,
-        });
+        if (isPostcode(match.text)) {
+          spans.push({
+            start: match.start,
+            end: match.end,
+            type: "POSTCODE",
+            evidence: EVIDENCE.FORMAT,
+          });
+        }
       }
       return spans;
     },
@@ -344,3 +348,18 @@ function regionalPostcode(name, region, pattern) {
 }
 
 export const postcodeUS = regionalPostcode("postcodeUS", "US", ZIP_PLUS_4);
+
+// Two letters after four digits that are units or eras, not a Dutch postcode
+// ("2024 AD", "1000 KB"), and the pairs PostNL does not issue.
+const NOT_DUTCH_POSTCODE_LETTERS = new Set(
+  "BC AD AM PM CE KG MB GB TB KB HZ MS KM CM MM ML MG PX EU US UK SA SD SS".split(
+    " "
+  )
+);
+
+export const postcodeNL = regionalPostcode(
+  "postcodeNL",
+  "NL",
+  DUTCH_POSTCODE,
+  postcode => !NOT_DUTCH_POSTCODE_LETTERS.has(postcode.slice(-2))
+);
