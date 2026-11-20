@@ -312,3 +312,35 @@ export const postcodeCued = {
     return spans;
   },
 };
+
+/**
+ * A rule for a postcode shape that is only distinctive in its own region.
+ *
+ * @param {string} name
+ * @param {string} region - Upper-case ISO 3166-1 code, such as "NL".
+ * @param {RegExp} pattern - Must have the g flag.
+ * @returns {Rule}
+ */
+function regionalPostcode(name, region, pattern) {
+  return {
+    name,
+    type: "POSTCODE",
+    detect({ text, region: userRegion }) {
+      if (userRegion !== region) {
+        return [];
+      }
+      const spans = [];
+      for (const match of matches(pattern, text)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "POSTCODE",
+          evidence: EVIDENCE.FORMAT,
+        });
+      }
+      return spans;
+    },
+  };
+}
+
+export const postcodeUS = regionalPostcode("postcodeUS", "US", ZIP_PLUS_4);
