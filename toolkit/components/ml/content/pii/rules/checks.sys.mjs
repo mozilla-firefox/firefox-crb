@@ -39,3 +39,61 @@ export function mod97(iban) {
   }
   return remainder === 1;
 }
+
+/** @type {nsICryptoHash} */
+let hash;
+
+/**
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+function sha256(bytes) {
+  // One instance, initialized again for each hash: creating one per call
+  // costs more than the hash itself.
+  hash ??= Cc["@mozilla.org/security/hash;1"].createInstance(Ci.nsICryptoHash);
+  hash.init(Ci.nsICryptoHash.SHA256);
+  hash.update(bytes, bytes.length);
+  return Uint8Array.from(hash.finish(false), char => char.charCodeAt(0));
+}
+
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/**
+ * Base58Check checksum of a legacy or P2SH Bitcoin address.
+ *
+ * @param {string} address
+ * @returns {boolean}
+ */
+export function base58check(address) {
+  // Base58 to bytes: multiply the bytes so far by 58 and add each digit.
+  /** @type {number[]} */
+  const bytes = [];
+  for (const char of address) {
+    let carry = BASE58_ALPHABET.indexOf(char);
+    if (carry < 0) {
+      return false;
+    }
+    for (let i = bytes.length - 1; i >= 0; i--) {
+      carry += bytes[i] * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.unshift(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  for (const char of address) {
+    if (char !== "1") {
+      break;
+    }
+    bytes.unshift(0);
+  }
+  if (bytes.length < 5) {
+    return false;
+  }
+  const payload = Uint8Array.from(bytes.slice(0, -4));
+  const checksum = sha256(sha256(payload)).slice(0, 4);
+  return checksum.every((byte, i) => byte === bytes[bytes.length - 4 + i]);
+}
