@@ -96,6 +96,44 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeUS: {
+    type: "POSTCODE",
+    source: "a USPS ZIP+4 code, 5 digits, a dash and 4 digits, in region US",
+    region: "US",
+    finds: [
+      "[[94105-1234]]",
+      "ship to [[10001-0001]]",
+      "[[02108-4321]]",
+      "my address ends in [[60614-2345]].",
+      "([[30301-1111]])",
+      "[[94105-1234]] and [[94107-5678]]",
+      "[[73301-0001]] Austin",
+      "ZIP+4 [[20500-0003]]",
+      "[[99501-2222]]",
+      "office [[33101-9999]], Miami",
+    ],
+    ignores: [
+      ["94105", "a plain 5 digits"],
+      ["94105-123", "a short tail"],
+      ["94105-12345", "a long tail"],
+      ["9410-1234", "4 digits before the dash"],
+      ["94105 1234", "a space instead of a dash"],
+      ["94105–1234", "an en dash"],
+      ["a94105-1234", "inside a word"],
+      ["1.94105-1234", "after a dot"],
+      ["94105-1234x", "followed by a letter"],
+      ["94105-1234-5", "followed by a dash"],
+      ["00-950", "a Polish layout"],
+      ["1000-001", "a Portuguese layout"],
+    ],
+    adversarial: {
+      "digits and dashes": length => repeatTo("12345-", length),
+      "short tails": length => wholeUnits("94105-123 ", length),
+      "a long run of digits": length => "9".repeat(length),
+      "dashes after 5 digits": length => `94105${"-".repeat(length - 5)}`,
+      "plain ZIP codes": length => wholeUnits("94105 ", length),
+    },
+  },
   postcodeCued: {
     type: "POSTCODE",
     source:
