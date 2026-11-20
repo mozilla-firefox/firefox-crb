@@ -96,6 +96,51 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeDE: {
+    type: "POSTCODE",
+    source:
+      'a Deutsche Post postcode, 5 digits before a capitalized place name, starting a line or after a comma or "(", in region DE',
+    region: "DE",
+    finds: [
+      "Lindenstraße 12, [[10115]] Berlin",
+      "[[80331]] München",
+      "[[20095]] Hamburg",
+      "[[50667]] Köln",
+      "[[60311]] Frankfurt am Main",
+      "[[01067]] Dresden",
+      "Hauptstr. 5, [[70173]] Stuttgart",
+      "([[04109]] Leipzig)",
+      "[[90402]] Nürnberg,[[28195]] Bremen",
+      "Muster GmbH\n[[10117]] Berlin",
+      "[[99084]] Erfurt.",
+      "[[24103]] Kiel",
+    ],
+    ignores: [
+      ["10115 berlin", "a lower-case place"],
+      ["10115 Bo", "a word of 2 letters"],
+      ["10115 B3rlin", "a digit in the word"],
+      ["1011 Berlin", "4 digits"],
+      ["101155 Berlin", "6 digits"],
+      ["10115  Berlin", "two spaces"],
+      ["10115, Berlin", "a comma"],
+      ["10115-Berlin", "a dash"],
+      ["a10115 Berlin", "inside a word"],
+      ["1.10115 Berlin", "after a dot"],
+      ["Berlin 10115", "the place before the number"],
+      ["Es kamen 50000 Leute", "mid-sentence, where nouns are capitalized"],
+      ["Nürnberg und 28195 Bremen", "mid-sentence"],
+      ["  10115 Berlin", "an indented line (gap)"],
+    ],
+    adversarial: {
+      "numbers and lower-case words": length =>
+        wholeUnits("10115 berlin ", length),
+      "numbers and short words": length => wholeUnits("10115 Bo ", length),
+      "a long run of digits before a word": length =>
+        `${"1".repeat(length - 7)} Berlin`,
+      "capitals in a row": length => repeatTo("B", length),
+      "words with digits": length => wholeUnits("10115 B3rlin ", length),
+    },
+  },
   postcodePT: {
     type: "POSTCODE",
     source: "a CTT postcode, 4 digits, a dash and 3 digits, in region PT",
