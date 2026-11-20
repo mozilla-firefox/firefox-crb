@@ -94,6 +94,70 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  urlToken: {
+    type: "URL_TOKEN",
+    source:
+      "the password in a URL, as the URL parser reads it, and query or fragment values whose name is a credential",
+    finds: [
+      "https://site.com/reset?token=[[a8f3k29dk3]]&x=1",
+      "https://api.x.com/v1?access_token=[[ya29.a0AfH6SMBx]]",
+      "https://app.com/cb#access_token=[[abc123def456]]&token_type=bearer",
+      "https://x.com/?api_key=[[SECRET123456]]",
+      "https://b.s3.amazonaws.com/f.pdf?X-Amz-Signature=[[ab12cd34ef56ab12]]",
+      "https://u:[[p4ssw0rd]]@host.com/",
+      "https://x.com/login?user=a&password=[[hunter22]]",
+      "https://x.com/a?sessionid=[[9f8e7d6c5b4a]]",
+      "https://x.com/a?key=[[a1b2c3d4e5f6g7h8]]",
+      "https://x.com/a?sig=[[MEUCIQDx7u]]",
+      "see (https://x.com/r?secret=[[Zk9vQm4xTw]]).",
+      "https://x.com/a?access%5Ftoken=[[q9w8e7r6t5]]",
+      "https://api.x.com/upload?secret_key=[[Ab12Cd34Ef56Gh78]]",
+      "https://s3.x.com/b?access-key=[[q1w2e3r4t5y6]]&x=1",
+      "https://x.com/hook?api_secret=[[z9x8c7v6b5]]",
+      "https://x.com/k?privatekey=[[m1n2b3v4c5]]",
+      // A user name with no password is not a token.
+      "https://[[EMAIL: user@host.com]]/",
+    ],
+    ignores: [
+      ["https://www.bbc.co.uk/news/123", "no credential"],
+      ["https://example.com/search?q=cats&page=2", "no credential parameter"],
+      [
+        "https://site.com/p?utm_source=news&ref=home",
+        "no credential parameter",
+      ],
+      ["https://x.com/a?key=sort", "key is ambiguous and sort is not random"],
+      ["https://x.com/?key=abc", "key is ambiguous and abc is not random"],
+      ["https://x.com/?token=", "an empty value"],
+      ["https://x.com/?sig=abc", "shorter than 6 characters"],
+      ["https://example.com/#section-2", "a fragment with no parameter"],
+      ["http://localhost:3000/api/users", "a port, not a password"],
+      ["ftp://files.example.org/readme.txt", "no credential"],
+      ["https://youtu.be/dQw4w9WgXcQ?t=42", "t is ambiguous and 42 is short"],
+      ["https://github.com/jsmith/repo", "no credential"],
+      ["token=a8f3k29dk3", "not in a URL"],
+      [
+        "https://shop.com/?code=SUMMERSALE",
+        "code is ambiguous and the value has no digit",
+      ],
+      [
+        "https://host.com\\u:pw12@x",
+        "the URL parser reads the backslash as the start of the path",
+      ],
+    ],
+    adversarial: {
+      "one URL with many parameters": length =>
+        `https://x.com/?${repeatTo("a=b&", length - 15)}`,
+      "credential names with short values": length =>
+        `https://x.com/?${repeatTo("token=abc&", length - 15)}`,
+      "malformed percent escapes in names": length =>
+        `https://x.com/?${repeatTo("%zz=1&", length - 15)}`,
+      "schemes with no slashes": length => repeatTo("https:", length),
+      "scheme-like words glued together": length =>
+        repeatTo("ab+cd.ef-gh:", length),
+      "a URL ending in punctuation": length =>
+        `https://x.com/${")".repeat(length - 14)}`,
+    },
+  },
   privateKey: {
     type: "API_KEY",
     source:
