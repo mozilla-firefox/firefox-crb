@@ -26,6 +26,7 @@ import {
   postcodeCanada,
   postcodeCued,
   postcodeUK,
+  postcodeUS,
   zipAfterState,
 } from "./geo.sys.mjs";
 import { ipv4, ipv6, mac } from "./network.sys.mjs";
@@ -111,6 +112,7 @@ export const RULES = [
   postcodeCanada,
   zipAfterState,
   postcodeCued,
+  postcodeUS,
 ];
 
 /**
