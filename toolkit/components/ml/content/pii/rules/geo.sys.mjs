@@ -152,3 +152,39 @@ export const poBox = {
     return spans;
   },
 };
+
+// A UK postcode in capitals: "SW1A 2AA", "M1 1AE", "GIR 0AA".
+const UK_POSTCODE = new RegExp(
+  [
+    "(?<![A-Za-z0-9])",
+    "(?:GIR ?0AA",
+    // Outward code: area letters, district digit and an optional character.
+    "|[A-PR-UWYZ][A-HK-Y]?\\d[A-Z\\d]?",
+    // Inward code: a digit and two letters, optionally after a space.
+    " ?\\d[ABD-HJLNP-UW-Z]{2})",
+    "(?![A-Za-z0-9])",
+  ].join(""),
+  "g"
+);
+
+/** @type {Rule} */
+export const postcodeUK = {
+  name: "postcodeUK",
+  type: "POSTCODE",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(UK_POSTCODE, text)) {
+      // A storage size such as "M2 1TB" has the same shape.
+      if (/\d[GPT]B$/.test(match.text)) {
+        continue;
+      }
+      spans.push({
+        start: match.start,
+        end: match.end,
+        type: "POSTCODE",
+        evidence: EVIDENCE.FORMAT,
+      });
+    }
+    return spans;
+  },
+};

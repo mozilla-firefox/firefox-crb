@@ -96,6 +96,49 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  postcodeUK: {
+    type: "POSTCODE",
+    source:
+      "a UK postcode in capitals, with the letters Royal Mail allows in each position",
+    finds: [
+      "[[SW1A 2AA]]",
+      "ship to [[M1 1AE]]",
+      "[[EC1A 1BB]] London",
+      "postcode: [[B33 8TH]]",
+      "[[CR2 6XH]]",
+      "[[DN55 1PT]]",
+      "[[W1A 0AX]]",
+      "[[SW1A2AA]]",
+      "[[GIR 0AA]]",
+      "10 Downing Street, London [[SW1A 2AA]].",
+      "([[LS1 4AP]])",
+      "[[G2 3WT]]",
+    ],
+    ignores: [
+      ["flight BA123", "a flight number"],
+      ["room 4B", "no inward code"],
+      ["sw1a 2aa", "lower case"],
+      ["SW1A 2CA", "C is not used in the inward code"],
+      ["QA1 2AB", "Q does not start an area"],
+      ["AI1 2AB", "I is not a second area letter"],
+      ["SW 2AA", "no district digit"],
+      ["XSW1A 2AA", "inside a word"],
+      ["SW1A 2AAB", "followed by a letter"],
+      ["M1 1AE2", "followed by a digit"],
+      ["SW1A  2AA", "two spaces"],
+      ["SW1A-2AA", "a dash"],
+      ["I bought an M2 1TB SSD", "a storage size"],
+      ["an M2 2TB drive", "a storage size"],
+    ],
+    adversarial: {
+      "outward codes glued together": length => repeatTo("SW1A", length),
+      "outward codes only": length => wholeUnits("SW1A ", length),
+      "inward codes with a letter not used": length =>
+        wholeUnits("SW1A 2CA ", length),
+      "capitals in a row": length => repeatTo("A", length),
+      "digits and capitals": length => repeatTo("1A", length),
+    },
+  },
   poBox: {
     type: "PO_BOX",
     source:
