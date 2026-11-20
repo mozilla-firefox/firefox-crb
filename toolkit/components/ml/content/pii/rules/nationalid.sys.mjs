@@ -480,3 +480,55 @@ export const ppsIE = {
     return spans;
   },
 };
+
+// "49-091-850": a New Zealand IRD number, 8 or 9 digits in groups of 2 or 3,
+// 3 and 3 with the same separator or none.
+const IRD = /(?<![\w.-])\d{2,3}([ -]?)\d{3}\1\d{3}(?![\w-]|\.\d)/g;
+const IRD_CUE = /\bird\b|\binland\s+revenue\b/i;
+
+/**
+ * @param {string} digits - Eight or nine digits.
+ * @returns {boolean} Whether the number is in the issued range and its last
+ *   digit is the modulus 11 check digit (Inland Revenue, 2020 specification).
+ */
+function isIRDNumber(digits) {
+  const number = Number(digits);
+  if (number < 10000000 || number > 150000000) {
+    return false;
+  }
+  const padded = digits.padStart(9, "0");
+  /** @param {number[]} weights */
+  const checkDigit = weights => {
+    const remainder = weighted(padded, weights) % 11;
+    return remainder === 0 ? 0 : 11 - remainder;
+  };
+  let check = checkDigit([3, 2, 7, 6, 5, 4, 3, 2]);
+  if (check === 10) {
+    check = checkDigit([7, 4, 3, 2, 5, 2, 7, 6]);
+  }
+  return check === Number(padded[8]);
+}
+
+/** @type {Rule} */
+export const irdNZ = {
+  name: "irdNZ",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(IRD, text)) {
+      if (
+        isIRDNumber(digitsOf(match.text)) &&
+        hasCueNear(text, match.start, match.end, IRD_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "NZ_IRD",
+        });
+      }
+    }
+    return spans;
+  },
+};

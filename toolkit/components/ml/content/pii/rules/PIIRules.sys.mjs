@@ -38,6 +38,7 @@ import {
 } from "./geo.sys.mjs";
 import {
   aadhaarIN,
+  irdNZ,
   itinUS,
   medicareAU,
   nhsUK,
@@ -151,6 +152,7 @@ export const RULES = [
   medicareAU,
   sinCA,
   ppsIE,
+  irdNZ,
 ];
 
 /**

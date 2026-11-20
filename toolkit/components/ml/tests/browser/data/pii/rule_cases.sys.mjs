@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  irdNZ: {
+    type: "NATIONAL_ID",
+    source:
+      "a New Zealand IRD number, 8 or 9 digits from 10,000,000 to 150,000,000 whose last is the modulus 11 check digit (Inland Revenue), within 48 characters after or 16 before an IRD cue",
+    finds: [
+      // Published (Inland Revenue).
+      "IRD [[49-091-850]]",
+      "IRD number [[101-874-680]]",
+      "my IRD no is [[95831648]]",
+      "IRD: [[73 530 040]].",
+      "[[31-364-752]] (IRD)",
+      "inland revenue number [[143780368]]",
+      "ird=[[115479520]]",
+      "IRD [[131 947 046]] and [[110 863 047]]",
+      "IRD [[77179167]]",
+      "IRD#[[134616059]]",
+    ],
+    ignores: [
+      ["ref 49091850", "no cue"],
+      ["IRD 49091851", "a wrong check digit"],
+      ["IRD 944698914", "above 150,000,000"],
+      ["IRD 05279348", "below 10,000,000"],
+      ["IRD 49-091 850", "two different separators"],
+      ["IRD 1018746801", "10 digits"],
+      ["IRDs 49091850", "a longer word than the cue"],
+      ["third 49091850", "the cue inside a word"],
+      ["IRD 49091850.5", "a decimal"],
+      [
+        "49091850 is not the number on my IRD",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong checks after a cue": length => wholeUnits("IRD 49091851 ", length),
+      "valid numbers without a cue": length =>
+        wholeUnits("49-091-850 ", length),
+      "digits in groups of 3": length => repeatTo("091-", length),
+    },
+  },
   ppsIE: {
     type: "NATIONAL_ID",
     source:
