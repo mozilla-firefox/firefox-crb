@@ -47,6 +47,7 @@ import {
   medicareAU,
   nhsUK,
   nieES,
+  nifPT,
   ninoUK,
   nirFR,
   nirFRCued,
@@ -171,6 +172,7 @@ export const RULES = [
   bsnNL,
   nirFR,
   nirFRCued,
+  nifPT,
 ];
 
 /**

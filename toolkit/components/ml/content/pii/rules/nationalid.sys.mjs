@@ -909,3 +909,43 @@ export const nirFRCued = {
     return spans;
   },
 };
+
+const NIF_CUE = /\bnif\b|\bnipc\b|\bcontribuinte\b/i;
+
+/**
+ * @param {string} digits - Nine digits.
+ * @returns {boolean} Whether the first digit is one the Autoridade Tributária
+ *   assigns (1 to 3 for people, 5, 6, 8 and 9 for companies and others) and
+ *   the last is the modulus 11 check digit.
+ */
+function isPortugueseNIF(digits) {
+  if (!"1235689".includes(digits[0])) {
+    return false;
+  }
+  const remainder = weighted(digits, [9, 8, 7, 6, 5, 4, 3, 2]) % 11;
+  return (remainder < 2 ? 0 : 11 - remainder) === Number(digits[8]);
+}
+
+/** @type {Rule} */
+export const nifPT = {
+  name: "nifPT",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NINE_DIGITS, text)) {
+      if (
+        isPortugueseNIF(match.text) &&
+        hasCueNear(text, match.start, match.end, NIF_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "PT_NIF",
+        });
+      }
+    }
+    return spans;
+  },
+};

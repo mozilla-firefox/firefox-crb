@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  nifPT: {
+    type: "NATIONAL_ID",
+    source:
+      "a Portuguese NIF, 9 digits starting with 1, 2, 3, 5, 6, 8 or 9 whose last is the modulus 11 check digit (Autoridade Tributária), within 48 characters after or 16 before a NIF, NIPC or contribuinte cue",
+    finds: [
+      // Published (Autoridade Tributária).
+      "NIF [[123456789]]",
+      "o meu contribuinte é [[564791288]]",
+      "NIF: [[596708750]].",
+      "[[151447594]] (NIF)",
+      "NIPC [[874606896]]",
+      "nif=[[873232470]]",
+      "NIF [[627049010]] e [[145301613]]",
+      "número de contribuinte [[945817444]]",
+      "NIF n.º [[633600458]]",
+      "Contribuinte: [[123456789]]",
+    ],
+    ignores: [
+      ["invoice 564791288", "no cue"],
+      ["NIF 123456788", "a wrong check digit"],
+      ["NIF 423456784", "first digit 4"],
+      ["NIF 723456780", "first digit 7"],
+      ["NIF 12345678", "8 digits"],
+      ["NIF 1234567890", "10 digits"],
+      ["NIF 123456789.5", "a decimal"],
+      ["NIFs 123456789", "a longer word than the cue"],
+      ["NIF x123456789", "inside a word"],
+      [
+        "123456789 is just a reference, not the NIF",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "wrong check digits after a cue": length =>
+        wholeUnits("NIF 123456788 ", length),
+      "valid numbers without a cue": length => wholeUnits("123456789 ", length),
+      "cues without numbers": length => repeatTo("NIF ", length),
+    },
+  },
   nirFRCued: {
     type: "NATIONAL_ID",
     source:
