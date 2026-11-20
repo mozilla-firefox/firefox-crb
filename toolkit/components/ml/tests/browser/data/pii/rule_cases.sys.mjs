@@ -96,6 +96,43 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  ppsIE: {
+    type: "NATIONAL_ID",
+    source:
+      "an Irish PPS number, 7 digits and a modulus 23 check letter, optionally with a second letter A to I or W (Revenue)",
+    finds: [
+      // Published (Revenue).
+      "PPSN [[1234567T]]",
+      "PPSN [[1234567TW]]",
+      "my PPS number is [[7196803A]].",
+      "PPS: [[4321673F]]",
+      "[[0160121I]]",
+      "([[9094383 D]])",
+      "[[1076342P]]",
+      "PPS [[4124393JA]] and [[3294674GH]]",
+      "pps=[[8658457N]]",
+      "[[8200372-W]],",
+    ],
+    ignores: [
+      ["1234567U", "a wrong check letter"],
+      ["1234567TB", "a second letter that changes the check"],
+      ["1234567RJ", "a second letter after I that is not W"],
+      ["1234567X", "a check letter after W"],
+      ["123456T", "6 digits"],
+      ["12345678T", "8 digits"],
+      ["x1234567T", "inside a word"],
+      ["1234567TWX", "followed by a letter"],
+      ["1.1234567T", "after a decimal point"],
+      ["1234567  T", "two spaces"],
+      ["1076342p", "a lower-case check letter"],
+      ["about 3000000 a year", "a word after 7 digits"],
+    ],
+    adversarial: {
+      "wrong check letters": length => wholeUnits("1234567U ", length),
+      "digits and letters": length => repeatTo("1234567", length),
+      "letters in a row": length => `1234567${repeatTo("A", length - 7)}`,
+    },
+  },
   sinCA: {
     type: "NATIONAL_ID",
     source:

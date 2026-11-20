@@ -43,6 +43,7 @@ import {
   nhsUK,
   ninoUK,
   panIN,
+  ppsIE,
   sinCA,
   ssnCued,
   ssnSeparated,
@@ -149,6 +150,7 @@ export const RULES = [
   tfnAU,
   medicareAU,
   sinCA,
+  ppsIE,
 ];
 
 /**

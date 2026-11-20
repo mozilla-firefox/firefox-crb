@@ -436,3 +436,47 @@ export const sinCA = {
     return spans;
   },
 };
+
+// "1234567T": an Irish Personal Public Service Number, 7 digits, a check
+// letter and, on numbers issued since 2013, a second letter A to I or W.
+// The first digit comes before the check on the character in front of it, so
+// that matching only starts at a digit.
+const PPS =
+  /(?<digits>\d(?<![\w.-]\d)\d{6})[ -]?(?<check>[A-W])(?<second>[A-IW])?(?![\w-])/g;
+// The check letter for each remainder modulo 23.
+const PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV";
+
+/**
+ * @param {Record<string, string>} groups - "digits", "check" and an optional
+ *   "second" letter.
+ * @returns {boolean} Whether the check letter matches the weighted digits
+ *   and second letter.
+ */
+function isPPSNumber({ digits, check, second }) {
+  let sum = weighted(digits, [8, 7, 6, 5, 4, 3, 2]);
+  if (second) {
+    sum += (second.charCodeAt(0) - 64) * 9;
+  }
+  return PPS_CHECK_LETTERS[sum % 23] === check;
+}
+
+/** @type {Rule} */
+export const ppsIE = {
+  name: "ppsIE",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PPS, text)) {
+      if (isPPSNumber(match.groups)) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM,
+          country: "IE_PPSN",
+        });
+      }
+    }
+    return spans;
+  },
+};
