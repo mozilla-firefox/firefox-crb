@@ -343,6 +343,7 @@ enum BFCacheStatus {
   ACTIVE_LOCK = 1 << 16,                 // Status 16
   ACTIVE_WEBTRANSPORT = 1 << 17,         // Status 17
   PAGE_LOADING = 1 << 18,                // Status 18
+  PARSER_ABORTED = 1 << 19,              // Status 19
 };
 
 }  // namespace dom
