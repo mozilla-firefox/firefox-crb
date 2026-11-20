@@ -107,6 +107,7 @@ ARCHIVE_FILES = {
                 "jit-test/**",
                 "jittest/**",  # To make the ignore checker happy
                 "perftests/**",
+                "mochitest-perftest/**",  # To make the ignore checker happy
                 "fuzztest/**",
                 "trainhop/**",
             ],
@@ -742,6 +743,29 @@ ARCHIVE_FILES = {
     ],
 }
 
+MOCHITEST_TEST_ROOTS = ("tests", "browser", "chrome", "a11y")
+
+# The mochitest harness without the tests, for the mochitest flavored
+# mozperftest tests. find_files adds the tests from their perftest.toml
+# manifests.
+ARCHIVE_FILES["mochitest-perftest"] = [
+    {
+        "source": buildconfig.topobjdir,
+        "base": "_tests/testing",
+        "pattern": "mochitest/**",
+        "ignore": [f"mochitest/{root}" for root in MOCHITEST_TEST_ROOTS],
+    },
+    {
+        "source": buildconfig.topobjdir,
+        "base": "_tests/testing",
+        "pattern": "mochitest/tests/SimpleTest/**",
+    },
+] + [
+    e
+    for e in ARCHIVE_FILES["mochitest"]
+    if e["source"] != buildconfig.topobjdir or e.get("base") != "_tests/testing"
+]
+
 if buildconfig.substs.get("MOZ_CODE_COVERAGE"):
     ARCHIVE_FILES["common"].append({
         "source": buildconfig.topsrcdir,
@@ -821,6 +845,28 @@ def find_generated_harness_files():
     ]
 
 
+def mochitest_perftest_entry():
+    """Return an archive entry with the directories of the installed
+    perftest.toml manifests and the support files they include with "!/"."""
+    base = mozpath.join(buildconfig.topobjdir, "_tests", "testing")
+    patterns = set()
+    for root in MOCHITEST_TEST_ROOTS:
+        for path, _ in FileFinder(base).find(f"mochitest/{root}/**/perftest.toml"):
+            patterns.add(mozpath.join(mozpath.dirname(path), "**"))
+            manifest = TestManifest([mozpath.join(base, path)], strict=False)
+            for test in manifest.tests:
+                for support in test.get("support-files", "").split():
+                    if support.startswith("!/"):
+                        patterns.update(
+                            f"mochitest/{r}/{support[2:]}" for r in MOCHITEST_TEST_ROOTS
+                        )
+    return {
+        "source": buildconfig.topobjdir,
+        "base": "_tests/testing",
+        "patterns": sorted(patterns),
+    }
+
+
 def find_files(archive):
     extra_entries = []
     generated_harness_files = find_generated_harness_files()
@@ -844,6 +890,8 @@ def find_files(archive):
         for path in set(generated_harness_files) - packaged_paths:
             entry["patterns"].append(path[len("_tests") + 1 :])
         extra_entries.append(entry)
+    elif archive == "mochitest-perftest":
+        extra_entries.append(mochitest_perftest_entry())
 
     for entry in ARCHIVE_FILES[archive] + extra_entries:
         source = entry["source"]

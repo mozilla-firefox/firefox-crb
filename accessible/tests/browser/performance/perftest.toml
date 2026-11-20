@@ -3,6 +3,7 @@ subsuite = "a11y"
 support-files = [
   "head.js",
   "!/accessible/tests/browser/shared-head.js",
+  "!/accessible/tests/browser/*.sys.mjs",
   "!/accessible/tests/mochitest/*.js",
 ]
 prefs = [

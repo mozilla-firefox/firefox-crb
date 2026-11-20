@@ -1,5 +1,6 @@
 [DEFAULT]
 support-files = [
+  "!/dom/serviceworkers/test/utils.js",
   "fwd_messages_upward.html",
   "intercepted.txt",
   "perfutils.js",
