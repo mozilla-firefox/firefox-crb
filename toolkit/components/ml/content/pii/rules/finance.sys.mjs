@@ -2,10 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 import { EVIDENCE, matches } from "./util.sys.mjs";
-import { mod97 } from "./checks.sys.mjs";
+import { luhn, mod97 } from "./checks.sys.mjs";
 
 /** @import { Rule } from "./util.sys.mjs" */
+
+const lazy = XPCOMUtils.declareLazy({
+  CreditCard: "resource://gre/modules/CreditCard.sys.mjs",
+});
 
 // IBAN length per country, from the SWIFT IBAN registry. Other countries must
 // be 15 to 34 characters with a valid mod-97.
@@ -85,6 +90,110 @@ export const iban = {
           });
           break;
         }
+      }
+    }
+    return spans;
+  },
+};
+
+const CARD_CANDIDATE = new RegExp(
+  [
+    "(?<![\\w.-])",
+    // 13 to 19 digits, optionally separated by single spaces or dashes.
+    "\\d(?:[ -]?\\d){12,18}",
+    // Not followed by more of a word or by a decimal part.
+    "(?![\\w-]|\\.\\d)",
+  ].join(""),
+  "g"
+);
+
+/**
+ * Real card numbers are written ungrouped or in standard groups: 4-4-4-4 with
+ * a last group of 1 to 4, American Express 4-6-5 and Diners Club 4-6-4.
+ *
+ * @param {string} number - Digits separated by spaces or dashes.
+ * @returns {boolean}
+ */
+function standardGrouping(number) {
+  const groups = number.split(/[ -]/).map(group => group.length);
+  if (groups.length === 1) {
+    return true;
+  }
+  if (groups.length === 3) {
+    return (
+      groups[0] === 4 && groups[1] === 6 && (groups[2] === 5 || groups[2] === 4)
+    );
+  }
+  const last = groups[groups.length - 1];
+  return (
+    groups.length >= 4 &&
+    groups.slice(0, -1).every(length => length === 4) &&
+    last >= 1 &&
+    last <= 4
+  );
+}
+
+/**
+ * Whether the number passes Luhn and its issuer prefix and length match a
+ * card network.
+ *
+ * @param {string} digits
+ * @returns {boolean}
+ */
+function isCardNumber(digits) {
+  // Luhn alone rejects nine numbers in ten, much faster than building a
+  // CreditCard, which checks Luhn too.
+  if (!luhn(digits) || !lazy.CreditCard.isValidNumber(digits)) {
+    return false;
+  }
+  const network = lazy.CreditCard.getType(digits);
+  // CreditCard accepts Visa numbers of 13 to 19 digits, but Visa issues only
+  // 13, 16 and 19. The other lengths are mostly IMEIs starting with 49,
+  // which pass Luhn too.
+  if (network === "visa") {
+    return [13, 16, 19].includes(digits.length);
+  }
+  return network !== null;
+}
+
+// "card ... 4920 0727 1234 5678": a cued number is replaced even when Luhn
+// fails, as a mistyped card number is still a card number.
+const CARD_CUE = new RegExp(
+  [
+    "\\b(?:card|credit|debit|visa|master\\s?card|amex|maestro|kreditkarte",
+    "|bankkarte|karte|carte|tarjeta|cart[ãa]o|carta|karty|kaart",
+    "|kredietkaart|pagamento|payment)\\b",
+    // Up to 40 characters with no digit or line break before the number.
+    "[^\\d\\n]{0,40}$",
+  ].join(""),
+  "i"
+);
+
+/** @type {Rule} */
+export const card = {
+  name: "card",
+  type: "CARD",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(CARD_CANDIDATE, text)) {
+      if (!standardGrouping(match.text)) {
+        continue;
+      }
+      const digits = match.text.replace(/[ -]/g, "");
+      const cued =
+        digits.length >= 15 &&
+        digits[0] >= "2" &&
+        digits[0] <= "6" &&
+        CARD_CUE.test(text.slice(Math.max(0, match.start - 48), match.start));
+      if (isCardNumber(digits) || cued) {
+        // A cued number that fails Luhn is labelled CHECKSUM too, so it is
+        // not outranked by shape-only matches of other rules.
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "CARD",
+          evidence: EVIDENCE.CHECKSUM,
+        });
       }
     }
     return spans;

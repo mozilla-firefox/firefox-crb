@@ -3,6 +3,25 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
+ * @param {string} digits - ASCII digits only.
+ * @returns {boolean} Whether the last digit is the Luhn check digit.
+ */
+export function luhn(digits) {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let digit = Number(digits[digits.length - 1 - i]);
+    if (i % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+    sum += digit;
+  }
+  return sum % 10 === 0;
+}
+
+/**
  * ISO 13616 mod-97 check of an IBAN.
  *
  * @param {string} iban - Upper case, without spaces.
