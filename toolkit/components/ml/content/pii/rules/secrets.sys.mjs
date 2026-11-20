@@ -2,9 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { EVIDENCE, matches, trimTail } from "./util.sys.mjs";
+import {
+  EVIDENCE,
+  WORD_END,
+  WORD_START,
+  matches,
+  trimTail,
+} from "./util.sys.mjs";
 
-/** @import { Rule } from "./util.sys.mjs" */
+/** @import { Rule, RegexMatch } from "./util.sys.mjs" */
 
 const JWT = new RegExp(
   [
@@ -289,6 +295,104 @@ export const urlToken = {
           }
         }
         separator = next;
+      }
+    }
+    return spans;
+  },
+};
+
+// The model reads "Firefox123" in "password is Firefox123" as a product, so a
+// secret introduced by a password cue is found here. In 8 languages.
+const PASSWORD_CUE =
+  "passwords?|passw[oö]rt|passwd|pwd|pw|pass\\s?code|pin(?:\\s?code)?" +
+  "|kennwort|mot\\s+de\\s+passe|mdp|contrase[ñn]a|clave|senha|has[łl]o" +
+  "|wachtwoord|codice";
+// ":", "=" or "is" in 8 languages between the cue and the value.
+const PASSWORD_IS = `(?::|=|${WORD_START}(?:is|are|ist|est|es|[ée]|jest)${WORD_END})`;
+// An optional "for <account>" between the cue and "is". The account starts
+// with a non-space, so the spaces before it are not also claimed by the
+// account and the spaces after it, which made matching quadratic on long runs
+// of spaces.
+const PASSWORD_FOR =
+  "(?:\\s+(?:for|of|to|on|von|f[üu]r|pour|para|voor|dla)\\s+[^\\s:;=][^\\n:;=]{0,39}?)?";
+// The value: 3 to 64 characters without spaces, brackets or quotes.
+const PASSWORD_VALUE = "(?<value>[^\\s,;()\\[\\]{}<>\"'`]{3,64})";
+
+// "password for the wifi is hunter2", "PIN: 4821", "mot de passe = Soleil42".
+const PASSWORD_ASSIGNED = new RegExp(
+  [
+    // The word start is checked after the cue, against the cue just matched,
+    // so that matching does not test it at every character.
+    `(?<cue>${PASSWORD_CUE})(?<![\\p{L}\\p{N}_]\\k<cue>)`,
+    PASSWORD_FOR,
+    `\\s*${PASSWORD_IS}\\s*`,
+    // An optional opening quote.
+    "[\"'`]?",
+    PASSWORD_VALUE,
+  ].join(""),
+  "giu"
+);
+
+// "password is required" is a sentence about a password, not a password.
+const NOT_A_SECRET = new Set(
+  (
+    "a an the my your our his her its their this that these those it not no " +
+    "yes ok okay fine wrong incorrect invalid expired required missing empty " +
+    "blank weak strong secure safe correct valid long short too being still " +
+    "now already never always stored saved changed reset visible hidden case " +
+    "sensitive confidential private public default same different set unset " +
+    "locked disabled enabled managed protected encrypted hashed unknown shown " +
+    "masked what which how why when where who if and or but for to of in on " +
+    "at by with from as is are was be been has have had do does did will " +
+    "would can could should must may might need needs manager please und " +
+    "oder der die das secret ein eine nicht falsch le la les un une pas el " +
+    "los las es est ist"
+  ).split(" ")
+);
+
+/**
+ * @param {string} text
+ * @param {RegexMatch} match - Has a named group "value" at its end.
+ * @returns {{start: number, end: number} | null} The value without trailing
+ *   punctuation, or null if it is a word about the secret.
+ */
+function secretSpan(text, match) {
+  const start = match.end - match.groups.value.length;
+  const end = trimTail(text, start, match.end, ".,;:?)]}'\"");
+  const value = text.slice(start, end);
+  if (value.length < 3 || NOT_A_SECRET.has(value.toLowerCase())) {
+    return null;
+  }
+  return { start, end };
+}
+
+/**
+ * @param {string} text
+ * @param {number} start
+ * @returns {boolean} Whether `start` begins a URL parameter, which urlToken
+ *   handles.
+ */
+function startsUrlParameter(text, start) {
+  return start > 0 && "?&#;".includes(text[start - 1]);
+}
+
+/** @type {Rule} */
+export const passwordAssigned = {
+  name: "passwordAssigned",
+  type: "SECRET_IN_CONTEXT",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(PASSWORD_ASSIGNED, text)) {
+      if (startsUrlParameter(text, match.start)) {
+        continue;
+      }
+      const span = secretSpan(text, match);
+      if (span) {
+        spans.push({
+          ...span,
+          type: "SECRET_IN_CONTEXT",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+        });
       }
     }
     return spans;
