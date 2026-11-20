@@ -15,6 +15,7 @@ import {
   cvv,
   ethereum,
   iban,
+  routing,
 } from "./finance.sys.mjs";
 
 /** @import { Rule, RuleSpan } from "./util.sys.mjs" */
@@ -22,7 +23,15 @@ import {
 export { EVIDENCE } from "./util.sys.mjs";
 
 /** @type {Rule[]} */
-export const RULES = [iban, card, cvv, bitcoinLegacy, bitcoinSegwit, ethereum];
+export const RULES = [
+  iban,
+  card,
+  cvv,
+  bitcoinLegacy,
+  bitcoinSegwit,
+  ethereum,
+  routing,
+];
 
 /**
  * Keeps one span wherever candidates overlap: the more specific evidence
