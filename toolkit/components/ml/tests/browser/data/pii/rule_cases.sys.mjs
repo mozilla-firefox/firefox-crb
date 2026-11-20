@@ -96,6 +96,45 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  bsnNL: {
+    type: "NATIONAL_ID",
+    source:
+      "a Dutch burgerservicenummer, 9 digits that pass the 11-test (Rijksdienst voor Identiteitsgegevens), within 48 characters after or 16 before a BSN cue",
+    finds: [
+      // Published (RvIG).
+      "BSN [[111222333]]",
+      "mijn burgerservicenummer is [[762422002]]",
+      "BSN: [[618689849]].",
+      "[[648142681]] (BSN)",
+      "sofinummer [[048050738]]",
+      "bsn=[[255946971]]",
+      "BSN [[165108113]] en [[234333261]]",
+      "burgerservicenr [[124496453]]",
+      "mijn sofi [[173925236]]",
+      "Burgerservicenummer (BSN): [[111222333]]",
+    ],
+    ignores: [
+      ["order 762422002", "no cue"],
+      ["bsn 111222334", "fails the 11-test"],
+      ["BSN 000000000", "a sum of 0"],
+      ["BSN 11122233", "8 digits"],
+      ["BSN 1112223330", "10 digits"],
+      ["BSN 111222333.5", "a decimal"],
+      ["BSNs 111222333", "a longer word than the cue"],
+      ["sofie 111222333", "a longer word than the cue"],
+      ["BSN x111222333", "inside a word"],
+      [
+        "111222333 is the number we discussed, not the BSN",
+        "the cue more than 16 characters after",
+      ],
+    ],
+    adversarial: {
+      "11-test failures after a cue": length =>
+        wholeUnits("BSN 111222334 ", length),
+      "valid numbers without a cue": length => wholeUnits("111222333 ", length),
+      "cues without numbers": length => repeatTo("BSN ", length),
+    },
+  },
   peselPL: {
     type: "NATIONAL_ID",
     source:

@@ -794,3 +794,39 @@ export const peselPL = {
     return spans;
   },
 };
+
+const BSN_CUE = /\bbsn\b|\bburgerservice|\bsofi(?:nummer)?\b/i;
+
+/**
+ * @param {string} digits - Nine digits.
+ * @returns {boolean} Whether the Dutch BSN passes the 11-test: the digits
+ *   weighted 9 down to 2, minus the last, sum to a non-zero multiple of 11.
+ */
+function isBSN(digits) {
+  const sum = weighted(digits, [9, 8, 7, 6, 5, 4, 3, 2]) - Number(digits[8]);
+  return sum !== 0 && sum % 11 === 0;
+}
+
+/** @type {Rule} */
+export const bsnNL = {
+  name: "bsnNL",
+  type: "NATIONAL_ID",
+  detect({ text }) {
+    const spans = [];
+    for (const match of matches(NINE_DIGITS, text)) {
+      if (
+        isBSN(match.text) &&
+        hasCueNear(text, match.start, match.end, BSN_CUE)
+      ) {
+        spans.push({
+          start: match.start,
+          end: match.end,
+          type: "NATIONAL_ID",
+          evidence: EVIDENCE.CHECKSUM_CUE,
+          country: "NL_BSN",
+        });
+      }
+    }
+    return spans;
+  },
+};
