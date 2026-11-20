@@ -96,6 +96,47 @@ const pem = (label, body = "MIIEowIBAAKCAQEAsynthetic", newline = "\n") =>
 
 /** @type {Record<string, RuleCases>} */
 export const RULE_CASES = {
+  phoneDE: {
+    type: "PHONE",
+    source:
+      "the German mobile layout, a 015x, 016x or 017x prefix and 6 to 8 digits (Bundesnetzagentur numbering plan), in region DE",
+    region: "DE",
+    finds: [
+      "[[0171 2345678]]",
+      "[[01712345678]]",
+      "[[0171/2345678]]",
+      "[[0171-2345678]]",
+      "[[0151 12345678]]",
+      "[[0160 1234567]]",
+      "[[0176 1234 5678]]",
+      "[[0171 234 5678]]",
+      "mein Handy: [[0171 2345678]]",
+      "Ruf mich unter [[0157 12345678]] an",
+      "([[0171 2345678]])",
+      "[[0162 9876543]].",
+    ],
+    ignores: [
+      ["030 1234567", "a landline, not a mobile"],
+      ["0181 2345678", "not 015, 016 or 017"],
+      ["0171 23456", "5 digits after the prefix"],
+      ["0171 123456789", "9 digits after the prefix"],
+      ["10171 2345678", "inside a longer number"],
+      ["a0171 2345678", "inside a word"],
+      ["0171 2345678x", "followed by a letter"],
+      ["0171 2345678-0", "followed by a dash"],
+      ["0171.2345678", "a dot separator"],
+      ["0171  2345678", "two spaces"],
+      ["06 12 34 56 78", "a French layout"],
+    ],
+    adversarial: {
+      "01 in a row": length => repeatTo("01", length),
+      "a prefix and a long run of digits": length =>
+        `0171${"2".repeat(length - 4)}`,
+      "prefixes and short numbers": length => wholeUnits("0171 23456 ", length),
+      "slashes after a prefix": length => `0171${"/".repeat(length - 4)}`,
+      "prefixes and two-digit groups": length => repeatTo("0171 23 ", length),
+    },
+  },
   phoneNL: {
     type: "PHONE",
     source:
