@@ -67,6 +67,7 @@ LOCAL_INCLUDES += [
     "/modules/libjar",
     "/netwerk/base",
     "/netwerk/protocol/http",
+    "/netwerk/streamconv/converters",
     "/security/manager/ssl",
     "/xpcom/threads",
 ]
