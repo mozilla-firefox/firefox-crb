@@ -184,6 +184,7 @@ void MaybeAddLink(const ScannedTag& aTag, nsTArray<PreloadHint>& aHints) {
   }
 
   PreloadHint hint;
+  hint.mInitiatorType.AssignLiteral(u"link");
   LinkHeader& link = hint.mLink;
   link.mHref = AttrValue(*href);
   link.mRel.AssignLiteral(u"preload");
@@ -223,6 +224,7 @@ void MaybeAddScript(const ScannedTag& aTag, nsTArray<PreloadHint>& aHints) {
     }
   }
   PreloadHint hint;
+  hint.mInitiatorType.AssignLiteral(u"script");
   hint.mLink.mHref = AttrValue(*src);
   hint.mLink.mRel.AssignLiteral(u"preload");
   hint.mLink.mAs.AssignLiteral(u"script");
@@ -435,14 +437,14 @@ void EarlyHintsService::ProcessLinks(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, false, hint.mBlocking);
+          aLoadingBrowsingContext, false, hint.mBlocking, hint.mInitiatorType);
     } else if (linkHeader.mRel.LowerCaseEqualsLiteral("modulepreload")) {
       mLinkType |= dom::LinkStyle::eMODULE_PRELOAD;
       EarlyHintPreloader::MaybeCreateAndInsertPreload(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, true, false);
+          aLoadingBrowsingContext, true, false, u""_ns);
     } else if (linkHeader.mRel.LowerCaseEqualsLiteral(
                    "compression-dictionary")) {
       mLinkType |= dom::LinkStyle::eCOMPRESSION_DICTIONARY;
@@ -450,7 +452,7 @@ void EarlyHintsService::ProcessLinks(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, true, false);
+          aLoadingBrowsingContext, true, false, u""_ns);
     }
   }
 }

@@ -31,6 +31,8 @@ struct PreloadHint {
   // the way the document would load it.  Scripts aren't, as a Leader holds
   // back other loads from the same connection, such as the page's images.
   bool mBlocking = false;
+  // The Resource Timing initiator type of the element, if from the document.
+  nsString mInitiatorType;
 };
 
 class EarlyHintsService {

@@ -197,7 +197,7 @@ void EarlyHintPreloader::MaybeCreateAndInsertPreload(
     const nsACString& aResponseReferrerPolicy, const nsACString& aCSPHeader,
     const nsACString& aConnectionAllowlistHeader, uint64_t aBrowsingContextID,
     dom::CanonicalBrowsingContext* aLoadingBrowsingContext,
-    bool aIsModulepreload, bool aBlocking) {
+    bool aIsModulepreload, bool aBlocking, const nsAString& aInitiatorType) {
   nsAttrValue as;
   ParseAsValue(aLinkHeader.mAs, as);
 
@@ -387,6 +387,7 @@ void EarlyHintPreloader::MaybeCreateAndInsertPreload(
   }
 
   earlyHintPreloader->mBlocking = aBlocking;
+  earlyHintPreloader->mInitiatorType = aInitiatorType;
   NS_ENSURE_SUCCESS_VOID(earlyHintPreloader->OpenChannel(
       uri, aPrincipal, securityFlags, contentPolicyType, referrerInfo,
       aCookieJarSettings, aBrowsingContextID));
@@ -439,6 +440,9 @@ nsresult EarlyHintPreloader::OpenChannel(
   MOZ_ASSERT(NS_SUCCEEDED(success));
 
   httpChannelObject->SetWarningReporter(this);
+  if (!mInitiatorType.IsEmpty()) {
+    (void)httpChannelObject->SetInitiatorType(mInitiatorType);
+  }
 
   mParentListener = new ParentChannelListener(this, nullptr);
 
