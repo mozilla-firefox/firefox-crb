@@ -437,6 +437,8 @@ nsresult EarlyHintPreloader::OpenChannel(
   success = httpChannel->SetRequestHeader("X-Moz"_ns, "early hint"_ns, false);
   MOZ_ASSERT(NS_SUCCEEDED(success));
 
+  httpChannelObject->SetWarningReporter(this);
+
   mParentListener = new ParentChannelListener(this, nullptr);
 
   PriorizeAsPreload();
@@ -590,6 +592,7 @@ nsresult EarlyHintPreloader::CancelChannel(nsresult aStatus,
   // EarlyHintPreloader::OnRedirectResult
   mRedirectChannel = nullptr;
   if (mChannel) {
+    SetWarningReporterOn(mChannel, nullptr);
     if (mSuspended) {
       mChannel->Resume();
     }
@@ -633,6 +636,52 @@ void EarlyHintPreloader::SetParentChannel() {
   RefPtr<HttpBaseChannel> channel = do_QueryObject(mChannel);
   RefPtr<HttpChannelParent> parent = do_QueryObject(mParent);
   parent->SetHttpChannelFromEarlyHintPreloader(channel);
+  SetWarningReporterOn(mChannel, parent);
+  for (const auto& warning : mPendingWarnings) {
+    warning(parent);
+  }
+  mPendingWarnings.Clear();
+}
+
+// static
+void EarlyHintPreloader::SetWarningReporterOn(
+    nsIChannel* aChannel, HttpChannelSecurityWarningReporter* aReporter) {
+  if (RefPtr<nsHttpChannel> channel = do_QueryObject(aChannel)) {
+    channel->SetWarningReporter(aReporter);
+  }
+}
+
+nsresult EarlyHintPreloader::ReportSecurityMessage(
+    const nsAString& aMessageTag, const nsAString& aMessageCategory) {
+  mPendingWarnings.AppendElement(
+      [tag = nsString(aMessageTag), category = nsString(aMessageCategory)](
+          HttpChannelSecurityWarningReporter* aReporter) {
+        (void)aReporter->ReportSecurityMessage(tag, category);
+      });
+  return NS_OK;
+}
+
+nsresult EarlyHintPreloader::LogBlockedCORSRequest(const nsAString& aMessage,
+                                                   const nsACString& aCategory,
+                                                   bool aIsWarning) {
+  mPendingWarnings.AppendElement(
+      [message = nsString(aMessage), category = nsCString(aCategory),
+       aIsWarning](HttpChannelSecurityWarningReporter* aReporter) {
+        (void)aReporter->LogBlockedCORSRequest(message, category, aIsWarning);
+      });
+  return NS_OK;
+}
+
+nsresult EarlyHintPreloader::LogMimeTypeMismatch(
+    const nsACString& aMessageName, bool aWarning, const nsAString& aURL,
+    const nsAString& aContentType) {
+  mPendingWarnings.AppendElement(
+      [name = nsCString(aMessageName), aWarning, url = nsString(aURL),
+       contentType = nsString(aContentType)](
+          HttpChannelSecurityWarningReporter* aReporter) {
+        (void)aReporter->LogMimeTypeMismatch(name, aWarning, url, contentType);
+      });
+  return NS_OK;
 }
 
 // Adapted from
@@ -833,7 +882,9 @@ EarlyHintPreloader::OnRedirectResult(nsresult aStatus) {
   LOG(("EarlyHintPreloader::OnRedirectResult [this=%p] aProceeding=0x%" PRIx32,
        this, static_cast<uint32_t>(aStatus)));
   if (NS_SUCCEEDED(aStatus) && mRedirectChannel) {
+    SetWarningReporterOn(mChannel, nullptr);
     mChannel = mRedirectChannel;
+    SetWarningReporterOn(mChannel, this);
   }
 
   mRedirectChannel = nullptr;
@@ -867,6 +918,7 @@ EarlyHintPreloader::Notify(nsITimer* timer) {
   mTimer = nullptr;
   mRedirectChannel = nullptr;
   if (mChannel) {
+    SetWarningReporterOn(mChannel, nullptr);
     if (mSuspended) {
       mChannel->Resume();
     }
