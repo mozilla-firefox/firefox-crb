@@ -21,6 +21,7 @@ class CanonicalBrowsingContext;
 
 namespace mozilla::net {
 
+struct LinkHeader;
 class EarlyHintConnectArgs;
 class OngoingEarlyHints;
 
@@ -33,6 +34,22 @@ class EarlyHintsService {
                  const nsACString& aCSPHeader,
                  const nsACString& aConnectionAllowlistHeader,
                  dom::CanonicalBrowsingContext* aLoadingBrowsingContext);
+  // Preloads for resources found in the document itself (see
+  // ScanDocumentHead), with the final response's policy headers.  Unlike
+  // EarlyHint, this may be called after an Early Hint response.
+  void DocumentHints(const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI,
+                     nsIChannel* aChannel, const nsACString& aReferrerPolicy,
+                     const nsACString& aCSPHeader,
+                     const nsACString& aConnectionAllowlistHeader,
+                     dom::CanonicalBrowsingContext* aLoadingBrowsingContext);
+
+  // Finds stylesheets, classic scripts and preloads in the head of the start
+  // of an HTML document.  Stops at anything that could change how later links
+  // are resolved or allowed (<base>, a CSP <meta>), and at the end of the head.
+  // Returns false if more of the document could still add links.
+  static bool ScanDocumentHead(const nsACString& aData,
+                               nsTArray<LinkHeader>& aLinks);
+
   void Reset();
   void Cancel(const nsACString& aReason);
 
@@ -42,6 +59,12 @@ class EarlyHintsService {
   uint32_t LinkType() const { return mLinkType; }
 
  private:
+  void ProcessLinks(const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI,
+                    nsIChannel* aChannel, const nsACString& aReferrerPolicy,
+                    const nsACString& aCSPHeader,
+                    const nsACString& aConnectionAllowlistHeader,
+                    dom::CanonicalBrowsingContext* aLoadingBrowsingContext);
+
   Maybe<TimeStamp> mFirstEarlyHint;
   uint32_t mEarlyHintsCount{0};
 

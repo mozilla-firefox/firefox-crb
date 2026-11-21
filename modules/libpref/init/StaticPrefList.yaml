@@ -15889,6 +15889,14 @@
   value: true
   mirror: always
 
+# Start preloads for stylesheets, classic scripts and preload links found in
+# the head of the first data of a top-level HTML document, from the parent
+# process, the same way as for Early Hints.
+- name: network.early-hints.from-document.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Enable sending 103 (Early Hints) responses over HTTP/1.1
 - name: network.early-hints.over-http-v1-1.enabled
   type: RelaxedAtomicBool

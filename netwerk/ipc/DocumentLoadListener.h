@@ -283,6 +283,20 @@ class DocumentLoadListener : public nsIInterfaceRequestor,
   // EarlyHints to be cancelled from there (Bug 1819886)
   void CancelEarlyHintPreloads();
 
+  // Sets up scanning the start of this document for preloads, if it should
+  // be.  The channel is then left running until FinishDocumentScan.
+  bool StartDocumentScan(nsIHttpChannel* aHttpChannel,
+                         dom::CanonicalBrowsingContext* aContext);
+  // aEnd is the offset just past aData in the response, to tell when the
+  // channel could finish loading next.
+  void ScanDocumentData(const nsACString& aData, uint64_t aEnd);
+  // Suspends the channel, and starts preloads for what the scan found unless
+  // aStartPreloads is false or it is too late for content to use them.
+  void FinishDocumentScan(bool aStartPreloads);
+  // Resumes the channel suspended by DoOnStartRequest, or skips that if the
+  // suspend is still waiting for the document scan.
+  void ResumeSuspendedChannel();
+
   // Gets the EarlyHint preloads for this document to pass them to the
   // ContentProcess. Registers them in the EarlyHintRegister
   void RegisterEarlyHintLinksAndGetConnectArgs(
@@ -619,6 +633,15 @@ class DocumentLoadListener : public nsIInterfaceRequestor,
   // helper from being installed, but we need to restore the value
   // later.
   bool mOldApplyConversion = false;
+  // DoOnStartRequest deferred suspending the channel until the start of the
+  // document has been scanned for preloads.
+  bool mScanFirstDataForHints = false;
+  // Decodes a copy of the content-encoded document data for the scan.
+  nsCOMPtr<nsIStreamListener> mHintDecoder;
+  nsCString mHintScanData;
+  // Early hint preloads have been registered for the content process; later
+  // ones wouldn't be used.
+  bool mEarlyHintArgsRegistered = false;
   // Set to true if any previous channel that we redirected away
   // from had a COOP mismatch.
   bool mHasCrossOriginOpenerPolicyMismatch = false;
