@@ -197,7 +197,7 @@ void EarlyHintPreloader::MaybeCreateAndInsertPreload(
     const nsACString& aResponseReferrerPolicy, const nsACString& aCSPHeader,
     const nsACString& aConnectionAllowlistHeader, uint64_t aBrowsingContextID,
     dom::CanonicalBrowsingContext* aLoadingBrowsingContext,
-    bool aIsModulepreload) {
+    bool aIsModulepreload, bool aBlocking) {
   nsAttrValue as;
   ParseAsValue(aLinkHeader.mAs, as);
 
@@ -386,6 +386,7 @@ void EarlyHintPreloader::MaybeCreateAndInsertPreload(
     return;
   }
 
+  earlyHintPreloader->mBlocking = aBlocking;
   NS_ENSURE_SUCCESS_VOID(earlyHintPreloader->OpenChannel(
       uri, aPrincipal, securityFlags, contentPolicyType, referrerInfo,
       aCookieJarSettings, aBrowsingContextID));
@@ -465,6 +466,12 @@ nsresult EarlyHintPreloader::OpenChannel(
 }
 
 void EarlyHintPreloader::PriorizeAsPreload() {
+  if (mBlocking) {
+    if (nsCOMPtr<nsIClassOfService> cos = do_QueryInterface(mChannel)) {
+      (void)cos->AddClassFlags(nsIClassOfService::Leader);
+    }
+    return;
+  }
   nsLoadFlags loadFlags = nsIRequest::LOAD_NORMAL;
   (void)mChannel->GetLoadFlags(&loadFlags);
   (void)mChannel->SetLoadFlags(loadFlags | nsIRequest::LOAD_BACKGROUND);

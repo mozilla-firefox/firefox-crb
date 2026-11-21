@@ -158,7 +158,7 @@ void CopyFetchAttrs(const ScannedTag& aTag, LinkHeader& aLink) {
   }
 }
 
-void MaybeAddLink(const ScannedTag& aTag, nsTArray<LinkHeader>& aLinks) {
+void MaybeAddLink(const ScannedTag& aTag, nsTArray<PreloadHint>& aHints) {
   const auto* rel = aTag.Attr("rel");
   const auto* href = aTag.Attr("href");
   if (!rel || !href || href->empty()) {
@@ -183,7 +183,8 @@ void MaybeAddLink(const ScannedTag& aTag, nsTArray<LinkHeader>& aLinks) {
     }
   }
 
-  LinkHeader link;
+  PreloadHint hint;
+  LinkHeader& link = hint.mLink;
   link.mHref = AttrValue(*href);
   link.mRel.AssignLiteral(u"preload");
   if (preload) {
@@ -197,16 +198,20 @@ void MaybeAddLink(const ScannedTag& aTag, nsTArray<LinkHeader>& aLinks) {
     }
   } else if (stylesheet && !alternate && !aTag.Attr("disabled")) {
     link.mAs.AssignLiteral(u"style");
+    hint.mBlocking = true;
   } else {
     return;
   }
   CopyFetchAttrs(aTag, link);
-  aLinks.AppendElement(std::move(link));
+  aHints.AppendElement(std::move(hint));
 }
 
-void MaybeAddScript(const ScannedTag& aTag, nsTArray<LinkHeader>& aLinks) {
+void MaybeAddScript(const ScannedTag& aTag, nsTArray<PreloadHint>& aHints) {
   const auto* src = aTag.Attr("src");
-  if (!src || src->empty() || aTag.Attr("nomodule")) {
+  // Async and deferred scripts don't block rendering; loading them early only
+  // competes with what does, and can pull in more work before the load event.
+  if (!src || src->empty() || aTag.Attr("nomodule") || aTag.Attr("async") ||
+      aTag.Attr("defer")) {
     return;
   }
   // Module scripts are left to the document; their fetch mode differs.
@@ -217,12 +222,12 @@ void MaybeAddScript(const ScannedTag& aTag, nsTArray<LinkHeader>& aLinks) {
       return;
     }
   }
-  LinkHeader link;
-  link.mHref = AttrValue(*src);
-  link.mRel.AssignLiteral(u"preload");
-  link.mAs.AssignLiteral(u"script");
-  CopyFetchAttrs(aTag, link);
-  aLinks.AppendElement(std::move(link));
+  PreloadHint hint;
+  hint.mLink.mHref = AttrValue(*src);
+  hint.mLink.mRel.AssignLiteral(u"preload");
+  hint.mLink.mAs.AssignLiteral(u"script");
+  CopyFetchAttrs(aTag, hint.mLink);
+  aHints.AppendElement(std::move(hint));
 }
 
 bool IsSkippedContentElement(const ScannedTag& aTag) {
@@ -254,7 +259,7 @@ size_t SkipToEndTag(std::string_view aData, size_t aPos,
 
 /* static */
 bool EarlyHintsService::ScanDocumentHead(const nsACString& aData,
-                                         nsTArray<LinkHeader>& aLinks) {
+                                         nsTArray<PreloadHint>& aHints) {
   std::string_view data(
       aData.BeginReading(),
       std::min<size_t>(aData.Length(), kMaxDocumentScanBytes));
@@ -265,7 +270,7 @@ bool EarlyHintsService::ScanDocumentHead(const nsACString& aData,
   bool atLimit = aData.Length() >= kMaxDocumentScanBytes;
   size_t pos = 0;
   while (true) {
-    if (aLinks.Length() >= kMaxDocumentHints) {
+    if (aHints.Length() >= kMaxDocumentHints) {
       return true;
     }
     size_t lt = data.find('<', pos);
@@ -315,11 +320,11 @@ bool EarlyHintsService::ScanDocumentHead(const nsACString& aData,
       continue;
     }
     if (tag.Is("link")) {
-      MaybeAddLink(tag, aLinks);
+      MaybeAddLink(tag, aHints);
       continue;
     }
     if (tag.Is("script")) {
-      MaybeAddScript(tag, aLinks);
+      MaybeAddScript(tag, aHints);
     }
     if (IsSkippedContentElement(tag)) {
       pos = SkipToEndTag(data, pos, tag.mName);
@@ -357,22 +362,25 @@ void EarlyHintsService::EarlyHint(
 
   // TODO: find out why LinkHeaderParser uses utf16 and check if it can be
   //       changed to utf8
-  ProcessLinks(ParseLinkHeader(NS_ConvertUTF8toUTF16(aLinkHeader)), aBaseURI,
-               aChannel, aReferrerPolicy, aCSPHeader,
+  nsTArray<PreloadHint> hints;
+  for (auto& link : ParseLinkHeader(NS_ConvertUTF8toUTF16(aLinkHeader))) {
+    hints.AppendElement(PreloadHint{std::move(link)});
+  }
+  ProcessLinks(hints, aBaseURI, aChannel, aReferrerPolicy, aCSPHeader,
                aConnectionAllowlistHeader, aLoadingBrowsingContext);
 }
 
 void EarlyHintsService::DocumentHints(
-    const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI, nsIChannel* aChannel,
+    const nsTArray<PreloadHint>& aHints, nsIURI* aBaseURI, nsIChannel* aChannel,
     const nsACString& aReferrerPolicy, const nsACString& aCSPHeader,
     const nsACString& aConnectionAllowlistHeader,
     dom::CanonicalBrowsingContext* aLoadingBrowsingContext) {
-  ProcessLinks(aLinks, aBaseURI, aChannel, aReferrerPolicy, aCSPHeader,
+  ProcessLinks(aHints, aBaseURI, aChannel, aReferrerPolicy, aCSPHeader,
                aConnectionAllowlistHeader, aLoadingBrowsingContext);
 }
 
 void EarlyHintsService::ProcessLinks(
-    const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI, nsIChannel* aChannel,
+    const nsTArray<PreloadHint>& aHints, nsIURI* aBaseURI, nsIChannel* aChannel,
     const nsACString& aReferrerPolicy, const nsACString& aCSPHeader,
     const nsACString& aConnectionAllowlistHeader,
     dom::CanonicalBrowsingContext* aLoadingBrowsingContext) {
@@ -412,7 +420,8 @@ void EarlyHintsService::ProcessLinks(
     return;
   }
 
-  for (const auto& linkHeader : aLinks) {
+  for (const auto& hint : aHints) {
+    const LinkHeader& linkHeader = hint.mLink;
     if (linkHeader.mRel.LowerCaseEqualsLiteral("preconnect")) {
       mLinkType |= dom::LinkStyle::ePRECONNECT;
       OriginAttributes originAttributes;
@@ -426,14 +435,14 @@ void EarlyHintsService::ProcessLinks(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, false);
+          aLoadingBrowsingContext, false, hint.mBlocking);
     } else if (linkHeader.mRel.LowerCaseEqualsLiteral("modulepreload")) {
       mLinkType |= dom::LinkStyle::eMODULE_PRELOAD;
       EarlyHintPreloader::MaybeCreateAndInsertPreload(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, true);
+          aLoadingBrowsingContext, true, false);
     } else if (linkHeader.mRel.LowerCaseEqualsLiteral(
                    "compression-dictionary")) {
       mLinkType |= dom::LinkStyle::eCOMPRESSION_DICTIONARY;
@@ -441,7 +450,7 @@ void EarlyHintsService::ProcessLinks(
           mOngoingEarlyHints, linkHeader, aBaseURI, principal,
           cookieJarSettings, aReferrerPolicy, aCSPHeader,
           aConnectionAllowlistHeader, loadInfo->GetBrowsingContextID(),
-          aLoadingBrowsingContext, true);
+          aLoadingBrowsingContext, true, false);
     }
   }
 }

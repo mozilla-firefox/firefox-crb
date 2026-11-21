@@ -3904,8 +3904,8 @@ void DocumentLoadListener::ScanDocumentData(const nsACString& aData,
   } else {
     mHintScanData.Append(aData);
   }
-  nsTArray<LinkHeader> links;
-  if (EarlyHintsService::ScanDocumentHead(mHintScanData, links)) {
+  nsTArray<PreloadHint> hints;
+  if (EarlyHintsService::ScanDocumentHead(mHintScanData, hints)) {
     FinishDocumentScan(true);
     return;
   }
@@ -3931,12 +3931,12 @@ void DocumentLoadListener::FinishDocumentScan(bool aStartPreloads) {
     return;
   }
 
-  nsTArray<LinkHeader> links;
-  EarlyHintsService::ScanDocumentHead(html, links);
+  nsTArray<PreloadHint> hints;
+  EarlyHintsService::ScanDocumentHead(html, hints);
   PROFILER_MARKER_TEXT("DocumentHints", NETWORK, {},
                        nsPrintfCString("%zu links from %zu bytes",
-                                       links.Length(), size_t(html.Length())));
-  if (links.IsEmpty()) {
+                                       hints.Length(), size_t(html.Length())));
+  if (hints.IsEmpty()) {
     return;
   }
   nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(mChannel);
@@ -3949,7 +3949,7 @@ void DocumentLoadListener::FinishDocumentScan(bool aStartPreloads) {
   if (NS_FAILED(NS_GetFinalChannelURI(mChannel, getter_AddRefs(uri)))) {
     return;
   }
-  mEarlyHintsService.DocumentHints(links, uri, mChannel, referrerPolicy, csp,
+  mEarlyHintsService.DocumentHints(hints, uri, mChannel, referrerPolicy, csp,
                                    connectionAllowlist,
                                    GetLoadingBrowsingContext());
 }

@@ -110,7 +110,7 @@ class EarlyHintPreloader final : public nsIStreamListener,
       const nsACString& aReferrerPolicy, const nsACString& aCSPHeader,
       const nsACString& aConnectionAllowlistHeader, uint64_t aBrowsingContextID,
       dom::CanonicalBrowsingContext* aLoadingBrowsingContext,
-      bool aIsModulepreload);
+      bool aIsModulepreload, bool aBlocking);
 
   // register Channel to EarlyHintRegistrar. Returns true and sets connect args
   // if successful
@@ -186,6 +186,9 @@ class EarlyHintPreloader final : public nsIStreamListener,
   bool mSuspended = false;
   nsTArray<std::function<void(HttpChannelSecurityWarningReporter*)>>
       mPendingWarnings;
+  // Prioritize like a render-blocking load of the document instead of a
+  // preload.
+  bool mBlocking = false;
   nsCOMPtr<nsIParentChannel> mParent;
   // Set to true after we've received the last OnStopRequest, and shouldn't
   // setup a reference from the ParentChannelListener to the replacement

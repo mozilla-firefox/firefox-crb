@@ -9,6 +9,7 @@
 #include "mozilla/RefPtr.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/dom/ipc/IdType.h"
+#include "nsNetUtil.h"
 #include "nsStringFwd.h"
 #include "nsTArray.h"
 
@@ -21,9 +22,16 @@ class CanonicalBrowsingContext;
 
 namespace mozilla::net {
 
-struct LinkHeader;
 class EarlyHintConnectArgs;
 class OngoingEarlyHints;
+
+struct PreloadHint {
+  LinkHeader mLink;
+  // From a render-blocking stylesheet in the document, so it is prioritized
+  // the way the document would load it.  Scripts aren't, as a Leader holds
+  // back other loads from the same connection, such as the page's images.
+  bool mBlocking = false;
+};
 
 class EarlyHintsService {
  public:
@@ -37,18 +45,18 @@ class EarlyHintsService {
   // Preloads for resources found in the document itself (see
   // ScanDocumentHead), with the final response's policy headers.  Unlike
   // EarlyHint, this may be called after an Early Hint response.
-  void DocumentHints(const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI,
+  void DocumentHints(const nsTArray<PreloadHint>& aHints, nsIURI* aBaseURI,
                      nsIChannel* aChannel, const nsACString& aReferrerPolicy,
                      const nsACString& aCSPHeader,
                      const nsACString& aConnectionAllowlistHeader,
                      dom::CanonicalBrowsingContext* aLoadingBrowsingContext);
 
-  // Finds stylesheets, classic scripts and preloads in the head of the start
-  // of an HTML document.  Stops at anything that could change how later links
-  // are resolved or allowed (<base>, a CSP <meta>), and at the end of the head.
-  // Returns false if more of the document could still add links.
+  // Finds stylesheets, classic blocking scripts and preloads in the head of
+  // the start of an HTML document.  Stops at anything that could change how
+  // later links are resolved or allowed (<base>, a CSP <meta>), and at the end
+  // of the head. Returns false if more of the document could still add links.
   static bool ScanDocumentHead(const nsACString& aData,
-                               nsTArray<LinkHeader>& aLinks);
+                               nsTArray<PreloadHint>& aHints);
 
   void Reset();
   void Cancel(const nsACString& aReason);
@@ -59,7 +67,7 @@ class EarlyHintsService {
   uint32_t LinkType() const { return mLinkType; }
 
  private:
-  void ProcessLinks(const nsTArray<LinkHeader>& aLinks, nsIURI* aBaseURI,
+  void ProcessLinks(const nsTArray<PreloadHint>& aHints, nsIURI* aBaseURI,
                     nsIChannel* aChannel, const nsACString& aReferrerPolicy,
                     const nsACString& aCSPHeader,
                     const nsACString& aConnectionAllowlistHeader,
