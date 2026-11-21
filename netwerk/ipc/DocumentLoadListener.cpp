@@ -15,12 +15,14 @@
 #include "mozilla/ExtensionPolicyService.h"
 #include "mozilla/LoadInfo.h"
 #include "mozilla/NullPrincipal.h"
+#include "mozilla/ProfilerMarkers.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/ResultVariant.h"
 #include "mozilla/ScopeExit.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_extensions.h"
 #include "mozilla/StaticPrefs_fission.h"
+#include "mozilla/StaticPrefs_network.h"
 #include "mozilla/StaticPrefs_privacy.h"
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/StoragePrincipalHelper.h"
@@ -59,10 +61,12 @@
 #include "nsDocShellLoadState.h"
 #include "nsDocShellLoadTypes.h"
 #include "nsExternalHelperAppService.h"
+#include "nsHTTPCompressConv.h"
 #include "nsHttpChannel.h"
 #include "nsHttpHandler.h"
 #include "nsIBrowser.h"
 #include "nsIBrowserDOMWindow.h"
+#include "nsICacheInfoChannel.h"
 #include "nsICachingChannel.h"
 #include "nsIClassifiedChannel.h"
 #include "nsIContentPolicy.h"
@@ -1126,7 +1130,7 @@ auto DocumentLoadListener::Open(nsDocShellLoadState* aLoadState,
     // DocumentChannel in content, so there the id matches no request.
     uint64_t channelId = identChannel ? identChannel->ChannelId() : 0;
     if (!channelId) {
-      channelId = RefPtr{nsHttpHandler::GetInstance()}->NewChannelId();
+      channelId = RefPtr { nsHttpHandler::GetInstance() } -> NewChannelId();
     }
     mDocumentChannelId = Some(channelId);
   }
@@ -1760,7 +1764,7 @@ void DocumentLoadListener::FinishReplacementChannelSetup(nsresult aResult) {
       redirectChannel->Delete();
     }
     mChannel->Cancel(aResult);
-    mChannel->Resume();
+    ResumeSuspendedChannel();
     return;
   }
 
@@ -1865,7 +1869,7 @@ bool DocumentLoadListener::ResumeSuspendedChannel(
   NS_ASSERTION(mStreamListenerFunctions.IsEmpty(),
                "Should not have added new stream listener function!");
 
-  mChannel->Resume();
+  ResumeSuspendedChannel();
 
   // Our caller will invoke `EndDocumentLoad` for us.
 
@@ -1878,6 +1882,8 @@ void DocumentLoadListener::CancelEarlyHintPreloads() {
 
 void DocumentLoadListener::RegisterEarlyHintLinksAndGetConnectArgs(
     dom::ContentParentId aCpId, nsTArray<EarlyHintConnectArgs>& aOutLinks) {
+  FinishDocumentScan(true);
+  mEarlyHintArgsRegistered = true;
   mEarlyHintsService.RegisterLinksAndGetConnectArgs(aCpId, aOutLinks);
 }
 
@@ -2609,6 +2615,8 @@ DocumentLoadListener::RedirectToRealChannel(
     }
 
     nsTArray<EarlyHintConnectArgs> ehArgs;
+    FinishDocumentScan(true);
+    mEarlyHintArgsRegistered = true;
     mEarlyHintsService.RegisterLinksAndGetConnectArgs(cp->ChildID(), ehArgs);
 
     RedirectToRealChannelArgs args;
@@ -3199,7 +3207,9 @@ nsresult DocumentLoadListener::DoOnStartRequest(nsIRequest* aRequest) {
     }
   }
 
-  mChannel->Suspend();
+  if (!StartDocumentScan(httpChannel, loadingContext)) {
+    mChannel->Suspend();
+  }
 
   mInitiatedRedirectToRealChannel = true;
 
@@ -3318,7 +3328,7 @@ nsresult DocumentLoadListener::ContinueDoOnStartRequestCommit(
     return NS_OK;
   }
   if (mOpenPromiseResolved) {
-    mChannel->Resume();
+    ResumeSuspendedChannel();
     return NS_OK;
   }
 
@@ -3326,7 +3336,7 @@ nsresult DocumentLoadListener::ContinueDoOnStartRequestCommit(
   auto* loadingContext = GetLoadingBrowsingContext();
   if (!loadingContext || loadingContext->IsDiscarded()) {
     Cancel(NS_ERROR_UNEXPECTED, "No valid LoadingBrowsingContext."_ns);
-    mChannel->Resume();
+    ResumeSuspendedChannel();
     return NS_ERROR_UNEXPECTED;
   }
   RefPtr<nsHttpChannel> httpChannel = do_QueryObject(mChannel);
@@ -3441,6 +3451,10 @@ DocumentLoadListener::OnDataAvailable(nsIRequest* aRequest,
   nsCString data;
   nsresult rv = NS_ReadInputStreamToString(aInputStream, data, aCount);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  if (mScanFirstDataForHints) {
+    ScanDocumentData(data, aOffset + aCount);
+  }
 
   mStreamListenerFunctions.AppendElement(StreamListenerFunction{
       VariantIndex<1>{},
@@ -3783,6 +3797,171 @@ NS_IMETHODIMP DocumentLoadListener::OnStatus(nsIRequest* aRequest,
         }));
   }
   return NS_OK;
+}
+
+namespace {
+
+// Appends the decoded output of a content-encoding converter to a string.
+class DecodedDataCollector final : public nsIStreamListener {
+ public:
+  NS_DECL_ISUPPORTS
+
+  explicit DecodedDataCollector(nsACString& aOut) : mOut(aOut) {}
+
+  NS_IMETHOD OnStartRequest(nsIRequest*) override { return NS_OK; }
+  NS_IMETHOD OnStopRequest(nsIRequest*, nsresult) override { return NS_OK; }
+  NS_IMETHOD OnDataAvailable(nsIRequest*, nsIInputStream* aStream, uint64_t,
+                             uint32_t aCount) override {
+    nsAutoCString chunk;
+    nsresult rv = NS_ReadInputStreamToString(aStream, chunk, aCount);
+    NS_ENSURE_SUCCESS(rv, rv);
+    mOut.Append(chunk);
+    return NS_OK;
+  }
+
+ private:
+  ~DecodedDataCollector() = default;
+
+  // Owned by the DocumentLoadListener, which owns the converter.
+  nsACString& mOut;
+};
+
+NS_IMPL_ISUPPORTS(DecodedDataCollector, nsIStreamListener, nsIRequestObserver)
+
+}  // namespace
+
+bool DocumentLoadListener::StartDocumentScan(
+    nsIHttpChannel* aHttpChannel, CanonicalBrowsingContext* aContext) {
+  if (!StaticPrefs::network_early_hints_from_document_enabled() ||
+      !StaticPrefs::network_early_hints_enabled() || !aHttpChannel ||
+      !mIsDocumentLoad || !aContext || !aContext->IsTopContent()) {
+    return false;
+  }
+  // Subresources of a controlled document go through its service worker, and
+  // an extension's stream filter has to see all of the document's data.
+  if (nsCOMPtr<nsILoadInfo>(mChannel->LoadInfo())->GetController().isSome() ||
+      !mStreamFilterRequests.IsEmpty()) {
+    return false;
+  }
+  // The subresources of a cached document are almost always cached as well,
+  // so preloading them gains little.
+  if (nsCOMPtr<nsICacheInfoChannel> cacheInfo =
+          do_QueryInterface(aHttpChannel)) {
+    bool fromCache = false;
+    if (NS_SUCCEEDED(cacheInfo->IsFromCache(&fromCache)) && fromCache) {
+      return false;
+    }
+  }
+  uint32_t status = 0;
+  if (NS_FAILED(aHttpChannel->GetResponseStatus(&status)) || status != 200) {
+    return false;
+  }
+  nsAutoCString contentType;
+  mChannel->GetContentType(contentType);
+  if (!contentType.EqualsLiteral(TEXT_HTML)) {
+    return false;
+  }
+
+  // The real stream is decoded in the content process; decode a copy here.
+  nsAutoCString encoding;
+  (void)aHttpChannel->GetResponseHeader("Content-Encoding"_ns, encoding);
+  encoding.Trim(" \t");
+  ToLowerCase(encoding);
+  if (!encoding.IsEmpty()) {
+    if (!encoding.EqualsLiteral("gzip") && !encoding.EqualsLiteral("x-gzip") &&
+        !encoding.EqualsLiteral("deflate") &&
+        !encoding.EqualsLiteral("x-deflate") && !encoding.EqualsLiteral("br") &&
+        !encoding.EqualsLiteral("zstd")) {
+      return false;
+    }
+    RefPtr<nsHTTPCompressConv> converter = new nsHTTPCompressConv();
+    nsCOMPtr<nsIStreamListener> collector =
+        new DecodedDataCollector(mHintScanData);
+    // No request is passed to the converter: it would otherwise modify the
+    // real channel's dictionary state.
+    if (NS_FAILED(converter->AsyncConvertData(encoding.get(), "uncompressed",
+                                              collector, nullptr)) ||
+        NS_FAILED(converter->OnStartRequest(nullptr))) {
+      return false;
+    }
+    mHintDecoder = converter;
+  }
+  mScanFirstDataForHints = true;
+  return true;
+}
+
+void DocumentLoadListener::ScanDocumentData(const nsACString& aData,
+                                            uint64_t aEnd) {
+  if (mHintDecoder) {
+    nsCOMPtr<nsIInputStream> stream;
+    if (NS_FAILED(NS_NewByteInputStream(getter_AddRefs(stream), Span(aData),
+                                        NS_ASSIGNMENT_DEPEND)) ||
+        NS_FAILED(mHintDecoder->OnDataAvailable(nullptr, stream, 0,
+                                                aData.Length()))) {
+      FinishDocumentScan(false);
+      return;
+    }
+  } else {
+    mHintScanData.Append(aData);
+  }
+  nsTArray<LinkHeader> links;
+  if (EarlyHintsService::ScanDocumentHead(mHintScanData, links)) {
+    FinishDocumentScan(true);
+    return;
+  }
+  // The channel mustn't complete before the redirect to the real channel, so
+  // stop at the last data, or, if that can't be told, the first data.
+  int64_t length = -1;
+  (void)mChannel->GetContentLength(&length);
+  if (length < 0 ? !mHintScanData.IsEmpty() : aEnd >= uint64_t(length)) {
+    FinishDocumentScan(true);
+  }
+}
+
+void DocumentLoadListener::FinishDocumentScan(bool aStartPreloads) {
+  if (!mScanFirstDataForHints) {
+    return;
+  }
+  mScanFirstDataForHints = false;
+  mChannel->Suspend();
+  // The decoder holds a reference to mHintScanData.
+  mHintDecoder = nullptr;
+  nsCString html = std::move(mHintScanData);
+  if (!aStartPreloads || mEarlyHintArgsRegistered) {
+    return;
+  }
+
+  nsTArray<LinkHeader> links;
+  EarlyHintsService::ScanDocumentHead(html, links);
+  PROFILER_MARKER_TEXT("DocumentHints", NETWORK, {},
+                       nsPrintfCString("%zu links from %zu bytes",
+                                       links.Length(), size_t(html.Length())));
+  if (links.IsEmpty()) {
+    return;
+  }
+  nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(mChannel);
+  nsAutoCString referrerPolicy, csp, connectionAllowlist;
+  (void)httpChannel->GetResponseHeader("Referrer-Policy"_ns, referrerPolicy);
+  (void)httpChannel->GetResponseHeader("Content-Security-Policy"_ns, csp);
+  (void)httpChannel->GetResponseHeader("Connection-Allowlist"_ns,
+                                       connectionAllowlist);
+  nsCOMPtr<nsIURI> uri;
+  if (NS_FAILED(NS_GetFinalChannelURI(mChannel, getter_AddRefs(uri)))) {
+    return;
+  }
+  mEarlyHintsService.DocumentHints(links, uri, mChannel, referrerPolicy, csp,
+                                   connectionAllowlist,
+                                   GetLoadingBrowsingContext());
+}
+
+void DocumentLoadListener::ResumeSuspendedChannel() {
+  if (mScanFirstDataForHints) {
+    mScanFirstDataForHints = false;
+    mHintDecoder = nullptr;
+    mHintScanData.Truncate();
+    return;
+  }
+  mChannel->Resume();
 }
 
 NS_IMETHODIMP DocumentLoadListener::EarlyHint(
