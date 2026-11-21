@@ -5,6 +5,8 @@
 #ifndef mozilla_net_EarlyHintPreloader_h
 #define mozilla_net_EarlyHintPreloader_h
 
+#include <functional>
+
 #include "NeckoCommon.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/PreloadHashKey.h"
@@ -73,7 +75,8 @@ class EarlyHintPreloader final : public nsIStreamListener,
                                  public nsIInterfaceRequestor,
                                  public nsIMultiPartChannelListener,
                                  public nsINamed,
-                                 public nsITimerCallback {
+                                 public nsITimerCallback,
+                                 public HttpChannelSecurityWarningReporter {
  public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSIREQUESTOBSERVER
@@ -85,6 +88,17 @@ class EarlyHintPreloader final : public nsIStreamListener,
   // required by NS_DECL_NSITIMERCALLBACK
   NS_DECL_NSINAMED
   NS_DECL_NSITIMERCALLBACK
+
+  // Warnings reported before a consumer connects are kept and passed on to it,
+  // as the console of the document isn't known yet.
+  [[nodiscard]] nsresult ReportSecurityMessage(
+      const nsAString& aMessageTag, const nsAString& aMessageCategory) override;
+  [[nodiscard]] nsresult LogBlockedCORSRequest(const nsAString& aMessage,
+                                               const nsACString& aCategory,
+                                               bool aIsWarning) override;
+  [[nodiscard]] nsresult LogMimeTypeMismatch(
+      const nsACString& aMessageName, bool aWarning, const nsAString& aURL,
+      const nsAString& aContentType) override;
 
  public:
   // Create and insert a preload into OngoingEarlyHints if the same preload
@@ -124,6 +138,8 @@ class EarlyHintPreloader final : public nsIStreamListener,
 
  private:
   void SetParentChannel();
+  static void SetWarningReporterOn(
+      nsIChannel* aChannel, HttpChannelSecurityWarningReporter* aReporter);
   void InvokeStreamListenerFunctions();
 
   EarlyHintPreloader();
@@ -168,6 +184,8 @@ class EarlyHintPreloader final : public nsIStreamListener,
   bool mOnStartRequestCalled = false;
   // Set to true if we suspended mChannel in the OnStartRequest call
   bool mSuspended = false;
+  nsTArray<std::function<void(HttpChannelSecurityWarningReporter*)>>
+      mPendingWarnings;
   nsCOMPtr<nsIParentChannel> mParent;
   // Set to true after we've received the last OnStopRequest, and shouldn't
   // setup a reference from the ParentChannelListener to the replacement
