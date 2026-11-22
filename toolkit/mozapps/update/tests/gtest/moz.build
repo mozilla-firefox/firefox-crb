@@ -40,3 +40,8 @@ if CONFIG["OS_ARCH"] == "WINNT":
         "userenv",
         "uuid",
     ]
+
+    if CONFIG["COMPILE_ENVIRONMENT"]:
+        TEST_HARNESS_FILES.xpcshell.toolkit.mozapps.update.tests.data += [
+            "!update-gtest.exe",
+        ]
