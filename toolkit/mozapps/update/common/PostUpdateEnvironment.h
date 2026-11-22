@@ -7,23 +7,22 @@
 
 #include <windows.h>
 
+#include <string>
+
 #include "elevation_type.h"
 
 /**
  * The environment of the post-update process.
  *
- * To prevent environment variables from affecting how the post-update process
- * and background tasks behave (bug 1903615), it runs with a minimal
- * environment. The run without elevation gets the user's default environment
- * rather than the environment inherited from the updater, so that any processes
- * it starts, such as the push notification helper, have the environment they
- * need to run normally (bug 2078262). In every other case, or if that
- * environment cannot be built, it gets an empty environment.
+ * Unelevated launches receive only SystemDrive and SystemRoot, taken from the
+ * system Windows directory, and TEMP, TMP and USERPROFILE from the user's
+ * default environment. The values aren't inherited from the updater, so that
+ * relaunch variables don't affect post-update background tasks (bug 1903615).
+ * Every other elevation type gets an empty environment.
  */
 class PostUpdateEnvironment final {
  public:
   explicit PostUpdateEnvironment(ElevationType aElevationType);
-  ~PostUpdateEnvironment();
 
   // Non-copyable and non-movable
   PostUpdateEnvironment(const PostUpdateEnvironment&) = delete;
@@ -34,7 +33,7 @@ class PostUpdateEnvironment final {
   LPVOID get() const;
 
  private:
-  LPVOID mEnvironmentBlock;
+  std::wstring mEnvironmentBlock;
 };
 
 #endif  // POST_UPDATE_ENVIRONMENT_H_

@@ -367,3 +367,10 @@ reason = "Windows only test"
 ["marWrongChannel.js"]
 
 ["marWrongChannelStage.js"]
+
+["postUpdateEnvironment_win.js"]
+head = ""
+run-if = [
+  "os == 'win'",
+]
+reason = "Windows only test"
