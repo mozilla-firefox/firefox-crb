@@ -46,6 +46,15 @@ function principalForDocumentLoad(browsingContext) {
  */
 export const IPPNetErrorUtils = {
   /**
+   * Set by the embedder to show a reconnect from the error page. It is given
+   * the browsing context and a function starting the reconnect, and must call
+   * that function and return its promise.
+   *
+   * @type {((browsingContext: BrowsingContext, reconnect: () => Promise<{started: boolean, error?: string}>) => Promise<{started: boolean, error?: string}>) | null}
+   */
+  onReconnect: null,
+
+  /**
    * Whether the failed load in this browsing context went through IP
    * Protection, so a proxy failure there is the VPN's.
    *
@@ -105,14 +114,17 @@ export const IPPNetErrorUtils = {
       browsingContext.reload(Ci.nsIWebNavigation.LOAD_FLAGS_NONE);
       return;
     }
-    const { started } = await lazy.IPPProxyManager.start(
-      true,
-      browsingContext.usePrivateBrowsing,
-      lazy.IPProtectionServerlist.resolveEgressCountry(
-        lazy.IPPAutoActivation.isPremium
-      ),
-      lazy.IPPProxyManager.mode
-    );
+    const reconnect = () =>
+      lazy.IPPProxyManager.start(
+        true,
+        browsingContext.usePrivateBrowsing,
+        lazy.IPProtectionServerlist.resolveEgressCountry(
+          lazy.IPPAutoActivation.isPremium
+        ),
+        lazy.IPPProxyManager.mode
+      );
+    const { started } = await (this.onReconnect?.(browsingContext, reconnect) ??
+      reconnect());
     if (!started || browsingContext.isDiscarded) {
       return;
     }

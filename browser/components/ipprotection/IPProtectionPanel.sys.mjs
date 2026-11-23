@@ -659,9 +659,31 @@ export class IPProtectionPanel {
     if (this.state.isRetrying) {
       return;
     }
+    await this.#whileRetrying(() => this.#startProxy());
+  }
+
+  /**
+   * Opens the panel in its trying again state for a reconnect started outside
+   * it, such as from the VPN error page. A failed reconnect returns the panel
+   * to the error.
+   *
+   * @param {() => Promise<{started: boolean, error?: string}>} reconnect
+   *   Starts the reconnect.
+   * @returns {Promise<{started: boolean, error?: string}>}
+   */
+  showReconnect(reconnect) {
+    if (this.state.isRetrying) {
+      return reconnect();
+    }
+    this.setState({ error: this.state.error || this.#getProxyErrorType() });
+    this.open();
+    return this.#whileRetrying(reconnect);
+  }
+
+  async #whileRetrying(retry) {
     this.setState({ isRetrying: true });
     try {
-      await this.#startProxy();
+      return await retry();
     } finally {
       this.setState({ isRetrying: false });
     }

@@ -441,6 +441,25 @@ async function waitForErrorPageTitle(browser) {
   });
 }
 
+/**
+ * Waits for the panel to open on its own. Call it before the action opening
+ * the panel.
+ *
+ * @returns {Promise<Element>} the panel content
+ */
+async function waitForPanelOpened() {
+  await Promise.all([
+    waitForPanelEvent(document, "popupshown"),
+    BrowserTestUtils.waitForEvent(document, "IPProtection:Init"),
+  ]);
+  const content = PanelMultiView.getViewNode(
+    document,
+    IPProtectionWidget.PANEL_ID
+  ).querySelector(IPProtectionPanel.CONTENT_TAGNAME);
+  await content.updateComplete;
+  return content;
+}
+
 function clickCardButton(tab, id) {
   return SpecialPowers.spawn(tab.linkedBrowser, [id], buttonId => {
     content.document
@@ -511,6 +530,9 @@ async function setupVPNErrorTest({
     },
 
     async [Symbol.asyncDispose]() {
+      if (IPProtection.getPanel(window)?.active) {
+        await closePanel();
+      }
       for (const tab of tabs) {
         BrowserTestUtils.removeTab(tab);
       }
@@ -664,6 +686,97 @@ add_task(async function test_failed_try_again_keeps_error_page() {
     await reloaded,
     "fp-neterror-vpn-error-title",
     "The site should still not load without the VPN"
+  );
+});
+
+/**
+ * Tests that trying again from the VPN error page opens the panel in its
+ * trying again state, and returns it to the error when the reconnect fails.
+ */
+add_task(async function test_error_page_try_again_opens_panel_retrying() {
+  await using test = await setupVPNErrorTest({
+    failingPass: true,
+    includedSites: ["https://example.com"],
+  });
+  const { tab } = await test.openErrorPage("https://example.com/");
+  await BrowserTestUtils.switchTab(gBrowser, tab);
+
+  const sandbox = sinon.createSandbox();
+  const { promise, resolve } = Promise.withResolvers();
+  const startStub = sandbox.stub(IPPProxyManager, "start").returns(promise);
+
+  const opened = waitForPanelOpened();
+  await clickCardButton(tab, "tryAgainButton");
+  const content = await opened;
+  await TestUtils.waitForCondition(
+    () => startStub.called,
+    "Trying again should start the reconnect"
+  );
+
+  Assert.equal(
+    content.statusBoxEl.titleEl.getAttribute("data-l10n-id"),
+    "ipprotection-connection-status-trying-again-title",
+    "The panel should say the VPN is trying again"
+  );
+  Assert.ok(
+    content.tryAgainButtonEl.disabled,
+    "Try again button should be disabled while retrying"
+  );
+
+  resolve({ started: false, error: ERRORS.GENERIC });
+  await TestUtils.waitForCondition(
+    () => !content.state.isRetrying,
+    "Retry should finish"
+  );
+  await content.updateComplete;
+
+  Assert.equal(
+    content.statusBoxEl.titleEl.getAttribute("data-l10n-id"),
+    "ipprotection-connection-status-blocked-error-title-1",
+    "The panel should return to the error after the reconnect fails"
+  );
+  Assert.ok(
+    !content.tryAgainButtonEl.disabled,
+    "Try again button should be enabled after the reconnect fails"
+  );
+
+  sandbox.restore();
+});
+
+/**
+ * Tests that a reconnect from the VPN error page that fails for real leaves
+ * the panel on the error.
+ */
+add_task(async function test_error_page_failed_try_again_keeps_panel_error() {
+  await using test = await setupVPNErrorTest({
+    failingPass: true,
+    includedSites: ["https://example.com"],
+  });
+  const { tab } = await test.openErrorPage("https://example.com/");
+  await BrowserTestUtils.switchTab(gBrowser, tab);
+
+  const opened = waitForPanelOpened();
+  const failed = waitForProxyState(IPPProxyStates.ACTIVATING).then(() =>
+    waitForProxyState(IPPProxyStates.ERROR)
+  );
+  await clickCardButton(tab, "tryAgainButton");
+  const content = await opened;
+  await failed;
+  await TestUtils.waitForCondition(
+    () => !content.state.isRetrying,
+    "Retry should finish"
+  );
+  await content.updateComplete;
+
+  Assert.equal(
+    content.state.error,
+    ERRORS.GENERIC,
+    "The panel should still show the error"
+  );
+  Assert.equal(
+    content.statusBoxEl.titleEl.getAttribute("data-l10n-id"),
+    "ipprotection-connection-status-blocked-error-title-1",
+    "The panel should show the error title"
   );
 });
 

@@ -9,6 +9,7 @@
 
 import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 import { IPProtectionActivator } from "moz-src:///toolkit/components/ipprotection/IPProtectionActivator.sys.mjs";
+import { IPPNetErrorUtils } from "moz-src:///toolkit/components/ipprotection/IPPNetErrorUtils.sys.mjs";
 
 const lazy = {};
 
@@ -111,5 +112,10 @@ IPProtectionActivator.setAuthProvider(authProvider);
 if (!AppConstants.MOZ_ENTERPRISE) {
   lazy.IPPAutoActivation.isPremium = () => lazy.IPProtectionPanel.isPremium();
 }
+
+IPPNetErrorUtils.onReconnect = (browsingContext, reconnect) =>
+  lazy.IPProtection.getPanel(browsingContext.topChromeWindow)?.showReconnect(
+    reconnect
+  ) ?? reconnect();
 
 export { IPProtectionActivator };
