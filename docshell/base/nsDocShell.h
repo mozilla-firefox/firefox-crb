@@ -11,6 +11,7 @@
 #include "mozilla/Encoding.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/NotNull.h"
+#include "mozilla/Result.h"
 #include "mozilla/ScrollbarPreferences.h"
 #include "mozilla/UniquePtr.h"
 #include "mozilla/WeakPtr.h"
@@ -348,6 +349,17 @@ class nsDocShell final : public nsDocLoader,
   mozilla::gfx::Matrix5x4* GetColorMatrix() { return mColorMatrix.get(); }
 
   static bool SandboxFlagsImplyCookies(const uint32_t& aSandboxFlags);
+
+  // See https://bugzilla.mozilla.org/show_bug.cgi?id=2089000
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY mozilla::Result<nsILoadGroup*, nsresult>
+  StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
+                                           uint32_t aLoadType);
+
+  // Ends the navigation StartNavigationForDownloadTurnedDocument started, for
+  // when its channel could not be opened.
+  void AbandonDownloadTurnedNavigation() {
+    CancelNavigationLoadGroupIfUnused();
+  }
 
   // Tell the favicon service that aNewURI has the same favicon as aOldURI.
   static void CopyFavicon(nsIURI* aOldURI, nsIURI* aNewURI,
@@ -1205,6 +1217,11 @@ class nsDocShell final : public nsDocLoader,
   MOZ_CAN_RUN_SCRIPT void ResetNavigationStateForStop(
       UnsetOngoingNavigation aUnsetOngoingNavigation);
   MOZ_CAN_RUN_SCRIPT void StopActiveDocument(uint32_t aStopFlags);
+
+  // With docshell.navigation.new_load_group, starts a navigation in a load
+  // group of its own, see nsDocLoader::BeginNavigationLoadGroup. Returns false
+  // if script run meanwhile started a newer navigation or stopped this one.
+  MOZ_CAN_RUN_SCRIPT bool StopForNewNavigation(uint32_t aStopFlags);
 
   MOZ_CAN_RUN_SCRIPT
   void ResetOngoingNavigation(
