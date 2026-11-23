@@ -5,6 +5,7 @@
 #include "PerformanceObserver.h"
 
 #include "LargestContentfulPaint.h"
+#include "LayoutShift.h"
 #include "PerformanceContainerTiming.h"
 #include "PerformanceEntry.h"
 #include "PerformanceObserverEntryList.h"
@@ -216,6 +217,12 @@ void PerformanceObserver::Observe(const PerformanceObserverInit& aOptions,
         validEntryTypes.AppendElement(kContainerTimingName);
       }
     }
+    if (NS_IsMainThread() && StaticPrefs::dom_enable_layout_shift()) {
+      if (entryTypes.Contains(kLayoutShiftName) &&
+          !validEntryTypes.Contains(kLayoutShiftName)) {
+        validEntryTypes.AppendElement(kLayoutShiftName);
+      }
+    }
     for (const nsLiteralString& name : kValidTypeNames) {
       if (entryTypes.Contains(name) && !validEntryTypes.Contains(name)) {
         validEntryTypes.AppendElement(name);
@@ -290,6 +297,12 @@ void PerformanceObserver::Observe(const PerformanceObserverInit& aOptions,
       }
     }
 
+    if (NS_IsMainThread() && StaticPrefs::dom_enable_layout_shift()) {
+      if (type == kLayoutShiftName) {
+        typeValid = true;
+      }
+    }
+
     if (!typeValid) {
       AutoTArray<nsString, 1> params = {std::move(type)};
       mGlobal->ReportToConsole(nsIScriptError::warningFlag, "DOM"_ns,
@@ -352,6 +365,10 @@ void PerformanceObserver::GetSupportedEntryTypes(
 
   if (StaticPrefs::dom_enable_largest_contentful_paint()) {
     validTypes.AppendElement(u"largest-contentful-paint"_ns);
+  }
+
+  if (NS_IsMainThread() && StaticPrefs::dom_enable_layout_shift()) {
+    validTypes.AppendElement(kLayoutShiftName);
   }
 
   for (const nsLiteralString& name : kValidTypeNames) {

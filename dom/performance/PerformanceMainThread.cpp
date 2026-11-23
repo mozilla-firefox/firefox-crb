@@ -80,9 +80,10 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(PerformanceMainThread,
                                                 Performance)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(
       mTiming, mNavigation, mDocEntry, mFCPTiming, mEventTimingEntries,
-      mLargestContentfulPaintEntries, mContainerTimingEntries, mFirstInputEvent,
-      mPendingPointerDown, mPendingEventTimingEntries, mEventCounts,
-      mInteractionMetrics, mCurrentEventTimingEntry, mPendingLCPCandidate)
+      mLargestContentfulPaintEntries, mLayoutShiftEntries,
+      mContainerTimingEntries, mFirstInputEvent, mPendingPointerDown,
+      mPendingEventTimingEntries, mEventCounts, mInteractionMetrics,
+      mCurrentEventTimingEntry, mPendingLCPCandidate)
   tmp->mTextFrameUnions.Clear();
   tmp->mContainerTimingRecords.Clear();
   tmp->mMozMemory = nullptr;
@@ -92,10 +93,11 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(PerformanceMainThread,
                                                   Performance)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(
       mTiming, mNavigation, mDocEntry, mFCPTiming, mEventTimingEntries,
-      mLargestContentfulPaintEntries, mContainerTimingEntries, mFirstInputEvent,
-      mPendingPointerDown, mPendingEventTimingEntries, mEventCounts,
-      mTextFrameUnions, mContainerTimingRecords, mInteractionMetrics,
-      mCurrentEventTimingEntry, mPendingLCPCandidate)
+      mLargestContentfulPaintEntries, mLayoutShiftEntries,
+      mContainerTimingEntries, mFirstInputEvent, mPendingPointerDown,
+      mPendingEventTimingEntries, mEventCounts, mTextFrameUnions,
+      mContainerTimingRecords, mInteractionMetrics, mCurrentEventTimingEntry,
+      mPendingLCPCandidate)
 
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
@@ -305,6 +307,14 @@ void PerformanceMainThread::BufferLargestContentfulPaintEntryIfNeeded(
   if (mLargestContentfulPaintEntries.Length() <
       kMaxLargestContentfulPaintBufferSize) {
     mLargestContentfulPaintEntries.AppendElement(aEntry);
+  }
+}
+
+void PerformanceMainThread::BufferLayoutShiftEntryIfNeeded(
+    LayoutShift* aEntry) {
+  MOZ_ASSERT(StaticPrefs::dom_enable_layout_shift());
+  if (mLayoutShiftEntries.Length() < kMaxLayoutShiftBufferSize) {
+    mLayoutShiftEntries.AppendElement(aEntry);
   }
 }
 
@@ -723,6 +733,11 @@ void PerformanceMainThread::QueueLargestContentfulPaintEntry(
   QueueEntry(aEntry);
 }
 
+void PerformanceMainThread::QueueLayoutShiftEntry(LayoutShift* aEntry) {
+  MOZ_ASSERT(StaticPrefs::dom_enable_layout_shift());
+  QueueEntry(aEntry);
+}
+
 EventCounts* PerformanceMainThread::EventCounts() {
   MOZ_ASSERT(StaticPrefs::dom_enable_event_timing());
   return mEventCounts;
@@ -795,6 +810,13 @@ void PerformanceMainThread::GetEntriesByTypeForObserver(
   if (StaticPrefs::dom_enable_container_timing()) {
     if (aEntryType.Equals(kContainerTimingName)) {
       aRetval.AppendElements(mContainerTimingEntries);
+      return;
+    }
+  }
+
+  if (StaticPrefs::dom_enable_layout_shift()) {
+    if (aEntryType.Equals(kLayoutShiftName)) {
+      aRetval.AppendElements(mLayoutShiftEntries);
       return;
     }
   }

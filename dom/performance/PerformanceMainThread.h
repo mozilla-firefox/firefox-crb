@@ -6,6 +6,7 @@
 #define mozilla_dom_PerformanceMainThread_h
 
 #include "LargestContentfulPaint.h"
+#include "LayoutShift.h"
 #include "Performance.h"
 #include "PerformanceInteractionMetrics.h"
 #include "PerformanceStorage.h"
@@ -90,6 +91,9 @@ class PerformanceMainThread final : public Performance,
                         const WidgetEvent* aEvent) override;
 
   void BufferLargestContentfulPaintEntryIfNeeded(LargestContentfulPaint*);
+  void BufferLayoutShiftEntryIfNeeded(LayoutShift*);
+
+  void QueueLayoutShiftEntry(LayoutShift* aEntry);
 
   void QueueContainerTimingEntry(PerformanceContainerTiming* aEntry);
   void FinalizeContainerTimingEntries();
@@ -140,6 +144,8 @@ class PerformanceMainThread final : public Performance,
   static constexpr double kDefaultEventTimingMinDuration = 16.0;
 
   static constexpr uint32_t kMaxLargestContentfulPaintBufferSize = 150;
+
+  static constexpr uint32_t kMaxLayoutShiftBufferSize = 150;
 
   static constexpr uint32_t kMaxContainerTimingBufferSize = 150;
 
@@ -239,6 +245,7 @@ class PerformanceMainThread final : public Performance,
 
   nsTArray<RefPtr<PerformanceEventTiming>> mEventTimingEntries;
   nsTArray<RefPtr<LargestContentfulPaint>> mLargestContentfulPaintEntries;
+  nsTArray<RefPtr<LayoutShift>> mLayoutShiftEntries;
   nsTArray<RefPtr<PerformanceContainerTiming>> mContainerTimingEntries;
 
   AutoCleanLinkedList<RefPtr<PerformanceEventTiming>>

@@ -3470,26 +3470,30 @@ nsINode* nsContentUtils::Retarget(nsINode* aTargetA, const nsINode* aTargetB) {
 Element* nsContentUtils::GetAnElementForTiming(Element* aTarget,
                                                const Document* aDocument,
                                                nsIGlobalObject* aGlobal) {
+  return IsExposedForPaintTiming(aTarget, aDocument, aGlobal) ? aTarget
+                                                              : nullptr;
+}
+
+// static
+bool nsContentUtils::IsExposedForPaintTiming(nsINode* aTarget,
+                                             const Document* aDocument,
+                                             nsIGlobalObject* aGlobal) {
   if (!aTarget->IsInComposedDoc()) {
-    return nullptr;
+    return false;
   }
 
   if (!aDocument) {
     nsCOMPtr<nsPIDOMWindowInner> inner = do_QueryInterface(aGlobal);
     if (!inner) {
-      return nullptr;
+      return false;
     }
     aDocument = inner->GetExtantDoc();
   }
 
   MOZ_ASSERT(aDocument);
 
-  if (aTarget->GetUncomposedDocOrConnectedShadowRoot() != aDocument ||
-      !aDocument->IsCurrentActiveDocument()) {
-    return nullptr;
-  }
-
-  return aTarget;
+  return aTarget->GetUncomposedDocOrConnectedShadowRoot() == aDocument &&
+         aDocument->IsCurrentActiveDocument();
 }
 
 // static
