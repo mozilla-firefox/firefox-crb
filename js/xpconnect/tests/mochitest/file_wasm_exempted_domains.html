@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<script src="file_wasm_exempted_domains_probe.js"></script>
+<script>
+"use strict";
+
+let worker;
+
+async function fromWorklet() {
+  const ctx = new OfflineAudioContext(1, 128, 44100);
+  await ctx.audioWorklet.addModule("file_wasm_exempted_domains_worklet.js");
+  const node = new AudioWorkletNode(ctx, "wasm-probe");
+  const result = new Promise((resolve, reject) => {
+    node.port.onmessage = e => resolve(e.data);
+    node.onprocessorerror = () => reject(new Error("worklet processor error"));
+  });
+  node.connect(ctx.destination);
+  await ctx.startRendering();
+  return result;
+}
+
+async function probeAll() {
+  if (location.search === "?window") {
+    return { window: wasmProbe() };
+  }
+  worker = new Worker("file_wasm_exempted_domains_worker.js");
+  const workers = await nextWorkerMessage(worker);
+  return { window: wasmProbe(), ...workers, worklet: await fromWorklet() };
+}
+
+async function report(fn) {
+  let result;
+  try {
+    result = await fn();
+  } catch (e) {
+    result = { error: String(e) };
+  }
+  parent.postMessage(result, "*");
+}
+
+window.onmessage = e => {
+  if (e.source === parent) {
+    worker.postMessage("respawn");
+    report(() => nextWorkerMessage(worker));
+  }
+};
+
+report(probeAll);
+</script>
