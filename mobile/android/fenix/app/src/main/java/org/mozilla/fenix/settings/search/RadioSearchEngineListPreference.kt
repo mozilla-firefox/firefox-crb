@@ -13,6 +13,9 @@ import android.view.ViewGroup
 import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.RadioGroup
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
 import androidx.navigation.findNavController
@@ -34,6 +37,7 @@ import org.mozilla.fenix.R
 import org.mozilla.fenix.databinding.SearchEngineRadioButtonBinding
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.telemetryName
+import org.mozilla.fenix.theme.FirefoxTheme
 
 class RadioSearchEngineListPreference
 @JvmOverloads
@@ -138,7 +142,7 @@ constructor(
         binding.radioButton.isChecked = isSelected
         binding.radioButton.setOnCheckedChangeListener(this)
         binding.engineText.text = context.getString(R.string.search_engine_use_default)
-        binding.overflowMenu.isVisible = false
+        binding.overflowMenuContainer.isVisible = false
         binding.engineIcon.isVisible = false
         return wrapper
     }
@@ -162,10 +166,10 @@ constructor(
         binding.radioButton.isChecked = isSelected
         binding.radioButton.setOnCheckedChangeListener(this)
         binding.engineText.text = engine.name
-        binding.overflowMenu.isVisible = allowDeletion || isCustomSearchEngine
-        binding.overflowMenu.setOnClickListener {
-            SearchEngineMenu(
-                    context = context,
+        binding.overflowMenuContainer.isVisible = allowDeletion || isCustomSearchEngine
+        if (binding.overflowMenuContainer.isVisible) {
+            val menu =
+                SearchEngineMenu(
                     allowDeletion = allowDeletion,
                     isCustomSearchEngine = isCustomSearchEngine,
                     onItemTapped = {
@@ -179,9 +183,17 @@ constructor(
                         }
                     },
                 )
-                .menuBuilder
-                .build(context)
-                .show(binding.overflowMenu)
+            var expanded by mutableStateOf(false)
+            binding.overflowMenuPopup.setContent {
+                FirefoxTheme {
+                    SearchEngineDropdownMenu(
+                        menu = menu,
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                    )
+                }
+            }
+            binding.overflowMenu.setOnClickListener { expanded = true }
         }
         val iconSize = res.getDimension(R.dimen.preference_icon_drawable_size).toInt()
         val engineIcon = engine.icon.toDrawable(res)

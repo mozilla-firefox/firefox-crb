@@ -6,6 +6,7 @@ package org.mozilla.fenix.ui.efficiency.selectors
 
 import org.mozilla.fenix.R
 import org.mozilla.fenix.helpers.DataGenerationHelper.getStringResource
+import org.mozilla.fenix.settings.search.SearchEngineMenu
 import org.mozilla.fenix.ui.efficiency.helpers.Selector
 import org.mozilla.fenix.ui.efficiency.helpers.SelectorContainer
 import org.mozilla.fenix.ui.efficiency.helpers.SelectorGroup
@@ -50,8 +51,8 @@ object SettingsSearchDefaultSearchEngineSelectors : SelectorContainer {
 
     val OVERFLOW_EDIT_ITEM =
         Selector(
-            strategy = SelectorStrategy.UIAUTOMATOR_WITH_TEXT,
-            value = getStringResource(R.string.search_engine_edit),
+            strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+            value = SearchEngineMenu.EDIT_TEST_TAG,
             description = "Edit item in the custom engine overflow menu",
         )
 }
