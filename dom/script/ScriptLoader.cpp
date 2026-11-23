@@ -2251,6 +2251,32 @@ void ScriptLoader::CancelAndClearScriptLoadRequests() {
   mPreloads.Clear();
 }
 
+void ScriptLoader::CancelAndClearParserOwnedScriptLoadRequests() {
+  // Unlike CancelAndClearScriptLoadRequests, mOffThreadCompilingRequests is
+  // left alone, so take these requests out of it.
+  auto removeFromCompilingList = [&](ScriptLoadRequest* aRequest) {
+    ScriptLoadContext* context = aRequest->GetScriptLoadContext();
+    if (context->mInCompilingList) {
+      mOffThreadCompilingRequests.Remove(aRequest);
+      context->mInCompilingList = false;
+    }
+  };
+
+  if (RefPtr<ScriptLoadRequest> request = mParserBlockingRequest.forget()) {
+    removeFromCompilingList(request);
+    request->Cancel();
+  }
+
+  mDeferRequests.CancelRequestsAndClear();
+  mXSLTRequests.CancelRequestsAndClear();
+
+  for (size_t i = 0; i < mPreloads.Length(); i++) {
+    removeFromCompilingList(mPreloads[i].mRequest);
+    mPreloads[i].mRequest->Cancel();
+  }
+  mPreloads.Clear();
+}
+
 nsresult ScriptLoader::CompileOffThreadOrProcessRequest(
     ScriptLoadRequest* aRequest) {
   NS_ASSERTION(nsContentUtils::IsSafeToRunScript(),
@@ -5679,7 +5705,11 @@ void ScriptLoader::DeferCheckpointReached() {
 
 void ScriptLoader::ParsingComplete(bool aTerminated) {
   if (aTerminated) {
-    CancelAndClearScriptLoadRequests();
+    if (mKeepScriptsNotOwnedByParser) {
+      CancelAndClearParserOwnedScriptLoadRequests();
+    } else {
+      CancelAndClearScriptLoadRequests();
+    }
 
     // Have to call this even if aTerminated so we'll correctly unblock onload.
     DeferCheckpointReached();
