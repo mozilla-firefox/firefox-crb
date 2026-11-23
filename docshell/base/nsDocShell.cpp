@@ -4467,7 +4467,8 @@ void nsDocShell::StopActiveDocument(uint32_t aStopFlags,
   }
 }
 
-bool nsDocShell::StopForNewNavigation(uint32_t aStopFlags) {
+bool nsDocShell::StopForNewNavigation(
+    uint32_t aStopFlags, UnsetOngoingNavigation aUnsetOngoingNavigation) {
   RefPtr kungFuDeathGrip = this;
 
   // nsDocLoader::Stop() used to do this as a side effect of cancelling
@@ -4478,7 +4479,7 @@ bool nsDocShell::StopForNewNavigation(uint32_t aStopFlags) {
   // This navigation supersedes one that is still pending.
   CancelNavigationLoadGroup();
 
-  ResetNavigationStateForStop(UnsetOngoingNavigation::No);
+  ResetNavigationStateForStop(aUnsetOngoingNavigation);
 
   // Cancelling mLoadGroup used to cancel javascript: URLs whose script is
   // still running; now they are cancelled explicitly, so that they do not go
@@ -4518,6 +4519,22 @@ nsDocShell::StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
 
   // A navigation that started after the download set mLoadType.
   mLoadType = aLoadType;
+  aChannel->SetLoadGroup(mLoadGroup);
+  return mLoadGroup.get();
+}
+
+Result<nsILoadGroup*, nsresult>
+nsDocShell::StartNavigationForJavascriptURLResult(nsIChannel* aChannel) {
+  RefPtr kungFuDeathGrip = this;
+  if (!StaticPrefs::docshell_navigation_new_load_group() || mIsBeingDestroyed) {
+    MOZ_TRY(Stop(nsIWebNavigation::STOP_ALL));
+    return nullptr;
+  }
+
+  if (!StopForNewNavigation(nsIWebNavigation::STOP_ALL,
+                            UnsetOngoingNavigation::Yes)) {
+    return Err(NS_BINDING_ABORTED);
+  }
   aChannel->SetLoadGroup(mLoadGroup);
   return mLoadGroup.get();
 }
