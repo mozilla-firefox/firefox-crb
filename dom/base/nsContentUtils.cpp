@@ -92,6 +92,7 @@
 #include "mozilla/IMEStateManager.h"
 #include "mozilla/InputEventOptions.h"
 #include "mozilla/Latin1.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Likely.h"
 #include "mozilla/LoadInfo.h"
 #include "mozilla/Logging.h"
@@ -6379,6 +6380,15 @@ nsresult nsContentUtils::DispatchEvent(
     *aDefaultAction = (status != nsEventStatus_eConsumeNoDefault);
   }
   return rv;
+}
+
+// static
+nsresult nsContentUtils::DispatchFormChangeEvent(Element* aEventTarget) {
+  MOZ_ASSERT(aEventTarget);
+  // https://wicg.github.io/layout-instability/#sec-input-exclusion
+  LayoutShiftTracker::NotifyChangeEvent(aEventTarget);
+  return DispatchTrustedEvent(aEventTarget, u"change"_ns, CanBubble::eYes,
+                              Cancelable::eNo);
 }
 
 // static

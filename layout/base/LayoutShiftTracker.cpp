@@ -14,12 +14,15 @@
 #include "mozilla/ScrollContainerFrame.h"
 #include "mozilla/WritingModes.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/dom/DocumentInlines.h"
+#include "mozilla/dom/Element.h"
 #include "mozilla/dom/LayoutShift.h"
 #include "mozilla/dom/LayoutShiftAttribution.h"
 #include "mozilla/dom/PerformanceMainThread.h"
 #include "nsIFrame.h"
 #include "nsIFrameInlines.h"
 #include "nsIMemoryReporter.h"
+#include "nsITimer.h"
 #include "nsLayoutUtils.h"
 #include "nsPresContext.h"
 #include "nsRefreshDriver.h"
@@ -37,6 +40,11 @@ MOZ_DEFINE_MALLOC_SIZE_OF(LayoutShiftMallocSizeOf)
 // Moves of less than this in both axes are not shifts.
 static constexpr int32_t kShiftThresholdCSSPixels = 3;
 static constexpr size_t kMaxSources = 5;
+static constexpr double kRecentInputMilliseconds = 500.0;
+// If a pointer has been down for longer than this, stop holding back shifts.
+// This also covers missed pointer releases.
+static constexpr uint32_t kMaxPendingPointerMilliseconds = 5000;
+
 namespace {
 
 // The offset of the starting corner (block-start, inline-start) of a box of
@@ -805,7 +813,12 @@ LayoutShiftTracker::LayoutShiftTracker(nsPresContext* aPresContext)
   MOZ_ASSERT(mPresContext);
 }
 
-LayoutShiftTracker::~LayoutShiftTracker() { ClearRecords(); }
+LayoutShiftTracker::~LayoutShiftTracker() {
+  if (mPendingPointerTimer) {
+    mPendingPointerTimer->Cancel();
+  }
+  ClearRecords();
+}
 
 /* static */
 LayoutShiftTracker* LayoutShiftTracker::Get(nsPresContext* aPresContext) {
@@ -949,11 +962,89 @@ void LayoutShiftTracker::Report() {
   // The entry's time is when it is created, which is after this rendering
   // update's animation frame callbacks ran, not the refresh tick time.
   const TimeStamp now = TimeStamp::Now();
+  const bool hadRecentInput =
+      !mLastExcludingInput.IsNull() &&
+      (now - mLastExcludingInput).ToMilliseconds() < kRecentInputMilliseconds;
+  const DOMHighResTimeStamp lastInputTime =
+      mLastExcludingInput.IsNull()
+          ? 0.0
+          : performance->GetReducedTimePrecisionDOMHighRes(mLastExcludingInput);
   RefPtr<LayoutShift> layoutShift = MakeRefPtr<LayoutShift>(
       performance, performance->TimeStampToDOMHighResForRendering(now), score,
-      /* aHadRecentInput */ false, /* aLastInputTime */ 0.0,
-      std::move(attributions));
-  performance->QueueLayoutShiftEntry(layoutShift);
+      hadRecentInput, lastInputTime, std::move(attributions));
+  if (mPointersDown) {
+    performance->AddPendingLayoutShiftEntry(layoutShift);
+  } else {
+    performance->QueueLayoutShiftEntry(layoutShift);
+  }
+}
+
+void LayoutShiftTracker::NotifyExcludingInput(const TimeStamp& aTime) {
+  mLastExcludingInput = aTime;
+}
+
+void LayoutShiftTracker::NotifyPointerDown() {
+  if (mPointersDown++) {
+    return;
+  }
+  // Owned by us and canceled when we go away, so |this| outlives it.
+  mPendingPointerTimer =
+      NS_NewTimerWithCallback(
+          [this](nsITimer*) {
+            mPointersDown = 0;
+            EndPendingPointerInteraction(Nothing());
+          },
+          kMaxPendingPointerMilliseconds, nsITimer::TYPE_ONE_SHOT,
+          "LayoutShiftTracker::PendingPointerTimeout"_ns)
+          .unwrapOr(nullptr);
+}
+
+/* static */
+void LayoutShiftTracker::NotifyChangeEvent(dom::Element* aTarget) {
+  nsPresContext* presContext = aTarget->OwnerDoc()->GetPresContext();
+  if (!presContext) {
+    return;
+  }
+  if (LayoutShiftTracker* tracker = Get(presContext)) {
+    tracker->NotifyExcludingInput(TimeStamp::Now());
+  }
+}
+
+void LayoutShiftTracker::NotifyPointerUp(const TimeStamp& aTime) {
+  // Also after the pending pointer timeout reset mPointersDown.
+  if (mPointersDown && --mPointersDown) {
+    return;
+  }
+  // Like Chrome, the release is the excluding input for the shifts held back
+  // during the press, whatever their timing.
+  mLastExcludingInput = aTime;
+  EndPendingPointerInteraction(Some(aTime));
+}
+
+void LayoutShiftTracker::NotifyPointerCanceled() {
+  if (!mPointersDown || --mPointersDown) {
+    return;
+  }
+  EndPendingPointerInteraction(Nothing());
+}
+
+void LayoutShiftTracker::EndPendingPointerInteraction(
+    const Maybe<TimeStamp>& aExcludingInput) {
+  if (mPendingPointerTimer) {
+    mPendingPointerTimer->Cancel();
+    mPendingPointerTimer = nullptr;
+  }
+  RefPtr<PerformanceMainThread> performance =
+      mPresContext->GetPerformanceMainThread();
+  if (!performance || !performance->HasPendingLayoutShiftEntries()) {
+    return;
+  }
+  Maybe<DOMHighResTimeStamp> excludingInputTime;
+  if (aExcludingInput) {
+    excludingInputTime =
+        Some(performance->GetReducedTimePrecisionDOMHighRes(*aExcludingInput));
+  }
+  performance->FlushPendingLayoutShiftEntries(excludingInputTime);
 }
 
 }  // namespace mozilla

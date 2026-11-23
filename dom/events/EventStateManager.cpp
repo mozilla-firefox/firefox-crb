@@ -21,6 +21,7 @@
 #include "mozilla/HTMLEditor.h"
 #include "mozilla/Hal.h"
 #include "mozilla/IMEStateManager.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Likely.h"
 #include "mozilla/Logging.h"
 #include "mozilla/LookAndFeel.h"
@@ -864,6 +865,45 @@ static bool IsMessageGamepadUserActivity(EventMessage aMessage) {
          aMessage == eGamepadAxisMove;
 }
 
+// https://wicg.github.io/layout-instability/#sec-input-exclusion
+static void NotifyLayoutShiftTrackerOfInput(nsPresContext* aPresContext,
+                                            const WidgetEvent* aEvent) {
+  switch (aEvent->mMessage) {
+    case eKeyDown:
+    case eMouseDown:
+    case ePointerDown:
+    case ePointerUp:
+    case ePointerCancel:
+      break;
+    default:
+      return;
+  }
+  if (!aEvent->IsTrusted()) {
+    return;
+  }
+  LayoutShiftTracker* tracker = LayoutShiftTracker::Get(aPresContext);
+  if (!tracker) {
+    return;
+  }
+  switch (aEvent->mMessage) {
+    case eKeyDown:
+    case eMouseDown:
+      tracker->NotifyExcludingInput(aEvent->mTimeStamp);
+      break;
+    case ePointerDown:
+      tracker->NotifyPointerDown();
+      break;
+    case ePointerUp:
+      tracker->NotifyPointerUp(aEvent->mTimeStamp);
+      break;
+    case ePointerCancel:
+      tracker->NotifyPointerCanceled();
+      break;
+    default:
+      break;
+  }
+}
+
 // static
 bool EventStateManager::IsKeyboardEventUserActivity(WidgetEvent* aEvent) {
   // We ignore things that shouldn't cause popups, but also things that look
@@ -1129,6 +1169,8 @@ nsresult EventStateManager::PreHandleEvent(nsPresContext* aPresContext,
     // target.  Otherwise, e.g., a keyboard event, let's forget it.
     mMouseEnterLeaveHelper->TryToRestorePendingRemovedOverTarget(aEvent);
   }
+
+  NotifyLayoutShiftTrackerOfInput(aPresContext, aEvent);
 
   static constexpr auto const allowSynthesisForTests = []() -> bool {
     nsCOMPtr<nsIDragService> dragService =

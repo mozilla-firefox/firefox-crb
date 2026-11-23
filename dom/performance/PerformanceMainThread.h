@@ -95,6 +95,21 @@ class PerformanceMainThread final : public Performance,
 
   void QueueLayoutShiftEntry(LayoutShift* aEntry);
 
+  // Layout shift entries produced while a pointer is down are held back until
+  // the pointer interaction ends, since only then is it known whether it was
+  // an excluding input (tap, drag) or became a scroll.
+  void AddPendingLayoutShiftEntry(LayoutShift* aEntry) {
+    mPendingLayoutShiftEntries.AppendElement(aEntry);
+  }
+  bool HasPendingLayoutShiftEntries() const {
+    return !mPendingLayoutShiftEntries.IsEmpty();
+  }
+  // Queues all pending layout shift entries. If aExcludingInputTime is set, the
+  // pointer was released at that time as an excluding input, and the entries
+  // are reported as having had recent input then.
+  void FlushPendingLayoutShiftEntries(
+      const Maybe<DOMHighResTimeStamp>& aExcludingInputTime);
+
   void QueueContainerTimingEntry(PerformanceContainerTiming* aEntry);
   void FinalizeContainerTimingEntries();
 
@@ -246,6 +261,7 @@ class PerformanceMainThread final : public Performance,
   nsTArray<RefPtr<PerformanceEventTiming>> mEventTimingEntries;
   nsTArray<RefPtr<LargestContentfulPaint>> mLargestContentfulPaintEntries;
   nsTArray<RefPtr<LayoutShift>> mLayoutShiftEntries;
+  nsTArray<RefPtr<LayoutShift>> mPendingLayoutShiftEntries;
   nsTArray<RefPtr<PerformanceContainerTiming>> mContainerTimingEntries;
 
   AutoCleanLinkedList<RefPtr<PerformanceEventTiming>>

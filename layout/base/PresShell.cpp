@@ -31,6 +31,7 @@
 #include "mozilla/AnimationEventDispatcher.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
+#include "mozilla/AutoRestore.h"
 #include "mozilla/CaretAssociationHint.h"
 #include "mozilla/ConnectedAncestorTracker.h"
 #include "mozilla/ContentIterator.h"
@@ -1886,6 +1887,9 @@ void PresShell::ForceResizeReflowWithCurrentDimensions() {
 
 void PresShell::ResizeReflow(const nsSize& aSize,
                              ResizeReflowOptions aOptions) {
+  AutoRestore<bool> restoreIsExternallyResizing(mIsExternallyResizing);
+  mIsExternallyResizing = true;
+
   if (mZoomConstraintsClient) {
     // If we have a ZoomConstraintsClient and the available screen area
     // changed, then we might need to disable double-tap-to-zoom, so notify
@@ -1977,6 +1981,14 @@ void PresShell::ScheduleResizeEventIfNeeded(ResizeEventKind aKind) {
   }
   if (aKind == ResizeEventKind::Regular) {
     mResizeEventPending = true;
+    // https://wicg.github.io/layout-instability/#sec-input-exclusion: an
+    // external resize of the top-level viewport is an excluding input.
+    if (BrowsingContext* bc = mDocument->GetBrowsingContext();
+        mIsExternallyResizing && bc && bc->IsTop()) {
+      if (LayoutShiftTracker* tracker = LayoutShiftTracker::Get(mPresContext)) {
+        tracker->NotifyExcludingInput(TimeStamp::Now());
+      }
+    }
   } else {
     MOZ_ASSERT(aKind == ResizeEventKind::Visual);
     mVisualViewportResizeEventPending = true;

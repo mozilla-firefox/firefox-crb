@@ -255,8 +255,7 @@ class DispatchChangeEventCallback final : public GetFilesCallback {
     nsresult rv = nsContentUtils::DispatchInputEvent(mInputElement);
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rv), "Failed to dispatch input event");
     mInputElement->SetUserInteracted(true);
-    rv = nsContentUtils::DispatchTrustedEvent(mInputElement, u"change"_ns,
-                                              CanBubble::eYes, Cancelable::eNo);
+    rv = nsContentUtils::DispatchFormChangeEvent(mInputElement);
 
     return rv;
   }
@@ -704,8 +703,7 @@ nsColorPickerShownCallback::Done(const nsAString& aColor) {
 
   if (mValueChanged) {
     mInput->SetUserInteracted(true);
-    rv = nsContentUtils::DispatchTrustedEvent(mInput, u"change"_ns,
-                                              CanBubble::eYes, Cancelable::eNo);
+    rv = nsContentUtils::DispatchFormChangeEvent(mInput);
   }
 
   return rv;
@@ -2840,9 +2838,7 @@ void HTMLInputElement::FireChangeEventIfNeeded() {
     return;
   }
   // Dispatch the change event.
-  nsContentUtils::DispatchTrustedEvent(static_cast<nsIContent*>(this),
-                                       u"change"_ns, CanBubble::eYes,
-                                       Cancelable::eNo);
+  nsContentUtils::DispatchFormChangeEvent(this);
 }
 
 FileList* HTMLInputElement::GetFiles() {
@@ -4322,10 +4318,7 @@ void HTMLInputElement::ActivationBehavior(EventChainPostVisitor& aVisitor) {
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                          "Failed to dispatch input event");
 
-    // FIXME: Why is this different than every other change event?
-    nsContentUtils::DispatchTrustedEvent<WidgetEvent>(
-        static_cast<Element*>(this), eFormChange, CanBubble::eYes,
-        Cancelable::eNo);
+    nsContentUtils::DispatchFormChangeEvent(this);
   }
 
   switch (mType) {

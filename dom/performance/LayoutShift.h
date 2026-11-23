@@ -39,6 +39,13 @@ class LayoutShift final : public PerformanceEntry {
     aSources = mSources.Clone();
   }
 
+  // Used when an entry that was held back while a pointer was down is reported
+  // because the pointer was released, which is an excluding input.
+  void SetInputInfo(bool aHadRecentInput, DOMHighResTimeStamp aLastInputTime) {
+    mHadRecentInput = aHadRecentInput;
+    mLastInputTime = aLastInputTime;
+  }
+
   void BufferEntryIfNeeded() override;
 
  private:
@@ -47,8 +54,8 @@ class LayoutShift final : public PerformanceEntry {
   RefPtr<PerformanceMainThread> mPerformance;
   const DOMHighResTimeStamp mStartTime;
   const double mValue;
-  const bool mHadRecentInput;
-  const DOMHighResTimeStamp mLastInputTime;
+  bool mHadRecentInput;
+  DOMHighResTimeStamp mLastInputTime;
   nsTArray<RefPtr<LayoutShiftAttribution>> mSources;
 };
 
