@@ -3046,6 +3046,9 @@ WorkerPrivate::WorkerPrivate(
     }
   }
 
+  // Use this worker's own principal, not the one copied from a parent.
+  mJSSettings.SetWasmExempted(mLoadInfo.mWasmExempted);
+
   nsCOMPtr<nsISerialEventTarget> target;
 
   // A child worker just inherits the parent workers ThrottledEventQueue

@@ -218,6 +218,13 @@ class JS_PUBLIC_API RealmCreationOptions {
     return *this;
   }
 
+  // Expose WebAssembly in this realm even when the context disables it.
+  bool wasmExempted() const { return wasmExempted_; }
+  RealmCreationOptions& setWasmExempted(bool flag) {
+    wasmExempted_ = flag;
+    return *this;
+  }
+
   uint64_t profilerRealmID() const { return profilerRealmID_; }
   RealmCreationOptions& setProfilerRealmID(uint64_t id) {
     profilerRealmID_ = id;
@@ -242,6 +249,7 @@ class JS_PUBLIC_API RealmCreationOptions {
   bool secureContext_ = false;
   bool freezeBuiltins_ = false;
   bool alwaysUseFdlibm_ = false;
+  bool wasmExempted_ = false;
 };
 
 // This is a wrapper for mozilla::RTPCallerType, that can't easily

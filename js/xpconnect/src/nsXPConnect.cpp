@@ -23,6 +23,7 @@
 #include "jsfriendapi.h"
 #include "JSServices.h"
 #include "mozJSModuleLoader.h"
+#include "nsCharSeparatedTokenizer.h"
 #include "nsContentUtils.h"
 #include "nsCycleCollector.h"
 #include "nsDOMJSUtils.h"
@@ -33,6 +34,7 @@
 #include "nsIOService.h"
 #include "nsJSEnvironment.h"
 #include "nsJSUtils.h"
+#include "nsNetUtil.h"
 #include "nsRFPService.h"
 #include "nsScriptError.h"
 #include "nsScriptSecurityManager.h"
@@ -554,6 +556,48 @@ void InitGlobalObjectOptions(JS::RealmOptions& aOptions,
     aOptions.behaviors().setLocaleOverride(
         PromiseFlatCString(aLanguageOverride).get());
   }
+}
+
+bool IsWasmExempted(nsIPrincipal* aPrincipal) {
+  MOZ_ASSERT(NS_IsMainThread());
+  static constexpr uint32_t kMaxListLength = 4096;
+
+  if (!aPrincipal || !aPrincipal->GetIsContentPrincipal() ||
+      !(aPrincipal->SchemeIs("http") || aPrincipal->SchemeIs("https")) ||
+      Preferences::IsLocked("javascript.options.wasm")) {
+    return false;
+  }
+
+  nsAutoCString list;
+  if (NS_FAILED(Preferences::GetCString(
+          "javascript.options.wasm.exemptedDomains", list)) ||
+      list.IsEmpty() || list.Length() > kMaxListLength) {
+    return false;
+  }
+  ToLowerCase(list);
+
+  nsAutoCString host;
+  if (NS_FAILED(aPrincipal->GetAsciiHost(host)) || host.IsEmpty()) {
+    return false;
+  }
+  ToLowerCase(host);
+
+  for (const auto& entry : nsCCharSeparatedTokenizer(list, ',').ToRange()) {
+    if (entry.FindCharInSet("/:?#@[]") != kNotFound) {
+      continue;
+    }
+    bool matches = host.Equals(entry);
+    if (StringBeginsWith(entry, "*."_ns)) {
+      const nsDependentCSubstring root(entry, 2);
+      if (!host.Equals(root)) {
+        (void)mozilla::net::HasRootDomain(host, root, &matches);
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool InitGlobalObject(JSContext* aJSContext, JS::Handle<JSObject*> aGlobal,
