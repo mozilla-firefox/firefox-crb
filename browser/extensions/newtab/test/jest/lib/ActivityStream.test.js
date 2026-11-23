@@ -12,6 +12,7 @@ import {
   MARKET_PREF_FALLBACKS,
   PREFS_CONFIG,
   csvPrefHasValue,
+  mergeTrainhopEnrollments,
 } from "lib/ActivityStream.sys.mjs";
 import { mockServices, stubGlobals } from "test/jest/test-utils";
 
@@ -1903,4 +1904,92 @@ describe("WIDGET_REGISTRY pref coverage", () => {
       expect(PREFS_CONFIG.has(widget.sizePref)).toBe(true);
     });
   }
+});
+
+describe("mergeTrainhopEnrollments", () => {
+  const enroll = (isRollout, type, payload) => ({
+    meta: { isRollout },
+    value: { type, payload },
+  });
+
+  it("should merge nested objects at every depth", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(true, "t", { a: { x: 1, deep: { p: 1 } }, keep: 1 }),
+        enroll(false, "t", { a: { y: 2, deep: { q: 2 } } }),
+      ])
+    ).toEqual({ t: { a: { x: 1, y: 2, deep: { p: 1, q: 2 } }, keep: 1 } });
+  });
+
+  it("should let an experiment win a key regardless of order", () => {
+    const rollout = enroll(true, "t", { a: { v: "rollout" } });
+    const experiment = enroll(false, "t", { a: { v: "experiment" } });
+    const expected = { t: { a: { v: "experiment" } } };
+    expect(mergeTrainhopEnrollments([rollout, experiment])).toEqual(expected);
+    expect(mergeTrainhopEnrollments([experiment, rollout])).toEqual(expected);
+  });
+
+  it("should keep keys named like Object.prototype members", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(false, "constructor", { toString: 1 }),
+        enroll(true, "t", { constructor: { valueOf: 2 } }),
+      ])
+    ).toEqual({
+      constructor: { toString: 1 },
+      t: { constructor: { valueOf: 2 } },
+    });
+  });
+
+  it("should skip falsy payloads", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(false, "t", false),
+        enroll(false, "u", ""),
+        enroll(true, "t", { a: 1 }),
+      ])
+    ).toEqual({ t: { a: 1 } });
+  });
+
+  it("should keep the first value among the same precedence", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(false, "t", { a: 1 }),
+        enroll(false, "t", { a: 2 }),
+      ])
+    ).toEqual({ t: { a: 1 } });
+  });
+
+  it("should replace arrays and primitives whole", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(true, "list", [1, 2, 3]),
+        enroll(false, "list", [9]),
+        enroll(false, "flag", true),
+        enroll(true, "t", { config: [1, 2] }),
+        enroll(false, "t", { config: [3] }),
+      ])
+    ).toEqual({ list: [9], flag: true, t: { config: [3] } });
+  });
+
+  it("should treat an enrollment without meta as an experiment", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(true, "t", { a: 1 }),
+        { value: { type: "t", payload: { a: 2 } } },
+      ])
+    ).toEqual({ t: { a: 2 } });
+  });
+
+  it("should flatten multi-payload enrollments", () => {
+    expect(
+      mergeTrainhopEnrollments([
+        enroll(false, "multi-payload", [
+          { type: "a", payload: { x: 1 } },
+          { type: "b", payload: { y: 2 } },
+          { type: "c" },
+        ]),
+      ])
+    ).toEqual({ a: { x: 1 }, b: { y: 2 } });
+  });
 });
