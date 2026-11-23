@@ -289,6 +289,7 @@ already_AddRefed<Promise> WorkletFetchHandler::AddModule(
   MOZ_ASSERT(NS_IsMainThread());
 
   aWorklet->Impl()->OnAddModuleStarted();
+  aWorklet->Impl()->UpdateWasmExemptedOnMainThread();
 
   auto promiseSettledGuard =
       MakeScopeExit([&] { aWorklet->Impl()->OnAddModulePromiseSettled(); });

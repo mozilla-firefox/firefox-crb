@@ -1156,6 +1156,10 @@ class WorkerPrivate final
 
   nsresult SetPrincipalsAndPolicyContainerFromChannel(nsIChannel* aChannel);
 
+  // Recomputes the WebAssembly exemption from the current principal, so a
+  // worker's realm reflects its final principal and the current pref.
+  void UpdateWasmExemptedOnMainThread();
+
   bool FinalChannelPrincipalIsValid(nsIChannel* aChannel);
 
 #ifdef MOZ_DIAGNOSTIC_ASSERT_ENABLED

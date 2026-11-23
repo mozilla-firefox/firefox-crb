@@ -17,6 +17,7 @@
 #include "mozilla/dom/WorkletGlobalScope.h"
 #include "mozilla/dom/worklet/WorkletModuleLoader.h"
 #include "nsGlobalWindowInner.h"
+#include "xpcpublic.h"
 
 using mozilla::dom::loader::WorkletModuleLoader;
 using mozilla::dom::loader::WorkletScriptLoader;
@@ -41,6 +42,7 @@ WorkletLoadInfo::WorkletLoadInfo(nsPIDOMWindowInner* aWindow)
 
 WorkletImpl::WorkletImpl(nsPIDOMWindowInner* aWindow, nsIPrincipal* aPrincipal)
     : mPrincipal(NullPrincipal::CreateWithInheritedAttributes(aPrincipal)),
+      mDocumentPrincipal(aPrincipal),
       mWorkletLoadInfo(aWindow),
       mTerminated(false),
       mFinishedOnExecutionThread(false),
@@ -74,6 +76,11 @@ WorkletImpl::WorkletImpl(nsPIDOMWindowInner* aWindow, nsIPrincipal* aPrincipal)
 }
 
 WorkletImpl::~WorkletImpl() { MOZ_ASSERT(!mGlobalScope); }
+
+void WorkletImpl::UpdateWasmExemptedOnMainThread() {
+  MOZ_ASSERT(NS_IsMainThread());
+  mWasmExempted = xpc::IsWasmExempted(mDocumentPrincipal);
+}
 
 JSObject* WorkletImpl::WrapWorklet(JSContext* aCx, dom::Worklet* aWorklet,
                                    JS::Handle<JSObject*> aGivenProto) {

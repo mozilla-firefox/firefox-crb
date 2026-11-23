@@ -853,6 +853,12 @@ pref("dom.event.contextmenu.enabled",       true);
 pref("javascript.enabled",                  true);
 pref("javascript.options.wasm",                   true);
 pref("javascript.options.wasm_trustedprincipals", true);
+// Comma-separated ASCII hosts that keep WebAssembly when
+// javascript.options.wasm is false, unless that pref is locked. An entry is an
+// exact host or "*.host" for its subdomains; entries with a scheme, port or
+// path are ignored, as is a list over 4096 bytes. Matches http and https on
+// any port. Only affects newly created globals.
+pref("javascript.options.wasm.exemptedDomains", "");
 pref("javascript.options.wasm_verbose",           false);
 pref("javascript.options.wasm_baselinejit",       true);
 

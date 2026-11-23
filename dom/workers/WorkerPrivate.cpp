@@ -2634,8 +2634,10 @@ void WorkerPrivate::SetBaseURI(nsIURI* aBaseURI) {
 nsresult WorkerPrivate::SetPrincipalsOnMainThread(
     nsIPrincipal* aPrincipal, nsIPrincipal* aPartitionedPrincipal,
     nsILoadGroup* aLoadGroup) {
-  return mLoadInfo.SetPrincipalsOnMainThread(aPrincipal, aPartitionedPrincipal,
-                                             aLoadGroup);
+  MOZ_TRY(mLoadInfo.SetPrincipalsOnMainThread(aPrincipal, aPartitionedPrincipal,
+                                              aLoadGroup));
+  UpdateWasmExemptedOnMainThread();
+  return NS_OK;
 }
 
 nsresult WorkerPrivate::SetPolicyContainerOnMainThread(
@@ -2652,12 +2654,22 @@ nsresult WorkerPrivate::SetPolicyContainerOnMainThread(
 nsresult WorkerPrivate::SetPrincipalsAndPolicyContainerFromChannel(
     nsIChannel* aChannel) {
   MOZ_TRY(mLoadInfo.SetPrincipalsAndPolicyContainerFromChannel(aChannel));
+  UpdateWasmExemptedOnMainThread();
 
   if (nsIContentSecurityPolicy* csp = GetCsp()) {
     csp->EnsureEventTarget(mMainThreadEventTarget);
   }
 
   return NS_OK;
+}
+
+void WorkerPrivate::UpdateWasmExemptedOnMainThread() {
+  AssertIsOnMainThread();
+  const bool exempted = xpc::IsWasmExempted(mLoadInfo.mPrincipal);
+
+  MutexAutoLock lock(mMutex);
+  mJSSettings.chromeRealmOptions.creationOptions().setWasmExempted(exempted);
+  mJSSettings.contentRealmOptions.creationOptions().setWasmExempted(exempted);
 }
 
 bool WorkerPrivate::FinalChannelPrincipalIsValid(nsIChannel* aChannel) {
@@ -2978,6 +2990,7 @@ WorkerPrivate::WorkerPrivate(
           ShouldResistFingerprinting(RFPTarget::JSMathFdlibm),
           ShouldResistFingerprinting(RFPTarget::JSLocale), languageOverride,
           timezoneOverride);
+      UpdateWasmExemptedOnMainThread();
       // Check if it's a privileged addon executing in order to allow access
       // to SharedArrayBuffer
       if (mLoadInfo.mPrincipal) {
