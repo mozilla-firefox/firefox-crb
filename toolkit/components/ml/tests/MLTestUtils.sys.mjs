@@ -362,6 +362,20 @@ export class MockLLMEngine {
   /** @type {Map<number, MockedRequest>} */
   #runRequests = new Map();
 
+  /**
+   * The options the engine was created with, as on a real MLEngine.
+   *
+   * @type {Partial<PipelineOptions>}
+   */
+  pipelineOptions;
+
+  /**
+   * @param {Partial<PipelineOptions>} [pipelineOptions]
+   */
+  constructor(pipelineOptions = {}) {
+    this.pipelineOptions = pipelineOptions;
+  }
+
   /** @type {Set<Function>} */
   #runRequestWaiters = new Set();
 
@@ -541,10 +555,51 @@ export class MockLLMEngine {
    * then each string is yielded as chunk. An actual array of ChunkResponses can also
    * be provided.
    *
+   * When mocking the "openai" backend, the stream ends like the OpenAI
+   * pipeline's, with a chunk carrying its `finishReason`: "tool_calls" if any
+   * chunk had tool calls, otherwise "stop". A mocked chunk that sets its own
+   * `finishReason` replaces that final chunk; set it to null to mock a stream
+   * that ends without one. Other backends report no `finishReason`.
+   *
    * @param {EngineRequests[FeatureID]} request
    * @returns {AsyncGenerator<ChunkResponse>}
    */
   async *runWithGenerator(request) {
+    if (this.pipelineOptions.backend !== "openai") {
+      yield* this.#runMockedGenerator(request);
+      return;
+    }
+    let finishReasonSent = false;
+    let sawToolCalls = false;
+    let usage;
+    for await (const chunk of this.#runMockedGenerator(request)) {
+      if (chunk?.finishReason !== undefined) {
+        finishReasonSent = true;
+      }
+      if (chunk?.toolCalls?.length) {
+        sawToolCalls = true;
+      }
+      usage = chunk?.usage ?? usage;
+      yield chunk;
+    }
+    if (!finishReasonSent) {
+      // The pipeline's final chunk carries the usage too, so keep the last one.
+      yield {
+        text: "",
+        tokens: null,
+        isPrompt: false,
+        toolCalls: [],
+        finishReason: sawToolCalls ? "tool_calls" : "stop",
+        ...(usage ? { usage } : {}),
+      };
+    }
+  }
+
+  /**
+   * @param {EngineRequests[FeatureID]} request
+   * @returns {AsyncGenerator<ChunkResponse>}
+   */
+  async *#runMockedGenerator(request) {
     const requestId = this.#nextRequestId++;
 
     // For manual testing without mockResponse, store the request and wait for respond()

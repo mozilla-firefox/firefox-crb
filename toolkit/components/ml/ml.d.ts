@@ -610,6 +610,11 @@ export interface ChunkResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+  /**
+   * The OpenAI `finish_reason` the stream ended with, on the final chunk only.
+   * Null when the server closed the stream without sending one.
+   */
+  finishReason?: string | null;
 }
 
 export type TypedArray =

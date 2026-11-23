@@ -358,8 +358,14 @@ export class ChatConversation extends Conversation {
 
   /**
    * @param {AsyncIterable} stream - Model response stream from `runWithGenerator`.
+   * @param {object} [options]
+   * @param {AbortSignal} [options.signal] - The turn's signal. A stream the
+   *   user stopped ends without a `finish_reason` and is not incomplete.
+   * @throws {Error} With clientReason "incompleteResponse" when the stream
+   *   ended before the model finished its reply. The partial reply is kept but
+   *   not marked complete.
    */
-  async receiveResponse(stream) {
+  async receiveResponse(stream, { signal } = {}) {
     const currentMessage = this.#getStreamTarget();
 
     // Set the browsing history snapshot on the message before streaming so its
@@ -400,9 +406,14 @@ export class ChatConversation extends Conversation {
       replyMessage.citations = currentMessage.citations;
     }
 
+    const incomplete =
+      !result.pendingToolCalls?.length &&
+      !signal?.aborted &&
+      this.#isIncompleteFinish(result.finishReason);
+
     // Only resolve used memories once the entire assistant turn is complete,
     // including all tool calls
-    if (!result.pendingToolCalls?.length) {
+    if (!result.pendingToolCalls?.length && !incomplete) {
       const turnMessages = this.#getCurrentTurnTextMessages();
       const citedMemoryIds = turnMessages.flatMap(
         message => message.tokens?.existing_memory ?? []
@@ -436,6 +447,15 @@ export class ChatConversation extends Conversation {
     await lazy.ChatStore.endStreamingWrites(this.id, false);
     await lazy.ChatStore.updateConversation(this);
 
+    if (incomplete) {
+      const error = new Error(
+        `Model response ended early (finish_reason: ${result.finishReason ?? "none"})`
+      );
+      error.clientReason = "incompleteResponse";
+      error.finishReason = result.finishReason;
+      throw error;
+    }
+
     // Only finalize the reply when the turn is actually done. When the model
     // requested tool calls, its answer streams into a new message after the
     // tools run (see the loop in Chat.sys.mjs), and the turn renders as one
@@ -451,6 +471,30 @@ export class ChatConversation extends Conversation {
       fullResponseText: result.fullResponseText,
       usage: result.usage,
     };
+  }
+
+  /**
+   * Whether a stream that ended without tool calls stopped before the model
+   * finished. Only the OpenAI backend reports a `finish_reason`, so streams
+   * from any other backend (e.g. on-device llama.cpp) are never judged.
+   * Mozilla's endpoint always sends one, so a missing one means the stream was
+   * cut. Other endpoints may omit it, so there only an explicit non-"stop"
+   * reason counts.
+   *
+   * @param {string|null} finishReason
+   * @returns {boolean}
+   */
+  #isIncompleteFinish(finishReason) {
+    if (
+      this.engine?.engineInstance?.pipelineOptions?.backend !== "openai" ||
+      finishReason === "stop"
+    ) {
+      return false;
+    }
+    if (!finishReason) {
+      return this.engine?.isCustomEndpoint === false;
+    }
+    return true;
   }
 
   /**

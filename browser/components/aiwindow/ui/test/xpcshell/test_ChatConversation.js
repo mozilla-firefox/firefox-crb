@@ -1167,6 +1167,128 @@ add_task(async function test_receiveResponse_empty_reply_completes_preamble() {
   );
 });
 
+async function* finishStream(text, finishReason) {
+  yield { text };
+  if (finishReason !== undefined) {
+    yield { text: "", finishReason };
+  }
+}
+
+function conversationOnEndpoint(isCustomEndpoint, backend = "openai") {
+  const conversation = new ChatConversation({});
+  conversation.engine = {
+    isCustomEndpoint,
+    engineInstance: { pipelineOptions: { backend } },
+  };
+  conversation.addUserMessage("Explain TCP");
+  const completed = [];
+  conversation.on("chat-conversation:message-complete", (_event, message) =>
+    completed.push(message)
+  );
+  return { conversation, completed };
+}
+
+add_task(async function test_receiveResponse_stop_finish_completes() {
+  const { conversation, completed } = conversationOnEndpoint(false);
+
+  await conversation.receiveResponse(finishStream("All done.", "stop"));
+
+  const reply = conversation.messages.at(-1);
+  Assert.equal(reply.content.body, "All done.", "The reply is stored");
+  Assert.deepEqual(completed, [reply], "A stop finish completes the reply");
+});
+
+add_task(async function test_receiveResponse_non_stop_finish_is_incomplete() {
+  for (const isCustomEndpoint of [false, true]) {
+    for (const finishReason of ["length", "content_filter"]) {
+      const { conversation, completed } =
+        conversationOnEndpoint(isCustomEndpoint);
+
+      await Assert.rejects(
+        conversation.receiveResponse(finishStream("TCP is a", finishReason)),
+        error =>
+          error.clientReason === "incompleteResponse" &&
+          error.finishReason === finishReason,
+        `A ${finishReason} finish is incomplete (custom endpoint: ${isCustomEndpoint})`
+      );
+      Assert.equal(
+        conversation.messages.at(-1).content.body,
+        "TCP is a",
+        "The partial reply is kept"
+      );
+      Assert.deepEqual(completed, [], "The partial reply is not completed");
+    }
+  }
+});
+
+add_task(async function test_receiveResponse_missing_finish() {
+  const mozilla = conversationOnEndpoint(false);
+  await Assert.rejects(
+    mozilla.conversation.receiveResponse(finishStream("TCP is a")),
+    error =>
+      error.clientReason === "incompleteResponse" &&
+      error.finishReason === null,
+    "A stream from Mozilla's endpoint without a finish_reason is incomplete"
+  );
+  Assert.deepEqual(mozilla.completed, [], "Its reply is not completed");
+
+  const custom = conversationOnEndpoint(true);
+  await custom.conversation.receiveResponse(finishStream("TCP is a"));
+  Assert.equal(
+    custom.completed.length,
+    1,
+    "A custom endpoint that sends no finish_reason still completes"
+  );
+});
+
+add_task(
+  async function test_receiveResponse_stopped_stream_is_not_incomplete() {
+    const { conversation } = conversationOnEndpoint(false);
+    const controller = new AbortController();
+    controller.abort();
+
+    await conversation.receiveResponse(finishStream("TCP is a"), {
+      signal: controller.signal,
+    });
+
+    Assert.equal(
+      conversation.messages.at(-1).content.body,
+      "TCP is a",
+      "A stream the user stopped keeps its text without an error"
+    );
+  }
+);
+
+add_task(
+  async function test_receiveResponse_tool_call_round_is_not_incomplete() {
+    const { conversation, completed } = conversationOnEndpoint(false);
+
+    const { pendingToolCalls } = await conversation.receiveResponse(
+      toolCallStream("Let me look.")
+    );
+
+    Assert.equal(pendingToolCalls.length, 1, "The tool calls are returned");
+    Assert.deepEqual(completed, [], "The turn continues after the tool calls");
+  }
+);
+
+add_task(async function test_receiveResponse_other_backend_is_not_judged() {
+  for (const finishReason of [undefined, "length"]) {
+    const { conversation, completed } = conversationOnEndpoint(
+      false,
+      "llama.cpp"
+    );
+
+    await conversation.receiveResponse(finishStream("TCP is a", finishReason));
+
+    Assert.equal(
+      completed.length,
+      1,
+      `An on-device reply completes as before (finish_reason: ${finishReason})`
+    );
+  }
+});
+
 add_task(
   async function test_deduplicatesMemoryIds_ChatConversation_receiveResponse() {
     let sandbox = lazy.sinon.createSandbox();

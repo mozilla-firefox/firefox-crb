@@ -166,6 +166,8 @@ skip-if = [
 
 ["browser_smartwindow_history_thumbnails_telemetry.js"]
 
+["browser_smartwindow_incomplete_response.js"]
+
 ["browser_smartwindow_init.js"]
 
 ["browser_smartwindow_jump_to_bottom.js"]

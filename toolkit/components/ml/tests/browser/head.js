@@ -981,6 +981,8 @@ function readRequestBody(request) {
  *   of a completion.
  * @param {boolean} [options.holdResponses] - Holds requests without sending
  *   a response until resumeResponses() is called.
+ * @param {string|null} [options.streamFinishReason] - `finish_reason` of the
+ *   last chunk of the simple (no tools) stream, or null to end it without one.
  */
 function startMockOpenAI({
   echo = "This gets echoed.",
@@ -988,6 +990,7 @@ function startMockOpenAI({
   holdStreamOpenAfterFinish = false,
   errorResponse = null,
   holdResponses = false,
+  streamFinishReason = "stop",
 } = {}) {
   const server = new HttpServer();
 
@@ -1249,7 +1252,7 @@ function startMockOpenAI({
           {
             index: 0,
             delta: { content: "" },
-            finish_reason: "stop",
+            finish_reason: streamFinishReason,
           },
         ],
       });

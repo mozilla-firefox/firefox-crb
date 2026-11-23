@@ -273,6 +273,55 @@ add_task(async function test_Chat_fetchWithHistory_streams_and_forwards_args() {
   }
 });
 
+add_task(async function test_Chat_fetchWithHistory_rejects_incomplete_reply() {
+  const sb = sinon.createSandbox();
+  try {
+    const fakeEngine = {
+      isCustomEndpoint: false,
+      engineInstance: { pipelineOptions: { backend: "openai" } },
+      runWithGenerator() {
+        async function* gen() {
+          yield { text: "The first step is" };
+          yield { text: "", finishReason: "length" };
+        }
+        return gen();
+      },
+      getConfig() {
+        return {};
+      },
+    };
+    sb.stub(AuthProvider, "getToken").resolves("mock_token");
+
+    const conversation = new ChatConversation({});
+    conversation.setSystemMessage({
+      type: SYSTEM_PROMPT_TYPE.TEXT,
+      body: "You are helpful",
+      version: 0,
+    });
+    conversation.addUserMessage("Explain it", "https://www.firefox.com", 0);
+    conversation.addAssistantMessage("text", "");
+    setupConversationForChat(conversation, {
+      model: TEST_MODEL,
+      engine: fakeEngine,
+    });
+
+    await Assert.rejects(
+      Chat.fetchWithHistory({ conversation }),
+      error =>
+        error.clientReason === "incompleteResponse" &&
+        error.finishReason === "length",
+      "A reply cut off by the token limit rejects instead of completing"
+    );
+    Assert.equal(
+      getLastAssistantResponse(conversation).content.body,
+      "The first step is",
+      "The partial reply is kept for the retry"
+    );
+  } finally {
+    sb.restore();
+  }
+});
+
 add_task(async function test_Chat_fetchWithHistory_sends_compacted_args() {
   const sb = sinon.createSandbox();
   try {

@@ -286,6 +286,69 @@ add_task(async function test_openai_client() {
   }
 });
 
+/**
+ * The stream's `finish_reason` reaches the caller as the last chunk's
+ * `finishReason`, so a reply cut short (or ended without one) is visible.
+ */
+add_task(async function test_openai_streaming_reports_finish_reason() {
+  for (const streamFinishReason of ["length", "content_filter", null]) {
+    const records = [
+      {
+        ...BASE_ENGINE_OPTIONS,
+        id: "8d2a6f1c-4b3e-4c7a-9e5d-1f0b2c3d4e5f",
+      },
+    ];
+    const { cleanup } = await setup({ records });
+    const { server: mockServer, port } = startMockOpenAI({
+      echo: "cut",
+      streamFinishReason,
+    });
+
+    const engineInstance = await createEngine({
+      ...BASE_ENGINE_OPTIONS,
+      apiKey: "ollama",
+      baseURL: `http://localhost:${port}/v1`,
+      backend: "openai",
+    });
+
+    try {
+      const chunks = await collectChunksBounded(
+        engineInstance.runWithGenerator({
+          args: [{ role: "user", content: "Explain TCP." }],
+          streamOptions: { enabled: true },
+        }),
+        STREAM_TURN_TIMEOUT_MS
+      );
+
+      Assert.equal(
+        chunks.map(chunk => chunk.text ?? "").join(""),
+        "Hello, this is cut",
+        "The text streamed before the finish still arrives"
+      );
+      const finishChunks = chunks.filter(chunk => "finishReason" in chunk);
+      Assert.equal(
+        finishChunks.length,
+        1,
+        "Only the final chunk carries a finishReason"
+      );
+      Assert.equal(
+        finishChunks[0].finishReason,
+        streamFinishReason,
+        `The stream's finish_reason (${streamFinishReason}) reaches the caller`
+      );
+      Assert.equal(
+        finishChunks[0],
+        chunks.at(-1),
+        "The finishReason is on the last chunk"
+      );
+    } finally {
+      await EngineProcess.destroyMLEngine();
+      await cleanup();
+      await stopMockOpenAI(mockServer);
+    }
+  }
+});
+
 add_task(async function test_openai_client_tools_non_streaming() {
   const records = [
     {
@@ -435,9 +498,13 @@ add_task(async function test_openai_client_tools_streaming() {
     });
 
     let final = "";
+    let finishReason;
     for await (const chunk of gen2) {
       if (chunk.text) {
         final += chunk.text;
+      }
+      if (chunk.finishReason !== undefined) {
+        finishReason = chunk.finishReason;
       }
     }
 
@@ -446,6 +513,11 @@ add_task(async function test_openai_client_tools_streaming() {
       final,
       "Here are the tabs I found for you.",
       "Should stream the expected assistant follow-up"
+    );
+    Assert.equal(
+      finishReason,
+      "stop",
+      "The finish_reason the stream ended with reaches the caller"
     );
   } finally {
     await EngineProcess.destroyMLEngine();
@@ -539,6 +611,12 @@ add_task(async function test_openai_tool_call_turn_reports_usage() {
       toolCalls[0].function.name,
       "search_open_tabs",
       "The tool the model asked for is the one the caller is told about"
+    );
+
+    Assert.equal(
+      chunks.findLast(chunk => chunk.finishReason !== undefined)?.finishReason,
+      "tool_calls",
+      "The tool round's finish_reason reaches the caller"
     );
 
     const usage = chunks.findLast(chunk => chunk.usage)?.usage;
