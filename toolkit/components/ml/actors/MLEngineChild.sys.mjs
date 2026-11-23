@@ -50,12 +50,12 @@ const SAFE_OVERRIDE_OPTIONS = [
 ];
 
 /**
- * Structured clone keeps only an Error's name, message and stack, so the HTTP
- * status and service error code a BackendError carries are sent beside the
- * error and reattached by MLEngineParent.
+ * Structured clone keeps only an Error's name, message and stack, so the
+ * service response a BackendError carries is sent beside the error and
+ * reattached by MLEngineParent.
  *
  * @param {any} error
- * @returns {{status?: number, error?: any} | null}
+ * @returns {{status?: number, error?: any, retryAfter?: string} | null}
  */
 function getErrorDetails(error) {
   if (!error || typeof error !== "object") {
@@ -67,6 +67,9 @@ function getErrorDetails(error) {
   }
   if (error.error !== undefined && error.error !== null) {
     details.error = error.error;
+  }
+  if (typeof error.retryAfter === "string") {
+    details.retryAfter = error.retryAfter;
   }
   return Object.keys(details).length ? details : null;
 }
@@ -896,7 +899,7 @@ class InferenceEngine {
       functions
     );
     // Rebuilds the BackendError a backend threw (see toMsg in Pipeline.mjs),
-    // keeping the status and error code the service reported.
+    // keeping the service response it carries.
     worker.ExceptionHandlers.BackendError = data => {
       const error = new Error(data.message);
       error.name = data.name;
@@ -909,6 +912,9 @@ class InferenceEngine {
       }
       if ("error" in data) {
         error.error = data.error;
+      }
+      if ("retryAfter" in data) {
+        error.retryAfter = data.retryAfter;
       }
       return error;
     };

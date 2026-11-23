@@ -976,9 +976,9 @@ function readRequestBody(request) {
  * @param {boolean} [options.holdStreamOpenAfterFinish] - When true, the
  *   streaming tool-call turn stops talking after finish_reason and never closes
  *   the connection, so the client is the only thing that can end the turn.
- * @param {{status: number, body: object}|null} [options.errorResponse] - When
- *   set, every request is answered with this HTTP status and JSON body instead
- *   of a completion.
+ * @param {{status: number, body: object, headers?: object}|null}
+ *   [options.errorResponse] - When set, every request is answered with this
+ *   response instead of a completion.
  * @param {boolean} [options.holdResponses] - Holds requests without sending
  *   a response until resumeResponses() is called.
  */
@@ -1010,6 +1010,9 @@ function startMockOpenAI({
         "application/json; charset=utf-8",
         false
       );
+      for (const [name, value] of Object.entries(errorResponse.headers ?? {})) {
+        response.setHeader(name, value, false);
+      }
       response.write(JSON.stringify(errorResponse.body));
       return;
     }
