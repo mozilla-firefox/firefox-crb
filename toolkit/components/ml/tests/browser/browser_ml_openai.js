@@ -835,9 +835,9 @@ add_task(async function test_openai_fxaccount_token() {
 });
 
 /**
- * A service that rejects a request reports why through the HTTP status and a
- * body error code. Both have to survive the trip from the inference process,
- * where structured clone keeps only the Error's name and message.
+ * A service that rejects a request reports why in its HTTP response. That has
+ * to survive the trip from the inference process, where structured clone keeps
+ * only the Error's name and message.
  */
 add_task(async function test_openai_error_keeps_status_and_code() {
   const records = [
@@ -848,7 +848,11 @@ add_task(async function test_openai_error_keeps_status_and_code() {
   ];
   const { cleanup } = await setup({ records });
   const { server: mockServer, port } = startMockOpenAI({
-    errorResponse: { status: 429, body: { error: 1 } },
+    errorResponse: {
+      status: 429,
+      body: { error: 1 },
+      headers: { "Retry-After": "60" },
+    },
   });
 
   const engineInstance = await createEngine({
@@ -874,6 +878,11 @@ add_task(async function test_openai_error_keeps_status_and_code() {
     );
     Assert.equal(error.status, 429, "The HTTP status is kept on the error");
     Assert.equal(error.error, 1, "The body error code is kept on the error");
+    Assert.equal(
+      error.retryAfter,
+      "60",
+      "The Retry-After header is kept on the error"
+    );
   } finally {
     await EngineProcess.destroyMLEngine();
     await cleanup();

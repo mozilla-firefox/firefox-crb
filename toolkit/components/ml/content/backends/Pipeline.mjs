@@ -79,6 +79,10 @@ export async function getBackend(consumer, wasm, options) {
  * Wraps a runtime error the backend can use to throw errors.
  *
  * Sometimes onnx sends us back integer values.
+ *
+ * @property {number} [status] - HTTP status of the request.
+ * @property {any} [error] - Error code from the response body.
+ * @property {string} [retryAfter] - Raw Retry-After header.
  */
 export class BackendError extends Error {
   constructor(backendName, backendError) {
@@ -93,14 +97,17 @@ export class BackendError extends Error {
     this.backendError = backendError;
     this.name = `${capitalizedBackend}BackendError`;
     this.backendName = backendName;
-    // An API client reports why the service refused a request through the
-    // HTTP status and the body's error field. Keep both on the error itself
-    // so they survive toMsg() and reach the caller.
+    // Keep the reason why the service refused the request on the error itself,
+    // so it survives toMsg() and reaches the caller.
     if (typeof backendError?.status === "number") {
       this.status = backendError.status;
     }
     if (backendError?.error !== undefined && backendError?.error !== null) {
       this.error = backendError.error;
+    }
+    const retryAfter = backendError?.headers?.get("retry-after");
+    if (retryAfter) {
+      this.retryAfter = retryAfter;
     }
   }
 
@@ -120,6 +127,7 @@ export class BackendError extends Error {
       stack: this.stack,
       ...(this.status !== undefined && { status: this.status }),
       ...(this.error !== undefined && { error: this.error }),
+      ...(this.retryAfter !== undefined && { retryAfter: this.retryAfter }),
     };
   }
 }
