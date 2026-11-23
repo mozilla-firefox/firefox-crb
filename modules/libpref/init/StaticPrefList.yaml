@@ -3003,6 +3003,13 @@
   value: true
   mirror: always
 
+# Whether the Layout Instability API (layout-shift performance entries) is
+# enabled. Only takes effect for documents loaded after it changes.
+- name: dom.enable_layout_shift
+  type: bool
+  value: false
+  mirror: always
+
 - name: dom.performance.largest_contentful_paint.coarsened_rendertime_enabled
   type: RelaxedAtomicBool
   value: true

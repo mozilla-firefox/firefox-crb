@@ -781,6 +781,7 @@ WEBIDL_FILES = [
     "KeyframeAnimationOptions.webidl",
     "KeyframeEffect.webidl",
     "KeyIdsInitData.webidl",
+    "LayoutShift.webidl",
     "LinkStyle.webidl",
     "Localization.webidl",
     "Location.webidl",
