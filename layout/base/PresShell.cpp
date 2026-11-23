@@ -46,6 +46,7 @@
 #include "mozilla/IMEStateManager.h"
 #include "mozilla/InputTaskManager.h"
 #include "mozilla/IntegerRange.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Likely.h"
 #include "mozilla/Logging.h"
 #include "mozilla/MemoryReporting.h"
@@ -1243,6 +1244,8 @@ void PresShell::Destroy() {
   CancelAllPendingReflows();
   CancelPostedReflowCallbacks();
 
+  mLayoutShiftTracker = nullptr;
+
   // Destroy the frame constructor. This will destroy the frame hierarchy
   mFrameConstructor->WillDestroyFrameTree();
 
@@ -2203,11 +2206,23 @@ void PresShell::SetIgnoreFrameDestruction(bool aIgnore) {
   mIgnoreFrameDestruction = aIgnore;
 }
 
+LayoutShiftTracker* PresShell::EnsureLayoutShiftTracker() {
+  MOZ_ASSERT(mPresContext->LayoutShiftTrackingAllowed());
+  if (!mLayoutShiftTracker) {
+    mLayoutShiftTracker = std::make_unique<LayoutShiftTracker>(mPresContext);
+  }
+  return mLayoutShiftTracker.get();
+}
+
 void PresShell::NotifyDestroyingFrame(nsIFrame* aFrame) {
   // We must remove these from FrameLayerBuilder::DisplayItemData::mFrameList
   // here, otherwise the DisplayItemData destructor will use the destroyed frame
   // when it tries to remove it from the (array) value of this property.
   aFrame->RemoveDisplayItemDataForDeletion();
+
+  if (aFrame->IsLayoutShiftRecorded() && mLayoutShiftTracker) {
+    mLayoutShiftTracker->Forget(aFrame);
+  }
 
   if (!mIgnoreFrameDestruction) {
     if (aFrame->HasImageRequest()) {

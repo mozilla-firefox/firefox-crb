@@ -27,6 +27,7 @@
 #include "mozilla/EventForwards.h"
 #include "mozilla/FocusModel.h"
 #include "mozilla/IntegerRange.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/PresShell.h"
@@ -99,6 +100,7 @@
 #include "nsPresContext.h"
 #include "nsPresContextInlines.h"
 #include "nsReadableUtils.h"
+#include "nsRefreshDriver.h"
 #include "nsString.h"
 #include "nsStyleConsts.h"
 #include "nsStyleStructInlines.h"
@@ -1358,6 +1360,13 @@ void nsIFrame::MarkNeedsDisplayItemRebuild() {
   }
 }
 
+// Whether a frame with style aStyle can't be unstable in the sense of the
+// Layout Instability API.
+static bool IsHiddenForLayoutShift(const ComputedStyle* aStyle) {
+  return !aStyle->StyleVisibility()->IsVisible() ||
+         aStyle->IsInOpacityZeroSubtree();
+}
+
 // Subclass hook for style post processing
 /* virtual */
 void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
@@ -1372,6 +1381,13 @@ void nsIFrame::DidSetComputedStyle(ComputedStyle* aOldComputedStyle) {
     }
 #endif
     UpdateGeneratedContentTextIfNeeded(this, aOldComputedStyle);
+
+    if (PresContext()->LayoutShiftTrackingAllowed() &&
+        IsHiddenForLayoutShift(aOldComputedStyle) !=
+            IsHiddenForLayoutShift(Style())) {
+      RecordLayoutShiftVisibilityChange(
+          IsHiddenForLayoutShift(aOldComputedStyle));
+    }
   }
 
   MaybeScheduleReflowSVGNonDisplayText(this);
@@ -2942,6 +2958,22 @@ bool nsIFrame::ComputeOverflowClipRectRelativeToSelf(
   }
   aOutRadii.AdjustOutwards(boxMargin);
   return true;
+}
+
+Maybe<nsRect> nsIFrame::GetClipRectForDescendants() const {
+  if (const ScrollContainerFrame* scrollContainer = do_QueryFrame(this)) {
+    return Some(
+        scrollContainer->GetScrollPortRectAccountingForDynamicToolbar());
+  }
+  const PhysicalAxes clipAxes = ShouldApplyOverflowClipping(StyleDisplay());
+  if (clipAxes.isEmpty()) {
+    return Nothing();
+  }
+  // The ink overflow contains every descendant, so it bounds the unclipped
+  // axis.
+  return Some(OverflowAreas::GetOverflowClipRect(
+      InkOverflowRectRelativeToSelf(), GetRectRelativeToSelf(), clipAxes,
+      OverflowClipMargin(clipAxes)));
 }
 
 nsMargin nsIFrame::OverflowClipMargin(PhysicalAxes aClipAxes,
@@ -7930,6 +7962,14 @@ void nsIFrame::DidReflow(nsPresContext* aPresContext,
 
   SVGObserverUtils::InvalidateDirectRenderingObservers(this);
 
+  // Note that a few frame classes (nsMenuPopupFrame, several SVG frames) clear
+  // NS_FRAME_FIRST_REFLOW elsewhere and never get a stamp. For those, only the
+  // NS_FRAME_FIRST_REFLOW check in RecordLayoutShiftOldRect applies.
+  if (HasAnyStateBits(NS_FRAME_FIRST_REFLOW)) {
+    mLayoutShiftGeneration =
+        uint16_t(aPresContext->RefreshDriver()->RenderingUpdateCount());
+  }
+
   RemoveStateBits(NS_FRAME_IN_REFLOW | NS_FRAME_FIRST_REFLOW |
                   NS_FRAME_IS_DIRTY | NS_FRAME_HAS_DIRTY_CHILDREN);
 
@@ -8896,6 +8936,9 @@ void nsIFrame::SetPosition(const nsPoint& aPt) {
   if (mRect.TopLeft() == aPt) {
     return;
   }
+  if (!IsLayoutShiftRecorded() && PresContext()->LayoutShiftTrackingAllowed()) {
+    RecordLayoutShiftOldRect();
+  }
   mRect.MoveTo(aPt);
   MarkNeedsDisplayItemRebuild();
 }
@@ -8910,6 +8953,55 @@ void nsIFrame::MovePositionBy(const nsPoint& aTranslation) {
   ReflowInput::ApplyRelativePositioning(
       this, computedOffsets ? *computedOffsets : nsMargin(), &position);
   SetPosition(position);
+}
+
+void nsIFrame::RecordLayoutShiftOldRect() {
+  MOZ_ASSERT(!IsLayoutShiftRecorded());
+  // Initial placement isn't a shift. NS_FRAME_FIRST_REFLOW is cleared in our
+  // DidReflow, after our parent positions us.
+  if (HasAnyStateBits(NS_FRAME_FIRST_REFLOW)) {
+    return;
+  }
+  const LayoutShiftTracker::RecordingInfo recording =
+      LayoutShiftTracker::GetForRecording(PresContext());
+  if (!recording.mTracker ||
+      !CanRecordLayoutShift(recording.mRenderingUpdateCount)) {
+    return;
+  }
+  SetLayoutShiftRecorded();
+  recording.mTracker->Record(this, mRect);
+}
+
+void nsIFrame::RecordLayoutShiftOldClip(const ComputedStyle* aNewStyle) {
+  if (!PresContext()->LayoutShiftTrackingAllowed()) {
+    return;
+  }
+  // Only frames that clip their descendants, now or after the style change,
+  // matter.
+  if (!IsScrollContainerOrSubclass() &&
+      ShouldApplyOverflowClipping(StyleDisplay()).isEmpty() &&
+      (!aNewStyle ||
+       OverflowClipAxesForDisplay(aNewStyle->StyleDisplay()).isEmpty())) {
+    return;
+  }
+  if (!IsLayoutShiftRecorded()) {
+    RecordLayoutShiftOldRect();
+  }
+  if (IsLayoutShiftRecorded()) {
+    PresShell()->LayoutShiftTrackerIfAny()->RecordClip(this);
+  }
+}
+
+void nsIFrame::RecordLayoutShiftVisibilityChange(bool aWasHidden) {
+  if (!IsLayoutShiftRecorded()) {
+    RecordLayoutShiftOldRect();
+    if (!IsLayoutShiftRecorded()) {
+      return;
+    }
+  }
+  if (LayoutShiftTracker* tracker = PresShell()->LayoutShiftTrackerIfAny()) {
+    tracker->NoteVisibilityChange(this, aWasHidden);
+  }
 }
 
 nsRect nsIFrame::GetNormalRect() const {
@@ -9671,6 +9763,12 @@ bool nsIFrame::IsVisibleForPainting() const {
 
 bool nsIFrame::IsVisibleOrCollapsedForPainting() const {
   return StyleVisibility()->IsVisibleOrCollapsed();
+}
+
+bool nsIFrame::HasVisibleBoxDecorations() const {
+  return StyleOutline()->ShouldPaintOutline() || StyleBorder()->HasBorder() ||
+         !StyleBackground()->IsTransparent(this) ||
+         StyleDisplay()->HasNativeAppearance();
 }
 
 /* virtual */
@@ -12356,6 +12454,14 @@ void nsIFrame::SetParent(nsContainerFrame* aParent) {
   MOZ_ASSERT_IF(ParentIsWrapperAnonBox(),
                 aParent->Style()->IsInheritingAnonBox());
 
+  // Our recorded rect is relative to our old parent, so it is meaningless now.
+  if (IsLayoutShiftRecorded()) {
+    if (LayoutShiftTracker* tracker = PresShell()->LayoutShiftTrackerIfAny()) {
+      tracker->Forget(this);
+    }
+    ClearLayoutShiftRecorded();
+  }
+
   // Note that the current mParent may already be destroyed at this point.
   mParent = aParent;
   MOZ_RELEASE_ASSERT(!mParent || PresContext() == mParent->PresContext());
@@ -12832,7 +12938,11 @@ void nsIFrame::UpdateVisibleDescendantsState() {
 PhysicalAxes nsIFrame::ShouldApplyOverflowClipping(
     const nsStyleDisplay* aDisp) const {
   MOZ_ASSERT(aDisp == StyleDisplay(), "Wrong display struct");
+  return OverflowClipAxesForDisplay(aDisp);
+}
 
+PhysicalAxes nsIFrame::OverflowClipAxesForDisplay(
+    const nsStyleDisplay* aDisp) const {
   if (IsScrollContainerOrSubclass()) {
     // Scrollers deal with overflow on their own.
     return {};

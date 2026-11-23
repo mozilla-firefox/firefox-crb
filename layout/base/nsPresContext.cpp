@@ -39,6 +39,7 @@
 #include "mozilla/ServoBindings.h"
 #include "mozilla/ServoStyleSet.h"
 #include "mozilla/StaticPrefs_bidi.h"
+#include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_layout.h"
 #include "mozilla/StaticPrefs_widget.h"
 #include "mozilla/StaticPrefs_zoom.h"
@@ -236,6 +237,15 @@ static bool IsVisualCharset(NotNull<const Encoding*> aCharset) {
   return aCharset == ISO_8859_8_ENCODING;
 }
 
+static bool LayoutShiftTrackingAllowedFor(
+    const dom::Document* aDocument, nsPresContext::nsPresContextType aType) {
+  return StaticPrefs::dom_enable_layout_shift() &&
+         aType == nsPresContext::eContext_Galley &&
+         !aDocument->IsResourceDoc() && !aDocument->IsStaticDocument() &&
+         !aDocument->IsBeingUsedAsImage() &&
+         !nsContentUtils::IsChromeDoc(aDocument);
+}
+
 nsPresContext::nsPresContext(dom::Document* aDocument, nsPresContextType aType)
     : mPresShell(nullptr),
       mDocument(aDocument),
@@ -287,6 +297,8 @@ nsPresContext::nsPresContext(dom::Document* aDocument, nsPresContextType aType)
       mHasWarnedAboutTooLargeDashedOrDottedRadius(false),
       mQuirkSheetAdded(false),
       mHadNonBlankPaint(false),
+      mLayoutShiftTrackingAllowed(
+          LayoutShiftTrackingAllowedFor(aDocument, aType)),
       mHadFirstContentfulPaint(false),
       mHadNonTickContentfulPaint(false),
       mHadContentfulPaintComposite(false),

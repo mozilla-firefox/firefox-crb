@@ -462,30 +462,36 @@ static Maybe<nsRect> ComputeTheIntersection(
   nsIFrame* containerFrame =
       nsLayoutUtils::GetCrossDocParentFrameInProcess(target);
   while (containerFrame && containerFrame != aRoot) {
-    // FIXME(emilio): What about other scroll frames that inherit from
-    // ScrollContainerFrame but have a different type, like nsListControlFrame?
-    // This looks bogus in that case, but different bug.
-    if (ScrollContainerFrame* scrollContainerFrame =
-            do_QueryFrame(containerFrame)) {
-      if (containerFrame->GetParent() == aRoot && !aRoot->GetParent()) {
-        // This is subtle: if we're computing the intersection against the
-        // viewport (the root frame), and this is its scroll frame, we really
-        // want to skip this intersection (because we want to account for the
-        // root margin, which is already in aRootBounds).
-        break;
-      }
-      nsRect subFrameRect =
-          scrollContainerFrame->GetScrollPortRectAccountingForDynamicToolbar();
+    // 3.4 If container has a content clip or a css clip-path property, update
+    // intersectionRect by applying container’s clip.
+    //
+    // 3.4 TODO: Apply clip-path.
+    if (Maybe<nsRect> clipRect = containerFrame->GetClipRectForDescendants()) {
+      if (containerFrame->IsScrollContainerOrSubclass()) {
+        if (containerFrame->GetParent() == aRoot && !aRoot->GetParent()) {
+          // This is subtle: if we're computing the intersection against the
+          // viewport (the root frame), and this is its scroll frame, we really
+          // want to skip this intersection (because we want to account for the
+          // root margin, which is already in aRootBounds).
+          break;
+        }
 
-      // 3.1 If container is the document of a nested browsing context, update
-      // intersectionRect by clipping to the viewport of the document, and
-      // update container to be the browsing context container of container.
-      // XXX: Handled below by aRemoteDocumentVisibleRect & walking
-      // CrossDocParentFrame.
+        // 3.1 If container is the document of a nested browsing context,
+        // update intersectionRect by clipping to the viewport of the document,
+        // and update container to be the browsing context container of
+        // container.
+        // XXX: Handled below by aRemoteDocumentVisibleRect & walking
+        // CrossDocParentFrame.
+
+        // 3.3 If container is a scroll container, apply the
+        // IntersectionObserver’s [[scrollMargin]] to the container’s clip rect
+        // as described in apply scroll margin to a scrollport.
+        clipRect->Inflate(ResolveMargin(aScrollMargin, clipRect->Size()));
+      }
 
       // 3.2 Map intersectionRect to the coordinate space of container.
       bool preservesAxisAlignedRectangles = false;
-      nsRect intersectionRectRelativeToContainer =
+      const nsRect intersectionRectRelativeToContainer =
           nsLayoutUtils::TransformFrameRectToAncestor(
               target, intersectionRect.value(), containerFrame,
               &preservesAxisAlignedRectangles);
@@ -493,47 +499,13 @@ static Maybe<nsRect> ComputeTheIntersection(
         *aPreservesAxisAlignedRectangles |= preservesAxisAlignedRectangles;
       }
 
-      // 3.3 If container is a scroll container, apply the
-      // IntersectionObserver’s [[scrollMargin]] to the container’s clip rect as
-      // described in apply scroll margin to a scrollport.
-      subFrameRect.Inflate(ResolveMargin(aScrollMargin, subFrameRect.Size()));
-
       intersectionRect =
           intersectionRectRelativeToContainer.EdgeInclusiveIntersection(
-              subFrameRect);
+              *clipRect);
       if (!intersectionRect) {
         return Nothing();
       }
       target = containerFrame;
-    } else {
-      const auto& disp = *containerFrame->StyleDisplay();
-      auto clipAxes = containerFrame->ShouldApplyOverflowClipping(&disp);
-      // 3.4 If container has a content clip or a css clip-path property, update
-      // intersectionRect by applying container’s clip.
-
-      // 3.4 TODO: Apply clip-path.
-      if (!clipAxes.isEmpty()) {
-        // 3.2 Map intersectionRect to the coordinate space of container.
-        bool preservesAxisAlignedRectangles = false;
-        const nsRect intersectionRectRelativeToContainer =
-            nsLayoutUtils::TransformFrameRectToAncestor(
-                target, intersectionRect.value(), containerFrame,
-                &preservesAxisAlignedRectangles);
-        if (aPreservesAxisAlignedRectangles) {
-          *aPreservesAxisAlignedRectangles |= preservesAxisAlignedRectangles;
-        }
-        const nsRect clipRect = OverflowAreas::GetOverflowClipRect(
-            intersectionRectRelativeToContainer,
-            containerFrame->GetRectRelativeToSelf(), clipAxes,
-            containerFrame->OverflowClipMargin(clipAxes));
-        intersectionRect =
-            intersectionRectRelativeToContainer.EdgeInclusiveIntersection(
-                clipRect);
-        if (!intersectionRect) {
-          return Nothing();
-        }
-        target = containerFrame;
-      }
     }
     // Preserve the popup's own clip, but skip ancestor clips since popups
     // can extend outside their embedding document's viewport.

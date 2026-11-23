@@ -6,6 +6,7 @@
 
 #include <cstddef>
 
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ProfilerLabels.h"
 #include "mozilla/ScopeExit.h"
@@ -540,9 +541,17 @@ void ScrollAnchorContainer::ApplyAdjustments() {
   MOZ_RELEASE_ASSERT(!mApplyingAnchorAdjustment);
   // We should use AutoRestore here, but that doesn't work with bitfields
   mApplyingAnchorAdjustment = true;
+  nsIFrame* scrolledFrame = Frame()->GetScrolledFrame();
+  const nsPoint scrolledFramePosition = scrolledFrame->GetPosition();
   Frame()->ScrollToInternal(Frame()->GetScrollPosition() + physicalAdjustment,
                             ScrollMode::Instant, ScrollOrigin::Relative);
   mApplyingAnchorAdjustment = false;
+
+  if (LayoutShiftTracker* tracker =
+          Frame()->PresShell()->LayoutShiftTrackerIfAny()) {
+    tracker->AddScrollAnchorAdjustment(
+        scrolledFrame, scrolledFrame->GetPosition() - scrolledFramePosition);
+  }
 
   if (Frame()->mIsRoot) {
     Frame()->PresShell()->RootScrollFrameAdjusted(physicalAdjustment.y);
