@@ -196,6 +196,9 @@ void nsRubyFrame::ReflowSegment(nsPresContext* aPresContext,
 
   ReflowOutput baseMetrics(aReflowInput);
   bool pushedFrame;
+  // The line layout positions the base container only after block-direction
+  // alignment, so take the inline position it will get from here.
+  const nscoord baseIStart = aReflowInput.mLineLayout->GetCurrentICoord();
   aReflowInput.mLineLayout->ReflowFrame(aBaseContainer, aStatus, &baseMetrics,
                                         pushedFrame);
 
@@ -271,17 +274,15 @@ void nsRubyFrame::ReflowSegment(nsPresContext* aPresContext,
 
   nscoord segmentISize = baseMetrics.ISize(lineWM);
   const nsSize dummyContainerSize;
-  LogicalRect baseRect =
-      aBaseContainer->GetLogicalRect(lineWM, dummyContainerSize);
   // We need to position our rtc frames on one side or the other of the
   // base container's rect, using a coordinate space that's relative to
-  // the ruby frame. Right now, the base container's rect's block-axis
-  // position is relative to the block container frame containing the
-  // lines, so here we reset it to the different between the ascents of
-  // the ruby container and the ruby base container, assuming they are
-  // aligned with the baseline.
+  // the ruby frame. Its block-axis position is the difference between the
+  // ascents of the ruby container and the ruby base container, assuming they
+  // are aligned with the baseline.
   // XXX We may need to add border/padding here. See bug 1055667.
-  baseRect.BStart(lineWM) = aBlockStartAscent - baseMetrics.BlockStartAscent();
+  LogicalRect baseRect(lineWM, baseIStart,
+                       aBlockStartAscent - baseMetrics.BlockStartAscent(),
+                       baseMetrics.ISize(lineWM), baseMetrics.BSize(lineWM));
   // The rect for offsets of text containers.
   LogicalRect offsetRect = baseRect;
 
