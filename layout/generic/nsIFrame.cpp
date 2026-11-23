@@ -8957,6 +8957,12 @@ void nsIFrame::MovePositionBy(const nsPoint& aTranslation) {
 
 void nsIFrame::RecordLayoutShiftOldRect() {
   MOZ_ASSERT(!IsLayoutShiftRecorded());
+  if (IsLayoutShiftSlid()) {
+    if (LayoutShiftTracker* tracker = PresShell()->LayoutShiftTrackerIfAny()) {
+      tracker->SlidFrameMoving(this);
+    }
+    return;
+  }
   // Initial placement isn't a shift. NS_FRAME_FIRST_REFLOW is cleared in our
   // DidReflow, after our parent positions us.
   if (HasAnyStateBits(NS_FRAME_FIRST_REFLOW)) {
@@ -8993,7 +8999,7 @@ void nsIFrame::RecordLayoutShiftOldClip(const ComputedStyle* aNewStyle) {
 }
 
 void nsIFrame::RecordLayoutShiftVisibilityChange(bool aWasHidden) {
-  if (!IsLayoutShiftRecorded()) {
+  if (!IsLayoutShiftRecorded() && !IsLayoutShiftSlid()) {
     RecordLayoutShiftOldRect();
     if (!IsLayoutShiftRecorded()) {
       return;
@@ -12455,11 +12461,12 @@ void nsIFrame::SetParent(nsContainerFrame* aParent) {
                 aParent->Style()->IsInheritingAnonBox());
 
   // Our recorded rect is relative to our old parent, so it is meaningless now.
-  if (IsLayoutShiftRecorded()) {
+  if (IsLayoutShiftRecorded() || IsLayoutShiftSlid()) {
     if (LayoutShiftTracker* tracker = PresShell()->LayoutShiftTrackerIfAny()) {
       tracker->Forget(this);
     }
     ClearLayoutShiftRecorded();
+    SetLayoutShiftSlid(false);
   }
 
   // Note that the current mParent may already be destroyed at this point.

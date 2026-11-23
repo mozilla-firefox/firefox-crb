@@ -770,6 +770,7 @@ class nsIFrame : public nsQueryFrame {
         mHasPaddingChange(false),
         mInScrollAnchorChain(false),
         mLayoutShiftRecorded(false),
+        mLayoutShiftSlid(false),
         mLayoutShiftGeneration(0) {
     MOZ_ASSERT(mComputedStyle);
     MOZ_ASSERT(mPresContext);
@@ -1353,6 +1354,12 @@ class nsIFrame : public nsQueryFrame {
     return mContent->IsXULElement() ||
            Style()->GetPseudoType() == mozilla::PseudoStyleType::MozRangeThumb;
   }
+
+  /**
+   * @see mLayoutShiftSlid
+   */
+  bool IsLayoutShiftSlid() const { return mLayoutShiftSlid; }
+  void SetLayoutShiftSlid(bool aSlid) { mLayoutShiftSlid = aSlid; }
 
   /**
    * Whether moving this frame can be a layout shift, given the refresh
@@ -5687,6 +5694,13 @@ class nsIFrame : public nsQueryFrame {
    * shift report is stored in the PresShell's LayoutShiftTracker.
    */
   bool mLayoutShiftRecorded : 1;
+
+  /**
+   * True if we were moved by our parent block sliding lines since the last
+   * layout shift report, and are in the LayoutShiftTracker's list for that
+   * block.
+   */
+  bool mLayoutShiftSlid : 1;
 
   /**
    * The (truncated) refresh driver rendering update count at the time of our

@@ -2232,7 +2232,8 @@ void PresShell::NotifyDestroyingFrame(nsIFrame* aFrame) {
   // when it tries to remove it from the (array) value of this property.
   aFrame->RemoveDisplayItemDataForDeletion();
 
-  if (aFrame->IsLayoutShiftRecorded() && mLayoutShiftTracker) {
+  if (mLayoutShiftTracker &&
+      (aFrame->IsLayoutShiftRecorded() || aFrame->IsLayoutShiftSlid())) {
     mLayoutShiftTracker->Forget(aFrame);
   }
 

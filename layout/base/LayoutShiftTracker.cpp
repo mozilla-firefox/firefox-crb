@@ -147,10 +147,12 @@ class MOZ_STACK_CLASS LayoutShiftScorer final {
   LayoutShiftScorer(
       const RecordMap& aRecords,
       const nsTHashMap<nsPtrHashKey<nsIFrame>, Maybe<nsRect>>& aOldClips,
+      const nsTArray<LayoutShiftTracker::BlockSlide>& aSlides,
       nsIFrame* aRootFrame, const nsRect& aViewport,
       const nsSize& aViewportSize, nscoord aDistanceBase)
       : mRecords(aRecords),
         mOldClips(aOldClips),
+        mSlides(aSlides),
         mRootFrame(aRootFrame),
         mViewport(aViewport),
         mViewportSize(aViewportSize),
@@ -162,6 +164,7 @@ class MOZ_STACK_CLASS LayoutShiftScorer final {
 
   void ProcessFrame(nsIFrame* aFrame,
                     const LayoutShiftTracker::OldGeometry& aOld);
+  void ProcessSlide(const LayoutShiftTracker::BlockSlide& aSlide);
 
   double Score() const;
   nsTArray<SourceCandidate> TakeSources();
@@ -256,6 +259,12 @@ class MOZ_STACK_CLASS LayoutShiftScorer final {
         return aFrame->GetPosition() - record->mOldRect.TopLeft();
       }
     }
+    if (aFrame->IsLayoutShiftSlid()) {
+      if (const auto* slide = LayoutShiftTracker::FindBlockSlide(
+              mSlides, aFrame->GetParent())) {
+        return slide->mDelta;
+      }
+    }
     return nsPoint();
   }
 
@@ -302,6 +311,7 @@ class MOZ_STACK_CLASS LayoutShiftScorer final {
 
   const RecordMap& mRecords;
   const nsTHashMap<nsPtrHashKey<nsIFrame>, Maybe<nsRect>>& mOldClips;
+  const nsTArray<LayoutShiftTracker::BlockSlide>& mSlides;
   nsIFrame* const mRootFrame;
   const nsRect mViewport;
   const nsSize mViewportSize;
@@ -564,6 +574,33 @@ void LayoutShiftScorer::ProcessFrame(
             transformed, originShifted);
 }
 
+void LayoutShiftScorer::ProcessSlide(
+    const LayoutShiftTracker::BlockSlide& aSlide) {
+  const AncestorInfo info = GetAncestorInfo(aSlide.mBlock);
+  // The old origin of the slid frames relative to their current origin, like
+  // MovedSubtree::mOldOrigin in ProcessFrame.
+  const nsPoint oldOrigin =
+      -(aSlide.mDelta + info.mOffsetDelta - info.mScrollDelta);
+  for (nsIFrame* frame : aSlide.mFrames) {
+    if (frame->IsLayoutShiftRecorded()) {
+      // Moved again after the slide; its record has its whole move.
+      continue;
+    }
+    if (!info.mTransformed && !frame->IsTransformed()) {
+      // Cheap version of the culling in ProcessFrame, without looking up the
+      // ancestor info for each frame.
+      const nsRect ink =
+          frame->InkOverflowRect() + info.mOrigin + frame->GetPosition();
+      if (!mViewport.Intersects(ink) &&
+          !mViewport.Intersects(ink + oldOrigin)) {
+        continue;
+      }
+    }
+    ProcessFrame(frame, LayoutShiftTracker::OldGeometry{
+                            frame->GetRect() - aSlide.mDelta, nsPoint()});
+  }
+}
+
 LayoutShiftScorer::VisualMapping LayoutShiftScorer::GetMapping(
     nsIFrame* aFrame, bool aTransformed, const nsPoint& aOldOrigin) {
   if (aTransformed) {
@@ -650,8 +687,9 @@ void LayoutShiftScorer::AddDescendants(const MovedSubtree& aSubtree,
           : AccumulateClipForDescendants(oldFrameClip, aOffset, aOldClip);
   for (const auto& childList : aFrame->ChildLists()) {
     for (nsIFrame* child : childList.mList) {
-      // Recorded frames moved relative to us and are processed on their own.
-      if (child->IsLayoutShiftRecorded() ||
+      // Recorded and slid frames moved relative to us and are processed on
+      // their own.
+      if (child->IsLayoutShiftRecorded() || child->IsLayoutShiftSlid() ||
           !child->CanRecordLayoutShift(mRenderingUpdateCount) ||
           child->IsPlaceholderFrame() ||
           child->Style()->IsInOpacityZeroSubtree()) {
@@ -872,8 +910,126 @@ void LayoutShiftTracker::RecordClip(nsIFrame* aFrame) {
       aFrame, [&] { return aFrame->GetClipRectForDescendants(); });
 }
 
+LayoutShiftTracker::AutoLineSlide::AutoLineSlide(nsIFrame* aBlock,
+                                                 const nsPoint& aDelta) {
+  const RecordingInfo recording = GetForRecording(aBlock->PresContext());
+  if (!recording.mTracker) {
+    return;
+  }
+  mTracker = recording.mTracker;
+  mRenderingUpdateCount = recording.mRenderingUpdateCount;
+  mTracker->mSliding = true;
+  mBlock = aBlock;
+  mDelta = aDelta;
+}
+
+/* static */
+const LayoutShiftTracker::BlockSlide* LayoutShiftTracker::FindBlockSlide(
+    const nsTArray<BlockSlide>& aSlides, const nsIFrame* aBlock) {
+  // Usually there are only a few blocks with slides, and the latest one is
+  // the most likely one.
+  for (const BlockSlide& slide : Reversed(aSlides)) {
+    if (slide.mBlock == aBlock) {
+      return &slide;
+    }
+  }
+  return nullptr;
+}
+
+LayoutShiftTracker::BlockSlide* LayoutShiftTracker::FindBlockSlide(
+    const nsIFrame* aBlock) {
+  return const_cast<BlockSlide*>(FindBlockSlide(mBlockSlides, aBlock));
+}
+
+void LayoutShiftTracker::WillSlideFrame(nsIFrame* aBlock, nsIFrame* aFrame,
+                                        const nsPoint& aDelta,
+                                        uint16_t aRenderingUpdateCount) {
+  if (aFrame->IsLayoutShiftRecorded()) {
+    // Its record already has its rect from before this slide.
+    return;
+  }
+  if (aFrame->IsLayoutShiftSlid()) {
+    // Slid again. Its total move may differ from that of the other frames in
+    // the list, so give it its own record.
+    MaterializeSlidFrame(aFrame);
+    return;
+  }
+  if (!aFrame->CanRecordLayoutShift(aRenderingUpdateCount)) {
+    return;
+  }
+  BlockSlide* slide = FindBlockSlide(aBlock);
+  if (slide && slide->mDelta != aDelta) {
+    // Another slide of this block by a different amount, which is rare enough
+    // to not bother with more than one list per block.
+    aFrame->SetLayoutShiftRecorded();
+    Record(aFrame, aFrame->GetRect());
+    return;
+  }
+  const bool wasEmpty = IsEmpty();
+  if (!slide) {
+    slide = mBlockSlides.AppendElement(BlockSlide{aBlock, aDelta, {}});
+  }
+  slide->mFrames.AppendElement(aFrame);
+  aFrame->SetLayoutShiftSlid(true);
+  if (wasEmpty) {
+    ScheduleReport();
+  }
+}
+
+void LayoutShiftTracker::MaterializeSlidFrame(nsIFrame* aFrame) {
+  MOZ_ASSERT(aFrame->IsLayoutShiftSlid());
+  MOZ_ASSERT(!aFrame->IsLayoutShiftRecorded());
+  const BlockSlide* slide = FindBlockSlide(aFrame->GetParent());
+  MOZ_ASSERT(slide, "Slid frames are in their parent's list");
+  const nsPoint delta = slide ? slide->mDelta : nsPoint();
+  // It stays in the list (and keeps IsLayoutShiftSlid()) so that the lists
+  // never contain destroyed frames, see ForgetSlidFrame.
+  aFrame->SetLayoutShiftRecorded();
+  Record(aFrame, aFrame->GetRect() - delta);
+}
+
+void LayoutShiftTracker::SlidFrameMoving(nsIFrame* aFrame) {
+  if (!mSliding) {
+    MaterializeSlidFrame(aFrame);
+  }
+}
+
+void LayoutShiftTracker::Forget(nsIFrame* aFrame) {
+  if (aFrame->IsLayoutShiftSlid()) {
+    ForgetSlidFrame(aFrame);
+  }
+  mRecords.Remove(aFrame);
+  mOldClips.Remove(aFrame);
+}
+
+void LayoutShiftTracker::ForgetSlidFrame(nsIFrame* aFrame) {
+  // The other frames in the list are all alive, since any of them being
+  // destroyed would have gotten here first. Give them their own records rather
+  // than searching the list for aFrame.
+  for (size_t i = 0; i < mBlockSlides.Length(); ++i) {
+    BlockSlide& slide = mBlockSlides[i];
+    if (!slide.mFrames.Contains(aFrame)) {
+      continue;
+    }
+    for (nsIFrame* frame : slide.mFrames) {
+      frame->SetLayoutShiftSlid(false);
+      if (frame != aFrame && !frame->IsLayoutShiftRecorded()) {
+        frame->SetLayoutShiftRecorded();
+        Record(frame, frame->GetRect() - slide.mDelta);
+      }
+    }
+    mBlockSlides.RemoveElementAt(i);
+    return;
+  }
+  MOZ_ASSERT_UNREACHABLE("Slid frame not in any list");
+  aFrame->SetLayoutShiftSlid(false);
+}
+
 void LayoutShiftTracker::NoteVisibilityChange(nsIFrame* aFrame,
                                               bool aWasHidden) {
+  if (!aFrame->IsLayoutShiftRecorded()) {
+    MaterializeSlidFrame(aFrame);
+  }
   if (auto record = mRecords.Lookup(aFrame)) {
     if (!record->mWasHidden) {
       record->mWasHidden = Some(aWasHidden);
@@ -894,6 +1050,12 @@ void LayoutShiftTracker::ClearRecords() {
   }
   mRecords.Clear();
   mOldClips.Clear();
+  for (const BlockSlide& slide : mBlockSlides) {
+    for (nsIFrame* frame : slide.mFrames) {
+      frame->SetLayoutShiftSlid(false);
+    }
+  }
+  mBlockSlides.Clear();
 }
 
 void LayoutShiftTracker::Report() {
@@ -930,18 +1092,26 @@ void LayoutShiftTracker::Report() {
       std::max(viewportSize.width, viewportSize.height);
 
   const TimeStamp start = TimeStamp::Now();
-  LayoutShiftScorer scorer(mRecords, mOldClips, rootFrame, viewport,
-                           viewportSize, distanceBase);
+  LayoutShiftScorer scorer(mRecords, mOldClips, mBlockSlides, rootFrame,
+                           viewport, viewportSize, distanceBase);
   for (const auto& entry : mRecords) {
     scorer.ProcessFrame(entry.GetKey(), entry.GetData());
   }
+  size_t slidFrames = 0;
+  for (const BlockSlide& slide : mBlockSlides) {
+    scorer.ProcessSlide(slide);
+    slidFrames += slide.mFrames.Length();
+  }
+
   const double score = scorer.Score();
   MOZ_LOG(sLayoutShiftLog, LogLevel::Debug,
-          ("Report %p: %u records (%zu table bytes), %u impact region rects, "
-           "%zu source candidates, score %g, %.3f ms",
+          ("Report %p: %u records (%zu table bytes), %zu slid frames in %zu "
+           "blocks, %u impact region rects, %zu source candidates, score %g, "
+           "%.3f ms",
            this, mRecords.Count(),
            mRecords.ShallowSizeOfExcludingThis(LayoutShiftMallocSizeOf),
-           scorer.ImpactRegionRectCount(), scorer.SourceCandidateCount(), score,
+           slidFrames, mBlockSlides.Length(), scorer.ImpactRegionRectCount(),
+           scorer.SourceCandidateCount(), score,
            (TimeStamp::Now() - start).ToMilliseconds()));
   if (score <= 0.0) {
     return;

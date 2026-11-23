@@ -26,6 +26,7 @@
 #include "mozilla/ComputedStyle.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/DefineEnum.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Likely.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/PresShell.h"
@@ -4805,22 +4806,24 @@ void nsBlockFrame::MoveChildFramesOfLine(nsLineBox* aLine,
     return;
   }
 
+  if (!aDeltaBCoord) {
+    return;
+  }
+
   WritingMode wm = GetWritingMode();
   LogicalPoint translation(wm, 0, aDeltaBCoord);
+  // MovePositionBy doesn't depend on the container size for vectors.
+  LayoutShiftTracker::AutoLineSlide layoutShiftSlide(
+      this, translation.GetPhysicalPoint(wm, nsSize()));
 
   if (aLine->IsBlock()) {
-    if (aDeltaBCoord) {
-      kid->MovePositionBy(wm, translation);
-    }
+    layoutShiftSlide.WillMove(kid);
+    kid->MovePositionBy(wm, translation);
   } else {
     // Adjust the block-dir coordinate of the frames in the line.
-    // Note: we need to re-position views even if aDeltaBCoord is 0, because
-    // one of our parent frames may have moved and so the view's position
-    // relative to its parent may have changed.
-    if (aDeltaBCoord) {
-      for (nsIFrame* f : aLine->ChildFrames()) {
-        f->MovePositionBy(wm, translation);
-      }
+    for (nsIFrame* f : aLine->ChildFrames()) {
+      layoutShiftSlide.WillMove(f);
+      f->MovePositionBy(wm, translation);
     }
   }
 }
