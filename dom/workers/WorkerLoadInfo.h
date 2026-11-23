@@ -157,6 +157,7 @@ struct WorkerLoadInfoData {
   nsCOMPtr<nsIReferrerInfo> mReferrerInfo;
   OriginTrials mTrials;
   bool mFromWindow;
+  bool mWasmExempted = false;
   bool mXHRParamsAllowed;
   bool mWatchedByDevTools;
   StorageAccess mStorageAccess;

@@ -712,6 +712,10 @@ void InitGlobalObjectOptions(JS::RealmOptions& aOptions,
                              const nsACString& aLanguageOverride,
                              const nsAString& aTimezoneOverride);
 
+// Whether globals with |aPrincipal| expose WebAssembly even when
+// javascript.options.wasm is false. Main thread only.
+bool IsWasmExempted(nsIPrincipal* aPrincipal);
+
 class ErrorBase {
  public:
   nsString mErrorMsg;
