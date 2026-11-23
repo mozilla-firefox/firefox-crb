@@ -7,17 +7,20 @@
 
 #include "mozilla/Maybe.h"
 #include "mozilla/TimeStamp.h"
+#include "nsCOMPtr.h"
 #include "nsHashKeys.h"
 #include "nsPoint.h"
 #include "nsRect.h"
 #include "nsTHashMap.h"
 
 class nsIFrame;
+class nsITimer;
 class nsPresContext;
 
 namespace mozilla {
 
 namespace dom {
+class Element;
 class PerformanceMainThread;
 }  // namespace dom
 
@@ -92,6 +95,25 @@ class LayoutShiftTracker final {
    */
   void Report();
 
+  /**
+   * Input notifications, used to compute LayoutShift.hadRecentInput.
+   * Key presses and mouse button presses are excluding inputs right away.
+   * Layout shifts that happen while a pointer is down are held back until the
+   * pointer is released, when they are reported as having had recent input at
+   * the release, or the interaction is canceled, e.g. because it became a
+   * scroll, when they are reported as they were.
+   */
+  void NotifyExcludingInput(const TimeStamp& aTime);
+  void NotifyPointerDown();
+  void NotifyPointerUp(const TimeStamp& aTime);
+  void NotifyPointerCanceled();
+
+  /**
+   * Called when a form control is about to dispatch a trusted change event,
+   * which is an excluding input for its document.
+   */
+  static void NotifyChangeEvent(dom::Element* aTarget);
+
   struct OldGeometry {
     // The frame's rect (relative to its parent) before it changed.
     nsRect mOldRect;
@@ -106,6 +128,9 @@ class LayoutShiftTracker final {
   bool IsEmpty() const { return mRecords.IsEmpty(); }
   void ScheduleReport();
 
+  // Releases the shifts held back while a pointer was down.
+  void EndPendingPointerInteraction(const Maybe<TimeStamp>& aExcludingInput);
+
   void ClearRecords();
 
   // Owned by the PresShell that owns us.
@@ -113,6 +138,11 @@ class LayoutShiftTracker final {
   nsTHashMap<nsPtrHashKey<nsIFrame>, OldGeometry> mRecords;
   // Snapshots for clipping frames only; their lifetime follows mRecords.
   nsTHashMap<nsPtrHashKey<nsIFrame>, Maybe<nsRect>> mOldClips;
+  TimeStamp mLastExcludingInput;
+  // Shifts are held back while this is nonzero.
+  uint32_t mPointersDown = 0;
+  // Stops holding back shifts if the pointer interaction doesn't end.
+  nsCOMPtr<nsITimer> mPendingPointerTimer;
 };
 
 }  // namespace mozilla

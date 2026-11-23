@@ -3540,6 +3540,10 @@ class PresShell final : public nsStubDocumentObserver,
   // presses within a given interval to trigger a warning about how to exit
   // fullscreen.
   uint8_t mEscapeKeyDownCountForFullscreenKeyboardLockWarning;
+  // Set while ResizeReflow runs, i.e. the viewport is being resized from
+  // outside the document rather than by e.g. a meta viewport change. Not a
+  // bitfield so that AutoRestore can hold a reference to it.
+  bool mIsExternallyResizing = false;
   TimeStamp mLastEscapeKeyDownTimeForFullscreenKeyboardLockWarning;
 
   // The `SelectionNodeCache` is tightly coupled with the PresShell.

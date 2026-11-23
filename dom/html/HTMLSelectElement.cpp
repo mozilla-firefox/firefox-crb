@@ -1660,8 +1660,7 @@ void HTMLSelectElement::UserFinishedInteracting(bool aChanged) {
 
   // 5. Fire an event named change at element, with the bubbles attribute
   //    initialized to true.
-  nsContentUtils::DispatchTrustedEvent(this, u"change"_ns, CanBubble::eYes,
-                                       Cancelable::eNo);
+  nsContentUtils::DispatchFormChangeEvent(this);
 }
 
 void HTMLSelectElement::AttributeChanged(dom::Element* aElement,

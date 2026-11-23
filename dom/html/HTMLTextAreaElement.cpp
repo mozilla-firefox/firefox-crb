@@ -439,8 +439,7 @@ void HTMLTextAreaElement::FireChangeEventIfNeeded() {
 
   // Dispatch the change event.
   mFocusedValue = std::move(value);
-  nsContentUtils::DispatchTrustedEvent(this, u"change"_ns, CanBubble::eYes,
-                                       Cancelable::eNo);
+  nsContentUtils::DispatchFormChangeEvent(this);
 }
 
 nsresult HTMLTextAreaElement::PostHandleEvent(EventChainPostVisitor& aVisitor) {

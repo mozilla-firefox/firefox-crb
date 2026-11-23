@@ -1755,6 +1755,13 @@ class nsContentUtils {
       nsEventStatus* aEventStatus = nullptr);
 
   /**
+   * Dispatches a trusted "change" event to aEventTarget, a form control whose
+   * value was changed by the user.
+   */
+  MOZ_CAN_RUN_SCRIPT static nsresult DispatchFormChangeEvent(
+      Element* aEventTarget);
+
+  /**
    * This method creates and dispatches a untrusted event.
    * Works only with events which can be created by calling
    * Document::CreateEvent() with parameter "Events".
