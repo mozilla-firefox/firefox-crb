@@ -570,6 +570,7 @@ export async function buildEngineForFeature(feature, opts = {}) {
     feature,
     baseURL,
     apiKey,
+    maxRetries: opts.maxRetries,
   });
 
   return { engine, parameters };
