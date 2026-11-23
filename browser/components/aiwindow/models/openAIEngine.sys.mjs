@@ -88,6 +88,13 @@ export class openAIEngine {
   #apiKey = null;
 
   /**
+   * Number of retry attempts the API client makes.
+   *
+   * @type {number | null}
+   */
+  #maxRetries = null;
+
+  /**
    * Checks whether a custom endpoint is configured via pref.
    *
    * @returns {boolean} True if the endpoint pref has a user-set value.
@@ -115,6 +122,14 @@ export class openAIEngine {
   }
 
   /**
+   * @param {string} modelChoiceId
+   * @returns {boolean} Whether the model choice uses the custom endpoint.
+   */
+  static isCustomModelChoice(modelChoiceId) {
+    return modelChoiceId === CUSTOM_MODEL_CHOICE_ID;
+  }
+
+  /**
    * Returns the endpoint and API key for a model choice.
    *
    * @param {string} [modelChoiceId] - Selected model choice id
@@ -122,7 +137,7 @@ export class openAIEngine {
    * @throws {Error} If the custom model choice is selected but not configured.
    */
   static resolveEndpointConfig(modelChoiceId) {
-    if (modelChoiceId === CUSTOM_MODEL_CHOICE_ID) {
+    if (openAIEngine.isCustomModelChoice(modelChoiceId)) {
       const baseURL = Services.prefs.getStringPref(CUSTOM_ENDPOINT_PREF, "");
       if (!baseURL) {
         throw new Error("Custom model choice selected but not configured");
@@ -146,6 +161,7 @@ export class openAIEngine {
    * @param {string} options.feature
    * @param {string} [options.baseURL] - Endpoint base URL
    * @param {string} [options.apiKey] - API key for the endpoint
+   * @param {number | null} [options.maxRetries]
    * @returns {Promise<openAIEngine>}
    */
   static async build({
@@ -156,6 +172,7 @@ export class openAIEngine {
     feature,
     baseURL = openAIEngine.endpoint,
     apiKey = "",
+    maxRetries = null,
   }) {
     const engine = new openAIEngine();
     const engineId = `${DEFAULT_ENGINE_ID}-${feature}-${model}`;
@@ -167,6 +184,7 @@ export class openAIEngine {
     engine.#flowId = flowId;
     engine.#baseURL = baseURL;
     engine.#apiKey = apiKey;
+    engine.#maxRetries = maxRetries;
     engine.engineInstance = await openAIEngine.#createOpenAIEngine(
       engineId,
       serviceType,
@@ -175,7 +193,8 @@ export class openAIEngine {
       flowId,
       feature,
       baseURL,
-      apiKey
+      apiKey,
+      maxRetries
     );
     return engine;
   }
@@ -192,6 +211,17 @@ export class openAIEngine {
       return false;
     }
     return error.status === 429 || !!error.message?.includes("429 status code");
+  }
+
+  /**
+   * Reads the delta-seconds form of Retry-After.
+   *
+   * @param {Error} error
+   * @returns {number | null} Milliseconds until the next retry.
+   */
+  static retryAfterMs(error) {
+    const seconds = Number.parseFloat(error.retryAfter);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
   }
 
   /**
@@ -239,6 +269,7 @@ export class openAIEngine {
    * @param {string | null} featureId - Feature name passed to PipelineOptions
    * @param {string} baseURL - The endpoint base URL for this engine instance
    * @param {string} apiKey - The API key for this engine instance
+   * @param {number | null} maxRetries - Retries the API client makes on its own
    * @returns {Promise<object>} - The configured engine instance
    */
   static async #createOpenAIEngine(
@@ -249,7 +280,8 @@ export class openAIEngine {
     flowId = null,
     featureId = null,
     baseURL,
-    apiKey
+    apiKey,
+    maxRetries = null
   ) {
     const extraHeadersPref = Services.prefs.getStringPref(
       "browser.smartwindow.extraHeaders",
@@ -277,6 +309,7 @@ export class openAIEngine {
         serviceType,
         purpose,
         extraHeaders,
+        maxRetries,
       });
       return engineInstance;
     } catch (error) {
@@ -362,7 +395,8 @@ export class openAIEngine {
       this.#flowId,
       this.feature,
       this.#baseURL,
-      this.#apiKey
+      this.#apiKey,
+      this.#maxRetries
     );
   }
 

@@ -14,11 +14,15 @@ import { sanitizeUntrustedContent } from "moz-src:///browser/components/aiwindow
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   renderPrompt: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
+  getCurrentModelChoiceId:
+    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   MODEL_FEATURES: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   buildConversation:
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
   loadPrompt:
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
+  openAIEngine:
+    "moz-src:///browser/components/aiwindow/models/openAIEngine.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "console", () =>
@@ -30,6 +34,10 @@ ChromeUtils.defineLazyGetter(lazy, "console", () =>
 
 // Max number of memories to include in prompts
 const MAX_NUM_MEMORIES = 8;
+
+// Block MLPA conversation starter generation until user limit is reset.
+const STARTER_GENERATION_BLOCKED_UNTIL_PREF =
+  "browser.smartwindow.conversationStarters.blockedUntil";
 
 /**
  * Helper to trim conversation history to recent messages, dropping empty messages, tool calls and responses
@@ -199,6 +207,16 @@ export async function generateConversationStartersSidebar(
   flowId = null,
   signal = new AbortController().signal
 ) {
+  const blockedUntilMs = Number(
+    Services.prefs.getStringPref(STARTER_GENERATION_BLOCKED_UNTIL_PREF, "0")
+  );
+  if (
+    !lazy.openAIEngine.isCustomModelChoice(lazy.getCurrentModelChoiceId()) &&
+    Date.now() < blockedUntilMs
+  ) {
+    lazy.console.debug("[sidebar-conversation-starters] skipped: rate limited");
+    return [];
+  }
   try {
     const today = new Date().toISOString().slice(0, 10);
 
@@ -232,7 +250,7 @@ export async function generateConversationStartersSidebar(
 
     const conversation = await lazy.buildConversation(
       lazy.MODEL_FEATURES.CONVERSATION_SUGGESTIONS_SIDEBAR_STARTER,
-      { flowId }
+      { flowId, maxRetries: 0 }
     );
     const [
       { prompt: conversationStarterSystemPrompt },
@@ -272,7 +290,19 @@ export async function generateConversationStartersSidebar(
     const token = await AuthProvider.getToken();
     signal.throwIfAborted();
 
-    let runPromise = conversation.run({ token });
+    let runPromise = conversation.run({ token }).catch(e => {
+      // An aborted call still counts its 429 error.
+      const retryAfterMs = lazy.openAIEngine.is429Error(e)
+        ? lazy.openAIEngine.retryAfterMs(e)
+        : null;
+      if (retryAfterMs !== null && !conversation.engine.isCustomEndpoint) {
+        Services.prefs.setStringPref(
+          STARTER_GENERATION_BLOCKED_UNTIL_PREF,
+          String(Date.now() + retryAfterMs)
+        );
+      }
+      throw e;
+    });
     runPromise = Promise.race([
       runPromise,
       new Promise((_, reject) => {

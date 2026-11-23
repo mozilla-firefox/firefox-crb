@@ -1482,7 +1482,7 @@ export class AIWindow extends MozLitElement {
         if (sidebarStartersPromise) {
           sidebarStarters = await sidebarStartersPromise;
 
-          if (sidebarStarters) {
+          if (sidebarStarters?.length) {
             this.#sidebarStarterCache.delete(startersKey);
             if (
               this.#sidebarStarterCache.size >= MAX_SIDEBAR_STARTER_CACHE_KEYS
