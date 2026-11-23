@@ -12,6 +12,8 @@
  * the Glean category it reports to, and how two records are compared.
  */
 
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -23,6 +25,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "resource://autofill/RustAutofillAddressStorage.sys.mjs",
   isStoredCreditCardField:
     "resource://autofill/RustAutofillCreditCardStorage.sys.mjs",
+  OSKeyStore: "resource://gre/modules/OSKeyStore.sys.mjs",
   RustAutofillAddressesAdapter:
     "resource://autofill/RustAutofillAddressStorage.sys.mjs",
   RustAutofillCreditCardsAdapter:
@@ -502,9 +505,18 @@ export class AutofillStorageMigrator {
       const undecryptableRecords = [];
       for (const record of records) {
         try {
-          exportable.push(
-            (await source._recordForMigrationExport?.(record)) ?? record
-          );
+          let exported;
+          try {
+            exported =
+              (await source._recordForMigrationExport?.(record)) ?? record;
+          } catch (e) {
+            // A subclass may read a record its source cannot.
+            if (!this.retryMigrationExport) {
+              throw e;
+            }
+            exported = await this.retryMigrationExport(record, e);
+          }
+          exportable.push(exported);
           // Only a credit card holds an encrypted value.
           anyDecrypted ||= !!record["cc-number-encrypted"];
         } catch (e) {
@@ -892,5 +904,47 @@ export class CreditCardStorageMigrator extends AutofillStorageMigrator {
   // An absent expiry is 0 on one side and missing on the other.
   fieldDiffers(field, a, b) {
     return lazy.creditCardFieldDiffers(field, a, b);
+  }
+
+  /**
+   * On Linux, retry a card the OS key store could not decrypt with the key in
+   * the NSS key database, which the OS key store used before it could load
+   * libsecret (bug 2094564), and record a migrate_nss_key_fallback event.
+   *
+   * @param {object} record The JSON store's record.
+   * @param {Error} error Why the JSON store could not export it.
+   * @returns {Promise<object>} The record with its number in the clear.
+   *   Rejects with `error` if the NSS key cannot read it either, or with the
+   *   NSS read's error if that read could not be made, so the card is not
+   *   dropped.
+   */
+  async retryMigrationExport(record, error) {
+    const cipherText = record["cc-number-encrypted"];
+    if (
+      AppConstants.platform != "linux" ||
+      !cipherText ||
+      (error.result != Cr.NS_ERROR_FAILURE && error.result != Cr.NS_ERROR_ABORT)
+    ) {
+      throw error;
+    }
+    let number;
+    try {
+      number = await lazy.OSKeyStore.decryptWithNSSKeyStore(cipherText);
+    } catch (nssError) {
+      if (!isUndecryptable(nssError)) {
+        throw nssError;
+      }
+      Glean.formautofillCreditcards.migrateNssKeyFallback.record({
+        recovered: false,
+      });
+      throw error;
+    }
+    Glean.formautofillCreditcards.migrateNssKeyFallback.record({
+      recovered: true,
+    });
+    // Keep in sync with CreditCardsBase._recordForMigrationExport.
+    const exported = { ...record, "cc-number": number };
+    delete exported["cc-number-encrypted"];
+    return exported;
   }
 }

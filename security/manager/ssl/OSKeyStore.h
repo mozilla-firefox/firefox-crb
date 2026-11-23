@@ -87,12 +87,19 @@ class OSKeyStore final : public nsIOSKeyStore {
                         const nsACString& aEncryptedBase64Text,
                         /*out*/ uint32_t* outLen,
                         /*out*/ uint8_t** outBytes);
+  // DecryptBytes with the key in the NSS key database, whatever mKs is. Never
+  // logs in to the token, so it never prompts for the primary password.
+  nsresult DecryptBytesWithNSSKeyStore(const nsACString& aLabel,
+                                       const nsACString& aEncryptedBase64Text,
+                                       /*out*/ uint32_t* outLen,
+                                       /*out*/ uint8_t** outBytes);
 
  private:
   OSKeyStore();
   ~OSKeyStore() = default;
 
   std::unique_ptr<AbstractOSKeyStore> mKs;
+  std::unique_ptr<AbstractOSKeyStore> mNSSKs;
   nsCOMPtr<nsISerialEventTarget> mBackgroundSerialEventTarget;
 };
 

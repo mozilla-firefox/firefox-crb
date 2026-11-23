@@ -343,14 +343,16 @@ add_task(async function test_unreadable_numbers_fail_the_attempt() {
   // reported, counted against the retry budget, and the profile left on JSON.
   // A key store that is merely locked defers instead, without spending one.
   const realDecrypt = OSKeyStore.decrypt;
+  const realDecryptWithNSSKeyStore = OSKeyStore.decryptWithNSSKeyStore;
   // Shaped like the native key store's rejection, which has no message.
-  OSKeyStore.decrypt = async function () {
+  OSKeyStore.decrypt = OSKeyStore.decryptWithNSSKeyStore = async function () {
     throw Components.Exception("", Cr.NS_ERROR_FAILURE);
   };
   try {
     s = await enableRust(s);
   } finally {
     OSKeyStore.decrypt = realDecrypt;
+    OSKeyStore.decryptWithNSSKeyStore = realDecryptWithNSSKeyStore;
   }
 
   Assert.ok(!getBool(ACTIVE_PREF), "the migration did not happen");

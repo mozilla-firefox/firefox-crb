@@ -334,6 +334,27 @@ export var OSKeyStore = {
   },
 
   /**
+   * Like decrypt(), but uses the key in the profile's NSS key database, and
+   * shows no prompt.
+   *
+   * @param {string} cipherText Encrypted string including the algorithm details.
+   * @returns {Promise<string>} The decrypted string. Rejects with
+   *   NS_ERROR_FAILURE if no key there decrypts cipherText.
+   */
+  async decryptWithNSSKeyStore(cipherText) {
+    try {
+      let bytes = await lazy.nativeOSKeyStore.asyncDecryptBytesWithNSSKeyStore(
+        this.STORE_LABEL,
+        cipherText
+      );
+      return String.fromCharCode.apply(String, bytes);
+    } catch (e) {
+      lazy.log.warn(`NSS key store decryption failed with result: ${e.result}`);
+      throw e;
+    }
+  },
+
+  /**
    * Encrypts a string and returns cipher text containing algorithm information used for decryption.
    *
    * @param   {string} plainText Original string without encryption.

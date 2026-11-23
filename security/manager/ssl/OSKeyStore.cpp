@@ -23,10 +23,8 @@
 #  include "CredentialManagerSecret.h"
 #elif defined(MOZ_WIDGET_GTK)
 #  include "LibSecret.h"
-#  include "NSSKeyStore.h"
-#else
-#  include "NSSKeyStore.h"
 #endif
+#include "NSSKeyStore.h"
 
 NS_IMPL_ISUPPORTS(OSKeyStore, nsIOSKeyStore)
 
@@ -55,7 +53,7 @@ already_AddRefed<OSKeyStore> OSKeyStore::GetSingleton() {
   return do_AddRef(sOSKeyStore);
 }
 
-OSKeyStore::OSKeyStore() : mKs(nullptr) {
+OSKeyStore::OSKeyStore() : mKs(nullptr), mNSSKs(nullptr) {
   MOZ_ASSERT(NS_IsMainThread());
   if (!NS_IsMainThread()) {
     return;
@@ -74,6 +72,7 @@ OSKeyStore::OSKeyStore() : mKs(nullptr) {
 #else
   mKs.reset(new NSSKeyStore());
 #endif
+  mNSSKs = std::make_unique<NSSKeyStore>();
 
   (void)NS_CreateBackgroundTaskQueue(
       "OSKeyStore", getter_AddRefs(mBackgroundSerialEventTarget));
@@ -582,6 +581,100 @@ OSKeyStore::AsyncDecryptBytes(const nsACString& aLabel,
        aLabel = nsAutoCString(aLabel)]() mutable {
         BackgroundDecryptBytes(aLabel, aEncryptedBase64Text, promiseHandle,
                                self);
+      }));
+
+  promiseHandle.forget(promiseOut);
+  return mBackgroundSerialEventTarget->Dispatch(runnable.forget(),
+                                                NS_DISPATCH_EVENT_MAY_BLOCK);
+}
+
+nsresult OSKeyStore::DecryptBytesWithNSSKeyStore(
+    const nsACString& aLabel, const nsACString& aEncryptedBase64Text,
+    /*out*/ uint32_t* outLen,
+    /*out*/ uint8_t** outBytes) {
+  NS_ENSURE_STATE(mNSSKs);
+  NS_ENSURE_ARG_POINTER(outLen);
+  NS_ENSURE_ARG_POINTER(outBytes);
+  *outLen = 0;
+  *outBytes = nullptr;
+
+  nsAutoCString ciphertext;
+  nsresult rv = Base64Decode(aEncryptedBase64Text, ciphertext);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+  uint8_t* tmp = BitwiseCast<uint8_t*, const char*>(ciphertext.BeginReading());
+  const std::vector<uint8_t> ciphertextBytes(tmp, tmp + ciphertext.Length());
+  std::vector<uint8_t> plaintextBytes;
+  rv = mNSSKs->EncryptDecrypt(aLabel, ciphertextBytes, plaintextBytes,
+                              Cipher::Decrypt);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  *outBytes = (uint8_t*)moz_xmalloc(plaintextBytes.size());
+  memcpy(*outBytes, plaintextBytes.data(), plaintextBytes.size());
+  *outLen = plaintextBytes.size();
+  return NS_OK;
+}
+
+void BackgroundDecryptBytesWithNSSKeyStore(
+    const nsACString& aLabel, const nsACString& aEncryptedBase64Text,
+    RefPtr<Promise>& aPromise, RefPtr<OSKeyStore> self) {
+  uint8_t* plaintext = nullptr;
+  uint32_t plaintextLen = 0;
+  nsresult rv = InShutdown() ? NS_ERROR_ILLEGAL_DURING_SHUTDOWN
+                             : self->DecryptBytesWithNSSKeyStore(
+                                   aLabel, aEncryptedBase64Text, &plaintextLen,
+                                   &plaintext);
+  nsTArray<uint8_t> plain;
+  if (plaintext) {
+    MOZ_ASSERT(plaintextLen > 0);
+    plain.AppendElements(plaintext, plaintextLen);
+    free(plaintext);
+  }
+
+  nsCOMPtr<nsIRunnable> runnable(NS_NewRunnableFunction(
+      "BackgroundDecryptBytesWithNSSKeyStoreResolve",
+      [rv, aPromise = std::move(aPromise), plain = std::move(plain)]() {
+        if (NS_FAILED(rv)) {
+          aPromise->MaybeReject(rv);
+        } else {
+          aPromise->MaybeResolve(plain);
+        }
+      }));
+  NS_DispatchToMainThread(runnable.forget());
+}
+
+NS_IMETHODIMP
+OSKeyStore::AsyncDecryptBytesWithNSSKeyStore(
+    const nsACString& aLabel, const nsACString& aEncryptedBase64Text,
+    JSContext* aCx, Promise** promiseOut) {
+  MOZ_ASSERT(NS_IsMainThread());
+  if (!NS_IsMainThread()) {
+    return NS_ERROR_NOT_SAME_THREAD;
+  }
+
+  NS_ENSURE_ARG_POINTER(aCx);
+
+  if (!mBackgroundSerialEventTarget) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  RefPtr<Promise> promiseHandle;
+  nsresult rv = GetPromise(aCx, promiseHandle);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  RefPtr<OSKeyStore> self = this;
+  nsCOMPtr<nsIRunnable> runnable(NS_NewRunnableFunction(
+      "BackgroundDecryptBytesWithNSSKeyStore",
+      [promiseHandle, self,
+       aEncryptedBase64Text = nsAutoCString(aEncryptedBase64Text),
+       aLabel = nsAutoCString(aLabel)]() mutable {
+        BackgroundDecryptBytesWithNSSKeyStore(aLabel, aEncryptedBase64Text,
+                                              promiseHandle, self);
       }));
 
   promiseHandle.forget(promiseOut);

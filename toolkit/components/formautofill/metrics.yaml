@@ -262,6 +262,28 @@ formautofill.creditcards:
           and then undoes it.
         type: boolean
 
+  migrate_nss_key_fallback:
+    type: event
+    description: >
+      Linux only. Recorded for each credit card the OS key store could not
+      decrypt while copying it into the Rust store, and that was retried with
+      the key in the profile's NSS key database (bug 2094564). Recorded again
+      on each attempt, including dry runs.
+    data_sensitivity:
+      - technical
+    bugs:
+      - https://bugzil.la/2094564
+    data_reviews:
+      - https://bugzil.la/2094564
+    notification_emails:
+      - autofill@lists.mozilla.org
+    expires: never
+    extra_keys:
+      recovered:
+        description: >
+          Whether the NSS key decrypted the card.
+        type: boolean
+
   migrate_record_divergence:
     type: event
     description: >
