@@ -157,6 +157,8 @@ struct WorkerLoadInfoData {
   nsCOMPtr<nsIReferrerInfo> mReferrerInfo;
   OriginTrials mTrials;
   bool mFromWindow;
+  // Computed with mPrincipal, before the worker's realm is created.
+  bool mWasmExempted = false;
   bool mXHRParamsAllowed;
   bool mWatchedByDevTools;
   StorageAccess mStorageAccess;

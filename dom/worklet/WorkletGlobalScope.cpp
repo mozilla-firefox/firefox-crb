@@ -137,6 +137,7 @@ JS::RealmOptions WorkletGlobalScope::CreateRealmOptions() const {
   }
   options.creationOptions().setAlwaysUseFdlibm(
       ShouldResistFingerprinting(RFPTarget::JSMathFdlibm));
+  options.creationOptions().setWasmExempted(mImpl->IsWasmExempted());
   if (ShouldResistFingerprinting(RFPTarget::JSLocale)) {
     nsCString locale = nsRFPService::GetSpoofedJSLocale();
     options.behaviors().setLocaleOverride(locale.get());

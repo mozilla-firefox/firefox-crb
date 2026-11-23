@@ -3046,6 +3046,12 @@ WorkerPrivate::WorkerPrivate(
     }
   }
 
+  // Use this worker's own principal, not the one copied from a parent.
+  mJSSettings.chromeRealmOptions.creationOptions().setWasmExempted(
+      mLoadInfo.mWasmExempted);
+  mJSSettings.contentRealmOptions.creationOptions().setWasmExempted(
+      mLoadInfo.mWasmExempted);
+
   nsCOMPtr<nsISerialEventTarget> target;
 
   // A child worker just inherits the parent workers ThrottledEventQueue

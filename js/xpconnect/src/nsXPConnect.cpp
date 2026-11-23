@@ -23,6 +23,7 @@
 #include "jsfriendapi.h"
 #include "JSServices.h"
 #include "mozJSModuleLoader.h"
+#include "nsCharSeparatedTokenizer.h"
 #include "nsContentUtils.h"
 #include "nsCycleCollector.h"
 #include "nsDOMJSUtils.h"
@@ -554,6 +555,57 @@ void InitGlobalObjectOptions(JS::RealmOptions& aOptions,
     aOptions.behaviors().setLocaleOverride(
         PromiseFlatCString(aLanguageOverride).get());
   }
+}
+
+// |aEntry| is either an exact host or "*.host", which matches strict
+// subdomains of host only.
+static bool HostMatchesWasmExemption(const nsACString& aHost,
+                                     const nsACString& aEntry) {
+  if (StringBeginsWith(aEntry, "*."_ns)) {
+    const nsDependentCSubstring suffix(aEntry, 1);
+    return suffix.Length() > 1 && aHost.Length() > suffix.Length() &&
+           StringEndsWith(aHost, suffix);
+  }
+  return aHost.Equals(aEntry);
+}
+
+bool IsWasmExempted(nsIPrincipal* aPrincipal) {
+  MOZ_ASSERT(NS_IsMainThread());
+  static constexpr uint32_t kMaxListLength = 4096;
+
+  if (!aPrincipal || !aPrincipal->GetIsContentPrincipal() ||
+      Preferences::IsLocked("javascript.options.wasm")) {
+    return false;
+  }
+
+  nsAutoCString list;
+  if (NS_FAILED(Preferences::GetCString(
+          "javascript.options.wasm.exemptedDomains", list)) ||
+      list.IsEmpty() || list.Length() > kMaxListLength) {
+    return false;
+  }
+  ToLowerCase(list);
+
+  nsCOMPtr<nsIURI> uri;
+  if (NS_FAILED(aPrincipal->GetURI(getter_AddRefs(uri))) || !uri ||
+      !(uri->SchemeIs("http") || uri->SchemeIs("https"))) {
+    return false;
+  }
+  nsAutoCString host;
+  if (NS_FAILED(uri->GetAsciiHost(host)) || host.IsEmpty()) {
+    return false;
+  }
+  ToLowerCase(host);
+
+  for (const auto& entry : nsCCharSeparatedTokenizer(list, ',').ToRange()) {
+    if (entry.IsEmpty() || entry.FindCharInSet("/:?#@[]") != kNotFound) {
+      continue;
+    }
+    if (HostMatchesWasmExemption(host, entry)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool InitGlobalObject(JSContext* aJSContext, JS::Handle<JSObject*> aGlobal,

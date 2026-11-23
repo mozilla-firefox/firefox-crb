@@ -2091,6 +2091,7 @@ static nsresult CreateNativeGlobalForInner(
       aDocument->ShouldResistFingerprinting(RFPTarget::JSLocale),
       aDocument->GetBrowsingContext()->Top()->GetLanguageOverride(),
       aDocument->GetBrowsingContext()->Top()->GetTimezoneOverride());
+  creationOptions.setWasmExempted(xpc::IsWasmExempted(principal));
 
   if (principal->IsSystemPrincipal()) {
     creationOptions.setFreezeBuiltins(true);
