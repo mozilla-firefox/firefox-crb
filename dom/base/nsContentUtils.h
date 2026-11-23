@@ -531,7 +531,18 @@ class nsContentUtils {
   static nsINode* Retarget(nsINode* aTargetA, const nsINode* aTargetB);
 
   /**
-   * @see https://wicg.github.io/element-timing/#get-an-element
+   * @see https://w3c.github.io/paint-timing/#exposed-for-paint-timing
+   * Generalized to nodes, which the Layout Instability API needs for its
+   * attribution nodes:
+   * https://wicg.github.io/layout-instability/#dom-layoutshiftattribution-node
+   *
+   * If aDocument is null, the document of aGlobal is used.
+   */
+  static bool IsExposedForPaintTiming(nsINode* aTarget,
+                                      const Document* aDocument,
+                                      nsIGlobalObject* aGlobal = nullptr);
+  /**
+   * Returns aTarget if it is exposed for paint timing, or nullptr.
    */
   static Element* GetAnElementForTiming(Element* aTarget,
                                         const Document* aDocument,

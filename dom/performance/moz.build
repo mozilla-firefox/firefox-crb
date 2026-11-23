@@ -9,6 +9,8 @@ EXPORTS.mozilla.dom += [
     "CacheablePerformanceTimingData.h",
     "EventCounts.h",
     "LargestContentfulPaint.h",
+    "LayoutShift.h",
+    "LayoutShiftAttribution.h",
     "Performance.h",
     "PerformanceContainerTiming.h",
     "PerformanceEntry.h",
@@ -35,6 +37,8 @@ EXPORTS.mozilla.dom += [
 UNIFIED_SOURCES += [
     "EventCounts.cpp",
     "LargestContentfulPaint.cpp",
+    "LayoutShift.cpp",
+    "LayoutShiftAttribution.cpp",
     "Performance.cpp",
     "PerformanceContainerTiming.cpp",
     "PerformanceEntry.cpp",

@@ -645,6 +645,7 @@ STATIC_ATOMS = [
     Atom("layer", "layer"),
     Atom("LayerActivity", "LayerActivity"),
     Atom("layout_guess", "layout-guess"),
+    Atom("layoutShift", "layout-shift"),
     Atom("leading", "leading"),
     Atom("leaf", "leaf"),
     Atom("left", "left"),
