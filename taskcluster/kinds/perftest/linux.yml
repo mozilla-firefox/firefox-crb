@@ -18,7 +18,7 @@ task-defaults:
             - artifact: target.condprof.tests.tar.zst
             - artifact: target.perftests.tests.tar.zst
             - artifact: target.xpcshell.tests.tar.zst
-            - artifact: target.mochitest.tests.tar.zst
+            - artifact: target.mochitest-perftest.tests.tar.zst
             - artifact: target.tar.xz
     platform:
         - linux2404-64-shippable/opt

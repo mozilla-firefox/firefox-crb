@@ -11,6 +11,7 @@ ALL_HARNESSES = [
     "common",  # Harnesses without a specific package will look here.
     "condprof",
     "mochitest",
+    "mochitest-perftest",
     "reftest",
     "xpcshell",
     "cppunittest",
@@ -32,6 +33,7 @@ PACKAGE_SPECIFIED_HARNESSES = [
     "condprof",
     "cppunittest",
     "mochitest",
+    "mochitest-perftest",
     "reftest",
     "xpcshell",
     "web-platform",
