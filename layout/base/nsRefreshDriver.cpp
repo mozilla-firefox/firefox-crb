@@ -44,6 +44,7 @@
 #include "mozilla/DisplayPortUtils.h"
 #include "mozilla/Hal.h"
 #include "mozilla/InputTaskManager.h"
+#include "mozilla/LayoutShiftTracker.h"
 #include "mozilla/Logging.h"
 #include "mozilla/PendingFullscreenEvent.h"
 #include "mozilla/Preferences.h"
@@ -1269,6 +1270,7 @@ static constexpr nsLiteralCString sRenderingPhaseNames[] = {
     "Layout, content-visibility and resize observers"_ns,  // Layout
     "View transition operations"_ns,        // ViewTransitionOperations
     "Update intersection observations"_ns,  // UpdateIntersectionObservations
+    "Report layout shift"_ns,               // ReportLayoutShift
     "Paint"_ns,                             // Paint
 };
 
@@ -2576,6 +2578,19 @@ void nsRefreshDriver::Tick(VsyncId aId, TimeStamp aNowTime,
   RunRenderingPhase(
       RenderingPhase::UpdateIntersectionObservations,
       [&](Document& aDoc) { aDoc.UpdateIntersections(aNowTime); });
+
+  // Not an HTML step: the Layout Instability API adds this after mark paint
+  // timing, https://wicg.github.io/layout-instability/#sec-processing-model.
+  RunRenderingPhase(RenderingPhase::ReportLayoutShift, [&](Document& aDoc) {
+    if (PresShell* ps = aDoc.GetPresShell()) {
+      if (LayoutShiftTracker* tracker = ps->LayoutShiftTrackerIfAny()) {
+        tracker->Report();
+      }
+    }
+  });
+  // Frames first laid out from here on are considered not rendered yet until
+  // the next rendering update. See nsIFrame::RecordLayoutShiftOldRect.
+  mRenderingUpdateCount++;
 
   // Notify display flush observers (like a11y).
   if (!TickObserverArray(2, aNowTime)) {
