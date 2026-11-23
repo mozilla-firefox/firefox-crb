@@ -20,6 +20,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import mozilla.components.compose.base.theme.Theme
 import mozilla.components.compose.base.utils.LocalUnderTest
+import mozilla.components.compose.browser.toolbar.ui.toolbarHorizontalPadding
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +34,8 @@ class TabGroupsStripContentTest {
 
     private val itemSize = 32.dp
     private val itemSpacing = 24.dp
-    private val edgePadding = 8.dp
+    private val startPadding = 8.dp
+    private val endPadding = 0.dp
     private val expandButtonWidth = 24.dp
 
     private val state =
@@ -193,7 +195,8 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
@@ -207,7 +210,8 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
@@ -221,10 +225,22 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
+    }
+
+    @Test
+    fun `WHEN the screen is narrower than the toolbar medium width THEN the end padding is zero`() {
+        assertEquals(0.dp, toolbarHorizontalPadding(599.dp))
+    }
+
+    @Test
+    fun `WHEN the screen is at least the toolbar medium width THEN the end padding matches the toolbar`() {
+        assertEquals(24.dp, toolbarHorizontalPadding(600.dp))
+        assertEquals(24.dp, toolbarHorizontalPadding(1000.dp))
     }
 
     private fun setContent(content: @Composable () -> Unit) {

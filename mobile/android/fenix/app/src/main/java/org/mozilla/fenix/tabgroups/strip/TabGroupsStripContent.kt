@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import mozilla.components.compose.base.button.IconButton
 import mozilla.components.compose.base.theme.ThemedValue
 import mozilla.components.compose.base.theme.ThemedValueProvider
+import mozilla.components.compose.browser.toolbar.ui.toolbarHorizontalPadding
 import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.Favicon
@@ -80,7 +81,7 @@ internal fun TabGroupsStripContent(
     modifier: Modifier = Modifier,
     showAddButton: Boolean = true,
 ) {
-    val edgePadding = FirefoxTheme.layout.space.static100
+    val startPadding = FirefoxTheme.layout.space.static100
     val itemSpacing = FirefoxTheme.layout.space.static100
     val itemSize = FirefoxTheme.layout.size.static600
     val expandButtonWidth = FirefoxTheme.layout.size.static600
@@ -89,6 +90,7 @@ internal fun TabGroupsStripContent(
         modifier = modifier.fillMaxWidth().testTag(TabGroupsTestTag.TAB_GROUPS_STRIP),
         contentAlignment = Alignment.CenterStart,
     ) {
+        val endPadding = toolbarHorizontalPadding(maxWidth)
         val tabsOverflowing =
             remember(state.tabs.size, maxWidth, showAddButton) {
                 areTabsOverflowing(
@@ -96,7 +98,8 @@ internal fun TabGroupsStripContent(
                     availableWidth = maxWidth,
                     itemSize = itemSize,
                     itemSpacing = itemSpacing,
-                    edgePadding = edgePadding,
+                    startPadding = startPadding,
+                    endPadding = endPadding,
                     expandButtonWidth = expandButtonWidth,
                     showAddButton = showAddButton,
                 )
@@ -107,20 +110,21 @@ internal fun TabGroupsStripContent(
                 state = state,
                 listState = listState,
                 showAddButton = showAddButton,
+                endPadding = endPadding,
                 onTabClick = onTabClick,
                 onAddTabClick = onAddTabClick,
                 onExpandGroupClick = onExpandGroupClick,
             )
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(end = expandButtonWidth + edgePadding),
+                modifier = Modifier.fillMaxWidth().padding(end = expandButtonWidth + endPadding),
                 horizontalArrangement = Arrangement.spacedBy(itemSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LazyRow(
                     modifier = Modifier.weight(weight = 1f, fill = false),
                     horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                    contentPadding = PaddingValues(start = edgePadding),
+                    contentPadding = PaddingValues(start = startPadding),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     tabFaviconItems(state.tabs, onTabClick)
@@ -132,7 +136,7 @@ internal fun TabGroupsStripContent(
 
             ExpandButton(
                 onClick = onExpandGroupClick,
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = edgePadding),
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = endPadding),
             )
         }
     }
@@ -154,11 +158,12 @@ private fun BoxScope.OverflowingTabGroupsStripContent(
     state: TabGroupsStripState.TabGroupStripVisible,
     listState: LazyListState,
     showAddButton: Boolean,
+    endPadding: Dp,
     onTabClick: (String) -> Unit,
     onAddTabClick: () -> Unit,
     onExpandGroupClick: () -> Unit,
 ) {
-    val edgePadding = FirefoxTheme.layout.space.static100
+    val startPadding = FirefoxTheme.layout.space.static100
     val itemSpacing = FirefoxTheme.layout.space.static100
     val itemSize = FirefoxTheme.layout.size.static600
     val expandButtonWidth = FirefoxTheme.layout.size.static600
@@ -178,8 +183,8 @@ private fun BoxScope.OverflowingTabGroupsStripContent(
         horizontalArrangement = Arrangement.spacedBy(itemSpacing),
         contentPadding =
             PaddingValues(
-                start = edgePadding,
-                end = gradientWidth + addButtonWidth + expandButtonWidth + edgePadding,
+                start = startPadding,
+                end = gradientWidth + addButtonWidth + expandButtonWidth + endPadding,
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -190,7 +195,7 @@ private fun BoxScope.OverflowingTabGroupsStripContent(
         showAddButton = showAddButton,
         onAddTabClick = onAddTabClick,
         onExpandGroupClick = onExpandGroupClick,
-        endPadding = edgePadding,
+        endPadding = endPadding,
         modifier = Modifier.align(Alignment.CenterEnd),
     )
 }
@@ -211,7 +216,8 @@ private fun LazyListState.isItemFullyVisible(index: Int): Boolean {
  * @param availableWidth The total width available to the strip.
  * @param itemSize The width of a single tab favicon and of the add tab button.
  * @param itemSpacing The spacing between tabs.
- * @param edgePadding The padding at each end of the strip.
+ * @param startPadding The padding at the start of the strip.
+ * @param endPadding The padding after the pinned expand button, at the end of the strip.
  * @param expandButtonWidth The width of the pinned expand button.
  * @param showAddButton Whether the add tab button is shown.
  */
@@ -221,7 +227,8 @@ internal fun areTabsOverflowing(
     availableWidth: Dp,
     itemSize: Dp,
     itemSpacing: Dp,
-    edgePadding: Dp,
+    startPadding: Dp,
+    endPadding: Dp,
     expandButtonWidth: Dp,
     showAddButton: Boolean = true,
 ): Boolean {
@@ -229,8 +236,8 @@ internal fun areTabsOverflowing(
 
     val tabsWidth = itemSize * tabCount + itemSpacing * (tabCount - 1)
     val addButtonWidth = if (showAddButton) itemSpacing + itemSize else 0.dp
-    val requiredWidth = edgePadding + tabsWidth + addButtonWidth
-    val widthForContent = availableWidth - expandButtonWidth - edgePadding
+    val requiredWidth = startPadding + tabsWidth + addButtonWidth
+    val widthForContent = availableWidth - expandButtonWidth - endPadding
 
     return requiredWidth > widthForContent
 }
