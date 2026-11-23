@@ -86,6 +86,7 @@ class AccessibleCaretEventHub;
 struct AnchorPosAnchorInfo;
 class FallbackRenderer;
 class GeckoMVMContext;
+class LayoutShiftTracker;
 class nsDisplayList;
 class nsDisplayListBuilder;
 class OverflowChangedTracker;
@@ -1842,6 +1843,11 @@ class PresShell final : public nsStubDocumentObserver,
    */
   void NotifyDestroyingFrame(nsIFrame* aFrame);
 
+  LayoutShiftTracker* LayoutShiftTrackerIfAny() const {
+    return mLayoutShiftTracker.get();
+  }
+  LayoutShiftTracker* EnsureLayoutShiftTracker();
+
   bool GetZoomableByAPZ() const;
 
   bool ReflowForHiddenContentIfNeeded();
@@ -3211,6 +3217,7 @@ class PresShell final : public nsStubDocumentObserver,
   UniquePtr<nsCSSFrameConstructor> mFrameConstructor;
   // The object responsible for listening to widget events.
   UniquePtr<PresShellWidgetListener> mWidgetListener;
+  UniquePtr<LayoutShiftTracker> mLayoutShiftTracker;
   RefPtr<nsFrameSelection> mSelection;
   // The frame selection that last took focus on this shell, which we need to
   // hide if we focus another selection. May or may not be the same as

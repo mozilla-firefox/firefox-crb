@@ -768,7 +768,9 @@ class nsIFrame : public nsQueryFrame {
         mAllDescendantsAreInvisible(false),
         mHasBSizeChange(false),
         mHasPaddingChange(false),
-        mInScrollAnchorChain(false) {
+        mInScrollAnchorChain(false),
+        mLayoutShiftRecorded(false),
+        mLayoutShiftGeneration(0) {
     MOZ_ASSERT(mComputedStyle);
     MOZ_ASSERT(mPresContext);
     mozilla::PodZero(&mOverflow);
@@ -944,6 +946,12 @@ class nsIFrame : public nsQueryFrame {
   void SetComputedStyle(ComputedStyle* aStyle) {
     if (aStyle != mComputedStyle) {
       AssertNewStyleIsSane(*aStyle);
+      // The old clip has to be taken with the old style, so this can't wait
+      // for DidSetComputedStyle. RecordLayoutShiftOldClip bails out quickly
+      // for frames that don't clip their descendants.
+      if (PresContext()->LayoutShiftTrackingAllowed()) {
+        RecordLayoutShiftOldClip(aStyle);
+      }
       RefPtr<ComputedStyle> oldComputedStyle = std::move(mComputedStyle);
       mComputedStyle = aStyle;
       DidSetComputedStyle(oldComputedStyle);
@@ -1212,6 +1220,10 @@ class nsIFrame : public nsQueryFrame {
     if (aRect == mRect) {
       return;
     }
+    if (aRebuildDisplayItems && !mLayoutShiftRecorded &&
+        PresContext()->LayoutShiftTrackingAllowed()) {
+      RecordLayoutShiftOldRect();
+    }
     if (mOverflow.mType != OverflowStorageType::Large &&
         mOverflow.mType != OverflowStorageType::None) {
       mozilla::OverflowAreas overflow = GetOverflowAreas();
@@ -1319,6 +1331,40 @@ class nsIFrame : public nsQueryFrame {
    * Return frame's rect without relative positioning
    */
   nsRect GetNormalRect() const;
+
+  /**
+   * @see mLayoutShiftRecorded
+   */
+  bool IsLayoutShiftRecorded() const { return mLayoutShiftRecorded; }
+  void SetLayoutShiftRecorded() { mLayoutShiftRecorded = true; }
+  void ClearLayoutShiftRecorded() { mLayoutShiftRecorded = false; }
+
+  /**
+   * Scrollbar, scroll corner and resizer parts, which are the only native
+   * anonymous XUL in content documents, and the thumb of a range input. These
+   * aren't nodes as far as the Layout Instability API is concerned, and Chrome
+   * doesn't track them either. Content in UA widget shadow trees, such as video
+   * controls, is tracked, as the spec's shadow-including traversal requires.
+   */
+  bool IsLayoutShiftWidgetPart() const {
+    if (!mContent || !mContent->IsInNativeAnonymousSubtree()) {
+      return false;
+    }
+    return mContent->IsXULElement() ||
+           Style()->GetPseudoType() == mozilla::PseudoStyleType::MozRangeThumb;
+  }
+
+  /**
+   * Whether moving this frame can be a layout shift, given the refresh
+   * driver's current (truncated) rendering update count. The frame has to have
+   * been rendered at its old position.
+   */
+  bool CanRecordLayoutShift(uint16_t aRenderingUpdateCount) const {
+    return !HasAnyStateBits(NS_FRAME_FIRST_REFLOW) &&
+           mLayoutShiftGeneration != aRenderingUpdateCount &&
+           !IsLayoutShiftWidgetPart();
+  }
+
   mozilla::LogicalRect GetLogicalNormalRect(
       mozilla::WritingMode aWritingMode, const nsSize& aContainerSize) const {
     return mozilla::LogicalRect(aWritingMode, GetNormalRect(), aContainerSize);
@@ -3369,6 +3415,18 @@ class nsIFrame : public nsQueryFrame {
   mozilla::PhysicalAxes ShouldApplyOverflowClipping(
       const nsStyleDisplay* aDisp) const;
 
+  // Like ShouldApplyOverflowClipping, but aDisp doesn't have to be our current
+  // display struct, e.g. to know whether we'll clip after a style change.
+  mozilla::PhysicalAxes OverflowClipAxesForDisplay(
+      const nsStyleDisplay* aDisp) const;
+
+  /**
+   * If this frame clips its descendants, as a scroll container or by overflow
+   * clipping, returns that clip relative to this frame: the scroll port, or
+   * the overflow clip rect, which is unbounded in the axes it doesn't clip.
+   */
+  mozilla::Maybe<nsRect> GetClipRectForDescendants() const;
+
   // Returns whether this frame is a block that was supposed to be a
   // scrollframe, but that was suppressed for print.
   bool IsSuppressedScrollableBlockForPrint() const;
@@ -4555,6 +4613,12 @@ class nsIFrame : public nsQueryFrame {
   bool IsVisibleOrCollapsedForPainting() const;
 
   /**
+   * Whether we paint a background, border, outline or native widget, i.e.
+   * whether our box is visible on its own, apart from our content.
+   */
+  bool HasVisibleBoxDecorations() const;
+
+  /**
    * Determines if this frame is a stacking context.
    */
   bool IsStackingContext(const nsStyleDisplay*, const nsStyleEffects*);
@@ -5618,7 +5682,40 @@ class nsIFrame : public nsQueryFrame {
    */
   bool mInScrollAnchorChain : 1;
 
+  /**
+   * True if our rect from before our first rect change since the last layout
+   * shift report is stored in the PresShell's LayoutShiftTracker.
+   */
+  bool mLayoutShiftRecorded : 1;
+
+  /**
+   * The (truncated) refresh driver rendering update count at the time of our
+   * first reflow, in a tick or in a flush outside one. Until a tick has gone
+   * through the layout shift report since, our moves aren't shifts, since we
+   * haven't been rendered yet. @see RecordLayoutShiftOldRect()
+   */
+  uint16_t mLayoutShiftGeneration;
+
+  /**
+   * Stores our current rect in the LayoutShiftTracker, if this frame is
+   * eligible for layout shift tracking. Called before our rect changes.
+   */
+  void RecordLayoutShiftOldRect();
+
+  /**
+   * Records visibility or opacity before its first change since the last
+   * layout shift report.
+   */
+  void RecordLayoutShiftVisibilityChange(bool aWasHidden);
+
  protected:
+  /**
+   * Stores the clip we apply to our descendants in the LayoutShiftTracker, if
+   * we have a stored rect or get one now. Called before the clip may change,
+   * through a style change to aNewStyle or a scroll port change.
+   */
+  void RecordLayoutShiftOldClip(const ComputedStyle* aNewStyle = nullptr);
+
   // Helpers
   /**
    * Can we stop inside this frame when we're skipping non-rendered whitespace?

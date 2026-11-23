@@ -28,6 +28,8 @@ enum class RenderingPhase : uint8_t {
   UpdateIntersectionObservations,
   // TODO: Record rendering time
   // TODO: Mark paint timing
+  // https://wicg.github.io/layout-instability/#sec-report-layout-shift
+  ReportLayoutShift,
   Paint,
   // TODO: Process top layer removals.
   Count,
@@ -47,6 +49,7 @@ inline constexpr RenderingPhases AllRenderingPhases() {
       RenderingPhase::Layout,
       RenderingPhase::ViewTransitionOperations,
       RenderingPhase::UpdateIntersectionObservations,
+      RenderingPhase::ReportLayoutShift,
       RenderingPhase::Paint,
   };
 }

@@ -1075,6 +1075,15 @@ class nsPresContext : public nsISupports,
   bool IsRootContentDocumentCrossProcess() const;
 
   bool HadNonBlankPaint() const { return mHadNonBlankPaint; }
+
+  /**
+   * Whether layout shifts in this document are tracked for the Layout
+   * Instability API: the API is enabled, and this is a content document
+   * displayed on screen.
+   */
+  bool LayoutShiftTrackingAllowed() const {
+    return mLayoutShiftTrackingAllowed;
+  }
   bool HadFirstContentfulPaint() const { return mHadFirstContentfulPaint; }
   bool HasStoppedGeneratingLCP() const;
   void NotifyNonBlankPaint();
@@ -1444,6 +1453,7 @@ class nsPresContext : public nsISupports,
 
   // Has NotifyNonBlankPaint been called on this PresContext?
   unsigned mHadNonBlankPaint : 1;
+  unsigned mLayoutShiftTrackingAllowed : 1;
   // Has NotifyContentfulPaint been called on this PresContext?
   unsigned mHadFirstContentfulPaint : 1;
   // True when a contentful paint has happened and this paint doesn't

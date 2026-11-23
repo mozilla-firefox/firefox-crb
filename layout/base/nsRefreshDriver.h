@@ -310,6 +310,10 @@ class nsRefreshDriver final : public mozilla::layers::TransactionIdAllocator,
     ScheduleRenderingPhases({aPhase});
   }
 
+  // The number of rendering updates this refresh driver has gone through, in
+  // the sense of the ReportLayoutShift rendering phase having been reached.
+  uint32_t RenderingUpdateCount() const { return mRenderingUpdateCount; }
+
   void EnsureIntersectionObservationsUpdateHappens() {
     // This is enough to make sure that UpdateIntersectionObservations runs at
     // least once. This is presumably the intent of step 5 in [1]:
@@ -550,6 +554,8 @@ class nsRefreshDriver final : public mozilla::layers::TransactionIdAllocator,
 
   // The "Update the rendering" phases we need to run on our documents.
   mozilla::EnumSet<mozilla::RenderingPhase, uint16_t> mRenderingPhasesNeeded;
+
+  uint32_t mRenderingUpdateCount = 0;
 
   // Runs a single update the rendering phase, at once, rather than filtering
   // the docs as per spec.

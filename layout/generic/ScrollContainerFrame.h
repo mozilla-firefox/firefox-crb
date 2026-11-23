@@ -1222,6 +1222,7 @@ class ScrollContainerFrame : public nsContainerFrame,
   const nsRect& ScrollPort() const { return mScrollPort; }
   void SetScrollPort(const nsRect& aNewScrollPort) {
     if (!mScrollPort.IsEqualEdges(aNewScrollPort)) {
+      RecordLayoutShiftOldClip();
       mMayScheduleScrollAnimations = true;
     }
     mScrollPort = aNewScrollPort;
