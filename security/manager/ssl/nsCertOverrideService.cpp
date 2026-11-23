@@ -639,6 +639,13 @@ static bool IsDebugger() {
   return false;
 }
 
+bool nsCertOverrideService::IsSecurityCheckDisabledFor(
+    uint32_t aUserContextId, const MutexAutoLock& aProofOfLock) {
+  mMutex.AssertCurrentThreadOwns();
+  auto p = mUserContextIdsWithSecurityChecksOverride.lookup(aUserContextId);
+  return p ? p->value() : mDisableAllSecurityCheck;
+}
+
 NS_IMETHODIMP
 nsCertOverrideService::
     SetDisableAllSecurityChecksAndLetAttackersInterceptMyData(bool aDisable) {
@@ -672,10 +679,16 @@ nsCertOverrideService::
     return NS_ERROR_NOT_AVAILABLE;
   }
 
+  bool changed;
   {
     MutexAutoLock lock(mMutex);
+    changed = IsSecurityCheckDisabledFor(aUserContextId, lock) != aDisable;
     (void)mUserContextIdsWithSecurityChecksOverride.put(aUserContextId,
                                                         aDisable);
+  }
+
+  if (changed) {
+    mozilla::net::SSLTokensCache::ClearSessionCacheAndTokens();
   }
 
   return NS_OK;
@@ -689,9 +702,16 @@ nsCertOverrideService::
     return NS_ERROR_NOT_AVAILABLE;
   }
 
+  bool changed;
   {
     MutexAutoLock lock(mMutex);
+    changed = IsSecurityCheckDisabledFor(aUserContextId, lock) !=
+              mDisableAllSecurityCheck;
     mUserContextIdsWithSecurityChecksOverride.remove(aUserContextId);
+  }
+
+  if (changed) {
+    mozilla::net::SSLTokensCache::ClearSessionCacheAndTokens();
   }
 
   return NS_OK;
