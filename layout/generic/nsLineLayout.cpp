@@ -972,8 +972,10 @@ void nsLineLayout::ReflowFrame(nsIFrame* aFrame, nsReflowStatus& aReflowStatus,
   pfd->mBounds.ISize(lineWM) = reflowOutput.ISize(lineWM);
   pfd->mBounds.BSize(lineWM) = reflowOutput.BSize(lineWM);
 
-  // Size the frame, but |RelativePositionFrames| will size the view.
-  aFrame->SetRect(lineWM, pfd->mBounds, ContainerSizeForSpan(psd));
+  // Size the frame. Its position is only final after block-direction
+  // alignment, so leave it alone to avoid moving frames back and forth, which
+  // e.g. makes them be considered modified for retained display lists.
+  aFrame->SetSize(lineWM, pfd->mBounds.Size(lineWM));
 
   // Tell the frame that we're done reflowing it
   aFrame->DidReflow(mPresContext, isText ? nullptr : reflowInputHolder.ptr());
@@ -1534,6 +1536,9 @@ void nsLineLayout::SetSpanForEmptyLine(PerSpanData* aPerSpanData,
     // knowing that the line is empty.
     if (!pfd->mFrame->IsInlineFrame() && !pfd->mFrame->IsRubyFrame() &&
         !pfd->mFrame->IsPlaceholderFrame()) {
+      // ReflowFrame only sized this frame.
+      pfd->mFrame->SetPosition(aWM, pfd->mBounds.Origin(aWM),
+                               ContainerSizeForSpan(aPerSpanData));
       continue;
     }
     // Collapse the physical size to 0.

@@ -662,10 +662,8 @@ class nsLineLayout {
                       const nsStyleText* aStyleText, float aInflation,
                       bool* aZeroEffectiveSpanBox);
 
-  static void SetSpanForEmptyLine(PerSpanData* aPerSpanData,
-                                  mozilla::WritingMode aWM,
-                                  const nsSize& aContainerSize,
-                                  nscoord aBStartEdge);
+  void SetSpanForEmptyLine(PerSpanData* aPerSpanData, mozilla::WritingMode aWM,
+                           const nsSize& aContainerSize, nscoord aBStartEdge);
   void VerticalAlignFrames(PerSpanData* psd);
 
   void ApplyBlockTextBoxTrim(PerSpanData* psd, mozilla::WritingMode aLineWM,
