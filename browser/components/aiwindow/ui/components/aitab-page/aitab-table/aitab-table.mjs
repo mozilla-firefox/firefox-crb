@@ -6,6 +6,8 @@ import { html, nothing } from "chrome://global/content/vendor/lit.all.mjs";
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
 import { httpUrl } from "chrome://browser/content/aiwindow/modules/AITabUtils.mjs";
 // eslint-disable-next-line import-x/no-unassigned-import
+import "chrome://browser/content/aiwindow/components/aitab-image.mjs";
+// eslint-disable-next-line import-x/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/smartwindow-chip.mjs";
 
 /**
@@ -204,17 +206,27 @@ export class AITabTable extends MozLitElement {
   }
 
   #renderRow(row, { title, subtitles, details }) {
+    const hasImage = !!row?.image;
     const subtitleValues = subtitles
       .map(field => formatValue(field, row))
       .filter(Boolean);
     return html`<tr>
       <th scope="row">
-        <div class="aitab-table-name-cell">
-          <span class="aitab-table-name">${formatValue(title, row)}</span>
-          ${subtitleValues.map(
-            text => html`<span class="aitab-table-subtitle">${text}</span>`
-          )}
-          ${this.#renderSourceChip(row)}
+        <div class=${hasImage ? "aitab-table-header-group" : nothing}>
+          ${hasImage
+            ? html`<aitab-image
+                class="aitab-table-image"
+                .src=${row.image.src}
+                .alt=${row.image.alt_text ?? ""}
+              ></aitab-image>`
+            : nothing}
+          <div class="aitab-table-name-cell">
+            <span class="aitab-table-name">${formatValue(title, row)}</span>
+            ${subtitleValues.map(
+              text => html`<span class="aitab-table-subtitle">${text}</span>`
+            )}
+            ${this.#renderSourceChip(row)}
+          </div>
         </div>
       </th>
       ${details.map(field => html`<td>${formatValue(field, row)}</td>`)}

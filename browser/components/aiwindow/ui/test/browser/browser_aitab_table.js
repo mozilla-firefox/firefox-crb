@@ -82,6 +82,70 @@ function readCells(browser) {
   });
 }
 
+describe("AITab table row images", () => {
+  it("renders an image before the title in the row header", async () => {
+    const name = ROWS[1].name;
+    const image = {
+      src: "chrome://branding/content/about-logo.png",
+      alt_text: "Firefox logo",
+    };
+    await withTestPage(async browser => {
+      await setTableProps(browser, { columns: COLUMNS, rows: [{ name, image }] });
+
+      await SpecialPowers.spawn(browser, [name, image], async (title, source) => {
+        const table = content.document.getElementById("table");
+        const rowHeader = table.shadowRoot.querySelector('th[scope="row"]');
+        const imageElement = rowHeader?.querySelector("aitab-image");
+        if (!imageElement) {
+          throw new Error("The row header did not render an image");
+        }
+        await imageElement.updateComplete;
+        const img = imageElement.shadowRoot.querySelector("img");
+        if (!img) {
+          throw new Error("aitab-image did not render an img element");
+        }
+        img.scrollIntoView();
+        await ContentTaskUtils.waitForCondition(
+          () => img.complete && img.naturalWidth > 0,
+          "The row image finishes loading"
+        );
+        Assert.equal(img.currentSrc, source.src, "The row image loads");
+        Assert.equal(img.alt, source.alt_text, "The image has its alt text");
+        Assert.equal(
+          imageElement.nextElementSibling?.textContent.trim(),
+          title,
+          "The title follows the image in the same row header"
+        );
+      });
+    });
+  });
+
+  it("renders the row title without an image", async () => {
+    const name = ROWS[1].name;
+    await withTestPage(async browser => {
+      await setTableProps(browser, { columns: COLUMNS, rows: [{ name }] });
+
+      await SpecialPowers.spawn(browser, [name], title => {
+        const table = content.document.getElementById("table");
+        const rowHeader = table.shadowRoot.querySelector('th[scope="row"]');
+        if (!rowHeader) {
+          throw new Error("The table did not render a row header");
+        }
+        Assert.equal(
+          rowHeader.textContent.trim(),
+          title,
+          "The row title renders"
+        );
+        Assert.equal(
+          rowHeader.querySelector("aitab-image"),
+          null,
+          "No image renders"
+        );
+      });
+    });
+  });
+});
+
 add_task(async function test_renders_heading_columns_and_rows() {
   await withTestPage(async browser => {
     await setTableProps(browser, {
