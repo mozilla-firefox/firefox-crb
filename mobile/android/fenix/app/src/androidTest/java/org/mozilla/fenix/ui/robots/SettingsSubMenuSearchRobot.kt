@@ -71,6 +71,7 @@ import org.mozilla.fenix.helpers.click
 import org.mozilla.fenix.helpers.isChecked
 import org.mozilla.fenix.helpers.isEnabled
 import org.mozilla.fenix.settings.search.SearchEngineShortcutsTestTag
+import org.mozilla.fenix.settings.search.ui.SearchEngineDropdownMenuTestTag
 
 /** Implementation of Robot Pattern for the settings search sub menu. */
 class SettingsSubMenuSearchRobot {
@@ -567,14 +568,14 @@ class SettingsSubMenuSearchRobot {
 
     fun clickEdit() {
         Log.i(TAG, "clickEdit: Trying to click the \"Edit\" button")
-        onView(withText("Edit")).click()
+        mDevice.findObject(UiSelector().resourceId(SearchEngineDropdownMenuTestTag.EDIT)).click()
         Log.i(TAG, "clickEdit: Clicked the \"Edit\" button")
     }
 
     // Used in the Default search engine menu
     fun clickDeleteSearchEngine() {
         Log.i(TAG, "clickDeleteSearchEngine: Trying to click the \"Delete\" button")
-        mDevice.findObject(UiSelector().textContains(getStringResource(R.string.search_engine_delete))).click()
+        mDevice.findObject(UiSelector().resourceId(SearchEngineDropdownMenuTestTag.DELETE)).click()
         Log.i(TAG, "clickDeleteSearchEngine: Clicked the \"Delete\" button")
     }
 
