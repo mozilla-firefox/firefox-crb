@@ -281,6 +281,17 @@ skip-if = [
   "os == 'android'", # Fission situation on Android is more complicated.
 ]
 
+["test_wasm_exempted_domains.html"]
+scheme = "https"
+support-files = [
+  "file_wasm_exempted_domains.html",
+  "file_wasm_exempted_domains_csp.html",
+  "file_wasm_exempted_domains_csp.html^headers^",
+  "file_wasm_exempted_domains_probe.js",
+  "file_wasm_exempted_domains_worker.js",
+  "file_wasm_exempted_domains_worklet.js",
+]
+
 ["test_weakRefs.html"]
 
 ["test_weakRefs_collected_wrapper.html"]

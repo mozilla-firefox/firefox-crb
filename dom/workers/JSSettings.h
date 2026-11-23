@@ -59,6 +59,11 @@ struct JSSettings {
     chromeRealmOptions.behaviors().copyOverrideStrings();
     contentRealmOptions.behaviors().copyOverrideStrings();
   }
+
+  void SetWasmExempted(bool aExempted) {
+    chromeRealmOptions.creationOptions().setWasmExempted(aExempted);
+    contentRealmOptions.creationOptions().setWasmExempted(aExempted);
+  }
 };
 
 }  // namespace mozilla::dom::workerinternals
