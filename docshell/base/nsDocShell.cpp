@@ -894,96 +894,6 @@ bool nsDocShell::IsLoadingFromSessionHistory() {
   return mActiveEntryIsLoadingFromSessionHistory;
 }
 
-// StopDetector is modeled similarly to OnloadBlocker; it is a rather
-// dummy nsIRequest implementation which can be added to an nsILoadGroup to
-// detect Cancel calls.
-class StopDetector final : public nsIRequest {
- public:
-  StopDetector() = default;
-
-  NS_DECL_ISUPPORTS
-  NS_DECL_NSIREQUEST
-
-  bool Canceled() { return mCanceled; }
-
- private:
-  ~StopDetector() = default;
-
-  bool mCanceled = false;
-};
-
-NS_IMPL_ISUPPORTS(StopDetector, nsIRequest)
-
-NS_IMETHODIMP
-StopDetector::GetName(nsACString& aResult) {
-  aResult.AssignLiteral("about:stop-detector");
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StopDetector::IsPending(bool* aRetVal) {
-  *aRetVal = true;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StopDetector::GetStatus(nsresult* aStatus) {
-  *aStatus = NS_OK;
-  return NS_OK;
-}
-
-NS_IMETHODIMP StopDetector::SetCanceledReason(const nsACString& aReason) {
-  return SetCanceledReasonImpl(aReason);
-}
-
-NS_IMETHODIMP StopDetector::GetCanceledReason(nsACString& aReason) {
-  return GetCanceledReasonImpl(aReason);
-}
-
-NS_IMETHODIMP StopDetector::CancelWithReason(nsresult aStatus,
-                                             const nsACString& aReason) {
-  return CancelWithReasonImpl(aStatus, aReason);
-}
-
-NS_IMETHODIMP
-StopDetector::Cancel(nsresult /*aStatus*/) {
-  mCanceled = true;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StopDetector::Suspend(void) { return NS_OK; }
-NS_IMETHODIMP
-StopDetector::Resume(void) { return NS_OK; }
-
-NS_IMETHODIMP
-StopDetector::GetLoadGroup(nsILoadGroup** aLoadGroup) {
-  *aLoadGroup = nullptr;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StopDetector::SetLoadGroup(nsILoadGroup* /*aLoadGroup*/) { return NS_OK; }
-
-NS_IMETHODIMP
-StopDetector::GetLoadFlags(nsLoadFlags* aLoadFlags) {
-  *aLoadFlags = nsIRequest::LOAD_NORMAL;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StopDetector::GetTRRMode(nsIRequest::TRRMode* aTRRMode) {
-  return GetTRRModeImpl(aTRRMode);
-}
-
-NS_IMETHODIMP
-StopDetector::SetTRRMode(nsIRequest::TRRMode aTRRMode) {
-  return SetTRRModeImpl(aTRRMode);
-}
-
-NS_IMETHODIMP
-StopDetector::SetLoadFlags(nsLoadFlags /*aLoadFlags*/) { return NS_OK; }
-
 bool nsDocShell::MaybeHandleSubframeHistory(
     nsDocShellLoadState* aLoadState, bool aContinueHandlingSubframeHistory) {
   // First, verify if this is a subframe.
@@ -1039,9 +949,7 @@ bool nsDocShell::MaybeHandleSubframeHistory(
       !GetCreatedDynamically() && aLoadState->OriginalFrameSrc()) {
     if (XRE_IsContentProcess()) {
       dom::ContentChild* contentChild = dom::ContentChild::GetSingleton();
-      nsCOMPtr<nsILoadGroup> loadGroup;
-      GetLoadGroup(getter_AddRefs(loadGroup));
-      if (contentChild && loadGroup && !GetIsAttemptingToNavigate()) {
+      if (contentChild && !GetIsAttemptingToNavigate()) {
         RefPtr<Document> parentDoc = parentDS->GetDocument();
         parentDoc->BlockOnload();
         RefPtr<BrowsingContext> browsingContext = mBrowsingContext;
@@ -1049,33 +957,29 @@ bool nsDocShell::MaybeHandleSubframeHistory(
             mBrowsingContext->GetCurrentLoadIdentifier();
         RefPtr<nsDocShellLoadState> loadState = aLoadState;
         bool isNavigating = mIsNavigating;
-        RefPtr stopDetector = MakeRefPtr<StopDetector>();
-        loadGroup->AddRequest(stopDetector, nullptr);
         // Need to set mCheckingSessionHistory so that
         // GetIsAttemptingToNavigate() returns true.
         mCheckingSessionHistory = true;
 
         auto resolve =
             [currentLoadIdentifier, browsingContext, parentDoc, loadState,
-             isNavigating, loadGroup,
-             stopDetector](mozilla::Maybe<LoadingSessionHistoryInfo>&& aResult)
+             isNavigating, stopGeneration = mStopGeneration](
+                mozilla::Maybe<LoadingSessionHistoryInfo>&& aResult)
                 MOZ_CAN_RUN_SCRIPT {
                   RefPtr<nsDocShell> docShell =
                       static_cast<nsDocShell*>(browsingContext->GetDocShell());
-                  auto unblockParent = MakeScopeExit(
-                      [loadGroup, stopDetector, parentDoc, docShell]() {
-                        if (docShell) {
-                          docShell->mCheckingSessionHistory = false;
-                        }
-                        loadGroup->RemoveRequest(stopDetector, nullptr, NS_OK);
-                        parentDoc->UnblockOnload(false);
-                      });
+                  auto unblockParent = MakeScopeExit([parentDoc, docShell]() {
+                    if (docShell) {
+                      docShell->mCheckingSessionHistory = false;
+                    }
+                    parentDoc->UnblockOnload(false);
+                  });
 
                   if (!docShell || !docShell->mCheckingSessionHistory) {
                     return;
                   }
 
-                  if (stopDetector->Canceled()) {
+                  if (docShell->mStopGeneration != stopGeneration) {
                     return;
                   }
                   if (currentLoadIdentifier ==
@@ -1091,7 +995,7 @@ bool nsDocShell::MaybeHandleSubframeHistory(
                   // LoadURI again with the possibly updated data.
                   docShell->LoadURI(loadState, isNavigating, true);
                 };
-        auto reject = [loadGroup, stopDetector, browsingContext,
+        auto reject = [browsingContext,
                        parentDoc](mozilla::ipc::ResponseRejectReason) {
           RefPtr<nsDocShell> docShell =
               static_cast<nsDocShell*>(browsingContext->GetDocShell());
@@ -1099,7 +1003,6 @@ bool nsDocShell::MaybeHandleSubframeHistory(
             docShell->mCheckingSessionHistory = false;
           }
           // In practise reject shouldn't be called ever.
-          loadGroup->RemoveRequest(stopDetector, nullptr, NS_OK);
           parentDoc->UnblockOnload(false);
         };
         contentChild->SendAdoptChildSHEntry(
@@ -4244,33 +4147,19 @@ nsresult nsDocShell::ReloadNavigable(
     RefPtr<BrowsingContext> browsingContext(mBrowsingContext);
     nsCOMPtr<nsIURI> currentURI(mCurrentURI);
     nsCOMPtr<nsIReferrerInfo> referrerInfo(mReferrerInfo);
-    RefPtr stopDetector = MakeRefPtr<StopDetector>();
-    nsCOMPtr<nsILoadGroup> loadGroup;
-    GetLoadGroup(getter_AddRefs(loadGroup));
-    if (loadGroup) {
-      // loadGroup may be null in theory. In that case stopDetector just
-      // doesn't do anything.
-      loadGroup->AddRequest(stopDetector, nullptr);
-    }
 
     ContentChild::GetSingleton()->SendNotifyOnHistoryReload(
         mBrowsingContext, aReloadFlags,
         [docShell, doc, loadType, internalLoadFlags, browsingContext,
-         currentURI, referrerInfo, loadGroup, stopDetector](
+         currentURI, referrerInfo, stopGeneration = mStopGeneration](
             std::tuple<bool, Maybe<NotNull<RefPtr<nsDocShellLoadState>>>>&&
                 aResult) MOZ_CAN_RUN_SCRIPT {
-          auto scopeExit = MakeScopeExit([loadGroup, stopDetector]() {
-            if (loadGroup) {
-              loadGroup->RemoveRequest(stopDetector, nullptr, NS_OK);
-            }
-          });
-
           // Decrease mPendingReloadCount before any other early returns!
           if (--(docShell->mPendingReloadCount) > 0) {
             return;
           }
 
-          if (stopDetector->Canceled()) {
+          if (docShell->mStopGeneration != stopGeneration) {
             return;
           }
           bool canReload;
