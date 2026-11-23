@@ -17,7 +17,7 @@ say.
   be a scalar (e.g. `42`, `"text"`, `true`, `null`) printed on one line, so a
   filter that starts at the first line beginning with `{` or `[` prints nothing
   for it. A call that builds the virtualenv (`SKILL.md` §1 says when) prints
-  "Creating the 'wpt' site", and on a Linux host without `pkg-config` and the
+  "Creating the 'wptrunner' site", and on a Linux host without `pkg-config` and the
   cairo and GObject introspection headers, a harmless failure to build the
   optional PyGObject (bug 2090261), which can land in stdout after the result.
   Build it with a call of its own before the first probe, as that section says,
