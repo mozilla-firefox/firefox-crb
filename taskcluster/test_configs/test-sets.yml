@@ -123,6 +123,7 @@ browsertime:
     - browsertime-throttled
     - browsertime-pageload-benchmark
     - browsertime-nav-bench
+    - browsertime-nav-bench-a11y
     - browsertime-indexeddb
     - browsertime-video-playback-latency
     - browsertime-network-bench
