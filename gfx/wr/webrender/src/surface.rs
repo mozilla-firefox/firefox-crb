@@ -515,6 +515,16 @@ impl SurfaceInfo {
         self.device_to_picture_rect(&self.clipping_rect)
     }
 
+    /// `culling_rect` in this surface's picture space.
+    pub fn culling_rect_in_picture_space(&self) -> PictureRect {
+        if self.culling_rect == RasterRect::max_rect() || self.device_pixel_scale.0 <= 0.0 {
+            return PictureRect::max_rect();
+        }
+
+        let scale = self.device_pixel_scale.0;
+        self.device_to_picture_rect(&self.culling_rect.cast_unit().scale(scale, scale))
+    }
+
     /// Clip a device rect and round it out to a device rect suitable for
     /// allocating a child off-screen surface of this surface (e.g. for
     /// clip-masks)

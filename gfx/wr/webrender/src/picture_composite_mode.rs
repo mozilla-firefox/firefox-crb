@@ -979,44 +979,21 @@ fn map_svgfe_subregions(
     }).collect()
 }
 
-pub fn get_surface_rects(
-    surface_index: SurfaceIndex,
+/// The clipped, unclipped and source local rects of a surface for
+/// `composite_mode`, given the region of it that is needed, `local_clip_rect`.
+fn surface_local_rects(
     composite_mode: &PictureCompositeMode,
-    parent_surface_index: SurfaceIndex,
-    surfaces: &mut [SurfaceInfo],
-    spatial_tree: &SpatialTree,
-    max_surface_size: f32,
-    force_scissor_rect: bool,
-) -> Option<SurfaceAllocInfo> {
-    let parent_surface = &surfaces[parent_surface_index.0];
-
-    let parent_clipping_rect = parent_surface.clipping_rect_in_picture_space();
-
-    let local_to_parent = SpaceMapper::new_with_target(
-        parent_surface.surface_spatial_node_index,
-        surfaces[surface_index.0].surface_spatial_node_index,
-        parent_clipping_rect,
-        spatial_tree,
-    );
-
-    let local_clip_rect = local_to_parent
-        .unmap(&parent_clipping_rect)
-        .unwrap_or(PictureRect::max_rect())
-        .cast_unit();
-
-    let surface = &mut surfaces[surface_index.0];
-
-    let mut svgfe_source_map = ScaleOffset::identity();
-
-    let (clipped_local, unclipped_local, source_local) = match composite_mode {
+    surface: &SurfaceInfo,
+    local_clip_rect: PictureRect,
+) -> Option<(PictureRect, PictureRect, PictureRect)> {
+    Some(match composite_mode {
         PictureCompositeMode::SVGFEGraph(ref filters, _) => {
             // The subregions are authored against the filtered element's
             // spatial node, but the graph is composited in this surface's space
             // (the backdrop root for a backdrop filter). Map them through the
             // relationship computed when the surface was assigned so they line
             // up with the captured source and the output prim.
-            svgfe_source_map = surface.svgfe_source_map;
-            let filters = map_svgfe_subregions(filters, &svgfe_source_map);
+            let filters = map_svgfe_subregions(filters, &surface.svgfe_source_map);
             let filters = &filters;
 
             let prim_subregion = get_coverage_target_svgfe(filters, surface.clipped_local_rect.cast_unit());
@@ -1095,7 +1072,7 @@ pub fn get_surface_rects(
                 None => return None,
             };
 
-            (clipped, unclipped, clipped)
+            (clipped, unclipped.cast_unit(), clipped)
         }
         _ => {
             let surface_origin = surface.clipped_local_rect.min.to_vector().cast_unit();
@@ -1125,7 +1102,68 @@ pub fn get_surface_rects(
 
             (clipped.cast_unit(), unclipped.cast_unit(), clipped.cast_unit())
         }
+    })
+}
+
+pub fn get_surface_rects(
+    surface_index: SurfaceIndex,
+    composite_mode: &PictureCompositeMode,
+    parent_surface_index: SurfaceIndex,
+    surfaces: &mut [SurfaceInfo],
+    spatial_tree: &SpatialTree,
+    max_surface_size: f32,
+    force_scissor_rect: bool,
+) -> Option<SurfaceAllocInfo> {
+    let parent_surface = &surfaces[parent_surface_index.0];
+
+    let parent_clipping_rect = parent_surface.clipping_rect_in_picture_space();
+
+    let local_to_parent = SpaceMapper::new_with_target(
+        parent_surface.surface_spatial_node_index,
+        surfaces[surface_index.0].surface_spatial_node_index,
+        parent_clipping_rect,
+        spatial_tree,
+    );
+
+    let local_clip_rect = local_to_parent
+        .unmap(&parent_clipping_rect)
+        .unwrap_or(PictureRect::max_rect())
+        .cast_unit();
+
+    // Without a bound on what can be visible (e.g. under perspective), keep
+    // deciding from the dirty region rather than from the whole surface.
+    let local_culling_rect = if parent_surface.culling_rect == RasterRect::max_rect() {
+        local_clip_rect
+    } else {
+        let parent_culling_rect = parent_surface.culling_rect_in_picture_space();
+        SpaceMapper::new_with_target(
+            parent_surface.surface_spatial_node_index,
+            surfaces[surface_index.0].surface_spatial_node_index,
+            parent_culling_rect,
+            spatial_tree,
+        )
+            .unmap(&parent_culling_rect)
+            .unwrap_or(local_clip_rect)
     };
+
+    let surface = &mut surfaces[surface_index.0];
+
+    let mut svgfe_source_map = ScaleOffset::identity();
+
+    if let PictureCompositeMode::SVGFEGraph(..) = composite_mode {
+        svgfe_source_map = surface.svgfe_source_map;
+    }
+
+    let (clipped_local, unclipped_local, source_local) =
+        surface_local_rects(composite_mode, surface, local_clip_rect)?;
+
+    // The scale a surface too large for `max_surface_size` is reduced to must
+    // not depend on the part of it being drawn, which follows the dirty region:
+    // a partial repaint would otherwise draw at a different scale than the rest
+    // of the surface. Decide it from the part that can be visible instead.
+    let (stable_clipped_local, stable_source_local) =
+        surface_local_rects(composite_mode, surface, local_culling_rect)
+            .map_or((clipped_local, source_local), |(clipped, _, source)| (clipped, source));
 
     let mut clipped = surface.map_to_device_rect(&clipped_local.cast_unit());
     let mut unclipped = surface.map_to_device_rect(&unclipped_local.cast_unit());
@@ -1134,19 +1172,26 @@ pub fn get_surface_rects(
     let mut clipped_snapped = clipped.round_out();
     let mut source_snapped = source.round_out();
 
+    let stable_rects = [stable_clipped_local, stable_source_local];
+    let stable_local_dimension = stable_rects.iter()
+        .fold(0.0f32, |m, r| m.max(r.width()).max(r.height()));
+    let stable_device_dimension = stable_rects.iter()
+        .map(|r| surface.map_to_device_rect(r).round_out())
+        .fold(0.0f32, |m, r| m.max(r.width()).max(r.height()));
+
     let max_dimension =
         clipped_snapped.width().max(
             clipped_snapped.height().max(
                 source_snapped.width().max(
                     source_snapped.height()
-                ))).ceil();
+                ))).max(stable_device_dimension).ceil();
     if max_dimension > max_surface_size {
         let max_dimension =
             clipped_local.width().max(
                 clipped_local.height().max(
                     source_local.width().max(
                         source_local.height()
-                    ))).ceil();
+                    ))).max(stable_local_dimension).ceil();
         surface.raster_spatial_node_index = surface.surface_spatial_node_index;
         surface.device_pixel_scale = Scale::new(max_surface_size / max_dimension);
         surface.local_scale = (1.0, 1.0);
