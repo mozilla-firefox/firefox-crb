@@ -40,9 +40,11 @@ const lazy = XPCOMUtils.declareLazy({
  * @property {PromiseWithResolvers<MethodResult>} callerResultResolvers
  *   The caller's promise and the functions that settle it.
  * @property {() => PromiseLike<MethodResult>} runOriginalMethod
- *   Invokes the original method.
+ *   Invokes the original method and validates its return value.
  * @property {Promise<MethodResult> | null} methodResultPromise
  *   The original method's outcome once started.
+ * @property {boolean} rejectedByController
+ *   Whether the test rejected the call before it ran.
  */
 
 /**
@@ -132,7 +134,7 @@ class AsyncCallController {
   }
 
   /**
-   * Waits for the next call before the original method starts.
+   * Waits for an intercepted call before the original method starts.
    *
    * @returns {Promise<void>} Rejects with `AbortError` if the control
    *   is restored before a call is intercepted.
@@ -146,7 +148,7 @@ class AsyncCallController {
    * before releasing the result.
    * Safe to call more than once.
    *
-   * @throws {unknown} If no call was intercepted.
+   * @throws {unknown} If no call was intercepted or the test rejected the call.
    */
   start() {
     this.#startOriginalMethod(this.#requireInterceptedCall());
@@ -157,7 +159,7 @@ class AsyncCallController {
    * Starts the method if needed.
    *
    * @returns {Promise<MethodResult>} Rejects if the method throws or rejects.
-   * @throws {unknown} If no call was intercepted.
+   * @throws {unknown} If no call was intercepted or the test rejected the call.
    */
   waitForResult() {
     return this.#startOriginalMethod(this.#requireInterceptedCall());
@@ -169,7 +171,7 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} The same promise the caller received.
    *   Rejects if the original method throws or rejects.
-   * @throws {unknown} If no call was intercepted.
+   * @throws {unknown} If no call was intercepted or the test rejected the call.
    */
   releaseResult() {
     const interceptedCall = this.#requireInterceptedCall();
@@ -179,6 +181,33 @@ class AsyncCallController {
     resolveCallerPromise(this.#startOriginalMethod(interceptedCall));
 
     return callerPromise;
+  }
+
+  /**
+   * Rejects the intercepted call so the original method never runs.
+   *
+   * @param {unknown} [reason=new Error("Controlled call rejected")]
+   *   The rejection reason to deliver to the caller.
+   * @throws {unknown} If no call was intercepted, the method
+   *   already started, or the test already rejected the call.
+   */
+  rejectResult(reason = new Error("Controlled call rejected")) {
+    const interceptedCall = this.#requireInterceptedCall();
+
+    if (interceptedCall.methodResultPromise) {
+      throw new Error(
+        `The original call to ${this.#methodName} has already started`
+      );
+    }
+
+    if (interceptedCall.rejectedByController) {
+      throw new Error(
+        `The intercepted call to ${this.#methodName} was rejected`
+      );
+    }
+
+    interceptedCall.rejectedByController = true;
+    interceptedCall.callerResultResolvers.reject(reason);
   }
 
   /**
@@ -196,7 +225,7 @@ class AsyncCallController {
       return;
     }
 
-    if (this.#interceptedCall) {
+    if (this.#interceptedCall && !this.#interceptedCall.rejectedByController) {
       this.releaseResult();
     }
   }
@@ -285,12 +314,39 @@ class AsyncCallController {
     this.#removeStub();
     this.#interceptedCall = {
       callerResultResolvers: Promise.withResolvers(),
-      runOriginalMethod: callOriginalMethod,
+      runOriginalMethod: () => this.#invokeOriginalMethod(callOriginalMethod),
       methodResultPromise: null,
+      rejectedByController: false,
     };
     this.#interceptionSignal.resolve();
 
     return this.#interceptedCall.callerResultResolvers.promise;
+  }
+
+  /**
+   * Runs the original method and checks that it returns a promise-like value.
+   *
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   * @throws {TypeError} If the original method returns a non-awaitable value.
+   */
+  #invokeOriginalMethod(callOriginalMethod) {
+    const originalResult = callOriginalMethod();
+    const originalThen = originalResult?.then;
+
+    if (typeof originalThen !== "function") {
+      throw new TypeError(`${this.#methodName} must return a promise`);
+    }
+
+    // The method can return a thenable with a `then` getter instead of a
+    // native promise. Returning `originalResult` directly would make JavaScript
+    // read `then` again when settling the promise, so we need to reuse the
+    // function we already read to ensure the getter runs only once.
+    return {
+      then(resolve, reject) {
+        return Reflect.apply(originalThen, originalResult, [resolve, reject]);
+      },
+    };
   }
 
   /**
@@ -323,8 +379,15 @@ class AsyncCallController {
    *
    * @param {InterceptedCall<MethodResult>} interceptedCall - The intercepted call to start.
    * @returns {Promise<MethodResult>}
+   * @throws {Error} If the test rejected the call.
    */
   #startOriginalMethod(interceptedCall) {
+    if (interceptedCall.rejectedByController) {
+      throw new Error(
+        `The intercepted call to ${this.#methodName} was rejected`
+      );
+    }
+
     if (!interceptedCall.methodResultPromise) {
       interceptedCall.methodResultPromise = Promise.resolve().then(
         interceptedCall.runOriginalMethod
