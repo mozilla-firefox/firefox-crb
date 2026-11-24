@@ -50,6 +50,10 @@ add_task(
     await AddonTestUtils.promiseStartupManager();
 
     Services.prefs.setBoolPref("app.update.langpack.enabled", true);
+    Services.prefs.setBoolPref(
+      "extensions.langpacks.updateAtStartup.featureGate",
+      false
+    );
 
     let result = await reasons();
     Assert.ok(
@@ -101,6 +105,28 @@ add_task(
     Assert.ok(
       result.includes(REASON.LANGPACK_INSTALLED),
       "Recognizes a language pack is installed."
+    );
+
+    // Langpacks don't prevent scheduling when they are updated at startup.
+    Services.prefs.setBoolPref(
+      "extensions.langpacks.updateAtStartup.featureGate",
+      true
+    );
+
+    result = await reasons();
+    Assert.ok(
+      !result.includes(REASON.LANGPACK_INSTALLED),
+      "Reasons does not include LANGPACK_INSTALLED with updateAtStartup"
+    );
+    result = await checkGleanPing();
+    Assert.ok(
+      !result.includes(REASON.LANGPACK_INSTALLED),
+      "No Glean metric for langpacks with updateAtStartup."
+    );
+
+    Services.prefs.setBoolPref(
+      "extensions.langpacks.updateAtStartup.featureGate",
+      false
     );
 
     // Now turn off langpack updating.
