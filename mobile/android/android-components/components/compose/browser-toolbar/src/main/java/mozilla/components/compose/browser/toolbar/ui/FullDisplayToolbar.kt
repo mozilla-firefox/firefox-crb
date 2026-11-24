@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import mozilla.components.compose.base.progressbar.AnimatedProgressBar
@@ -228,20 +229,21 @@ private fun BrowserActionsColorScheme(
     }
 }
 
+/** The horizontal padding the full display toolbar applies at each end for a window of the given [width]. */
+fun toolbarHorizontalPadding(width: Dp): Dp =
+    if (width < WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND.dp) {
+        NO_TOOLBAR_PADDING_DP.dp
+    } else {
+        LARGE_TOOLBAR_PADDING_DP.dp
+    }
+
 /**
  * Applies the toolbar's adaptive horizontal padding, depending on the width of the current screen.
  *
  * This is an interim fix for https://issuetracker.google.com/issues/515098186.
  */
 private fun Modifier.adaptiveHorizontalPadding() = layout { measurable, constraints ->
-    val isSmallWidthScreen = constraints.maxWidth < WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND.dp.roundToPx()
-    val padding =
-        when (isSmallWidthScreen) {
-                true -> NO_TOOLBAR_PADDING_DP
-                else -> LARGE_TOOLBAR_PADDING_DP
-            }
-            .dp
-            .roundToPx()
+    val padding = toolbarHorizontalPadding(constraints.maxWidth.toDp()).roundToPx()
 
     val horizontal = padding * 2
     val placeable =

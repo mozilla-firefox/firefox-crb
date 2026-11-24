@@ -33,7 +33,8 @@ class TabGroupsStripContentTest {
 
     private val itemSize = 32.dp
     private val itemSpacing = 24.dp
-    private val edgePadding = 8.dp
+    private val startPadding = 8.dp
+    private val endPadding = 0.dp
     private val expandButtonWidth = 24.dp
 
     private val state =
@@ -193,7 +194,8 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
@@ -207,7 +209,8 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
@@ -221,7 +224,8 @@ class TabGroupsStripContentTest {
                 availableWidth = 400.dp,
                 itemSize = itemSize,
                 itemSpacing = itemSpacing,
-                edgePadding = edgePadding,
+                startPadding = startPadding,
+                endPadding = endPadding,
                 expandButtonWidth = expandButtonWidth,
             )
         )
