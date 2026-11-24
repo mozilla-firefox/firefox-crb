@@ -1,0 +1,15 @@
+{
+  "label": "jpopsingles.eu",
+  "bugs": {
+    "2083585": {
+      "issue": "firefox-blocked-completely",
+      "matches": ["*://*.jpopsingles.eu/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "ua_string": ["change_Firefox_to_FireFox"]
+    }
+  ]
+}
