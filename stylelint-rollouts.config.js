@@ -173,7 +173,6 @@ module.exports = [
       "browser/themes/shared/translations/panel.css",
       "browser/themes/shared/urlbar.css",
       "browser/themes/shared/urlbar/dynamic-results.css",
-      "browser/themes/shared/urlbar/view-nova.css",
       "browser/themes/shared/urlbar/view-proton.css",
       "browser/themes/shared/webRTC-indicator.css",
       "browser/tools/mozscreenshots/mozscreenshots/extension/lib/mozscreenshots-style.css",

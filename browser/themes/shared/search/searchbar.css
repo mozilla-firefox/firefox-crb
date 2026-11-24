@@ -27,7 +27,7 @@
 .search-panel-header > label {
   margin-top: 2px;
   margin-bottom: 1px;
-  opacity: 0.6;
+  opacity: var(--opacity-deemphasized-strong);
 }
 
 /* Make the contrast stronger in dark mode */
