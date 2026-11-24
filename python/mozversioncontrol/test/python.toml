@@ -27,9 +27,13 @@ subsuite = "mozversioncontrol"
 
 ["test_is_shallow.py"]
 
+["test_jj_file_statuses.py"]
+
 ["test_push.py"]
 
 ["test_push_to_try.py"]
+
+["test_renamed_files.py"]
 
 ["test_try_commit.py"]
 
