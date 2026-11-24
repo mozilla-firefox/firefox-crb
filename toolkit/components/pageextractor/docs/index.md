@@ -184,6 +184,11 @@ const price =
   reader.metaValues("product:price:amount")[0];
 ```
 
+When `browser.smartwindow.pageMetadata.enabled` is true, Smart Window gives
+the model a page's metadata alongside its text, since markup often declares
+facts the visible text leaves out, like a recipe's ingredients or a product's
+price. It tells the model the metadata may be incomplete or wrong.
+
 Treat the values as untrusted hints. They can be long, missing, wrong, or
 contradict the page's own content, so keep your feature working without them.
 
