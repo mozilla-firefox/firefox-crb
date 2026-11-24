@@ -223,5 +223,42 @@ def test_push_perf_risk_timeout(monkeypatch, responses):
         push_perf_risk("autoland", "abcdef")
 
 
+@pytest.fixture
+def previous_pushes(monkeypatch):
+    bugbug.previous_push_schedules.cache_clear()
+    fetched = []
+
+    def fake_fetch(branch, rev, session, *, write_perfherder_data=True):
+        fetched.append((rev, write_perfherder_data))
+        return {"groups": {f"{rev}.toml": 0.9}}
+
+    monkeypatch.setattr(bugbug, "_fetch_push_schedules", fake_fetch)
+    yield fetched
+    bugbug.previous_push_schedules.cache_clear()
+
+
+def test_previous_push_schedules_cached(monkeypatch, previous_pushes):
+    """The previous pushes are fetched once, without perfherder data."""
+    push_data = {1: {"changesets": ["rev1"]}, 2: {"changesets": ["rev2"]}}
+    monkeypatch.setattr(bugbug, "get_push_data", lambda *args: push_data)
+
+    for _ in range(2):
+        data = bugbug.previous_push_schedules("repo", "autoland", 3, 3)
+        assert data == {"groups": {"rev1.toml": 0.9, "rev2.toml": 0.9}}
+    assert previous_pushes == [("rev1", False), ("rev2", False)]
+
+
+def test_previous_push_schedules_failure_cached(monkeypatch, previous_pushes):
+    """A failure is cached too, so that the processes loading the kinds don't all
+    wait for it again."""
+    calls = []
+    monkeypatch.setattr(bugbug, "get_push_data", lambda *args: calls.append(args))
+
+    for _ in range(2):
+        with pytest.raises(bugbug.PushDataUnavailable):
+            bugbug.previous_push_schedules("repo", "autoland", 3, 3)
+    assert len(calls) == 1
+
+
 if __name__ == "__main__":
     mozunit.main()

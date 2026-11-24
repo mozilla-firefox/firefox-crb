@@ -16,6 +16,7 @@ from taskgraph.util.python_path import find_object
 from taskgraph.util.yaml import load_yaml
 
 from gecko_taskgraph import GECKO
+from gecko_taskgraph.optimize import bugbug as bugbug_strategies
 from gecko_taskgraph.optimize import experimental, perf_batching, project, tryselect
 from gecko_taskgraph.optimize.backstop import SkipUnlessBackstop, SkipUnlessPushInterval
 from gecko_taskgraph.optimize.bugbug import (
@@ -23,7 +24,6 @@ from gecko_taskgraph.optimize.bugbug import (
     BugBugPushSchedules,
     DisperseGroups,
     SkipUnlessDebug,
-    merge_bugbug_replies,
 )
 from gecko_taskgraph.optimize.docs import SkipUnlessSphinxJs
 from gecko_taskgraph.optimize.mozlint import SkipUnlessMozlint
@@ -34,6 +34,7 @@ from gecko_taskgraph.optimize.perf_batching import (
     SkipUnlessTimeSinceLastBatch,
 )
 from gecko_taskgraph.optimize.strategies import SkipUnlessMissing, SkipUnlessSchedules
+from gecko_taskgraph.util import bugbug
 from gecko_taskgraph.util.backstop import BACKSTOP_PUSH_INTERVAL
 from gecko_taskgraph.util.bugbug import (
     BUGBUG_BASE_URL,
@@ -41,6 +42,9 @@ from gecko_taskgraph.util.bugbug import (
     CT_MEDIUM,
     CT_VERY_LOW,
     BugbugTimeoutException,
+    PushDataUnavailable,
+    merge_bugbug_replies,
+    previous_push_schedules,
     push_schedules,
 )
 
@@ -48,12 +52,15 @@ from gecko_taskgraph.util.bugbug import (
 @pytest.fixture(autouse=True)
 def clear_push_schedules_memoize():
     push_schedules.cache_clear()
+    previous_push_schedules.cache_clear()
 
 
 @pytest.fixture
 def params():
     return {
         "branch": "autoland",
+        "bugbug_confidence_threshold": "low",
+        "bugbug_num_pushes": 1,
         "head_repository": "https://hg.mozilla.org/integration/autoland",
         "head_rev": "abcdef",
         "project": "autoland",
@@ -561,6 +568,73 @@ def test_expanded(params):
     assert scheduled == all_labels
 
 
+def test_bugbug_manifest_strategies_use_parameters():
+    """The strategies selecting manifests select them like the manifest loader."""
+    for name, strategy in registry.items():
+        if isinstance(strategy, BugBugPushSchedules) and not strategy.tasks_only:
+            assert strategy.confidence_threshold is None, name
+
+
+@pytest.mark.parametrize(
+    "threshold,num_pushes,expected",
+    [
+        pytest.param("low", 1, {"task-0-label", "task-1-label"}, id="low"),
+        pytest.param("medium", 1, {"task-0-label"}, id="medium"),
+        pytest.param(
+            "very_low",
+            10,
+            {"task-0-label", "task-1-label", "task-2-label"},
+            id="expanded",
+        ),
+    ],
+)
+def test_bugbug_selection_parameters(
+    monkeypatch, params, threshold, num_pushes, expected
+):
+    def fake_get_push_schedules(params, num_pushes):
+        groups = {"foo.toml": 0.9, "bar.toml": 0.75, "baz.toml": 0.35}
+        if num_pushes == 1:
+            del groups["baz.toml"]
+        return {"groups": groups}
+
+    monkeypatch.setattr(
+        bugbug_strategies, "get_push_schedules", fake_get_push_schedules
+    )
+    params.update({
+        "bugbug_confidence_threshold": threshold,
+        "bugbug_num_pushes": num_pushes,
+    })
+    tasks = list(
+        generate_tasks(
+            {"attributes": {"test_manifests": ["foo.toml"]}},
+            {"attributes": {"test_manifests": ["bar.toml"]}},
+            {"attributes": {"test_manifests": ["baz.toml"]}},
+        )
+    )
+    opt = registry["bugbug"]
+    scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, {})}
+    assert scheduled == expected
+
+
+def test_bugbug_push_data_unavailable(monkeypatch, params):
+    """The fallback is used when the previous pushes can't be retrieved."""
+    params["pushlog_id"] = 10
+    monkeypatch.setattr(bugbug, "get_push_data", lambda *args: None)
+    monkeypatch.setattr(
+        registry[FALLBACK],
+        "should_remove_task",
+        lambda task, params, _: task.label == default_tasks[0].label,
+    )
+
+    opt = BugBugPushSchedules(CT_VERY_LOW, False, True, FALLBACK, 10)
+    assert opt.should_remove_task(default_tasks[0], params, {})
+    assert not opt.should_remove_task(default_tasks[1], params, {})
+
+    opt = BugBugPushSchedules(CT_VERY_LOW, False, True, None, 10)
+    with pytest.raises(PushDataUnavailable):
+        opt.should_remove_task(default_tasks[0], params, {})
+
+
 @pytest.mark.parametrize(
     "strategy",
     [
@@ -584,7 +658,7 @@ def test_tryselect_backstop_expanded(responses, params, strategy):
     )
 
     tasks = list(generate_tasks({}, {}, {}))
-    opt = tryselect.bugbug_reduced_manifests_config_selection_medium[strategy]
+    opt = tryselect.bugbug_reduced_manifests_config_selection[strategy]
     scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, None)}
     assert scheduled == {"task-0-label"}
 
@@ -607,9 +681,7 @@ def test_tryselect_changed(responses, params):
     )
 
     tasks = list(generate_tasks({}, {}, {}))
-    opt = tryselect.bugbug_reduced_manifests_config_selection_medium[
-        "skip-unless-changed"
-    ]
+    opt = tryselect.bugbug_reduced_manifests_config_selection["skip-unless-changed"]
     patterns = {
         "task-0-label": ["js/src/**"],
         "task-1-label": ["dom/**"],
@@ -633,7 +705,7 @@ def test_project_autoland_test(monkeypatch, responses, params):
     monkeypatch.setattr(DisperseGroups, "should_remove_task", lambda *args: False)
 
     def fake_bugbug_should_remove_task(self, task, params, importance):
-        if self.num_pushes > 1:
+        if params["bugbug_num_pushes"] > 1:
             return task.label == "task-4-label"
         return task.label in ("task-2-label", "task-3-label", "task-4-label")
 
@@ -653,6 +725,8 @@ def test_project_autoland_test(monkeypatch, responses, params):
     # On expanded pushes, some things are optimized.
     params["backstop"] = False
     params["pushlog_id"] = 10
+    params["bugbug_confidence_threshold"] = "very_low"
+    params["bugbug_num_pushes"] = 10
     scheduled = {
         t.label for t in default_tasks if not opt.should_remove_task(t, params, {})
     }
@@ -660,6 +734,8 @@ def test_project_autoland_test(monkeypatch, responses, params):
 
     # On regular pushes, more things are optimized.
     params["pushlog_id"] = 11
+    params["bugbug_confidence_threshold"] = "low"
+    params["bugbug_num_pushes"] = 1
     scheduled = {
         t.label for t in default_tasks if not opt.should_remove_task(t, params, {})
     }

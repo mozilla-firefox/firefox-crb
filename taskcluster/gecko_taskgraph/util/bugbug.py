@@ -17,6 +17,8 @@ from taskgraph import create
 from taskgraph.util import json
 from taskgraph.util.taskcluster import requests_retry_session
 
+from gecko_taskgraph.util.hg import get_push_data
+
 try:
     # TODO(py3): use time.monotonic()
     from time import monotonic
@@ -61,6 +63,18 @@ def translate_group(group):
             return group.replace(prefix, value)
 
     return group
+
+
+def get_selection_parameters(params):
+    """Return the confidence threshold and number of pushes, as a tuple, with which
+    the manifest loader and the strategies selecting manifests use bugbug's results,
+    from the `bugbug_confidence_threshold` and `bugbug_num_pushes` parameters."""
+    confidence_threshold = next(
+        ct
+        for ct, level in CT_LEVELS.items()
+        if level == params["bugbug_confidence_threshold"]
+    )
+    return confidence_threshold, params["bugbug_num_pushes"]
 
 
 def get_confidence_threshold(data, kind, confidence_threshold):
@@ -391,6 +405,123 @@ def patch_schedules(base_rev, patch_content, mode="quick"):
         )
 
     return {k: v for k, v in data["groups"].items() if v >= confidence_threshold}
+
+
+def merge_bugbug_replies(data, new_data):
+    """Merge a bugbug reply (stored in the `new_data` argument) into another (stored
+    in the `data` argument).
+    """
+    for key, value in new_data.items():
+        # The confidence thresholds depend on the models used for each reply: use the ones of
+        # the latest reply.
+        if key == "confidence_thresholds":
+            if value:
+                data[key] = value
+            continue
+
+        if isinstance(value, dict):
+            if key not in data:
+                data[key] = {}
+
+            if len(value) == 0:
+                continue
+
+            dict_value = next(iter(value.values()))
+            if isinstance(dict_value, list):
+                for name, configs in value.items():
+                    if name not in data[key]:
+                        data[key][name] = set()
+
+                    data[key][name].update(configs)
+            else:
+                for name, confidence in value.items():
+                    if name not in data[key] or data[key][name] < confidence:
+                        data[key][name] = confidence
+        elif isinstance(value, list):
+            if key not in data:
+                data[key] = set()
+
+            data[key].update(value)
+
+
+class PushDataUnavailable(Exception):
+    """The pushlog entries of the pushes before the current one couldn't be
+    retrieved."""
+
+
+_previous_push_schedules_results = {}
+
+
+def previous_push_schedules(repository, branch, push_id, num_pushes):
+    """Return bugbug's replies for the `num_pushes - 1` pushes before `push_id`,
+    merged.
+
+    The result, or the failure, is cached, so that the decision task can fetch
+    them before forking the processes that load the kinds, which then share it.
+    They are not recorded in the perfherder data, which is about the query for
+    the current push.
+
+    Raises PushDataUnavailable if the pushes couldn't be retrieved.
+    """
+    key = (repository, branch, push_id, num_pushes)
+    if key not in _previous_push_schedules_results:
+        try:
+            _previous_push_schedules_results[key] = _fetch_previous_push_schedules(*key)
+        except (
+            BugbugTimeoutException,
+            PushDataUnavailable,
+            requests.RequestException,
+        ) as e:
+            _previous_push_schedules_results[key] = e
+
+    result = _previous_push_schedules_results[key]
+    if isinstance(result, Exception):
+        raise result
+    return result
+
+
+previous_push_schedules.cache_clear = _previous_push_schedules_results.clear
+
+
+def _fetch_previous_push_schedules(repository, branch, push_id, num_pushes):
+    start_push_id = push_id - num_pushes + 1
+    push_data = get_push_data(repository, branch, start_push_id, push_id - 1)
+    if push_data is None:
+        raise PushDataUnavailable(
+            f"Failed to retrieve pushes {start_push_id}-{push_id - 1}"
+        )
+
+    data = {}
+    for previous_push_id in range(start_push_id, push_id):
+        rev = push_data[previous_push_id]["changesets"][-1]
+        merge_bugbug_replies(
+            data,
+            _fetch_push_schedules(
+                branch, rev, get_session(), write_perfherder_data=False
+            ),
+        )
+    return data
+
+
+def get_push_schedules(params, num_pushes=1):
+    """Return bugbug's reply for the push in `params`, merged with the replies for
+    the `num_pushes - 1` pushes before it.
+
+    Raises PushDataUnavailable if the pushes before it couldn't be retrieved.
+    """
+    data = {}
+    if num_pushes != 1:
+        merge_bugbug_replies(
+            data,
+            previous_push_schedules(
+                params["head_repository"],
+                params["project"],
+                int(params["pushlog_id"]),
+                num_pushes,
+            ),
+        )
+    merge_bugbug_replies(data, push_schedules(params["project"], params["head_rev"]))
+    return data
 
 
 if __name__ == "__main__":

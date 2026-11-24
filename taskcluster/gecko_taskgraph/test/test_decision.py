@@ -174,6 +174,74 @@ def test_get_decision_parameters(
         assert params[key] == expected[key], f"key {key} does not match!"
 
 
+@patch("gecko_taskgraph.decision.is_backstop", return_value=False)
+@patch("gecko_taskgraph.decision.get_hg_revision_metadata")
+@patch("gecko_taskgraph.decision.get_repository")
+@patch("gecko_taskgraph.decision.get_changed_files")
+@pytest.mark.parametrize(
+    "project,pushlog_id,expected",
+    (
+        pytest.param("autoland", "140", ("very_low", 10), id="autoland-expanded"),
+        pytest.param("autoland", "143", ("low", 1), id="autoland-regular"),
+        pytest.param("mozilla-central", "140", ("low", 1), id="mozilla-central"),
+    ),
+)
+def test_decision_parameters_bugbug_manifest_selection(
+    mock_get_changed_files,
+    mock_get_repository,
+    mock_get_hg_revision_metadata,
+    mock_is_backstop,
+    options,
+    project,
+    pushlog_id,
+    expected,
+):
+    mock_get_hg_revision_metadata.return_value = _hg_metadata("commit message")
+    mock_get_repository.return_value = MagicMock(default_branch="baseref")
+    mock_get_changed_files.return_value = []
+
+    options = dict(
+        options,
+        project=project,
+        pushlog_id=pushlog_id,
+        allow_parameter_override=False,
+    )
+    params = decision.get_decision_parameters(FAKE_GRAPH_CONFIG, options)
+
+    assert (
+        params["bugbug_confidence_threshold"],
+        params["bugbug_num_pushes"],
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    "loader,num_pushes,expected",
+    (
+        pytest.param("bugbug", 10, [("repo", "autoland", 140, 10)], id="expanded"),
+        pytest.param("bugbug", 1, [], id="regular"),
+        pytest.param("default", 10, [], id="default-loader"),
+    ),
+)
+def test_prefetch_previous_push_schedules(monkeypatch, loader, num_pushes, expected):
+    calls = []
+
+    def fake_previous_push_schedules(*args):
+        calls.append(args)
+        raise decision.PushDataUnavailable("unavailable")
+
+    monkeypatch.setattr(
+        decision, "previous_push_schedules", fake_previous_push_schedules
+    )
+    decision.prefetch_previous_push_schedules({
+        "bugbug_num_pushes": num_pushes,
+        "head_repository": "repo",
+        "project": "autoland",
+        "pushlog_id": "140",
+        "test_manifest_loader": loader,
+    })
+    assert calls == expected
+
+
 def _note_mock_repo(mock_get_repository, mock_get_hg_revision_metadata, note):
     mock_get_hg_revision_metadata.return_value = _hg_metadata("commit message")
     mock_repo = MagicMock()

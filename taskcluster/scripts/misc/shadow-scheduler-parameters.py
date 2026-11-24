@@ -2,9 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
-Write the parameters a decision task ran with to a file, with the target tasks
-method replaced, so that `mach taskgraph optimized -p <file>` re-runs its
-scheduling over a different set of targeted tasks.
+Write the parameters a decision task ran with to a file, with some of them
+replaced, so that `mach taskgraph optimized -p <file>` re-runs its scheduling
+with them (e.g. over a different set of targeted tasks).
 """
 
 import argparse
@@ -26,14 +26,29 @@ def main(argv):
     )
     parser.add_argument(
         "--target-tasks-method",
-        required=True,
         help="Value of the target_tasks_method parameter to write.",
+    )
+    parser.add_argument(
+        "--set",
+        metavar="NAME=VALUE",
+        action="append",
+        default=[],
+        help="Parameter to replace, with its value in YAML. Can be repeated.",
     )
     parser.add_argument("output", help="Path of the parameters file to write.")
     args = parser.parse_args(argv)
 
+    overrides = {}
+    for override in args.set:
+        name, sep, value = override.partition("=")
+        if not sep:
+            parser.error(f"--set expects NAME=VALUE, got {override!r}")
+        overrides[name] = yaml.safe_load(value)
+
     parameters = get_artifact(args.decision_task_id, "public/parameters.yml")
-    parameters["target_tasks_method"] = args.target_tasks_method
+    if args.target_tasks_method:
+        parameters["target_tasks_method"] = args.target_tasks_method
+    parameters.update(overrides)
     with open(args.output, "w") as fh:
         yaml.safe_dump(parameters, fh, allow_unicode=True, default_flow_style=False)
 

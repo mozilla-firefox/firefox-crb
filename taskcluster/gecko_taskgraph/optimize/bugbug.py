@@ -13,90 +13,42 @@ from gecko_taskgraph.util.bugbug import (
     CT_HIGH,
     CT_LOW,
     CT_MEDIUM,
-    CT_VERY_LOW,
     BugbugTimeoutException,
+    PushDataUnavailable,
     get_confidence_threshold,
-    push_schedules,
+    get_push_schedules,
+    get_selection_parameters,
 )
-from gecko_taskgraph.util.hg import get_push_data
 
 FALLBACK = "skip-unless-has-relevant-tests"
 
 
-def merge_bugbug_replies(data, new_data):
-    """Merge a bugbug reply (stored in the `new_data` argument) into another (stored
-    in the `data` argument).
-    """
-    for key, value in new_data.items():
-        # The confidence thresholds depend on the models used for each reply: use the ones of
-        # the latest reply.
-        if key == "confidence_thresholds":
-            if value:
-                data[key] = value
-            continue
-
-        if isinstance(value, dict):
-            if key not in data:
-                data[key] = {}
-
-            if len(value) == 0:
-                continue
-
-            dict_value = next(iter(value.values()))
-            if isinstance(dict_value, list):
-                for name, configs in value.items():
-                    if name not in data[key]:
-                        data[key][name] = set()
-
-                    data[key][name].update(configs)
-            else:
-                for name, confidence in value.items():
-                    if name not in data[key] or data[key][name] < confidence:
-                        data[key][name] = confidence
-        elif isinstance(value, list):
-            if key not in data:
-                data[key] = set()
-
-            data[key].update(value)
-
-
-@register_strategy("bugbug-low", args=(CT_LOW,))
-@register_strategy("bugbug-medium", args=(CT_MEDIUM,))
-@register_strategy("bugbug-high", args=(CT_HIGH,))
+# The strategies selecting manifests use the confidence threshold and number of
+# pushes in the parameters, like the manifest loader, so that the manifests they
+# select are in the tasks.
+@register_strategy("bugbug", args=(None,))
 @register_strategy("bugbug-tasks-medium", args=(CT_MEDIUM, True))
 @register_strategy("bugbug-tasks-high", args=(CT_HIGH, True))
 @register_strategy("bugbug-reduced", args=(CT_MEDIUM, True, True))
 @register_strategy("bugbug-reduced-fallback", args=(CT_MEDIUM, True, True, FALLBACK))
 @register_strategy("bugbug-reduced-high", args=(CT_HIGH, True, True))
-@register_strategy("bugbug-reduced-manifests", args=(CT_MEDIUM, False, True))
-@register_strategy(
-    "bugbug-reduced-manifests-config-selection-low",
-    args=(CT_LOW, False, True, None, 1, True),
-)
+@register_strategy("bugbug-reduced-manifests", args=(None, False, True))
 @register_strategy(
     "bugbug-reduced-manifests-config-selection",
-    args=(CT_MEDIUM, False, True, None, 1, True),
+    args=(None, False, True),
+    kwargs={"select_configs": True},
 )
 @register_strategy(
-    "bugbug-reduced-manifests-config-selection-high",
-    args=(CT_HIGH, False, True, None, 1, True),
-)
-@register_strategy(
-    "bugbug-reduced-manifests-fallback-low", args=(CT_LOW, False, True, FALLBACK)
-)
-@register_strategy(
-    "bugbug-reduced-manifests-fallback", args=(CT_MEDIUM, False, True, FALLBACK)
-)
-@register_strategy(
-    "bugbug-reduced-manifests-fallback-last-10-pushes",
-    args=(CT_VERY_LOW, False, True, FALLBACK, 10),
+    "bugbug-reduced-manifests-fallback", args=(None, False, True, FALLBACK)
 )
 class BugBugPushSchedules(OptimizationStrategy):
     """Query the 'bugbug' service to retrieve relevant tasks and manifests.
 
     Args:
         confidence_threshold (float): The minimum confidence threshold (in
-            range [0, 1]) needed for a task to be scheduled.
+            range [0, 1]) needed for a task to be scheduled, or None to use the
+            ones of the `bugbug_confidence_threshold` and `bugbug_num_pushes`
+            parameters (instead of `num_pushes`).
         tasks_only (bool): Whether or not to only use tasks and no groups
             (default: False)
         use_reduced_tasks (bool): Whether or not to use the reduced set of tasks
@@ -132,41 +84,26 @@ class BugBugPushSchedules(OptimizationStrategy):
         if project not in ("autoland", "try"):
             return False
 
-        current_push_id = int(params["pushlog_id"])
-
-        rev = params["head_rev"]
-
         if self.timedout:
             return registry[self.fallback].should_remove_task(task, params, importance)
 
-        data = {}
+        if self.confidence_threshold is None:
+            confidence_threshold, num_pushes = get_selection_parameters(params)
+        else:
+            confidence_threshold = self.confidence_threshold
+            num_pushes = self.num_pushes
 
-        start_push_id = current_push_id - self.num_pushes + 1
-        if self.num_pushes != 1:
-            push_data = get_push_data(
-                params["head_repository"], project, start_push_id, current_push_id - 1
-            )
+        try:
+            data = get_push_schedules(params, num_pushes)
+        except (BugbugTimeoutException, RetryError, PushDataUnavailable):
+            if not self.fallback:
+                raise
 
-        for push_id in range(start_push_id, current_push_id + 1):
-            if push_id == current_push_id:
-                rev = params["head_rev"]
-            else:
-                rev = push_data[push_id]["changesets"][-1]
-
-            try:
-                new_data = push_schedules(params["project"], rev)
-                merge_bugbug_replies(data, new_data)
-            except (BugbugTimeoutException, RetryError):
-                if not self.fallback:
-                    raise
-
-                self.timedout = True
-                return self.should_remove_task(task, params, importance)
+            self.timedout = True
+            return self.should_remove_task(task, params, importance)
 
         key = "reduced_tasks" if self.use_reduced_tasks else "tasks"
-        tasks_threshold = get_confidence_threshold(
-            data, "tasks", self.confidence_threshold
-        )
+        tasks_threshold = get_confidence_threshold(data, "tasks", confidence_threshold)
         tasks = {
             task
             for task, confidence in data.get(key, {}).items()
@@ -186,7 +123,7 @@ class BugBugPushSchedules(OptimizationStrategy):
         # If a task contains more than one group, use the max confidence.
         groups = data.get("groups", {})
         groups_threshold = get_confidence_threshold(
-            data, "groups", self.confidence_threshold
+            data, "groups", confidence_threshold
         )
         confidences = [c for g, c in groups.items() if g in test_manifests]
         if not confidences or max(confidences) < groups_threshold:

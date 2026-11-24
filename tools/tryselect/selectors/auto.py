@@ -10,8 +10,9 @@ from ..push import push_to_try
 from ..util.dicttools import merge
 
 TRY_AUTO_PARAMETERS = {
+    "bugbug_confidence_threshold": "medium",
     "filters": ["try_auto"],
-    "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection_medium",  # noqa
+    "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection",  # noqa
     "optimize_target_tasks": True,
     "test_manifest_loader": "bugbug",
     "try_mode": "try_auto",
@@ -38,6 +39,15 @@ class AutoParser(BaseTryParser):
                 "help": "Override the default optimization strategy. Valid values "
                 "are the experimental strategies defined at the bottom of "
                 "`taskcluster/gecko_taskgraph/optimize/__init__.py`.",
+            },
+        ],
+        [
+            ["--confidence-threshold"],
+            {
+                "default": None,
+                "choices": ["very_low", "low", "medium", "high"],
+                "help": "Override the confidence threshold at which the bugbug "
+                "strategies select manifests (default: medium).",
             },
         ],
         [
@@ -84,6 +94,7 @@ def run(
     write_task_config=False,
     closed_tree=False,
     strategy=None,
+    confidence_threshold=None,
     tasks_regex=None,
     tasks_regex_exclude=None,
     try_config_params=None,
@@ -99,6 +110,9 @@ def run(
 
     if strategy:
         params["optimize_strategies"] = strategy
+
+    if confidence_threshold:
+        params["bugbug_confidence_threshold"] = confidence_threshold
 
     if tasks_regex or tasks_regex_exclude:
         params.setdefault("try_task_config", {})["tasks-regex"] = {}
