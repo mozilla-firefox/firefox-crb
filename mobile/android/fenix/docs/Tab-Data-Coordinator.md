@@ -24,18 +24,22 @@ Anything requiring more complex tab data modeling should still read directly fro
 
 ## Data flow
 
-`TabDataCoordinator` is the entry point for accessing simple, transformed models of tab data. It combines open tabs with their associated tab groups and exposes the merged snapshot as a `StateFlow<TabsSnapshot?>`. As the underlying data sources update, the coordinator emits a new snapshot. When the application asks the coordinator for a data update, the coordinator passes the update along to the appropriate source(s).
+`TabDataCoordinator` is the entry point for accessing simple, transformed models of tab data. It combines open tabs, their associated tab groups, and the tab-related user settings, and exposes the merged snapshot as a `StateFlow<TabsSnapshot?>`. As the underlying data sources update, the coordinator emits a new snapshot. When the application asks the coordinator for a data update, the coordinator passes the update along to the appropriate source(s).
 
 ```{mermaid}
 flowchart LR
     BS["BrowserStore"] --> TR["DefaultTabRepository (Fenix)"]
     TR -* "tabFlow" --> C["DefaultTabDataCoordinator"]
     TGR["TabGroupRepository"] -* "tabGroupDataFlow" --> C
+    TSR["TabSettingsRepository"] -* "settingsSnapshot" --> C
     C -* "StateFlow of TabsSnapshot" --> UI["Consumers"]
+    C -* "StateFlow of TabSettings" --> UI
     UI -* "suspend write APIs" --> C
     C -* "moveTabs / removeTabs" --> TR
     TR -* "TabsUseCases" --> BS
     C -* "group writes" --> TGR
+    UI -* "setTabGroupsEnabled / setInactiveTabsEnabled" --> C
+    C -* "settings writes" --> TSR
 ```
 
 ## Emitted data
@@ -52,9 +56,12 @@ classDiagram
         inactiveTabs: List~Tab~
         tabGroups: List~TabGroup~
         openTabGroups: List~TabGroup~
-        inactiveTabsEnabled: Boolean
-        tabGroupsEnabled: Boolean
+        settings: TabSettings
         ...
+    }
+    class TabSettings {
+        tabGroupsEnabled: Boolean
+        inactiveTabsEnabled: Boolean
     }
     class Tab {
         id: String
@@ -75,15 +82,16 @@ classDiagram
     }
     TabsSnapshot --> Tab
     TabsSnapshot --> TabGroup
+    TabsSnapshot --> TabSettings
 ```
 
 ### Tab feature settings
 
-`TabsSnapshot` also reports whether tab-specific features, such as inactive tabs and tab groups, are enabled. These come from user settings, not Nimbus.
+`TabsSnapshot.settings` reports whether tab-specific features, such as inactive tabs and tab groups, are enabled. The value is a `TabSettings` sourced from `feature-tab-settings`'s `TabSettingsRepository`, which persists it in a `DataStore`. A setting that has never been set by the user falls back to the `TabSettings` the embedding app constructs the repository with; Fenix uses the Nimbus-controlled `DefaultTabManagementFeatureHelper.tabGroupsEnabled` for the tab groups default.
 
-:::{warning}
-The settings are currently only read when a snapshot is computed. Toggling one does not produce a new snapshot on its own; the new value appears once the tab or tab group source next emits. This will be remedied in [Bug 2069529](https://bugzilla.mozilla.org/show_bug.cgi?id=2069529).
-:::
+Unlike tab and tab group data, the settings are also available on their own, without waiting for tab data to load, via `TabDataCoordinator.tabSettings`. Use this for consumers, such as a settings screen, that only need the settings.
+
+Toggling a setting through `setTabGroupsEnabled` / `setInactiveTabsEnabled` updates both `tabSettings` and the next `tabsSnapshot` emission; settings changes, like tab and tab group changes, produce a new snapshot on their own.
 
 ### Semantics and edge cases
 
@@ -106,6 +114,7 @@ The coordinator exposes `suspend` write APIs for operations that touch more than
 | Membership | `addTabsToTabGroup`, `mergeTabGroupIntoTab`, `mergeTabGroups`, `removeTabFromTabGroup` |
 | Group lifecycle | `openTabGroup`, `closeTabGroup`, `ungroupTabGroup`, `ungroupTabGroups`, `deleteTabGroupAndTabs` |
 | Ordering | `reorderItem` |
+| Settings | `setTabGroupsEnabled`, `setInactiveTabsEnabled` |
 
 See the KDoc on [TabDataCoordinator](https://searchfox.org/firefox-main/source/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/TabDataCoordinator.kt) for each operation's exact behavior.
 
@@ -130,7 +139,7 @@ Do not bypass the coordinator when the operation involves tab groups. Moving or 
 
 ## Lifecycle
 
-`TabDataCoordinator` lives for the lifetime of the Firefox process. It is created lazily as `Components.tabDataCoordinator`, and `initialize()` is called once at the end of `FenixApplication`'s startup. After that, the coordinator continuously observes its data sources.
+`TabDataCoordinator` lives for the lifetime of the Firefox process. It is created lazily as `Components.tabDataCoordinator`, and `initialize()` is called once at the end of `FenixApplication`'s startup. `initialize()` also initializes the `TabSettingsRepository`, so the settings start reading from disk at the same point as the tab and tab group sources. After that, the coordinator continuously observes its data sources.
 
 :::{caution}
 Consumers must not call `initialize()` more than once. It is not idempotent: each call starts another collector.
@@ -146,6 +155,8 @@ The component deliberately does not depend on `browser-state` or `feature-tabs`.
 Fenix's implementation is `DefaultTabRepository`, which is backed by `BrowserStore` and `TabsUseCases`.
 
 Tab groups are read from, and written to, `TabGroupRepository` in `feature-tabgroups-storage` directly.
+
+Tab-related user settings are read from, and written to, `TabSettingsRepository` in `feature-tab-settings` directly. Fenix's implementation is `DefaultTabSettingsRepository`, backed by a `DataStore` the component owns internally.
 
 ## Usage guidelines
 
@@ -229,14 +240,18 @@ val tabDataCoordinator =
     DefaultTabDataCoordinator(
         tabRepository = DefaultTabRepository(browserStore = browserStore, tabsUseCases = TabsUseCases(store = browserStore)),
         tabGroupRepository = tabGroupRepository,
-        isInactiveTabsEnabled = { inactiveTabsEnabled },
-        isTabGroupsEnabled = { tabGroupsEnabled },
+        tabSettingsRepository =
+            FakeTabSettingsRepository(
+                initialSettingsSnapshot = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true)
+            ),
         scope = backgroundScope,
         dispatcher = StandardTestDispatcher(testScheduler),
         dateTimeProvider = fakeDateTimeProvider,
     )
 tabDataCoordinator.initialize()
 ```
+
+`FakeTabSettingsRepository` is published as a test fixture by `feature-tab-settings`; pull it in with `testImplementation testFixtures(project(':components:feature-tab-settings'))`.
 
 * Run the component's unit tests with:
 
@@ -252,7 +267,8 @@ tabDataCoordinator.initialize()
 * [Tabs Snapshot](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/data/TabsSnapshot.kt#21)
 * [Tabs Snapshot queries](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/data/TabsSnapshotQueries.kt)
 * Tab Repository ([interface](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/repository/TabRepository.kt#11), [default implementation in Fenix](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/tabs/DefaultTabRepository.kt#26))
-* Components attachment: `Components.tabDataCoordinator` in [Components.kt](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Components.kt#577-589)
+* Tab Settings Repository (interface and `TabSettings` in `mobile/android/android-components/components/feature/tab-settings/src/main/java/mozilla/components/feature/tab/settings/repository/TabSettingsRepository.kt`, default implementation in `DefaultTabSettingsRepository.kt`)
+* Components attachment: `Components.tabDataCoordinator` and `Components.tabSettingsRepository` in `mobile/android/fenix/app/src/main/java/org/mozilla/fenix/components/Components.kt`
 * Initialization: `components.tabDataCoordinator.initialize()` in [FenixApplication.kt](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/FenixApplication.kt#475)
 * [Coordinator tests](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/feature/tabdata-coordinator/src/test/java/mozilla/components/feature/tabdata/coordinator/DefaultTabDataCoordinatorTest.kt)
 * [Reference consumer: TabStorageMiddleware](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/fenix/app/src/main/java/org/mozilla/fenix/tabstray/redux/middleware/TabStorageMiddleware.kt)
@@ -264,5 +280,6 @@ tabDataCoordinator.initialize()
 * [ADR](https://searchfox.org/firefox-main/source/mobile/android/docs/adrs/0002-global-organized-tab-data.md)
 * [Implementation ticket](https://bugzilla.mozilla.org/show_bug.cgi?id=2060386)
 * [Ticket to integrate into TabManagementFragment](https://bugzilla.mozilla.org/show_bug.cgi?id=2073219)
+* [Ticket to migrate tab settings off of SharedPreferences, backing TabsSnapshot.settings and TabDataCoordinator.tabSettings with feature-tab-settings](https://bugzilla.mozilla.org/show_bug.cgi?id=2069529)
 * Tab data in Browser State: `BrowserState.tabs` in [BrowserState.kt](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/browser/state/src/main/java/mozilla/components/browser/state/state/BrowserState.kt#43)
 * [Tab group data in Tab Group Repository](https://searchfox.org/firefox-main/rev/0b6146da78e50813404df3e74fe0dc29257252bc/mobile/android/android-components/components/feature/tabgroups-storage/src/main/java/mozilla/components/feature/tabgroups/storage/repository/TabGroupRepository.kt)
