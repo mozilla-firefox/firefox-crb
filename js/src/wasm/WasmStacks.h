@@ -43,6 +43,7 @@ class Label;
 }  // namespace jit
 namespace wasm {
 class CallSiteDesc;
+class FuncType;
 }  // namespace wasm
 }  // namespace js
 
@@ -104,9 +105,13 @@ struct alignas(16) SwitchTarget {
 #  endif
   void* resumePC = nullptr;
   wasm::Instance* instance = nullptr;
-  // An optional pointer to where params for a stack switching operation can be
-  // stored.
-  void* paramsArea = nullptr;
+  // An optional pointer to the params area for a suspend or resume target.
+  void* fullParamsArea = nullptr;
+  // For a resume target, the next param in fullParamsArea that has not been
+  // bound by `cont.bind` yet. [fullParamsArea, unboundParamsArea) holds the
+  // bound params. `cont.bind` and `resume` instructions write and advance this
+  // pointer.
+  void* unboundParamsArea = nullptr;
   // The underlying stack this switch is on. This has the stack limits we need
   // to update to.
   const StackTarget* stack = nullptr;
@@ -228,6 +233,10 @@ class ContStack {
   // Keeps the creator module's code alive while initialResumeTarget_.resumePC
   // points into it (before the first resume).
   SharedCode initialResumeCode_;
+  // The params of the initial resume target's function. Before the first
+  // resume, its params area sits just below the base frame and traceFields
+  // traces the bound params in it against this type.
+  SharedTypeDef initialResumeParamsType_;
 
   // A target useable when switching to this stack.
   StackTarget target_{};
@@ -252,6 +261,9 @@ class ContStack {
 
   ContStack() = default;
   ~ContStack() = default;
+
+  // Trace the params bound by cont.bind before the first resume.
+  void traceBaseFrame(JSTracer* trc);
 
   FrameWithInstances* baseFrame() {
     uintptr_t baseFrameAddress =
@@ -292,6 +304,13 @@ class ContStack {
   friend class ContStackArena;
 
  public:
+  // ABI byte size of the full param sequence for a cont func type, matching the
+  // layout GenerateContBaseFrameStub reads.
+  static uint32_t ParamsAreaBytesFor(const wasm::FuncType& funcType);
+  // The size of the initial params area reserved below the base frame, aligned
+  // to keep the stack pointer aligned.
+  static uint32_t InitialParamsAreaBytesFor(const wasm::FuncType& funcType);
+
   static void unwind(wasm::Handlers* handlers);
   static void freeSuspended(UniqueContStack resumeBase);
 
@@ -372,6 +391,7 @@ class ContStack {
     return handlers_->returnTarget.stack->stack;
   }
   const SwitchTarget* resumeTarget() const { return resumeTarget_; }
+
   ContStack* resumeTargetStack() const {
     if (!resumeTarget_) {
       return nullptr;
@@ -621,10 +641,6 @@ class ContObject : public NativeObject {
     return NativeObject::getFixedSlotOffset(ResumeBaseSlot);
   }
 
- private:
-  static const JSClassOps classOps_;
-  static const ClassExtension classExt_;
-
   ContStack* resumeBase() {
     Value stackSlot = getFixedSlot(ResumeBaseSlot);
     if (stackSlot.isUndefined()) {
@@ -633,12 +649,17 @@ class ContObject : public NativeObject {
     return reinterpret_cast<ContStack*>(stackSlot.toPrivate());
   }
 
-  // Destroy this continuation by taking the inner stack owned by it.
+  // Destroy this continuation by taking the inner stack owned by it. Future
+  // resume/cont.bind on this ContObject will trap.
   UniqueContStack takeResumeBase() {
     UniqueContStack result = UniqueContStack(resumeBase());
     setFixedSlot(ResumeBaseSlot, JS::UndefinedValue());
     return result;
   }
+
+ private:
+  static const JSClassOps classOps_;
+  static const ClassExtension classExt_;
 
   static void finalize(JS::GCContext* gcx, JSObject* obj);
   static void trace(JSTracer* trc, JSObject* obj);
@@ -675,7 +696,7 @@ void EmitFindHandler(jit::MacroAssembler& masm, jit::Register instance,
 //
 // suspendResultsAreaBase is the FP relative offset of the suspend results
 // area (0 when no tag results). Its address is advertised into the resume
-// SwitchTarget's paramsArea so the next resumer writes the tag results
+// SwitchTarget's fullParamsArea so the next resumer writes the tag results
 // straight into this area; the suspender then reads them back from here.
 //
 // Clobbers scratch1, scratch2, scratch3, and suspendedCont.
@@ -693,23 +714,18 @@ struct HandlerJitOffsets {
 };
 
 // Validates the continuation (null/resumable checks, branching to fail on
-// failure) and computes into `output` the destination paramsArea pointer that
-// the resume params should be written to.
+// failure) and computes into `output` the resume target's unboundParamsArea,
+// where the resume params that were not bound by `cont.bind` are written.
 //
-// For a fresh continuation the destination is the resumer's own
-// resumeParamsArea (FP - resumeParamsAreaBase), which is also advertised into
-// initialResumeTarget.paramsArea for the base frame stub. For a suspended
-// continuation the destination is the paramsArea the suspender already
-// advertised (its suspendResultsArea), so the params are written straight into
-// the suspender's frame.
-//
-// Only used when the continuation takes params (resumeParamsAreaBase != 0).
-//
-// Clobbers scratch1, scratch2; preserves cont.
+// Preserves cont, which must not alias output.
 void EmitPrepareResume(jit::MacroAssembler& masm, jit::Register cont,
-                       uint32_t resumeParamsAreaBase, jit::Register output,
-                       jit::Register scratch1, jit::Register scratch2,
-                       jit::Label* fail);
+                       jit::Register output, jit::Label* fail);
+
+// Advances the resume target's unboundParamsArea by boundBytes and moves the
+// ContStack from cont to outCont. Clobbers scratch.
+void EmitFinishContBind(jit::MacroAssembler& masm, jit::Register cont,
+                        jit::Register outCont, jit::Register scratch,
+                        uint32_t boundBytes);
 
 // Resume a suspended continuation with the given handlers.
 //
@@ -718,15 +734,15 @@ void EmitPrepareResume(jit::MacroAssembler& masm, jit::Register cont,
 // jumps to the corresponding handlerLabels entry with only InstanceReg live.
 //
 // handlersParamsAreaBase: FP relative offset of the handlers params area;
-//   each handler's target.paramsArea is set to FP - base + resultsAreaOffset
-//   (0 only when there are no handlers; the continuation is always passed, so a
-//   handler with no tag params still has a non-empty area).
+//   each handler's target.fullParamsArea is set to FP - base +
+//   resultsAreaOffset (0 only when there are no handlers; the continuation is
+//   always passed, so a handler with no tag params still has a non-empty area).
 // contResultsAreaBase: FP relative offset of the cont results area whose
-//   address is written into returnTarget.paramsArea so the typed base frame
+//   address is written into returnTarget.fullParamsArea so the typed base frame
 //   stub can store cont results (0 when there are no cont results).
 //
-// The resume params are written by EmitPrepareResume before this is called, so
-// EmitResume no longer touches resumeTarget.paramsArea.
+// The resume params are written at the unboundParamsArea returned by
+// EmitPrepareResume before this is called, so EmitResume does not touch them.
 //
 // Clobbers scratch1, scratch2, scratch3, and cont.
 void EmitResume(jit::MacroAssembler& masm, jit::Register instance,

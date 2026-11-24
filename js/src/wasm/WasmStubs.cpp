@@ -2914,7 +2914,9 @@ bool wasm::GenerateContBaseFrameStub(jit::MacroAssembler& masm,
                                      Offsets* offsets) {
   AssertExpectedSP(masm);
   masm.haltingAlign(CodeAlignment);
-  masm.setFramePushed(0);
+  // The initial params area sits between the base frame and the entry stack
+  // pointer (see ContStack::prepare).
+  masm.setFramePushed(ContStack::InitialParamsAreaBytesFor(funcType));
 
   offsets->begin = masm.indirectTarget(TargetKind::Jump).offset();
 
@@ -2933,11 +2935,11 @@ bool wasm::GenerateContBaseFrameStub(jit::MacroAssembler& masm,
                         static_cast<int32_t>(
                             wasm::FrameWithInstances::calleeInstanceOffset())));
 
-  // Load paramsArea before clearing initialResumeTarget_.
+  // Load fullParamsArea before clearing initialResumeTarget_.
   masm.loadPtr(
       Address(FramePointer, offsetFromFPToStack +
                                 ContStack::offsetOfInitialResumeTarget() +
-                                offsetof(wasm::SwitchTarget, paramsArea)),
+                                offsetof(wasm::SwitchTarget, fullParamsArea)),
       scratch1);
 
   // Clear the 'resumeTarget' in the frame (use scratch2 for the address).
@@ -3074,9 +3076,9 @@ bool wasm::GenerateContBaseFrameStub(jit::MacroAssembler& masm,
   // stack results.
   masm.freeStackTo(masm.framePushed());
 
-  // Store results to returnTarget.paramsArea in source order. scratch3 holds
-  // the paramsArea pointer for the whole routine, so it must not alias a result
-  // register: loading it would clobber the register result. We store the
+  // Store results to returnTarget.fullParamsArea in source order. scratch3
+  // holds the paramsArea pointer for the whole routine, so it must not alias a
+  // result register: loading it would clobber the register result. We store the
   // register result first, while it is still live in ReturnReg; once it is in
   // memory, scratch2 (the stack-result shuffle temporary) may safely alias a
   // result register.
@@ -3090,7 +3092,7 @@ bool wasm::GenerateContBaseFrameStub(jit::MacroAssembler& masm,
                  scratch3);
     masm.loadPtr(
         Address(scratch3, offsetof(wasm::Handlers, returnTarget) +
-                              offsetof(wasm::SwitchTarget, paramsArea)),
+                              offsetof(wasm::SwitchTarget, fullParamsArea)),
         scratch3);
 
     // SP was restored above, so the stack results the callee wrote through the

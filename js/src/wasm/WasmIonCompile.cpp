@@ -9420,8 +9420,75 @@ bool FunctionCompiler::emitContBind() {
     return true;
   }
 
-  // TODO: Not yet implemented
-  unimplementedTrap();
+  // Only the leading boundArgs.length() params of the input cont type are
+  // bound.
+  const TypeDef& inputContTypeDef = codeMeta().types->type(inputContTypeIndex);
+  const FuncType& inputFuncType = inputContTypeDef.contType().funcType();
+  MOZ_RELEASE_ASSERT(boundArgs.length() <= inputFuncType.args().length());
+
+  // Emit MWasmPrepareResume to validate the continuation
+  // (trapping if it is not resumable) and get where the bound args go.
+  MWasmPrepareResume* destBase =
+      MWasmPrepareResume::New(alloc(), cont, trapSiteDesc());
+  if (!destBase) {
+    return false;
+  }
+  curBlock_->add(destBase);
+
+  // Allocate the output continuation before changing cont.
+  MDefinition* outCont = nullptr;
+  if (!emitInstanceCall0(readBytecodeOffset(), SASigContNewEmpty, &outCont)) {
+    return false;
+  }
+
+  // The stack moves to outCont, so mark it as for resume. This must follow the
+  // allocation, which can start an incremental GC.
+  MWasmResumeBarrier* barrier =
+      MWasmResumeBarrier::New(alloc(), instancePointer_, cont);
+  if (!barrier) {
+    return false;
+  }
+  curBlock_->add(barrier);
+
+  uint32_t bytes = 0;
+  if (boundArgs.length() > 0) {
+    // Store each bound arg at dest + cumulative offset: refs via MWasmStoreRef,
+    // scalars via MWasmStoreStackResult.
+    for (uint32_t i = 0; i < boundArgs.length(); i++) {
+      if (!mirGen().ensureBallast()) {
+        return false;
+      }
+      ValType vt = inputFuncType.args()[i];
+      MIRType mirType = vt.toMIRType();
+      if (mirType == MIRType::WasmAnyRef) {
+        // This is a write to the stack and doesn't need a barrier.
+        auto* store = MWasmStoreRef::New(alloc(), instancePointer_, destBase,
+                                         bytes, boundArgs[i], AliasSet::Any,
+                                         WasmPreBarrierKind::None);
+        if (!store) {
+          return false;
+        }
+        curBlock_->add(store);
+      } else {
+        auto* store =
+            MWasmStoreStackResult::New(alloc(), destBase, bytes, boundArgs[i]);
+        if (!store) {
+          return false;
+        }
+        curBlock_->add(store);
+      }
+      bytes += wasm::MIRTypeToABIResultSize(mirType);
+    }
+  }
+
+  // Advance unboundParamsArea and move the stack to outCont.
+  auto* finish = MWasmFinishContBind::New(alloc(), cont, outCont, bytes);
+  if (!finish) {
+    return false;
+  }
+  curBlock_->add(finish);
+
+  iter().setResult(outCont);
   return true;
 }
 
@@ -9527,7 +9594,7 @@ bool FunctionCompiler::emitSuspend() {
   MWasmLoadInstance* paramsArea =
       MWasmLoadInstance::New(alloc(), handler,
                              offsetof(wasm::Handler, target) +
-                                 offsetof(wasm::SwitchTarget, paramsArea),
+                                 offsetof(wasm::SwitchTarget, fullParamsArea),
                              MIRType::Pointer, AliasSet::None());
   if (!paramsArea) {
     return false;
@@ -9618,34 +9685,28 @@ bool FunctionCompiler::emitResume() {
   }
   curBlock_->add(barrier);
 
-  // Allocate the cont params area (empty when the cont takes none) and emit
-  // MWasmPrepareResume unconditionally. It validates the continuation (trapping
-  // if it is not resumable) and computes where the args go: the resumer's own
-  // resumeParamsArea for a fresh continuation, or the suspender's advertised
-  // suspendResultsArea for a suspended one, so the args are written straight
-  // there without an extra copy. Emitting it for every resume also means the
-  // resumability check happens once here rather than again in EmitResume.
-  MWasmStackResultArea* resumeParamsArea = nullptr;
-  if (!makeSwitchStackResultArea(contFuncType.args(), &resumeParamsArea)) {
-    return false;
-  }
+  // Emit MWasmPrepareResume to validate the continuation
+  // (trapping if it is not resumable) and get where the resume args go.
   MWasmPrepareResume* prepareResume =
-      MWasmPrepareResume::New(alloc(), cont, resumeParamsArea, trapSiteDesc());
+      MWasmPrepareResume::New(alloc(), cont, trapSiteDesc());
   if (!prepareResume) {
     return false;
   }
   curBlock_->add(prepareResume);
+  size_t argOffset = 0;
   for (uint32_t i = 0; i < args.length(); i++) {
     if (!mirGen().ensureBallast()) {
       return false;
     }
-    size_t argOffset = resumeParamsArea->result(i).offset();
+    MWasmStackResultArea::StackResult loc(argOffset,
+                                          contFuncType.args()[i].toMIRType());
     MWasmStoreStackResult* store =
         MWasmStoreStackResult::New(alloc(), prepareResume, argOffset, args[i]);
     if (!store) {
       return false;
     }
     curBlock_->add(store);
+    argOffset = loc.endOffset();
   }
 
   // If the cont has results, allocate a stack area for them so the typed base

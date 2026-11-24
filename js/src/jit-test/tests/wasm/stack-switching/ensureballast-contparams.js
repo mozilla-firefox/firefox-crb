@@ -60,3 +60,26 @@ wasmEvalText(`(module
     ${pushes}
     local.get $k
     resume $ct))`);
+
+// Case 4: cont.bind with many bound params — triggers the emitContBind loop
+// (an MWasmStoreField per scalar arg).
+// MBinaryInstruction nodes are smaller than MTernaryInstruction, so a larger N
+// is needed to exhaust the 16 KiB ballast.
+{
+  const N4 = 900;
+  const types4 = new Array(N4).fill("i64").join(" ");
+  const pushes4 = "(i64.const 0) ".repeat(N4);
+  wasmEvalText(`(module
+    (type $ft (func (param ${types4})))
+    (type $ct (cont $ft))
+    (type $ft0 (func))
+    (type $ct0 (cont $ft0))
+    (func $f (type $ft))
+    (elem declare func $f)
+    (func
+      ${pushes4}
+      ref.func $f
+      cont.new $ct
+      cont.bind $ct $ct0
+      resume $ct0))`);
+}

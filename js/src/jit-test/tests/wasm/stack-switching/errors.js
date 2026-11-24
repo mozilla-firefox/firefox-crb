@@ -40,6 +40,69 @@
   assertErrorMessage(() => resume2(), WebAssembly.RuntimeError, /null pointer/);
 }
 
+// Can't cont.bind a continuation that was already consumed (by cont.bind).
+{
+  let { init, bind1, bind2 } = wasmEvalText(`(module
+    (type $ft (func (param i32)))
+    (type $ct (cont $ft))
+    (type $ft0 (func))
+    (type $ct0 (cont $ft0))
+    (global $k (mut (ref null $ct)) (ref.null $ct))
+    (func $f (type $ft))
+    (elem declare func $f)
+    (func (export "init")
+      ref.func $f
+      cont.new $ct
+      global.set $k
+    )
+    (func $bind
+      i32.const 1
+      global.get $k
+      cont.bind $ct $ct0
+      drop
+    )
+    (func (export "bind1") call $bind)
+    (func (export "bind2") call $bind)
+  )`).exports;
+  init();
+  bind1();
+  assertErrorMessage(() => bind2(), WebAssembly.RuntimeError,
+                     /null pointer/);
+}
+
+// Can't resume a continuation that was already consumed by cont.bind.
+{
+  let { init, bind, resumeOrig } = wasmEvalText(`(module
+    (type $ft (func (param i32)))
+    (type $ct (cont $ft))
+    (type $ft0 (func))
+    (type $ct0 (cont $ft0))
+    (global $k (mut (ref null $ct)) (ref.null $ct))
+    (func $f (type $ft))
+    (elem declare func $f)
+    (func (export "init")
+      ref.func $f
+      cont.new $ct
+      global.set $k
+    )
+    (func (export "bind")
+      i32.const 1
+      global.get $k
+      cont.bind $ct $ct0
+      drop
+    )
+    (func (export "resumeOrig")
+      i32.const 1
+      global.get $k
+      resume $ct
+    )
+  )`).exports;
+  init();
+  bind();
+  assertErrorMessage(() => resumeOrig(), WebAssembly.RuntimeError,
+                     /null pointer/);
+}
+
 // Unhandled suspension (no handlers at all)
 {
   let { run } = wasmEvalText(`(module

@@ -11079,10 +11079,6 @@ void CodeGenerator::visitWasmPrepareResume(LWasmPrepareResume* lir) {
   MWasmPrepareResume* mir = lir->mir();
   Register cont = ToRegister(lir->cont());
   Register output = ToRegister(lir->output());
-  Register scratch1 = ToRegister(lir->temp0());
-  Register scratch2 = ToRegister(lir->temp1());
-  uint32_t resumeParamsAreaBase =
-      mir->resumeParamsArea()->toWasmStackResultArea()->base();
   wasm::TrapSiteDesc trapSiteDesc = mir->trapSiteDesc();
 
   auto* ool = new (alloc())
@@ -11091,8 +11087,7 @@ void CodeGenerator::visitWasmPrepareResume(LWasmPrepareResume* lir) {
       });
   addOutOfLineCode(ool, (const BytecodeSite*)nullptr);
 
-  wasm::EmitPrepareResume(masm, cont, resumeParamsAreaBase, output, scratch1,
-                          scratch2, ool->entry());
+  wasm::EmitPrepareResume(masm, cont, output, ool->entry());
 }
 
 void CodeGenerator::visitWasmResume(LWasmResume* lir) {
@@ -11161,6 +11156,12 @@ void CodeGenerator::visitWasmResume(LWasmResume* lir) {
 
   // Jump to the fallthrough block
   jumpToBlock(mir->fallthroughBlock());
+}
+
+void CodeGenerator::visitWasmFinishContBind(LWasmFinishContBind* lir) {
+  wasm::EmitFinishContBind(masm, ToRegister(lir->cont()),
+                           ToRegister(lir->outCont()), ToRegister(lir->temp0()),
+                           lir->mir()->boundBytes());
 }
 #endif  // ENABLE_WASM_JSPI
 

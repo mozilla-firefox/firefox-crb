@@ -900,26 +900,6 @@ class LWasmSuspend : public LInstructionHelper<0, 3, 3> {
   }
 };
 
-class LWasmPrepareResume : public LInstructionHelper<1, 1, 2> {
- public:
-  LIR_HEADER(WasmPrepareResume);
-
-  static constexpr size_t ContIndex = 0;
-
-  explicit LWasmPrepareResume(const LAllocation& cont, const LDefinition& temp0,
-                              const LDefinition& temp1)
-      : LInstructionHelper(classOpcode) {
-    setOperand(ContIndex, cont);
-    setTemp(0, temp0);
-    setTemp(1, temp1);
-  }
-
-  const LAllocation* cont() const { return getOperand(ContIndex); }
-  const LDefinition* temp0() { return getTemp(0); }
-  const LDefinition* temp1() { return getTemp(1); }
-  MWasmPrepareResume* mir() const { return mir_->toWasmPrepareResume(); }
-};
-
 class LWasmResume : public LInstructionHelper<0, 2, 3> {
  public:
   LIR_HEADER(WasmResume);

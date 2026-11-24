@@ -4926,23 +4926,34 @@
   lir_temps: 1
 
 # Prepares a resume: validates the continuation (null/resumable checks that
-# trap on failure) and returns the destination paramsArea pointer (the resumer's
-# resumeParamsArea for a fresh continuation, or the suspender's advertised
-# suspendResultsArea for a suspended one). Emitted for every resume, so the
-# resumability check happens here. resumeParamsArea is an MWasmStackResultArea
-# (empty when the cont takes no params), read via ->base() at codegen.
+# trap on failure) and returns the resume target's unboundParamsArea, where
+# the params not bound by cont.bind are written. Emitted for every resume, so
+# the resumability check happens here.
 - name: WasmPrepareResume
   operands:
     cont: WasmAnyRef
-    resumeParamsArea: StackResults
   arguments:
     trapSiteDesc: wasm::TrapSiteDesc
   result_type: Pointer
   guard: true
   type_policy: none
+  generate_lir: true
 
 - name: WasmResume
   gen_boilerplate: false
+
+# Advances the resume target's unboundParamsArea by boundBytes and moves the
+# ContStack from cont to outCont.
+- name: WasmFinishContBind
+  operands:
+    cont: WasmAnyRef
+    outCont: WasmAnyRef
+  arguments:
+    boundBytes: uint32_t
+  guard: true
+  type_policy: none
+  generate_lir: true
+  lir_temps: 1
 #endif
 
 - name: WasmSelect

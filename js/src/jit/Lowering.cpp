@@ -7514,8 +7514,7 @@ void LIRGenerator::visitWasmResumeBarrier(MWasmResumeBarrier* ins) {
 }
 
 void LIRGenerator::visitWasmPrepareResume(MWasmPrepareResume* ins) {
-  auto* lir = new (alloc())
-      LWasmPrepareResume(useRegister(ins->cont()), temp(), temp());
+  auto* lir = new (alloc()) LWasmPrepareResume(useRegister(ins->cont()));
   define(lir, ins);
 }
 
@@ -7530,6 +7529,12 @@ void LIRGenerator::visitWasmResume(MWasmResume* ins) {
 
   add(lir, ins);
   assignWasmSafepoint(lir);
+}
+
+void LIRGenerator::visitWasmFinishContBind(MWasmFinishContBind* ins) {
+  auto* lir = new (alloc()) LWasmFinishContBind(
+      useRegister(ins->cont()), useRegister(ins->outCont()), temp());
+  add(lir, ins);
 }
 #endif  // ENABLE_WASM_JSPI
 
