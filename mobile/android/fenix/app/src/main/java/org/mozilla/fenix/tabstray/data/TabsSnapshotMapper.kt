@@ -50,7 +50,7 @@ fun TabsSnapshot.toTabStorageUpdate(): TabStorageUpdate {
                 )
             }
 
-            inactiveTabsEnabled && displayTab.inactive -> inactiveTabs.add(displayTab)
+            settings.inactiveTabsEnabled && displayTab.inactive -> inactiveTabs.add(displayTab)
 
             else -> {
                 normalTabCount++
