@@ -25,6 +25,8 @@ import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.downloads.ui.DownloadCancelDialogFragment
+import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.currentTabSettings
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.state.DelicateAction
 import mozilla.components.service.fxa.manager.FxaAccountManager
@@ -179,6 +181,7 @@ interface TabManagerController : SyncedTabsController, InactiveTabsController, T
  * @param appStore [AppStore] used to dispatch any [AppAction].
  * @param tabsTrayStore [TabsTrayStore] used to read/update the [TabsTrayState].
  * @param browserStore [BrowserStore] used to read/update the current [BrowserState].
+ * @param tabDataCoordinator [TabDataCoordinator] used to read the tab-related user settings.
  * @param settings [Settings] used to update any user preferences.
  * @param browsingModeManager [BrowsingModeManager] used to read/update the current [BrowsingMode].
  * @param navController [NavController] used to navigate away from the tab manager.
@@ -208,6 +211,7 @@ class DefaultTabManagerController(
     private val appStore: AppStore,
     private val tabsTrayStore: TabsTrayStore,
     private val browserStore: BrowserStore,
+    private val tabDataCoordinator: TabDataCoordinator,
     private val settings: Settings,
     private val browsingModeManager: BrowsingModeManager,
     private val navController: NavController,
@@ -744,7 +748,10 @@ class DefaultTabManagerController(
             when (sessionId) {
                 ALL_NORMAL_TABS -> browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
                 ALL_ACTIVE_NORMAL_TABS ->
-                    tabsUseCases.removeAllActiveNormalTabs(state = browserStore.state, settings = settings)
+                    tabsUseCases.removeAllActiveNormalTabs(
+                        state = browserStore.state,
+                        inactiveTabsEnabled = tabDataCoordinator.currentTabSettings.inactiveTabsEnabled,
+                    )
                 ALL_PRIVATE_TABS -> browserStore.state.privateTabs.size.also { tabsUseCases.removePrivateTabs() }
                 else -> return
             }

@@ -32,6 +32,8 @@ import androidx.annotation.IdRes
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.ActionBar
 import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.core.os.BundleCompat
@@ -586,9 +588,11 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
                         visibility = View.VISIBLE
 
                         setContent {
+                            val tabSettings by components.tabDataCoordinator.tabSettings.collectAsState()
+
                             FenixOverlay(
                                 browserStore = components.core.store,
-                                inactiveTabsEnabled = components.settings.inactiveTabsAreEnabled,
+                                inactiveTabsEnabled = tabSettings?.inactiveTabsEnabled ?: true,
                                 loginsStorage = components.core.passwordsStorage,
                                 tabGroupRepository = components.core.tabGroupRepository,
                                 listenStore = components.listenToPage.store,
