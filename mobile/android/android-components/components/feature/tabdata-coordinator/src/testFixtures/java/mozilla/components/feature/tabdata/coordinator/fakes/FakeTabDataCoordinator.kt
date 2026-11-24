@@ -5,21 +5,31 @@
 package mozilla.components.feature.tabdata.coordinator.fakes
 
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import mozilla.components.feature.tab.settings.data.TabSettings
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
 
 /**
- * A simple fake [TabDataCoordinator] for unit tests. Its [tabsSnapshot] can be set directly, [openTabGroup] opens the
- * group in it, and every other function is stubbed to do nothing.
+ * A simple fake [TabDataCoordinator] for unit tests. Its [tabsSnapshot] and [tabSettings] can be set directly, the
+ * settings setters update [tabSettings] synchronously, [openTabGroup] opens the group in it,and every other function is
+ * stubbed to do nothing.
  *
  * @param initialTabsSnapshot The [TabsSnapshot] emitted by [tabsSnapshot]. Null by default, mirroring a coordinator
  *   which is not yet fully initialized.
+ * @param initialTabSettings The [TabSettings] emitted by [tabSettings]. Null by default, mirroring settings which have
+ *   not been read from disk yet.
  * @property selectedTabIds The IDs passed to [selectTab], in call order.
  * @property addNewTabToGroupIds The group IDs passed to [addNewTabToTabGroup], in call order.
  */
-class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDataCoordinator {
+class FakeTabDataCoordinator(
+    initialTabsSnapshot: TabsSnapshot? = null,
+    initialTabSettings: TabSettings? = null,
+) : TabDataCoordinator {
 
     override val tabsSnapshot: MutableStateFlow<TabsSnapshot?> = MutableStateFlow(initialTabsSnapshot)
+
+    override val tabSettings: MutableStateFlow<TabSettings?> = MutableStateFlow(initialTabSettings)
 
     val selectedTabIds = mutableListOf<String>()
 
@@ -68,7 +78,15 @@ class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDat
 
     override suspend fun reorderItem(sourceId: String, destinationId: String?, placeAfter: Boolean) = Unit
 
-    override fun setTabGroupsEnabled(enabled: Boolean) = Unit
+    override fun setTabGroupsEnabled(enabled: Boolean) {
+        tabSettings.update { (it ?: defaultTabSettings).copy(tabGroupsEnabled = enabled) }
+    }
 
-    override fun setInactiveTabsEnabled(enabled: Boolean) = Unit
+    override fun setInactiveTabsEnabled(enabled: Boolean) {
+        tabSettings.update { (it ?: defaultTabSettings).copy(inactiveTabsEnabled = enabled) }
+    }
+
+    private companion object {
+        val defaultTabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true)
+    }
 }

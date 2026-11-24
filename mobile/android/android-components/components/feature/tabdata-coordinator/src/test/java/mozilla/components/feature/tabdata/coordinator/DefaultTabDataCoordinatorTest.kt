@@ -1115,6 +1115,23 @@ class DefaultTabDataCoordinatorTest {
     }
 
     @Test
+    fun `WHEN the tab settings repository emits THEN the coordinator's tab settings mirror it without waiting for tab data`() =
+        runTest {
+            val tabSettingsRepository = FakeTabSettingsRepository(initialSettingsSnapshot = null)
+            val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+            assertNull(coordinator.tabSettings.value)
+
+            tabSettingsRepository.setTabGroupsEnabled(false)
+
+            assertEquals(
+                expected = TabSettings(tabGroupsEnabled = false, inactiveTabsEnabled = true),
+                actual = coordinator.tabSettings.value,
+            )
+            assertNull(coordinator.tabsSnapshot.value)
+        }
+
+    @Test
     fun `GIVEN the tab settings have not loaded WHEN the coordinator is initialized THEN the tabs state is null`() =
         runTest {
             val coordinator =

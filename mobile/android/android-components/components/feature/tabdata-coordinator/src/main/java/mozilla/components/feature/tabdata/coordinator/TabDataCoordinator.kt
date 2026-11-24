@@ -69,6 +69,12 @@ interface TabDataCoordinator {
      */
     val tabsSnapshot: StateFlow<TabsSnapshot?>
 
+    /**
+     * The [StateFlow] which emits the tab-related user [TabSettings]. Unlike [tabsSnapshot], this does not wait for tab
+     * data to load. Emits null until the settings have been read from disk.
+     */
+    val tabSettings: StateFlow<TabSettings?>
+
     /** Initializes the coordinator so it starts collecting from its aggregate of data sources. */
     fun initialize()
 
@@ -241,6 +247,9 @@ class DefaultTabDataCoordinator(
 
     override val tabsSnapshot: StateFlow<TabsSnapshot?>
         field = MutableStateFlow<TabsSnapshot?>(null)
+
+    override val tabSettings: StateFlow<TabSettings?>
+        get() = tabSettingsRepository.settingsSnapshot
 
     override fun initialize() {
         tabSettingsRepository.initialize()
