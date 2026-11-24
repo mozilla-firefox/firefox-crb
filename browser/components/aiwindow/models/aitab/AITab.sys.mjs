@@ -340,7 +340,10 @@ const PAGE_NOT_EDITABLE_ERROR = "This page cannot be modified";
  * a description of what went wrong and its canonical error code (the one
  * reported to telemetry).
  *
- * @typedef {{metadata: AITabMetadata, surface: A2UISurface} | {error: string, code: string}} AITabResult
+ * `deniedUrls` lists the requested URLs that the conversation's security
+ * properties refused to read, so the page was built without them.
+ *
+ * @typedef {{metadata: AITabMetadata, surface: A2UISurface, deniedUrls: string[]} | {error: string, code: string}} AITabResult
  */
 
 /**
@@ -1096,7 +1099,7 @@ export class AITab {
     if (sources.error) {
       return sources;
     }
-    const { urlsUsed, readUrls, sourceText } = sources;
+    const { urlsUsed, readUrls, deniedUrls, sourceText } = sources;
 
     const focusText = AITab.#capped(focus);
 
@@ -1194,7 +1197,7 @@ export class AITab {
       },
     };
 
-    return { metadata, surface: structured.surface };
+    return { metadata, surface: structured.surface, deniedUrls };
   }
 
   /**
@@ -1341,8 +1344,9 @@ export class AITab {
    *   check, so a page the chat may not read contributes nothing.
    * @param {AbortSignal} [options.signal] - Cancels the extractions.
    * @returns {Promise<{urlsUsed: AITabSource[], readUrls: string[],
-   *   sourceText: string}|{error: string}>} The sources in the order
-   *   requested, the URLs among them that could be read, and the text for the
+   *   deniedUrls: string[], sourceText: string}|{error: string}>} The sources
+   *   in the order requested, the URLs among them that could be read, those
+   *   the conversation's security properties refused, and the text for the
    *   prompt, or a description of why there is nothing to build from.
    */
   static async #collectSources({
@@ -1371,6 +1375,17 @@ export class AITab {
       // partial read, or inline content alongside unreadable pages, still
       // generates from what is there.
       if (!rawText && !contents.some(result => result.ok)) {
+        // A security refusal outranks any other failure: the user can only
+        // fix it by bringing the page in themselves, not by retrying.
+        const denied = urls.filter(
+          (url, index) => contents[index]?.accessDenied
+        );
+        if (denied.length) {
+          return {
+            error: `access to ${denied.join(", ")} was blocked because the conversation contains both private data and untrusted web content`,
+            code: "pages_access_denied",
+          };
+        }
         return {
           error: "none of the requested pages could be read",
           code: "pages_unreadable",
@@ -1437,6 +1452,7 @@ export class AITab {
     return {
       urlsUsed,
       readUrls: urls.filter((url, index) => contents[index]?.ok),
+      deniedUrls: urls.filter((url, index) => contents[index]?.accessDenied),
       sourceText: sourceParts.join(PAGE_BREAK),
     };
   }
