@@ -49,16 +49,19 @@
     <androidx.preference.PreferenceCategory
         android:layout="@layout/preference_cat_style"
         android:title="@string/preferences_tab_organization"
+        app:key="@string/pref_key_tab_organization"
         app:allowDividerAbove="true"
         app:iconSpaceReserved="false">
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="@string/pref_key_inactive_tabs"
+            app:persistent="false"
             android:summary="@string/preferences_inactive_tabs_title"
             android:title="@string/preferences_inactive_tabs_toggle_title" />
 
         <SwitchPreferenceCompat
             android:key="@string/pref_key_tab_groups"
+            app:persistent="false"
             android:summary="@string/preferences_tab_groups_description"
             android:title="@string/preferences_tab_groups_title" />
     </androidx.preference.PreferenceCategory>
