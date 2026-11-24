@@ -27,6 +27,7 @@ internal fun TabsTrayState.withStorageUpdate(storageUpdate: TabStorageUpdate) =
                 selectedItemIndex = storageUpdate.selectedPrivateItemIndex,
             ),
         tabGroupState = tabGroupState.copy(groups = storageUpdate.tabGroups),
+        config = config.copy(tabGroupsEnabled = storageUpdate.tabGroupsEnabled),
         hasTabDataLoaded = true,
     )
 

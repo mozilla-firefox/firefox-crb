@@ -571,6 +571,7 @@ class TabsTrayStoreReducerTest {
                         privateTabs = expectedPrivateTabs,
                         selectedPrivateItemIndex = expectedSelectedPrivateTabIndex,
                         tabGroups = expectedTabGroups,
+                        tabGroupsEnabled = true,
                     )
             )
         val expectedState =
@@ -589,6 +590,7 @@ class TabsTrayStoreReducerTest {
                         selectedItemIndex = expectedSelectedPrivateTabIndex,
                     ),
                 tabGroupState = TabsTrayState.TabGroupState(groups = expectedTabGroups),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
         val resultState = TabsTrayReducer.reduce(state = initialState, action = action)

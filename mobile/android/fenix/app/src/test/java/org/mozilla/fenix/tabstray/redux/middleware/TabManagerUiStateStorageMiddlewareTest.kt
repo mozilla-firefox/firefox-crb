@@ -280,6 +280,7 @@ class TabManagerUiStateStorageMiddlewareTest {
             privateTabs = emptyList(),
             selectedPrivateItemIndex = 0,
             tabGroups = listOf(createTabGroup()),
+            tabGroupsEnabled = true,
         )
 
     private fun createTabDataUpdateWithZeroGroups() =
@@ -292,5 +293,6 @@ class TabManagerUiStateStorageMiddlewareTest {
             privateTabs = emptyList(),
             selectedPrivateItemIndex = 0,
             tabGroups = emptyList(),
+            tabGroupsEnabled = true,
         )
 }

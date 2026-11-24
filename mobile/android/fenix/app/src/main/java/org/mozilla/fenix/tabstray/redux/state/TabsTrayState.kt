@@ -167,7 +167,7 @@ data class TabsTrayState(
     )
 
     /**
-     * Configuration and feature flags for the Tabs Tray UI.
+     * Configuration, user preferences, and feature flags for the Tabs Tray UI.
      *
      * @property displayTabsInGrid Whether normal and private tabs are displayed in a grid (vs list).
      * @property tabGroupsEnabled Whether the Tab Groups feature is enabled.
