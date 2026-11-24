@@ -1489,3 +1489,9 @@ def find_task_from_index(index_paths):
 def set_taskcluster_root_url():
     if "TASKCLUSTER_ROOT_URL" not in os.environ:
         os.environ["TASKCLUSTER_ROOT_URL"] = TASKCLUSTER_ROOT_URL
+
+
+def code_review_bot_full_loop_probe_21():
+    """Merged-master probe for the code review bot Git migration test."""
+    unused_probe_value = 58
+    return "probe-21"
