@@ -13239,28 +13239,10 @@ bool nsDocShell::GetIsAttemptingToNavigate() {
 
   // javascript: channels have slightly weird behavior: they're LOAD_BACKGROUND
   // until the script runs, which means they're not sending loadgroup
-  // notifications and hence not getting set as mDocumentRequest.  Look through
-  // our loadgroup for document-level javascript: loads.
-  if (!mLoadGroup) {
-    return false;
-  }
-
-  nsCOMPtr<nsISimpleEnumerator> requests;
-  mLoadGroup->GetRequests(getter_AddRefs(requests));
-  bool hasMore = false;
-  while (NS_SUCCEEDED(requests->HasMoreElements(&hasMore)) && hasMore) {
-    nsCOMPtr<nsISupports> elem;
-    requests->GetNext(getter_AddRefs(elem));
-    nsCOMPtr<nsIScriptChannel> scriptChannel(do_QueryInterface(elem));
-    if (!scriptChannel) {
-      continue;
-    }
-
-    if (scriptChannel->GetIsDocumentLoad()) {
-      // This is a javascript: load that might lead to a new document,
-      // hence a navigation.
-      return true;
-    }
+  // notifications and hence not getting set as mDocumentRequest. One of those
+  // might still lead to a new document, hence a navigation.
+  if (!mJavascriptURIRequests.IsEmpty()) {
+    return true;
   }
 
   if (mOngoingNavigation == Some(OngoingNavigation::NavigationID)) {
@@ -13611,19 +13593,12 @@ void nsDocShell::ResetOngoingNavigation(
 }
 
 void nsDocShell::StopPendingJavascriptURLNavigations() {
-  nsCOMPtr<nsISimpleEnumerator> requests;
-  mLoadGroup->GetRequests(getter_AddRefs(requests));
-  bool hasMore;
-  while (NS_SUCCEEDED(requests->HasMoreElements(&hasMore)) && hasMore) {
-    nsCOMPtr<nsISupports> elem;
-    requests->GetNext(getter_AddRefs(elem));
-    nsCOMPtr<nsIScriptChannel> script = do_QueryInterface(elem);
-    if (script) {
-      nsCOMPtr<nsIRequest> request = do_QueryInterface(elem);
-      MOZ_ASSERT(request);
-      mLoadGroup->CancelRequest(
-          request, "nsDocShell::StopPendingJavascriptNavigations"_ns,
-          NS_BINDING_ABORTED);
-    }
+  // Cancelling notifies the group observer, which removes each request from
+  // the list, so take them all first.
+  nsTArray<nsCOMPtr<nsIRequest>> requests = std::move(mJavascriptURIRequests);
+  for (nsIRequest* request : requests) {
+    mLoadGroup->CancelRequest(request,
+                              "nsDocShell::StopPendingJavascriptNavigations"_ns,
+                              NS_BINDING_ABORTED);
   }
 }
