@@ -26,6 +26,10 @@ add_setup(async function () {
           code: "firefox-b-exp1",
           telemetrySuffix: "b-exp1",
         },
+        text_selection: {
+          code: "firefox-b-exp1",
+          telemetrySuffix: "b-exp1",
+        },
         context: { code: "contextmenucode" },
       },
     };
@@ -179,11 +183,12 @@ add_task(
       "google",
       "mapped contextmenu"
     );
+    let overridesEngine = await SearchService.getEngineById("sap-overrides");
     assertSubmission(
-      engine,
+      overridesEngine,
       "text_selection",
-      "contextmenucode",
-      "google",
+      "contextmenu",
+      "sap-overrides",
       "mapped text_selection"
     );
     assertSubmission(
@@ -235,5 +240,13 @@ add_task(async function test_config_engine_google() {
     "firefox-b-exp1",
     "google-b-exp1",
     "google hardcoded override (newtab_search_widget)"
+  );
+
+  assertSubmission(
+    engine,
+    "text_selection",
+    "firefox-b-exp1",
+    "google-b-exp1",
+    "google hardcoded override (text_selection)"
   );
 });

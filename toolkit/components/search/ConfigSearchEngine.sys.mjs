@@ -731,10 +731,12 @@ export class ConfigSearchEngine extends SearchEngine {
             telemetryId: "google-com-nocodes",
           });
         }
-        partnerCodeMap.set("newtab_search_widget", {
-          code: "firefox-b-exp1",
-          telemetryId: "google-b-exp1",
-        });
+        for (let sapSource of ["newtab_search_widget", "text_selection"]) {
+          partnerCodeMap.set(sapSource, {
+            code: "firefox-b-exp1",
+            telemetryId: "google-b-exp1",
+          });
+        }
       }
     }
 

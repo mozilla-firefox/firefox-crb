@@ -191,6 +191,7 @@ function v3GoogleCodesPerPlatform() {
           ["context", "client=windows-firefox-cm-re"],
           ["newtab", "client=windows-firefox-ntp-re"],
           ["newtab_search_widget", "client=firefox-b-exp1"],
+          ["text_selection", "client=firefox-b-exp1"],
           // TODO: Bug 2082144 - Add check for error page.
         ]),
         partnerCode: "windows-firefox-o-re",
@@ -203,6 +204,7 @@ function v3GoogleCodesPerPlatform() {
           ["context", "client=macos-firefox-cm-re"],
           ["newtab", "client=macos-firefox-ntp-re"],
           ["newtab_search_widget", "client=firefox-b-exp1"],
+          ["text_selection", "client=firefox-b-exp1"],
           // TODO: Bug 2082144 - Add check for error page.
         ]),
         partnerCode: "macos-firefox-o-re",
@@ -216,6 +218,7 @@ function v3GoogleCodesPerPlatform() {
           ["context", "client=linux-firefox-cm-re"],
           ["newtab", "client=linux-firefox-ntp-re"],
           ["newtab_search_widget", "client=firefox-b-exp1"],
+          ["text_selection", "client=firefox-b-exp1"],
           // TODO: Bug 2082144 - Add check for error page.
         ]),
         partnerCode: "linux-firefox-o-re",

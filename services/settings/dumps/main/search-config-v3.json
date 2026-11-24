@@ -2817,6 +2817,10 @@
                 "newtab_search_widget": {
                   "code": "firefox-b-exp1",
                   "telemetrySuffix": "b-exp1"
+                },
+                "text_selection": {
+                  "code": "firefox-b-exp1",
+                  "telemetrySuffix": "b-exp1"
                 }
               }
             },
@@ -2846,6 +2850,10 @@
                 "newtab_search_widget": {
                   "code": "firefox-b-exp1",
                   "telemetrySuffix": "b-exp1"
+                },
+                "text_selection": {
+                  "code": "firefox-b-exp1",
+                  "telemetrySuffix": "b-exp1"
                 }
               }
             },
@@ -2873,6 +2881,10 @@
                   "telemetrySuffix": "linux-newtab"
                 },
                 "newtab_search_widget": {
+                  "code": "firefox-b-exp1",
+                  "telemetrySuffix": "b-exp1"
+                },
+                "text_selection": {
                   "code": "firefox-b-exp1",
                   "telemetrySuffix": "b-exp1"
                 }
