@@ -4,6 +4,9 @@
 const { TestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/TestUtils.sys.mjs"
 );
+const { PromiseTestUtils } = ChromeUtils.importESModule(
+  "resource://testing-common/PromiseTestUtils.sys.mjs"
+);
 const { sinon } = ChromeUtils.importESModule(
   "resource://testing-common/Sinon.sys.mjs"
 );
@@ -348,6 +351,46 @@ add_task(async function test_stale_wrapper_preserves_new_control() {
 });
 
 /**
+ * This test case ensures that releasing a paused call starts the original
+ * method and leaves the caller waiting for its result.
+ */
+add_task(async function test_release_before_original_result_settles() {
+  const originalResult = Promise.withResolvers();
+  let started = false;
+  const operation = {
+    run() {
+      started = true;
+
+      return originalResult.promise;
+    },
+  };
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  const result = operation.run();
+  let delivered = false;
+  result.then(() => {
+    delivered = true;
+  });
+
+  try {
+    await runController.waitForInterception();
+    runController.releaseResult();
+
+    await TestUtils.waitForTick();
+    Assert.ok(started, "Release should start the original method");
+    Assert.ok(!delivered, "The caller should still be waiting for the method");
+  } finally {
+    originalResult.resolve("value");
+  }
+
+  Assert.equal(await result, "value", "The caller should receive the result");
+  Assert.equal(
+    await runController.waitForResult(),
+    "value",
+    "Release should leave the original result available to the test"
+  );
+});
+
+/**
  * This test case ensures that restoring a matched hold lets the caller receive
  * a pending result and leaves the original promise available to the test.
  */
@@ -389,6 +432,277 @@ add_task(async function test_result_remains_available_after_restore() {
     callerPromise,
     "Release should return the same caller promise after restore"
   );
+});
+
+/**
+ * This test case ensures that the caller stays pending after the original
+ * method rejects until the control's `using` scope exits.
+ */
+add_task(async function test_disposal_releases_a_held_rejection() {
+  const failure = new Error("run failed");
+  const operation = {
+    async run() {
+      throw failure;
+    },
+  };
+  let delivery;
+
+  {
+    using runController = TestUtils.asyncControlProxy(operation).run();
+    const result = operation.run();
+    let delivered = false;
+    delivery = result.finally(() => {
+      delivered = true;
+    });
+
+    await runController.waitForInterception();
+    await Assert.rejects(
+      runController.waitForResult(),
+      error => error === failure
+    );
+    await TestUtils.waitForTick();
+    Assert.ok(!delivered, "The rejection should remain held");
+  }
+
+  await Assert.rejects(
+    delivery,
+    error => error === failure,
+    "The caller should receive the original rejection"
+  );
+});
+
+/**
+ * This test case ensures that starting a failing method keeps its rejection
+ * available to the test while the caller waits for release.
+ */
+add_task(async function test_started_rejection_remains_available() {
+  const failure = new Error("run failed");
+  const originalStarted = Promise.withResolvers();
+  const operation = {
+    async run() {
+      originalStarted.resolve();
+      throw failure;
+    },
+  };
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  const callerPromise = operation.run();
+  let callerError;
+
+  callerPromise.catch(error => {
+    callerError = error;
+  });
+
+  await runController.waitForInterception();
+  runController.start();
+  await originalStarted.promise;
+
+  PromiseTestUtils.ensureDOMPromiseRejectionsProcessed();
+  PromiseTestUtils.assertNoUncaughtRejections();
+  Assert.strictEqual(
+    callerError,
+    undefined,
+    "The caller should still be waiting for the rejection"
+  );
+
+  await Assert.rejects(
+    runController.waitForResult(),
+    error => error === failure,
+    "The test should see the original rejection before release"
+  );
+
+  const releasedPromise = runController.releaseResult();
+
+  Assert.strictEqual(
+    releasedPromise,
+    callerPromise,
+    "Release should return the same promise for a rejected call"
+  );
+  await Assert.rejects(
+    releasedPromise,
+    error => error === failure,
+    "Awaiting release should report the original error"
+  );
+  Assert.strictEqual(
+    callerError,
+    failure,
+    "The caller should receive the original rejection"
+  );
+});
+
+/**
+ * This test case ensures that a method which returns a plain value reports
+ * the invalid return to both the test and the intercepted caller.
+ */
+add_task(async function test_sync_return_reports_error() {
+  const operation = {
+    run() {
+      return "value";
+    },
+  };
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  const result = operation.run();
+
+  await runController.waitForInterception();
+  await Assert.rejects(
+    runController.waitForResult(),
+    /run must return a promise/,
+    "Waiting for the result should detect a synchronous return"
+  );
+  runController.releaseResult();
+  await Assert.rejects(
+    result,
+    /run must return a promise/,
+    "The caller should receive the error for the invalid return value"
+  );
+});
+
+/**
+ * This test case ensures that a thenable result is adopted with one read
+ * of its `then` getter and with the original receiver.
+ */
+add_task(async function test_thenable_result_reads_then_once() {
+  let thenReads = 0;
+  const thenable = {
+    value: "thenable value",
+    get then() {
+      if (++thenReads === 1) {
+        return function (resolve) {
+          resolve(this.value);
+        };
+      }
+      return undefined;
+    },
+  };
+  const operation = {
+    run() {
+      return thenable;
+    },
+  };
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  const result = operation.run();
+
+  await runController.waitForInterception();
+  Assert.strictEqual(
+    await runController.waitForResult(),
+    "thenable value",
+    "The test gets the value resolved by the thenable"
+  );
+  runController.releaseResult();
+  Assert.strictEqual(
+    await result,
+    "thenable value",
+    "The caller gets the same value"
+  );
+  Assert.equal(thenReads, 1, "The thenable's getter was read once");
+});
+
+/**
+ * This test case ensures that a synchronous throw from the original method
+ * becomes a rejection that the caller receives only after release.
+ */
+add_task(async function test_synchronous_throw_becomes_rejection() {
+  const failure = new Error("run failed before returning a promise");
+  const operation = {
+    run() {
+      throw failure;
+    },
+  };
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  let delivered = false;
+  const delivery = operation.run().finally(() => {
+    delivered = true;
+  });
+
+  await runController.waitForInterception();
+  await Assert.rejects(
+    runController.waitForResult(),
+    error => error === failure,
+    "The test should receive the synchronous exception"
+  );
+  await TestUtils.waitForTick();
+  Assert.ok(!delivered, "The caller should still be waiting for release");
+
+  runController.releaseResult();
+  await Assert.rejects(
+    delivery,
+    error => error === failure,
+    "The caller should receive the original exception as a rejection"
+  );
+});
+
+/**
+ * This test case ensures that leaving a scope after an early-release error
+ * removes the unused stub and cancels the interception wait.
+ */
+add_task(async function test_disposal_removes_an_unused_stub() {
+  const operation = new TestOperation();
+  const original = operation.run;
+  let interception;
+  Assert.throws(
+    () => {
+      using runController = TestUtils.asyncControlProxy(operation).run();
+      interception = runController.waitForInterception();
+      Assert.throws(
+        () => runController.start(),
+        /No intercepted call to run/,
+        "Starting before a call matches should throw"
+      );
+      Assert.throws(
+        () => runController.waitForResult(),
+        /No intercepted call to run/,
+        "Waiting for a result before a call matches should throw"
+      );
+      Assert.throws(
+        () => runController.rejectResult(),
+        /No intercepted call to run/,
+        "Rejecting before a call matches should throw"
+      );
+      runController.releaseResult();
+    },
+    /No intercepted call to run/,
+    "Releasing before the method is called should throw"
+  );
+
+  await Assert.rejects(
+    Promise.race([interception, TestUtils.waitForTick()]),
+    error => error.name === "AbortError",
+    "Disposal should cancel the interception wait"
+  );
+  Assert.strictEqual(
+    operation.run,
+    original,
+    "Leaving the scope with an error should remove the unused stub"
+  );
+  Assert.equal(
+    await operation.run(),
+    "value",
+    "The original method should work"
+  );
+});
+
+/**
+ * This test case ensures that leaving a scope with an error releases a
+ * captured call and preserves the original exception.
+ */
+add_task(async function test_disposal_releases_a_captured_call_on_error() {
+  const operation = new TestOperation();
+  const failure = new Error("Failure while the call is paused");
+  let result;
+
+  await Assert.rejects(
+    (async () => {
+      using runController = TestUtils.asyncControlProxy(operation).run();
+      result = operation.run("target");
+      await runController.waitForInterception();
+      Assert.equal(operation.lastInput, null, "The captured call is paused");
+      throw failure;
+    })(),
+    error => error === failure,
+    "Disposal preserves the original exception"
+  );
+
+  Assert.equal(await result, "value", "Disposal releases the captured call");
+  Assert.equal(operation.lastInput, "target", "The original method ran");
 });
 
 /**
@@ -441,5 +755,119 @@ add_task(async function test_manual_restore_is_idempotent() {
     );
   } finally {
     nextRunController?.restore();
+  }
+});
+
+/**
+ * This test case ensures that an injected failure prevents the original
+ * method from running, including when the control is disposed.
+ */
+add_task(async function test_reject_result_skips_original_method() {
+  const reason = { name: "injected failure" };
+  const operation = new TestOperation();
+
+  {
+    using runController = TestUtils.asyncControlProxy(operation).run();
+    const result = operation.run("target");
+
+    await runController.waitForInterception();
+    runController.rejectResult(reason);
+
+    await Assert.rejects(
+      result,
+      error => error === reason,
+      "The caller should receive the supplied rejection reason"
+    );
+
+    Assert.throws(
+      () => runController.start(),
+      /The intercepted call to run was rejected/,
+      "Start should not run an intentionally rejected call"
+    );
+    Assert.throws(
+      () => runController.waitForResult(),
+      /The intercepted call to run was rejected/,
+      "Waiting for the result should not start an intentionally rejected call"
+    );
+    Assert.throws(
+      () => runController.releaseResult(),
+      /The intercepted call to run was rejected/,
+      "Release should not start an intentionally rejected call"
+    );
+    Assert.throws(
+      () => runController.rejectResult(new Error("second reason")),
+      /The intercepted call to run was rejected/,
+      "A second rejection should leave the first outcome intact"
+    );
+  }
+
+  await TestUtils.waitForTick();
+  Assert.equal(
+    operation.lastInput,
+    null,
+    "Rejecting and disposing should leave the method uncalled"
+  );
+});
+
+/**
+ * This test case ensures a test can inject a failure without providing a reason.
+ */
+add_task(async function test_reject_result_supplies_default_error() {
+  const operation = new TestOperation();
+  using runController = TestUtils.asyncControlProxy(operation).run();
+  const result = operation.run();
+
+  await runController.waitForInterception();
+  runController.rejectResult();
+
+  await Assert.rejects(
+    result,
+    error =>
+      error.name === "Error" && error.message === "Controlled call rejected",
+    "The caller should receive the default error"
+  );
+});
+
+/**
+ * This test case ensures that once the real method is allowed to run, an
+ * injected rejection cannot replace its outcome or restart it.
+ */
+add_task(async function test_reject_result_after_start_preserves_outcome() {
+  for (const start of ["start", "waitForResult", "releaseResult"]) {
+    let calls = 0;
+    const operation = {
+      async run() {
+        calls++;
+
+        return "value";
+      },
+    };
+    using runController = TestUtils.asyncControlProxy(operation).run();
+    const callerResult = operation.run();
+
+    await runController.waitForInterception();
+    runController[start]();
+
+    Assert.throws(
+      () => runController.rejectResult(),
+      /The original call to run has already started/,
+      `Rejecting after ${start} should throw`
+    );
+
+    const result = runController.waitForResult();
+
+    Assert.strictEqual(
+      runController.waitForResult(),
+      result,
+      "Repeated waits should use the same promise"
+    );
+    runController.releaseResult();
+    Assert.equal(await result, "value", "The test should see the real outcome");
+    Assert.equal(
+      await callerResult,
+      "value",
+      "The caller should receive the real outcome"
+    );
+    Assert.equal(calls, 1, "The original method should run only once");
   }
 });
