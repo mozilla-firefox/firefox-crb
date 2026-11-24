@@ -236,6 +236,7 @@ class GitRepository(Repository):
             cmd = ["diff-tree", "-r", "--no-commit-id", rev]
 
         cmd.append("--name-only")
+        cmd.append("--no-renames")
         cmd.append("--diff-filter=" + diff_filter.upper())
 
         return self._run(*cmd).splitlines()
@@ -248,6 +249,7 @@ class GitRepository(Repository):
         files = self._run(
             "log",
             "--name-only",
+            "--no-renames",
             f"--diff-filter={diff_filter.upper()}",
             "--oneline",
             "--topo-order",

@@ -213,7 +213,8 @@ class Repository(abc.ABC):
             D - Include files that were deleted
             M - Include files that were modified
 
-        By default, all three will be included.
+        By default, all three will be included. A renamed file counts as its
+        old path deleted and its new path added.
 
         ``mode`` can be one of 'unstaged', 'staged' or 'all'. Only has an
         effect on git. Defaults to 'unstaged'.
