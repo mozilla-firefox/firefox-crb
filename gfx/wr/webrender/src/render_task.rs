@@ -23,6 +23,7 @@ use crate::resource_cache::ImageRequest;
 use crate::renderer::{GpuBufferAddress, GpuBufferBuilder, GpuBufferBuilderF};
 use crate::render_backend::DataStores;
 use crate::render_target::RenderTargetKind;
+use crate::util::ScaleOffset;
 use crate::render_task_graph::{PassId, RenderTaskId, RenderTaskGraphBuilder};
 use crate::render_task_cache::RenderTaskCacheEntryHandle;
 use crate::segment::EdgeMask;
@@ -1062,11 +1063,12 @@ impl RenderTask {
         source_subregion: LayoutRect,
         target_subregion: LayoutRect,
         prim_subregion: LayoutRect,
-        subregion_to_device_scale_x: f32,
-        subregion_to_device_scale_y: f32,
-        subregion_to_device_offset_x: f32,
-        subregion_to_device_offset_y: f32,
+        subregion_to_device: ScaleOffset,
     ) -> RenderTaskId {
+        // Lengths (blur deviations, radii, kernel units) are unsigned, while
+        // positions and offsets follow the possibly reflected mapping.
+        let subregion_to_device_scale_x = subregion_to_device.scale.x.abs();
+        let subregion_to_device_scale_y = subregion_to_device.scale.y.abs();
         const BUFFER_LIMIT: usize = SVGFE_GRAPH_MAX;
         let mut task_by_buffer_id: [RenderTaskId; BUFFER_LIMIT] = [RenderTaskId::INVALID; BUFFER_LIMIT];
         let mut subregion_by_buffer_id: [LayoutRect; BUFFER_LIMIT] = [LayoutRect::zero(); BUFFER_LIMIT];
@@ -1215,8 +1217,8 @@ impl RenderTask {
                             (kernel_unit_length_x * subregion_to_device_scale_x).round(),
                         kernel_unit_length_y:
                             (kernel_unit_length_y * subregion_to_device_scale_y).round(),
-                        x: x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        y: y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        x: x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        y: y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         z: *z}
                 },
                 FilterGraphOp::SVGFEDiffuseLightingSpot{
@@ -1230,11 +1232,11 @@ impl RenderTask {
                             (kernel_unit_length_x * subregion_to_device_scale_x).round(),
                         kernel_unit_length_y:
                             (kernel_unit_length_y * subregion_to_device_scale_y).round(),
-                        x: x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        y: y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        x: x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        y: y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         z: *z,
-                        points_at_x: points_at_x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        points_at_y: points_at_y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        points_at_x: points_at_x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        points_at_y: points_at_y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         points_at_z: *points_at_z,
                         cone_exponent: *cone_exponent,
                         limiting_cone_angle: *limiting_cone_angle}
@@ -1243,8 +1245,8 @@ impl RenderTask {
                 FilterGraphOp::SVGFEDisplacementMap{
                     scale_x, scale_y, x_channel_selector, y_channel_selector} => {
                     FilterGraphOp::SVGFEDisplacementMap{
-                        scale_x: scale_x * subregion_to_device_scale_x,
-                        scale_y: scale_y * subregion_to_device_scale_y,
+                        scale_x: scale_x * subregion_to_device.scale.x,
+                        scale_y: scale_y * subregion_to_device.scale.y,
                         x_channel_selector: *x_channel_selector,
                         y_channel_selector: *y_channel_selector}
                 },
@@ -1252,8 +1254,8 @@ impl RenderTask {
                     color, dx, dy, std_deviation_x, std_deviation_y} => {
                     FilterGraphOp::SVGFEDropShadow{
                         color: *color,
-                        dx: dx * subregion_to_device_scale_x,
-                        dy: dy * subregion_to_device_scale_y,
+                        dx: dx * subregion_to_device.scale.x,
+                        dy: dy * subregion_to_device.scale.y,
                         std_deviation_x: std_deviation_x * subregion_to_device_scale_x,
                         std_deviation_y: std_deviation_y * subregion_to_device_scale_y}
                 },
@@ -1310,8 +1312,8 @@ impl RenderTask {
                             (kernel_unit_length_x * subregion_to_device_scale_x).round(),
                         kernel_unit_length_y:
                             (kernel_unit_length_y * subregion_to_device_scale_y).round(),
-                        x: x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        y: y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        x: x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        y: y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         z: *z }
                 },
                 FilterGraphOp::SVGFESpecularLightingSpot{
@@ -1327,11 +1329,11 @@ impl RenderTask {
                             (kernel_unit_length_x * subregion_to_device_scale_x).round(),
                         kernel_unit_length_y:
                             (kernel_unit_length_y * subregion_to_device_scale_y).round(),
-                        x: x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        y: y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        x: x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        y: y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         z: *z,
-                        points_at_x: points_at_x * subregion_to_device_scale_x + subregion_to_device_offset_x,
-                        points_at_y: points_at_y * subregion_to_device_scale_y + subregion_to_device_offset_y,
+                        points_at_x: points_at_x * subregion_to_device.scale.x + subregion_to_device.offset.x,
+                        points_at_y: points_at_y * subregion_to_device.scale.y + subregion_to_device.offset.y,
                         points_at_z: *points_at_z,
                         cone_exponent: *cone_exponent,
                         limiting_cone_angle: *limiting_cone_angle}
@@ -1397,16 +1399,13 @@ impl RenderTask {
                         }
                     };
                 // Convert offset to device coordinates.
-                let offset = LayoutVector2D::new(
-                        (input.offset.x * subregion_to_device_scale_x).round(),
-                        (input.offset.y * subregion_to_device_scale_y).round(),
-                    );
+                let offset = subregion_to_device.map_vector(&input.offset).round();
                 // To figure out the portion of the node subregion used by this
                 // source image we need to apply the target padding.  Note that
                 // this does not affect the subregion of the input, as that
                 // can't be modified as it is used for placement (offset).
-                let target_padding = input.target_padding
-                    .scale(subregion_to_device_scale_x, subregion_to_device_scale_y)
+                let target_padding: LayoutRect = ScaleOffset::from_scale(subregion_to_device.scale)
+                    .map_rect(&input.target_padding)
                     .round();
                 let target_subregion =
                     LayoutRect::new(
@@ -1434,9 +1433,8 @@ impl RenderTask {
             }).collect();
 
             // Convert subregion from PicturePixels to DevicePixels and round.
-            let full_subregion = node.subregion
-                .scale(subregion_to_device_scale_x, subregion_to_device_scale_y)
-                .translate(LayoutVector2D::new(subregion_to_device_offset_x, subregion_to_device_offset_y))
+            let full_subregion: LayoutRect = subregion_to_device
+                .map_rect(&node.subregion)
                 .round();
 
             // Clip the used subregion we calculated from the inputs to fit

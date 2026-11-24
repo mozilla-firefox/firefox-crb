@@ -809,11 +809,6 @@ pub fn prepare_composite_mode(
                 )
             );
 
-            let subregion_to_device_scale_x = surface_rects.clipped_notsnapped.width() / surface_rects.clipped_local.width();
-            let subregion_to_device_scale_y = surface_rects.clipped_notsnapped.height() / surface_rects.clipped_local.height();
-            let subregion_to_device_offset_x = surface_rects.clipped_notsnapped.min.x - (surface_rects.clipped_local.min.x * subregion_to_device_scale_x).floor();
-            let subregion_to_device_offset_y = surface_rects.clipped_notsnapped.min.y - (surface_rects.clipped_local.min.y * subregion_to_device_scale_y).floor();
-
             let filter_task_id = request_render_task(
                 frame_state,
                 snapshot,
@@ -830,10 +825,7 @@ pub fn prepare_composite_mode(
                         source_subregion.cast_unit(),
                         target_subregion.cast_unit(),
                         prim_subregion.cast_unit(),
-                        subregion_to_device_scale_x,
-                        subregion_to_device_scale_y,
-                        subregion_to_device_offset_x,
-                        subregion_to_device_offset_y,
+                        surface_rects.picture_to_device,
                     )
                 }
             );
@@ -955,6 +947,9 @@ pub struct SurfaceAllocInfo {
     // graph is composited in (the surface's spatial node, which for a backdrop
     // filter is the backdrop root). Identity for regular filters.
     pub svgfe_source_map: ScaleOffset,
+    // The surface's picture to device mapping, including any reflection and
+    // the reduced scale if the surface was shrunk to fit `max_surface_size`.
+    pub picture_to_device: ScaleOffset,
 }
 
 /// Map every absolute subregion in an SVGFE filter graph through `map`, moving
@@ -1204,6 +1199,7 @@ pub fn get_surface_rects(
         clipped_local,
         uv_rect_kind,
         svgfe_source_map,
+        picture_to_device: surface.picture_to_device,
     })
 }
 
