@@ -119,7 +119,7 @@ class DefaultTabDataCoordinatorTest {
                     normalTabs = listOf(normalTab, inactiveTab),
                     browsableNormalTabs = listOf(normalTab),
                     inactiveTabs = listOf(inactiveTab),
-                    inactiveTabsEnabled = true,
+                    settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
@@ -144,7 +144,7 @@ class DefaultTabDataCoordinatorTest {
                     normalTabs = listOf(normalTab, inactiveTab),
                     browsableNormalTabs = listOf(normalTab, inactiveTab),
                     inactiveTabs = emptyList(),
-                    inactiveTabsEnabled = false,
+                    settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = false),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
@@ -328,7 +328,7 @@ class DefaultTabDataCoordinatorTest {
                 TabsSnapshot(
                     normalTabs = listOf(groupedTab),
                     browsableNormalTabs = listOf(groupedTab),
-                    tabGroupsEnabled = false,
+                    settings = TabSettings(tabGroupsEnabled = false, inactiveTabsEnabled = true),
                     tabGroups = emptyList(),
                 ),
             actual = coordinator.tabsSnapshot.value,
@@ -1173,7 +1173,7 @@ class DefaultTabDataCoordinatorTest {
                     normalTabs = listOf(normalTab, inactiveTab),
                     browsableNormalTabs = listOf(normalTab, inactiveTab),
                     inactiveTabs = emptyList(),
-                    inactiveTabsEnabled = false,
+                    settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = false),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
@@ -1201,7 +1201,7 @@ class DefaultTabDataCoordinatorTest {
                     normalTabs = listOf(normalTab, inactiveTab),
                     browsableNormalTabs = listOf(normalTab),
                     inactiveTabs = listOf(inactiveTab),
-                    inactiveTabsEnabled = true,
+                    settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
@@ -1234,7 +1234,7 @@ class DefaultTabDataCoordinatorTest {
                     normalTabs = listOf(groupedTab),
                     browsableNormalTabs = listOf(groupedTab),
                     tabGroups = emptyList(),
-                    tabGroupsEnabled = false,
+                    settings = TabSettings(tabGroupsEnabled = false, inactiveTabsEnabled = true),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
@@ -1269,7 +1269,7 @@ class DefaultTabDataCoordinatorTest {
                     browsableNormalTabs = listOf(expectedGroupedTab),
                     tabGroups = listOf(createTabGroup(id = group.id, tabIds = group.tabIds)),
                     openTabGroups = listOf(createTabGroup(id = group.id, tabIds = group.tabIds)),
-                    tabGroupsEnabled = true,
+                    settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true),
                 ),
             actual = coordinator.tabsSnapshot.value,
         )
