@@ -16,11 +16,22 @@ const lazy = XPCOMUtils.declareLazy({
 const stubTargetsByMethodName = new Map();
 
 /**
- * The instance properties considered when selecting a method on a class.
+ * The callable static properties of a class.
+ *
+ * @template {object} Owner
+ * @typedef {{
+ *   [MethodName in keyof Owner as Owner[MethodName] extends (...args: never[]) => unknown
+ *     ? MethodName
+ *     : never]: Owner[MethodName]
+ * }} AsyncControlStaticMethods
+ */
+
+/**
+ * The properties considered when selecting a method on an object or class.
  *
  * @template {object} Owner
  * @typedef {Owner extends abstract new (...args: never[]) => infer Instance
- *   ? Instance
+ *   ? AsyncControlStaticMethods<Owner> & Omit<Instance, keyof AsyncControlStaticMethods<Owner>>
  *   : Owner} AsyncControlTarget
  */
 
@@ -459,15 +470,43 @@ class AsyncCallController {
 }
 
 /**
- * Gets the object on which to install the stub.
+ * Gets the object on which to install the stub. A callable static method
+ * takes precedence over a same-named instance method. If a static accessor uses
+ * that name, pass the prototype directly to create a controller for the
+ * instance method.
  *
  * @param {object} owner - The object or class to control.
+ * @param {string} methodName - The name of the method to select.
  * @returns {object} The target on which to install the stub.
  */
-function getStubTarget(owner) {
-  return typeof owner === "function" && owner.prototype
-    ? owner.prototype
-    : owner;
+function getStubTarget(owner, methodName) {
+  if (typeof owner !== "function" || !owner.prototype) {
+    return owner;
+  }
+
+  const prototype = owner.prototype;
+
+  for (
+    let candidate = owner;
+    // We need to stop at Function.prototype, which has no own `prototype`
+    // property. Otherwise its built-in `call` could hide an instance method
+    // with the same name.
+    typeof candidate === "function" && Object.hasOwn(candidate, "prototype");
+    candidate = Object.getPrototypeOf(candidate)
+  ) {
+    const descriptor = Object.getOwnPropertyDescriptor(candidate, methodName);
+    if (descriptor) {
+      // TypeScript can see a callable getter as a static method, so we need
+      // to reject the accessor before creating a controller for the instance method.
+      const isAccessor = !Object.hasOwn(descriptor, "value");
+
+      return isAccessor || typeof descriptor.value === "function"
+        ? owner
+        : prototype;
+    }
+  }
+
+  return prototype;
 }
 
 /**
@@ -498,7 +537,7 @@ export function asyncControlProxy(owner) {
         return undefined;
       }
 
-      const stubTarget = getStubTarget(owner);
+      const stubTarget = getStubTarget(owner, propertyKey);
       if (!(propertyKey in stubTarget)) {
         return undefined;
       }
