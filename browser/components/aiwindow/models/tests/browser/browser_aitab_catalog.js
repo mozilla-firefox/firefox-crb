@@ -7,10 +7,10 @@
 // structure), plus runtime validation of bound-array items — data that lives
 // in the data model, which the per-component (literal) schema can't reach.
 
-const { AITab } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+const { AITabValidation } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs"
 );
-const { loadAssets, buildSurface } = AITab;
+const { loadAssets, buildSurface } = AITabValidation;
 const { FEATURE_MAJOR_VERSIONS, MODEL_FEATURES, parseVersion } =
   ChromeUtils.importESModule(
     "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"

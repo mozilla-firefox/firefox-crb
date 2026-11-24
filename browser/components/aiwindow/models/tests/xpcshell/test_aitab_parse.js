@@ -3,13 +3,13 @@
 
 "use strict";
 
-const { AITab } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+const { AITabSurface } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabSurface.sys.mjs"
 );
 const { UrlTokenizer } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/UrlTokenizer.sys.mjs"
 );
-const { parsePageConfig } = AITab;
+const { parsePageConfig } = AITabSurface;
 
 const PAGE = { header: { type: "header", title: "Hi" }, blocks: [] };
 const JSON_TEXT = JSON.stringify(PAGE);
@@ -81,7 +81,7 @@ add_task(function test_expandSurfaceUrlTokens() {
   };
 
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(surface, tokenizer),
+    AITabSurface.expandSurfaceUrlTokens(surface, tokenizer),
     {
       components: [
         {
@@ -124,12 +124,12 @@ add_task(function test_expandSurfaceUrlTokens_allowedLinks() {
   };
 
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(surface, tokenizer, new Set([seen])),
+    AITabSurface.expandSurfaceUrlTokens(surface, tokenizer, new Set([seen])),
     { items: [{ title: "Seen", href: seen, image }] },
     "an item linking to a URL outside allowedLinks is dropped"
   );
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(surface, tokenizer),
+    AITabSurface.expandSurfaceUrlTokens(surface, tokenizer),
     {
       items: [
         { title: "Seen", href: seen, image },
@@ -144,7 +144,7 @@ add_task(function test_expandSurfaceUrlTokens_rejects_unknown_image_token() {
   const tokenizer = new UrlTokenizer();
 
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(
+    AITabSurface.expandSurfaceUrlTokens(
       {
         title: "Keep the containing item",
         image: {
@@ -164,7 +164,7 @@ add_task(function test_expandSurfaceUrlTokens_rejects_image_token_in_text() {
   const token = tokenizer.formatToken("https://example.com/image.png");
 
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(
+    AITabSurface.expandSurfaceUrlTokens(
       {
         title: "Keep the containing item",
         image: { src: `Image: ${token}`, alt_text: "Example image" },
@@ -208,13 +208,13 @@ add_task(function test_tokenizeSurfaceUrls_round_trips() {
   };
 
   const tokenizer = new UrlTokenizer();
-  const tokenized = AITab.tokenizeSurfaceUrls(surface, tokenizer);
+  const tokenized = AITabSurface.tokenizeSurfaceUrls(surface, tokenizer);
   Assert.ok(
     !JSON.stringify(tokenized).includes("https://"),
     "every URL is replaced with a token"
   );
   Assert.deepEqual(
-    AITab.expandSurfaceUrlTokens(tokenized, tokenizer),
+    AITabSurface.expandSurfaceUrlTokens(tokenized, tokenizer),
     surface,
     "expanding with the same tokenizer restores the surface"
   );
@@ -241,12 +241,15 @@ add_task(function test_expandSurfaceUrlTokens_depth_limit() {
   ]) {
     const shallow = nest(wrap, 5);
     Assert.deepEqual(
-      AITab.expandSurfaceUrlTokens(shallow, tokenizer),
+      AITabSurface.expandSurfaceUrlTokens(shallow, tokenizer),
       shallow,
       `shallow nested ${name} are kept`
     );
 
-    const deep = AITab.expandSurfaceUrlTokens(nest(wrap, 1000), tokenizer);
+    const deep = AITabSurface.expandSurfaceUrlTokens(
+      nest(wrap, 1000),
+      tokenizer
+    );
     Assert.lessOrEqual(
       depthOf(deep),
       34,

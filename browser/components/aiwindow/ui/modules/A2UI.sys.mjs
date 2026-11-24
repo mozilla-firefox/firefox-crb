@@ -5,14 +5,14 @@
 /**
  * A generated surface before hydration.
  *
- * @typedef {import("../../models/aitab/AITab.sys.mjs").A2UISurface} A2UISurface
+ * @typedef {import("../../models/aitab/AITabValidation.sys.mjs").A2UISurface} A2UISurface
  */
 
 /**
  * A component with its catalog properties.
  *
- * @typedef {import("../../models/aitab/AITab.sys.mjs").A2UIComponent &
- *   import("../../models/aitab/AITab.sys.mjs").A2UIComponentProps} AITabComponent
+ * @typedef {import("../../models/aitab/AITabValidation.sys.mjs").A2UIComponent &
+ *   import("../../models/aitab/AITabValidation.sys.mjs").A2UIComponentProps} AITabComponent
  */
 
 /**

@@ -3,10 +3,10 @@
 
 "use strict";
 
-const { AITab } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+const { AITabSources } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabSources.sys.mjs"
 );
-const { shareBudget } = AITab;
+const { shareBudget } = AITabSources;
 
 const sum = numbers => numbers.reduce((total, number) => total + number, 0);
 

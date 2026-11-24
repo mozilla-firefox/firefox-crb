@@ -16,7 +16,7 @@ Services.scriptloader.loadSubScript(
 );
 
 const { MAX_AITAB_CONTEXT_TABS } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabSources.sys.mjs"
 );
 
 const MORE_THAN_LIMIT_TAB_COUNT = MAX_AITAB_CONTEXT_TABS + 2;
