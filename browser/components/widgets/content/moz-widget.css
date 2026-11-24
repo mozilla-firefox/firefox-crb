@@ -109,7 +109,7 @@ iframe,
   }
 }
 
-@media (forced-colors: active) {
+@media (forced-colors) {
   :host(:hover) {
     border-color: var(--border-color-interactive-hover);
   }

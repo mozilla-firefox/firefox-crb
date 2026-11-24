@@ -68,7 +68,7 @@
 }
 
 // Keep the badge readable in High Contrast Mode by using the system accent.
-@media (forced-colors: active) {
+@media (forced-colors) {
   .stocks-new-badge {
     --badge-background-color-filled: AccentColor;
   }
@@ -533,7 +533,7 @@
 }
 
 // Keep the checkmark perceivable in High Contrast Mode, where the purple fill is dropped.
-@media (forced-colors: active) {
+@media (forced-colors) {
   .stock-ticker--large .stock-ticker-added {
     border: var(--border-width) solid CanvasText;
   }
@@ -548,7 +548,7 @@
 
 // The dot is a filled shape; forced-colors resets background-color, so pin it to
 // a system colour to keep the separator visible in High Contrast Mode.
-@media (forced-colors: active) {
+@media (forced-colors) {
   .stock-ticker-dot {
     background-color: CanvasText;
   }
