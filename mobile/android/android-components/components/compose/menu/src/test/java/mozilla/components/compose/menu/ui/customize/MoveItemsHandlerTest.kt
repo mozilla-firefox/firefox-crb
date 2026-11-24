@@ -6,13 +6,17 @@ package mozilla.components.compose.menu.ui.customize
 
 import mozilla.components.compose.base.text.Text
 import mozilla.components.compose.menu.data.CustomizableMenuItem
+import mozilla.components.compose.menu.data.ExpandableMenuItem
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import mozilla.components.compose.menu.data.MenuItemTitle
 import mozilla.components.compose.menu.data.StandardMenuItem
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction
+import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.AttemptedMoveAsSubItem
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.Init
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.ItemsChanged
 import mozilla.components.compose.menu.store.CustomizableMenuItemsState
 import mozilla.components.compose.menu.store.CustomizableMenuItemsStore
+import mozilla.components.compose.menu.store.MenuEvent
 import mozilla.components.compose.menu.ui.customize.CustomizeMenuItemKey.DROP_AREA
 import mozilla.components.compose.menu.ui.customize.CustomizeMenuItemKey.HIDDEN_TITLE
 import mozilla.components.lib.state.Middleware
@@ -116,6 +120,83 @@ class MoveItemsHandlerTest {
 
         assertEquals(listOf(Init), actions)
     }
+
+    @Test
+    fun `WHEN a group item is let go inside an expandable item THEN nothing is saved and the user is told once`() {
+        val groupItems =
+            CustomizeMenuItems(
+                shown = listOf(group, expandable),
+                hidden = emptyList(),
+                expandedIds = setOf("more"),
+            )
+
+        MoveItemsHandler(store = store, items = groupItems).apply {
+            onDragStart(sourceKey = "group", preserveSelectMode = false)
+            onMove(sourceKey = "group", targetKey = "sub", placeAfter = false)
+            onDragEnd()
+        }
+
+        assertEquals(listOf(Init, AttemptedMoveAsSubItem("group")), actions)
+    }
+
+    @Test
+    fun `WHEN a group item is let go inside a hidden expandable item THEN nothing is saved and the user is told`() {
+        val groupItems =
+            CustomizeMenuItems(shown = listOf(group), hidden = listOf(expandable), expandedIds = setOf("more"))
+
+        MoveItemsHandler(store = store, items = groupItems).apply {
+            onDragStart(sourceKey = "group", preserveSelectMode = false)
+            onMove(sourceKey = "group", targetKey = "sub", placeAfter = false)
+            onDragEnd()
+        }
+
+        assertEquals(listOf(Init, AttemptedMoveAsSubItem("group")), actions)
+    }
+
+    @Test
+    fun `WHEN a group item is let go unmoved after a cancelled drag over an expandable item THEN the user is not told`() {
+        val groupItems =
+            CustomizeMenuItems(shown = listOf(group, expandable), hidden = emptyList(), expandedIds = setOf("more"))
+
+        MoveItemsHandler(store = store, items = groupItems).apply {
+            onDragStart(sourceKey = "group", preserveSelectMode = false)
+            onMove(sourceKey = "group", targetKey = "sub", placeAfter = false)
+            onDragCancel()
+            onDragStart(sourceKey = "group", preserveSelectMode = false)
+            onDragEnd()
+        }
+
+        assertEquals(listOf(Init), actions)
+    }
+
+    @Test
+    fun `WHEN a group item is let go at the top level THEN it is saved and the user is not told`() {
+        val groupItems =
+            CustomizeMenuItems(shown = listOf(expandable, group), hidden = emptyList(), expandedIds = setOf("more"))
+
+        MoveItemsHandler(store = store, items = groupItems).apply {
+            onDragStart(sourceKey = "group", preserveSelectMode = false)
+            onMove(sourceKey = "group", targetKey = "more", placeAfter = false)
+            onDragEnd()
+        }
+
+        assertEquals(listOf(Init), actions.filter { it !is ItemsChanged })
+        assertEquals(1, actions.filterIsInstance<ItemsChanged>().size)
+    }
+
+    private val group = items("group").single().copy(affinity = MenuItemAffinity.GROUP)
+
+    private val expandable =
+        CustomizableMenuItem(
+            id = "more",
+            item =
+                ExpandableMenuItem(
+                    title = MenuItemTitle(Text.String("more")),
+                    onClickEvent = object : MenuEvent {},
+                    subMenuItems = emptyList(),
+                ),
+            subItems = items("sub"),
+        )
 
     private fun items(vararg ids: String) = ids.map {
         CustomizableMenuItem(id = it, item = StandardMenuItem(title = MenuItemTitle(Text.String(it))))
