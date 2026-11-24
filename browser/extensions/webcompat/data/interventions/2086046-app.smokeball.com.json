@@ -1,0 +1,21 @@
+{
+  "label": "app.smokeball.com",
+  "bugs": {
+    "2086046": {
+      "issue": "firefox-blocked-completely",
+      "matches": ["*://app.smokeball.com/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "content_scripts": {
+        "js": [
+          "use_chrome_useragent.js",
+          "use_chrome_vendor.js",
+          "define_minimal_window_chrome.js"
+        ]
+      }
+    }
+  ]
+}
