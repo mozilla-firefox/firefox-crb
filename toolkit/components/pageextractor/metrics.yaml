@@ -27,7 +27,8 @@ page_extractor:
 
       Slice by `phase` for a route's outcome and latency (e.g.
       "headless-extractor" for headless loads, "pdf-extract" for PDFs,
-      "captcha-detected" for bot checks in headless loads), by
+      "captcha-detected", "captcha-script" and "captcha-wait" for bot checks
+      in headless loads), by
       `strategy` for how a get-text call read the page ("dom", "reader",
       "youtube-dom", "youtube-transcript", "google-docs", "about-reader"),
       and by `site_strategy` for site-specific handling ("google-search",
@@ -41,10 +42,12 @@ page_extractor:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088247
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088250
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088247
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088250
     data_sensitivity:
       - web_activity
     notification_emails:
@@ -86,6 +89,10 @@ page_extractor:
           page from being read; see `block_reason`), or "detected" (a captcha
           showed up). "captcha-detected" is only recorded when a captcha
           shows up.
+          "captcha-script" is only recorded when the page requests a captcha
+          widget's script, with "requested", and `duration_ms` is how long
+          into the load that was. "captcha-wait" is recorded when a short
+          read waited for that widget, with "appeared" or "gave-up".
       error_name:
         type: string
         description: >

@@ -4,6 +4,7 @@ prefs = [
 ]
 support-files = [
   "captcha_frame.html",
+  "captcha_loader.js",
   "cf_challenge.sjs",
   "client_redirect.sjs",
   "head.js",

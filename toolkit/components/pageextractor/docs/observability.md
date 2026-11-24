@@ -55,6 +55,10 @@ page has little text besides it. The error carries `blockReason` (`captcha`
 or `off-site`), and for a captcha also `captchaType` and `captchaEvent`, so a
 caller can explain the block without parsing the message.
 
+When the read finds little text and the page has requested a captcha
+provider's script, it waits briefly for the widget to appear, since the script
+inserts it after a fast page can already be read.
+
 To count blocks, use the `headless-extractor` phase, which is recorded once per
 load:
 
@@ -67,6 +71,11 @@ load:
 The `captcha-detected` phase records how long into the load a captcha was
 found, and `detected_by` how: by its frame reporting in, by its frame's URL
 when the page was read, or by a Cloudflare challenge response.
+
+The `captcha-script` phase records how long into the load the page requested a
+captcha's script, and `captcha-wait` how long a read waited for the widget.
+`captcha-wait` records `gave-up` when the wait runs out, which means the widget
+didn't appear in time; it may still appear later.
 
 The profiler markers carry the same fields, and a blocked load's markers are
 yellow and read, for example, "blocked by Cloudflare Turnstile (check failed)".

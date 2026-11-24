@@ -34,11 +34,32 @@ const ARKOSE_LABS_FRAMES = new MatchPatternSet([
   "https://client-api.arkoselabs.com/fc/assets/ec-game-core/game-core/*",
 ]);
 
-/**
- * Captcha states in which the check went against the visitor.
- *
- * @type {Set<CaptchaUpdate["event"]>}
- */
+// Only list scripts whose widget CaptchaDetectionChild reports, or a read
+// waits for a report that never comes.
+const RECAPTCHA_V2_SCRIPTS = new MatchPatternSet([
+  "https://www.google.com/recaptcha/api.js",
+  "https://www.google.com/recaptcha/api.js?*",
+  "https://www.google.com/recaptcha/enterprise.js",
+  "https://www.google.com/recaptcha/enterprise.js?*",
+]);
+
+const HCAPTCHA_SCRIPTS = new MatchPatternSet([
+  "https://js.hcaptcha.com/1/api.js",
+  "https://js.hcaptcha.com/1/api.js?*",
+]);
+
+// Only served on DataDome's block page, beside its captcha frame.
+const DATADOME_SCRIPTS = new MatchPatternSet([
+  "https://ct.captcha-delivery.com/c.js",
+  "https://ct.captcha-delivery.com/c.js?*",
+]);
+
+const CF_TURNSTILE_SCRIPTS = new MatchPatternSet([
+  "https://challenges.cloudflare.com/turnstile/v0/api.js",
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?*",
+]);
+
+/** @type {Set<CaptchaUpdate["event"]>} */
 export const BLOCKING_CAPTCHA_EVENTS = new Set([
   "challenge",
   "blocked",
@@ -165,8 +186,51 @@ export function setTestFrames(patterns) {
 }
 
 /**
- * Finds a captcha frame in a page by frame URL alone, so a caller doesn't
- * have to wait for the frame's actor to report in.
+ * Test-only loader scripts, matched as Cloudflare Turnstile's.
+ *
+ * @type {MatchPatternSet | null}
+ */
+let testScripts = null;
+
+/**
+ * @param {string[] | null} patterns - null resets.
+ */
+export function setTestScripts(patterns) {
+  if (!Cu.isInAutomation) {
+    throw new Error("Only available in automation.");
+  }
+  testScripts = patterns && new MatchPatternSet(patterns);
+}
+
+/**
+ * @param {nsIURI} uri
+ * @returns {string | null} The provider whose widget-loading script `uri` is.
+ */
+export function captchaTypeForLoaderScript(uri) {
+  if (testScripts?.matches(uri)) {
+    return "cf-turnstile";
+  }
+  if (RECAPTCHA_V2_SCRIPTS.matches(uri)) {
+    // v3 loads as api.js?render=<site key> and only renders an invisible
+    // frame, which GoogleRecaptchaV2Handler skips; v2 uses render=explicit.
+    const render = URL.fromURI(uri).searchParams.get("render");
+    return render && render !== "explicit" ? null : "g-recaptcha-v2";
+  }
+  if (HCAPTCHA_SCRIPTS.matches(uri)) {
+    return "hCaptcha";
+  }
+  if (DATADOME_SCRIPTS.matches(uri)) {
+    return "datadome";
+  }
+  if (CF_TURNSTILE_SCRIPTS.matches(uri)) {
+    return "cf-turnstile";
+  }
+  return null;
+}
+
+/**
+ * Matches frame URLs alone, so a caller needn't wait for a frame's actor to
+ * report in.
  *
  * @param {BrowsingContext} browsingContext - The page's top BrowsingContext.
  * @returns {CaptchaUpdate | null} A "shown" update for the first captcha

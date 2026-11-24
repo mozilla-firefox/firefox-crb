@@ -67,3 +67,45 @@ add_task(async function test_captcha_frame_urls() {
     );
   }
 });
+
+/**
+ * Loader scripts as live pages requested them on 2026-10-05. reCAPTCHA v3
+ * renders only an invisible frame and Arkose Labs only a challenge, so neither
+ * is waited on.
+ */
+add_task(async function test_captcha_loader_scripts() {
+  const { captchaTypeForLoaderScript } = ChromeUtils.importESModule(
+    "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs"
+  );
+  const cases = [
+    ["https://www.google.com/recaptcha/api.js", "g-recaptcha-v2"],
+    [
+      "https://www.google.com/recaptcha/api.js?onload=cb&render=explicit",
+      "g-recaptcha-v2",
+    ],
+    ["https://www.google.com/recaptcha/enterprise.js", "g-recaptcha-v2"],
+    ["https://www.google.com/recaptcha/api.js.map", null],
+    ["https://js.hcaptcha.com/1/api.js", "hCaptcha"],
+    ["https://ct.captcha-delivery.com/c.js", "datadome"],
+    [
+      "https://www.google.com/recaptcha/api.js?render=6Lcyqq8oAAAAAJE7eVJ3aZp_hnJcI6LgGdYD8lge",
+      null,
+    ],
+    [
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=cb&render=explicit",
+      "cf-turnstile",
+    ],
+    [
+      "https://client-api.arkoselabs.com/v2/11111111-1111-1111-1111-111111111111/api.js",
+      null,
+    ],
+    ["https://www.gstatic.com/recaptcha/releases/x/recaptcha__en.js", null],
+  ];
+  for (const [spec, expected] of cases) {
+    is(
+      captchaTypeForLoaderScript(Services.io.newURI(spec)),
+      expected,
+      `${spec} is ${expected ? `a ${expected} widget script` : "not waited on"}.`
+    );
+  }
+});
