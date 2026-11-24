@@ -18,6 +18,7 @@
 #include "nsServiceManagerUtils.h"
 #include "nsThreadManager.h"
 #include "nsThreadUtils.h"
+#include "nsXULAppAPI.h"
 #if defined(XP_UNIX) || defined(MOZ_DMD)
 #  include "nsMemoryInfoDumper.h"
 #endif
@@ -2005,8 +2006,9 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
     RefPtr<nsMemoryReporterManager> self = this;
     uint32_t generation = s->mGeneration;
     nsCOMPtr<nsIRunnable> endParent = NS_NewRunnableFunction(
-        "nsMemoryReporterManager::StartGettingReports",
-        [self, generation]() { self->EndProcessReport(generation, true); });
+        "nsMemoryReporterManager::StartGettingReports", [self, generation]() {
+          self->EndProcessReport(generation, XRE_GetChildID(), true);
+        });
     if (NS_FAILED(NS_DispatchToMainThread(endParent))) {
       // Only late in shutdown.  Finishing the request now is better than
       // never finishing it.
@@ -2117,7 +2119,8 @@ nsMemoryReporterManager::EndReport() {
     if (mPendingReportersState->mGeneration) {
       // This is the parent process.  If its request already timed out, this
       // is ignored rather than ending a later request.
-      EndProcessReport(*mPendingReportersState->mGeneration, true);
+      EndProcessReport(*mPendingReportersState->mGeneration, XRE_GetChildID(),
+                       true);
     } else {
       mPendingReportersState->mFinishReporting->Callback(
           mPendingReportersState->mFinishReportingData);
@@ -2167,7 +2170,8 @@ nsMemoryReporterManager::GetStateForGeneration(uint32_t aGeneration) {
 // clear place to report the problem to, but that's ok -- we will end up
 // hitting the timeout and executing TimeoutCallback().
 void nsMemoryReporterManager::HandleChildReport(
-    uint32_t aGeneration, const dom::MemoryReport& aChildReport) {
+    uint32_t aGeneration, GeckoChildID aChildID,
+    const dom::MemoryReport& aChildReport) {
   PendingProcessesState* s = GetStateForGeneration(aGeneration);
   if (!s) {
     return;
@@ -2216,6 +2220,7 @@ bool nsMemoryReporterManager::StartChildReport(
 }
 
 void nsMemoryReporterManager::EndProcessReport(uint32_t aGeneration,
+                                               GeckoChildID aChildID,
                                                bool aSuccess) {
   PendingProcessesState* s = GetStateForGeneration(aGeneration);
   if (!s) {

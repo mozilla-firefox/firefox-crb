@@ -600,6 +600,7 @@ class ContentParent final : public PContentParent,
       const nsTArray<BroadcastBlobURLUnregistrationRequest>& aRequests);
 
   virtual int32_t Pid() const override;
+  GeckoChildID GetGeckoChildID() const override { return OtherChildID(); }
 
   // PURLClassifierParent.
   PURLClassifierParent* AllocPURLClassifierParent(
