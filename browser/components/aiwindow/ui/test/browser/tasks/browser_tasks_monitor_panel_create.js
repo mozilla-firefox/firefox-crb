@@ -208,7 +208,7 @@ describe("Monitor panel create view", () => {
       await win.document.l10n.translateFragment(panel);
       Assert.equal(
         headerTitle(panel).textContent,
-        "Create new task",
+        "Create a task",
         "Header names the create view"
       );
       Assert.equal(

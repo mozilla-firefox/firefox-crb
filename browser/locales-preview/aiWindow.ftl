@@ -16,21 +16,21 @@ smartwindow-monitor-panel-title = Tasks
 smartwindow-monitor-panel-new-matches = New matches
 # Label above the list of tasks the user has running
 smartwindow-monitor-panel-watching = Recent
-smartwindow-monitor-panel-empty-title = Nothing watched yet.
-smartwindow-monitor-panel-empty-description = { -brand-short-name } can keep an eye on a page and tell you the moment it changes. It only checks while { -brand-short-name } is open. Create new task below to get started.
+smartwindow-monitor-panel-empty-title = Spend less time checking
+smartwindow-monitor-panel-empty-description = Describe a change to watch for on pages you choose. { -smart-window-brand-name } will notify you when it finds it.
 # Shown when the task's condition was met on its last check
 smartwindow-monitor-panel-result-match = Match
 smartwindow-monitor-panel-result-no-match = No match
 # Shown when the most recent check failed, so there is no match to report.
 smartwindow-monitor-panel-result-could-not-check = Couldn’t check
-smartwindow-monitor-panel-create = Create new task
+smartwindow-monitor-panel-create = Create Task
 # Panel title while the user is filling in the create form
-smartwindow-monitor-panel-create-title = Create new task
+smartwindow-monitor-panel-create-title = Create a task
 # Variables:
 #   $used (number) - How many tasks the user has
 #   $max (number) - The maximum number of tasks allowed
 smartwindow-monitor-panel-count = { $used } of { $max }
-smartwindow-monitor-panel-manage = Manage and view all tasks
+smartwindow-monitor-panel-manage = Manage Tasks
 
 ## AI Tasks
 
@@ -88,14 +88,14 @@ ai-tasks-alert-name =
 ai-tasks-alert-alert =
   .label = Notify me when
   .placeholder = Examples: New JBL Tune 670NC headphones under $50 (not refurbished). Lasagna recipe appears on blog home.
-  .description = Describe in detail what you want to watch for.
+  .description = Describe in detail the change you want to watch for.
 # Variables:
 #   $maxPages (number) - The maximum number of webpages that can be monitored
 ai-tasks-alert-pages =
   .label = Pages to watch ({ $maxPages } max)
   .placeholder = Type or paste a webpage address
 ai-tasks-alert-check-label = How often to check
-ai-tasks-alert-time-label = Time
+ai-tasks-alert-time-label = Time to check
 ai-tasks-alert-day-label = Day
 
 ## Schedule Options - Strings for scheduling alert frequency
@@ -124,11 +124,11 @@ ai-tasks-alert-weekday-saturday =
 
 ## Alert Actions - Button labels for alert management
 
-ai-tasks-alert-create-button = Create task
+ai-tasks-alert-create-button = Create
 ai-tasks-alert-cancel-button = Cancel
 ai-tasks-alert-save-button = Save changes
 ai-tasks-alert-delete-button =
-  .aria-label = Delete alert
+  .aria-label = Delete task
 ai-tasks-alert-edit-button = Edit
 ai-tasks-alert-pause-button = Pause
 ai-tasks-alert-resume-button = Resume
@@ -156,7 +156,7 @@ ai-tasks-alert-required-note = * Required
 
 ai-tasks-page-title = Tasks
 ai-tasks-add-alert-button = Create task
-ai-task-page-description = { -smart-window-brand-name } can watch prices and content on pages you choose. You’ll get a desktop notification when it finds a match.
+ai-task-page-description = { -smart-window-brand-name } can watch prices and content on pages you choose. You’ll get notified when it finds a match.
 ai-tasks-no-monitors-title = { -smart-window-brand-name } tasks aren’t available in your region
 ai-tasks-no-monitors-message = Learn more <a data-l10n-name="smart-window-link">about { -smart-window-brand-name }</a>.
 ai-tasks-blocked-title = { -smart-window-brand-name } tasks are blocked in AI controls
@@ -180,12 +180,6 @@ ai-tasks-group-count = { $count }
 ai-tasks-group-show-more = Show { $count } more
 # Button below an expanded group of tasks that hides all but the first few again.
 ai-tasks-group-show-less = Show less
-# Variables:
-#   $count (number) - The number of webpages being watched
-ai-tasks-alert-watching-pages = { $count ->
-    [one] Watching { $count } webpage
-   *[other] Watching { $count } webpages
-}
 
 ## Error Messages - Validation and error messages for alert creation
 
