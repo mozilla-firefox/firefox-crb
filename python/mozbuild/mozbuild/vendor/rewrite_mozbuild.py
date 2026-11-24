@@ -926,6 +926,19 @@ def renormalize_filename(
     return normalized_filename_to_act_on
 
 
+def name_in_moz_build_files(normalized_filename, normalized_mozbuild_filenames):
+    """
+    Given a normalized filename and a list of normalized moz.build filenames, return whether
+    the file's name appears in any of those moz.build files.
+    """
+    basename = os.path.basename(normalized_filename)
+    for normalized_mozbuild_filename in normalized_mozbuild_filenames:
+        with open(normalized_mozbuild_filename) as file:
+            if basename in file.read():
+                return True
+    return False
+
+
 #########################################################
 # PUBLIC API
 #########################################################
@@ -938,6 +951,22 @@ class MozBuildRewriteException(Exception):
 class MozBuildFileNotListedException(MozBuildRewriteException):
     """The file to remove isn't mentioned in any of the moz.build files that
     could list it, so there is nothing to remove."""
+
+
+def moz_build_mentions_file(normalized_filename, moz_yaml_dir=None, vendoring_dir=None):
+    """
+    Given a filename, relative to the gecko root (aka normalized), return whether its name
+    appears in any of the moz.build files that could list it.
+    """
+    moz_yaml_dir, vendoring_dir = validate_directory_parameters(
+        moz_yaml_dir, vendoring_dir
+    )
+    return name_in_moz_build_files(
+        normalized_filename,
+        get_mozbuild_file_search_order(
+            normalized_filename, moz_yaml_dir, vendoring_dir, None
+        ),
+    )
 
 
 def remove_file_from_moz_build_file(
@@ -998,13 +1027,12 @@ def remove_file_from_moz_build_file(
 
         normalized_filename_to_remove = original_normalized_filename_to_remove
 
-    basename = os.path.basename(normalized_filename_to_remove)
-    for normalized_mozbuild_filename in all_possible_normalized_mozbuild_filenames:
-        with open(normalized_mozbuild_filename) as file:
-            if basename in file.read():
-                raise MozBuildRewriteException(
-                    "Could not remove " + normalized_filename_to_remove
-                )
+    if name_in_moz_build_files(
+        normalized_filename_to_remove, all_possible_normalized_mozbuild_filenames
+    ):
+        raise MozBuildRewriteException(
+            "Could not remove " + normalized_filename_to_remove
+        )
     raise MozBuildFileNotListedException(
         normalized_filename_to_remove + " is not listed in any moz.build file"
     )
