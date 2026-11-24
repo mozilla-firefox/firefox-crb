@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import mozilla.components.feature.tab.settings.data.TabSettings
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.data.TabGroup
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
@@ -327,7 +328,7 @@ class TabsSnapshotMapperTest {
             normalTabs = normalTabs,
             privateTabs = privateTabs,
             tabGroups = tabGroups,
-            inactiveTabsEnabled = inactiveTabsEnabled,
+            settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = inactiveTabsEnabled),
         )
 
     private fun createTab(

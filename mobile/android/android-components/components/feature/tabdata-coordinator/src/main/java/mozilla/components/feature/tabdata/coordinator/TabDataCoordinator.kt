@@ -40,8 +40,7 @@ private data class CombinedTabData(
     val selectedTabId: String?,
     val tabGroups: List<StoredTabGroup>,
     val tabGroupAssignments: Map<String, String>, // tab ID -> tab group ID
-    val inactiveTabsEnabled: Boolean,
-    val tabGroupsEnabled: Boolean,
+    val settings: TabSettings,
 ) {
 
     constructor(
@@ -53,8 +52,7 @@ private data class CombinedTabData(
         selectedTabId = tabData.selectedTabId,
         tabGroups = tabGroupData.tabGroups,
         tabGroupAssignments = tabGroupData.tabGroupAssignments,
-        inactiveTabsEnabled = tabSettings.inactiveTabsEnabled,
-        tabGroupsEnabled = tabSettings.tabGroupsEnabled,
+        settings = tabSettings,
     )
 }
 
@@ -338,7 +336,7 @@ class DefaultTabDataCoordinator(
     override suspend fun deleteTabGroupAndTabs(tabGroupId: String) {
         val snapshot = tabsSnapshot.value
         val inactiveTabIds =
-            if (snapshot?.inactiveTabsEnabled == true) {
+            if (snapshot?.settings?.inactiveTabsEnabled == true) {
                 snapshot.inactiveTabs.mapTo(mutableSetOf()) { it.id }
             } else {
                 emptySet()
@@ -438,8 +436,7 @@ class DefaultTabDataCoordinator(
 
     /** Transforms the inputted data into the final [TabsSnapshot] model. */
     private fun transformTabData(tabData: CombinedTabData): TabsSnapshot {
-        val isInactiveTabsEnabled = tabData.inactiveTabsEnabled
-        val isTabGroupsEnabled = tabData.tabGroupsEnabled
+        val isInactiveTabsEnabled = tabData.settings.inactiveTabsEnabled
         val privateTabs = tabData.tabs.filter { tab -> tab.private }
         val (normalTabsWithGroupAssignments, closedTabGroupIds, transformedTabGroups) =
             processTabGroups(tabData = tabData)
@@ -467,8 +464,7 @@ class DefaultTabDataCoordinator(
             inactiveTabs = inactiveTabs,
             tabGroups = transformedTabGroups,
             openTabGroups = transformedTabGroups.filter { !it.closed },
-            inactiveTabsEnabled = isInactiveTabsEnabled,
-            tabGroupsEnabled = isTabGroupsEnabled,
+            settings = tabData.settings,
         )
     }
 
@@ -487,7 +483,7 @@ class DefaultTabDataCoordinator(
         val closedTabGroupIds: Set<String>
         val transformedTabGroups: List<TabGroup>
 
-        if (tabData.tabGroupsEnabled) {
+        if (tabData.settings.tabGroupsEnabled) {
             closedTabGroupIds = tabData.tabGroups.filter { it.closed }.mapTo(mutableSetOf()) { it.id }
             transformedTabGroups =
                 tabData.tabGroups.map { group ->
