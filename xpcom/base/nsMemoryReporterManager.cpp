@@ -1950,25 +1950,35 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
     // to be buffered and consume (possibly scarce) memory.
 
     for (size_t i = 0; i < childWeakRefs.Length(); ++i) {
-      s->mChildrenPending.AppendElement(childWeakRefs[i]);
+      const dom::RemoteType& remoteType = childWeakRefs[i]->GetRemoteType();
+      nsAutoCString kind("Content");
+      if (remoteType.IsKnown()) {
+        kind = remoteType.Stringify();
+        // Like the child does, leave out the site when anonymizing.
+        int32_t siteStart = kind.FindChar('=');
+        if (s->mAnonymize && siteStart != kNotFound) {
+          kind.Truncate(siteStart);
+        }
+      }
+      s->mChildrenPending.AppendElement(PendingChild{childWeakRefs[i], kind});
     }
   }
 
   if (gfx::GPUProcessManager* gpu = gfx::GPUProcessManager::Get()) {
     if (RefPtr<MemoryReportingProcess> proc = gpu->GetProcessMemoryReporter()) {
-      s->mChildrenPending.AppendElement(proc.forget());
+      s->mChildrenPending.AppendElement(PendingChild{proc, "GPU"_ns});
     }
   }
 
   if (RDDProcessManager* rdd = RDDProcessManager::Get()) {
     if (RefPtr<MemoryReportingProcess> proc = rdd->GetProcessMemoryReporter()) {
-      s->mChildrenPending.AppendElement(proc.forget());
+      s->mChildrenPending.AppendElement(PendingChild{proc, "RDD"_ns});
     }
   }
 
   if (gfx::VRProcessManager* vr = gfx::VRProcessManager::Get()) {
     if (RefPtr<MemoryReportingProcess> proc = vr->GetProcessMemoryReporter()) {
-      s->mChildrenPending.AppendElement(proc.forget());
+      s->mChildrenPending.AppendElement(PendingChild{proc, "VR"_ns});
     }
   }
 
@@ -1979,7 +1989,7 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
            utility->GetAllProcessesProcessParent()) {
         if (RefPtr<MemoryReportingProcess> proc =
                 utility->GetProcessMemoryReporter(parent)) {
-          s->mChildrenPending.AppendElement(proc.forget());
+          s->mChildrenPending.AppendElement(PendingChild{proc, "Utility"_ns});
         }
       }
     }
@@ -2007,6 +2017,14 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
     uint32_t generation = s->mGeneration;
     nsCOMPtr<nsIRunnable> endParent = NS_NewRunnableFunction(
         "nsMemoryReporterManager::StartGettingReports", [self, generation]() {
+          if (PendingProcessesState* state =
+                  self->GetStateForGeneration(generation)) {
+            ReportIncompleteProcess(
+                state, ""_ns,
+                "This process's memory report could not be started because "
+                "an earlier memory report in this process was still running. "
+                "None of its measurements are included.");
+          }
           self->EndProcessReport(generation, XRE_GetChildID(), true);
         });
     if (NS_FAILED(NS_DispatchToMainThread(endParent))) {
@@ -2180,6 +2198,13 @@ void nsMemoryReporterManager::HandleChildReport(
   // Child reports should have a non-empty process.
   MOZ_ASSERT(!aChildReport.process().IsEmpty());
 
+  if (RunningProcess* proc = s->FindRunningProcess(aChildID)) {
+    if (!proc->mHasReported) {
+      proc->mProcess = aChildReport.process();
+      proc->mHasReported = true;
+    }
+  }
+
   // If the call fails, ignore and continue.
   s->mHandleReport->Callback(aChildReport.process(), aChildReport.path(),
                              aChildReport.kind(), aChildReport.units(),
@@ -2227,36 +2252,56 @@ void nsMemoryReporterManager::EndProcessReport(uint32_t aGeneration,
     return;
   }
 
-  MOZ_ASSERT(s->mNumProcessesRunning > 0);
-  s->mNumProcessesRunning--;
+  RunningProcess* proc = s->FindRunningProcess(aChildID);
+  if (!proc) {
+    MOZ_ASSERT_UNREACHABLE("EndProcessReport for a process that isn't running");
+    return;
+  }
+
+  // Remove the entry before calling out, so that no pointer into the array is
+  // held across the callback.
+  nsCString process = std::move(proc->mProcess);
+  s->mProcessesRunning.RemoveElementAt(proc - s->mProcessesRunning.Elements());
+
+  if (!aSuccess) {
+    ReportIncompleteProcess(
+        s, process,
+        "This process did not complete its memory report. It may have exited, "
+        "or still been busy with an earlier memory report. Any measurements "
+        "shown for it are incomplete.");
+  }
+
   s->mNumProcessesCompleted++;
   MEMORY_REPORTING_LOG(
       "HandleChildReports (aGen=%u): process %u %s"
       " (%u running, %u pending)\n",
       aGeneration, s->mNumProcessesCompleted,
-      aSuccess ? "completed" : "exited during report", s->mNumProcessesRunning,
+      aSuccess ? "completed" : "exited during report",
+      static_cast<unsigned>(s->mProcessesRunning.Length()),
       static_cast<unsigned>(s->mChildrenPending.Length()));
 
   // Start pending children up to the concurrency limit.
-  while (s->mNumProcessesRunning < s->mConcurrencyLimit &&
+  while (s->mProcessesRunning.Length() < s->mConcurrencyLimit &&
          !s->mChildrenPending.IsEmpty()) {
     // Pop last element from s->mChildrenPending
-    const RefPtr<MemoryReportingProcess> nextChild =
-        s->mChildrenPending.PopLastElement();
+    const PendingChild nextChild = s->mChildrenPending.PopLastElement();
     // Start report (if the child is still alive).
-    if (StartChildReport(nextChild, s)) {
-      ++s->mNumProcessesRunning;
+    if (StartChildReport(nextChild.mProcess, s)) {
+      int32_t pid = nextChild.mProcess->Pid();
+      s->mProcessesRunning.AppendElement(
+          RunningProcess{nextChild.mProcess->GetGeckoChildID(),
+                         ChildProcessName(nextChild.mKind, pid), false});
       MEMORY_REPORTING_LOG(
           "HandleChildReports (aGen=%u): started child report"
           " (%u running, %u pending)\n",
-          aGeneration, s->mNumProcessesRunning,
+          aGeneration, static_cast<unsigned>(s->mProcessesRunning.Length()),
           static_cast<unsigned>(s->mChildrenPending.Length()));
     }
   }
 
   // If all the child processes (if any) have reported, we can cancel
   // the timer (if started) and finish up.  Otherwise, just return.
-  if (s->mNumProcessesRunning == 0) {
+  if (s->mProcessesRunning.IsEmpty()) {
     MOZ_ASSERT(s->mChildrenPending.IsEmpty());
     if (s->mTimer) {
       s->mTimer->Cancel();
@@ -2275,12 +2320,59 @@ void nsMemoryReporterManager::TimeoutCallback(nsITimer* aTimer, void* aData) {
   // complain about unused variables.
   MOZ_RELEASE_ASSERT(s, "mgr->mPendingProcessesState");
   MEMORY_REPORTING_LOG("TimeoutCallback (s->gen=%u; %u running, %u pending)\n",
-                       s->mGeneration, s->mNumProcessesRunning,
+                       s->mGeneration,
+                       static_cast<unsigned>(s->mProcessesRunning.Length()),
                        static_cast<unsigned>(s->mChildrenPending.Length()));
+
+  // Copy the names first, so that the arrays aren't being iterated over while
+  // calling out.
+  nsTArray<nsCString> unfinished;
+  for (const RunningProcess& proc : s->mProcessesRunning) {
+    unfinished.AppendElement(proc.mProcess);
+  }
+  nsTArray<nsCString> neverStarted;
+  for (const PendingChild& child : s->mChildrenPending) {
+    if (child.mProcess->IsAlive()) {
+      neverStarted.AppendElement(
+          ChildProcessName(child.mKind, child.mProcess->Pid()));
+    }
+  }
+
+  for (const nsCString& process : unfinished) {
+    ReportIncompleteProcess(
+        s, process,
+        "This process did not finish its memory report before the request "
+        "timed out (see the memory.reporter.timeout pref). Any measurements "
+        "shown for it are incomplete, and memory that the missing reporters "
+        "would have measured may be counted as heap-unclassified.");
+  }
+  for (const nsCString& process : neverStarted) {
+    ReportIncompleteProcess(
+        s, process,
+        "This process's memory report was never started because the request "
+        "timed out (see the memory.reporter.timeout pref) while other "
+        "processes were reporting. None of its measurements are included.");
+  }
 
   // We don't bother sending any kind of cancellation message to the child
   // processes that haven't reported back.
   mgr->FinishReporting();
+}
+
+/* static */
+nsCString nsMemoryReporterManager::ChildProcessName(const nsACString& aKind,
+                                                    int32_t aPid) {
+  return nsPrintfCString("%s (pid %d)", PromiseFlatCString(aKind).get(), aPid);
+}
+
+/* static */
+void nsMemoryReporterManager::ReportIncompleteProcess(
+    const PendingProcessesState* aState, const nsACString& aProcess,
+    const char* aDescription) {
+  aState->mHandleReport->Callback(
+      aProcess, "memory-report-incomplete"_ns, nsIMemoryReporter::KIND_OTHER,
+      nsIMemoryReporter::UNITS_COUNT, 1, nsDependentCString(aDescription),
+      aState->mHandleReportData);
 }
 
 nsresult nsMemoryReporterManager::FinishReporting() {
@@ -2314,14 +2406,28 @@ nsMemoryReporterManager::PendingProcessesState::PendingProcessesState(
     : mGeneration(aGeneration),
       mAnonymize(aAnonymize),
       mMinimize(aMinimize),
-      mNumProcessesRunning(1),  // reporting starts with the parent
       mNumProcessesCompleted(0),
       mConcurrencyLimit(aConcurrencyLimit),
       mHandleReport(aHandleReport),
       mHandleReportData(aHandleReportData),
       mFinishReporting(aFinishReporting),
       mFinishReportingData(aFinishReportingData),
-      mDMDDumpIdent(aDMDDumpIdent) {}
+      mDMDDumpIdent(aDMDDumpIdent) {
+  // Reporting starts with the parent, whose reports use an empty process name.
+  mProcessesRunning.AppendElement(
+      RunningProcess{XRE_GetChildID(), nsCString(), true});
+}
+
+nsMemoryReporterManager::RunningProcess*
+nsMemoryReporterManager::PendingProcessesState::FindRunningProcess(
+    GeckoChildID aChildID) {
+  for (RunningProcess& proc : mProcessesRunning) {
+    if (proc.mChildID == aChildID) {
+      return &proc;
+    }
+  }
+  return nullptr;
+}
 
 static void CrashIfRefcountIsZero(nsISupports* aObj) {
   // This will probably crash if the object's refcount is 0.

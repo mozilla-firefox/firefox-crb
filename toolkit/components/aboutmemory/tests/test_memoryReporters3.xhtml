@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin" type="text/css"?>
+<?xml-stylesheet href="chrome://mochikit/content/tests/SimpleTest/test.css"
+                 type="text/css"?>
+<window title="Memory reporters with a child process that times out"
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+  <script src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"/>
+
+  <!-- This file tests that a child process that doesn't finish reporting
+       before the timeout gets a memory-report-incomplete measurement. -->
+
+  <!-- test results are displayed in the html:body -->
+  <body xmlns="http://www.w3.org/1999/xhtml">
+  </body>
+
+  <!-- test code goes here -->
+  <script type="application/javascript"><![CDATA[
+
+  const TIMEOUT_MS = 2000;
+  const BLOCK_MS = 5000;
+
+  function frameScript(aBlockMs) {
+    /* global addMessageListener, sendAsyncMessage */
+    const mgr = Cc["@mozilla.org/memory-reporter-manager;1"].getService(
+      Ci.nsIMemoryReporterManager
+    );
+    const reporter = {
+      QueryInterface: ChromeUtils.generateQI(["nsIMemoryReporter"]),
+      collectReports() {
+        mgr.unregisterStrongReporter(reporter);
+        const end = Date.now() + aBlockMs;
+        while (Date.now() < end) {
+          // Busy-wait so this process can't finish reporting in time.
+        }
+        sendAsyncMessage("test:unblocked");
+      },
+    };
+    mgr.registerStrongReporter(reporter);
+    addMessageListener("test:cleanup", () => {
+      try {
+        mgr.unregisterStrongReporter(reporter);
+      } catch (e) {
+        // It already unregistered itself when it ran.
+      }
+      sendAsyncMessage("test:cleaned");
+    });
+    sendAsyncMessage("test:ready", Services.appinfo.processID);
+  }
+
+  add_task(async function test_incomplete_report() {
+    await SpecialPowers.pushPrefEnv({
+      set: [["memory.reporter.timeout", TIMEOUT_MS]],
+    });
+
+    let w = window.browsingContext.topChromeWindow.open(
+      "remote.xhtml", "", "chrome");
+    // Set once the frame script is listening for test:cleanup.
+    let frameScriptMM = null;
+    SimpleTest.registerCleanupFunction(async () => {
+      // Make sure the blocking reporter can't affect later tests.
+      if (frameScriptMM) {
+        let cleaned = new Promise(resolve =>
+          frameScriptMM.addMessageListener("test:cleaned", resolve));
+        frameScriptMM.sendAsyncMessage("test:cleanup");
+        await cleaned;
+      }
+      w.close();
+    });
+    await new Promise(resolve =>
+      w.addEventListener("load", resolve, { once: true }));
+    let browser = w.document.getElementById("remote");
+    let mm = browser.messageManager;
+
+    let ready = new Promise(resolve =>
+      mm.addMessageListener("test:ready", msg => resolve(msg.data)));
+    let unblocked = new Promise(resolve =>
+      mm.addMessageListener("test:unblocked", resolve));
+    mm.loadFrameScript(
+      "data:," + encodeURI(`(${frameScript})(${BLOCK_MS});`), true);
+    let pid = await ready;
+    frameScriptMM = mm;
+
+    let mgr = Cc["@mozilla.org/memory-reporter-manager;1"].
+              getService(Ci.nsIMemoryReporterManager);
+    let incomplete = [];
+    await new Promise(resolve => {
+      mgr.getReports(
+        (aProcess, aPath, aKind, aUnits, aAmount, aDescription) => {
+          if (aPath == "memory-report-incomplete") {
+            incomplete.push({ process: aProcess, description: aDescription });
+          }
+        },
+        null, resolve, null, /* anonymize = */ false);
+    });
+
+    let ours = incomplete.filter(r => r.process.endsWith(`(pid ${pid})`));
+    is(ours.length, 1, "the blocked process is reported as incomplete");
+    // The name is the child's own if it reported anything before blocking,
+    // otherwise one made by the parent; both should look the same.
+    is(ours[0]?.process, `${browser.remoteType} (pid ${pid})`,
+       "the incomplete process is named after its remote type");
+    ok(ours[0]?.description.includes("memory.reporter.timeout"),
+       "the description mentions the timeout: " + ours[0]?.description);
+
+    await unblocked;
+  });
+
+  ]]></script>
+</window>

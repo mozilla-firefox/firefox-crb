@@ -36,4 +36,6 @@ support-files = [
 
 ["test_memoryReporters2.xhtml"]
 
+["test_memoryReporters3.xhtml"]
+
 ["test_sqliteMultiReporter.xhtml"]

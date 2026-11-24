@@ -109,13 +109,16 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   //   request is ignored, as per getReports()'s specification.  No error is
   //   reported, because the previous request will complete soon enough.
   //
-  // - If one or more child processes fail to respond within the time limit,
-  //   things will proceed as if they don't exist.  No error is reported,
-  //   because partial information is better than nothing.
+  // - If one or more processes fail to finish reporting within the time
+  //   limit, things proceed with whatever they have reported so far, because
+  //   partial information is better than nothing.  Each such process,
+  //   including any whose request was never sent, gets a
+  //   "memory-report-incomplete" measurement so that the omission is visible.
   //
   // - If this process's reporters are still running for another caller, such
-  //   as an earlier request that timed out, this process is left out of the
-  //   request, and the child processes proceed.
+  //   as an earlier request that timed out, this process gets a
+  //   "memory-report-incomplete" measurement instead of reports, and the
+  //   child processes proceed.
   //
   // - If a child process reports after the time-out occurs, it is ignored.
   //   (Generation checking will ensure it is ignored even if a subsequent
@@ -125,8 +128,8 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   //
   // - If the time-out occurs after a child process has sent some reports but
   //   before it has signaled completion (see bug 1151597), then what it
-  //   successfully sent will be included, with no explicit indication that it
-  //   is incomplete.
+  //   successfully sent will be included, along with a
+  //   "memory-report-incomplete" measurement.
   //
   // Now, what what happens if a child process is created/destroyed in the
   // middle of a request?  Well, PendingProcessesState is initialized with an
@@ -140,7 +143,8 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   //   data will reflect how things are when the request ends.
   //
   // - If a process is destroyed after it starts reporting back but before it
-  //   finishes, the reported data will contain a partial report for it.
+  //   finishes, the reported data will contain a partial report for it, along
+  //   with a "memory-report-incomplete" measurement.
   //
   // - If a process is destroyed after reporting back, but before all other
   //   child processes have reported back, it will be included in the reported
@@ -262,6 +266,21 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
 
   uint32_t mNextGeneration;  // MainThread only
 
+  struct PendingChild {
+    RefPtr<mozilla::MemoryReportingProcess> mProcess;
+    // The kind of process (e.g. "web" or "GPU"), used to name it if it is
+    // incomplete before sending any reports.
+    nsCString mKind;
+  };
+
+  struct RunningProcess {
+    GeckoChildID mChildID;
+    // The process name its reports use; until it sends one, a name made from
+    // its kind and pid.
+    nsCString mProcess;
+    bool mHasReported;
+  };
+
   // Used to keep track of state of which processes are currently running and
   // waiting to run memory reports. Holds references to parameters needed when
   // requesting a memory report and finishing reporting.
@@ -270,8 +289,8 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
     bool mAnonymize;
     bool mMinimize;
     nsCOMPtr<nsITimer> mTimer;
-    nsTArray<RefPtr<mozilla::MemoryReportingProcess>> mChildrenPending;
-    uint32_t mNumProcessesRunning;
+    nsTArray<PendingChild> mChildrenPending;
+    nsTArray<RunningProcess> mProcessesRunning;
     uint32_t mNumProcessesCompleted;
     uint32_t mConcurrencyLimit;
     nsCOMPtr<nsIHandleReportCallback> mHandleReport;
@@ -287,6 +306,8 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
                           nsIFinishReportingCallback* aFinishReporting,
                           nsISupports* aFinishReportingData,
                           const nsAString& aDMDDumpIdent);
+
+    RunningProcess* FindRunningProcess(GeckoChildID aChildID);
   };
 
   // Used to keep track of the state of the asynchronously run memory
@@ -327,6 +348,10 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   [[nodiscard]] static bool StartChildReport(
       mozilla::MemoryReportingProcess* aChild,
       const PendingProcessesState* aState);
+  static nsCString ChildProcessName(const nsACString& aKind, int32_t aPid);
+  static void ReportIncompleteProcess(const PendingProcessesState* aState,
+                                      const nsACString& aProcess,
+                                      const char* aDescription);
 };
 
 #define NS_MEMORY_REPORTER_MANAGER_CID \
