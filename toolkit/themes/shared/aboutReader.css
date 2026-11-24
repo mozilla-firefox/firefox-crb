@@ -125,8 +125,10 @@ body.contrast {
   --main-background: #000000;
   --main-foreground: #fff;
   --primary-color: #d6b4fd;
-  --link-color: #8080ff;
-  --link-color-hover: #d6b4fd;
+  @media not (forced-colors) {
+    --link-color: #8080ff;
+    --link-color-hover: #d6b4fd;
+  }
   --toolbar-border: #ffee32;
   --icon-fill: #ffee32;
 }

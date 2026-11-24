@@ -27,7 +27,9 @@
   color: var(--text-color);
 
   @media not (forced-colors) {
-    --background-color-box: light-dark(var(--color-violet-desaturated-0, var(--color-violet-0)), color-mix(in srgb, var(--color-violet-30) 12%, transparent));
+    @media not (prefers-contrast) {
+      --background-color-box: light-dark(var(--color-violet-desaturated-0, var(--color-violet-0)), color-mix(in srgb, var(--color-violet-30) 12%, transparent));
+    }
 
     background-color: var(--background-color-box);
   }

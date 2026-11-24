@@ -9,7 +9,9 @@
   :root:not([lwtheme]) {
     /* Our JSON design token system does not have a mechanism for supporting non-color tokens in dark mode. */
     @media (prefers-color-scheme: dark) {
-      --urlbar-icon-fill-opacity: 1;
+      @media not (prefers-contrast) {
+        --urlbar-icon-fill-opacity: 1;
+      }
     }
   }
 }

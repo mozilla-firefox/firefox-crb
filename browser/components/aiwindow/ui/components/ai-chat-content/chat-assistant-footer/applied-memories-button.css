@@ -105,6 +105,11 @@
       .retry-without-memories-button {
         --button-background-color-ghost-hover: var(--smartwindow-panel-item-background-color-hover);
         --button-background-color-ghost-active: var(--smartwindow-panel-item-background-color-active);
+      }
+    }
+
+    @media not (prefers-contrast) {
+      .retry-without-memories-button {
         --button-text-color-ghost: light-dark(var(--color-violet-60), var(--color-violet-30));
         --button-text-color-ghost-hover: light-dark(var(--color-violet-60), var(--color-violet-30));
       }

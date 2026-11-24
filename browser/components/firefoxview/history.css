@@ -65,6 +65,8 @@ dialog {
 
 @media (prefers-color-scheme: dark) {
   dialog {
-    --background-color-canvas: #42414d;
+    @media not (prefers-contrast) {
+      --background-color-canvas: #42414d;
+    }
   }
 }

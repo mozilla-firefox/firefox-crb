@@ -47,14 +47,12 @@
 }
 
 .pinned-tabs-promo {
-  --promo-border-color: light-dark(var(--color-violet-50), var(--color-violet-30));
+  @media not (prefers-contrast) {
+    --promo-border-color: light-dark(var(--color-violet-50), var(--color-violet-30));
+  }
   --promo-border: var(--promo-border-width) dashed var(--promo-border-color);
   container-type: inline-size;
   margin: var(--space-small);
-
-  @media (prefers-contrast) {
-    --promo-border-color: var(--border-color);
-  }
 
   @media (forced-colors) {
     /* TODO: This is a temporary fix for poor text color contrast

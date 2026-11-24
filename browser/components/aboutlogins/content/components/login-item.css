@@ -13,7 +13,9 @@
 /* Only overwrite the deemphasized text color in non-dark mode. */
 @media not (prefers-color-scheme: dark) {
   :host {
-    --text-color-deemphasized: #737373;
+    @media not (prefers-contrast) {
+      --text-color-deemphasized: #737373;
+    }
   }
 }
 

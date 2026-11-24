@@ -298,9 +298,11 @@ button:where(.caret-icon, #expand-all-button, .unload-icon, .reload-icon) {
   overflow: hidden;
   text-overflow: ellipsis;
   font: inherit;
-  --link-color: currentColor;
-  --link-color-hover: currentColor;
-  --link-color-active: currentColor;
+  @media not (forced-colors) {
+    --link-color: currentColor;
+    --link-color-hover: currentColor;
+    --link-color-active: currentColor;
+  }
 }
 .name-link:hover {
   text-decoration: underline;

@@ -217,11 +217,13 @@
   align-self: flex-start;
   --button-border-radius: var(--border-radius-circle);
   --button-font-weight: var(--font-weight);
-  --button-background-color: light-dark(var(--color-violet-0), var(--color-gray-80));
-  --button-background-color-active: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
-  --button-background-color-disabled: var(--color-gray-20);
-  --button-background-color-hover: light-dark(color-mix(in srgb, var(--color-violet-50) 15%, transparent), color-mix(in srgb, white 10%, transparent));
-  --button-background-color-selected: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+  @media not (forced-colors) {
+    --button-background-color: light-dark(var(--color-violet-0), var(--color-gray-80));
+    --button-background-color-active: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+    --button-background-color-disabled: var(--color-gray-20);
+    --button-background-color-hover: light-dark(color-mix(in srgb, var(--color-violet-50) 15%, transparent), color-mix(in srgb, white 10%, transparent));
+    --button-background-color-selected: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+  }
   --button-font-size: var(--font-size-small);
   --button-padding: var(--space-small);
   --button-text-color: var(--smartwindow-brand-accent);

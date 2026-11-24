@@ -99,7 +99,9 @@
 
 /* TODO: Bug 2067225 make the jump-to-bottom a reusable component in aiwindow */
 .form-review-jump-to-bottom-button {
-  --button-opacity-disabled: 1;
+  @media not (forced-colors) {
+    --button-opacity-disabled: 1;
+  }
   inset-block-end: var(--space-large);
   inset-inline: 0;
   margin-inline: auto;
@@ -110,7 +112,9 @@
   width: max-content;
 
   @media not (forced-colors) {
-    --button-border-color-ghost: var(--color-accent-primary);
+    @media not (prefers-contrast) {
+      --button-border-color-ghost: var(--color-accent-primary);
+    }
     --button-background-color-ghost: light-dark(var(--color-white), var(--color-gray-80));
     --button-background-color-ghost-hover: light-dark(var(--color-violet-0), var(--color-gray-70));
   }

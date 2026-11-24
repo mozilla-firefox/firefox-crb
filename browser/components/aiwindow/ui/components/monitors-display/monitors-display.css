@@ -3,7 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 :host {
-  --color-accent-primary: light-dark(var(--color-gray-50), var(--color-gray-70));
+  @media not (forced-colors) {
+    --color-accent-primary: light-dark(var(--color-gray-50), var(--color-gray-70));
+  }
 }
 
 .monitors-section h3 {
