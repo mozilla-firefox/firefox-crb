@@ -532,6 +532,8 @@ export class PageExtractorEvent {
       return result;
     } catch (error) {
       if (error?.name === "BlockedError") {
+        // Lets a caller join what it does about the block to this read.
+        error.flowId ??= this.#traceId.flowId;
         this.finish({
           status: "blocked",
           blockReason: error.blockReason,
