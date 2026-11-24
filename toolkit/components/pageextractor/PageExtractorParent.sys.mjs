@@ -526,9 +526,17 @@ export class PageExtractorParent extends JSWindowActorParent {
           event.traceId,
           result.text.length
         );
-        const captcha = captchaWatcher?.captchaInsteadOfPage(
-          result.text.length
-        );
+        let captcha;
+        if (captchaWatcher) {
+          captcha = captchaWatcher.captchaInsteadOfPage(result.text.length);
+        } else if (
+          lazy.useCaptchaDetection &&
+          result.text.length < CAPTCHA_PAGE_MAX_TEXT_LENGTH
+        ) {
+          // CaptchaDetection reports nothing from an open tab, so only its
+          // frames' URLs can tell.
+          captcha = lazy.findCaptchaFrame(this.browsingContext.top);
+        }
         if (captcha) {
           event.addData({ textLength: result.text.length });
           throw blockedError(

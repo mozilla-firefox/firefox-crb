@@ -39,6 +39,8 @@ support-files = [
 
 ["browser_page_metadata.js"]
 
+["browser_tab_extractor_captcha.js"]
+
 ["browser_viewport_extractor.js"]
 
 ["browser_youtube_extraction.js"]

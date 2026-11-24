@@ -50,6 +50,8 @@ export type BlockDetails = {
   captchaType?: string;
   // The latest captcha state, for "captcha".
   captchaEvent?: CaptchaUpdate["event"];
+  // The blocked read's `flow_id`, set once the error leaves its trace.
+  flowId?: string;
 };
 
 export type CanvasSnapshot = {
