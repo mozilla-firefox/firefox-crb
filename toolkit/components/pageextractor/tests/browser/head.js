@@ -114,3 +114,15 @@ async function readAtDeadline(location, options) {
   PageExtractorParent.expireHeadlessLoadsForTesting();
   return read;
 }
+
+/**
+ * Returns the parent-process PageExtractor phase event recorded for `phase`.
+ *
+ * @param {string} phase
+ * @returns {object | undefined}
+ */
+function findParentPhaseEvent(phase) {
+  return Glean.pageExtractor.phase
+    .testGetValue("page-extractor")
+    ?.find(e => e.extra.phase === phase && e.extra.process === "parent");
+}

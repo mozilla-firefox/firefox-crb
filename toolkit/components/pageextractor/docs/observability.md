@@ -45,3 +45,32 @@ The events module and the Glean metrics and pings definitions next to it define
 the phases and fields. The design history is in
 [bug 2065318](https://bugzilla.mozilla.org/show_bug.cgi?id=2065318) and
 [bug 2058247](https://bugzilla.mozilla.org/show_bug.cgi?id=2058247).
+
+## Bot checks
+
+A headless load uses CaptchaDetection to notice a captcha in the page it
+loaded. A puzzle, a refusal, or a failed check rejects the load at once with a
+`BlockedError`. A widget that only loaded rejects the read when the
+page has little text besides it. The error carries `blockReason` (`captcha`
+or `off-site`), and for a captcha also `captchaType` and `captchaEvent`, so a
+caller can explain the block without parsing the message.
+
+To count blocks, use the `headless-extractor` phase, which is recorded once per
+load:
+
+- `status` is `blocked` for a blocked load.
+- `block_reason` says why: `captcha` or `off-site`.
+- `captcha_type` names the provider and `captcha_event` its latest state. Both
+  are also set on a load that was read despite a captcha, such as a passed check
+  or a widget beside readable content.
+
+The `captcha-detected` phase records how long into the load a captcha was
+found, and `detected_by` how: by its frame reporting in, by its frame's URL
+when the page was read, or by a Cloudflare challenge response.
+
+The profiler markers carry the same fields, and a blocked load's markers are
+yellow and read, for example, "blocked by Cloudflare Turnstile (check failed)".
+Captchas in hidden browsers are left out of the `captcha-detection` ping.
+
+The `browser.ml.pageExtractor.captchaDetection.enabled` pref turns this
+behavior off.

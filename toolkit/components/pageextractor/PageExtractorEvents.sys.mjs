@@ -2,6 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+const lazy = XPCOMUtils.declareLazy({
+  CAPTCHA_EVENT_LABELS:
+    "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs",
+  CAPTCHA_PROVIDER_NAMES:
+    "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs",
+});
+
 let schemaRegistered = false;
 
 function ensureSchemaRegistered() {
@@ -77,6 +86,19 @@ function ensureSchemaRegistered() {
         format: "string",
         searchable: true,
       },
+      {
+        key: "captchaType",
+        label: "Captcha",
+        format: "string",
+        searchable: true,
+      },
+      {
+        key: "captchaEvent",
+        label: "Captcha event",
+        format: "string",
+        searchable: true,
+      },
+      { key: "detectedBy", label: "Found by", format: "string" },
       { key: "color", hidden: true },
     ],
   });
@@ -127,8 +149,9 @@ function formatOptions(options) {
 let nextId = 1;
 
 const DEFAULT_MARKER_COLOR = "blue";
-// Statuses other than "success" or "error" (e.g. "unavailable",
-// "document-hidden", "empty") are handled outcomes, not thrown exceptions.
+// Statuses other than these or "error" (e.g. "unavailable", "blocked",
+// "empty") are handled outcomes, not thrown exceptions.
+const DEFAULT_COLOR_STATUSES = new Set(["success", "detected"]);
 const HANDLED_OUTCOME_MARKER_COLOR = "yellow";
 const ERROR_MARKER_COLOR = "red";
 
@@ -147,6 +170,40 @@ const STATUS_DESCRIPTIONS = new Map([
 ]);
 
 /**
+ * How a captcha was found, for a profile's reader.
+ *
+ * @type {Map<string, string>}
+ */
+const DETECTED_BY_DESCRIPTIONS = new Map([
+  ["frame-report", "its frame reporting in"],
+  ["frame-url", "its frame's URL, when the page was read"],
+  ["response-header", "the page's cf-mitigated response header"],
+]);
+
+/**
+ * @param {string} captchaType
+ * @param {string} captchaEvent
+ * @returns {string} e.g. "Cloudflare Turnstile (check failed)".
+ */
+function describeCaptcha(captchaType, captchaEvent) {
+  const provider = lazy.CAPTCHA_PROVIDER_NAMES.get(captchaType);
+  const event = lazy.CAPTCHA_EVENT_LABELS.get(captchaEvent);
+  return `${provider} (${event})`;
+}
+
+/**
+ * Why a site kept a page from being read, from a "BlockedError"'s fields.
+ *
+ * @param {{blockReason: string, captchaType?: string, captchaEvent?: string}} details
+ * @returns {string} e.g. "blocked by Cloudflare Turnstile (check failed)".
+ */
+function describeBlock({ blockReason, captchaType, captchaEvent }) {
+  return blockReason === "captcha"
+    ? `blocked by ${describeCaptcha(captchaType, captchaEvent)}`
+    : "blocked: the page ended up on another site";
+}
+
+/**
  * The outcome of a phase in plain language, for a profile's reader.
  *
  * @param {Record<string, any>} data - The finished marker's data.
@@ -155,7 +212,16 @@ const STATUS_DESCRIPTIONS = new Map([
 function describeOutcome(data) {
   switch (data.status) {
     case "blocked":
-      return "blocked: the page ended up on another site";
+      // The length is why a page with a widget counts as the bot check.
+      return data.blockReason === "captcha" && data.textLength !== undefined
+        ? `${describeBlock(data)}, only ${data.textLength} characters on the page`
+        : describeBlock(data);
+    case "detected": {
+      const captcha = describeCaptcha(data.captchaType, data.captchaEvent);
+      return data.detectedBy
+        ? `${captcha}, found by ${DETECTED_BY_DESCRIPTIONS.get(data.detectedBy)}`
+        : captcha;
+    }
     case "error":
       return `failed with ${data.errorName ?? "an error"}`;
   }
@@ -197,6 +263,9 @@ const GLEAN_EXTRA_KEYS = {
   status: "status",
   errorName: "error_name",
   blockReason: "block_reason",
+  captchaType: "captcha_type",
+  captchaEvent: "captcha_event",
+  detectedBy: "detected_by",
   textLength: "text_length",
   linkCount: "link_count",
   canvasCount: "canvas_count",
@@ -256,6 +325,10 @@ export class PageExtractorEvent {
     headlessNavigate: {
       name: "headless-navigate",
       label: "Navigate to page",
+    },
+    captchaDetected: {
+      name: "captcha-detected",
+      label: "Bot check appeared on page",
     },
     waitForReady: {
       name: "wait-for-ready",
@@ -394,7 +467,7 @@ export class PageExtractorEvent {
       return;
     }
     ensureSchemaRegistered();
-    if (this.#data.status === "success") {
+    if (DEFAULT_COLOR_STATUSES.has(this.#data.status)) {
       this.#data.color = DEFAULT_MARKER_COLOR;
     } else if (this.#data.status === "error") {
       this.#data.color = ERROR_MARKER_COLOR;
@@ -442,7 +515,12 @@ export class PageExtractorEvent {
       return result;
     } catch (error) {
       if (error?.name === "BlockedError") {
-        this.finish({ status: "blocked", blockReason: error.blockReason });
+        this.finish({
+          status: "blocked",
+          blockReason: error.blockReason,
+          captchaType: error.captchaType,
+          captchaEvent: error.captchaEvent,
+        });
       } else {
         // Optional chaining because JS permits throwing anything: a task that
         // rejects with null would otherwise throw a TypeError here, replacing
