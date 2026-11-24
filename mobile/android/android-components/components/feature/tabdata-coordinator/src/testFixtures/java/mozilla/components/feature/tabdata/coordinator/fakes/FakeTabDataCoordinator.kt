@@ -67,4 +67,8 @@ class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDat
     override suspend fun removeTabFromTabGroup(tabGroupId: String, tabId: String) = Unit
 
     override suspend fun reorderItem(sourceId: String, destinationId: String?, placeAfter: Boolean) = Unit
+
+    override fun setTabGroupsEnabled(enabled: Boolean) = Unit
+
+    override fun setInactiveTabsEnabled(enabled: Boolean) = Unit
 }

@@ -26,6 +26,8 @@ import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.feature.session.SessionUseCases
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.fakes.FakeTabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
 import mozilla.components.feature.tabgroups.storage.data.TabGroup
 import mozilla.components.feature.tabgroups.storage.data.TabGroupData
@@ -2752,8 +2754,14 @@ class TabStorageMiddlewareTest {
                         fenixBrowserUseCases = fenixBrowserUseCases,
                     ),
                 tabGroupRepository = tabGroupRepository,
-                isInactiveTabsEnabled = { inactiveTabsEnabled },
-                isTabGroupsEnabled = { tabGroupsEnabled },
+                tabSettingsRepository =
+                    FakeTabSettingsRepository(
+                        initialSettingsSnapshot =
+                            TabSettings(
+                                tabGroupsEnabled = tabGroupsEnabled,
+                                inactiveTabsEnabled = inactiveTabsEnabled,
+                            )
+                    ),
                 scope = backgroundScope,
                 dispatcher = StandardTestDispatcher(testScheduler),
                 dateTimeProvider = dateTimeProvider,
