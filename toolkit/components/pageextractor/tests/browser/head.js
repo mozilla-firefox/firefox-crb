@@ -114,3 +114,13 @@ async function readAtDeadline(location, options) {
   PageExtractorParent.expireHeadlessLoadsForTesting();
   return read;
 }
+
+/**
+ * @param {string} phase
+ * @returns {object | undefined}
+ */
+function findParentPhaseEvent(phase) {
+  return Glean.pageExtractor.phase
+    .testGetValue("page-extractor")
+    ?.find(e => e.extra.phase === phase && e.extra.process === "parent");
+}

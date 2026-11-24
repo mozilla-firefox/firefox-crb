@@ -26,7 +26,8 @@ page_extractor:
       cross-reference a shared profile with this data.
 
       Slice by `phase` for a route's outcome and latency (e.g.
-      "headless-extractor" for headless loads, "pdf-extract" for PDFs), by
+      "headless-extractor" for headless loads, "pdf-extract" for PDFs,
+      "captcha-detected" for bot checks in headless loads), by
       `strategy` for how a get-text call read the page ("dom", "reader",
       "youtube-dom", "youtube-transcript", "google-docs", "about-reader"),
       and by `site_strategy` for site-specific handling ("google-search",
@@ -39,9 +40,11 @@ page_extractor:
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088247
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088247
     data_sensitivity:
       - web_activity
     notification_emails:
@@ -79,8 +82,10 @@ page_extractor:
         description: >
           The phase's outcome: "success", "error", or a handled non-error
           outcome such as "unavailable", "document-hidden", "empty",
-          "not-readerable", "document-unloaded", or "blocked" (the site kept
-          the page from being read; see `block_reason`).
+          "not-readerable", "document-unloaded", "blocked" (the site kept the
+          page from being read; see `block_reason`), or "detected" (a captcha
+          showed up). "captcha-detected" is only recorded when a captcha
+          shows up.
       error_name:
         type: string
         description: >
@@ -90,7 +95,33 @@ page_extractor:
         type: string
         description: >
           The reason extraction was blocked: "off-site" means the load ended up
-          on another site. Only present when status is "blocked".
+          on another site, and "captcha" means a bot check stood in front of
+          the content. Only present when status is "blocked".
+      captcha_type:
+        type: string
+        description: >
+          The captcha provider CaptchaDetection reported in the page, e.g.
+          "g-recaptcha-v2", "cf-turnstile", "datadome", "hCaptcha",
+          "arkoseLabs". Omitted when none was seen.
+      captcha_event:
+        type: string
+        description: >
+          The latest captcha state seen in the page by the time the phase
+          finished: "shown" (the widget loaded), "challenge" (a puzzle was
+          presented), "blocked" (the provider refused the visitor), "failed"
+          or "passed". "captcha-detected" finishes when the first captcha is
+          found, so there it is the first state, and `duration_ms` is the time
+          from the start of the page load until then; see `detected_by`.
+          Omitted when no captcha was seen.
+      detected_by:
+        type: string
+        description: >
+          On "captcha-detected", how the captcha was found: "frame-report"
+          (its frame reported in as it loaded), "frame-url" (its frame's URL
+          was spotted when the page was read, so `duration_ms` runs until the
+          read rather than until the captcha appeared), or "response-header"
+          (the page's response was marked as a Cloudflare challenge). Omitted
+          otherwise.
       text_length:
         type: quantity
         description: >

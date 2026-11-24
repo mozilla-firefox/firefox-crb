@@ -37,6 +37,21 @@ export type GetTextOptions = Partial<{
   useSimpleText: boolean;
 }>;
 
+export type CaptchaUpdate = {
+  // The captcha provider, e.g. "cf-turnstile".
+  type: string;
+  // "shown" only means the widget loaded, not that anything is gated by it.
+  event: "shown" | "challenge" | "blocked" | "failed" | "passed";
+};
+
+export type BlockDetails = {
+  blockReason: "off-site" | "captcha";
+  // For "captcha".
+  captchaType?: string;
+  // The latest captcha state, for "captcha".
+  captchaEvent?: CaptchaUpdate["event"];
+};
+
 export type CanvasSnapshot = {
   blob: Blob;
   width: number;
