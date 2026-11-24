@@ -12,12 +12,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-xsmall);
   -moz-context-properties: fill;
   fill: currentColor;
   font-size: 15px;
 
   > h4 {
     margin-block: var(--sidebar-panel-header-heading-margin-block);
+    margin-inline-end: auto;
   }
 }
 
