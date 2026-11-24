@@ -1,0 +1,15 @@
+{
+  "label": "edu-tlf.szhuaxi.net",
+  "bugs": {
+    "2086606": {
+      "issue": "firefox-blocked-completely",
+      "matches": ["*://edu-tlf.szhuaxi.net/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "ua_string": ["Chrome_with_FxQuantum"]
+    }
+  ]
+}
