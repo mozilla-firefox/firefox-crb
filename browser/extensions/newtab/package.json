@@ -90,5 +90,8 @@
   "permissions": {
     "multiprocess": true,
     "private-browsing": true
+  },
+  "allowScripts": {
+    "@parcel/watcher": false
   }
 }

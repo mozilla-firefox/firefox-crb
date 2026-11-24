@@ -81,5 +81,8 @@
     "help": "yamscripts help",
     "yamscripts": "yamscripts compile",
     "__": "# NOTE: THESE SCRIPTS ARE COMPILED!!! EDIT yamscripts.yml instead!!!"
+  },
+  "allowScripts": {
+    "fsevents": false
   }
 }

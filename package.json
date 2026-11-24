@@ -52,5 +52,8 @@
     "test:ts": "node --experimental-vm-modules node_modules/jest/bin/jest.js --rootDir tools/ts"
   },
   "notes(private)": "We don't want to publish to npm, so this is marked as private",
-  "private": true
+  "private": true,
+  "allowScripts": {
+    "@parcel/watcher": false
+  }
 }
