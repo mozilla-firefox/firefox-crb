@@ -11,11 +11,13 @@ package mozilla.components.compose.menu.data
  * @property item How the item looks, or `null` while the app does not show it, in which case it keeps its place but is
  *   not shown on the customize screen.
  * @property subItems The items this one expands to, if it is an [ExpandableMenuItem].
+ * @property affinity Where in its section the item can be placed, or `null` if anywhere in it.
  */
 data class CustomizableMenuItem(
     val id: String,
     val item: MenuItem?,
     val subItems: List<CustomizableMenuItem> = emptyList(),
+    val affinity: MenuItemAffinity? = null,
 )
 
 /** Whether this item has a sub-item the app shows. */
