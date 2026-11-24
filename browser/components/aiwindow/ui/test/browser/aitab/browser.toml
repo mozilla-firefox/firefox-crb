@@ -33,6 +33,11 @@ support-files = [
 ]
 ["browser_aitab_sidebar.js"]
 support-files = ["!/browser/components/aiwindow/ui/test/browser/head.js"]
+["browser_aitab_table_images.js"]
+support-files = [
+  "!/browser/components/aiwindow/ui/test/browser/test_aitab_table.mjs",
+  "!/browser/components/aiwindow/ui/test/browser/test_aitab_table_page.html",
+]
 ["browser_aitab_tab_menu_triggers.js"]
 support-files = [
   "!/browser/components/aiwindow/ui/test/browser/head.js",
