@@ -4,6 +4,8 @@
 
 package org.mozilla.fenix.components.menu.configuration
 
+import mozilla.components.compose.menu.data.MenuItemAffinity
+
 /** Type of items that can be expanded to show other (even unrelated) menu items. */
 sealed interface FenixExpandableMenuItem {
 
@@ -18,6 +20,10 @@ sealed interface FenixExpandableMenuItem {
  *   once shipped.
  */
 sealed class FenixMenuItem(val id: String) {
+    /** Where in its section this item can be placed, or `null` if anywhere in it. */
+    open val affinity: MenuItemAffinity?
+        get() = null
+
     /** A banner allowing to set this application as the default browser. */
     data object DefaultBrowserBanner : FenixMenuItem("default_browser_banner")
 
@@ -31,7 +37,9 @@ sealed class FenixMenuItem(val id: String) {
     data object Bookmark : FenixMenuItem("bookmark")
 
     /** A menu item expanding to the user's extensions, or to a list of recommended ones. */
-    data object Extensions : FenixMenuItem("extensions")
+    data object Extensions : FenixMenuItem("extensions") {
+        override val affinity = MenuItemAffinity.GROUP
+    }
 
     /** A menu item allowing to start the find in page feature. */
     data object FindInPage : FenixMenuItem("find_in_page")
