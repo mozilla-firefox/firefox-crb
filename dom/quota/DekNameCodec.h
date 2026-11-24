@@ -7,6 +7,7 @@
 #ifndef DOM_QUOTA_DEKNAMECODEC_H_
 #define DOM_QUOTA_DEKNAMECODEC_H_
 
+#include "mozilla/Maybe.h"
 #include "mozilla/Result.h"
 #include "nsError.h"
 #include "nsString.h"
@@ -36,6 +37,9 @@ class DekNameCodec {
   };
 
   static nsCString Build(const DekNameParts& aParts);
+
+  // The inverse of Build. Nothing for a name Build cannot have produced.
+  static Maybe<DekNameParts> Parse(const nsACString& aName);
 
   // Prefix matching all DEKs for a given profile + origin.
   static nsCString OriginPrefix(const nsACString& aProfileId,

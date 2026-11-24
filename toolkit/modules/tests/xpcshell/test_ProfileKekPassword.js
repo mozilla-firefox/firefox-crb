@@ -267,6 +267,70 @@ add_task(async function test_discard_locked_drops_unrecoverable_deks() {
   );
 });
 
+add_task(async function test_discard_locked_clears_quota_storage() {
+  await resetLockstore();
+  const ls = getLockstore();
+  await createPasswordKek(PW);
+
+  // Named the way QuotaManager names the key of an origin's localStorage.
+  const dekName =
+    "dom-quota:" +
+    ["profile", "https://example.com", "bottle", "ls", "db"]
+      .map(part => `${part.length}:${part}`)
+      .join(":");
+  await ls.createDek(dekName, PW_KEK, true, 32);
+  await ls.lockKek(PW_KEK);
+
+  Services.prefs.setBoolPref("dom.quotaManager.testing", true);
+  await new Promise(resolve => {
+    Services.qms.init().callback = resolve;
+  });
+  Services.prefs.clearUserPref("dom.quotaManager.testing");
+
+  const clientDir = name => {
+    const dir = do_get_profile();
+    for (const leaf of ["storage", "default", "https+++example.com", name]) {
+      dir.append(leaf);
+    }
+    return dir;
+  };
+  const lsDir = clientDir("ls");
+  lsDir.create(Ci.nsIFile.DIRECTORY_TYPE, 0o755);
+  const fsDir = clientDir("fs");
+  fsDir.create(Ci.nsIFile.DIRECTORY_TYPE, 0o755);
+
+  await ProfileKekPassword.discard();
+
+  Assert.ok(!(await ls.dekExists(dekName)), "the origin's DEK is deleted");
+  Assert.ok(!lsDir.exists(), "storage the deleted DEK protected is cleared");
+  Assert.ok(fsDir.exists(), "storage of another client is untouched");
+});
+
+add_task(async function test_discard_locked_skips_malformed_quota_deks() {
+  await resetLockstore();
+  const ls = getLockstore();
+  await createPasswordKek(PW);
+
+  const dekNames = [
+    // A negative, an overlong and a non-numeric length, then too few parts.
+    "dom-quota:-4:",
+    "dom-quota:99:profile",
+    "dom-quota:x:profile",
+    "dom-quota:7:profile",
+  ];
+  for (const dekName of dekNames) {
+    await ls.createDek(dekName, PW_KEK, true, 32);
+  }
+  await ls.lockKek(PW_KEK);
+
+  await ProfileKekPassword.discard();
+
+  for (const dekName of dekNames) {
+    Assert.ok(!(await ls.dekExists(dekName)), `${dekName} is deleted`);
+  }
+  Assert.ok(!(await ls.kekExists(PW_KEK)), "the password KEK is gone");
+});
+
 add_task(async function test_discard_ignores_the_pref() {
   await resetLockstore();
   const ls = getLockstore();
@@ -299,7 +363,7 @@ add_task(async function test_discard_without_kek_is_a_noop() {
 add_task(async function test_moveDeks_rolls_back_the_target_on_failure() {
   const deleted = [];
   const stub = {
-    migrateDeks: () => Promise.reject(new Error("migrate failed")),
+    migrateDeksAndDeleteKek: () => Promise.reject(new Error("migrate failed")),
     deleteKek: kekRef => {
       deleted.push(kekRef);
       return Promise.resolve();
@@ -317,31 +381,26 @@ add_task(async function test_moveDeks_rolls_back_the_target_on_failure() {
   );
 });
 
-add_task(async function test_moveDeks_drops_the_emptied_source() {
-  const deleted = [];
+add_task(async function test_moveDeks_drops_the_source_with_the_migration() {
+  const calls = [];
   const stub = {
-    migrateDeks: () => Promise.resolve(),
+    migrateDeksAndDeleteKek: (from, to) => {
+      calls.push(["migrateDeksAndDeleteKek", from, to]);
+      return Promise.resolve();
+    },
     deleteKek: kekRef => {
-      deleted.push(kekRef);
+      calls.push(["deleteKek", kekRef]);
       return Promise.resolve();
     },
   };
 
   await ProfileKekPassword.moveDeks(stub, PW_KEK, LOCAL_KEK);
 
-  Assert.deepEqual(deleted, [PW_KEK], "the emptied source KEK is dropped");
-});
-
-add_task(async function test_moveDeks_survives_a_failed_cleanup() {
-  const stub = {
-    migrateDeks: () => Promise.resolve(),
-    deleteKek: () => Promise.reject(new Error("delete failed")),
-  };
-
-  // A leftover source KEK is harmless; it must not turn a completed
-  // migration into a reported failure.
-  await ProfileKekPassword.moveDeks(stub, PW_KEK, LOCAL_KEK);
-  Assert.ok(true, "moveDeks resolved despite the cleanup failure");
+  Assert.deepEqual(
+    calls,
+    [["migrateDeksAndDeleteKek", PW_KEK, LOCAL_KEK]],
+    "the source KEK is dropped by the migration call, not a separate one"
+  );
 });
 
 add_task(async function test_changePassword_skips_unlock_when_locked() {

@@ -27,6 +27,7 @@
 #include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPtr.h"
+#include "mozilla/dom/quota/DekNameCodec.h"
 #include "mozilla/dom/quota/PQuota.h"
 #include "mozilla/dom/quota/PersistenceType.h"
 #include "mozilla/dom/quota/PrincipalUtils.h"
@@ -1502,6 +1503,31 @@ QuotaManagerService::ResetStoragesForClient(nsIPrincipal* aPrincipal,
              BoolResponsePromiseResolveOrRejectCallback(request));
 
   request.forget(_retval);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+QuotaManagerService::DecodeDekName(const nsACString& aDekName,
+                                   nsAString& aClientType,
+                                   nsIPrincipal** _retval) {
+  MOZ_ASSERT(NS_IsMainThread());
+
+  aClientType.SetIsVoid(true);
+  *_retval = nullptr;
+
+  const Maybe<DekNameCodec::DekNameParts> parts = DekNameCodec::Parse(aDekName);
+  if (parts.isNothing()) {
+    return NS_OK;
+  }
+
+  QM_TRY_INSPECT(const auto& principalInfo,
+                 QuotaManager::ParseOrigin(parts->mStorageOrigin), NS_OK);
+
+  QM_TRY_UNWRAP(nsCOMPtr<nsIPrincipal> principal,
+                PrincipalInfoToPrincipal(principalInfo), NS_OK);
+
+  CopyUTF8toUTF16(parts->mClientType, aClientType);
+  principal.forget(_retval);
   return NS_OK;
 }
 

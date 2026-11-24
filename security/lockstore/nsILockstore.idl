@@ -253,6 +253,17 @@ interface nsILockstore : nsISupports
   Promise migrateDeks(in AUTF8String fromKekRef,
                      in AUTF8String toKekRef);
 
+  /**
+   * `migrateDeks` followed by `deleteKek(fromKekRef)`, with no other keystore
+   * operation in between, so no DEK can be wrapped under `fromKekRef` after
+   * the migration and before the delete. If the migration fails, `fromKekRef`
+   * is not deleted and the Promise rejects. A failed delete is not reported:
+   * the DEKs have moved, and `fromKekRef` is left behind wrapping nothing.
+   */
+  [implicit_jscontext]
+  Promise migrateDeksAndDeleteKek(in AUTF8String fromKekRef,
+                                  in AUTF8String toKekRef);
+
   /* --- Crypto (async, byte-oriented) ----------------------------------- */
 
   /**

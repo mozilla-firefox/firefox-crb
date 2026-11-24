@@ -72,7 +72,8 @@ class LockstoreService final : public nsILockstore, public nsIObserver {
                          const nsACString& aToKekRef);
   // Migrates every DEK from aFromKekRef to aToKekRef and deletes aFromKekRef
   // without releasing mMutex in between, so no DEK can be wrapped under
-  // aFromKekRef between the two steps.
+  // aFromKekRef between the two steps. Fails only if the migration does: a
+  // failed delete leaves aFromKekRef behind, wrapping nothing.
   nsresult DoMigrateDeksAndDeleteKek(const nsACString& aFromKekRef,
                                      const nsACString& aToKekRef);
   Result<nsTArray<nsCString>, nsresult> DoListDeks();

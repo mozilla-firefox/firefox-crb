@@ -8,7 +8,6 @@
 #define DOM_QUOTA_LOCKSTORESTORAGEKEYPROVIDER_H_
 
 #include "LockstoreService.h"
-#include "mozilla/Mutex.h"
 #include "mozilla/dom/quota/CipherKeyStoreBackend.h"
 
 namespace mozilla::dom::quota {
@@ -37,13 +36,10 @@ class LockstoreStorageKeyProvider final : public CipherKeyStoreBackend {
       const nsACString& aProfileId);
   ~LockstoreStorageKeyProvider() = default;
 
-  nsresult EnsureKek() MOZ_REQUIRES(mMutex);
   nsCString DekName(const nsACString& aOrigin, const nsACString& aClientType,
                     const nsACString& aKeyId) const;
 
   RefPtr<mozilla::security::lockstore::LockstoreService> mLockstore;
-  Mutex mMutex{"LockstoreStorageKeyProvider"};
-  nsCString mKekRef MOZ_GUARDED_BY(mMutex);
   nsCString mProfileId;
 };
 
