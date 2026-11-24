@@ -297,13 +297,13 @@ export class AgentUI {
     const watchUrlTitles = await lazy.MonitorUIUtils.resolveWatchUrlTitles(
       args.watchUrls
     );
+    const { l10nId, args: scheduleArgs } = this.#scheduleConfirmationL10n(
+      updateData?.schedule
+    );
     this.#setMessageL10n(
       message,
-      "smartwindow-agent-monitor-watching",
-      {
-        monitorName,
-        schedule: this.#formatScheduleSummary(updateData?.schedule),
-      },
+      l10nId,
+      { monitorName, ...scheduleArgs },
       { l10nName: "tasks", href: TASKS_PAGE_URL }
     );
     await this.#reportMonitorCreated(message, conversation, monitorId);
@@ -997,37 +997,34 @@ export class AgentUI {
   }
 
   /**
-   * Formats a localized, readable cadence for a schedule (e.g.
-   * "daily at 9:00 AM" or "weekly on Monday at 9:00 AM")
+   * Picks the chat confirmation message for a schedule and its schedule args.
+   * The time is saved as "HH:MM" rather than a timestamp, so ai-chat-content
+   * can put it on the local clock the schedule runs on when it renders.
+   * #buildSchedule has already validated the time and weekday.
    *
    * @param {object} [schedule] - '{ frequency: "daily"|"weekly", time: "HH:MM",
    *   weekday: string }' from the card submit event
-   * @returns {string} The localized cadence
+   * @returns {{l10nId: string, args: object}}
    * @private
    */
-  static #formatScheduleSummary(schedule) {
-    const [hour, minute] = String(schedule?.time ?? "")
-      .split(":")
-      .map(Number);
-    if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
-      return "";
+  static #scheduleConfirmationL10n(schedule) {
+    switch (schedule?.frequency) {
+      case "weekly":
+        return {
+          l10nId: "smartwindow-agent-monitor-watching-weekly",
+          args: {
+            scheduleTime: schedule.time,
+            weekday: Number(schedule.weekday),
+          },
+        };
+      // The card only offers daily and weekly schedules, and defaults to daily.
+      case "daily":
+      default:
+        return {
+          l10nId: "smartwindow-agent-monitor-watching-daily",
+          args: { scheduleTime: schedule?.time },
+        };
     }
-    const when = new Date();
-    when.setHours(hour, minute, 0, 0);
-    if (schedule.frequency === "weekly") {
-      const offset = (Number(schedule.weekday) - when.getDay() + 7) % 7;
-      when.setDate(when.getDate() + offset);
-      return lazy.l10n.formatValueSync(
-        "smartwindow-agent-monitor-schedule-weekly",
-        // DATETIME needs a numeric timestamp
-        { time: when.getTime() }
-      );
-    }
-    return lazy.l10n.formatValueSync(
-      "smartwindow-agent-monitor-schedule-daily",
-      // DATETIME needs a numeric timestamp
-      { time: when.getTime() }
-    );
   }
 
   /**

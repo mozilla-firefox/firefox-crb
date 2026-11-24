@@ -202,47 +202,143 @@ add_task(async function test_monitor_command_seeds_blank_url_in_full_page() {
   }
 });
 
-add_task(async function test_create_monitor_localizes_schedule_summary() {
+async function createMonitorWithSchedule(schedule) {
   await SpecialPowers.pushPrefEnv({ set: [[PREF_AGENT_ENABLED, true]] });
   await MonitorAgent._resetForTesting();
 
   try {
     const { conversation } = makeConversationStub();
     const message = { content: {}, toolUIData: { properties: { agent: {} } } };
-    const updateData = {
-      monitorName: "r/Watchexchange",
-      condition: "new posts",
-      watchUrls: ["https://example.com/watches"],
-      schedule: { frequency: "daily", time: "09:00", weekday: "1" },
-    };
-
     const created = await AgentUI.handleCreateMonitor({
       message,
-      updateData,
+      updateData: {
+        monitorName: "r/Watchexchange",
+        condition: "new posts",
+        watchUrls: ["https://example.com/watches"],
+        schedule,
+      },
       conversation,
     });
     Assert.ok(created, "The watch is created");
-
-    Assert.equal(
-      message.content.l10nId,
-      "smartwindow-agent-monitor-watching",
-      "The watching message renders from its l10n id"
-    );
-
-    const { schedule } = message.content.l10nArgs;
-
-    Assert.ok(
-      schedule.startsWith("daily at") && /\d/.test(schedule),
-      `The schedule arg is a localized cadence string, got: "${schedule}"`
-    );
-    Assert.ok(
-      !schedule.includes("DATETIME") && !schedule.includes("[object"),
-      "The schedule arg is fully resolved"
-    );
+    return message.content;
   } finally {
     await MonitorAgent._resetForTesting();
     await SpecialPowers.popPrefEnv();
   }
+}
+
+async function renderConfirmation({ l10nId, l10nArgs, link }) {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.smartwindow.enabled", true]],
+  });
+  try {
+    return await BrowserTestUtils.withNewTab("about:aichatcontent", browser =>
+      SpecialPowers.spawn(
+        browser,
+        [{ l10nId, l10nArgs, link }],
+        async messageContent => {
+          await content.customElements.whenDefined("ai-chat-content");
+          const chatContent = content.document.querySelector("ai-chat-content");
+          chatContent.dispatchEvent(
+            new content.CustomEvent("aiChatContentActor:message", {
+              detail: Cu.cloneInto(
+                {
+                  role: "assistant",
+                  convId: "c1",
+                  ordinal: 1,
+                  id: "a1",
+                  content: { body: "", ...messageContent },
+                  memoriesApplied: [],
+                },
+                content
+              ),
+              bubbles: true,
+            })
+          );
+          let text = "";
+          await ContentTaskUtils.waitForCondition(() => {
+            text =
+              chatContent.shadowRoot.querySelector("ai-chat-message")
+                ?.wrappedJSObject.localizedText ?? "";
+            return text;
+          }, "The confirmation renders");
+          return text;
+        }
+      )
+    );
+  } finally {
+    await SpecialPowers.popPrefEnv();
+  }
+}
+
+function formatScheduleTime(hour, minute, weekday) {
+  const when = new Date();
+  when.setHours(hour, minute, 0, 0);
+  if (weekday !== undefined) {
+    when.setDate(when.getDate() + ((weekday - when.getDay() + 7) % 7));
+  }
+  const format = options =>
+    new Intl.DateTimeFormat(Services.locale.appLocalesAsBCP47, options).format(
+      when
+    );
+  return {
+    time: format({ hour: "numeric", minute: "2-digit" }),
+    weekday: format({ weekday: "long" }),
+  };
+}
+
+add_task(async function test_create_monitor_daily_confirmation() {
+  const content = await createMonitorWithSchedule({
+    frequency: "daily",
+    time: "09:00",
+    weekday: "1",
+  });
+
+  Assert.equal(
+    content.l10nId,
+    "smartwindow-agent-monitor-watching-daily",
+    "The daily confirmation renders from its own l10n id"
+  );
+  Assert.deepEqual(
+    content.l10nArgs,
+    { monitorName: "r/Watchexchange", scheduleTime: "09:00" },
+    "Only raw values are passed as arguments"
+  );
+
+  const text = await renderConfirmation(content);
+  const { time } = formatScheduleTime(9, 0);
+  Assert.ok(
+    text.startsWith(`I’ll check r/Watchexchange daily at ${time}.`),
+    `The daily confirmation is unchanged in en-US, got: "${text}"`
+  );
+});
+
+add_task(async function test_create_monitor_weekly_confirmation() {
+  const content = await createMonitorWithSchedule({
+    frequency: "weekly",
+    time: "18:30",
+    weekday: "3",
+  });
+
+  Assert.equal(
+    content.l10nId,
+    "smartwindow-agent-monitor-watching-weekly",
+    "The weekly confirmation renders from its own l10n id"
+  );
+  Assert.deepEqual(
+    content.l10nArgs,
+    { monitorName: "r/Watchexchange", scheduleTime: "18:30", weekday: 3 },
+    "Only raw values are passed as arguments"
+  );
+
+  const text = await renderConfirmation(content);
+  const { time, weekday } = formatScheduleTime(18, 30, 3);
+  Assert.ok(
+    text.startsWith(
+      `I’ll check r/Watchexchange weekly on ${weekday} at ${time}.`
+    ),
+    `The weekly confirmation is unchanged in en-US, got: "${text}"`
+  );
 });
 
 add_task(async function test_created_card_carries_an_active_check_limit() {
