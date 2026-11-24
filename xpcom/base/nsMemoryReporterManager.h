@@ -7,6 +7,7 @@
 
 #include "mozilla/Maybe.h"
 #include "mozilla/Mutex.h"
+#include "mozilla/ProcessType.h"
 #include "nsHashKeys.h"
 #include "nsIMemoryReporter.h"
 #include "nsISupports.h"
@@ -149,9 +150,10 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   // The inconsistencies between these cases are unfortunate but difficult to
   // avoid.  It's enough of an edge case to not be worth doing more.
   //
-  void HandleChildReport(uint32_t aGeneration,
+  void HandleChildReport(uint32_t aGeneration, GeckoChildID aChildID,
                          const mozilla::dom::MemoryReport& aChildReport);
-  void EndProcessReport(uint32_t aGeneration, bool aSuccess);
+  void EndProcessReport(uint32_t aGeneration, GeckoChildID aChildID,
+                        bool aSuccess);
 
   // Functions that (a) implement distinguished amounts, and (b) are outside of
   // this module.

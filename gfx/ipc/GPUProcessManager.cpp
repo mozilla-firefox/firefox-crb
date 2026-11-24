@@ -1894,6 +1894,13 @@ class GPUMemoryReporter : public MemoryReportingProcess {
     return 0;
   }
 
+  GeckoChildID GetGeckoChildID() const override {
+    if (GPUChild* child = GetChild()) {
+      return child->OtherChildID();
+    }
+    return kInvalidGeckoChildID;
+  }
+
  private:
   GPUChild* GetChild() const {
     if (GPUProcessManager* gpm = GPUProcessManager::Get()) {
