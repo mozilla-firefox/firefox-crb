@@ -45,11 +45,12 @@ export function showSourceTreeItemContextMenu(
   isOverridden
 ) {
   return async ({ dispatch, getState, panel }) => {
-    const copySourceUri2Label = L10N.getStr("copySourceUri2");
-    const copySourceUri2Key = L10N.getStr("copySourceUri2.accesskey");
+    const copySourceUri2Label = L10N.getStr("copySourceUri3");
+    const copySourceUri2Key = L10N.getStr("copySourceUri3.accesskey");
     const setDirectoryRootLabel = L10N.getStr("setDirectoryRoot.label");
     const setDirectoryRootKey = L10N.getStr("setDirectoryRoot.accesskey");
     const removeDirectoryRootLabel = L10N.getStr("removeDirectoryRoot.label");
+    const removeDirectoryRootKey = L10N.getStr("removeDirectoryRoot.accesskey");
 
     const menuOptions = [];
 
@@ -114,6 +115,7 @@ export function showSourceTreeItemContextMenu(
         menuOptions.push({
           id: "node-remove-directory-root",
           label: removeDirectoryRootLabel,
+          accesskey: removeDirectoryRootKey,
           disabled: false,
           click: () => dispatch(clearProjectDirectoryRoot()),
         });
@@ -137,7 +139,7 @@ export function showSourceTreeItemContextMenu(
       addBlackboxAllOption(dispatch, state, menuOptions, item, depth);
     }
 
-    showMenu(event, menuOptions, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, menuOptions);
   };
 }
 
@@ -208,33 +210,17 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
   } = getBlackBoxSourcesGroups(state, item);
   const projectRoot = getProjectDirectoryRoot(state);
 
-  let blackBoxInsideMenuItemLabel;
-  let blackBoxOutsideMenuItemLabel;
-  if (depth === 0 || (depth === 1 && projectRoot === "")) {
-    blackBoxInsideMenuItemLabel = allInsideBlackBoxed
-      ? L10N.getStr("unignoreAllInGroup.label")
-      : L10N.getStr("ignoreAllInGroup.label");
-    if (sourcesOutside.length) {
-      blackBoxOutsideMenuItemLabel = allOutsideBlackBoxed
-        ? L10N.getStr("unignoreAllOutsideGroup.label")
-        : L10N.getStr("ignoreAllOutsideGroup.label");
-    }
-  } else {
-    blackBoxInsideMenuItemLabel = allInsideBlackBoxed
-      ? L10N.getStr("unignoreAllInDir.label")
-      : L10N.getStr("ignoreAllInDir.label");
-    if (sourcesOutside.length) {
-      blackBoxOutsideMenuItemLabel = allOutsideBlackBoxed
-        ? L10N.getStr("unignoreAllOutsideDir.label")
-        : L10N.getStr("ignoreAllOutsideDir.label");
-    }
-  }
+  const scope =
+    depth === 0 || (depth === 1 && projectRoot === "") ? "Group" : "Dir";
+  const insideKey = `${allInsideBlackBoxed ? "unignore" : "ignore"}AllIn${scope}`;
+  const outsideKey = `${allOutsideBlackBoxed ? "unignore" : "ignore"}AllOutside${scope}`;
 
   const blackBoxInsideMenuItem = {
     id: allInsideBlackBoxed
       ? "node-unblackbox-all-inside"
       : "node-blackbox-all-inside",
-    label: blackBoxInsideMenuItemLabel,
+    label: L10N.getStr(`${insideKey}.label`),
+    accesskey: L10N.getStr(`${insideKey}.accesskey`),
     disabled: false,
     click: () => dispatch(blackBoxSources(sourcesInside, !allInsideBlackBoxed)),
   };
@@ -243,13 +229,15 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
     menuOptions.push({
       id: "node-blackbox-all",
       label: L10N.getStr("ignoreAll.label"),
+      accesskey: L10N.getStr("ignoreAll.accesskey"),
       submenu: [
         blackBoxInsideMenuItem,
         {
           id: allOutsideBlackBoxed
             ? "node-unblackbox-all-outside"
             : "node-blackbox-all-outside",
-          label: blackBoxOutsideMenuItemLabel,
+          label: L10N.getStr(`${outsideKey}.label`),
+          accesskey: L10N.getStr(`${outsideKey}.accesskey`),
           disabled: false,
           click: () =>
             dispatch(blackBoxSources(sourcesOutside, !allOutsideBlackBoxed)),
@@ -265,6 +253,7 @@ function addCollapseExpandAllOptions(menuOptions, item, setExpanded) {
   menuOptions.push({
     id: "node-menu-collapse-all",
     label: L10N.getStr("collapseAll.label"),
+    accesskey: L10N.getStr("collapseAll.accesskey"),
     disabled: false,
     click: () => setExpanded(item, false, true),
   });
@@ -272,6 +261,7 @@ function addCollapseExpandAllOptions(menuOptions, item, setExpanded) {
   menuOptions.push({
     id: "node-menu-expand-all",
     label: L10N.getStr("expandAll.label"),
+    accesskey: L10N.getStr("expandAll.accesskey"),
     disabled: false,
     click: () => setExpanded(item, true, true),
   });

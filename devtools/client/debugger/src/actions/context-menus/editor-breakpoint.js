@@ -78,7 +78,7 @@ export function showEditorEditBreakpointContextMenu(event, breakpoint) {
     );
     items.push(logPointItem(breakpoint, selectedLocation, dispatch));
 
-    showMenu(event, items, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, items);
   };
 }
 
@@ -90,7 +90,7 @@ export function showEditorCreateBreakpointContextMenu(
   return async ({ dispatch }) => {
     const items = createBreakpointItems(location, lineText, dispatch);
 
-    showMenu(event, items, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, items);
   };
 }
 
@@ -172,8 +172,8 @@ const addLogPointItem = (location, dispatch) => ({
 
 const editLogPointItem = (location, dispatch) => ({
   id: "node-menu-edit-log-point",
-  label: L10N.getStr("editor.editLogPoint"),
-  accesskey: L10N.getStr("editor.editLogPoint.accesskey"),
+  label: L10N.getStr("editor.editLogPoint2"),
+  accesskey: L10N.getStr("editor.editLogPoint2.accesskey"),
   disabled: false,
   click: () => dispatch(openConditionalPanel(location, true)),
   accelerator: stringifyFromElectronKey(
@@ -222,6 +222,7 @@ const toggleDbgStatementItem = (location, breakpoint, dispatch) => {
       disabled: false,
       id: "node-menu-enable-dbgStatement",
       label: L10N.getStr("breakpointMenuItem.enabledbg.label"),
+      accesskey: L10N.getStr("breakpointMenuItem.enabledbg.accesskey"),
       click: () =>
         dispatch(
           setBreakpointOptions(location, {
@@ -236,6 +237,7 @@ const toggleDbgStatementItem = (location, breakpoint, dispatch) => {
     disabled: false,
     id: "node-menu-disable-dbgStatement",
     label: L10N.getStr("breakpointMenuItem.disabledbg.label"),
+    accesskey: L10N.getStr("breakpointMenuItem.disabledbg.accesskey"),
     click: () =>
       dispatch(
         setBreakpointOptions(location, {
@@ -262,8 +264,8 @@ const enableBreakpointsOnLineItem = (
   dispatch
 ) => ({
   id: "node-menu-remove-breakpoints-on-line",
-  label: L10N.getStr("breakpointMenuItem.enableAllAtLine.label"),
-  accesskey: L10N.getStr("breakpointMenuItem.enableAllAtLine.accesskey"),
+  label: L10N.getStr("breakpointMenuItem.enableAllAtLine2.label"),
+  accesskey: L10N.getStr("breakpointMenuItem.enableAllAtLine2.accesskey"),
   disabled: isLineBlackboxed(
     blackboxedRangesForSelectedSource,
     location.line,

@@ -76,8 +76,8 @@ export function getTabMenuItems() {
     },
     copySourceUri2: {
       id: "node-menu-copy-source-url",
-      label: L10N.getStr("copySourceUri2"),
-      accesskey: L10N.getStr("copySourceUri2.accesskey"),
+      label: L10N.getStr("copySourceUri3"),
+      accesskey: L10N.getStr("copySourceUri3.accesskey"),
       disabled: false,
     },
     toggleBlackBox: {

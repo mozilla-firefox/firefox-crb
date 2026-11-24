@@ -69,8 +69,7 @@ export function showEditorContextMenu(event, editor, lineObject, location) {
         isSourceOnIgnoreList,
         dispatch,
         endColumn,
-      }),
-      { accesskeyConflictsBug: 2073896 }
+      })
     );
   };
 }
@@ -85,25 +84,21 @@ export function showEditorGutterContextMenu(event, line, location, lineText) {
       isSourceMapIgnoreListEnabled(state) &&
       isSourceOnSourceMapIgnoreList(state, source);
 
-    showMenu(
-      event,
-      [
-        ...createBreakpointItems(location, lineText, dispatch),
-        { type: "separator" },
-        continueToHereItem(location, isPaused, dispatch),
-        { type: "separator" },
-        blackBoxLineMenuItem(
-          source,
-          line,
-          blackboxedRanges,
-          isSourceOnIgnoreList,
-          location.line,
-          dispatch,
-          lineText.length
-        ),
-      ],
-      { accesskeyConflictsBug: 2073896 }
-    );
+    showMenu(event, [
+      ...createBreakpointItems(location, lineText, dispatch),
+      { type: "separator" },
+      continueToHereItem(location, isPaused, dispatch),
+      { type: "separator" },
+      blackBoxLineMenuItem(
+        source,
+        line,
+        blackboxedRanges,
+        isSourceOnIgnoreList,
+        location.line,
+        dispatch,
+        lineText.length
+      ),
+    ]);
   };
 }
 
@@ -136,8 +131,8 @@ const copySourceItem = selectedContent => ({
 
 const copySourceUri2Item = selectedSource => ({
   id: "node-menu-copy-source-url",
-  label: L10N.getStr("copySourceUri2"),
-  accesskey: L10N.getStr("copySourceUri2.accesskey"),
+  label: L10N.getStr("copySourceUri3"),
+  accesskey: L10N.getStr("copySourceUri3.accesskey"),
   disabled: !selectedSource.url,
   click: () => copyToTheClipboard(getRawSourceURL(selectedSource.url)),
 });
@@ -224,10 +219,10 @@ const blackBoxLineMenuItem = (
   return {
     id: "node-menu-blackbox-line",
     label: !selectedLineIsBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLine")
+      ? L10N.getStr("ignoreContextItem.ignoreLine2")
       : L10N.getStr("ignoreContextItem.unignoreLine"),
     accesskey: !selectedLineIsBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLine.accesskey")
+      ? L10N.getStr("ignoreContextItem.ignoreLine2.accesskey")
       : L10N.getStr("ignoreContextItem.unignoreLine.accesskey"),
     disabled: shouldDisable,
     click: () => {
@@ -275,11 +270,11 @@ const blackBoxLinesMenuItem = (
   return {
     id: "node-menu-blackbox-lines",
     label: !selectedLinesAreBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLines")
-      : L10N.getStr("ignoreContextItem.unignoreLines"),
+      ? L10N.getStr("ignoreContextItem.ignoreLines2")
+      : L10N.getStr("ignoreContextItem.unignoreLines2"),
     accesskey: !selectedLinesAreBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLines.accesskey")
-      : L10N.getStr("ignoreContextItem.unignoreLines.accesskey"),
+      ? L10N.getStr("ignoreContextItem.ignoreLines2.accesskey")
+      : L10N.getStr("ignoreContextItem.unignoreLines2.accesskey"),
     disabled: isSourceOnIgnoreList,
     click: () => {
       const selectionRange = {
@@ -314,6 +309,7 @@ const watchExpressionItem = (selectedSource, selectionText, dispatch) => ({
 const evaluateInConsoleItem = (selectedSource, selectionText, dispatch) => ({
   id: "node-menu-evaluate-in-console",
   label: L10N.getStr("evaluateInConsole.label"),
+  accesskey: L10N.getStr("evaluateInConsole.accesskey"),
   click: () => dispatch(evaluateInConsole(selectionText)),
 });
 
@@ -329,6 +325,9 @@ const inlinePreviewItem = dispatch => ({
   label: features.inlinePreview
     ? L10N.getStr("inlinePreview.hide.label")
     : L10N.getStr("inlinePreview.show.label"),
+  accesskey: features.inlinePreview
+    ? L10N.getStr("inlinePreview.hide.accesskey")
+    : L10N.getStr("inlinePreview.show.accesskey"),
   click: () => dispatch(toggleInlinePreview(!features.inlinePreview)),
 });
 
@@ -337,6 +336,9 @@ const editorWrappingItem = (editorWrappingEnabled, dispatch) => ({
   label: editorWrappingEnabled
     ? L10N.getStr("editorWrapping.hide.label")
     : L10N.getStr("editorWrapping.show.label"),
+  accesskey: editorWrappingEnabled
+    ? L10N.getStr("editorWrapping.hide.accesskey")
+    : L10N.getStr("editorWrapping.show.accesskey"),
   click: () => dispatch(toggleEditorWrapping(!editorWrappingEnabled)),
 });
 
