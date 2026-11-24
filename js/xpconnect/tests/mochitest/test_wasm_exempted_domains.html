@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bug 1968134 - javascript.options.wasm.exemptedDomains</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" href="/tests/SimpleTest/test.css"/>
+</head>
+<body>
+<script>
+"use strict";
+
+const BASE = "/tests/js/xpconnect/tests/mochitest/";
+const FIXTURE = "file_wasm_exempted_domains.html";
+const LIST_PREF = "javascript.options.wasm.exemptedDomains";
+const EXEMPT = "https://example.com";
+const IDN = "https://xn--hxajbheg2az3al.xn--jxalpdlp";
+
+function nextMessage(iframe, origin) {
+  return new Promise(resolve => {
+    function onMessage(e) {
+      if (e.source !== iframe.contentWindow || e.origin !== origin) {
+        return;
+      }
+      window.removeEventListener("message", onMessage);
+      resolve(e.data);
+    }
+    window.addEventListener("message", onMessage);
+  });
+}
+
+async function load(origin, file) {
+  const iframe = document.createElement("iframe");
+  const message = nextMessage(iframe, origin);
+  iframe.src = origin + BASE + file;
+  document.body.appendChild(iframe);
+  return { iframe, data: await message };
+}
+
+async function probe(list, origin, file = FIXTURE) {
+  await SpecialPowers.pushPrefEnv({ set: [[LIST_PREF, list]] });
+  try {
+    const { iframe, data } = await load(origin, file);
+    iframe.remove();
+    is(data.error, undefined, `${origin}: fixture ran without errors`);
+    return data;
+  } finally {
+    await SpecialPowers.popPrefEnv();
+  }
+}
+
+function checkContexts(data, expected, what) {
+  for (const context of ["window", "worker", "nested", "worklet"]) {
+    is(data[context], expected, `${what}: wasm in ${context}`);
+  }
+}
+
+add_setup(async function () {
+  await SpecialPowers.pushPrefEnv({
+    set: [["javascript.options.wasm", false]],
+  });
+});
+
+add_task(async function all_contexts() {
+  const listed = await probe("example.com", EXEMPT);
+  checkContexts(listed, "instantiated", "listed");
+  is(listed.opaque, "undefined", "opaque child of a listed worker has no wasm");
+  checkContexts(
+    await probe("example.com", "https://example.org"),
+    "unavailable",
+    "unlisted"
+  );
+});
+
+add_task(async function host_matching() {
+  for (const [list, origin, expected] of [
+    ["example.com", "https://test1.example.com", "unavailable"],
+    ["*.example.com", "https://test1.example.com", "instantiated"],
+    ["*.example.com", EXEMPT, "unavailable"],
+    ["example.com/, example.com:443, https://example.com", EXEMPT, "unavailable"],
+    ["example.org, EXAMPLE.com", EXEMPT, "instantiated"],
+    ["παράδειγμα.δοκιμή", IDN, "instantiated"],
+    [
+      "*.παράδειγμα.δοκιμή",
+      "https://sub1.xn--hxajbheg2az3al.xn--jxalpdlp",
+      "instantiated",
+    ],
+    [`${"a".repeat(4096)},example.com`, EXEMPT, "unavailable"],
+  ]) {
+    const data = await probe(list, origin, `${FIXTURE}?window`);
+    is(data.window, expected, `${list.slice(0, 40)} on ${origin}`);
+  }
+});
+
+add_task(async function csp_still_applies() {
+  const data = await probe(
+    "example.com",
+    EXEMPT,
+    "file_wasm_exempted_domains_csp.html"
+  );
+  is(data.window, "CompileError", "CSP blocks wasm on a listed host");
+});
+
+add_task(async function child_after_revocation() {
+  await SpecialPowers.pushPrefEnv({ set: [[LIST_PREF, "example.com"]] });
+  const { iframe } = await load(EXEMPT, FIXTURE);
+  await SpecialPowers.pushPrefEnv({ set: [[LIST_PREF, ""]] });
+
+  const respawned = nextMessage(iframe, EXEMPT);
+  iframe.contentWindow.postMessage("respawn", EXEMPT);
+  const result = await respawned;
+  iframe.remove();
+  await SpecialPowers.popPrefEnv();
+  await SpecialPowers.popPrefEnv();
+
+  is(result.error, undefined, "respawn ran without errors");
+  is(result.worker, "instantiated", "existing worker keeps its realm");
+  is(result.nested, "unavailable", "new child sees the revoked entry");
+});
+
+add_task(async function locked_pref_wins() {
+  const name = "javascript.options.wasm";
+  const saved = await SpecialPowers.spawnChrome([name], pref => {
+    const state = {
+      value: Services.prefs.getDefaultBranch("").getBoolPref(pref),
+      locked: Services.prefs.prefIsLocked(pref),
+    };
+    Services.prefs.unlockPref(pref);
+    Services.prefs.getDefaultBranch("").setBoolPref(pref, false);
+    return state;
+  });
+
+  try {
+    let data = await probe("example.com", EXEMPT, `${FIXTURE}?window`);
+    is(data.window, "instantiated", "unlocked: exemption applies");
+    await SpecialPowers.spawnChrome([name], pref => Services.prefs.lockPref(pref));
+    data = await probe("example.com", EXEMPT, `${FIXTURE}?window`);
+    is(data.window, "unavailable", "locked: exemption ignored");
+  } finally {
+    await SpecialPowers.spawnChrome([name, saved], (pref, state) => {
+      Services.prefs.unlockPref(pref);
+      Services.prefs.getDefaultBranch("").setBoolPref(pref, state.value);
+      if (state.locked) {
+        Services.prefs.lockPref(pref);
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>

@@ -853,6 +853,8 @@ pref("dom.event.contextmenu.enabled",       true);
 pref("javascript.enabled",                  true);
 pref("javascript.options.wasm",                   true);
 pref("javascript.options.wasm_trustedprincipals", true);
+// HTTPS hosts that keep WebAssembly when javascript.options.wasm is false.
+pref("javascript.options.wasm.exemptedDomains", "");
 pref("javascript.options.wasm_verbose",           false);
 pref("javascript.options.wasm_baselinejit",       true);
 

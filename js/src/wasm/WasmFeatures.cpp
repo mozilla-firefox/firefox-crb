@@ -274,11 +274,15 @@ bool wasm::HasPlatformSupport() {
 bool wasm::HasSupport(JSContext* cx) {
   // If the general wasm pref is on, it's on for everything.
   bool prefEnabled = cx->options().wasm();
-  // If the general pref is off, check trusted principals.
+  // If the general pref is off, check exempted realms and trusted principals.
   if (MOZ_UNLIKELY(!prefEnabled)) {
-    prefEnabled = cx->options().wasmForTrustedPrinciples() && cx->realm() &&
-                  cx->realm()->principals() &&
-                  cx->realm()->principals()->isSystemOrAddonPrincipal();
+    if (JS::Realm* realm = cx->realm()) {
+      bool exempted = realm->creationOptions().wasmExempted();
+      bool trusted = cx->options().wasmForTrustedPrinciples() &&
+                     realm->principals() &&
+                     realm->principals()->isSystemOrAddonPrincipal();
+      prefEnabled = exempted || trusted;
+    }
   }
   // Do not check for compiler availability, as that may be run-time variant.
   // For HasSupport() we want a stable answer depending only on prefs.
