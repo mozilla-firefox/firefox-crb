@@ -114,6 +114,7 @@ add_task(async function test_headless_extraction_never_loads() {
  * challenge page, is reported as a block rather than a timeout.
  */
 add_task(async function test_headless_extraction_cross_site_redirect() {
+  Services.fog.testResetFOG();
   await Assert.rejects(
     readAtDeadline("https://w3c-test.org/", {
       urlString: `https://example.com${TEST_DIR}redirect_to.sjs?https://w3c-test.org/`,
@@ -122,9 +123,24 @@ add_task(async function test_headless_extraction_cross_site_redirect() {
     }),
     error =>
       error.name === "BlockedError" &&
+      error.blockReason === "off-site" &&
       /ended up at https:\/\/w3c-test\.org\//.test(error.message),
     "The cross-site redirect is reported as a block, not a timeout."
   );
+
+  const headless = Glean.pageExtractor.phase
+    .testGetValue("page-extractor")
+    ?.find(
+      e =>
+        e.extra.phase === "headless-extractor" && e.extra.process === "parent"
+    );
+  ok(headless, "The headless load records a page_extractor.phase event.");
+  is(
+    headless.extra.status,
+    "blocked",
+    "Telemetry records a block, not an error."
+  );
+  is(headless.extra.block_reason, "off-site", "Telemetry records why.");
 });
 
 /**
