@@ -38,6 +38,7 @@ const MAX_JSON_LD_LENGTH = 100_000;
 
 /**
  * Keeps repeats and conflicts so callers can pick the ones that matter.
+ * StructuredMetadataReader interprets the result.
  *
  * @param {Document} document
  * @returns {StructuredMetadata}

@@ -3,6 +3,10 @@
 
 "use strict";
 
+const { StructuredMetadataReader } = ChromeUtils.importESModule(
+  "moz-src:///toolkit/components/pageextractor/StructuredMetadataReader.sys.mjs"
+);
+
 const EMPTY_METADATA = {
   truncated: false,
   url: null,
@@ -512,5 +516,543 @@ add_task(async function test_document_fields() {
     );
   } finally {
     await cleanup();
+  }
+});
+
+add_task(async function test_reader_picks_the_main_item_over_site_furniture() {
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const { getPageExtractor, cleanup } = await html`
+    <title>Tomato Soup | Example Kitchen</title>
+    <meta property="og:title" content="Tomato Soup (Open Graph)" />
+    <meta property="og:site_name" content="Example Kitchen" />
+    <meta name="description" content="HTML description" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "#org",
+            "name": "Example Kitchen Inc."
+          },
+          { "@type": "WebSite", "@id": "#site", "name": "Example Kitchen" },
+          {
+            "@type": "WebPage",
+            "@id": "#page",
+            "name": "Tomato Soup | Example Kitchen",
+            "breadcrumb": {
+              "@type": "BreadcrumbList",
+              "itemListElement": [{ "@type": "ListItem", "position": 1 }]
+            }
+          },
+          { "@type": "Person", "@id": "#ada", "name": "Ada" },
+          {
+            "@type": "schema:Recipe",
+            "name": "Tomato Soup",
+            "description": "A quick soup.",
+            "author": [{ "@id": "#ada" }, { "@type": "Person", "name": "Bo" }],
+            "publisher": { "@id": "#org" },
+            "image": { "@type": "ImageObject", "url": "/soup.jpg" },
+            "datePublished": "2026-10-05",
+            "inLanguage": "en-US"
+          }
+        ]
+      }
+    </script>
+    <p>Soup.</p>
+  `;
+  try {
+    const metadata = await getPageExtractor().getStructuredMetadata();
+    const reader = new StructuredMetadataReader(metadata);
+    Assert.equal(
+      reader.primaryItem?.["@type"],
+      "schema:Recipe",
+      "The recipe is the main item, not the organization, site or page."
+    );
+    Assert.equal(reader.title, "Tomato Soup");
+    Assert.equal(reader.description, "A quick soup.");
+    Assert.equal(
+      reader.author,
+      "Ada, Bo",
+      "References and inline authors are both named."
+    );
+    Assert.equal(
+      reader.image,
+      new URL("/soup.jpg", metadata.url).href,
+      "Image objects are resolved against the document."
+    );
+    Assert.equal(reader.publishedTime, "2026-10-05");
+    Assert.equal(reader.siteName, "Example Kitchen");
+    Assert.equal(reader.language, "en-US");
+    Assert.equal(
+      reader.findItems("Recipe").length,
+      1,
+      "Compact IRI types match their schema.org name."
+    );
+    Assert.equal(
+      reader.findItems("ListItem").length,
+      1,
+      "Nested items are found."
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+add_task(async function test_reader_finds_items_and_follows_references() {
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const { getPageExtractor, cleanup } = await html`
+    <meta property="og:title" content="Tomato Soup (Open Graph)" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "#org",
+            "name": "Example Kitchen Inc."
+          },
+          {
+            "@type": "WebPage",
+            "breadcrumb": {
+              "@type": "BreadcrumbList",
+              "itemListElement": [{ "@type": "ListItem", "position": 1 }]
+            }
+          },
+          { "@type": "Person", "@id": "#ada", "name": "Ada" },
+          {
+            "@type": "schema:Recipe",
+            "name": "Tomato Soup",
+            "author": [{ "@id": "#ada" }, { "@type": "Person", "name": "Bo" }],
+            "publisher": { "@id": "#org" }
+          }
+        ]
+      }
+    </script>
+    <p>Soup.</p>
+  `;
+  try {
+    const reader = new StructuredMetadataReader(
+      await getPageExtractor().getStructuredMetadata()
+    );
+    Assert.deepEqual(
+      reader.items.map(item => item["@type"]),
+      [
+        "Organization",
+        "WebPage",
+        "BreadcrumbList",
+        "ListItem",
+        "Person",
+        "schema:Recipe",
+        "Person",
+      ],
+      "Every typed item is listed in document order, nested ones included."
+    );
+    const [recipe] = reader.findItems("Recipe");
+    Assert.equal(
+      recipe?.name,
+      "Tomato Soup",
+      "Compact IRI types match their schema.org name."
+    );
+    Assert.equal(
+      reader.findItems("ListItem").length,
+      1,
+      "Nested items are found."
+    );
+    Assert.equal(
+      reader.resolve(recipe.author[0]).name,
+      "Ada",
+      "A reference resolves to the item with that @id."
+    );
+    Assert.equal(
+      reader.resolve(recipe.publisher).name,
+      "Example Kitchen Inc.",
+      "A reference resolves to an item declared earlier in the graph."
+    );
+    Assert.strictEqual(
+      reader.resolve(recipe.author[1]),
+      recipe.author[1],
+      "An inline item is returned as is."
+    );
+    Assert.deepEqual(
+      reader.metaValues("og:title"),
+      ["Tomato Soup (Open Graph)"],
+      "Meta tags are read by name."
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+add_task(async function test_reader_falls_back_to_tags_and_document() {
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const { getPageExtractor, cleanup } = await html`
+    <title>Document title</title>
+    <meta name="twitter:description" content="Twitter description" />
+    <meta name="description" content="HTML description" />
+    <meta name="author" content="Ada" />
+    <meta property="og:image" content="javascript:alert(1)" />
+    <meta name="twitter:image" content="https://example.com/card.jpg" />
+    <meta property="og:url" content="https://example.com/canonical" />
+    <meta property="article:published_time" content="2026-10-05T10:00:00Z" />
+    <script type="application/ld+json">
+      { "@type": "WebSite", "name": "Example" }
+    </script>
+    <p>Text.</p>
+  `;
+  try {
+    const reader = new StructuredMetadataReader(
+      await getPageExtractor().getStructuredMetadata()
+    );
+    Assert.equal(reader.primaryItem, null, "Site-level items are skipped.");
+    Assert.equal(reader.title, "Document title");
+    Assert.equal(reader.description, "Twitter description");
+    Assert.equal(reader.author, "Ada");
+    Assert.equal(
+      reader.image,
+      "https://example.com/card.jpg",
+      "Only http(s) image URLs are returned."
+    );
+    Assert.equal(reader.canonicalUrl, "https://example.com/canonical");
+    Assert.equal(reader.publishedTime, "2026-10-05T10:00:00Z");
+    Assert.equal(reader.siteName, "Example");
+    Assert.equal(reader.modifiedTime, null);
+    Assert.equal(reader.language, null);
+  } finally {
+    await cleanup();
+  }
+});
+
+add_task(async function test_reader_finds_events_in_a_listing() {
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const { getPageExtractor, cleanup } = await html`
+    <script type="application/ld+json">
+      [
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "item": {
+                "@type": "MusicEvent",
+                "name": "Concert",
+                "startDate": "2026-12-01T20:00",
+                "location": { "@id": "#hall" }
+              }
+            },
+            {
+              "@type": "ListItem",
+              "item": {
+                "@type": "https://schema.org/SportsEvent",
+                "name": "Match",
+                "location": { "@type": "Place", "name": "Stadium" }
+              }
+            }
+          ]
+        },
+        { "@type": "Place", "@id": "#hall", "name": "Hall" }
+      ]
+    </script>
+  `;
+  try {
+    const reader = new StructuredMetadataReader(
+      await getPageExtractor().getStructuredMetadata()
+    );
+    const events = reader.findItems("Event", "MusicEvent", "SportsEvent");
+    Assert.deepEqual(
+      events.map(event => [event.name, reader.resolve(event.location).name]),
+      [
+        ["Concert", "Hall"],
+        ["Match", "Stadium"],
+      ],
+      "Nested events are found in document order, and references resolve."
+    );
+    Assert.deepEqual(
+      reader.findItems("Event"),
+      [],
+      "Subtypes are not inferred."
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+add_task(async function test_reader_primary_item_can_be_overridden() {
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const { getPageExtractor, cleanup } = await html`
+    <script type="application/ld+json">
+      [
+        { "@type": "Product", "name": "First product" },
+        { "@type": "Product", "name": "Second product" }
+      ]
+    </script>
+  `;
+  try {
+    const reader = new StructuredMetadataReader(
+      await getPageExtractor().getStructuredMetadata()
+    );
+    Assert.equal(
+      reader.title,
+      "First product",
+      "By default the first item in document order is the primary one."
+    );
+    reader.primaryItem = reader.findItems("Product")[1];
+    Assert.equal(
+      reader.primaryItem?.name,
+      "Second product",
+      "The assigned item replaces the heuristic's choice."
+    );
+    Assert.equal(
+      reader.title,
+      "Second product",
+      "The title follows the assigned item."
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+/**
+ * primaryItem on pages shaped like SEO and shop plugin output. The fixtures
+ * are trimmed from a Yoast blog index, a WooCommerce product page and a Yoast
+ * with WP Recipe Maker recipe blog. Mirrors the reader tests above.
+ */
+add_task(async function test_reader_primary_item_on_plugin_generated_pages() {
+  const yoastBlogIndex = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": ["WebPage", "CollectionPage"],
+        "@id": "https://example.com/blog/",
+        name: "Blog",
+        isPartOf: { "@id": "https://example.com/#website" },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [{ "@type": "ListItem", position: 1 }],
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://example.com/#website",
+        name: "Example",
+        potentialAction: [
+          {
+            "@type": "SearchAction",
+            target: {
+              "@type": "EntryPoint",
+              urlTemplate: "https://example.com/?s={search_term_string}",
+            },
+          },
+        ],
+      },
+      { "@type": ["Organization", "Brand"], name: "Example" },
+    ],
+  };
+  const productPage = [
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["WebPage", "ItemPage"],
+          "@id": "https://example.com/products/pot/",
+          name: "Soup pot - Example",
+          potentialAction: { "@type": "BuyAction" },
+        },
+        { "@type": "ImageObject", url: "https://example.com/pot.jpg" },
+        { "@type": "WebSite", name: "Example" },
+      ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Product",
+          "@id": "https://example.com/products/pot/#product",
+          mainEntityOfPage: { "@id": "https://example.com/products/pot/" },
+          name: "Soup pot",
+          offers: { "@type": "Offer", price: "19.99" },
+          potentialAction: { "@type": "BuyAction" },
+        },
+      ],
+    },
+  ];
+  const recipePost = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        "@id": "https://example.com/lasagna/#article",
+        headline: "Easy Homemade Lasagna",
+        potentialAction: [{ "@type": "CommentAction" }],
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://example.com/lasagna/",
+        name: "Easy Homemade Lasagna Recipe - Example",
+      },
+      { "@type": "Person", name: "Ada" },
+      {
+        "@type": "Recipe",
+        "@id": "https://example.com/lasagna/#recipe",
+        mainEntityOfPage: "https://example.com/lasagna/",
+        isPartOf: { "@id": "https://example.com/lasagna/#article" },
+        name: "Easy Homemade Lasagna",
+        recipeInstructions: [{ "@type": "HowToStep", text: "Layer." }],
+      },
+    ],
+  };
+
+  const itemPageWithMainEntity = {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", name: "Example" },
+      {
+        "@type": "ItemPage",
+        name: "Soup pot - Example",
+        mainEntity: { "@type": "Product", name: "Soup pot" },
+      },
+    ],
+  };
+
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  for (const [blocks, expectedType, message] of [
+    [
+      [yoastBlogIndex],
+      ["WebPage", "CollectionPage"],
+      "A blog index is its page, not the site search's EntryPoint.",
+    ],
+    [
+      productPage,
+      "Product",
+      "A product page is its Product, not the page's BuyAction.",
+    ],
+    [
+      [recipePost],
+      "Recipe",
+      "The Recipe declaring mainEntityOfPage wins over the earlier Article.",
+    ],
+    [
+      [itemPageWithMainEntity],
+      "Product",
+      "A page's inline mainEntity is a candidate, and wins over the page.",
+    ],
+  ]) {
+    const page = await html`
+      ${blocks
+        .map(
+          block =>
+            `<script type="application/ld+json">${JSON.stringify(block)}</script>`
+        )
+        .join("\n")}
+      <p>Page.</p>
+    `;
+    try {
+      const reader = new StructuredMetadataReader(
+        await page.getPageExtractor().getStructuredMetadata()
+      );
+      Assert.deepEqual(reader.primaryItem?.["@type"], expectedType, message);
+    } finally {
+      await page.cleanup();
+    }
+  }
+});
+
+/**
+ * A feature reads a product price from the page the way the "read a product
+ * price" example in docs/index.md shows. Mirrors the reader tests above.
+ */
+add_task(async function test_reader_reads_a_product_price_as_documented() {
+  const readPrice = async getPageExtractor => {
+    const pageExtractor = getPageExtractor();
+    const reader = new StructuredMetadataReader(
+      await pageExtractor.getStructuredMetadata()
+    );
+    const [product] = reader.findItems("Product");
+    const offers = [reader.resolve(product?.offers)]
+      .flat()
+      .map(offer => reader.resolve(offer));
+    return (
+      offers.find(offer => offer?.price != null)?.price ??
+      reader.metaValues("product:price:amount")[0]
+    );
+  };
+
+  const { html } = await MLTestUtils.serveHTMLInTab({ browser: gBrowser });
+  const withJsonLd = await html`
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Shop"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "Soup pot",
+        "offers": [
+          { "@type": "Offer", "availability": "InStock" },
+          { "@id": "#sale" }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Offer",
+        "@id": "#sale",
+        "price": "19.99"
+      }
+    </script>
+    <p>A soup pot.</p>
+  `;
+  try {
+    Assert.equal(
+      await readPrice(withJsonLd.getPageExtractor),
+      "19.99",
+      "A price reached through an @id reference in another block is found."
+    );
+  } finally {
+    await withJsonLd.cleanup();
+  }
+
+  const withMetaOnly = await html`
+    <meta property="product:price:amount" content="7.50" />
+    <meta property="product:price:currency" content="EUR" />
+    <p>A soup pot.</p>
+  `;
+  try {
+    Assert.equal(
+      await readPrice(withMetaOnly.getPageExtractor),
+      "7.50",
+      "Without JSON-LD the Open Graph product price is used."
+    );
+  } finally {
+    await withMetaOnly.cleanup();
+  }
+});
+
+add_task(async function test_reader_without_a_base_url_keeps_absolute_urls() {
+  const tab = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "data:text/html," +
+      '<meta property="og:image" content="/relative.jpg">' +
+      '<meta name="twitter:image" content="https://example.com/card.jpg">',
+    true
+  );
+  try {
+    const metadata = await tab.linkedBrowser.browsingContext.currentWindowGlobal
+      .getActor("PageExtractor")
+      .getStructuredMetadata();
+    Assert.strictEqual(metadata.url, null, "A data: page has no base URL.");
+    Assert.strictEqual(
+      new StructuredMetadataReader(metadata).image,
+      "https://example.com/card.jpg",
+      "A relative image has nothing to resolve against, so the absolute one is used."
+    );
+  } finally {
+    BrowserTestUtils.removeTab(tab);
   }
 });
