@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
+import java.text.NumberFormat
 import kotlin.time.Instant
 import mozilla.components.ExperimentalAndroidComponentsApi
 import mozilla.components.compose.base.LinkText
@@ -88,10 +90,13 @@ import org.mozilla.experiments.nimbus.StringHolder
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.list.TextListItem
 import org.mozilla.fenix.compose.settings.SettingsSectionHeader
+import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.settings.ipprotection.IPProtectionMessageCard
 import org.mozilla.fenix.theme.FirefoxTheme
 
 private val PROMO_ILLUSTRATION_SIZE = 60.dp
+private const val MESSAGE_TITLE_KEY_FXA_LIMIT = "fxa_data_limit_gb"
+private const val MESSAGE_TITLE_KEY_GPI_LIMIT = "gpi_data_limit_gb"
 
 /**
  * The main VPN / IP Protection settings screen.
@@ -356,9 +361,25 @@ private fun MessageCard(message: Message, onMessageClick: (Message) -> Unit, onM
                 )
                 .fillMaxWidth(),
         message = message,
+        titleReplacements = buildVpnMessageTitleReplacements(),
         onAction = onMessageClick,
         onDismiss = onMessageDismiss,
     )
+}
+
+@Composable
+private fun buildVpnMessageTitleReplacements(): Map<String, String> {
+    val feature = FxNimbus.features.ipProtection.value()
+    val locale = LocalLocale.current
+    val numberFormat = remember(locale) { NumberFormat.getIntegerInstance(locale.platformLocale) }
+    return try {
+        mapOf(
+            MESSAGE_TITLE_KEY_FXA_LIMIT to numberFormat.format(feature.dataLimitGigabyte),
+            MESSAGE_TITLE_KEY_GPI_LIMIT to numberFormat.format(feature.gpiDataLimitGigabytes),
+        )
+    } catch (_: NumberFormatException) {
+        emptyMap()
+    }
 }
 
 @Composable
