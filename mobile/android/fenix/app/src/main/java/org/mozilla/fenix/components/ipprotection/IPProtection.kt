@@ -47,6 +47,7 @@ data class IPProtectionAuthSources(
 )
 
 /** Provides access to IP Protection related components. */
+@Suppress("LongParameterList")
 class IPProtection(
     val engine: Engine,
     val browserStore: BrowserStore,
@@ -73,7 +74,7 @@ class IPProtection(
                         messages = snackbarMessages,
                     ),
                     IPProtectionTelemetryMiddleware(),
-                    IPProtectionPreferencesMiddleware(ipProtectionRepository),
+                    IPProtectionPreferencesMiddleware(preferences = ipProtectionRepository),
                     IPProtectionLocationMiddleware(repository = DefaultIPProtectionLocationRepository(context)),
                     engineMiddleware,
                 )
