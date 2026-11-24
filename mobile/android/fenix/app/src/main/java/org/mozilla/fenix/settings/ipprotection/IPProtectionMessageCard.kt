@@ -7,8 +7,10 @@ package org.mozilla.fenix.settings.ipprotection
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -21,6 +23,7 @@ import mozilla.components.compose.base.theme.informationContainer
 import mozilla.components.service.nimbus.messaging.Message
 import mozilla.components.service.nimbus.messaging.MessageData
 import mozilla.components.service.nimbus.messaging.StyleData
+import mozilla.components.service.nimbus.messaging.types.vpnSettingsMessage
 import org.mozilla.experiments.nimbus.NullVariables
 import org.mozilla.experiments.nimbus.StringHolder
 import org.mozilla.fenix.R
@@ -31,6 +34,7 @@ import org.mozilla.fenix.theme.FirefoxTheme
  *
  * @param message The [Message] object
  * @param modifier Modifier for the component
+ * @param titleReplacements Map of title argument keys to the corresponding values
  * @param onAction Callback invoked when the message's action is clicked
  * @param onDismiss Callback invoked when the message is dismissed
  */
@@ -38,14 +42,24 @@ import org.mozilla.fenix.theme.FirefoxTheme
 internal fun IPProtectionMessageCard(
     message: Message,
     modifier: Modifier = Modifier,
+    titleReplacements: Map<String, Any> = emptyMap(),
     onAction: (message: Message) -> Unit = {},
     onDismiss: ((message: Message) -> Unit)? = null,
 ) {
+    val locale = LocalLocale.current.platformLocale
+    val vpnMessage = message.vpnSettingsMessage
+    val title =
+        remember(locale, message, titleReplacements) {
+            vpnMessage.title(locale, titleReplacements)?.takeIf { it.isNotBlank() }
+        }
+    val description = vpnMessage.text.takeUnless { it == EMPTY_VPN_MESSAGE_BODY || it.isBlank() }
+    if (title == null && description == null) return
+
     PromoCard(
         modifier = modifier,
-        title = message.title?.takeIf { it.isNotBlank() },
+        title = title,
         footer =
-            message.buttonLabel
+            vpnMessage.actionText
                 ?.takeIf { it.isNotBlank() }
                 ?.let { label ->
                     label to
@@ -55,7 +69,7 @@ internal fun IPProtectionMessageCard(
                             onClick = { onAction(message) },
                         )
                 },
-        description = message.text.takeIf { it.isNotBlank() },
+        description = description,
         colors = PromoCardColors.promoCardColors(backgroundColor = MaterialTheme.colorScheme.informationContainer),
         closeButtonContentDescription =
             if (onDismiss != null) stringResource(R.string.ip_protection_settings_message_dismiss) else null,
@@ -88,3 +102,5 @@ private fun PreviewIPProtectionMessageCard(@PreviewParameter(PreviewThemeProvide
         ) {}
     }
 }
+
+internal const val EMPTY_VPN_MESSAGE_BODY = "VPN_MESSAGE_EMPTY_BODY"
