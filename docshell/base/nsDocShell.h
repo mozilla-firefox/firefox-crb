@@ -355,6 +355,12 @@ class nsDocShell final : public nsDocLoader,
   StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
                                            uint32_t aLoadType);
 
+  // A javascript: URL's script has returned a string, which aChannel will load
+  // as the new document. Stops this docshell's current navigation and returns
+  // the load group aChannel was moved to, or nullptr if it stays in its own.
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY mozilla::Result<nsILoadGroup*, nsresult>
+  StartNavigationForJavascriptURLResult(nsIChannel* aChannel);
+
   // Tell the favicon service that aNewURI has the same favicon as aOldURI.
   static void CopyFavicon(nsIURI* aOldURI, nsIURI* aNewURI,
                           bool aInPrivateBrowsing);
@@ -1222,7 +1228,9 @@ class nsDocShell final : public nsDocLoader,
   // documents are only stopped if the navigation commits, see
   // https://github.com/whatwg/html/issues/4489. Returns false if script run
   // meanwhile started a newer navigation or stopped this one.
-  MOZ_CAN_RUN_SCRIPT bool StopForNewNavigation(uint32_t aStopFlags);
+  MOZ_CAN_RUN_SCRIPT bool StopForNewNavigation(
+      uint32_t aStopFlags, UnsetOngoingNavigation aUnsetOngoingNavigation =
+                               UnsetOngoingNavigation::No);
 
   MOZ_CAN_RUN_SCRIPT
   void ResetOngoingNavigation(
