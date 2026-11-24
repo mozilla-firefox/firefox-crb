@@ -631,6 +631,111 @@ add_task(async function test_staged_langpack_for_app_update_fail() {
 });
 
 /**
+ * This test verifies that a langpack disabled by an application update can be
+ * updated for the running version.
+ */
+add_task(async function test_install_langpack_updates_for_current_app() {
+  await promiseStartupManager("58");
+  let [, { addon }] = await Promise.all([
+    promiseLangpackStartup(),
+    AddonTestUtils.promiseInstallXPI(ADDONS.langpack_1),
+  ]);
+  Assert.ok(addon.isActive);
+
+  Assert.deepEqual(
+    await AddonManager.getIncompatibleLangpacks(["und"]),
+    [],
+    "The langpack is compatible"
+  );
+
+  await promiseRestartManager("59");
+  addon = await promiseAddonByID(ID);
+  Assert.ok(addon.appDisabled);
+  let langpacks = await AddonManager.getIncompatibleLangpacks(["und"]);
+  Assert.deepEqual(
+    langpacks.map(langpack => langpack.id),
+    [ID],
+    "The langpack is incompatible"
+  );
+  Assert.ok(
+    !(await AddonManager.installLangpackUpdates(langpacks)),
+    "No langpack update is available for 59"
+  );
+
+  await promiseRestartManager("60");
+  langpacks = await AddonManager.getIncompatibleLangpacks(["und"]);
+  Assert.equal(langpacks.length, 1, "The langpack is incompatible");
+  let [, isUpdated] = await Promise.all([
+    promiseLangpackStartup(),
+    AddonManager.installLangpackUpdates(langpacks),
+  ]);
+  Assert.ok(isUpdated, "Langpack was updated for 60");
+
+  addon = await promiseAddonByID(ID);
+  Assert.ok(addon.isActive);
+  Assert.equal(addon.version, "60.1.20230309.91233");
+
+  await addon.uninstall();
+  await promiseShutdownManager();
+});
+
+/**
+ * This test verifies that a compatibility-only update, which marks the
+ * installed langpack version compatible with the running version, counts as
+ * an update.
+ */
+add_task(async function test_install_langpack_updates_compatibility_only() {
+  const COMPAT_ID = "langpack-compat@test.mozilla.org";
+  let files = structuredClone(ADDONS.langpack_1);
+  let manifest = files["manifest.json"];
+  manifest.browser_specific_settings.gecko = {
+    id: COMPAT_ID,
+    strict_min_version: "58.0",
+    strict_max_version: "58.*",
+    update_url: "http://example.com/test_update_langpack_compat.json",
+  };
+  AddonTestUtils.registerJSON(server, "/test_update_langpack_compat.json", {
+    addons: {
+      [COMPAT_ID]: {
+        updates: [
+          {
+            version: manifest.version,
+            applications: {
+              gecko: { strict_min_version: "58.0", strict_max_version: "60.*" },
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await promiseStartupManager("58");
+  await Promise.all([
+    promiseLangpackStartup(),
+    AddonTestUtils.promiseInstallXPI(files),
+  ]);
+
+  await promiseRestartManager("60");
+  let langpacks = await AddonManager.getIncompatibleLangpacks(["und"]);
+  Assert.deepEqual(
+    langpacks.map(langpack => langpack.id),
+    [COMPAT_ID],
+    "The langpack is incompatible"
+  );
+  Assert.ok(
+    await AddonManager.installLangpackUpdates(langpacks),
+    "A compatibility-only update counts as an update"
+  );
+
+  let addon = await promiseAddonByID(COMPAT_ID);
+  Assert.ok(addon.isCompatible, "The langpack is compatible");
+  Assert.equal(addon.version, manifest.version, "The version didn't change");
+
+  await addon.uninstall();
+  await promiseShutdownManager();
+});
+
+/**
  * This test verifies that the staged langpack update is available after
  * updating the application, even if another langpack update happened in
  * the meantime.

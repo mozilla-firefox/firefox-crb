@@ -3732,6 +3732,8 @@ for (let meth of [
   "isInstallEnabled",
   "updateSystemAddons",
   "stageLangpacksForAppUpdate",
+  "getIncompatibleLangpacks",
+  "installLangpackUpdates",
 ]) {
   XPIProvider[meth] = function () {
     return XPIExports.XPIInstall[meth](...arguments);

@@ -4298,6 +4298,44 @@ var AppUpdate = {
     }
     return Promise.all(updates);
   },
+
+  async getIncompatibleLangpacks(locales) {
+    let addons = await AddonManager.getAddonsByTypes(["locale"]);
+    return addons.filter(addon => {
+      if (
+        addon.isCompatible ||
+        addon.userDisabled ||
+        !(addon.permissions & AddonManager.PERM_CAN_UPGRADE)
+      ) {
+        return false;
+      }
+      let languages =
+        XPIExports.XPIInternal.XPIStates.findAddon(addon.id)?.startupData
+          ?.languages ?? [];
+      return !!Services.locale.negotiateLanguages(locales, languages).length;
+    });
+  },
+
+  async installLangpackUpdates(langpacks) {
+    let results = await Promise.all(
+      langpacks.map(addon =>
+        this.findAddonUpdates(
+          addon,
+          AddonManager.UPDATE_WHEN_NEW_APP_INSTALLED,
+          Services.appinfo.version,
+          Services.appinfo.platformVersion
+        )
+          .then(async update =>
+            update ? !!(await update.install()) : addon.isCompatible
+          )
+          .catch(e => {
+            logger.debug(`Langpack update for ${addon.id} failed: ${e}`);
+            return false;
+          })
+      )
+    );
+    return results.every(Boolean);
+  },
 };
 
 export var XPIInstall = {
@@ -4314,6 +4352,14 @@ export var XPIInstall = {
 
   stageLangpacksForAppUpdate(nextVersion, nextPlatformVersion) {
     return AppUpdate.stageLangpackUpdates(nextVersion, nextPlatformVersion);
+  },
+
+  getIncompatibleLangpacks(locales) {
+    return AppUpdate.getIncompatibleLangpacks(locales);
+  },
+
+  installLangpackUpdates(langpacks) {
+    return AppUpdate.installLangpackUpdates(langpacks);
   },
 
   // Keep track of in-progress operations that support cancel()

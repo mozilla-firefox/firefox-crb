@@ -4400,6 +4400,45 @@ export var AddonManager = {
   },
 
   /**
+   * Gets the enabled langpacks that are not compatible with the running
+   * application, can be updated and provide one of the given locales.
+   *
+   * @param {Array<string>} locales
+   * @returns {Promise<Array<AddonWrapper>>}
+   */
+  getIncompatibleLangpacks(locales) {
+    if (!gStarted) {
+      throw Components.Exception(
+        "AddonManager is not initialized",
+        Cr.NS_ERROR_NOT_INITIALIZED
+      );
+    }
+    return AddonManagerInternal._getProviderByName(
+      "XPIProvider"
+    ).getIncompatibleLangpacks(locales);
+  },
+
+  /**
+   * Finds and installs updates compatible with the running application for
+   * the given langpacks.
+   *
+   * @param {Array<AddonWrapper>} langpacks
+   * @returns {Promise<boolean>} Resolves to true if every langpack was updated
+   *          or made compatible by a compatibility update.
+   */
+  installLangpackUpdates(langpacks) {
+    if (!gStarted) {
+      throw Components.Exception(
+        "AddonManager is not initialized",
+        Cr.NS_ERROR_NOT_INITIALIZED
+      );
+    }
+    return AddonManagerInternal._getProviderByName(
+      "XPIProvider"
+    ).installLangpackUpdates(langpacks);
+  },
+
+  /**
    * Gets an array of add-on IDs that changed during the most recent startup.
    *
    * @param  aType
