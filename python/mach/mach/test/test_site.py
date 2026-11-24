@@ -18,6 +18,7 @@ from packaging.requirements import Requirement
 import mach.site
 from mach.requirements import (
     MachEnvRequirements,
+    PypiOptionalSpecifier,
     PypiSpecifier,
     RequirementsTxtSpecifier,
 )
@@ -213,24 +214,61 @@ def test_requirements_validation_canonical_names():
     assert result.has_all_packages
 
 
+def read_constraints(pip_install_args):
+    constraints_path = pip_install_args[pip_install_args.index("--constraint") + 1]
+    return Path(constraints_path).read_text().splitlines()
+
+
 def test_pip_install_with_constraints_excludes(tmp_path):
     venv = PythonVirtualenv(str(tmp_path / "venv"))
     constraints = []
-
-    def record_constraints(pip_install_args):
-        constraints_path = pip_install_args[pip_install_args.index("--constraint") + 1]
-        constraints.extend(Path(constraints_path).read_text().splitlines())
 
     with mock.patch.multiple(
         venv,
         _resolve_installed_packages=mock.Mock(
             return_value={"platformdirs": "4.3.8", "psutil": "7.2.2"}
         ),
-        pip_install=mock.Mock(side_effect=record_constraints),
+        pip_install=mock.Mock(
+            side_effect=lambda args: constraints.extend(read_constraints(args))
+        ),
     ):
         venv.pip_install_with_constraints(["psutil==5.9.4"], excludes={"psutil"})
 
     assert constraints == ["platformdirs==4.3.8"]
+
+
+def test_install_optional_packages_constraints(tmp_path):
+    venv = PythonVirtualenv(str(tmp_path / "venv"))
+    installs = []
+
+    with mock.patch.multiple(
+        venv,
+        _resolve_installed_packages=mock.Mock(return_value={"psutil": "7.2.2"}),
+        pip_install=mock.Mock(
+            side_effect=lambda args: installs.append((args[-1], read_constraints(args)))
+        ),
+    ):
+        venv.install_optional_packages([
+            PypiOptionalSpecifier("", Requirement("glean-sdk==71.1.0")),
+            PypiOptionalSpecifier("", Requirement("PSUtil>=5.4.2")),
+            PypiOptionalSpecifier("", Requirement("PyYAML==6.0.3")),
+            PypiOptionalSpecifier(
+                "", Requirement('requests[socks]==2.32.5; sys_platform == "linux"')
+            ),
+        ])
+
+    constraints = [
+        "psutil==7.2.2",
+        "glean-sdk==71.1.0",
+        "PyYAML==6.0.3",
+        'requests==2.32.5; sys_platform == "linux"',
+    ]
+    assert installs == [
+        ("glean-sdk==71.1.0", constraints),
+        ("PSUtil>=5.4.2", constraints),
+        ("PyYAML==6.0.3", constraints),
+        ('requests[socks]==2.32.5; sys_platform == "linux"', constraints),
+    ]
 
 
 def create_venv_for_up_to_date_check(tmp_path):

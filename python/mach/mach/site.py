@@ -1037,7 +1037,7 @@ class PythonVirtualenv:
 
         return dirs
 
-    def pip_install_with_constraints(self, pip_args, excludes=()):
+    def pip_install_with_constraints(self, pip_args, excludes=(), constraints=()):
         """Create a pip constraints file or existing packages
 
         When pip installing an incompatible package, pip will follow through with
@@ -1057,16 +1057,20 @@ class PythonVirtualenv:
             if name not in excludes
         }
 
-        if existing_packages:
+        constraint_lines = [
+            f"{name}=={version}" for name, version in existing_packages.items()
+        ] + [
+            f"{requirement.name}{requirement.specifier}"
+            + (f"; {requirement.marker}" if requirement.marker else "")
+            for requirement in constraints
+            if canonicalize_name(requirement.name) not in existing_packages
+        ]
+
+        if constraint_lines:
             with tempfile.TemporaryDirectory() as tempdir:
                 constraints_path = os.path.join(tempdir, "site-constraints.txt")
                 with open(constraints_path, "w") as file:
-                    file.write(
-                        "\n".join([
-                            f"{name}=={version}"
-                            for name, version in existing_packages.items()
-                        ])
-                    )
+                    file.write("\n".join(constraint_lines))
 
                 self.pip_install(["--constraint", constraints_path] + pip_args)
         else:
@@ -1126,9 +1130,12 @@ class PythonVirtualenv:
         return install_result
 
     def install_optional_packages(self, optional_requirements):
+        constraints = [requirement.requirement for requirement in optional_requirements]
         for requirement in optional_requirements:
             try:
-                self.pip_install_with_constraints([str(requirement.requirement)])
+                self.pip_install_with_constraints(
+                    [str(requirement.requirement)], constraints=constraints
+                )
             except subprocess.CalledProcessError:
                 if not self._quiet:
                     print(
