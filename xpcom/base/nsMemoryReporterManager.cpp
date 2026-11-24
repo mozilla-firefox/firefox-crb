@@ -2281,12 +2281,14 @@ void nsMemoryReporterManager::EndProcessReport(uint32_t aGeneration,
       static_cast<unsigned>(s->mChildrenPending.Length()));
 
   // Start pending children up to the concurrency limit.
+  bool startedChild = false;
   while (s->mProcessesRunning.Length() < s->mConcurrencyLimit &&
          !s->mChildrenPending.IsEmpty()) {
     // Pop last element from s->mChildrenPending
     const PendingChild nextChild = s->mChildrenPending.PopLastElement();
     // Start report (if the child is still alive).
     if (StartChildReport(nextChild.mProcess, s)) {
+      startedChild = true;
       int32_t pid = nextChild.mProcess->Pid();
       s->mProcessesRunning.AppendElement(
           RunningProcess{nextChild.mProcess->GetGeckoChildID(),
@@ -2297,6 +2299,15 @@ void nsMemoryReporterManager::EndProcessReport(uint32_t aGeneration,
           aGeneration, static_cast<unsigned>(s->mProcessesRunning.Length()),
           static_cast<unsigned>(s->mChildrenPending.Length()));
     }
+  }
+
+  // Restart the timeout so that children started late, after waiting for a
+  // free slot, get as long as the first ones.
+  if (startedChild && s->mTimer) {
+    s->mTimer->InitWithNamedFuncCallback(
+        TimeoutCallback, this, StaticPrefs::memory_reporter_timeout(),
+        nsITimer::TYPE_ONE_SHOT,
+        "nsMemoryReporterManager::EndProcessReport"_ns);
   }
 
   // If all the child processes (if any) have reported, we can cancel

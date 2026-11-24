@@ -81,10 +81,11 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   //   finishes reporting back, including the parent.  If all processes do so
   //   before time-out, the timer is cancelled.  If there are child processes
   //   whose requests have not yet been sent, they will be started until the
-  //   concurrency limit is (again) reached.
+  //   concurrency limit is (again) reached, and the timer is restarted.
   //
-  // - TimeoutCallback() is called (asynchronously) if all the child processes
-  //   don't respond within the time threshold.
+  // - TimeoutCallback() is called (asynchronously) if processes are still
+  //   reporting "memory.reporter.timeout" ms after the most recent child was
+  //   started (or after the request began, if no child has started yet).
   //
   // - FinishReporting() finishes things off.  It is *always* called -- either
   //   from EndChildReport() (if all child processes have reported back) or
