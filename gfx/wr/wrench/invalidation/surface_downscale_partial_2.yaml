@@ -1,0 +1,76 @@
+---
+root:
+  items:
+    - type: rect
+      bounds: 0 0 800 600
+      color: white
+    - type: stacking-context
+      bounds: 0 0 800 600
+      filters: blur(2, 2)
+      items:
+        - type: rect
+          bounds: 0 0 800 600
+          color: white
+        - type: rect
+          bounds: 0 0 20 600
+          color: black
+        - type: rect
+          bounds: 40 0 20 600
+          color: black
+        - type: rect
+          bounds: 80 0 20 600
+          color: black
+        - type: rect
+          bounds: 120 0 20 600
+          color: black
+        - type: rect
+          bounds: 160 0 20 600
+          color: black
+        - type: rect
+          bounds: 200 0 20 600
+          color: black
+        - type: rect
+          bounds: 240 0 20 600
+          color: black
+        - type: rect
+          bounds: 280 0 20 600
+          color: black
+        - type: rect
+          bounds: 320 0 20 600
+          color: black
+        - type: rect
+          bounds: 360 0 20 600
+          color: black
+        - type: rect
+          bounds: 400 0 20 600
+          color: black
+        - type: rect
+          bounds: 440 0 20 600
+          color: black
+        - type: rect
+          bounds: 480 0 20 600
+          color: black
+        - type: rect
+          bounds: 520 0 20 600
+          color: black
+        - type: rect
+          bounds: 560 0 20 600
+          color: black
+        - type: rect
+          bounds: 600 0 20 600
+          color: black
+        - type: rect
+          bounds: 640 0 20 600
+          color: black
+        - type: rect
+          bounds: 680 0 20 600
+          color: black
+        - type: rect
+          bounds: 720 0 20 600
+          color: black
+        - type: rect
+          bounds: 760 0 20 600
+          color: black
+    - type: rect
+      bounds: 300 300 40 40
+      color: [0, 0, 255, 0.5]
