@@ -6,9 +6,16 @@ package org.mozilla.fenix.settings
 
 import android.os.Bundle
 import android.view.View
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.navArgs
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.Tabs
@@ -29,24 +36,45 @@ class TabsSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFragm
     private lateinit var inactiveTabs: SwitchPreferenceCompat
     private lateinit var privacyReport: SwitchPreferenceCompat
     private lateinit var tabGroups: SwitchPreferenceCompat
+    private lateinit var tabOrganizationCategory: PreferenceCategory
     private val args by navArgs<TabsSettingsFragmentArgs>()
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.tabs_preferences, rootKey)
+        setupPreferences()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         Tabs.settingOpened.record(NoExtras())
+        observeTabSettings()
     }
 
     override fun onResume() {
         super.onResume()
         showToolbar(getString(R.string.preferences_tabs))
 
-        setupPreferences()
         args.preferenceToScrollTo?.let {
             scrollToPreferenceWithHighlight(it)
+        }
+    }
+
+    /**
+     * Keeps the inactive tabs and tab groups switches in sync with the tab settings, which may still be loading from
+     * disk when this screen opens, or may change while it is visible. The switches stay hidden until the settings are
+     * known, so they never show a value that is not the user's.
+     */
+    private fun observeTabSettings() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                requireComponents.tabDataCoordinator.tabSettings.filterNotNull().collect { settings ->
+                    inactiveTabs.isChecked = settings.inactiveTabsEnabled
+                    tabGroups.isChecked = settings.tabGroupsEnabled
+                    tabOrganizationCategory.isVisible = true
+                    inactiveTabs.isVisible = true
+                    tabGroups.isVisible = true
+                }
+            }
         }
     }
 
@@ -64,25 +92,31 @@ class TabsSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFragm
         radioOneWeek = requirePreference(R.string.pref_key_close_tabs_after_one_week)
         radioOneDay = requirePreference(R.string.pref_key_close_tabs_after_one_day)
 
+        val settings = requireComponents.settings
+        val tabDataCoordinator = requireComponents.tabDataCoordinator
+
+        tabOrganizationCategory = requirePreference(R.string.pref_key_tab_organization)
+        tabOrganizationCategory.isVisible = false
+
         inactiveTabs =
             requirePreference<SwitchPreferenceCompat>(R.string.pref_key_inactive_tabs).also {
-                it.isChecked = requireComponents.settings.inactiveTabsAreEnabled
-                it.isEnabled =
-                    !(requireComponents.settings.closeTabsAfterOneDay ||
-                        requireComponents.settings.closeTabsAfterOneWeek)
-                it.onPreferenceChangeListener = SharedPreferenceUpdater()
+                // Hide the setting in code instead of the XML so it's visible to the settings indexer
+                it.isVisible = false
+                it.isEnabled = !(settings.closeTabsAfterOneDay || settings.closeTabsAfterOneWeek)
+                it.onPreferenceChangeListener = onTabSettingToggled(tabDataCoordinator::setInactiveTabsEnabled)
             }
 
         privacyReport =
             requirePreference<SwitchPreferenceCompat>(R.string.pref_key_privacy_report_tab_manager).also {
-                it.isChecked = requireComponents.settings.showPrivacyReportInTabManager
+                it.isChecked = settings.showPrivacyReportInTabManager
                 it.onPreferenceChangeListener = SharedPreferenceUpdater()
             }
 
         tabGroups =
             requirePreference<SwitchPreferenceCompat>(R.string.pref_key_tab_groups).also {
-                it.isChecked = requireComponents.settings.tabGroupsEnabled
-                it.onPreferenceChangeListener = SharedPreferenceUpdater()
+                // Hide the setting in code instead of the XML so it's visible to the settings indexer
+                it.isVisible = false
+                it.onPreferenceChangeListener = onTabSettingToggled(tabDataCoordinator::setTabGroupsEnabled)
             }
 
         listRadioButton.onClickListener(::sendTabViewTelemetry)
@@ -125,6 +159,21 @@ class TabsSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFragm
     private fun disableInactiveTabsSetting() {
         inactiveTabs.isEnabled = false
         inactiveTabs.isChecked = false
-        requireComponents.settings.inactiveTabsAreEnabled = false
+        requireComponents.tabDataCoordinator.setInactiveTabsEnabled(false)
     }
+
+    /**
+     * Returns a listener that forwards a switch toggle to [setTabSetting], which writes it to the tab settings owned by
+     * the Tab Data Coordinator instead of SharedPreferences.
+     */
+    private fun onTabSettingToggled(setTabSetting: (enabled: Boolean) -> Unit) =
+        Preference.OnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue as? Boolean
+            if (enabled != null) {
+                setTabSetting(enabled)
+                true
+            } else {
+                false
+            }
+        }
 }
