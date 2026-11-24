@@ -12,8 +12,9 @@ using namespace mozilla::ipc;
 
 namespace mozilla::dom {
 
-MemoryReportRequestHost::MemoryReportRequestHost(uint32_t aGeneration)
-    : mGeneration(aGeneration), mSuccess(false) {
+MemoryReportRequestHost::MemoryReportRequestHost(uint32_t aGeneration,
+                                                 GeckoChildID aChildID)
+    : mGeneration(aGeneration), mChildID(aChildID), mSuccess(false) {
   MOZ_COUNT_CTOR(MemoryReportRequestHost);
   mReporterManager = nsMemoryReporterManager::GetOrCreate();
   NS_WARNING_ASSERTION(mReporterManager, "GetOrCreate failed");
@@ -28,7 +29,7 @@ void MemoryReportRequestHost::RecvReport(const MemoryReport& aReport) {
   }
 
   if (mReporterManager) {
-    mReporterManager->HandleChildReport(mGeneration, aReport);
+    mReporterManager->HandleChildReport(mGeneration, mChildID, aReport);
   }
 }
 
@@ -44,7 +45,7 @@ MemoryReportRequestHost::~MemoryReportRequestHost() {
   MOZ_COUNT_DTOR(MemoryReportRequestHost);
 
   if (mReporterManager) {
-    mReporterManager->EndProcessReport(mGeneration, mSuccess);
+    mReporterManager->EndProcessReport(mGeneration, mChildID, mSuccess);
     mReporterManager = nullptr;
   }
 }

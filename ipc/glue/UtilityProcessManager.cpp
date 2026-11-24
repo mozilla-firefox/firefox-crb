@@ -849,6 +849,13 @@ class UtilityMemoryReporter : public MemoryReportingProcess {
     return 0;
   }
 
+  GeckoChildID GetGeckoChildID() const override {
+    if (RefPtr<UtilityProcessParent> parent = GetParent()) {
+      return parent->OtherChildID();
+    }
+    return kInvalidGeckoChildID;
+  }
+
  private:
   RefPtr<UtilityProcessParent> GetParent() const { return mParent; }
 
