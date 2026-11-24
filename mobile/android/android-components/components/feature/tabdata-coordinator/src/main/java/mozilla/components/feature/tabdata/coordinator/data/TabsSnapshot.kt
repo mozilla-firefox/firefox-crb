@@ -4,6 +4,8 @@
 
 package mozilla.components.feature.tabdata.coordinator.data
 
+import mozilla.components.feature.tab.settings.data.TabSettings
+
 /**
  * Data class containing the current snapshot of tab data.
  *
@@ -15,8 +17,7 @@ package mozilla.components.feature.tabdata.coordinator.data
  * @property inactiveTabs The complete collection of normal browsing [Tab]s which are inactive.
  * @property tabGroups The complete collection of [TabGroup]s.
  * @property openTabGroups The complete collection of open [TabGroup]s.
- * @property inactiveTabsEnabled Whether the inactive tabs feature is enabled.
- * @property tabGroupsEnabled Whether the tab groups feature is enabled.
+ * @property settings The tab-related user [TabSettings] the snapshot was transformed with.
  */
 data class TabsSnapshot(
     val selectedTab: Tab? = null,
@@ -26,6 +27,5 @@ data class TabsSnapshot(
     val inactiveTabs: List<Tab> = emptyList(),
     val tabGroups: List<TabGroup> = emptyList(),
     val openTabGroups: List<TabGroup> = emptyList(),
-    val inactiveTabsEnabled: Boolean = true,
-    val tabGroupsEnabled: Boolean = true,
+    val settings: TabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true),
 )
