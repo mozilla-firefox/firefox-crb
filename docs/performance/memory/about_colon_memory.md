@@ -97,6 +97,20 @@ any particular tree overwhelming, it can be helpful to collapse all the
 sub-trees immediately below the root, and then gradually expand the
 sub-trees of interest.
 
+### Incomplete reports
+
+A process that doesn't finish reporting is listed in a warning at the top of
+the page, and its section starts with a warning saying why. This happens when
+the measurement times out (see the `memory.reporter.timeout` pref, in
+milliseconds), when the process exits during the measurement, or when it is
+still busy with an earlier measurement. A process that was still reporting
+shows only what it reported before the cutoff; a process whose report never
+started has no measurements at all. Memory that the missing reporters would
+have measured may show up as `heap-unclassified`.
+
+When diffing two files, the warning instead names any input file that contains
+incomplete reports, because missing measurements show up in the diff as changes.
+
 ### [Sections]
 
 Memory reports are displayed on a per-process basis, with one process

@@ -9,6 +9,8 @@ support-files = [
   "memory-reports-diff1.json",
   "memory-reports-diff2.json",
   "memory-reports-good.json",
+  "memory-reports-incomplete1.json",
+  "memory-reports-incomplete2.json",
   "remote.xhtml",
 ]
 
@@ -27,6 +29,8 @@ support-files = [
 ["test_aboutmemory7.xhtml"]
 
 ["test_aboutmemory8.xhtml"]
+
+["test_aboutmemory9.xhtml"]
 
 ["test_collectorLogAnalyzer.xhtml"]
 
