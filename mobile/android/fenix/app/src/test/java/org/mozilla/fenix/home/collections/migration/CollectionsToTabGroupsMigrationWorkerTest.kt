@@ -35,7 +35,7 @@ class CollectionsToTabGroupsMigrationWorkerTest {
 
     private val settings = mockk<Settings>(relaxed = true)
     private val tabCollectionStorage = mockk<TabCollectionStorage>(relaxed = true)
-    private val collectionsMigrationRepository = DefaultCollectionsMigrationRepository(settings)
+    private val collectionsMigrationRepository = DefaultCollectionsMigrationRepository(settings = settings) { true }
 
     private lateinit var workManager: WorkManager
 
@@ -46,7 +46,6 @@ class CollectionsToTabGroupsMigrationWorkerTest {
 
         every { settings.hasMigratedCollectionsToTabGroups } returns false
         every { settings.migrateCollectionsToTabGroupsEnabled } returns true
-        every { settings.tabGroupsEnabled } returns true
         every { settings.migratedCollectionIds } returns emptySet()
         coEvery { tabCollectionStorage.getCollectionsList() } returns emptyList()
 

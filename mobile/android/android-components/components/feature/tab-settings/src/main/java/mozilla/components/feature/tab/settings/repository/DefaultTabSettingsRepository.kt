@@ -35,13 +35,13 @@ import mozilla.components.support.base.log.logger.Logger
  *
  * @param dataStore The [DataStore] used to read/write the tab settings.
  * @param scope The [CoroutineScope] used to observe the [DataStore] once [initialize] is called and to perform writes.
- * @param defaultSettings The [TabSettings] used for any setting that has not been persisted yet.
+ * @property defaultSettings The [TabSettings] used for any setting that has not been persisted yet.
  */
 class DefaultTabSettingsRepository
 internal constructor(
     private val dataStore: DataStore<Preferences>,
     private val scope: CoroutineScope,
-    private val defaultSettings: TabSettings,
+    override val defaultSettings: TabSettings,
 ) : TabSettingsRepository {
 
     private val logger = Logger(tag = "DefaultTabSettingsRepository")

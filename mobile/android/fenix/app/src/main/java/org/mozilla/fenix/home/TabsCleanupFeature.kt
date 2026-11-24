@@ -15,6 +15,8 @@ import mozilla.components.browser.state.selector.privateTabs
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
+import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.currentTabSettings
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.base.feature.LifecycleAwareFeature
 import org.mozilla.fenix.R
@@ -42,6 +44,7 @@ import org.mozilla.fenix.utils.getUndoDelay
  * @param navController [NavController] used for navigation.
  * @param tabsUseCases The [TabsUseCases] instance to perform tab actions.
  * @param fenixBrowserUseCases [FenixBrowserUseCases] used for adding new homepage tabs.
+ * @param tabDataCoordinator [TabDataCoordinator] used to check whether the inactive tabs feature is enabled.
  * @param settings [Settings] used to check the application shared preferences.
  * @param snackbarHostState The [SnackbarHostState] used to display snackbars.
  * @param viewLifecycleScope The [CoroutineScope] to use for launching coroutines.
@@ -55,6 +58,7 @@ class TabsCleanupFeature(
     private val navController: NavController,
     private val tabsUseCases: TabsUseCases,
     private val fenixBrowserUseCases: FenixBrowserUseCases,
+    private val tabDataCoordinator: TabDataCoordinator,
     private val settings: Settings,
     private val snackbarHostState: SnackbarHostState,
     private val viewLifecycleScope: CoroutineScope,
@@ -74,6 +78,9 @@ class TabsCleanupFeature(
     }
 
     override fun stop() = Unit
+
+    private val inactiveTabsEnabled: Boolean
+        get() = tabDataCoordinator.currentTabSettings.inactiveTabsEnabled
 
     /**
      * Shows an undo snackbar after removing one or more tabs.
@@ -131,7 +138,10 @@ class TabsCleanupFeature(
     private fun removeAllNormalTabs(): Int = browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
 
     private fun removeAllActiveNormalTabs(): Int =
-        tabsUseCases.removeAllActiveNormalTabs(state = browserStore.state, settings = settings)
+        tabsUseCases.removeAllActiveNormalTabs(
+            state = browserStore.state,
+            inactiveTabsEnabled = inactiveTabsEnabled,
+        )
 
     private fun removeTabAndShowSnackbar(sessionId: String) {
         val tab = browserStore.state.findTab(sessionId) ?: return
@@ -145,7 +155,7 @@ class TabsCleanupFeature(
                 browserStore.state.normalTabs.size > 1
             }
 
-        val inactiveTabs = browserStore.state.actualInactiveTabs(settings = settings)
+        val inactiveTabs = browserStore.state.actualInactiveTabs(inactiveTabsEnabled = inactiveTabsEnabled)
 
         tabsUseCases.removeTab(tabId = sessionId, excludedFallbackTabIds = inactiveTabs.map { it.id }.toSet())
 

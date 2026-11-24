@@ -12,7 +12,7 @@ interface CollectionsMigrationRepository {
      * Returns whether the migration should be attempted. The migration is skipped once every Collection has been
      * migrated, when it has been disabled, and when the Tab Groups feature is disabled.
      */
-    fun shouldMigrate(): Boolean
+    suspend fun shouldMigrate(): Boolean
 
     /** Returns whether every stored Collection has been migrated to a Tab Group. */
     fun hasMigratedCollections(): Boolean
@@ -55,12 +55,17 @@ interface CollectionsMigrationRepository {
  * The default implementation of the [CollectionsMigrationRepository].
  *
  * @param settings [Settings] used to read and write the migration preferences.
+ * @param isTabGroupsEnabled Returns whether the Tab Groups feature is currently enabled, suspending until that is
+ *   known.
  */
-class DefaultCollectionsMigrationRepository(private val settings: Settings) : CollectionsMigrationRepository {
-    override fun shouldMigrate(): Boolean =
+class DefaultCollectionsMigrationRepository(
+    private val settings: Settings,
+    private val isTabGroupsEnabled: suspend () -> Boolean,
+) : CollectionsMigrationRepository {
+    override suspend fun shouldMigrate(): Boolean =
         !settings.hasMigratedCollectionsToTabGroups &&
             settings.migrateCollectionsToTabGroupsEnabled &&
-            settings.tabGroupsEnabled
+            isTabGroupsEnabled()
 
     override fun hasMigratedCollections(): Boolean = settings.hasMigratedCollectionsToTabGroups
 

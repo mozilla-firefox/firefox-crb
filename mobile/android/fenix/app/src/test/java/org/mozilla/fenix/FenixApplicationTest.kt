@@ -30,6 +30,8 @@ import mozilla.components.concept.engine.webextension.DisabledFlags
 import mozilla.components.concept.engine.webextension.Metadata
 import mozilla.components.concept.engine.webextension.WebExtension
 import mozilla.components.feature.addons.migration.DefaultSupportedAddonsChecker
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.support.base.android.PowerManagerInfoProvider
 import mozilla.components.support.test.robolectric.DefaultBrowserUtils
 import mozilla.components.support.test.robolectric.testContext
@@ -101,6 +103,10 @@ class FenixApplicationTest {
 
         every { testContext.components.core } returns mockk(relaxed = true)
         every { testContext.components.nimbus } returns mockk(relaxed = true)
+        every { testContext.components.tabDataCoordinator } returns
+            FakeTabDataCoordinator(
+                initialTabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true)
+            )
         every { testContext.components.aiControlsFeatureBlock } returns AIFeatureBlock.inMemory()
         every { testContext.components.aiFeatureRegistry } returns AIFeatureRegistry.inMemory()
         every { testContext.components.distributionIdManager } returns
@@ -208,7 +214,6 @@ class FenixApplicationTest {
         every { settings.showContileFeature } returns true
         every { application.reportHomeScreenMetrics(settings) } just Runs
         every { application.deviceTotalRAM } returns 7L
-        every { settings.inactiveTabsAreEnabled } returns true
         every { settings.isIsolatedProcessEnabled } returns true
         every { settings.isAppZygoteEnabled } returns true
         every { application.isDeviceRamAboveThreshold } returns true

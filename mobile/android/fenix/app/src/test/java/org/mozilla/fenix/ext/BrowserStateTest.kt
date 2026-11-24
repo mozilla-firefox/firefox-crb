@@ -4,7 +4,6 @@
 
 package org.mozilla.fenix.ext
 
-import io.mockk.every
 import io.mockk.mockk
 import kotlin.collections.listOf
 import mozilla.components.browser.state.state.BrowserState
@@ -20,7 +19,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.home.recenttabs.RecentTab
-import org.mozilla.fenix.utils.Settings
 import org.mozilla.fenix.utils.Stories.markAsOpenedFromStoriesScreen
 import org.robolectric.RobolectricTestRunner
 
@@ -459,11 +457,7 @@ class BrowserStateTest {
                         privateTab4,
                     )
             )
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns false
-        }
-
-        val result = browserState.actualInactiveTabs(settings)
+        val result = browserState.actualInactiveTabs(inactiveTabsEnabled = false)
 
         assertTrue(result.isEmpty())
     }
@@ -498,11 +492,7 @@ class BrowserStateTest {
                         privateTab4,
                     )
             )
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns true
-        }
-
-        val result = browserState.actualInactiveTabs(settings)
+        val result = browserState.actualInactiveTabs(inactiveTabsEnabled = true)
 
         assertEquals(2, result.size)
         assertTrue(result.containsAll(listOf(normalTab1, normalTab3)))
@@ -520,11 +510,7 @@ class BrowserStateTest {
         val privateTab2 = createTab(url = "url6", id = "privateTab2", private = true, lastAccess = 0L, createdAt = 0L)
         val browserState =
             BrowserState(tabs = listOf(normalTab1, normalTab2, normalTab3, normalTab4, privateTab1, privateTab2))
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns false
-        }
-
-        val (activeTabs, inactiveTabs) = browserState.partitionNormalTabsByActiveTime(settings)
+        val (activeTabs, inactiveTabs) = browserState.partitionNormalTabsByActiveTime(inactiveTabsEnabled = false)
 
         assertEquals(listOf(normalTab1, normalTab2, normalTab3, normalTab4), activeTabs)
         assertEquals(emptyList<TabSessionState>(), inactiveTabs)
@@ -542,11 +528,7 @@ class BrowserStateTest {
         val privateTab2 = createTab(url = "url6", id = "privateTab2", private = true, lastAccess = 0L, createdAt = 0L)
         val browserState =
             BrowserState(tabs = listOf(normalTab1, normalTab2, inactiveTab1, inactiveTab2, privateTab1, privateTab2))
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns true
-        }
-
-        val (activeTabs, inactiveTabs) = browserState.partitionNormalTabsByActiveTime(settings)
+        val (activeTabs, inactiveTabs) = browserState.partitionNormalTabsByActiveTime(inactiveTabsEnabled = true)
 
         assertEquals(listOf(normalTab1, normalTab2), activeTabs)
         assertEquals(listOf(inactiveTab1, inactiveTab2), inactiveTabs)
