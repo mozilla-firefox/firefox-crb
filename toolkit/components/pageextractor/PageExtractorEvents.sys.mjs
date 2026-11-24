@@ -12,9 +12,10 @@ function ensureSchemaRegistered() {
 
   ChromeUtils.registerMarkerSchema({
     name: "PageExtractor",
-    tooltipLabel: "{marker.data.phaseLabel}",
-    tableLabel: "{marker.data.process}: {marker.data.phaseLabel}",
-    chartLabel: "{marker.data.phaseLabel}",
+    tooltipLabel: "{marker.data.phaseLabel}: {marker.data.outcome}",
+    tableLabel:
+      "{marker.data.process}: {marker.data.phaseLabel}: {marker.data.outcome}",
+    chartLabel: "{marker.data.phaseLabel}: {marker.data.outcome}",
     display: ["marker-chart", "marker-table"],
     colorField: "color",
     data: [
@@ -22,6 +23,12 @@ function ensureSchemaRegistered() {
       {
         key: "phaseLabel",
         label: "Description",
+        format: "string",
+        searchable: true,
+      },
+      {
+        key: "outcome",
+        label: "Outcome",
         format: "string",
         searchable: true,
       },
@@ -61,6 +68,12 @@ function ensureSchemaRegistered() {
       {
         key: "errorName",
         label: "Error",
+        format: "string",
+        searchable: true,
+      },
+      {
+        key: "blockReason",
+        label: "Block reason",
         format: "string",
         searchable: true,
       },
@@ -119,6 +132,36 @@ const DEFAULT_MARKER_COLOR = "blue";
 const HANDLED_OUTCOME_MARKER_COLOR = "yellow";
 const ERROR_MARKER_COLOR = "red";
 
+/**
+ * Descriptions of the statuses that need no other data.
+ *
+ * @type {Map<string, string>}
+ */
+const STATUS_DESCRIPTIONS = new Map([
+  ["success", "done"],
+  ["empty", "no text found"],
+  ["unavailable", "can't be read"],
+  ["document-hidden", "page is in a background tab"],
+  ["not-readerable", "Reader Mode declined, read as is"],
+  ["document-unloaded", "page replaced before it was ready"],
+]);
+
+/**
+ * The outcome of a phase in plain language, for a profile's reader.
+ *
+ * @param {Record<string, any>} data - The finished marker's data.
+ * @returns {string} The outcome in plain words, for a profile's reader.
+ */
+function describeOutcome(data) {
+  switch (data.status) {
+    case "blocked":
+      return "blocked: the page ended up on another site";
+    case "error":
+      return `failed with ${data.errorName ?? "an error"}`;
+  }
+  return STATUS_DESCRIPTIONS.get(data.status) ?? data.status;
+}
+
 let submissionScheduled = false;
 
 /**
@@ -153,6 +196,7 @@ const GLEAN_EXTRA_KEYS = {
   siteStrategy: "site_strategy",
   status: "status",
   errorName: "error_name",
+  blockReason: "block_reason",
   textLength: "text_length",
   linkCount: "link_count",
   canvasCount: "canvas_count",
@@ -357,6 +401,7 @@ export class PageExtractorEvent {
     } else {
       this.#data.color = HANDLED_OUTCOME_MARKER_COLOR;
     }
+    this.#data.outcome = describeOutcome(this.#data);
     const formatted = this.#options ? formatOptions(this.#options) : "";
     if (formatted) {
       this.#data.options = formatted;
@@ -376,10 +421,11 @@ export class PageExtractorEvent {
   }
 
   /**
-   * Runs `task`, finishing with "success" on resolve or "error" (and
-   * rethrowing) on throw. `task` can call `finish()` itself first for a
-   * more specific status (e.g. "unavailable"); since finish() is
-   * idempotent, the status set here is then a no-op.
+   * Runs `task`, finishing with "success" on resolve, or on throw with
+   * "blocked" for a "BlockedError" and "error" otherwise, and rethrowing.
+   * `task` can call `finish()` itself first for a more specific status
+   * (e.g. "unavailable"); since finish() is idempotent, the status set here
+   * is then a no-op.
    *
    * Private: only `trace()` below calls this, immediately after
    * construction, so that constructing an event and timing a task are
@@ -395,10 +441,14 @@ export class PageExtractorEvent {
       this.finish({ status: "success" });
       return result;
     } catch (error) {
-      // Optional chaining because JS permits throwing anything: a task that
-      // rejects with null would otherwise throw a TypeError here, replacing
-      // the original rejection and leaving this event never finished.
-      this.finish({ status: "error", errorName: error?.name });
+      if (error?.name === "BlockedError") {
+        this.finish({ status: "blocked", blockReason: error.blockReason });
+      } else {
+        // Optional chaining because JS permits throwing anything: a task that
+        // rejects with null would otherwise throw a TypeError here, replacing
+        // the original rejection and leaving this event never finished.
+        this.finish({ status: "error", errorName: error?.name });
+      }
       throw error;
     }
   }

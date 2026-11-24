@@ -38,8 +38,10 @@ page_extractor:
       `duration_ms` measures our own work and is recorded exactly.
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2058247
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2088246
     data_sensitivity:
       - web_activity
     notification_emails:
@@ -77,12 +79,18 @@ page_extractor:
         description: >
           The phase's outcome: "success", "error", or a handled non-error
           outcome such as "unavailable", "document-hidden", "empty",
-          "not-readerable", or "document-unloaded".
+          "not-readerable", "document-unloaded", or "blocked" (the site kept
+          the page from being read; see `block_reason`).
       error_name:
         type: string
         description: >
           The thrown error's `name` when status is "error". Omitted
           otherwise.
+      block_reason:
+        type: string
+        description: >
+          The reason extraction was blocked: "off-site" means the load ended up
+          on another site. Only present when status is "blocked".
       text_length:
         type: quantity
         description: >

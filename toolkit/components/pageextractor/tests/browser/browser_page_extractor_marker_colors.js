@@ -6,14 +6,19 @@
 const { ProfilerTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/ProfilerTestUtils.sys.mjs"
 );
+const TEST_DIR = getRootDirectory(gTestPath).replace(
+  "chrome://mochitests/content",
+  ""
+);
 
 /**
- * Drives one real success, one real handled outcome ("document-hidden"),
- * and one real error ("TimeoutError") through PageExtractor: no internals
- * are stubbed, and every status comes from an actual page load. Asserts the
- * resulting marker colors, then dumps the captured profile to disk so it
- * can be dragged into https://profiler.firefox.com to see the blue/yellow/
- * red PageExtractor markers in the marker chart.
+ * Drives one real success, real handled outcomes ("document-hidden" and a
+ * blocked cross-site redirect), and one real error ("TimeoutError") through
+ * PageExtractor: no internals are stubbed, and every status comes from an
+ * actual page load. Asserts the resulting marker colors and outcome labels,
+ * then dumps the captured profile to disk so it can be dragged into
+ * https://profiler.firefox.com to see the blue/yellow/red PageExtractor
+ * markers in the marker chart.
  */
 add_task(async function test_page_extractor_marker_colors() {
   const { PageExtractorParent } = ChromeUtils.importESModule(
@@ -66,6 +71,18 @@ add_task(async function test_page_extractor_marker_colors() {
     await backgroundExtractor.waitForPageReady();
 
     info(
+      "Yellow marker: a headless load redirected to another site is blocked."
+    );
+    await Assert.rejects(
+      readAtDeadline("https://w3c-test.org/", {
+        urlString: `https://example.com${TEST_DIR}redirect_to.sjs?https://w3c-test.org/`,
+        callback: () => ok(false, "The callback must not run."),
+      }),
+      error => error.name === "BlockedError",
+      "The cross-site redirect is blocked."
+    );
+
+    info(
       "Red marker: loading a headless page that never commits, which times out."
     );
     await SpecialPowers.pushPrefEnv({
@@ -107,12 +124,33 @@ add_task(async function test_page_extractor_marker_colors() {
   const errorMarker = markers.find(
     m => m.phase === "headless-navigate" && m.status === "error"
   );
+  const blockedMarker = markers.find(
+    m => m.phase === "headless-extractor" && m.status === "blocked"
+  );
   ok(successMarker, "A success marker was recorded.");
   ok(hiddenMarker, "A document-hidden marker was recorded.");
   ok(errorMarker, "An error marker was recorded.");
+  ok(blockedMarker, "A blocked marker was recorded.");
   is(successMarker.color, "blue", "Success renders blue.");
   is(hiddenMarker.color, "yellow", "A handled outcome renders yellow.");
   is(errorMarker.color, "red", "An error renders red.");
+  is(blockedMarker.color, "yellow", "A block renders yellow.");
+  is(successMarker.outcome, "done", "A success says it is done.");
+  is(
+    hiddenMarker.outcome,
+    "page is in a background tab",
+    "A handled outcome says what happened in plain words."
+  );
+  is(
+    errorMarker.outcome,
+    "failed with TimeoutError",
+    "An error names the error."
+  );
+  is(
+    blockedMarker.outcome,
+    "blocked: the page ended up on another site",
+    "A block says why."
+  );
 
   const path = PathUtils.join(
     PathUtils.tempDir,

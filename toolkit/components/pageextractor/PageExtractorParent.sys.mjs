@@ -33,6 +33,22 @@ const lazy = XPCOMUtils.declareLazy({
   },
 });
 
+/**
+ * @typedef {object} BlockDetails
+ * @property {"off-site"} blockReason - The load ended up on another site.
+ */
+
+/**
+ * Carries `details` so callers don't need to parse the message.
+ *
+ * @param {string} message
+ * @param {BlockDetails} details
+ * @returns {DOMException & BlockDetails}
+ */
+function blockedError(message, details) {
+  return Object.assign(new DOMException(message, "BlockedError"), details);
+}
+
 // NOTE: Copied from nsSandboxFlags.h.
 // Blocks window.open / target="_blank" popups.
 const SANDBOXED_AUXILIARY_NAVIGATION = 0x2;
@@ -575,13 +591,13 @@ export class PageExtractorParent extends JSWindowActorParent {
             const onDeadline = () => {
               if (offSiteLocation) {
                 navigateEvent.finish({
-                  status: "error",
-                  errorName: "BlockedError",
+                  status: "blocked",
+                  blockReason: "off-site",
                 });
                 actorResolver.reject(
-                  new DOMException(
+                  blockedError(
                     `The page ended up at ${offSiteLocation} instead of ${url.href} and never returned within ${timeoutMs}ms.`,
-                    "BlockedError"
+                    { blockReason: "off-site" }
                   )
                 );
                 return;
@@ -619,9 +635,9 @@ export class PageExtractorParent extends JSWindowActorParent {
               return await callback(await ready, traceId);
             } catch (error) {
               if (offSiteLocation && error?.name !== "BlockedError") {
-                throw new DOMException(
+                throw blockedError(
                   `The page navigated to ${offSiteLocation} instead of ${url.href} before its content could be read.`,
-                  "BlockedError"
+                  { blockReason: "off-site" }
                 );
               }
               throw error;
