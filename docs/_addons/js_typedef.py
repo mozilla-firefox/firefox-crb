@@ -4,7 +4,8 @@
 
 """
 Sphinx extension that adds a ``js:autotypedef`` directive, which shows the
-properties of one or more JSDoc typedefs as a single table.
+properties of one or more JSDoc typedefs as a single table. A typedef that
+intersects other typedefs, such as ``A & B``, lists the properties of each.
 """
 
 import re
@@ -21,11 +22,42 @@ COLUMN_WIDTHS = (2, 2, 1, 5)
 
 def lookup_typedef(analyzer, name):
     """Returns the jsdoc doclet for the typedef with the given name."""
+    if not re.fullmatch(r"[\w.]+", name):
+        raise SuffixNotFound([name])
     path = PathVisitor().visit(path_and_formal_params["path"].parse(name))
     doclet = analyzer._doclets_by_path.get(path)
     if doclet.get("kind") != "typedef":
         raise SuffixNotFound(path)
     return doclet
+
+
+def typedef_doclets(analyzer, name):
+    """Returns the doclets whose properties make up the named typedef.
+
+    An intersection typedef has no properties of its own, so the doclets of
+    the typedefs it intersects are returned in its place.
+    """
+    doclet = lookup_typedef(analyzer, name)
+    names = doclet.get("type", {}).get("names", [])
+    if doclet.get("properties") or len(names) != 1 or "&" not in names[0]:
+        return [doclet]
+    doclets = []
+    for part in names[0].split("&"):
+        doclets.extend(typedef_doclets(analyzer, part.strip()))
+    return doclets
+
+
+def merge_property(props, prop):
+    """Adds the property to the dict keyed by name.
+
+    A repeated name keeps the first type and description and is required if
+    any of its typedefs requires it.
+    """
+    existing = props.get(prop["name"])
+    if existing is None:
+        props[prop["name"]] = dict(prop)
+    elif not prop.get("optional"):
+        existing["optional"] = False
 
 
 def format_type(prop):
@@ -52,17 +84,19 @@ class AutoTypedefDirective(Directive):
         env = self.state.document.settings.env
         analyzer = env.app._sphinxjs_analyzer
 
-        props = []
+        props = {}
         for name in self.arguments:
             try:
-                doclet = lookup_typedef(analyzer, name)
+                doclets = typedef_doclets(analyzer, name)
             except (SuffixNotFound, SuffixAmbiguous):
                 raise self.error(f"No unique JSDoc typedef named {name!r} was found.")
-            meta = doclet["meta"]
-            env.note_dependency(
-                relpath(join(meta["path"], meta["filename"]), env.app.srcdir)
-            )
-            props.extend(doclet.get("properties", []))
+            for doclet in doclets:
+                meta = doclet["meta"]
+                env.note_dependency(
+                    relpath(join(meta["path"], meta["filename"]), env.app.srcdir)
+                )
+                for prop in doclet.get("properties") or []:
+                    merge_property(props, prop)
 
         tgroup = nodes.tgroup(cols=len(HEADERS))
         for width in COLUMN_WIDTHS:
@@ -70,7 +104,7 @@ class AutoTypedefDirective(Directive):
         tgroup += nodes.thead("", make_row([[nodes.Text(h)] for h in HEADERS]))
         tbody = nodes.tbody()
         messages = []
-        for prop in props:
+        for prop in props.values():
             type_text = format_type(prop)
             description = " ".join(prop.get("description", "").split())
             description_nodes, description_messages = self.state.inline_text(

@@ -14,9 +14,9 @@ const { EventEmitter } = ChromeUtils.importESModule(
 
 /**
  * @typedef {object} PreferenceConfig
- * @property {string} id
- * @property {string} type
- * @property {boolean} [inverted]
+ * @property {string} id The pref name, such as `general.autoScroll`.
+ * @property {string} type The pref type: `int`, `bool`, `string`, `wstring`, `unichar`, `fontname`, or `file`.
+ * @property {boolean} [inverted] Whether the value is read and written as the opposite of the `bool` pref.
  */
 
 /**
@@ -31,6 +31,11 @@ function getElementsByAttribute(name, value) {
   return document.querySelectorAll(`[${name}="${value}"]`);
 }
 
+/**
+ * Represents one `Services.prefs` preference registered with `Preferences`.
+ * It reads and writes the pref value for its `type` and keeps bound elements
+ * in sync with that value.
+ */
 export class Preference extends EventEmitter {
   /**
    * @type {PreferenceValue}
@@ -260,9 +265,6 @@ export class Preference extends EventEmitter {
     return this._value;
   }
 
-  /**
-   * @param {PreferenceValue} val
-   */
   set value(val) {
     if (this.value !== val) {
       this._value = val;
@@ -360,9 +362,6 @@ export class Preference extends EventEmitter {
     return null;
   }
 
-  /**
-   * @param {PreferenceValue} val
-   */
   set valueFromPreferences(val) {
     // Exit early if nothing to do.
     if (this.readonly || this.valueFromPreferences == val) {

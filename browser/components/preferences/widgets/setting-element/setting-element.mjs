@@ -142,6 +142,11 @@ class SpreadDirective extends Directive {
   }
 }
 
+/**
+ * Lit directive that applies each property in a props object to a DOM element.
+ * Key prefixes control how each value is written: `?` for boolean attributes,
+ * `.` for direct properties, no prefix for regular attributes.
+ */
 export const spread = directive(SpreadDirective);
 
 /**
@@ -173,6 +178,11 @@ function bumpHeadingLevelForSrd(level, srdEnabled) {
   return Math.max(level + 1, 3);
 }
 
+/**
+ * Base class shared by SettingGroup and SettingControl. Centralizes the
+ * mapping from a SettingElementConfig onto DOM attributes and properties on
+ * the rendered control.
+ */
 export class SettingElement extends MozLitElement {
   /**
    * The default properties that the setting element accepts.

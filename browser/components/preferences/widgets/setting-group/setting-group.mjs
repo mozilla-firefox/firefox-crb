@@ -21,10 +21,12 @@ import { SettingGroupManager } from "chrome://browser/content/preferences/config
  * @typedef {object} SettingGroupConfigExtensions
  * @property {SettingControlConfig[]} items Array of SettingControlConfigs to render.
  * @property {boolean} [inProgress]
- * Hide this section unless the browser.settings-redesign.enabled or
- * browser.settings-redesign.<groupid>.enabled prefs are true.
+ * Whether the group is removed unless `browser.settings-redesign.enabled` or
+ * `browser.settings-redesign.<groupid>.enabled` is true.
  * @property {"default"|"always"|"never"} [card]
- * Whether to use a card. Default: use a card after SRD or in a sub-pane.
+ * Whether to use a card. Default: use a card unless
+ * `browser.settings-redesign.enabled` is false and the group isn't in a
+ * sub-pane.
  * @property {boolean} [hiddenFromSearch]
  * Whether this group should be hidden from search.
  * @property {boolean} [hidden] Whether this group should be visible.
@@ -55,6 +57,11 @@ const HiddenAttr = Object.freeze({
   Search: "data-hidden-from-search",
 });
 
+/**
+ * Lit custom element that renders a set of related controls inside a pane
+ * from a SettingGroupConfig. Group configs are registered with
+ * SettingGroupManager.
+ */
 export class SettingGroup extends SettingElement {
   static properties = {
     config: { type: Object },
@@ -97,11 +104,12 @@ export class SettingGroup extends SettingElement {
     this.config = undefined;
 
     /**
-     * Set by initSettingGroup based on browser.settings-redesign.enabled.
+     * Whether `browser.settings-redesign.enabled` is true. Set by
+     * initSettingGroup.
      */
     this.srdEnabled = false;
     /**
-     * Set by setting-pane if this is a sub pane so we can render cards even if SRD is off.
+     * Whether this group renders inside a sub-pane. Set by setting-pane.
      */
     this.inSubPane = false;
   }

@@ -29,6 +29,11 @@ const domContentLoadedPromise = new Promise(resolve => {
   });
 });
 
+/**
+ * Registry of the `Preference` and `Setting` objects for a preferences
+ * window. Legacy elements with a `preference` attribute are kept in sync
+ * with their `Preference` through this object.
+ */
 export const Preferences = {
   /**
    * @type {Record<string, Preference>}
@@ -91,11 +96,12 @@ export const Preferences = {
   },
 
   /**
-   * A configuration object that adds an element (control) associated with a pref,
-   * that includes all of the configuration for the control
-   * such as its Fluent strings, support page, subcategory etc.
+   * Creates a Setting from the config and registers it by its id. The new
+   * Setting subscribes to changes of the pref the config declares and keeps
+   * the teardown function its setup callback returns.
    *
    * @param {SettingConfig} settingConfig
+   * @throws {Error} If the config's pref wasn't registered with add or addAll.
    */
   addSetting(settingConfig) {
     if (this._unloaded) {

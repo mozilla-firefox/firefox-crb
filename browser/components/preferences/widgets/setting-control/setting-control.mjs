@@ -48,11 +48,11 @@ import { MozInputFolder } from "chrome://global/content/elements/moz-input-folde
  * ExtensionSettingStore id for checking if a setting is controlled by an extension.
  */
 
-/**
- * @typedef {SettingOptionConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingOptionConfig
- * @typedef {SettingControlConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingControlConfig
- * @typedef {{ control: SettingControl } & HTMLElement} SettingControlChild
- */
+/** @typedef {SettingOptionConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingOptionConfig */
+
+/** @typedef {SettingControlConfigExtensions & SettingElementConfig & SettingNestedConfig} SettingControlConfig */
+
+/** @typedef {{ control: SettingControl } & HTMLElement} SettingControlChild */
 
 /**
  * @template T=Event
@@ -96,6 +96,10 @@ const ITEM_SLOT_BY_PARENT = new Map([
   ["moz-toggle", "nested"],
 ]);
 
+/**
+ * Error thrown when a setting-control references a setting id that hasn't
+ * been registered with Preferences.addSetting.
+ */
 export class SettingNotDefinedError extends Error {
   /** @param {string} settingId */
   constructor(settingId) {
@@ -107,6 +111,11 @@ export class SettingNotDefinedError extends Error {
   }
 }
 
+/**
+ * Lit custom element that wraps one individual setting inside a group. It
+ * reads a SettingControlConfig, resolves the matching Setting from
+ * Preferences, and renders the appropriate control element.
+ */
 export class SettingControl extends SettingElement {
   static SettingNotDefinedError = SettingNotDefinedError;
   static properties = {

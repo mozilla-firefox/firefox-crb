@@ -124,8 +124,8 @@ import { Preferences } from "chrome://global/content/preferences/Preferences.mjs
 
 /**
  * @typedef {object} SettingControllingExtensionInfo
- * @property {string} storeId The ExtensionSettingsStore id that controls this setting.
- * @property {string} l10nId A fluent id to show in a controlled by extension message.
+ * @property {string} storeId The ExtensionSettingsStore id that controls this setting, such as `privacy.containers`.
+ * @property {string} l10nId A fluent id to show in a controlled by extension message, such as `extension-controlling-privacy-containers`.
  * @property {string} [name] The controlling extension's name.
  * @property {string} [id] The controlling extension's id.
  * @property {string} [supportPage] A support page to show in the message.
@@ -141,26 +141,31 @@ import { Preferences } from "chrome://global/content/preferences/Preferences.mjs
  * @property {Pick<SettingControllingExtensionInfo, "storeId" | "l10nId" | "allowControl" | "supportPage">} [controllingExtensionInfo] Data related to the setting being controlled by an extension.
  * @property {SettingVisibleCallback} [visible] - Function to determine if a setting is visible in the UI
  * @property {SettingGetCallback} [get] - Function to get the value of the setting. Optional if {@link SettingConfig#pref} is set.
- * @property {SettingSetCallback} [set] - See {@link SettingSetCallback}
+ * @property {SettingSetCallback} [set] - Called whenever the Setting's value is set, by its control or by JS. See {@link SettingSetCallback}
  * @property {SettingGetControlConfigCallback} [getControlConfig] -  Function that allows the setting to modify its layout, this is intended to be used to provide the options, {@link SettingConfig#l10nId} or {@link SettingConfig#l10nArgs} data if necessary, but technically it can change anything (that doesn't mean it will have any effect though).
  * @property {SettingOnUserChangeCallback} [onUserChange] - A function that will be called when the setting
  *    has been modified by the user, it is passed the value/pressed/checked from its input. NOTE: This should be used for
- *    additional work that needs to happen, such as recording telemetry.
+ *    additional work that needs to happen, such as recording telemetry (see `aiFeatures.mjs`).
  *    If you want to set the value of the Setting then use the {@link SettingConfig.set} function.
  * @property {SettingSetupCallback} [setup] -  A function to be called to register listeners for
  *    the setting. It should return a {@link SettingTeardownCallback} function to
  *    remove the listeners if necessary. This should emit change events when the setting has changed to
- *    ensure the UI stays in sync if possible.
+ *    ensure the UI stays in sync if possible. Called once when the Setting is created; the returned
+ *    function runs when the page unloads. Settings without a {@link SettingConfig#pref} emit their own
+ *    change events through `emitChange` or `setting.emit("change")`.
  * @property {SettingDisabledCallback} [disabled] - A function to determine if a setting should be disabled
  * @property {SettingOnUserClickCallback} [onUserClick] - A function that will be called when a setting has been
  *    clicked, the element name must be included in the CLICK_HANDLERS array
  *    in {@link file://./../../browser/components/preferences/widgets/setting-group/setting-group.mjs}. This should be
  *    used for controls that aren't regular form controls but instead perform an action when clicked, like a button or link.
- * @property {SettingOnMessageBarDismissCallback} [onMessageBarDismiss] - A function that will be called when a message bar has been
- *    dismissed. This should be used for moz-message-bar to override the default behavior.
- * @property {SettingOnUserReorderCallback} [onUserReorder] - A function that will be called when items in a
- *    reorderable list have been reordered. This should be used to update the underlying data when the user
- *    reorders items, such as updating preference values.
+ * @property {SettingOnMessageBarDismissCallback} [onMessageBarDismiss] - A function that will be called when the user
+ *    dismisses the setting's moz-message-bar, in response to its `message-bar:user-dismissed` event. This should be used
+ *    to react to the dismissal, for example to persist that the message bar shouldn't be shown again.
+ * @property {SettingOnUserReorderCallback} [onUserReorder] - A function that will be called when the user reorders
+ *    the setting's items by drag and drop or keyboard, in response to the `reorder` event from a reorderable
+ *    moz-box-group. This should be used to persist the new ordering, such as updating preference values. The event's
+ *    `detail` has `draggedElement`,
+ *    `targetElement`, `position` (-1 = before, 0 = after the target), `draggedIndex`, and `targetIndex`.
  */
 
 const { EventEmitter } = ChromeUtils.importESModule(
@@ -194,6 +199,12 @@ class PreferenceNotAddedError extends Error {
   }
 }
 
+/**
+ * Represents one setting on the preferences page. It wraps a `SettingConfig`
+ * or `AsyncSetting`, reads and writes its value through the backing
+ * `Preference` or the config's callbacks, and emits `change` when its value,
+ * visibility, or disabled state may have changed.
+ */
 export class Setting extends EventEmitter {
   /**
    * @type {Preference}
@@ -322,9 +333,6 @@ export class Setting extends EventEmitter {
     return prefVal;
   }
 
-  /**
-   * @param {SettingValue} val
-   */
   set value(val) {
     let newVal = this.config.set ? this.config.set(val, this.deps, this) : val;
     if (this.pref && !(newVal instanceof Object && "then" in newVal)) {

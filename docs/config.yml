@@ -183,6 +183,12 @@ js_source_paths:
     - browser/components/migration/content
     - browser/components/mozcachedohttp
     - browser/components/mozcachedohttp/actors
+    - browser/components/preferences/config/SettingGroupManager.mjs
+    - browser/components/preferences/config/SettingPaneManager.mjs
+    - browser/components/preferences/widgets/setting-control
+    - browser/components/preferences/widgets/setting-element
+    - browser/components/preferences/widgets/setting-group
+    - browser/components/preferences/widgets/setting-pane
     # Limited to SessionStore.sys.mjs, the only file in the directory that has
     # a documentation page.
     - browser/components/sessionstore/SessionStore.sys.mjs
@@ -208,6 +214,10 @@ js_source_paths:
     - toolkit/components/extensions
     - toolkit/components/extensions/parent
     - toolkit/components/ml/content/backends/ONNXPipeline.mjs
+    - toolkit/content/preferences/AsyncSetting.mjs
+    - toolkit/content/preferences/Preference.mjs
+    - toolkit/content/preferences/Preferences.mjs
+    - toolkit/content/preferences/Setting.mjs
     - toolkit/modules/BrowserUtils.sys.mjs
     - toolkit/mozapps/extensions
     - toolkit/components/prompts/src

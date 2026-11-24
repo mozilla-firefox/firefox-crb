@@ -44,11 +44,16 @@ function shouldGoBackToParent(win, parentCategory) {
  * @property {"beta" | "new"} [badge] Badge type to display in the page header.
  * @property {() => boolean} [visible] If this pane is visible.
  * @property {string} [replaces] ID of legacy pane getting replaced by new pane.
- *
- * @typedef {string} SettingPaneId
- * @typedef {SettingPaneConfig & { id: SettingPaneId }} SettingPaneFullConfig
  */
 
+/** @typedef {string} SettingPaneId */
+
+/** @typedef {SettingPaneConfig & { id: SettingPaneId }} SettingPaneFullConfig */
+
+/**
+ * Lit custom element that renders one top-level preferences pane from a
+ * SettingPaneConfig. Pane configs are registered with SettingPaneManager.
+ */
 export class SettingPane extends MozLitElement {
   #internals;
 
