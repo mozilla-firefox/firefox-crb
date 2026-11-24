@@ -74,6 +74,7 @@ fun TabsSnapshot.toTabStorageUpdate(): TabStorageUpdate {
         privateTabs = displayPrivateTabs,
         selectedPrivateItemIndex = displayPrivateTabs.indexOfFirst { it.isFocused }.coerceAtLeast(0),
         tabGroups = displayTabGroups,
+        tabGroupsEnabled = settings.tabGroupsEnabled,
     )
 }
 

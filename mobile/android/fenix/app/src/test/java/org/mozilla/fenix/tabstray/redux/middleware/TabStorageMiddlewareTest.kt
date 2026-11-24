@@ -568,6 +568,7 @@ class TabStorageMiddlewareTest {
                         groups = listOf(displayGroup.copy(lastModified = fakeDateTimeProvider.currentTimeMillis()))
                     ),
                 backStack = TabsTrayState().backStack + ExpandedTabGroup(group = displayGroup),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
 
@@ -664,6 +665,7 @@ class TabStorageMiddlewareTest {
                             tabCount = selectedTabs.size,
                         ),
                     tabGroupState = TabsTrayState.TabGroupState(groups = expectedTabGroupList),
+                    config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                     hasTabDataLoaded = true,
                 )
 
@@ -754,6 +756,7 @@ class TabStorageMiddlewareTest {
                             tabCount = tabs.size,
                         ),
                     tabGroupState = TabsTrayState.TabGroupState(groups = expectedTabGroupList),
+                    config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                     hasTabDataLoaded = true,
                 )
 
@@ -829,6 +832,7 @@ class TabStorageMiddlewareTest {
                             tabCount = tabs.size,
                         ),
                     tabGroupState = TabsTrayState.TabGroupState(groups = expectedTabGroupList),
+                    config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                     hasTabDataLoaded = true,
                 )
 
@@ -874,6 +878,7 @@ class TabStorageMiddlewareTest {
                             tabCount = 1,
                         ),
                     tabGroupState = TabsTrayState.TabGroupState(groups = expectedTabGroupList),
+                    config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                     hasTabDataLoaded = true,
                 )
 
@@ -1683,6 +1688,7 @@ class TabStorageMiddlewareTest {
                                 )
                             )
                     ),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
 
@@ -1971,6 +1977,7 @@ class TabStorageMiddlewareTest {
                         groups = expectedTabGroupList,
                         dragProcessingState = TabsTrayState.DragProcessingState.COMPLETED,
                     ),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
 
@@ -2032,6 +2039,7 @@ class TabStorageMiddlewareTest {
                         groups = expectedTabGroupList,
                         dragProcessingState = TabsTrayState.DragProcessingState.COMPLETED,
                     ),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
 
@@ -2088,6 +2096,7 @@ class TabStorageMiddlewareTest {
                         groups = expectedTabGroupList,
                         dragProcessingState = TabsTrayState.DragProcessingState.COMPLETED,
                     ),
+                config = TabsTrayState.TabsTrayConfig(tabGroupsEnabled = true),
                 hasTabDataLoaded = true,
             )
 
