@@ -110,6 +110,8 @@ export class OpenAIPipeline {
    * @param {Function|null} args.inferenceProgressCallback - Callback function to report inference progress
    * @param {MessagePort|null} args.port - Port for posting messages to the caller
    * @param {boolean} args.isDone - Whether this is the final progress update
+   * @param {string|null} [args.finishReason] - The `finish_reason` the stream
+   *   ended with, or null if it never sent one. Only set on the final update.
    */
   #sendProgress(args) {
     const {
@@ -120,6 +122,7 @@ export class OpenAIPipeline {
       isDone,
       toolCalls,
       usage,
+      finishReason,
     } = args;
     port?.postMessage({
       text: content,
@@ -135,6 +138,7 @@ export class OpenAIPipeline {
         tokens: [],
         ...(toolCalls ? { toolCalls } : {}),
         ...(usage ? { usage } : {}),
+        ...(isDone ? { finishReason: finishReason ?? null } : {}),
       },
       type: Progress.ProgressType.INFERENCE,
       statusText: isDone
@@ -247,6 +251,7 @@ export class OpenAIPipeline {
     let streamOutput = "";
     let toolAcc = new Map();
     let sawToolCallsFinish = false;
+    let finishReason = null;
     let usage = null;
     let chunkIndex = 0;
 
@@ -298,6 +303,10 @@ export class OpenAIPipeline {
           usage = chunk.usage;
         }
 
+        if (choice?.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
+
         // If the model signals it wants tools now
         if (choice?.finish_reason === "tool_calls") {
           sawToolCallsFinish = true;
@@ -335,6 +344,7 @@ export class OpenAIPipeline {
       inferenceProgressCallback,
       port,
       isDone: true,
+      finishReason,
       ...(usage ? { usage } : {}),
     });
 
@@ -394,6 +404,7 @@ export class OpenAIPipeline {
       port,
       isDone: true,
       toolCalls,
+      finishReason: completion.choices[0].finish_reason,
     });
 
     return {

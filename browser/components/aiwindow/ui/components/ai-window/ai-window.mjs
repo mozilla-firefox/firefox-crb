@@ -4103,6 +4103,7 @@ export class AIWindow extends MozLitElement {
     }
 
     this._isRetrying = true;
+    this.#conversation?.discardIncompleteReply();
     this.#fetchAIResponse("", { isRetry: true })
       .catch(error => {
         console.error("Error retrying after error:", error);

@@ -562,7 +562,8 @@ Object.assign(Chat, {
       try {
         this.lastUsage = null;
         const response = await conversation.receiveResponse(
-          streamModelResponse()
+          streamModelResponse(),
+          { signal }
         );
         fullResponseText = response.fullResponseText;
         pendingToolCalls = response.pendingToolCalls;
@@ -1002,7 +1003,7 @@ Object.assign(Chat, {
         // Same receiveResponse the model's own output goes through, so it picks
         // up the streaming updates, citations, persistence and completion.
         if (directAnswerStream) {
-          await conversation.receiveResponse(directAnswerStream);
+          await conversation.receiveResponse(directAnswerStream, { signal });
           logConversationStream(currentTurn, "STREAM END", null, toolName);
 
           return signal?.aborted ? null : turnResult;

@@ -1961,6 +1961,10 @@ export class MLEngine {
             isPrompt: chunk.metadata.isPrompt,
             toolCalls: chunk.metadata.toolCalls,
             usage: chunk.metadata.usage,
+            // Only the OpenAI backend reports one.
+            ...("finishReason" in chunk.metadata
+              ? { finishReason: chunk.metadata.finishReason }
+              : {}),
           };
 
           // Be a bit defensive here in getting the metadata, as different engines may

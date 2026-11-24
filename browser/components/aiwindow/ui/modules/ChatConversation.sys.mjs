@@ -198,6 +198,14 @@ export class ChatConversation extends Conversation {
   #pendingCitationUrls = new Set();
 
   /**
+   * The reply the last stream left incomplete, until it is retried or another
+   * response streams.
+   *
+   * @type {ChatMessage|null}
+   */
+  #incompleteReply = null;
+
+  /**
    * @param {object} params
    * @param {string} [params.id]
    * @param {string} params.title
@@ -358,8 +366,15 @@ export class ChatConversation extends Conversation {
 
   /**
    * @param {AsyncIterable} stream - Model response stream from `runWithGenerator`.
+   * @param {object} [options]
+   * @param {AbortSignal} [options.signal] - The turn's signal. A stream the
+   *   user stopped ends without a `finish_reason` and is not incomplete.
+   * @throws {Error} With clientReason "incompleteResponse" when the stream
+   *   ended before the model finished its reply. The partial reply is kept but
+   *   not marked complete; see discardIncompleteReply.
    */
-  async receiveResponse(stream) {
+  async receiveResponse(stream, { signal } = {}) {
+    this.#incompleteReply = null;
     const currentMessage = this.#getStreamTarget();
 
     // Set the browsing history snapshot on the message before streaming so its
@@ -400,9 +415,14 @@ export class ChatConversation extends Conversation {
       replyMessage.citations = currentMessage.citations;
     }
 
+    const incomplete =
+      !result.pendingToolCalls?.length &&
+      !signal?.aborted &&
+      this.#isIncompleteFinish(result.finishReason);
+
     // Only resolve used memories once the entire assistant turn is complete,
     // including all tool calls
-    if (!result.pendingToolCalls?.length) {
+    if (!result.pendingToolCalls?.length && !incomplete) {
       const turnMessages = this.#getCurrentTurnTextMessages();
       const citedMemoryIds = turnMessages.flatMap(
         message => message.tokens?.existing_memory ?? []
@@ -436,6 +456,16 @@ export class ChatConversation extends Conversation {
     await lazy.ChatStore.endStreamingWrites(this.id, false);
     await lazy.ChatStore.updateConversation(this);
 
+    if (incomplete) {
+      this.#incompleteReply = currentMessage;
+      const error = new Error(
+        `Model response ended early (finish_reason: ${result.finishReason ?? "none"})`
+      );
+      error.clientReason = "incompleteResponse";
+      error.finishReason = result.finishReason;
+      throw error;
+    }
+
     // Only finalize the reply when the turn is actually done. When the model
     // requested tool calls, its answer streams into a new message after the
     // tools run (see the loop in Chat.sys.mjs), and the turn renders as one
@@ -451,6 +481,45 @@ export class ChatConversation extends Conversation {
       fullResponseText: result.fullResponseText,
       usage: result.usage,
     };
+  }
+
+  /**
+   * Empties the reply the last stream left incomplete, so retrying regenerates
+   * it instead of appending to the partial text and sending that text back to
+   * the model as history.
+   *
+   * @returns {boolean} Whether there was an incomplete reply to empty.
+   */
+  discardIncompleteReply() {
+    const message = this.#incompleteReply;
+    this.#incompleteReply = null;
+    if (!message || message !== this.messages.at(-1)) {
+      return false;
+    }
+    message.content.body = "";
+    message.tokens = { search: [], existing_memory: [], followup: [] };
+    message.memoriesApplied = [];
+    message.webSearchQueries = [];
+    message.followUpSuggestions = [];
+    message.kit = undefined;
+    return true;
+  }
+
+  /**
+   * Whether a stream that ended without tool calls stopped before the model
+   * finished. Only judged for Mozilla's endpoint on the OpenAI backend, which
+   * always sends a `finish_reason`; custom endpoints and other backends (e.g.
+   * on-device llama.cpp) may report it differently or not at all.
+   *
+   * @param {string|null} finishReason
+   * @returns {boolean}
+   */
+  #isIncompleteFinish(finishReason) {
+    return (
+      this.engine?.engineInstance?.pipelineOptions?.backend === "openai" &&
+      this.engine.isCustomEndpoint === false &&
+      finishReason !== "stop"
+    );
   }
 
   /**

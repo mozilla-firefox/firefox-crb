@@ -1149,6 +1149,9 @@ export const AIWindowTestUtils = {
    *   each streamed chunk. Defaults to 0.
    * @property {(index: number) => Promise<void>|void} [beforeStreamChunk]
    *   Called before sending each text chunk; may pause the stream.
+   * @property {string|null} [finishReason] - `finish_reason` sent with the
+   *   last streamChunks chunk, or null to end the stream without one.
+   *   Defaults to "stop".
    * @property {MockToolCall|null} [toolCall] - When non-null, the first
    *   streaming request that includes tools will respond with this tool call
    *   instead of text content. A subsequent request containing the tool result
@@ -1181,6 +1184,7 @@ export const AIWindowTestUtils = {
     streamChunks = ["Hello from mock."],
     streamChunkDelayMs = 0,
     beforeStreamChunk,
+    finishReason = "stop",
     toolCall = null,
     followupChunks = ["Tool complete."],
     onRequest,
@@ -1325,7 +1329,7 @@ export const AIWindowTestUtils = {
                   index: 0,
                   delta: { content: chunk },
                   finish_reason:
-                    index === streamChunks.length - 1 ? "stop" : null,
+                    index === streamChunks.length - 1 ? finishReason : null,
                 },
               ],
             });

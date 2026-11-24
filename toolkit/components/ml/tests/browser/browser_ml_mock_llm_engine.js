@@ -101,6 +101,53 @@ add_task(async function test_mock_llm_engine_with_tool_calls() {
   ]);
 });
 
+add_task(async function test_mock_llm_engine_openai_finish_reason() {
+  const usage = { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 };
+  const cases = [
+    {
+      response: [{ text: "Hi.", usage }],
+      expected: { finishReason: "stop", usage },
+    },
+    {
+      response: [{ text: "", toolCalls: [{ id: "call_1", function: {} }] }],
+      expected: { finishReason: "tool_calls" },
+    },
+  ];
+  for (const { response, expected } of cases) {
+    const engine = new MLTestUtils.MockLLMEngine({ backend: "openai" });
+    const chunksPromise = MLTestUtils.gatherChunks(
+      engine.runWithGenerator({ args: [] })
+    );
+    const [requestId] = engine.getNextRequest();
+    engine.respond(requestId, response);
+    const chunks = await chunksPromise;
+
+    Assert.equal(
+      chunks.length,
+      response.length + 1,
+      "The OpenAI backend ends the stream with a final chunk"
+    );
+    Assert.equal(chunks.at(-1).finishReason, expected.finishReason);
+    Assert.deepEqual(
+      chunks.at(-1).usage,
+      expected.usage,
+      "The final chunk carries the last usage"
+    );
+  }
+
+  const cutOff = new MLTestUtils.MockLLMEngine({ backend: "openai" });
+  const cutOffChunks = MLTestUtils.gatherChunks(
+    cutOff.runWithGenerator({ args: [] })
+  );
+  const [cutOffId] = cutOff.getNextRequest();
+  cutOff.respond(cutOffId, [{ text: "Hi", finishReason: null }]);
+  Assert.equal(
+    (await cutOffChunks).length,
+    1,
+    "A mocked finishReason replaces the final chunk"
+  );
+});
+
 add_task(async function test_mock_llm_engine_with_chunked_tool_calls() {
   const engine = new MLTestUtils.MockLLMEngine();
 

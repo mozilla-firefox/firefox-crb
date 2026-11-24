@@ -750,6 +750,7 @@ async function* answerAsStream(text, signal) {
     }
     yield { text: chunk, tokens: null, isPrompt: false, toolCalls: null };
   }
+  yield { text: "", finishReason: "stop" };
 }
 
 /**

@@ -397,13 +397,16 @@ export class Conversation {
    *
    * @param {AsyncIterable} stream
    * @param {Message} currentMessage
-   * @returns {Promise<{pendingToolCalls, fullResponseText, usage, currentMessage}>}
+   * @returns {Promise<{pendingToolCalls, fullResponseText, usage, finishReason, currentMessage}>}
+   *   `finishReason` is the stream's final `finish_reason`, or null if none
+   *   arrived.
    */
   async receiveResponse(stream, currentMessage) {
     const parserState = createParserState();
     let pendingToolCalls = null;
     let fullResponseText = "";
     let usage = null;
+    let finishReason = null;
 
     for await (const chunk of stream) {
       usage = chunk?.usage;
@@ -414,6 +417,9 @@ export class Conversation {
       if (chunk?.toolCalls?.length) {
         pendingToolCalls = chunk.toolCalls;
       }
+      if (chunk?.finishReason) {
+        finishReason = chunk.finishReason;
+      }
     }
 
     const remainder = flushTokenRemainder(parserState);
@@ -422,7 +428,13 @@ export class Conversation {
         (currentMessage.content.body ?? "") + remainder;
     }
 
-    return { pendingToolCalls, fullResponseText, usage, currentMessage };
+    return {
+      pendingToolCalls,
+      fullResponseText,
+      usage,
+      finishReason,
+      currentMessage,
+    };
   }
 
   /**
