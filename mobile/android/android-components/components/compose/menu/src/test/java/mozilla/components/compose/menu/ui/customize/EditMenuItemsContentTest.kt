@@ -19,10 +19,12 @@ import mozilla.components.compose.base.theme.AcornTheme
 import mozilla.components.compose.menu.R
 import mozilla.components.compose.menu.data.CustomizableMenuItem
 import mozilla.components.compose.menu.data.ExpandableMenuItem
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import mozilla.components.compose.menu.data.MenuItemTitle
 import mozilla.components.compose.menu.data.StandardMenuItem
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.AttemptedEmptySection
+import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.AttemptedMoveAsSubItem
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.ItemsChanged
 import mozilla.components.compose.menu.store.CustomizableMenuItemsAction.PreviewClicked
 import mozilla.components.compose.menu.store.CustomizableMenuItemsState
@@ -416,6 +418,42 @@ class EditMenuItemsContentTest {
         assertTrue(actions.none { it is AttemptedEmptySection })
     }
 
+    @Test
+    fun `WHEN a group item is let go among the sub-items of an expanded item THEN it stays where it was and the user is told`() {
+        val actions = mutableListOf<CustomizableMenuItemsAction>()
+        val more = expandable("More", item("Sub 1"), item("Sub 2"))
+        val store =
+            setContent(
+                CustomizableMenuItemsState(items = listOf(groupItem("Group"), more), expandedItemIds = setOf("More")),
+                listOf(capturing(actions)),
+            )
+
+        dragByHandle(title = "Group", to = { boundsOf("Sub 2").topCenter })
+
+        assertEquals(listOf("Group", "More"), store.state.items.map { it.id })
+        assertEquals(listOf(AttemptedMoveAsSubItem("Group")), actions.filterIsInstance<AttemptedMoveAsSubItem>())
+        assertTrue(actions.none { it is ItemsChanged })
+    }
+
+    @Test
+    fun `WHEN a group item is let go at the top level after being dragged past an expanded item THEN the user is not told`() {
+        val actions = mutableListOf<CustomizableMenuItemsAction>()
+        val more = expandable("More", item("Sub 1"), item("Sub 2"))
+        val store =
+            setContent(
+                CustomizableMenuItemsState(
+                    items = listOf(groupItem("Group"), more, item("Last")),
+                    expandedItemIds = setOf("More"),
+                ),
+                listOf(capturing(actions)),
+            )
+
+        dragByHandle(title = "Group", to = { boundsOf("Last").topCenter })
+
+        assertEquals(listOf("More", "Group", "Last"), store.state.items.map { it.id })
+        assertTrue(actions.none { it is AttemptedMoveAsSubItem })
+    }
+
     private fun setContent(
         state: CustomizableMenuItemsState,
         middleware: List<Middleware<CustomizableMenuItemsState, CustomizableMenuItemsAction>> = emptyList(),
@@ -485,6 +523,8 @@ class EditMenuItemsContentTest {
 
     private fun item(title: String) =
         CustomizableMenuItem(id = title, item = StandardMenuItem(title = MenuItemTitle(Text.String(title))))
+
+    private fun groupItem(title: String) = item(title).copy(affinity = MenuItemAffinity.GROUP)
 
     private fun expandable(
         title: String,
