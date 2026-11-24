@@ -20,6 +20,8 @@ import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.session.SessionUseCases
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.fakes.FakeTabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
 import mozilla.components.feature.tabgroups.storage.data.TabGroup
 import mozilla.components.feature.tabgroups.storage.data.TabGroupData
@@ -486,8 +488,10 @@ class TabGroupFlowStorageMiddlewareTest {
                         fenixBrowserUseCases = fenixBrowserUseCases,
                     ),
                 tabGroupRepository = repository,
-                isInactiveTabsEnabled = { false },
-                isTabGroupsEnabled = { true },
+                tabSettingsRepository =
+                    FakeTabSettingsRepository(
+                        initialSettingsSnapshot = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = false)
+                    ),
                 scope = backgroundScope,
                 dispatcher = StandardTestDispatcher(testScheduler),
                 dateTimeProvider = fakeDateTimeProvider,
