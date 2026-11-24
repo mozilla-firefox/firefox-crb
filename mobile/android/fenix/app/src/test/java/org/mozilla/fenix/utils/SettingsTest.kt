@@ -859,13 +859,6 @@ class SettingsTest {
     }
 
     @Test
-    fun inactiveTabsAreEnabled() {
-        // When just created
-        // Then
-        assertTrue(settings.inactiveTabsAreEnabled)
-    }
-
-    @Test
     fun `GIVEN shouldShowInactiveTabsAutoCloseDialog WHEN the dialog has been dismissed before THEN no show the dialog`() {
         val settings = spyk(settings)
         every { settings.hasInactiveTabsAutoCloseDialogBeenDismissed } returns true

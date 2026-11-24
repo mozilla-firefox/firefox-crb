@@ -117,6 +117,7 @@ import org.mozilla.fenix.search.VoiceSearchAIControlFeature
 import org.mozilla.fenix.settings.emailmasks.middleware.DefaultEmailMasksRepository
 import org.mozilla.fenix.settings.emailmasks.middleware.EmailMasksRepository
 import org.mozilla.fenix.settings.settingssearch.DefaultFenixSettingsIndexer
+import org.mozilla.fenix.tabstray.DefaultTabManagementFeatureHelper
 import org.mozilla.fenix.termsofuse.TermsOfUseManager
 import org.mozilla.fenix.termsofuse.store.DefaultTermsOfUsePromptRepository
 import org.mozilla.fenix.utils.Settings
@@ -631,8 +632,8 @@ class Components(
             scope = applicationScope,
             defaultSettings =
                 TabSettings(
-                    tabGroupsEnabled = settings.tabGroupsEnabled,
-                    inactiveTabsEnabled = settings.inactiveTabsAreEnabled,
+                    tabGroupsEnabled = DefaultTabManagementFeatureHelper.tabGroupsEnabled,
+                    inactiveTabsEnabled = true,
                 ),
         )
     }

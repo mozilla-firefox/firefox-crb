@@ -9,9 +9,24 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import mozilla.components.feature.tab.settings.migration.LegacyTabSettings
+import mozilla.components.feature.tab.settings.migration.LegacyTabSettingsMigration
 
-/** [DataStore] for persisting tab-related user settings. */
-internal val Context.tabSettingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "tab_settings")
+/**
+ * [DataStore] for persisting tab-related user settings. When the [android.app.Application] implements
+ * [LegacyTabSettings.Provider], its legacy settings are migrated in the first time the store is opened.
+ */
+internal val Context.tabSettingsDataStore: DataStore<Preferences> by
+    preferencesDataStore(
+        name = "tab_settings",
+        produceMigrations = { context ->
+            listOfNotNull(
+                (context.applicationContext as? LegacyTabSettings.Provider)
+                    ?.legacyTabSettings
+                    ?.let(::LegacyTabSettingsMigration)
+            )
+        },
+    )
 
 /** Datastore key for reading/writing whether the tab groups feature is enabled. */
 internal val tabGroupsEnabledKey = booleanPreferencesKey("tabGroupsEnabledKey")
