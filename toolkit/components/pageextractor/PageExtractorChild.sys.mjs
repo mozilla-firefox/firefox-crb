@@ -5,7 +5,7 @@
 // @ts-check
 
 /**
- * @import { GetTextOptions, CanvasSnapshot, ExtractionResult, PageMetadata, ReaderModeDocument } from './PageExtractor.d.ts'
+ * @import { GetTextOptions, CanvasSnapshot, ExtractionResult, PageMetadata, ReaderModeDocument, StructuredMetadata } from './PageExtractor.d.ts'
  * @import { PageExtractorParent } from './PageExtractorParent.sys.mjs'
  * @import { PageExtractorPhase, TraceId } from './PageExtractorEvents.sys.mjs'
  */
@@ -30,6 +30,8 @@ const lazy = XPCOMUtils.declareLazy({
   ReaderMode: "moz-src:///toolkit/components/reader/ReaderMode.sys.mjs",
   extractTextFromDOM:
     "moz-src:///toolkit/components/pageextractor/DOMExtractor.sys.mjs",
+  extractStructuredMetadata:
+    "moz-src:///toolkit/components/pageextractor/StructuredMetadata.sys.mjs",
   shouldExtractYouTube:
     "moz-src:///toolkit/components/pageextractor/YouTubeExtraction.sys.mjs",
   getYouTubeContent:
@@ -64,6 +66,14 @@ export class PageExtractorChild extends JSWindowActorChild {
   #isPageReady = false;
 
   /**
+   * Shared so a getText and a getStructuredMetadata sent together record one
+   * wait.
+   *
+   * @type {Promise<{hasPendingNavigation: boolean}> | null}
+   */
+  #pendingPageReady = null;
+
+  /**
    * Route the messages coming from the parent process.
    *
    * @param {object} message
@@ -76,9 +86,7 @@ export class PageExtractorChild extends JSWindowActorChild {
     switch (name) {
       case "PageExtractorParent:GetText": {
         const { options, traceId } = data;
-        if (!this.#isPageReady) {
-          await this.waitForPageReady(traceId);
-        }
+        await this.#waitForPageReadyOnce(traceId);
         return this.getText(options, traceId);
       }
       case "PageExtractorParent:WaitForPageReady":
@@ -89,8 +97,24 @@ export class PageExtractorChild extends JSWindowActorChild {
         );
       case "PageExtractorParent:GetPageMetadata":
         return this.#getPageMetadata(data?.traceId);
+      case "PageExtractorParent:GetStructuredMetadata":
+        await this.#waitForPageReadyOnce(data?.traceId);
+        return this.#getStructuredMetadata(data?.traceId);
     }
     return Promise.reject(new Error("Unknown message: " + name));
+  }
+
+  /**
+   * @param {TraceId} [traceId]
+   */
+  async #waitForPageReadyOnce(traceId) {
+    if (this.#isPageReady) {
+      return;
+    }
+    this.#pendingPageReady ??= this.waitForPageReady(traceId).finally(() => {
+      this.#pendingPageReady = null;
+    });
+    await this.#pendingPageReady;
   }
 
   /**
@@ -262,6 +286,31 @@ export class PageExtractorChild extends JSWindowActorChild {
     const isReaderable = lazy.isProbablyReaderable(document);
 
     return { structuredDataTypes, wordCount, language, isReaderable, isGated };
+  }
+
+  /**
+   * @see PageExtractorParent#getStructuredMetadata for docs
+   *
+   * @param {TraceId} [traceId]
+   * @returns {Promise<StructuredMetadata>}
+   */
+  #getStructuredMetadata(traceId) {
+    return this.#trace(lazy.Phase.getStructuredMetadata, { traceId }, () => {
+      const document = this.browsingContext?.window?.document;
+      // about:reader replaced the page, and the page's metadata with it.
+      if (!document || this.isAboutReader()) {
+        return {
+          truncated: false,
+          url: null,
+          title: "",
+          canonicalUrl: null,
+          language: null,
+          metaTags: [],
+          jsonLd: [],
+        };
+      }
+      return lazy.extractStructuredMetadata(document);
+    });
   }
 
   /**
