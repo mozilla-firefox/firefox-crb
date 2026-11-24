@@ -5,6 +5,7 @@
 package org.mozilla.fenix.components.menu.configuration
 
 import kotlin.test.assertEquals
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import org.junit.Test
 import org.mozilla.fenix.components.menu.fake.allMenuItems
 
@@ -14,6 +15,12 @@ class FenixMenuItemTest {
         val ids = allMenuItems().map { it.id }
 
         assertEquals(emptyMap(), ids.groupingBy { it }.eachCount().filterValues { it > 1 })
+    }
+
+    @Test
+    fun `only the extensions item has to be directly in its section`() {
+        assertEquals(listOf(FenixMenuItem.Extensions), allMenuItems().filter { it.affinity != null })
+        assertEquals(MenuItemAffinity.GROUP, FenixMenuItem.Extensions.affinity)
     }
 
     @Test
