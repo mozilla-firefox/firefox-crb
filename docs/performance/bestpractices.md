@@ -529,21 +529,21 @@ expose things like markers (from *window.performance.mark()*).
 
 ### Use the compositor for animations
 
-Performing animations on the main thread should be treated as
-**deprecated**. Avoid doing it. Instead, animate using
-*Element.animate()*. See the article [Animating like you just don't
-care](https://hacks.mozilla.org/2016/08/animating-like-you-just-dont-care-with-element-animate/)
-for more information on how to do this.
+Animations and transitions of `opacity`, `transform`, `translate`,
+`rotate`, `scale`, the `offset-*` properties and `background-color` can
+run on the compositor, so they keep a steady frame rate while the main
+thread is busy. Any other animated property, and these ones in the cases
+that force a fallback, run on the main thread, and a property that
+affects layout reflows on every frame. The
+{doc}`CSS guidelines </code-quality/coding-style/css_guidelines>` list
+the fallback cases under "Animations and transitions". DevTools'
+Animations panel marks the animations that run on the compositor.
 
 ### Explicitly define start and end animation values
 
-Some optimizations in the animation code of Gecko are based on an
-expectation that the *from* (0%) and the *to* (100%) values will be
-explicitly defined in the *@keyframes* definition. Even though these
-values may be inferred through the use of initial values or the cascade,
-the offscreen animation optimizations are dependent on the explicit
-definition. See [this comment](https://bugzilla.mozilla.org/show_bug.cgi?id=1419096#c18)
-and a few previous comments on that bug for more information.
+Give `@keyframes` explicit `from` (0%) and `to` (100%) values. When one
+is left out, Gecko fills it in from the element's base style and has to
+resolve that style again each time the animation updates.
 
 ## Use IndexedDB for storage
 
