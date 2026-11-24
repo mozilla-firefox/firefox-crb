@@ -15,6 +15,7 @@ from unittest import mock
 
 import pytest
 from mozunit import main
+from mozversioncontrol import get_repository_object
 
 from mozbuild.vendor.host_base import TagNotFound
 from mozbuild.vendor.rewrite_mozbuild import (
@@ -328,7 +329,7 @@ def test_update_moz_build_only_touches_tracked_file_types(add_file, remove_file)
             "third_party/foo/src/new.c",
         ],
     }
-    vm.repository.get_changed_files.side_effect = lambda diff_filter: changed[
+    vm.repository.get_changed_files.side_effect = lambda diff_filter, mode: changed[
         diff_filter
     ]
 
@@ -362,7 +363,7 @@ def test_update_moz_build_removed_file_not_listed(remove_file, exception, expect
     vm.log = mock.Mock()
     vm.logInfo = mock.Mock()
     vm.repository = mock.Mock()
-    vm.repository.get_changed_files.side_effect = lambda diff_filter: (
+    vm.repository.get_changed_files.side_effect = lambda diff_filter, mode: (
         ["third_party/foo/src/gone.h"] if diff_filter == "D" else []
     )
     remove_file.side_effect = exception
@@ -487,7 +488,7 @@ def test_update_moz_build_moved_files(
         "D": [f"third_party/foo/{f}" for f in removed],
         "A": [f"third_party/foo/{f}" for f in added],
     }
-    vm.repository.get_changed_files.side_effect = lambda diff_filter: changed[
+    vm.repository.get_changed_files.side_effect = lambda diff_filter, mode: changed[
         diff_filter
     ]
 
@@ -505,6 +506,47 @@ def test_update_moz_build_moved_files(
         } in errors
     else:
         assert errors == []
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="requires git")
+@mock.patch(
+    "mozbuild.vendor.vendor_manifest.moz_build_mentions_file", new=lambda *args: True
+)
+@mock.patch("mozbuild.vendor.vendor_manifest.remove_file_from_moz_build_file")
+@mock.patch("mozbuild.vendor.vendor_manifest.add_file_to_moz_build_file")
+def test_update_moz_build_finds_registered_git_changes(add_file, remove_file, tmp_path):
+    """On Git, registering the vendored files with version control stages
+    them, so the added, removed and moved sources must still be found once
+    they are only in the index."""
+    src = tmp_path / "third_party" / "foo" / "src"
+    (src / "arm").mkdir(parents=True)
+    (src / "gone.c").write_text("int gone(void);\n")
+    (src / "arm" / "moved.c").write_text("int moved(void);\n")
+    _git(tmp_path, "init", "--quiet")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "--quiet", "-m", "Initial commit")
+
+    (src / "gone.c").unlink()
+    (src / "arm" / "64").mkdir()
+    (src / "arm" / "moved.c").rename(src / "arm" / "64" / "moved.c")
+    (src / "new.c").write_text("int new_function(void);\n")
+
+    vm = VendorManifest.__new__(VendorManifest)
+    vm.log = mock.Mock()
+    vm.logInfo = mock.Mock()
+    vm.repository = get_repository_object(str(tmp_path))
+    vm.repository.add_remove_files("third_party/foo")
+
+    vm.update_moz_build("third_party/foo", "third_party/foo", False)
+
+    assert sorted(call.args[0] for call in add_file.call_args_list) == [
+        "third_party/foo/src/arm/64/moved.c",
+        "third_party/foo/src/new.c",
+    ]
+    assert sorted(call.args[0] for call in remove_file.call_args_list) == [
+        "third_party/foo/src/arm/moved.c",
+        "third_party/foo/src/gone.c",
+    ]
 
 
 def test_update_yaml_asserts_when_a_field_is_missing(tmp_path):
