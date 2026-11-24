@@ -70,6 +70,7 @@ projects:
     - components:feature-summarize
     - components:feature-syncedtabs
     - components:feature-tab-collections
+    - components:feature-tab-settings
     - components:feature-tabdata-coordinator
     - components:feature-tabgroups-storage
     - components:feature-tabs
