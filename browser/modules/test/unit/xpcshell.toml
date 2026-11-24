@@ -39,6 +39,10 @@ run-if = [
   "os == 'win'", # Test of a Windows-specific feature
 ]
 
+["test_LangpackUpdateAfterAppUpdate.js"]
+
+["test_LangpackUpdateAfterAppUpdate_nimbus.js"]
+
 ["test_LaterRun.js"]
 
 ["test_LinksCache.js"]

@@ -59,6 +59,9 @@ with Files("EveryWindow.sys.mjs"):
 with Files("ExtensionsUI.sys.mjs"):
     BUG_COMPONENT = ("WebExtensions", "General")
 
+with Files("*LangpackUpdateAfterAppUpdate*"):
+    BUG_COMPONENT = ("Toolkit", "Application Update")
+
 with Files("LaterRun.sys.mjs"):
     BUG_COMPONENT = ("Firefox", "Tours")
 
@@ -153,6 +156,7 @@ EXTRA_JS_MODULES += [
 MOZ_SRC_FILES += [
     "CanvasPermissionPromptHelper.sys.mjs",
     "ContextId.sys.mjs",
+    "LangpackUpdateAfterAppUpdate.sys.mjs",
     "ObserverForwarder.sys.mjs",
     "PrivateBrowsingUI.sys.mjs",
     "SerialDeviceSharingHelper.sys.mjs",
