@@ -70,6 +70,7 @@ class TabsTrayTelemetryMiddlewareTest {
                     privateTabs = emptyList(),
                     selectedPrivateItemIndex = 0,
                     tabGroups = emptyList(),
+                    tabGroupsEnabled = true,
                 )
             )
         )

@@ -669,7 +669,6 @@ class TabManagementFragment : Fragment() {
                             restoredState.config.copy(
                                 displayTabsInGrid = settings.gridTabView,
                                 homepageAsNewTabEnabled = settings.enableHomepageAsNewTab,
-                                tabGroupsEnabled = settings.tabGroupsEnabled,
                             )
                     ) ?: createInitialState(args, settings),
                 middlewares =
@@ -734,7 +733,6 @@ class TabManagementFragment : Fragment() {
                 sync = TabsTrayState.SyncState(isSignedIn = settings.signedInFxaAccount),
                 config =
                     TabsTrayState.TabsTrayConfig(
-                        tabGroupsEnabled = settings.tabGroupsEnabled,
                         tabGroupsDragAndDropEnabled = settings.tabGroupsDragAndDropEnabled,
                         tabGroupsLiveReorderEnabled = settings.tabGroupsLiveReorderEnabled,
                         tabGroupsOnboardingEnabled = settings.tabGroupsOnboardingEnabled,
