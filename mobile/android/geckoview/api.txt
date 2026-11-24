@@ -2615,6 +2615,7 @@ package org.mozilla.geckoview {
   public static interface PictureInPictureController.SessionPictureInPicture.Delegate {
     method @UiThread default public void onEnterPictureInPicture(@NonNull GeckoSession, @NonNull String);
     method @UiThread default public void onExitPictureInPicture(@NonNull GeckoSession);
+    method @UiThread default public void onVideoAvailable(@NonNull GeckoSession);
   }
 
   @UiThread public class ProfilerController {

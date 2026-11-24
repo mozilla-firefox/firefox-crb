@@ -143,6 +143,9 @@ abstract class Settings {
     /** Setting to control whether media should be suspended when the session is inactive. */
     open var suspendMediaWhenInactive: Boolean by UnsupportedSetting()
 
+    /** Setting to control whether sessions can show their videos in a picture-in-picture window of their own. */
+    open var pictureInPictureWindowEnabled: Boolean by UnsupportedSetting()
+
     /** Setting to control whether font inflation is enabled. */
     open var fontInflationEnabled: Boolean? by UnsupportedSetting()
 
@@ -312,6 +315,7 @@ data class DefaultSettings(
     override var preferredColorScheme: PreferredColorScheme = PreferredColorScheme.System,
     override var testingModeEnabled: Boolean = false,
     override var suspendMediaWhenInactive: Boolean = false,
+    override var pictureInPictureWindowEnabled: Boolean = false,
     override var firefoxRelay: Engine.FirefoxRelayMode? = null,
     override var fontInflationEnabled: Boolean? = null,
     override var fontSizeFactor: Float? = null,

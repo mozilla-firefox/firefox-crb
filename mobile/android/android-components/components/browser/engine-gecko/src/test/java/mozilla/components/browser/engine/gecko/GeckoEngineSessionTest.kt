@@ -5394,11 +5394,24 @@ class GeckoEngineSessionTest {
         assertTrue(onResultCalled)
     }
 
+    private val pictureInPictureSettings = DefaultSettings(pictureInPictureWindowEnabled = true)
+
+    @Test
+    fun `picture-in-picture delegate is not set when the picture-in-picture window is disabled`() {
+        GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+
+        verify(geckoSession, never()).pictureInPictureDelegate = any()
+    }
+
     @OptIn(ExperimentalGeckoViewApi::class)
     @Test
     fun `source session is kept active while its picture-in-picture window is open`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
-        GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        GeckoEngineSession(
+            runtime,
+            geckoSessionProvider = geckoSessionProvider,
+            defaultSettings = pictureInPictureSettings,
+        )
         val delegate = capturePictureInPictureDelegate()
 
         delegate.onEnterPictureInPicture(geckoSession, "token")
@@ -5412,7 +5425,11 @@ class GeckoEngineSessionTest {
     fun `source session the view stopped showing is deactivated once Gecko closes its picture-in-picture window`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         whenever(sessionPictureInPicture.setKeepActive(false)).thenReturn(true)
-        GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        GeckoEngineSession(
+            runtime,
+            geckoSessionProvider = geckoSessionProvider,
+            defaultSettings = pictureInPictureSettings,
+        )
         val delegate = capturePictureInPictureDelegate()
 
         delegate.onEnterPictureInPicture(geckoSession, "token")
@@ -5427,7 +5444,11 @@ class GeckoEngineSessionTest {
     fun `source session the view still shows stays active once Gecko closes its picture-in-picture window`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         whenever(sessionPictureInPicture.setKeepActive(false)).thenReturn(false)
-        GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        GeckoEngineSession(
+            runtime,
+            geckoSessionProvider = geckoSessionProvider,
+            defaultSettings = pictureInPictureSettings,
+        )
         val delegate = capturePictureInPictureDelegate()
 
         delegate.onEnterPictureInPicture(geckoSession, "token")
@@ -5442,7 +5463,12 @@ class GeckoEngineSessionTest {
     fun `source session the view stopped showing is deactivated once the application closes its picture-in-picture window`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         whenever(sessionPictureInPicture.setKeepActive(false)).thenReturn(true)
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
         val delegate = capturePictureInPictureDelegate()
 
         delegate.onEnterPictureInPicture(geckoSession, "token")
@@ -5458,7 +5484,12 @@ class GeckoEngineSessionTest {
     fun `source session the view still shows stays active once the application closes its picture-in-picture window`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         whenever(sessionPictureInPicture.setKeepActive(false)).thenReturn(false)
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
         val delegate = capturePictureInPictureDelegate()
 
         delegate.onEnterPictureInPicture(geckoSession, "token")
@@ -5475,7 +5506,12 @@ class GeckoEngineSessionTest {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         val result = GeckoResult<Void>()
         whenever(sessionPictureInPicture.request()).thenReturn(result)
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
         var isFinished = false
         engineSession.register(
             object : EngineSession.Observer {
@@ -5500,7 +5536,12 @@ class GeckoEngineSessionTest {
         val sessionPictureInPicture = mockSessionPictureInPicture()
         val result = GeckoResult<Void>()
         whenever(sessionPictureInPicture.request()).thenReturn(result)
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
         var isFinished = false
         engineSession.register(
             object : EngineSession.Observer {
@@ -5521,7 +5562,12 @@ class GeckoEngineSessionTest {
     @Test
     fun `picture-in-picture session from Gecko is passed on to observers loading a blank page`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
 
         val enteredSession = enterPictureInPicture(engineSession, "token")
 
@@ -5533,7 +5579,12 @@ class GeckoEngineSessionTest {
     @Test
     fun `picture-in-picture request from Gecko without a placement token is ignored`() {
         val sessionPictureInPicture = mockSessionPictureInPicture()
-        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val engineSession =
+            GeckoEngineSession(
+                runtime,
+                geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
+            )
 
         val enteredSession = enterPictureInPicture(engineSession, "")
 
@@ -5551,6 +5602,7 @@ class GeckoEngineSessionTest {
                 privateMode = true,
                 contextId = "1",
                 geckoSessionProvider = geckoSessionProvider,
+                defaultSettings = pictureInPictureSettings,
             )
 
         val settings = (enterPictureInPicture(engineSession, "token") as GeckoEngineSession).geckoSession.settings

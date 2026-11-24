@@ -32,6 +32,7 @@ class PictureInPictureTest : BaseSessionTest() {
             mapOf(
                 "media.autoplay.default" to 0,
                 "media.geckoview.autoplay.request" to false,
+                "media.videocontrols.picture-in-picture.video-toggle.always-show" to true,
             )
         )
     }
@@ -128,6 +129,87 @@ class PictureInPictureTest : BaseSessionTest() {
             "onEnterPictureInPicture",
         )
         sessionRule.waitForResult(mainSession.sessionPictureInPicture.exit())
+    }
+
+    @WithDisplay(width = 100, height = 100)
+    @Test
+    fun eligibleVideoNotifiesDelegateOnce() {
+        sessionRule.delegateUntilTestEnd(
+            object : PictureInPictureController.SessionPictureInPicture.Delegate {
+                @AssertCalled(count = 1)
+                override fun onVideoAvailable(session: GeckoSession) {
+                    assertThat("Should be notified for the video's session", session, equalTo(mainSession))
+                }
+            }
+        )
+
+        mainSession.loadTestPath(VIDEO_WEBM_PATH)
+        mainSession.waitForPageStop()
+        mainSession
+            .evaluatePromiseJS(
+                """
+                new Promise(r => {
+                    const video = document.querySelector("video");
+                    video.readyState >= 1 ? r() : video.addEventListener("loadedmetadata", r, { once: true });
+                })
+                """
+                    .trimIndent()
+            )
+            .value
+        mainSession.waitForRoundTrip()
+    }
+
+    @WithDisplay(width = 100, height = 100)
+    @Test
+    fun eligibleVideoInShadowRootNotifiesDelegate() {
+        mainSession.loadTestPath(HELLO_HTML_PATH)
+        mainSession.waitForPageStop()
+
+        sessionRule.delegateDuringNextWait(
+            object : PictureInPictureController.SessionPictureInPicture.Delegate {
+                @AssertCalled(count = 1)
+                override fun onVideoAvailable(session: GeckoSession) {
+                    assertThat("Should be notified for the video's session", session, equalTo(mainSession))
+                }
+            }
+        )
+
+        mainSession.evaluateJS(
+            """
+            const host = document.createElement("div");
+            document.body.appendChild(host);
+            const video = document.createElement("video");
+            video.src = "videos/gizmo.webm";
+            host.attachShadow({ mode: "closed" }).appendChild(video);
+            """
+                .trimIndent()
+        )
+        mainSession.waitUntilCalled(
+            PictureInPictureController.SessionPictureInPicture.Delegate::class,
+            "onVideoAvailable",
+        )
+    }
+
+    @WithDisplay(width = 100, height = 100)
+    @Test
+    fun audioDoesNotNotifyDelegate() {
+        sessionRule.delegateUntilTestEnd(
+            object : PictureInPictureController.SessionPictureInPicture.Delegate {
+                @AssertCalled(false)
+                override fun onVideoAvailable(session: GeckoSession) {
+                    fail("Audio must not be reported as an eligible video")
+                }
+            }
+        )
+
+        mainSession.loadTestPath(AUDIO_SESSION_TYPE_PLAYBACK_PATH)
+        mainSession.waitForPageStop()
+        mainSession
+            .evaluatePromiseJS(
+                "new Promise(r => audio.paused ? audio.addEventListener('playing', r, { once: true }) : r())"
+            )
+            .value
+        mainSession.waitForRoundTrip()
     }
 
     @WithDisplay(width = 100, height = 100)

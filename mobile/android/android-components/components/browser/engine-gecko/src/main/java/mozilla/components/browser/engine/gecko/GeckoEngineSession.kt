@@ -1956,7 +1956,9 @@ class GeckoEngineSession(
         geckoSession.mediaSessionDelegate = GeckoMediaSessionDelegate(this)
         geckoSession.scrollDelegate = createScrollDelegate()
         geckoSession.translationsSessionDelegate = GeckoTranslateSessionDelegate(this)
-        geckoSession.pictureInPictureDelegate = createPictureInPictureDelegate()
+        if (defaultSettings?.pictureInPictureWindowEnabled == true) {
+            geckoSession.pictureInPictureDelegate = createPictureInPictureDelegate()
+        }
     }
 
     companion object {

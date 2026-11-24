@@ -793,18 +793,7 @@ function startup() {
       onInit: {
         resource: "resource://gre/modules/GeckoViewPictureInPicture.sys.mjs",
         actors: {
-          // The session playing the video. Answers which video a request should act on.
-          GeckoViewPictureInPictureSource: {
-            child: {
-              esModuleURI:
-                "resource:///actors/GeckoViewPictureInPictureSourceChild.sys.mjs",
-            },
-            allFrames: true,
-            messageManagerGroups: ["browsers"],
-            safeForUntrustedWebProcess: true,
-          },
-          // The session hosting the cloned video. Registered separately from
-          // GeckoViewPictureInPictureSource so that the player can reuse toolkit's
+          // The session hosting the cloned video. Reuses toolkit's
           // PictureInPictureChild, which listens to the source video itself
           // rather than through actor-registered events.
           GeckoViewPictureInPicturePlayer: {
@@ -815,6 +804,30 @@ function startup() {
             child: {
               esModuleURI:
                 "resource:///actors/GeckoViewPictureInPicturePlayerChild.sys.mjs",
+            },
+            allFrames: true,
+            messageManagerGroups: ["browsers"],
+            safeForUntrustedWebProcess: true,
+          },
+        },
+      },
+      onEnable: {
+        actors: {
+          // The session playing the video. Tracks which videos can be shown in
+          // picture-in-picture and answers which one a request should act on.
+          GeckoViewPictureInPictureSource: {
+            parent: {
+              esModuleURI:
+                "resource:///actors/GeckoViewPictureInPictureSourceParent.sys.mjs",
+            },
+            child: {
+              esModuleURI:
+                "resource:///actors/GeckoViewPictureInPictureSourceChild.sys.mjs",
+              events: {
+                UAWidgetSetupOrChange: {},
+                pageshow: { mozSystemGroup: true },
+                pagehide: { mozSystemGroup: true },
+              },
             },
             allFrames: true,
             messageManagerGroups: ["browsers"],

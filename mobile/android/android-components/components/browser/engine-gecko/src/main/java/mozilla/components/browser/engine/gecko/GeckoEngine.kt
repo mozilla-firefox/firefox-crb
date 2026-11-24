@@ -1614,6 +1614,12 @@ class GeckoEngine(
                         defaultSettings?.suspendMediaWhenInactive = value
                     }
 
+                override var pictureInPictureWindowEnabled: Boolean
+                    get() = defaultSettings?.pictureInPictureWindowEnabled ?: false
+                    set(value) {
+                        defaultSettings?.pictureInPictureWindowEnabled = value
+                    }
+
                 override var clearColor: Int?
                     get() = defaultSettings?.clearColor
                     set(value) {

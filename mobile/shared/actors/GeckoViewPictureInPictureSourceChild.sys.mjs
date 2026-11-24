@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { GeckoViewActorChild } from "resource://gre/modules/GeckoViewActorChild.sys.mjs";
 import { GeckoViewUtils } from "resource://gre/modules/GeckoViewUtils.sys.mjs";
+import { PictureInPictureToggleChild } from "moz-src:///toolkit/actors/PictureInPictureChild.sys.mjs";
 
 const { debug } = GeckoViewUtils.initLogging(
   "GeckoViewPictureInPictureSource[C]"
@@ -14,13 +14,28 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ContentDOMReference: "resource://gre/modules/ContentDOMReference.sys.mjs",
 });
 
-export class GeckoViewPictureInPictureSourceChild extends GeckoViewActorChild {
+// Reuses toolkit's urlbar button eligibility tracking, which reports
+// PictureInPicture:UpdateEligiblePipVideoCount to the parent.
+export class GeckoViewPictureInPictureSourceChild extends PictureInPictureToggleChild {
   receiveMessage(msg) {
     switch (msg.name) {
       case "GeckoView:PictureInPicture:FindVideo":
         return this.findVideo();
     }
-    return null;
+    return super.receiveMessage(msg);
+  }
+
+  // GeckoView has no hover toggle, so skip the mouse and pointer listeners
+  // toolkit adds whenever a video is in the viewport.
+  beginTrackingMouseOverVideos() {}
+
+  // A page restored from bfcache gets a fresh onPageStart, which hides the
+  // button, so ask the parent to report the video again.
+  onPageShow(event) {
+    super.onPageShow(event);
+    if (event.persisted && !this.browsingContext.parent) {
+      this.sendAsyncMessage("GeckoView:PictureInPicture:PageShow");
+    }
   }
 
   /**

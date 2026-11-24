@@ -13,6 +13,12 @@ exclude: true
 
 ⚠️  breaking change and deprecation notices
 
+## v163
+- Added experimental [`PictureInPictureController.SessionPictureInPicture.Delegate.onVideoAvailable`][163.1], called once per page load when the page first has a video that [`SessionPictureInPicture.request`][163.2] can show in a picture-in-picture window.
+
+[163.1]: {{javadoc_uri}}/PictureInPictureController.SessionPictureInPicture.Delegate.html#onVideoAvailable(org.mozilla.geckoview.GeckoSession)
+[163.2]: {{javadoc_uri}}/PictureInPictureController.SessionPictureInPicture.html#request()
+
 ## v162
 - [`setKeepActive`][162.1] now returns whether a `GeckoView` skipped deactivating the session while it was kept active. ([bug 2075323]({{bugzilla}}2075323))
 - Added experimental [`GeckoRuntimeSettings.Builder.creditCardSecurityCodeEnabled`][162.2],
@@ -2155,4 +2161,4 @@ to allow adding gecko profiler markers.
 [65.24]: {{javadoc_uri}}/CrashReporter.html#sendCrashReport(android.content.Context,android.os.Bundle,java.lang.String)
 [65.25]: {{javadoc_uri}}/GeckoResult.html
 
-[api-version]: 3178a28d2e02b0ea9be0beb5d7c15ba598177d00
+[api-version]: 53ad0ff91727c1ae6a2fb9f732200f6d626c0493

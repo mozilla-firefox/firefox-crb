@@ -180,6 +180,7 @@ class Core(
                 automaticFontSizeAdjustment = context.components.settings.shouldUseAutoSize,
                 fontInflationEnabled = context.components.settings.shouldUseAutoSize,
                 suspendMediaWhenInactive = false,
+                pictureInPictureWindowEnabled = context.components.settings.isPictureInPictureWindowAvailable,
                 forceUserScalableContent = context.components.settings.forceEnableZoom,
                 loginAutofillEnabled = context.components.settings.shouldAutofillLogins,
                 creditCardSecurityCodeEnabled = context.components.settings.isCreditCardSecurityCodeEnabled,
@@ -457,7 +458,9 @@ class Core(
                 )
 
                 MediaSessionFeature(context, MediaSessionService::class.java, this).start()
-                PictureInPictureWindowFeature(context, this, PictureInPictureActivity::class.java).start()
+                if (context.components.settings.isPictureInPictureWindowAvailable) {
+                    PictureInPictureWindowFeature(context, this, PictureInPictureActivity::class.java).start()
+                }
                 CarUxRestrictionsFeature(
                         applicationContext = context,
                         store = this,

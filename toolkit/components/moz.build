@@ -113,6 +113,12 @@ if CONFIG["MOZ_BUILD_APP"] != "mobile/android":
         "uniffi-bindgen-gecko-js",
         "uniffi-bindgen-gecko-js/test-fixtures",
     ]
+else:
+    # GeckoView's PiP source actor extends PictureInPictureToggleChild,
+    # which imports these constants.
+    MOZ_SRC_FILES += [
+        "pictureinpicture/PictureInPictureControls.sys.mjs",
+    ]
 
 if CONFIG["BUILD_CTYPES"]:
     DIRS += ["ctypes"]

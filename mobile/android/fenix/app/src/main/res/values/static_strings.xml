@@ -111,7 +111,7 @@
     <!-- Label for showing more shortcuts -->
     <string name="preferences_debug_settings_show_more_shortcuts" translatable="false">Show More Shortcuts</string>
     <!-- Label for enabling the picture-in-picture window -->
-    <string name="preferences_debug_settings_picture_in_picture_window" translatable="false">Enable Picture-in-Picture Window</string>
+    <string name="preferences_debug_settings_picture_in_picture_window" translatable="false">Enable Picture-in-Picture Window (requires restart)</string>
     <!-- Label for enabling Homepage Weather Widget -->
     <string name="preferences_debug_settings_homepage_weather_widget" translatable="false">Enable Homepage Weather Widget</string>
     <!-- Label for enabling Homepage Wrexham Widget -->

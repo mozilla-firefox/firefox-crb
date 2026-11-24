@@ -28,6 +28,7 @@ public class PictureInPictureController {
     private static final String EXIT_EVENT = "GeckoView:PictureInPicture:Exit";
     private static final String LAUNCH_EVENT = "GeckoView:PictureInPicture:Launch";
     private static final String CLOSE_EVENT = "GeckoView:PictureInPicture:Close";
+    private static final String VIDEO_AVAILABLE_EVENT = "GeckoView:PictureInPicture:VideoAvailable";
 
     private final GeckoSession mSession;
     private final Handler mHandler;
@@ -142,6 +143,15 @@ public class PictureInPictureController {
        */
       @UiThread
       default void onExitPictureInPicture(final @NonNull GeckoSession session) {}
+
+      /**
+       * Called once per page load, the first time any frame of the page in {@code session} has a
+       * video that {@link #request} can show in a picture-in-picture window.
+       *
+       * @param session The session the video belongs to.
+       */
+      @UiThread
+      default void onVideoAvailable(final @NonNull GeckoSession session) {}
     }
 
     /* package */ static class Handler extends GeckoSessionHandler<Delegate> {
@@ -149,7 +159,10 @@ public class PictureInPictureController {
       private final GeckoSession mSession;
 
       private Handler(final GeckoSession session) {
-        super("GeckoViewPictureInPicture", session, new String[] {LAUNCH_EVENT, CLOSE_EVENT});
+        super(
+            "GeckoViewPictureInPicture",
+            session,
+            new String[] {LAUNCH_EVENT, CLOSE_EVENT, VIDEO_AVAILABLE_EVENT});
         mSession = session;
       }
 
@@ -163,6 +176,8 @@ public class PictureInPictureController {
           delegate.onEnterPictureInPicture(mSession, message.getString("placementToken", ""));
         } else if (CLOSE_EVENT.equals(event)) {
           delegate.onExitPictureInPicture(mSession);
+        } else if (VIDEO_AVAILABLE_EVENT.equals(event)) {
+          delegate.onVideoAvailable(mSession);
         }
       }
     }

@@ -302,6 +302,10 @@ pref("media.mediadrm-widevinecdm.visible", true);
 // Ask for permission when enumerating WebRTC devices (bug 1369108)
 pref("media.navigator.permission.device", true);
 
+// Track videos eligible for picture-in-picture in PictureInPictureToggleChild.
+pref("media.videocontrols.picture-in-picture.urlbar-button.enabled", true);
+pref("media.videocontrols.picture-in-picture.video-toggle.min-video-secs", 0);
+
 // On mobile we throttle the download once the readahead_limit is hit
 // if we're using a cellular connection, even if the download is slow,
 // this is to preserve battery and data (bug 1540573)
