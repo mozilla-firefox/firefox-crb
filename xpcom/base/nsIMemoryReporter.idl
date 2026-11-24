@@ -270,6 +270,12 @@ interface nsIMemoryReporterManager : nsISupports
    * in-flight request will finish soon, and the caller would very likely just
    * catch and ignore any error anyway.
    *
+   * For each process that doesn't finish reporting (because the request timed
+   * out, the process exited, or it couldn't start), |handleReport| is called
+   * with a "memory-report-incomplete" report for that process: KIND_OTHER,
+   * UNITS_COUNT, an amount of 1, and a description of what happened.  Any
+   * other reports for that process are incomplete.
+   *
    * If |anonymize| is true, it indicates that the memory reporters should
    * anonymize any privacy-sensitive data (see above).
    */
