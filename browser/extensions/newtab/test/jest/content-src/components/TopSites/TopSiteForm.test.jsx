@@ -190,7 +190,7 @@ describe("<TopSiteForm>", () => {
 
       expect(
         container.querySelector(".top-site-icon").style.backgroundImage
-      ).toBe("url(bar)");
+      ).toBe('url("bar")');
     });
 
     it("should not display a preview screenshot", () => {
@@ -209,7 +209,7 @@ describe("<TopSiteForm>", () => {
       setProps({ site: { tippyTopIcon: "bar", searchTopSite: true } });
 
       expect(container.querySelector(".rich-icon").style.backgroundImage).toBe(
-        "url(bar)"
+        'url("bar")'
       );
       expect(container.querySelector(".search-topsite")).toBeInTheDocument();
     });

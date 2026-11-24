@@ -157,7 +157,7 @@ describe("<TopSiteLink>", () => {
     expect(container.querySelectorAll(".screenshot")).toHaveLength(0);
     expect(container.querySelectorAll(".default-icon")).toHaveLength(0);
     const tippyTop = container.querySelector(".rich-icon");
-    expect(tippyTop.style.backgroundImage).toBe("url(foo.png)");
+    expect(tippyTop.style.backgroundImage).toBe('url("foo.png")');
     // The DOM reads the color back as rgb(), not the input hex "#FFFFFF".
     expect(tippyTop.style.backgroundColor).toBe("rgb(255, 255, 255)");
   });
@@ -169,7 +169,7 @@ describe("<TopSiteLink>", () => {
     expect(container.querySelectorAll(".screenshot")).toHaveLength(0);
     expect(container.querySelectorAll(".default-icon")).toHaveLength(0);
     const richIcon = container.querySelector(".rich-icon");
-    expect(richIcon.style.backgroundImage).toBe("url(foo.png)");
+    expect(richIcon.style.backgroundImage).toBe('url("foo.png")');
     expect(richIcon.style.backgroundColor).toBe("rgb(255, 255, 255)");
   });
   it("should not render a rich icon if it is smaller than 96x96", () => {
