@@ -6,6 +6,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import os
 import shutil
 import subprocess
@@ -299,6 +300,9 @@ def test_update_yaml_rewrites_quoted_and_unusual_values(tmp_path, initial_value)
     assert "  revision: v9.9.9\n" in result
 
 
+@mock.patch(
+    "mozbuild.vendor.vendor_manifest.moz_build_mentions_file", new=lambda *args: True
+)
 @mock.patch("mozbuild.vendor.vendor_manifest.remove_file_from_moz_build_file")
 @mock.patch("mozbuild.vendor.vendor_manifest.add_file_to_moz_build_file")
 def test_update_moz_build_only_touches_tracked_file_types(add_file, remove_file):
@@ -346,6 +350,9 @@ def test_update_moz_build_only_touches_tracked_file_types(add_file, remove_file)
         (MozBuildRewriteException("unparseable"), pytest.raises(SystemExit)),
     ],
 )
+@mock.patch(
+    "mozbuild.vendor.vendor_manifest.moz_build_mentions_file", new=lambda *args: True
+)
 @mock.patch("mozbuild.vendor.vendor_manifest.remove_file_from_moz_build_file")
 def test_update_moz_build_removed_file_not_listed(remove_file, exception, expectation):
     """A removed file that no moz.build mentions needs no moz.build change, so
@@ -362,6 +369,142 @@ def test_update_moz_build_removed_file_not_listed(remove_file, exception, expect
 
     with expectation:
         vm.update_moz_build("third_party/foo", "third_party/foo", False)
+
+
+@pytest.mark.parametrize(
+    "mozbuilds_before,removed,added,mozbuilds_after,reported",
+    [
+        pytest.param(
+            {
+                "moz.build": (
+                    "SOURCES += [\n"
+                    '    "src/arm/32/first.S",\n'
+                    '    "src/arm/64/second.S",\n'
+                    "]\n"
+                )
+            },
+            ["src/arm/moved.c"],
+            ["src/arm/64/moved.c"],
+            {
+                "moz.build": (
+                    "SOURCES += [\n"
+                    '    "src/arm/32/first.S",\n'
+                    '    "src/arm/64/moved.c",\n'
+                    '    "src/arm/64/second.S",\n'
+                    "]\n"
+                )
+            },
+            True,
+            id="unlisted-file-moved",
+        ),
+        pytest.param(
+            {
+                "moz.build": 'SOURCES += [\n    "src/first.c",\n]\n',
+                "src/arm/64/moz.build": 'SOURCES += [\n    "second.S",\n]\n',
+            },
+            ["src/old/moved.c"],
+            ["src/arm/64/moved.c"],
+            {
+                "moz.build": 'SOURCES += [\n    "src/first.c",\n]\n',
+                "src/arm/64/moz.build": (
+                    'SOURCES += [\n    "moved.c",\n    "second.S",\n]\n'
+                ),
+            },
+            False,
+            id="unlisted-file-moved-to-another-moz-build",
+        ),
+        pytest.param(
+            {"moz.build": 'SOURCES += [\n    "src/kept.c",\n]\n'},
+            ["src/gone.c"],
+            [],
+            {"moz.build": 'SOURCES += [\n    "src/kept.c",\n]\n'},
+            False,
+            id="unlisted-file-removed",
+        ),
+        pytest.param(
+            {"moz.build": 'SOURCES += [\n    "lib/other.c",\n    "src/old.c",\n]\n'},
+            ["src/old.c"],
+            ["src/new.c"],
+            {"moz.build": 'SOURCES += [\n    "lib/other.c",\n    "src/new.c",\n]\n'},
+            False,
+            id="only-listed-file-in-its-directory-renamed",
+        ),
+        pytest.param(
+            {
+                "moz.build": (
+                    'if CONFIG["X"]:\n'
+                    "    SOURCES += [\n"
+                    '        "x86/bar_avx2.asm",\n'
+                    '        "x86/foo_avx2.asm",\n'
+                    "    ]\n"
+                    "SOURCES += [\n"
+                    '    "x86/baz_sse.asm",\n'
+                    '    "x86/foo_sse.asm",\n'
+                    "]\n"
+                )
+            },
+            ["x86/foo_avx2.asm"],
+            ["x86/foo_avx2_v2.asm"],
+            {
+                "moz.build": (
+                    'if CONFIG["X"]:\n'
+                    "    SOURCES += [\n"
+                    '        "x86/bar_avx2.asm",\n'
+                    '        "x86/foo_avx2_v2.asm",\n'
+                    "    ]\n"
+                    "SOURCES += [\n"
+                    '    "x86/baz_sse.asm",\n'
+                    '    "x86/foo_sse.asm",\n'
+                    "]\n"
+                )
+            },
+            False,
+            id="renamed-file-stays-in-its-list",
+        ),
+    ],
+)
+def test_update_moz_build_moved_files(
+    tmp_path, monkeypatch, mozbuilds_before, removed, added, mozbuilds_after, reported
+):
+    """Upstream moving or renaming a file shows up as one removal and one
+    addition. When the old path was listed, the new path must take its place in
+    the same list. When it was not, the new path is still added, and if that
+    puts its name into a moz.build that could list the old path, it is reported
+    for review, which makes the vendor exit with an error once every edit is
+    done. A removed file that no moz.build lists needs no change."""
+    (tmp_path / ".arcconfig").touch()
+    library = tmp_path / "third_party" / "foo"
+    for path, contents in mozbuilds_before.items():
+        (library / path).parent.mkdir(parents=True, exist_ok=True)
+        (library / path).write_text(contents)
+    monkeypatch.chdir(tmp_path)
+
+    vm = VendorManifest.__new__(VendorManifest)
+    vm.log = mock.Mock()
+    vm.logInfo = mock.Mock()
+    vm.repository = mock.Mock()
+    changed = {
+        "D": [f"third_party/foo/{f}" for f in removed],
+        "A": [f"third_party/foo/{f}" for f in added],
+    }
+    vm.repository.get_changed_files.side_effect = lambda diff_filter: changed[
+        diff_filter
+    ]
+
+    with pytest.raises(SystemExit) if reported else does_not_raise():
+        vm.update_moz_build("third_party/foo", "third_party/foo", False)
+
+    assert {
+        path: (library / path).read_text() for path in mozbuilds_before
+    } == mozbuilds_after
+    errors = [c.args[2] for c in vm.log.call_args_list if c.args[0] == logging.ERROR]
+    if reported:
+        assert {
+            "f": f"third_party/foo/{added[0]}",
+            "removed": f"third_party/foo/{removed[0]}",
+        } in errors
+    else:
+        assert errors == []
 
 
 def test_update_yaml_asserts_when_a_field_is_missing(tmp_path):
