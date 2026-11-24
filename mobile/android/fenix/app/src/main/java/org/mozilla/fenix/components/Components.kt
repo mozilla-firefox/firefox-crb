@@ -24,6 +24,9 @@ import mozilla.components.feature.addons.update.DefaultAddonUpdater
 import mozilla.components.feature.autofill.AutofillConfiguration
 import mozilla.components.feature.summarize.PageSummaryFeature
 import mozilla.components.feature.summarize.settings.SummarizationSettings
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.repository.DefaultTabSettingsRepository
+import mozilla.components.feature.tab.settings.repository.TabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
 import mozilla.components.lib.ai.controls.AIFeatureBlockStorage
@@ -618,6 +621,18 @@ class Components(
         )
     }
 
+    private val tabSettingsRepository: TabSettingsRepository by lazy {
+        DefaultTabSettingsRepository(
+            context = context,
+            scope = applicationScope,
+            defaultSettings =
+                TabSettings(
+                    tabGroupsEnabled = settings.tabGroupsEnabled,
+                    inactiveTabsEnabled = settings.inactiveTabsAreEnabled,
+                ),
+        )
+    }
+
     val tabDataCoordinator: TabDataCoordinator by lazy {
         DefaultTabDataCoordinator(
             tabRepository =
@@ -627,8 +642,7 @@ class Components(
                     fenixBrowserUseCases = useCases.fenixBrowserUseCases,
                 ),
             tabGroupRepository = core.tabGroupRepository,
-            isInactiveTabsEnabled = settings::inactiveTabsAreEnabled,
-            isTabGroupsEnabled = settings::tabGroupsEnabled,
+            tabSettingsRepository = tabSettingsRepository,
             scope = applicationScope,
         )
     }

@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.repository.TabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.data.TabGroup
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
@@ -33,19 +35,27 @@ import mozilla.components.support.utils.DateTimeProvider
 import mozilla.components.support.utils.DefaultDateTimeProvider
 
 /** Value class representing the combined data model of all tab data inputs before being transformed. */
-@JvmInline
-private value class CombinedTabData(private val combinedData: Pair<TabRepository.Data, TabGroupData>) {
-    val tabs: List<Tab>
-        get() = combinedData.first.tabs
+private data class CombinedTabData(
+    val tabs: List<Tab>,
+    val selectedTabId: String?,
+    val tabGroups: List<StoredTabGroup>,
+    val tabGroupAssignments: Map<String, String>, // tab ID -> tab group ID
+    val inactiveTabsEnabled: Boolean,
+    val tabGroupsEnabled: Boolean,
+) {
 
-    val selectedTabId: String?
-        get() = combinedData.first.selectedTabId
-
-    val tabGroups: List<StoredTabGroup>
-        get() = combinedData.second.tabGroups
-
-    val tabGroupAssignments: Map<String, String> // tab ID -> tab group ID
-        get() = combinedData.second.tabGroupAssignments
+    constructor(
+        tabData: TabRepository.Data,
+        tabGroupData: TabGroupData,
+        tabSettings: TabSettings,
+    ) : this(
+        tabs = tabData.tabs,
+        selectedTabId = tabData.selectedTabId,
+        tabGroups = tabGroupData.tabGroups,
+        tabGroupAssignments = tabGroupData.tabGroupAssignments,
+        inactiveTabsEnabled = tabSettings.inactiveTabsEnabled,
+        tabGroupsEnabled = tabSettings.tabGroupsEnabled,
+    )
 }
 
 /**
@@ -186,6 +196,12 @@ interface TabDataCoordinator {
      * @param placeAfter Whether the moved item is placed after, rather than before, the destination.
      */
     suspend fun reorderItem(sourceId: String, destinationId: String?, placeAfter: Boolean)
+
+    /** Sets whether the tab groups feature is enabled. */
+    fun setTabGroupsEnabled(enabled: Boolean)
+
+    /** Sets whether the inactive tabs feature is enabled. */
+    fun setInactiveTabsEnabled(enabled: Boolean)
 }
 
 /**
@@ -193,8 +209,7 @@ interface TabDataCoordinator {
  *
  * @param tabRepository Repository used to observe, and perform updates to, tab data.
  * @param tabGroupRepository Repository used to observe, and perform updates to, tab group data.
- * @param isInactiveTabsEnabled Fetch whether the inactive tabs feature is enabled.
- * @param isTabGroupsEnabled Fetch whether the tab groups feature is enabled.
+ * @param tabSettingsRepository Repository used to observe, and perform updates to, tab-related user settings.
  * @param scope [CoroutineScope] used to transform the data sources inputs into an outputted [StateFlow].
  * @param dispatcher [CoroutineDispatcher] the tab data transformation is performed on.
  * @param dateTimeProvider [DateTimeProvider] used to stamp tab group updates.
@@ -202,8 +217,7 @@ interface TabDataCoordinator {
 class DefaultTabDataCoordinator(
     private val tabRepository: TabRepository,
     private val tabGroupRepository: TabGroupRepository,
-    private val isInactiveTabsEnabled: () -> Boolean,
-    private val isTabGroupsEnabled: () -> Boolean,
+    private val tabSettingsRepository: TabSettingsRepository,
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val dateTimeProvider: DateTimeProvider = DefaultDateTimeProvider(),
@@ -213,8 +227,9 @@ class DefaultTabDataCoordinator(
         combine(
                 flow = tabRepository.tabFlow.distinctUntilChanged(),
                 flow2 = tabGroupRepository.tabGroupDataFlow.distinctUntilChanged(),
-            ) { tabData, tabGroupData ->
-                CombinedTabData(combinedData = Pair(tabData, tabGroupData))
+                flow3 = tabSettingsRepository.settingsSnapshot.filterNotNull(),
+            ) { tabData, tabGroupData, tabSettings ->
+                CombinedTabData(tabData = tabData, tabGroupData = tabGroupData, tabSettings = tabSettings)
             }
             .flowOn(dispatcher)
             .stateIn(
@@ -230,6 +245,7 @@ class DefaultTabDataCoordinator(
         field = MutableStateFlow<TabsSnapshot?>(null)
 
     override fun initialize() {
+        tabSettingsRepository.initialize()
         scope.launch {
             combinedDataFlow.filterNotNull().collect { data ->
                 withContext(dispatcher) {
@@ -322,8 +338,8 @@ class DefaultTabDataCoordinator(
     override suspend fun deleteTabGroupAndTabs(tabGroupId: String) {
         val snapshot = tabsSnapshot.value
         val inactiveTabIds =
-            if (isInactiveTabsEnabled()) {
-                snapshot?.inactiveTabs?.mapTo(mutableSetOf()) { it.id } ?: emptySet()
+            if (snapshot?.inactiveTabsEnabled == true) {
+                snapshot.inactiveTabs.mapTo(mutableSetOf()) { it.id }
             } else {
                 emptySet()
             }
@@ -412,10 +428,18 @@ class DefaultTabDataCoordinator(
     private fun List<String>.sequentiallyFirstTabId(): String =
         tabsSnapshot.value?.normalTabs?.firstOrNull { it.id in this }?.id ?: first()
 
+    override fun setTabGroupsEnabled(enabled: Boolean) {
+        tabSettingsRepository.setTabGroupsEnabled(enabled)
+    }
+
+    override fun setInactiveTabsEnabled(enabled: Boolean) {
+        tabSettingsRepository.setInactiveTabsEnabled(enabled)
+    }
+
     /** Transforms the inputted data into the final [TabsSnapshot] model. */
     private fun transformTabData(tabData: CombinedTabData): TabsSnapshot {
-        val isInactiveTabsEnabled = isInactiveTabsEnabled()
-        val isTabGroupsEnabled = isTabGroupsEnabled()
+        val isInactiveTabsEnabled = tabData.inactiveTabsEnabled
+        val isTabGroupsEnabled = tabData.tabGroupsEnabled
         val privateTabs = tabData.tabs.filter { tab -> tab.private }
         val (normalTabsWithGroupAssignments, closedTabGroupIds, transformedTabGroups) =
             processTabGroups(tabData = tabData)
@@ -429,6 +453,7 @@ class DefaultTabDataCoordinator(
             filterBrowsableTabsFromNormalTabs(
                 normalTabs = normalTabsWithGroupAssignments,
                 closedTabGroupIds = closedTabGroupIds,
+                isInactiveTabsEnabled = isInactiveTabsEnabled,
             )
         val selectedTab =
             normalTabsWithGroupAssignments.find { it.id == tabData.selectedTabId }
@@ -462,7 +487,7 @@ class DefaultTabDataCoordinator(
         val closedTabGroupIds: Set<String>
         val transformedTabGroups: List<TabGroup>
 
-        if (isTabGroupsEnabled()) {
+        if (tabData.tabGroupsEnabled) {
             closedTabGroupIds = tabData.tabGroups.filter { it.closed }.mapTo(mutableSetOf()) { it.id }
             transformedTabGroups =
                 tabData.tabGroups.map { group ->
@@ -500,9 +525,10 @@ class DefaultTabDataCoordinator(
     private fun filterBrowsableTabsFromNormalTabs(
         normalTabs: List<Tab>,
         closedTabGroupIds: Set<String>,
+        isInactiveTabsEnabled: Boolean,
     ): List<Tab> {
         return normalTabs.filterNot { tab ->
-            (isInactiveTabsEnabled() && tab.inactive) || tab.tabGroupId in closedTabGroupIds
+            (isInactiveTabsEnabled && tab.inactive) || tab.tabGroupId in closedTabGroupIds
         }
     }
 }

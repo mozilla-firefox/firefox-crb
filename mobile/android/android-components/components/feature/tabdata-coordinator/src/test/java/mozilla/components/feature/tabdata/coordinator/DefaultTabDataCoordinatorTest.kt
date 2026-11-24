@@ -6,11 +6,14 @@ package mozilla.components.feature.tabdata.coordinator
 
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.fakes.FakeTabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.data.TabGroup
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
@@ -104,7 +107,7 @@ class DefaultTabDataCoordinatorTest {
         val coordinator =
             createCoordinator(
                 tabRepository = createTabRepository(tabs = listOf(normalTab, inactiveTab)),
-                isInactiveTabsEnabled = { true },
+                tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = true),
             )
 
         coordinator.initialize()
@@ -129,7 +132,7 @@ class DefaultTabDataCoordinatorTest {
         val coordinator =
             createCoordinator(
                 tabRepository = createTabRepository(tabs = listOf(normalTab, inactiveTab)),
-                isInactiveTabsEnabled = { false },
+                tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = false),
             )
 
         coordinator.initialize()
@@ -314,7 +317,7 @@ class DefaultTabDataCoordinatorTest {
                         tabGroups = listOf(group),
                         tabGroupAssignments = mapOf(groupedTab.id to group.id),
                     ),
-                isTabGroupsEnabled = { false },
+                tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = false),
             )
 
         coordinator.initialize()
@@ -344,7 +347,7 @@ class DefaultTabDataCoordinatorTest {
                         tabGroups = listOf(group),
                         tabGroupAssignments = mapOf(groupedTab.id to group.id),
                     ),
-                isTabGroupsEnabled = { false },
+                tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = false),
             )
 
         coordinator.initialize()
@@ -368,7 +371,7 @@ class DefaultTabDataCoordinatorTest {
                         tabGroups = listOf(group),
                         tabGroupAssignments = mapOf(groupedTab.id to group.id),
                     ),
-                isTabGroupsEnabled = { true },
+                tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = true),
             )
 
         coordinator.initialize()
@@ -742,7 +745,6 @@ class DefaultTabDataCoordinatorTest {
                             tabGroups = listOf(group),
                             tabGroupAssignments = mapOf("1" to group.id, "3" to group.id),
                         ),
-                    isInactiveTabsEnabled = { true },
                 )
 
             coordinator.initialize()
@@ -770,7 +772,7 @@ class DefaultTabDataCoordinatorTest {
                             tabGroups = listOf(group),
                             tabGroupAssignments = mapOf("1" to group.id),
                         ),
-                    isInactiveTabsEnabled = { false },
+                    tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = false),
                 )
 
             coordinator.initialize()
@@ -1102,20 +1104,242 @@ class DefaultTabDataCoordinatorTest {
         assertEquals(expected = listOf("1", "2"), actual = tabRepository.tabs.map { it.id })
     }
 
+    @Test
+    fun `WHEN the coordinator is initialized THEN the tab settings repository is initialized`() = runTest {
+        val tabSettingsRepository = createTabSettingsRepository()
+        val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+        coordinator.initialize()
+
+        assertTrue(tabSettingsRepository.isInitialized)
+    }
+
+    @Test
+    fun `GIVEN the tab settings have not loaded WHEN the coordinator is initialized THEN the tabs state is null`() =
+        runTest {
+            val coordinator =
+                createCoordinator(
+                    tabRepository = createTabRepository(tabs = listOf(createTab(id = "1"))),
+                    tabSettingsRepository = FakeTabSettingsRepository(initialSettingsSnapshot = null),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            assertNull(coordinator.tabsSnapshot.value)
+        }
+
+    @Test
+    fun `GIVEN the tab settings have not loaded WHEN the tab settings become available THEN the tabs state is emitted`() =
+        runTest {
+            val tab = createTab(id = "1")
+            val tabSettingsRepository = FakeTabSettingsRepository(initialSettingsSnapshot = null)
+            val coordinator =
+                createCoordinator(
+                    tabRepository = createTabRepository(tabs = listOf(tab)),
+                    tabSettingsRepository = tabSettingsRepository,
+                )
+            coordinator.initialize()
+            runCurrent()
+
+            tabSettingsRepository.setTabGroupsEnabled(true)
+            runCurrent()
+
+            assertEquals(
+                expected = TabsSnapshot(normalTabs = listOf(tab), browsableNormalTabs = listOf(tab)),
+                actual = coordinator.tabsSnapshot.value,
+            )
+        }
+
+    @Test
+    fun `WHEN the inactive tabs setting is disabled THEN the tabs state is updated`() = runTest {
+        val normalTab = createTab(id = "1")
+        val inactiveTab = createTab(id = "2", inactive = true)
+        val tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = true)
+        val coordinator =
+            createCoordinator(
+                tabRepository = createTabRepository(tabs = listOf(normalTab, inactiveTab)),
+                tabSettingsRepository = tabSettingsRepository,
+            )
+        coordinator.initialize()
+        runCurrent()
+
+        tabSettingsRepository.setInactiveTabsEnabled(false)
+        runCurrent()
+
+        assertEquals(
+            expected =
+                TabsSnapshot(
+                    normalTabs = listOf(normalTab, inactiveTab),
+                    browsableNormalTabs = listOf(normalTab, inactiveTab),
+                    inactiveTabs = emptyList(),
+                    inactiveTabsEnabled = false,
+                ),
+            actual = coordinator.tabsSnapshot.value,
+        )
+    }
+
+    @Test
+    fun `WHEN the inactive tabs setting is enabled THEN the tabs state is updated`() = runTest {
+        val normalTab = createTab(id = "1")
+        val inactiveTab = createTab(id = "2", inactive = true)
+        val tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = false)
+        val coordinator =
+            createCoordinator(
+                tabRepository = createTabRepository(tabs = listOf(normalTab, inactiveTab)),
+                tabSettingsRepository = tabSettingsRepository,
+            )
+        coordinator.initialize()
+        runCurrent()
+
+        tabSettingsRepository.setInactiveTabsEnabled(true)
+        runCurrent()
+
+        assertEquals(
+            expected =
+                TabsSnapshot(
+                    normalTabs = listOf(normalTab, inactiveTab),
+                    browsableNormalTabs = listOf(normalTab),
+                    inactiveTabs = listOf(inactiveTab),
+                    inactiveTabsEnabled = true,
+                ),
+            actual = coordinator.tabsSnapshot.value,
+        )
+    }
+
+    @Test
+    fun `WHEN the tab groups setting is disabled THEN the tabs state is updated`() = runTest {
+        val groupedTab = createTab(id = "1")
+        val group = createStoredTabGroup(id = "group-1", tabIds = listOf(groupedTab.id))
+        val tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = true)
+        val coordinator =
+            createCoordinator(
+                tabRepository = createTabRepository(tabs = listOf(groupedTab)),
+                tabGroupRepository =
+                    createTabGroupRepository(
+                        tabGroups = listOf(group),
+                        tabGroupAssignments = mapOf(groupedTab.id to group.id),
+                    ),
+                tabSettingsRepository = tabSettingsRepository,
+            )
+        coordinator.initialize()
+        runCurrent()
+
+        tabSettingsRepository.setTabGroupsEnabled(false)
+        runCurrent()
+
+        assertEquals(
+            expected =
+                TabsSnapshot(
+                    normalTabs = listOf(groupedTab),
+                    browsableNormalTabs = listOf(groupedTab),
+                    tabGroups = emptyList(),
+                    tabGroupsEnabled = false,
+                ),
+            actual = coordinator.tabsSnapshot.value,
+        )
+    }
+
+    @Test
+    fun `WHEN the tab groups setting is enabled THEN the tabs state is updated`() = runTest {
+        val groupedTab = createTab(id = "1")
+        val group = createStoredTabGroup(id = "group-1", tabIds = listOf(groupedTab.id))
+        val tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = false)
+        val coordinator =
+            createCoordinator(
+                tabRepository = createTabRepository(tabs = listOf(groupedTab)),
+                tabGroupRepository =
+                    createTabGroupRepository(
+                        tabGroups = listOf(group),
+                        tabGroupAssignments = mapOf(groupedTab.id to group.id),
+                    ),
+                tabSettingsRepository = tabSettingsRepository,
+            )
+        coordinator.initialize()
+        runCurrent()
+
+        tabSettingsRepository.setTabGroupsEnabled(true)
+        runCurrent()
+
+        val expectedGroupedTab = groupedTab.copy(tabGroupId = group.id)
+        assertEquals(
+            expected =
+                TabsSnapshot(
+                    normalTabs = listOf(expectedGroupedTab),
+                    browsableNormalTabs = listOf(expectedGroupedTab),
+                    tabGroups = listOf(createTabGroup(id = group.id, tabIds = group.tabIds)),
+                    openTabGroups = listOf(createTabGroup(id = group.id, tabIds = group.tabIds)),
+                    tabGroupsEnabled = true,
+                ),
+            actual = coordinator.tabsSnapshot.value,
+        )
+    }
+
+    @Test
+    fun `WHEN tab groups are enabled through the coordinator THEN the setting is forwarded to the tab settings repository`() =
+        runTest {
+            val tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = false)
+            val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+            coordinator.setTabGroupsEnabled(true)
+
+            assertEquals(true, tabSettingsRepository.settingsSnapshot.value?.tabGroupsEnabled)
+        }
+
+    @Test
+    fun `WHEN tab groups are disabled through the coordinator THEN the setting is forwarded to the tab settings repository`() =
+        runTest {
+            val tabSettingsRepository = createTabSettingsRepository(tabGroupsEnabled = true)
+            val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+            coordinator.setTabGroupsEnabled(false)
+
+            assertEquals(false, tabSettingsRepository.settingsSnapshot.value?.tabGroupsEnabled)
+        }
+
+    @Test
+    fun `WHEN inactive tabs are enabled through the coordinator THEN the setting is forwarded to the tab settings repository`() =
+        runTest {
+            val tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = false)
+            val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+            coordinator.setInactiveTabsEnabled(true)
+
+            assertEquals(true, tabSettingsRepository.settingsSnapshot.value?.inactiveTabsEnabled)
+        }
+
+    @Test
+    fun `WHEN inactive tabs are disabled through the coordinator THEN the setting is forwarded to the tab settings repository`() =
+        runTest {
+            val tabSettingsRepository = createTabSettingsRepository(inactiveTabsEnabled = true)
+            val coordinator = createCoordinator(tabSettingsRepository = tabSettingsRepository)
+
+            coordinator.setInactiveTabsEnabled(false)
+
+            assertEquals(false, tabSettingsRepository.settingsSnapshot.value?.inactiveTabsEnabled)
+        }
+
     private fun TestScope.createCoordinator(
         tabRepository: TabRepository = createTabRepository(),
         tabGroupRepository: TabGroupRepository = createTabGroupRepository(),
-        isInactiveTabsEnabled: () -> Boolean = { true },
-        isTabGroupsEnabled: () -> Boolean = { true },
+        tabSettingsRepository: FakeTabSettingsRepository = createTabSettingsRepository(),
     ): DefaultTabDataCoordinator =
         DefaultTabDataCoordinator(
             tabRepository = tabRepository,
             tabGroupRepository = tabGroupRepository,
-            isInactiveTabsEnabled = isInactiveTabsEnabled,
-            isTabGroupsEnabled = isTabGroupsEnabled,
+            tabSettingsRepository = tabSettingsRepository,
             scope = backgroundScope,
             dispatcher = StandardTestDispatcher(testScheduler),
             dateTimeProvider = FakeDateTimeProvider(currentTime = CURRENT_TIME),
+        )
+
+    private fun createTabSettingsRepository(
+        tabGroupsEnabled: Boolean = true,
+        inactiveTabsEnabled: Boolean = true,
+    ): FakeTabSettingsRepository =
+        FakeTabSettingsRepository(
+            initialSettingsSnapshot =
+                TabSettings(tabGroupsEnabled = tabGroupsEnabled, inactiveTabsEnabled = inactiveTabsEnabled)
         )
 
     private fun createTabRepository(
