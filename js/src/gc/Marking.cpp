@@ -1041,7 +1041,9 @@ void js::gc::PerformIncrementalPreWriteBarrier(TenuredCell* cell) {
 
 #ifdef ENABLE_WASM_JSPI
 void js::gc::PerformIncrementalPreWriteBarrierAllChildren(JSObject* cell) {
-  if (!cell) {
+  // Nursery cells were allocated after this incremental GC started, so like
+  // other pre-barriers this needs nothing for them.
+  if (!cell || IsInsideNursery(cell)) {
     return;
   }
 

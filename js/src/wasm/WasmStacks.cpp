@@ -39,6 +39,7 @@
 #include "wasm/WasmJS.h"
 #include "wasm/WasmStubs.h"
 
+#include "gc/Marking-inl.h"
 #include "jit/MacroAssembler-inl.h"
 #include "vm/JSObject-inl.h"
 
@@ -1149,6 +1150,33 @@ ContStack* ContStackAllocator::findForAddress(uintptr_t address) const {
   return arena->findForAddress(address);
 }
 
+void ContStackAllocator::sweepAfterMinorGC(JSContext* cx, Nursery& nursery) {
+  AutoEnterOOMUnsafeRegion oomUnsafe;
+  Vector<ContObject*, 0, SystemAllocPolicy> conts;
+  std::swap(nurseryConts_, conts);
+  for (ContObject* cont : conts) {
+    if (!nursery.inCollectedRegion(cont)) {
+      if (!nurseryConts_.append(cont)) {
+        oomUnsafe.crash("ContStackAllocator::sweepAfterMinorGC");
+      }
+      continue;
+    }
+    if (gc::IsForwarded(cont)) {
+      // A tenured ContObject is finalized as usual. One moved within the
+      // nursery (semispace) is still tracked here.
+      ContObject* moved = gc::Forwarded(cont);
+      if (IsInsideNursery(moved) && !nurseryConts_.append(moved)) {
+        oomUnsafe.crash("ContStackAllocator::sweepAfterMinorGC");
+      }
+      continue;
+    }
+    // The dead object's memory is intact until the nursery is cleared. This
+    // can't reach Debugger frames yet: debuggees compile with baseline, which
+    // doesn't support stack switching.
+    ContObject::releaseResumeBase(cx, *cont);
+  }
+}
+
 void ContStackAllocator::purge(bool shrinking) {
   if (!initialized_) {
     return;
@@ -1195,6 +1223,10 @@ ContObject* ContObject::create(JSContext* cx, Handle<JSFunction*> target,
     ReportOutOfMemory(cx);
     return nullptr;
   }
+  if (IsInsideNursery(cont) && !cx->wasm().contStacks().addNurseryCont(cont)) {
+    ReportOutOfMemory(cx);
+    return nullptr;
+  }
 
   UniqueContStack stack(cx->wasm().contStacks().allocate(
       cx, cont, target, contBaseFrameStub, creatorCode));
@@ -1214,15 +1246,21 @@ ContObject* ContObject::createEmpty(JSContext* cx) {
     ReportOutOfMemory(cx);
     return nullptr;
   }
+  if (IsInsideNursery(cont) && !cx->wasm().contStacks().addNurseryCont(cont)) {
+    ReportOutOfMemory(cx);
+    return nullptr;
+  }
   MOZ_ASSERT(!cont->resumeBase());
   return cont;
 }
 
 // We must foreground finalize because the continuation stack allocator is not
-// thread safe.
+// thread safe. ContObjects that die in the nursery are not finalized, see
+// ContStackAllocator::sweepAfterMinorGC.
 const JSClass ContObject::class_ = {
     "ContObject",
-    JSCLASS_HAS_RESERVED_SLOTS(SlotCount) | JSCLASS_FOREGROUND_FINALIZE,
+    JSCLASS_HAS_RESERVED_SLOTS(SlotCount) | JSCLASS_FOREGROUND_FINALIZE |
+        JSCLASS_SKIP_NURSERY_FINALIZE,
     &ContObject::classOps_,
     nullptr,
     &ContObject::classExt_,
@@ -1238,8 +1276,11 @@ const ClassExtension ContObject::classExt_ = {};
 /* static */
 void ContObject::finalize(JS::GCContext* gcx, JSObject* obj) {
   JSContext* cx = gcx->runtimeFromAnyThread()->mainContextFromAnyThread();
-  ContObject& cont = obj->as<ContObject>();
+  releaseResumeBase(cx, obj->as<ContObject>());
+}
 
+/* static */
+void ContObject::releaseResumeBase(JSContext* cx, ContObject& cont) {
   if (UniqueContStack resumeBase = cont.takeResumeBase()) {
     // Terminate any Debugger.Frame objects whose frame pointers point into
     // stacks in this chain, before the stacks are freed.

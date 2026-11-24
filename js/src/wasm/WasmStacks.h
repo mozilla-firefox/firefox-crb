@@ -551,6 +551,9 @@ class ContStackAllocator {
   // The pool of arenas. These are sorted by base address and don't overlap,
   // which allows us to binary search to find an arena for a given SP.
   ContStackArenaVector arenas_;
+  // The ContObjects allocated in the nursery. Their finalizer does not run if
+  // they die there, so sweepAfterMinorGC frees the stacks they own instead.
+  Vector<ContObject*, 0, SystemAllocPolicy> nurseryConts_;
   // Whether we've been initialized or not.
   bool initialized_ = false;
 
@@ -590,6 +593,12 @@ class ContStackAllocator {
   // Free empty arenas. If !shrinking, keep one empty arena cached.
   void purge(bool shrinking);
 
+  [[nodiscard]] bool addNurseryCont(ContObject* cont) {
+    return nurseryConts_.append(cont);
+  }
+  // Free the stacks owned by ContObjects that died in this minor GC.
+  void sweepAfterMinorGC(JSContext* cx, Nursery& nursery);
+
   // Total mapped bytes across all arenas. This reads arenas_.length()
   // without synchronization, so it is only safe to call from the thread that
   // owns this allocator (typically during memory reporting on the main
@@ -616,6 +625,9 @@ class ContObject : public NativeObject {
                             void* contBaseFrameStub, const Code* creatorCode);
   // Create a continuation that is empty and cannot be resumed.
   static ContObject* createEmpty(JSContext* cx);
+
+  // Terminate the Debugger.Frames on cont's stack and free it, if any.
+  static void releaseResumeBase(JSContext* cx, ContObject& cont);
 
   static constexpr size_t offsetOfResumeBase() {
     return NativeObject::getFixedSlotOffset(ResumeBaseSlot);

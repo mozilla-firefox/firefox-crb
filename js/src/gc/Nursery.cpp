@@ -32,6 +32,7 @@
 #include "vm/Logging.h"
 #include "vm/Realm.h"
 #include "vm/Time.h"
+#include "wasm/WasmContext.h"
 
 #include "gc/BufferAllocator-inl.h"
 #include "gc/Heap-inl.h"
@@ -2150,6 +2151,11 @@ void js::Nursery::sweep() {
   }
 
   sweepMapAndSetObjects();
+
+#ifdef ENABLE_WASM_JSPI
+  runtime()->mainContextFromOwnThread()->wasm().contStacks().sweepAfterMinorGC(
+      runtime()->mainContextFromOwnThread(), *this);
+#endif
 
   sweepWeakMaps();
 
