@@ -188,6 +188,11 @@ head = "head_addons.js head_amremotesettings.js"
 
 ["test_isReady.js"]
 
+["test_langpack_locked_location.js"]
+skip-if = [
+  "os == 'android'", # Non-extension add-ons are not supported on Android, but test installs langpack.
+]
+
 ["test_loadManifest_isPrivileged.js"]
 
 ["test_locale.js"]
