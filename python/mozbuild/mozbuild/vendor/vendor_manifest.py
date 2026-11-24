@@ -876,8 +876,10 @@ class VendorManifest(MozbuildObject):
         header_suffixes = (".h", ".hpp")
         tracked_suffixes = source_suffixes + header_suffixes
 
-        files_removed = self.repository.get_changed_files(diff_filter="D")
-        files_added = self.repository.get_changed_files(diff_filter="A")
+        # Registering the vendored changes with version control has staged them
+        # on Git, so they are no longer in the unstaged diff.
+        files_removed = self.repository.get_changed_files("D", mode="staged")
+        files_added = self.repository.get_changed_files("A", mode="staged")
 
         # Filter the files added to just source files we track in moz.build files.
         files_added = [f for f in files_added if f.endswith(source_suffixes)]
