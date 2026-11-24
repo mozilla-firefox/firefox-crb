@@ -80,14 +80,6 @@ export default [
     },
   },
   {
-    // TODO: Bug 1773467 - Move these to .mjs or figure out a generic way
-    // to identify these as modules.
-    files: ["tests/unit/**/*.js"],
-    languageOptions: {
-      sourceType: "module",
-    },
-  },
-  {
     // These files use fluent-dom to insert content
     files: [
       "content-src/components/Zap.jsx",
@@ -116,23 +108,10 @@ export default [
     },
   },
   {
-    files: ["content-src/**", "tests/unit/**"],
+    files: ["content-src/**"],
     rules: {
       // Disallow commonjs in these directories.
       "import-x/no-commonjs": 2,
-    },
-  },
-  {
-    // These tests simulate the browser environment.
-    files: "tests/unit/**",
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.mocha,
-        assert: "readonly",
-        chai: "readonly",
-        sinon: "readonly",
-      },
     },
   },
   {
