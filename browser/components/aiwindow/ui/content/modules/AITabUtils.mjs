@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
- * @import { A2UIComponent } from "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+ * @import { A2UIComponent } from "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs"
  */
 
 /**

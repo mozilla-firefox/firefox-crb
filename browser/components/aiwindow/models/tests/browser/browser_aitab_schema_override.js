@@ -8,10 +8,10 @@
 // without rebuilding. Covers both directions: the override taking effect, and
 // reverting to the packaged catalog once the pref is cleared.
 
-const { AITab } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+const { AITabValidation } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs"
 );
-const { loadAssets, buildSurface } = AITab;
+const { loadAssets, buildSurface } = AITabValidation;
 const { FEATURE_MAJOR_VERSIONS, MODEL_FEATURES } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
 );
@@ -61,7 +61,7 @@ const OVERRIDE_CATALOG = {
 };
 
 add_setup(async function () {
-  // Raise AITab's log verbosity for the duration of this file so a failing run
+  // Raise AITabValidation's log verbosity for the duration of this file so a failing run
   // surfaces the module's debug/error output. Reverted automatically at teardown.
   await SpecialPowers.pushPrefEnv({
     set: [["browser.smartwindow.conversation.logLevel", "Debug"]],
