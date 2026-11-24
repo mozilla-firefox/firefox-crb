@@ -1,0 +1,15 @@
+{
+  "label": "acrossmatrix.com",
+  "bugs": {
+    "2085323": {
+      "issue": "firefox-blocked-completely",
+      "matches": ["*://*.acrossmatrix.com/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "ua_string": ["Chrome_with_FxQuantum"]
+    }
+  ]
+}
