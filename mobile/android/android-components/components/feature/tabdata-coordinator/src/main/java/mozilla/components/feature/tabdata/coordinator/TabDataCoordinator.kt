@@ -57,6 +57,13 @@ private data class CombinedTabData(
 }
 
 /**
+ * The current [TabDataCoordinator.tabSettings], or [TabDataCoordinator.defaultTabSettings] while the settings have not
+ * been read from disk yet.
+ */
+val TabDataCoordinator.currentTabSettings: TabSettings
+    get() = tabSettings.value ?: defaultTabSettings
+
+/**
  * Abstraction for observing and updating tab data.
  *
  * Updates which span more than one tab data source, such as assigning a tab to a tab group, are performed here.
@@ -74,6 +81,9 @@ interface TabDataCoordinator {
      * data to load. Emits null until the settings have been read from disk.
      */
     val tabSettings: StateFlow<TabSettings?>
+
+    /** The [TabSettings] used for any setting that has not been read from disk yet. */
+    val defaultTabSettings: TabSettings
 
     /** Initializes the coordinator so it starts collecting from its aggregate of data sources. */
     fun initialize()
@@ -250,6 +260,9 @@ class DefaultTabDataCoordinator(
 
     override val tabSettings: StateFlow<TabSettings?>
         get() = tabSettingsRepository.settingsSnapshot
+
+    override val defaultTabSettings: TabSettings
+        get() = tabSettingsRepository.defaultSettings
 
     override fun initialize() {
         tabSettingsRepository.initialize()

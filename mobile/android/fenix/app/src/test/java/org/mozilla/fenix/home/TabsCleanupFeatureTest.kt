@@ -22,6 +22,8 @@ import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Before
@@ -57,6 +59,9 @@ class TabsCleanupFeatureTest {
 
     @RelaxedMockK private lateinit var settings: Settings
 
+    private val tabDataCoordinator =
+        FakeTabDataCoordinator(initialTabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true))
+
     private val snackbarHostState = SnackbarHostState()
 
     private val feature by lazy {
@@ -70,6 +75,7 @@ class TabsCleanupFeatureTest {
                     settings = settings,
                     tabsUseCases = tabsUseCases,
                     fenixBrowserUseCases = fenixBrowserUseCases,
+                    tabDataCoordinator = tabDataCoordinator,
                     snackbarHostState = snackbarHostState,
                     viewLifecycleScope = testCoroutineScope,
                 )
@@ -116,7 +122,6 @@ class TabsCleanupFeatureTest {
                 ),
             )
 
-        every { settings.inactiveTabsAreEnabled } returns true
         browserStore = BrowserStore(BrowserState(tabs = tabs))
         every { viewModel.sessionToDelete } returns ALL_ACTIVE_NORMAL_TABS
 
@@ -426,8 +431,6 @@ class TabsCleanupFeatureTest {
 
         browserStore = BrowserStore(BrowserState(tabs = listOf(activeTab, inactiveTab)))
         every { viewModel.sessionToDelete } returns "1"
-
-        every { settings.inactiveTabsAreEnabled } returns true
 
         feature.start()
 

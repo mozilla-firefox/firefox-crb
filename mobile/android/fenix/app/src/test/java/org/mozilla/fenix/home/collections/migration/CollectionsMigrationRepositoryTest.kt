@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertFalse
 import junit.framework.TestCase.assertTrue
+import kotlinx.coroutines.test.runTest
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Before
 import org.junit.Test
@@ -19,44 +20,46 @@ class CollectionsMigrationRepositoryTest {
 
     private lateinit var settings: Settings
     private lateinit var repository: DefaultCollectionsMigrationRepository
+    private var tabGroupsEnabled = true
 
     @Before
     fun setup() {
         settings = Settings(testContext)
-        repository = DefaultCollectionsMigrationRepository(settings)
+        repository = DefaultCollectionsMigrationRepository(settings = settings) { tabGroupsEnabled }
     }
 
     @Test
-    fun `GIVEN the migration is enabled and incomplete WHEN the migration is attempted THEN it should migrate`() {
-        settings.migrateCollectionsToTabGroupsEnabled = true
-        settings.tabGroupsEnabled = true
-        settings.hasMigratedCollectionsToTabGroups = false
+    fun `GIVEN the migration is enabled and incomplete WHEN the migration is attempted THEN it should migrate`() =
+        runTest {
+            settings.migrateCollectionsToTabGroupsEnabled = true
+            tabGroupsEnabled = true
+            settings.hasMigratedCollectionsToTabGroups = false
 
-        assertTrue(repository.shouldMigrate())
-    }
+            assertTrue(repository.shouldMigrate())
+        }
 
     @Test
-    fun `GIVEN the migration is disabled WHEN the migration is attempted THEN it should not migrate`() {
+    fun `GIVEN the migration is disabled WHEN the migration is attempted THEN it should not migrate`() = runTest {
         settings.migrateCollectionsToTabGroupsEnabled = false
-        settings.tabGroupsEnabled = true
+        tabGroupsEnabled = true
         settings.hasMigratedCollectionsToTabGroups = false
 
         assertFalse(repository.shouldMigrate())
     }
 
     @Test
-    fun `GIVEN tab groups are disabled WHEN the migration is attempted THEN it should not migrate`() {
+    fun `GIVEN tab groups are disabled WHEN the migration is attempted THEN it should not migrate`() = runTest {
         settings.migrateCollectionsToTabGroupsEnabled = true
-        settings.tabGroupsEnabled = false
+        tabGroupsEnabled = false
         settings.hasMigratedCollectionsToTabGroups = false
 
         assertFalse(repository.shouldMigrate())
     }
 
     @Test
-    fun `GIVEN the migration is complete WHEN the migration is attempted THEN it should not migrate`() {
+    fun `GIVEN the migration is complete WHEN the migration is attempted THEN it should not migrate`() = runTest {
         settings.migrateCollectionsToTabGroupsEnabled = true
-        settings.tabGroupsEnabled = true
+        tabGroupsEnabled = true
         settings.hasMigratedCollectionsToTabGroups = true
 
         assertFalse(repository.shouldMigrate())

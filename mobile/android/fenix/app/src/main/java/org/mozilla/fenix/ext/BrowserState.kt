@@ -15,7 +15,6 @@ import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import org.mozilla.fenix.components.menu.middleware.getTabUrl
 import org.mozilla.fenix.home.recenttabs.RecentTab
 import org.mozilla.fenix.tabstray.ext.isNormalTabInactive
-import org.mozilla.fenix.utils.Settings
 import org.mozilla.fenix.utils.Stories.hasUrlOfInternallyOpenedStory
 
 /** The time until which a tab is considered in-active (in days). */
@@ -59,9 +58,11 @@ val BrowserState.potentialInactiveTabs: List<TabSessionState>
 /**
  * List of all inactive tabs based on [maxActiveTime]. The result will be always be empty if the user disabled the
  * feature.
+ *
+ * @param inactiveTabsEnabled Whether the user has the inactive tabs feature enabled.
  */
-fun BrowserState.actualInactiveTabs(settings: Settings): List<TabSessionState> {
-    return if (settings.inactiveTabsAreEnabled) {
+fun BrowserState.actualInactiveTabs(inactiveTabsEnabled: Boolean): List<TabSessionState> {
+    return if (inactiveTabsEnabled) {
         potentialInactiveTabs
     } else {
         emptyList()
@@ -72,12 +73,13 @@ fun BrowserState.actualInactiveTabs(settings: Settings): List<TabSessionState> {
  * Splits all normal tabs into the active and inactive ones, based on [maxActiveTime]. All normal tabs are considered
  * active if the user disabled the inactive tabs feature.
  *
+ * @param inactiveTabsEnabled Whether the user has the inactive tabs feature enabled.
  * @return The active normal tabs (first) and the inactive tabs (second).
  */
 fun BrowserState.partitionNormalTabsByActiveTime(
-    settings: Settings
+    inactiveTabsEnabled: Boolean
 ): Pair<List<TabSessionState>, List<TabSessionState>> =
-    if (settings.inactiveTabsAreEnabled) {
+    if (inactiveTabsEnabled) {
         normalTabs.partition { !it.isNormalTabInactive(maxActiveTime) }
     } else {
         normalTabs to emptyList()

@@ -1132,6 +1132,35 @@ class DefaultTabDataCoordinatorTest {
         }
 
     @Test
+    fun `GIVEN the tab settings have not loaded THEN the current tab settings are the repository's default settings`() =
+        runTest {
+            val defaultSettings = TabSettings(tabGroupsEnabled = false, inactiveTabsEnabled = true)
+            val coordinator =
+                createCoordinator(
+                    tabSettingsRepository =
+                        FakeTabSettingsRepository(defaultSettings = defaultSettings, initialSettingsSnapshot = null)
+                )
+
+            assertEquals(expected = defaultSettings, actual = coordinator.defaultTabSettings)
+            assertEquals(expected = defaultSettings, actual = coordinator.currentTabSettings)
+        }
+
+    @Test
+    fun `GIVEN the tab settings have loaded THEN the current tab settings are the loaded settings`() = runTest {
+        val loadedSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = false)
+        val coordinator =
+            createCoordinator(
+                tabSettingsRepository =
+                    FakeTabSettingsRepository(
+                        defaultSettings = TabSettings(tabGroupsEnabled = false, inactiveTabsEnabled = true),
+                        initialSettingsSnapshot = loadedSettings,
+                    )
+            )
+
+        assertEquals(expected = loadedSettings, actual = coordinator.currentTabSettings)
+    }
+
+    @Test
     fun `GIVEN the tab settings have not loaded WHEN the coordinator is initialized THEN the tabs state is null`() =
         runTest {
             val coordinator =

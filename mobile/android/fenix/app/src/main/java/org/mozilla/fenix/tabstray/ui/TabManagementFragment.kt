@@ -228,6 +228,7 @@ class TabManagementFragment : Fragment() {
                 appStore = requireComponents.appStore,
                 tabsTrayStore = tabsTrayStore,
                 browserStore = requireComponents.core.store,
+                tabDataCoordinator = requireComponents.tabDataCoordinator,
                 settings = requireComponents.settings,
                 browsingModeManager = (activity as HomeActivity).browsingModeManager,
                 navController = findNavController(),

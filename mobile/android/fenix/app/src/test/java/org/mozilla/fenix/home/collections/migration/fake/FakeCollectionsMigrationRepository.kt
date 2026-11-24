@@ -15,7 +15,7 @@ class FakeCollectionsMigrationRepository(
     var cardVisible: Boolean = false,
 ) : CollectionsMigrationRepository {
 
-    override fun shouldMigrate(): Boolean = !migrationCompleted && migrationEnabled && tabGroupsEnabled
+    override suspend fun shouldMigrate(): Boolean = !migrationCompleted && migrationEnabled && tabGroupsEnabled
 
     override fun hasMigratedCollections(): Boolean = migrationCompleted
 

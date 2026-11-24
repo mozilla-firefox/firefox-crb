@@ -16,6 +16,9 @@ interface TabSettingsRepository {
      */
     val settingsSnapshot: StateFlow<TabSettings?>
 
+    /** The [TabSettings] used for any setting that has not been persisted yet. */
+    val defaultSettings: TabSettings
+
     /** Starts observing the persisted settings and populating [settingsSnapshot]. Subsequent calls are no-ops. */
     fun initialize()
 

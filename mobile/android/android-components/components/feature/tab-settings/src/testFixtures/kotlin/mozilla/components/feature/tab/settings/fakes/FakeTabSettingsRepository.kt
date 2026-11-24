@@ -15,11 +15,11 @@ import mozilla.components.feature.tab.settings.repository.TabSettingsRepository
  *
  * Updates are applied to [settingsSnapshot] synchronously.
  *
- * @param defaultSettings The [TabSettings] that updates are applied to while [settingsSnapshot] is null.
+ * @property defaultSettings The [TabSettings] that updates are applied to while [settingsSnapshot] is null.
  * @param initialSettingsSnapshot The initial value of [settingsSnapshot].
  */
 class FakeTabSettingsRepository(
-    private val defaultSettings: TabSettings =
+    override val defaultSettings: TabSettings =
         TabSettings(
             tabGroupsEnabled = true,
             inactiveTabsEnabled = true,

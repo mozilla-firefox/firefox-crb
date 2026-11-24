@@ -4,15 +4,12 @@
 
 package org.mozilla.fenix.ext
 
-import io.mockk.every
-import io.mockk.mockk
 import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.feature.tabs.TabsUseCases
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.mozilla.fenix.utils.Settings
 
 class TabsUseCasesTest {
 
@@ -23,15 +20,11 @@ class TabsUseCasesTest {
         val inactiveTab = createTab(url = "url3", id = "inactive", lastAccess = 0L, createdAt = 0L)
         val privateTab = createTab(url = "url4", id = "private", private = true, lastAccess = 0L, createdAt = 0L)
 
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns true
-        }
-
         val state = BrowserState(tabs = listOf(activeTab1, inactiveTab, activeTab2, privateTab))
         val store = BrowserStore(initialState = state)
         val tabsUseCases = TabsUseCases(store)
 
-        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, settings = settings)
+        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, inactiveTabsEnabled = true)
 
         assertEquals(2, result)
         assertEquals(store.state.tabs, listOf(inactiveTab, privateTab))
@@ -43,15 +36,11 @@ class TabsUseCasesTest {
         val activeTab2 = createTab(url = "url2", id = "active2")
         val activeTab3 = createTab(url = "url3", id = "active3", lastAccess = 0L, createdAt = 0L)
         val privateTab = createTab(url = "url4", id = "private", private = true, lastAccess = 0L, createdAt = 0L)
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns false
-        }
-
         val state = BrowserState(tabs = listOf(activeTab1, activeTab3, activeTab2, privateTab))
         val store = BrowserStore(initialState = state)
         val tabsUseCases = TabsUseCases(store)
 
-        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, settings = settings)
+        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, inactiveTabsEnabled = false)
 
         assertEquals(3, result)
         assertEquals(store.state.tabs, listOf(privateTab))
@@ -60,15 +49,11 @@ class TabsUseCasesTest {
     @Test
     fun `GIVEN no normal tabs are open WHEN removeAllActiveNormalTabs is called THEN remove nothing`() {
         val privateTab = createTab(url = "url1", id = "1", private = true)
-        val settings: Settings = mockk {
-            every { inactiveTabsAreEnabled } returns true
-        }
-
         val state = BrowserState(tabs = listOf(privateTab))
         val store = BrowserStore(initialState = state)
         val tabsUseCases = TabsUseCases(store)
 
-        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, settings = settings)
+        val result = tabsUseCases.removeAllActiveNormalTabs(state = state, inactiveTabsEnabled = true)
 
         assertEquals(0, result)
         assertEquals(store.state.tabs, listOf(privateTab))
