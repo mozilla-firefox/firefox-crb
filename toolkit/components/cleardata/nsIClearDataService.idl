@@ -221,6 +221,13 @@ interface nsIClearDataService : nsISupports
   const uint32_t CLEAR_BFCACHE = 1 << 1;
 
   /**
+   * Speculation-rules prefetch records.
+   * FIXME: Like CLEAR_BFCACHE, this reuses the CLEAR_NETWORK_CACHE bit because
+   *        we are out of bits (Bug 1918722).
+   */
+  const uint32_t CLEAR_PREFETCH_CACHE = 1 << 1;
+
+  /**
    * Image cache.
    */
   const uint32_t CLEAR_IMAGE_CACHE = 1 << 2;
@@ -387,7 +394,7 @@ interface nsIClearDataService : nsISupports
    */
   const uint32_t CLEAR_ALL_CACHES = CLEAR_NETWORK_CACHE | CLEAR_IMAGE_CACHE |
     CLEAR_JS_CACHE | CLEAR_CSS_CACHE | CLEAR_PREFLIGHT_CACHE | CLEAR_HSTS | CLEAR_BFCACHE |
-    CLEAR_GEOLOCATION_CACHE;
+    CLEAR_GEOLOCATION_CACHE | CLEAR_PREFETCH_CACHE;
 
   /**
    * Delete all DOM storages

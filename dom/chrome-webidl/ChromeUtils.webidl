@@ -313,6 +313,13 @@ namespace ChromeUtils {
   undefined clearBfcacheByPrincipal(Principal principal);
 
   /**
+   * Cancels and discards all speculation-rules prefetch records. Only callable
+   * in the parent process.
+   */
+  [Throws]
+  undefined clearPrefetchCache();
+
+  /**
    * Clears the Messaging Layer Security state by schemeless site.
    * This includes associated state-partitioned cache.
    */

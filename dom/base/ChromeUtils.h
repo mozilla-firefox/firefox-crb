@@ -220,6 +220,8 @@ class ChromeUtils {
                                       nsIPrincipal* aPrincipal,
                                       ErrorResult& aRv);
 
+  static void ClearPrefetchCache(GlobalObject& aGlobal, ErrorResult& aRv);
+
   static void EnableAllPerfStatsFeatures(GlobalObject& aGlobal);
 
   static void SetPerfStatsFeatures(GlobalObject& aGlobal,

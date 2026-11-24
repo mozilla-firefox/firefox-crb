@@ -2640,10 +2640,13 @@ void WindowGlobalParent::ClearPrefetchCache(
   // https://wicg.github.io/nav-speculation/prefetch.html#clear-prefetch-cache
   // Unlike the spec, which matches on origin alone, documents are matched on
   // their partitioned principal so that a third-party response can't clear a
-  // first-party document's prefetches.
+  // first-party document's prefetches. A null aPartitionedPrincipal matches
+  // every document, for nsIClearDataService.
   if (LOG_SPECRULES_ENABLED()) {
-    nsAutoCString origin;
-    aPartitionedPrincipal->GetOrigin(origin);
+    nsAutoCString origin("*");
+    if (aPartitionedPrincipal) {
+      aPartitionedPrincipal->GetOrigin(origin);
+    }
     LOG_SPECRULES_FMT("WindowGlobalParent::ClearPrefetchCache: origin={}",
                       origin);
   }
@@ -2662,8 +2665,9 @@ void WindowGlobalParent::ClearPrefetchCache(
             aBC->Canonical()->GetCurrentWindowGlobal();
         // 1.2.2. If activeDocument's origin is not same origin with origin,
         // then continue.
-        if (!wgp || !wgp->DocumentPartitionedPrincipal()->Equals(
-                        aPartitionedPrincipal)) {
+        if (!wgp || (aPartitionedPrincipal &&
+                     !wgp->DocumentPartitionedPrincipal()->Equals(
+                         aPartitionedPrincipal))) {
           return;
         }
         // 1.2.3. For each prefetchRecord in activeDocument's prefetch records:

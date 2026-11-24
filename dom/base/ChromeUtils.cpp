@@ -1874,6 +1874,15 @@ void ChromeUtils::ClearBfcacheByPrincipal(GlobalObject& aGlobal,
   aRv = CanonicalBrowsingContext::ClearBfcacheByPrincipal(aPrincipal);
 }
 
+void ChromeUtils::ClearPrefetchCache(GlobalObject& aGlobal, ErrorResult& aRv) {
+  if (!XRE_IsParentProcess()) {
+    aRv.ThrowNotSupportedError(
+        "clearPrefetchCache can only be called in the parent process");
+    return;
+  }
+  WindowGlobalParent::ClearPrefetchCache(nullptr);
+}
+
 #define PROCTYPE_TO_WEBIDL_CASE(_procType, _webidl) \
   case mozilla::ProcType::_procType:                \
     return WebIDLProcType::_webidl

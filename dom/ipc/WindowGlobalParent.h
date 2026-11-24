@@ -469,6 +469,9 @@ class WindowGlobalParent final : public WindowContext,
   void NotifyPrefetchStateChanged(dom::PrefetchRecordParent* aRec);
   void DedupePrefetchRecords(dom::PrefetchRecordParent* aJustCompleted);
 
+  // Implements "clear prefetch cache". Clears the prefetch records of documents
+  // whose partitioned principal equals aPartitionedPrincipal, or of every
+  // document if it is null.
   static void ClearPrefetchCache(nsIPrincipal* aPartitionedPrincipal);
 
   // "Find a matching complete prefetch record": synchronous lookup of a

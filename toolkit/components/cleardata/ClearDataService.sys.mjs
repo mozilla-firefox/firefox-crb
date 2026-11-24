@@ -2145,6 +2145,32 @@ const BfcacheCleaner = {
   },
 };
 
+// Prefetch records are short-lived and only speed up navigations, so user
+// requests clear all of them rather than matching by site or principal.
+// Programmatic requests are ignored: Clear-Site-Data discards matching records
+// itself, and clearing every record would let one site cancel another's.
+const PrefetchCacheCleaner = {
+  async deleteByPrincipal(_aPrincipal, aIsUserRequest) {
+    if (aIsUserRequest) {
+      await this.deleteAll();
+    }
+  },
+
+  async deleteBySite(
+    _aSchemelessSite,
+    _aOriginAttributesPattern,
+    aIsUserRequest
+  ) {
+    if (aIsUserRequest) {
+      await this.deleteAll();
+    }
+  },
+
+  async deleteAll() {
+    ChromeUtils.clearPrefetchCache();
+  },
+};
+
 // Here the map of Flags-Cleaners.
 const FLAGS_MAP = [
   {
@@ -2292,6 +2318,11 @@ const FLAGS_MAP = [
   {
     flag: Ci.nsIClearDataService.CLEAR_BFCACHE,
     cleaners: [BfcacheCleaner],
+  },
+
+  {
+    flag: Ci.nsIClearDataService.CLEAR_PREFETCH_CACHE,
+    cleaners: [PrefetchCacheCleaner],
   },
 ];
 
