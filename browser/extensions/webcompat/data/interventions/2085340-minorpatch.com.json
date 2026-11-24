@@ -1,0 +1,21 @@
+{
+  "label": "minorpatch.com",
+  "bugs": {
+    "2085340": {
+      "issue": "broken-interactive-elements",
+      "matches": ["*://www.minorpatch.com/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "alter_request_headers": [
+        {
+          "headers": ["origin"],
+          "replacement": "https://www.minorpatch.com",
+          "urls": ["*://www.minorpatch.com/_nuxt/*"]
+        }
+      ]
+    }
+  ]
+}
