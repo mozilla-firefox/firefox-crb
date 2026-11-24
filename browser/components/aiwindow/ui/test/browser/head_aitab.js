@@ -3,10 +3,7 @@
 
 /* import-globals-from head.js */
 
-const { FEATURE_MAJOR_VERSIONS } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
-);
-const AITAB_PROMPT_VERSION = `v${FEATURE_MAJOR_VERSIONS.aitab}.0`;
+const AITAB_PROMPT_VERSION = promptRecordVersion("aitab");
 
 const AITAB_GENERATION_RECORDS = [
   {

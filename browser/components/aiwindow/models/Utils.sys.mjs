@@ -293,7 +293,7 @@ export const FEATURE_MAJOR_VERSIONS = Object.freeze({
   [MODEL_FEATURES.SEARCH_ANSWER_GENERATION]: 1,
   // aitab structured-page generation. Paired with the `version` major in
   // models/aitab/component_schema.json (AITabValidation.loadAssets rejects a mismatch).
-  // Bump both, plus the aitab records in the packaged dump, in one patch.
+  // Bump both in one patch, once the packaged dump has the matching records.
   [MODEL_FEATURES.AITAB]: 2,
 });
 

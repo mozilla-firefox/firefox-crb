@@ -111,39 +111,44 @@ function withServer(serverOptions, task) {
 
 let gIntentEngineStub;
 
+/**
+ * @param {string} feature - A MODEL_FEATURES value.
+ * @returns {string} The prompt record version for the feature's current
+ *   FEATURE_MAJOR_VERSIONS entry, e.g. "v12.0".
+ */
+function promptRecordVersion(feature) {
+  const { FEATURE_MAJOR_VERSIONS } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
+  );
+  const major = FEATURE_MAJOR_VERSIONS[feature];
+  if (major === undefined) {
+    throw new Error(`No FEATURE_MAJOR_VERSIONS entry for "${feature}"`);
+  }
+  return `v${major}.0`;
+}
+
 // Minimal RS records returned by the global getRemoteClient stub.
-// Version numbers must match FEATURE_MAJOR_VERSIONS in models/Utils.sys.mjs.
 const MOCK_RS_RECORDS = [
-  ["chat", 12],
-  ["title-generation", 2],
-  ["tab-group-naming", 2],
-  ["conversation-starters-sidebar-system", 1],
-  ["conversation-suggestions-sidebar-starter", 3],
-  ["conversation-suggestions-followup", 1],
-  ["conversation-suggestions-assistant-limitations", 1],
-  ["conversation-suggestions-memories", 1],
-  ["memories-initial-generation-system", 2],
-  ["memories-initial-generation-user", 2],
-  ["memories-sensitivity-filter-system", 1],
-  ["memories-sensitivity-filter-user", 1],
-  ["memories-quality-filter-system", 1],
-  ["memories-quality-filter-user", 1],
-  ["memories-message-classification-system", 1],
-  ["memories-message-classification-user", 1],
-  ["search-answer-generation", 1],
+  "title-generation",
+  "conversation-starters-sidebar-system",
+  "conversation-suggestions-sidebar-starter",
+  "conversation-suggestions-followup",
+  "conversation-suggestions-assistant-limitations",
+  "conversation-suggestions-memories",
+  "memories-message-classification-system",
+  "memories-message-classification-user",
+  "search-answer-generation",
 ]
-  .map(([feature, major]) => ({
+  .map(feature => ({
     feature,
-    // chat uses "generic" as the fallback model name (see selectMainConfig);
-    // all other features use "test-model" with is_default: true.
-    model: feature === "chat" ? "generic" : "test-model",
+    model: "test-model",
     service_type: "ai",
     parameters: {},
     prompts:
       feature === "conversation-suggestions-sidebar-starter"
         ? "Generate {n} prompts for {current_tab}.\nOpen tabs: {open_tabs}"
         : "Test system prompt.",
-    version: `v${major}.0`,
+    version: promptRecordVersion(feature),
     is_default: true,
   }))
   // Chat resolves model+params from v2 kind:"params" records (one generic
@@ -158,7 +163,7 @@ const MOCK_RS_RECORDS = [
       purpose: "chat",
       parameters: {},
       prompts: "Test system prompt.",
-      version: "v12.0",
+      version: promptRecordVersion("chat"),
       is_default: true,
     },
     {
@@ -176,7 +181,7 @@ const MOCK_RS_RECORDS = [
       service_type: "ai",
       purpose: "chat",
       parameters: {},
-      version: "v12.0",
+      version: promptRecordVersion("chat"),
     },
     {
       kind: "params",
@@ -194,7 +199,7 @@ const MOCK_RS_RECORDS = [
       purpose: "chat",
       parameters: {},
       prompts: "Test system prompt.",
-      version: "v12.0",
+      version: promptRecordVersion("chat"),
     },
     {
       kind: "params",
@@ -211,7 +216,7 @@ const MOCK_RS_RECORDS = [
       service_type: "ai",
       purpose: "chat",
       parameters: {},
-      version: "v12.0",
+      version: promptRecordVersion("chat"),
     },
     // The relevant-memories module is loaded for the chat model, so it resolves
     // via the "generic" fallback rather than is_default like the v1 records.
@@ -223,7 +228,7 @@ const MOCK_RS_RECORDS = [
       parameters: {},
       is_default: true,
       modules: [{ name: "relevant-memories", version: "1.0" }],
-      version: "v1.0",
+      version: promptRecordVersion("memories-context"),
     },
     {
       kind: "module",
@@ -249,7 +254,7 @@ const MOCK_RS_RECORDS = [
         { name: "system-instructions", version: "v2.0" },
         { name: "user-data", version: "v2.0" },
       ],
-      version: "v2.0",
+      version: promptRecordVersion("tab-group-naming"),
       is_default: true,
     },
     {
@@ -282,7 +287,7 @@ const MOCK_RS_RECORDS = [
         { name: "system-instructions", version: "v1.0" },
         { name: "user-data", version: "v1.0" },
       ],
-      version: "v1.0",
+      version: promptRecordVersion("agent-monitor-setup"),
       is_default: true,
     },
     {
@@ -329,14 +334,10 @@ const MOCK_RS_RECORDS = [
 
 // Auto's chat record, routing to an existing model choice like the real one.
 const MOCK_AUTO_RS_RECORD = (() => {
-  const {
-    AUTO_MODEL_CHOICE_ID,
-    FALLBACK_MODELS,
-    FEATURE_MAJOR_VERSIONS,
-    MODEL_FEATURES,
-  } = ChromeUtils.importESModule(
-    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
-  );
+  const { AUTO_MODEL_CHOICE_ID, FALLBACK_MODELS, MODEL_FEATURES } =
+    ChromeUtils.importESModule(
+      "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
+    );
   return {
     kind: "params",
     feature: MODEL_FEATURES.CHAT,
@@ -347,7 +348,7 @@ const MOCK_AUTO_RS_RECORD = (() => {
     service_type: "ai",
     purpose: "chat",
     parameters: {},
-    version: `v${FEATURE_MAJOR_VERSIONS[MODEL_FEATURES.CHAT]}.0`,
+    version: promptRecordVersion(MODEL_FEATURES.CHAT),
   };
 })();
 

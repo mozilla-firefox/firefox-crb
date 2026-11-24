@@ -44,7 +44,7 @@ const SMART_FORM_FILL_REMOTE_SETTINGS_RECORDS = [
       name,
       version: "v2.0",
     })),
-    version: "v2.0",
+    version: promptRecordVersion("smart-form-fill"),
     is_default: true,
   },
   ...Object.entries(SMART_FORM_FILL_PROMPT_MODULES).map(
