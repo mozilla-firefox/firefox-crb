@@ -1625,10 +1625,12 @@ function updateAboutMemoryFromReporters() {
   updateMainAndFooter("Measuring...", NO_TIMESTAMP, HIDE_FOOTER);
 
   try {
-    gCurrentReports = [];
-    gCurrentHasMozMallocUsableSize = gMgr.hasMozMallocUsableSize;
-    gCurrentIsDiff = false;
-    gFilter = "";
+    // Reporters that were still running when an earlier measurement timed out
+    // keep calling that measurement's handleReport, and a measurement started
+    // while another is still running never gets its callbacks, so each
+    // measurement collects into its own array and only becomes the current one
+    // when it is displayed.
+    let reports = [];
 
     // Record the reports from the live memory reporters then process them.
     let handleReport = function (
@@ -1639,7 +1641,7 @@ function updateAboutMemoryFromReporters() {
       aAmount,
       aDescription
     ) {
-      gCurrentReports.push({
+      reports.push({
         process: aProcess,
         path: aUnsafePath,
         kind: aKind,
@@ -1650,6 +1652,10 @@ function updateAboutMemoryFromReporters() {
     };
 
     let displayReports = function () {
+      gCurrentReports = reports;
+      gCurrentHasMozMallocUsableSize = gMgr.hasMozMallocUsableSize;
+      gCurrentIsDiff = false;
+      gFilter = "";
       updateTitleMainAndFooter(
         "live measurement",
         "",
