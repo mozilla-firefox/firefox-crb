@@ -9,6 +9,22 @@ const lazy = XPCOMUtils.declareLazy({
 });
 
 /**
+ * The targets registered for interception, grouped by method name.
+ *
+ * @type {Map<string, Set<object>>}
+ */
+const stubTargetsByMethodName = new Map();
+
+/**
+ * The instance properties considered when selecting a method on a class.
+ *
+ * @template {object} Owner
+ * @typedef {Owner extends abstract new (...args: never[]) => infer Instance
+ *   ? Instance
+ *   : Owner} AsyncControlTarget
+ */
+
+/**
  * Exposes controls for the target's named promise-returning methods.
  *
  * @template {object} Target
@@ -29,7 +45,7 @@ const lazy = XPCOMUtils.declareLazy({
  * Exposes async call controls for the selected target.
  *
  * @template {object} Owner
- * @typedef {AsyncControlMethods<Owner>} AsyncControlProxy
+ * @typedef {AsyncControlMethods<AsyncControlTarget<Owner>>} AsyncControlProxy
  */
 
 /**
@@ -109,6 +125,7 @@ class AsyncCallController {
     this.#stubTarget = stubTarget;
     this.#methodName = methodName;
 
+    const registeredTargets = this.#getStubTargetsForRegistration();
     this.#originalMethod = this.#getOriginalMethod();
 
     const controller = this;
@@ -129,6 +146,9 @@ class AsyncCallController {
     ) {
       throw new TypeError(`Could not wrap ${methodName} as a method`);
     }
+
+    registeredTargets.add(stubTarget);
+    stubTargetsByMethodName.set(methodName, registeredTargets);
 
     this.#stub = stub;
   }
@@ -238,6 +258,34 @@ class AsyncCallController {
   }
 
   /**
+   * Gets the registered targets for this method before adding a new target.
+   *
+   * @returns {Set<object>}
+   * @throws {TypeError} If a registered target overlaps this target.
+   */
+  #getStubTargetsForRegistration() {
+    const registeredTargets =
+      stubTargetsByMethodName.get(this.#methodName) ?? new Set();
+    const stubTarget = this.#stubTarget;
+
+    // A prototype stub and an instance stub can compete for the same call,
+    // so we need to check for overlap before installing the stub.
+    for (const registeredTarget of registeredTargets) {
+      if (
+        registeredTarget === stubTarget ||
+        Object.prototype.isPrototypeOf.call(registeredTarget, stubTarget) ||
+        Object.prototype.isPrototypeOf.call(stubTarget, registeredTarget)
+      ) {
+        throw new TypeError(
+          `A controller for ${this.#methodName} is already waiting on an overlapping target`
+        );
+      }
+    }
+
+    return registeredTargets;
+  }
+
+  /**
    * Gets the original method before the stub is installed.
    *
    * @returns {(...args: MethodArgs) => PromiseLike<MethodResult>}
@@ -293,6 +341,14 @@ class AsyncCallController {
     }
 
     this.#stub = null;
+
+    const registeredTargets = stubTargetsByMethodName.get(this.#methodName);
+    if (
+      registeredTargets?.delete(this.#stubTarget) &&
+      !registeredTargets.size
+    ) {
+      stubTargetsByMethodName.delete(this.#methodName);
+    }
   }
 
   /**
@@ -403,10 +459,22 @@ class AsyncCallController {
 }
 
 /**
+ * Gets the object on which to install the stub.
+ *
+ * @param {object} owner - The object or class to control.
+ * @returns {object} The target on which to install the stub.
+ */
+function getStubTarget(owner) {
+  return typeof owner === "function" && owner.prototype
+    ? owner.prototype
+    : owner;
+}
+
+/**
  * Creates a proxy for controlling methods on the selected target.
  *
  * @template {object} Owner
- * @param {Owner} owner - The object to control.
+ * @param {Owner} owner - The object or class to control.
  * @returns {AsyncControlProxy<Owner>}
  */
 export function asyncControlProxy(owner) {
@@ -430,11 +498,12 @@ export function asyncControlProxy(owner) {
         return undefined;
       }
 
-      if (!(propertyKey in owner)) {
+      const stubTarget = getStubTarget(owner);
+      if (!(propertyKey in stubTarget)) {
         return undefined;
       }
 
-      return () => new AsyncCallController(owner, propertyKey);
+      return () => new AsyncCallController(stubTarget, propertyKey);
     },
   });
 }
