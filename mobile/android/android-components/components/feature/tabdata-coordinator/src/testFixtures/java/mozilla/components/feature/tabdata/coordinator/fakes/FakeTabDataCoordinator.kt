@@ -19,12 +19,14 @@ import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
  *   which is not yet fully initialized.
  * @param initialTabSettings The [TabSettings] emitted by [tabSettings]. Null by default, mirroring settings which have
  *   not been read from disk yet.
+ * @property defaultTabSettings The [TabSettings] that updates are applied to while [tabSettings] is null.
  * @property selectedTabIds The IDs passed to [selectTab], in call order.
  * @property addNewTabToGroupIds The group IDs passed to [addNewTabToTabGroup], in call order.
  */
 class FakeTabDataCoordinator(
     initialTabsSnapshot: TabsSnapshot? = null,
     initialTabSettings: TabSettings? = null,
+    override val defaultTabSettings: TabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true),
 ) : TabDataCoordinator {
 
     override val tabsSnapshot: MutableStateFlow<TabsSnapshot?> = MutableStateFlow(initialTabsSnapshot)
@@ -84,9 +86,5 @@ class FakeTabDataCoordinator(
 
     override fun setInactiveTabsEnabled(enabled: Boolean) {
         tabSettings.update { (it ?: defaultTabSettings).copy(inactiveTabsEnabled = enabled) }
-    }
-
-    private companion object {
-        val defaultTabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true)
     }
 }

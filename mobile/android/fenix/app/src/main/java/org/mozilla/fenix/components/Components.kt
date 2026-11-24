@@ -14,6 +14,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.android.play.core.review.ReviewManagerFactory
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import mozilla.components.concept.ai.controls.AIFeatureBlock
 import mozilla.components.concept.ai.controls.AIFeatureRegistry
 import mozilla.components.concept.integrity.RequestHashProvider
@@ -533,7 +535,9 @@ class Components(
     }
 
     val collectionsMigrationRepository: CollectionsMigrationRepository by lazy {
-        DefaultCollectionsMigrationRepository(settings)
+        DefaultCollectionsMigrationRepository(settings = settings) {
+            tabDataCoordinator.tabSettings.filterNotNull().first().tabGroupsEnabled
+        }
     }
 
     val relayFeatureIntegration by lazy {

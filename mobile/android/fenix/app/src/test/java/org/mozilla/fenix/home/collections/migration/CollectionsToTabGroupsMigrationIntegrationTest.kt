@@ -40,6 +40,7 @@ class CollectionsToTabGroupsMigrationIntegrationTest {
     private lateinit var tabCollectionStorage: TabCollectionStorage
     private lateinit var browserStore: BrowserStore
     private lateinit var settings: Settings
+    private var tabGroupsEnabled = true
 
     @Before
     fun setup() = runTest {
@@ -59,7 +60,6 @@ class CollectionsToTabGroupsMigrationIntegrationTest {
         settings =
             Settings(testContext).apply {
                 migrateCollectionsToTabGroupsEnabled = true
-                tabGroupsEnabled = true
                 hasMigratedCollectionsToTabGroups = false
                 migratedCollectionIds = emptySet()
             }
@@ -77,7 +77,8 @@ class CollectionsToTabGroupsMigrationIntegrationTest {
             tabCollectionStorage = tabCollectionStorage,
             restoreUseCase = TabsUseCases(browserStore).restore,
             tabGroupRepository = tabGroupRepository,
-            collectionsMigrationRepository = DefaultCollectionsMigrationRepository(settings = settings),
+            collectionsMigrationRepository =
+                DefaultCollectionsMigrationRepository(settings = settings) { tabGroupsEnabled },
             engine = FakeEngine(),
             filesDir = testContext.filesDir,
             dateTimeProvider = dateTimeProvider,
@@ -189,7 +190,7 @@ class CollectionsToTabGroupsMigrationIntegrationTest {
     @Test
     fun `GIVEN tab groups feature is disabled WHEN collection to tab group migration runs THEN the collections are left untouched`() =
         runTest(testDispatcher) {
-            settings.tabGroupsEnabled = false
+            tabGroupsEnabled = false
             tabCollectionStorage.createCollection(
                 title = "Recipes",
                 sessions = listOf(createTab(url = "https://example.com/pasta")),

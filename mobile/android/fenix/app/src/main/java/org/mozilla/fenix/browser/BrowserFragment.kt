@@ -41,6 +41,7 @@ import mozilla.components.feature.contextmenu.R as contextMenuR
 import mozilla.components.feature.listentopage.ListenAction
 import mozilla.components.feature.readerview.ReaderViewFeature
 import mozilla.components.feature.tab.collections.TabCollection
+import mozilla.components.feature.tabdata.coordinator.currentTabSettings
 import mozilla.components.feature.tabs.WindowFeature
 import mozilla.components.lib.accelerometer.sensormanager.LifecycleAwareSensorManagerAccelerometer
 import mozilla.components.lib.shake.detectShakes
@@ -568,7 +569,7 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
     private fun createOpenInNewTabInGroupCandidate(context: Context) =
         TabGroupContextMenuCandidate.createOpenInNewTabInGroupCandidate(
             resources = context.resources,
-            tabGroupsEnabled = context.components.settings.tabGroupsEnabled,
+            tabGroupsEnabled = context.components.tabDataCoordinator.currentTabSettings.tabGroupsEnabled,
             tabGroupsStripEnabled = context.components.settings.tabGroupsStripEnabled,
             tabsUseCases = context.components.useCases.tabsUseCases,
             tabDataCoordinator = context.components.tabDataCoordinator,

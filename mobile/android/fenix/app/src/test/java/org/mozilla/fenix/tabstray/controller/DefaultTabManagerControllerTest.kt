@@ -40,6 +40,8 @@ import mozilla.components.concept.storage.BookmarkNodeType
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.search.SearchUseCases
 import mozilla.components.feature.session.SessionUseCases
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.support.test.middleware.CaptureActionsMiddleware
@@ -109,6 +111,8 @@ class DefaultTabManagerControllerTest {
 
     private val appStore: AppStore = mockk(relaxed = true)
     private val settings: Settings = mockk(relaxed = true)
+    private val tabDataCoordinator =
+        FakeTabDataCoordinator(initialTabSettings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = true))
     private val shareUseCases: ShareUseCases = mockk(relaxed = true)
 
     private val addBookmarkUseCase: BookmarksUseCase.AddBookmarksUseCase = mockk(relaxed = true)
@@ -140,7 +144,6 @@ class DefaultTabManagerControllerTest {
                 every { getProfilerTime() } returns PROFILER_START_TIME
                 every { isProfilerActive() } returns true
             }
-        every { settings.inactiveTabsAreEnabled } returns true
     }
 
     @Test
@@ -3290,6 +3293,7 @@ class DefaultTabManagerControllerTest {
             appStore = appStore,
             tabsTrayStore = trayStore,
             browserStore = browserStore,
+            tabDataCoordinator = tabDataCoordinator,
             settings = settings,
             browsingModeManager = browsingModeManager,
             navController = navController,

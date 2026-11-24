@@ -40,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1253,7 +1254,13 @@ open class FenixApplication : Application(), Provider, ThemeProvider {
                 }
             )
 
-            inactiveTabsEnabled.set(settings.inactiveTabsAreEnabled)
+            // Report the inactive tabs metric, or wait for the first non-null data emission then report.
+            val tabSettings = components.tabDataCoordinator.tabSettings
+            tabSettings.value?.let { inactiveTabsEnabled.set(it.inactiveTabsEnabled) }
+                ?: applicationScope.launch(ioDispatcher) {
+                    val settingsSnapshot = tabSettings.filterNotNull().first()
+                    inactiveTabsEnabled.set(settingsSnapshot.inactiveTabsEnabled)
+                }
             dohProtectionLevel.set(dohSettingsProvider.getSelectedProtectionLevel().toString())
             httpsOnlyMode.set(settings.getHttpsOnlyMode().toString())
             globalPrivacyControlEnabled.set(settings.shouldEnableGlobalPrivacyControl)

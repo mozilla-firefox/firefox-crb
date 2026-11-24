@@ -62,7 +62,7 @@ class CollectionsToTabGroupsMigrationWorker(
          * @param context The [Context] used to enqueue the work.
          * @param collectionsMigrationRepository [CollectionsMigrationRepository] for reading the migration state.
          */
-        fun enqueueIfNeeded(context: Context, collectionsMigrationRepository: CollectionsMigrationRepository) {
+        suspend fun enqueueIfNeeded(context: Context, collectionsMigrationRepository: CollectionsMigrationRepository) {
             if (!collectionsMigrationRepository.shouldMigrate()) {
                 return
             }

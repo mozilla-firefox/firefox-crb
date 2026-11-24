@@ -1592,6 +1592,7 @@ class HomeFragment : Fragment(), UserInteractionHandler, OnLongPressedListener {
                     navController = findNavController(),
                     tabsUseCases = requireComponents.useCases.tabsUseCases,
                     fenixBrowserUseCases = requireComponents.useCases.fenixBrowserUseCases,
+                    tabDataCoordinator = requireComponents.tabDataCoordinator,
                     settings = requireComponents.settings,
                     snackbarHostState = snackbarHostState,
                     viewLifecycleScope = viewLifecycleOwner.lifecycleScope,
