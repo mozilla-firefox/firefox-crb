@@ -26,6 +26,21 @@ class TabsSnapshotMapperTest {
         assertEquals(expected = emptyList(), actual = update.inactiveTabs)
         assertEquals(expected = emptyList(), actual = update.privateTabs)
         assertEquals(expected = emptyList(), actual = update.tabGroups)
+        assertTrue(update.tabGroupsEnabled)
+    }
+
+    @Test
+    fun `GIVEN tab groups are enabled THEN the update reports tab groups as enabled`() {
+        val update = createSnapshot(tabGroupsEnabled = true).toTabStorageUpdate()
+
+        assertTrue(update.tabGroupsEnabled)
+    }
+
+    @Test
+    fun `GIVEN tab groups are disabled THEN the update reports tab groups as disabled`() {
+        val update = createSnapshot(tabGroupsEnabled = false).toTabStorageUpdate()
+
+        assertFalse(update.tabGroupsEnabled)
     }
 
     @Test
@@ -322,13 +337,14 @@ class TabsSnapshotMapperTest {
         privateTabs: List<Tab> = emptyList(),
         tabGroups: List<TabGroup> = emptyList(),
         inactiveTabsEnabled: Boolean = true,
+        tabGroupsEnabled: Boolean = true,
     ): TabsSnapshot =
         TabsSnapshot(
             selectedTab = selectedTab,
             normalTabs = normalTabs,
             privateTabs = privateTabs,
             tabGroups = tabGroups,
-            settings = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = inactiveTabsEnabled),
+            settings = TabSettings(tabGroupsEnabled = tabGroupsEnabled, inactiveTabsEnabled = inactiveTabsEnabled),
         )
 
     private fun createTab(
