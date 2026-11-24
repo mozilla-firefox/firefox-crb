@@ -28,6 +28,7 @@
 #include "nsCRT.h"
 #include "nsContentSecurityManager.h"
 #include "nsContentUtils.h"
+#include "nsDocShell.h"
 #include "nsError.h"
 #include "nsEscape.h"
 #include "nsGlobalWindowInner.h"
@@ -512,6 +513,10 @@ class nsJSChannel : public nsIChannel,
 
   nsresult StopAll();
 
+  // Stops the docshell's current navigation, and sets aLoadGroup to the load
+  // group of the pending navigation that will load the script's result, if any.
+  nsresult CreateResultPendingNavigation(nsCOMPtr<nsILoadGroup>& aLoadGroup);
+
   void NotifyListener();
 
   void CleanupStrongRefs();
@@ -550,6 +555,22 @@ nsJSChannel::nsJSChannel()
       mOpenedStreamChannel(false) {}
 
 nsJSChannel::~nsJSChannel() = default;
+
+nsresult nsJSChannel::CreateResultPendingNavigation(
+    nsCOMPtr<nsILoadGroup>& aLoadGroup) {
+  nsCOMPtr<nsIDocShell> docShell;
+  NS_QueryNotificationCallbacks(mStreamChannel, docShell);
+  if (!docShell) {
+    return StopAll();
+  }
+
+  nsILoadGroup* navigationLoadGroup = MOZ_TRY(
+      nsDocShell::Cast(docShell)->StartNavigationForJavascriptURLResult(this));
+  if (navigationLoadGroup) {
+    aLoadGroup = navigationLoadGroup;
+  }
+  return NS_OK;
+}
 
 nsresult nsJSChannel::StopAll() {
   nsresult rv = NS_ERROR_UNEXPECTED;
@@ -920,7 +941,7 @@ void nsJSChannel::EvaluateScript() {
     }
 
     if (NS_SUCCEEDED(mStatus)) {
-      mStatus = StopAll();
+      mStatus = CreateResultPendingNavigation(loadGroup);
     }
   }
 
