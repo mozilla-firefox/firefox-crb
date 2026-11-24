@@ -70,6 +70,11 @@ class LockstoreService final : public nsILockstore, public nsIObserver {
                        const nsACString& aNewKekRef);
   nsresult DoMigrateDeks(const nsACString& aFromKekRef,
                          const nsACString& aToKekRef);
+  // Migrates every DEK from aFromKekRef to aToKekRef and deletes aFromKekRef
+  // without releasing mMutex in between, so no DEK can be wrapped under
+  // aFromKekRef between the two steps.
+  nsresult DoMigrateDeksAndDeleteKek(const nsACString& aFromKekRef,
+                                     const nsACString& aToKekRef);
   Result<nsTArray<nsCString>, nsresult> DoListDeks();
   Result<nsTArray<nsCString>, nsresult> DoListKeks(const nsACString& aDekName);
   Result<nsTArray<uint8_t>, nsresult> DoEncrypt(const nsACString& aDekName,

@@ -7,11 +7,14 @@
 
 #include <stdint.h>
 
+#include <utility>
+
 #include "mozilla/Queue.h"
 #include "nsCOMPtr.h"
 #include "nsIAsyncInputStream.h"
 #include "nsIAsyncOutputStream.h"
 #include "nsIInputStreamLength.h"
+#include "nsISerialEventTarget.h"
 #include "nsString.h"
 #include "nsStringStream.h"
 #include "nsTArrayForwardDeclare.h"
@@ -23,6 +26,18 @@ class nsIOutputStream;
 namespace testing {
 
 void CreateData(uint32_t aNumBytes, nsTArray<char>& aDataOut);
+
+// Runs `aFn` on a fresh background task queue and spins the current thread's
+// event loop until it has completed.
+template <typename Fn>
+void RunOnBackground(Fn&& aFn) {
+  nsCOMPtr<nsISerialEventTarget> queue;
+  MOZ_ALWAYS_SUCCEEDS(
+      NS_CreateBackgroundTaskQueue("RunOnBackground", getter_AddRefs(queue)));
+  MOZ_ALWAYS_SUCCEEDS(NS_DispatchAndSpinEventLoopUntilComplete(
+      "RunOnBackground"_ns, queue,
+      NS_NewRunnableFunction("RunOnBackground", std::forward<Fn>(aFn))));
+}
 
 void Write(nsIOutputStream* aStream, const nsTArray<char>& aData,
            uint32_t aOffset, uint32_t aNumBytes);

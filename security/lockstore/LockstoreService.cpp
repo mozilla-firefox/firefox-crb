@@ -454,6 +454,13 @@ nsresult LockstoreService::DoMigrateDeks(const nsACString& aFromKekRef,
   return keystore_migrate_deks(mKeystore, &aFromKekRef, &aToKekRef);
 }
 
+nsresult LockstoreService::DoMigrateDeksAndDeleteKek(
+    const nsACString& aFromKekRef, const nsACString& aToKekRef) {
+  LOCKSTORE_SYNC_PREAMBLE;
+  MOZ_TRY(keystore_migrate_deks(mKeystore, &aFromKekRef, &aToKekRef));
+  return keystore_delete_kek(mKeystore, &aFromKekRef);
+}
+
 Result<nsTArray<nsCString>, nsresult> LockstoreService::DoListDeks() {
   LOCKSTORE_SYNC_PREAMBLE;
   nsTArray<nsCString> out;
