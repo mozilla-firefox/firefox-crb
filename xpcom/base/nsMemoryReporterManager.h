@@ -5,6 +5,7 @@
 #ifndef nsMemoryReporterManager_h_
 #define nsMemoryReporterManager_h_
 
+#include "mozilla/Maybe.h"
 #include "mozilla/Mutex.h"
 #include "nsHashKeys.h"
 #include "nsIMemoryReporter.h"
@@ -110,6 +111,10 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
   // - If one or more child processes fail to respond within the time limit,
   //   things will proceed as if they don't exist.  No error is reported,
   //   because partial information is better than nothing.
+  //
+  // - If this process's reporters are still running for another caller, such
+  //   as an earlier request that timed out, this process is left out of the
+  //   request, and the child processes proceed.
   //
   // - If a child process reports after the time-out occurs, it is ignored.
   //   (Generation checking will ensure it is ignored even if a subsequent
@@ -295,6 +300,10 @@ class nsMemoryReporterManager final : public nsIMemoryReporterManager,
 
     // File handle to write a DMD report to if requested.
     FILE* mDMDFile;
+
+    // If these are the parent's reporters for a multi-process request, that
+    // request's generation.
+    mozilla::Maybe<uint32_t> mGeneration;
 
     PendingReportersState(nsIFinishReportingCallback* aFinishReporting,
                           nsISupports* aFinishReportingData, FILE* aDMDFile)

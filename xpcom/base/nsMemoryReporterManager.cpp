@@ -1919,7 +1919,9 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
   // Get reports for this process.
   FILE* parentDMDFile = nullptr;
 #ifdef MOZ_DMD
-  if (!s->mDMDDumpIdent.IsEmpty()) {
+  // If this process's reporters are still running, they won't run for this
+  // request (see below), so don't create a DMD file for them.
+  if (!s->mDMDDumpIdent.IsEmpty() && !mPendingReportersState) {
     rv = nsMemoryInfoDumper::OpenDMDFile(s->mDMDDumpIdent, getpid(),
                                          &parentDMDFile);
     if (NS_WARN_IF(NS_FAILED(rv))) {
@@ -1929,10 +1931,14 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
   }
 #endif
 
-  // This is async.
-  GetReportsForThisProcessExtended(
+  // This is async.  It fails if this process's reporters are still running
+  // for another caller, such as an earlier request that timed out.
+  bool parentStarted = NS_SUCCEEDED(GetReportsForThisProcessExtended(
       s->mHandleReport, s->mHandleReportData, s->mAnonymize, parentDMDFile,
-      s->mFinishReporting, s->mFinishReportingData);
+      s->mFinishReporting, s->mFinishReportingData));
+  if (parentStarted) {
+    mPendingReportersState->mGeneration = Some(s->mGeneration);
+  }
 
   nsTArray<dom::ContentParent*> childWeakRefs;
   dom::ContentParent::GetAll(childWeakRefs);
@@ -1991,6 +1997,21 @@ nsresult nsMemoryReporterManager::StartGettingReports() {
 
     MOZ_ASSERT(!s->mTimer);
     s->mTimer.swap(timer);
+  }
+
+  if (!parentStarted) {
+    // End the parent's part from the event loop, as if its reporters had run,
+    // so that the request never finishes before getReports() returns.
+    RefPtr<nsMemoryReporterManager> self = this;
+    uint32_t generation = s->mGeneration;
+    nsCOMPtr<nsIRunnable> endParent = NS_NewRunnableFunction(
+        "nsMemoryReporterManager::StartGettingReports",
+        [self, generation]() { self->EndProcessReport(generation, true); });
+    if (NS_FAILED(NS_DispatchToMainThread(endParent))) {
+      // Only late in shutdown.  Finishing the request now is better than
+      // never finishing it.
+      (void)endParent->Run();
+    }
   }
 
   return NS_OK;
@@ -2093,9 +2114,10 @@ nsMemoryReporterManager::EndReport() {
       nsMemoryInfoDumper::DumpDMDToFile(mPendingReportersState->mDMDFile);
     }
 #endif
-    if (mPendingProcessesState) {
-      // This is the parent process.
-      EndProcessReport(mPendingProcessesState->mGeneration, true);
+    if (mPendingReportersState->mGeneration) {
+      // This is the parent process.  If its request already timed out, this
+      // is ignored rather than ending a later request.
+      EndProcessReport(*mPendingReportersState->mGeneration, true);
     } else {
       mPendingReportersState->mFinishReporting->Callback(
           mPendingReportersState->mFinishReportingData);
