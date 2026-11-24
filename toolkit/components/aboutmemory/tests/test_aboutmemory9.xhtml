@@ -1,0 +1,157 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/css" href="chrome://global/skin"?>
+<?xml-stylesheet type="text/css" href="chrome://mochikit/content/tests/SimpleTest/test.css"?>
+<window title="about:memory"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+  <script src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"/>
+
+  <!-- This file tests the warning about processes that didn't finish
+       reporting, when loading and diffing memory report files. -->
+
+  <!-- test results are displayed in the html:body -->
+  <body xmlns="http://www.w3.org/1999/xhtml"></body>
+
+  <iframe id="amFrame" height="400" src="about:memory"></iframe>
+
+  <script type="application/javascript">
+  <![CDATA[
+  "use strict";
+
+  const INCOMPLETE = "memory-reports-incomplete1.json";
+  const COMPLETE = "memory-reports-incomplete2.json";
+
+  function getFilePath(aFilename) {
+    let file = SpecialPowers.Services.dirsvc.get("CurWorkD", Ci.nsIFile);
+    for (let part of ["chrome", "toolkit", "components", "aboutmemory",
+                      "tests", aFilename]) {
+      file.append(part);
+    }
+    return file.path;
+  }
+
+  function changeEvent(aSkipClick) {
+    let e = document.createEvent("Event");
+    e.initEvent("change", true, true);
+    if (aSkipClick) {
+      e.skipClick = true;
+    }
+    return e;
+  }
+
+  function doc() {
+    return document.getElementById("amFrame").contentDocument;
+  }
+
+  // Loading clears the page synchronously, so this waits for the new output.
+  async function waitForOutput() {
+    await SimpleTest.promiseWaitForCondition(
+      () => doc().querySelector(".sections, .badInputWarning"),
+      "about:memory output");
+    is(doc().querySelector(".badInputWarning"), null, "the input was loaded");
+  }
+
+  async function load(aFilename) {
+    let input = doc().getElementById("fileInput1");
+    input.value = getFilePath(aFilename);
+    input.dispatchEvent(changeEvent(false));
+    await waitForOutput();
+  }
+
+  async function diff(aFilename1, aFilename2) {
+    let input = doc().getElementById("fileInput2");
+    input.value = getFilePath(aFilename1);
+    input.dispatchEvent(changeEvent(true));
+    input.value = getFilePath(aFilename2);
+    input.dispatchEvent(changeEvent(true));
+    await waitForOutput();
+  }
+
+  function warningItems() {
+    let warning = doc().querySelector(".incompleteReportWarning");
+    if (!warning) {
+      return null;
+    }
+    return [...warning.querySelectorAll("li")].map(li => li.textContent.trim());
+  }
+
+  function sectionWarnings() {
+    let warnings = {};
+    for (let section of doc().querySelectorAll(".sections .section")) {
+      let h1 = section.querySelector("h1");
+      let warning = section.querySelector(".incompleteReportProcessWarning");
+      if (h1 && warning) {
+        warnings[h1.textContent] = warning.textContent.trim();
+      }
+    }
+    return warnings;
+  }
+
+  function markerLineShown() {
+    return [...doc().querySelectorAll(".sections pre")].some(pre =>
+      pre.textContent.includes("memory-report-incomplete"));
+  }
+
+  const EXPECTED_SECTION_WARNINGS = {
+    "web (pid 2)": "WARNING: Did not finish.",
+    "web (pid 3)": "WARNING: Never started.",
+  };
+
+  add_setup(async function () {
+    let frame = document.getElementById("amFrame");
+    if (!frame.contentDocument?.getElementById("fileInput1")) {
+      await new Promise(resolve =>
+        frame.addEventListener("load", resolve, { once: true }));
+    }
+  });
+
+  add_task(async function test_load_incomplete() {
+    await load(INCOMPLETE);
+    isDeeply(warningItems(), ["web (pid 2)", "web (pid 3)"],
+             "the warning lists the incomplete processes");
+    let links = doc().querySelectorAll(".incompleteReportWarning a");
+    is(links.length, 2, "each incomplete process links to its section");
+    isDeeply(sectionWarnings(), EXPECTED_SECTION_WARNINGS,
+             "each incomplete process's section shows its description");
+    ok(!markerLineShown(), "the marker isn't shown as a measurement");
+  });
+
+  add_task(async function test_filter() {
+    let filterInput = doc().querySelector(".filterInput");
+    filterInput.value = "explicit";
+    filterInput.dispatchEvent(new Event("input"));
+    // The process that never started has nothing matching the filter.
+    await SimpleTest.promiseWaitForCondition(
+      () => !("web (pid 3)" in sectionWarnings()),
+      "the filter is applied");
+    isDeeply(warningItems(), ["web (pid 2)", "web (pid 3)"],
+             "the warning still lists the incomplete processes");
+    is(sectionWarnings()["web (pid 2)"], EXPECTED_SECTION_WARNINGS["web (pid 2)"],
+       "a filtered section still shows its warning");
+  });
+
+  add_task(async function test_load_complete() {
+    await load(COMPLETE);
+    is(warningItems(), null, "no warning for a complete report");
+  });
+
+  add_task(async function test_diff_one_incomplete() {
+    await diff(INCOMPLETE, COMPLETE);
+    let items = warningItems();
+    is(items?.length, 1, "the warning lists one input");
+    ok(items?.[0].endsWith(INCOMPLETE), "the warning names the incomplete input");
+    ok(!markerLineShown(), "the marker isn't shown as a change");
+  });
+
+  add_task(async function test_diff_both_incomplete() {
+    // The markers cancel out in the diff itself.
+    await diff(INCOMPLETE, INCOMPLETE);
+    is(warningItems()?.length, 2, "the warning lists both inputs");
+  });
+
+  add_task(async function test_diff_complete() {
+    await diff(COMPLETE, COMPLETE);
+    is(warningItems(), null, "no warning for a diff of complete reports");
+  });
+  ]]>
+  </script>
+</window>

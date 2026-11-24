@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "hasMozMallocUsableSize": true,
+  "reports": [
+    {
+      "process": "Main Process (pid 1)",
+      "path": "explicit/a",
+      "kind": 1,
+      "units": 0,
+      "amount": 100000,
+      "description": "A."
+    },
+    {
+      "process": "web (pid 2)",
+      "path": "explicit/a",
+      "kind": 1,
+      "units": 0,
+      "amount": 200000,
+      "description": "A."
+    },
+    {
+      "process": "web (pid 2)",
+      "path": "memory-report-incomplete",
+      "kind": 2,
+      "units": 1,
+      "amount": 1,
+      "description": "Did not finish."
+    },
+    {
+      "process": "web (pid 3)",
+      "path": "memory-report-incomplete",
+      "kind": 2,
+      "units": 1,
+      "amount": 1,
+      "description": "Never started."
+    }
+  ]
+}

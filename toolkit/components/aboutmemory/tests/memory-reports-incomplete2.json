@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "hasMozMallocUsableSize": true,
+  "reports": [
+    {
+      "process": "Main Process (pid 1)",
+      "path": "explicit/a",
+      "kind": 1,
+      "units": 0,
+      "amount": 100000,
+      "description": "A."
+    },
+    {
+      "process": "web (pid 2)",
+      "path": "explicit/a",
+      "kind": 1,
+      "units": 0,
+      "amount": 300000,
+      "description": "A."
+    },
+    {
+      "process": "web (pid 3)",
+      "path": "explicit/a",
+      "kind": 1,
+      "units": 0,
+      "amount": 400000,
+      "description": "A."
+    }
+  ]
+}

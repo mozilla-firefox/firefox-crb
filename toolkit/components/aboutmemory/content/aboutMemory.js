@@ -71,8 +71,14 @@ let gIsDiff = false;
 let gCurrentReports = [];
 let gCurrentHasMozMallocUsableSize = false;
 let gCurrentIsDiff = false;
+// The names of the diffed files that contain incomplete process reports.
+let gCurrentIncompleteDiffInputs = [];
 
 let gFilter = "";
+
+// nsMemoryReporterManager reports this path for each process that didn't
+// finish reporting.
+const gIncompleteReportPath = "memory-report-incomplete";
 
 // ---------------------------------------------------------------------------
 
@@ -1655,6 +1661,7 @@ function updateAboutMemoryFromReporters() {
       gCurrentReports = reports;
       gCurrentHasMozMallocUsableSize = gMgr.hasMozMallocUsableSize;
       gCurrentIsDiff = false;
+      gCurrentIncompleteDiffInputs = [];
       gFilter = "";
       updateTitleMainAndFooter(
         "live measurement",
@@ -1734,8 +1741,11 @@ function updateAboutMemoryFromCurrentData() {
  * @param aObj
  *        An object that (hopefully!) conforms to the JSON schema used by
  *        nsIMemoryInfoDumper.
+ * @param aIncompleteDiffInputs
+ *        If aObj is a diff, the names of the diffed files that contain
+ *        incomplete process reports.
  */
-function updateAboutMemoryFromJSONObject(aObj) {
+function updateAboutMemoryFromJSONObject(aObj, aIncompleteDiffInputs = []) {
   try {
     assertInput(
       aObj.version === gCurrentFileFormatVersion,
@@ -1753,6 +1763,7 @@ function updateAboutMemoryFromJSONObject(aObj) {
     gCurrentReports = aObj.reports.concat();
     gCurrentHasMozMallocUsableSize = aObj.hasMozMallocUsableSize;
     gCurrentIsDiff = gIsDiff;
+    gCurrentIncompleteDiffInputs = aIncompleteDiffInputs;
     gFilter = "";
 
     updateAboutMemoryFromCurrentData();
@@ -1884,8 +1895,22 @@ function updateAboutMemoryFromTwoFiles(aFilename1, aFilename2) {
       try {
         let obj1 = parseAndUnwrapIfCrashDump(aStr1);
         let obj2 = parseAndUnwrapIfCrashDump(aStr2);
+        let diff = diffJSONObjects(obj1, obj2);
+
+        // Incomplete-report markers usually cancel out in the diff, so check
+        // the inputs instead.
+        let incompleteInputs = [];
+        for (let [filename, obj] of [
+          [aFilename1, obj1],
+          [aFilename2, obj2],
+        ]) {
+          if (obj.reports.some(r => r.path === gIncompleteReportPath)) {
+            incompleteInputs.push(filename);
+          }
+        }
+
         gIsDiff = true;
-        updateAboutMemoryFromJSONObject(diffJSONObjects(obj1, obj2));
+        updateAboutMemoryFromJSONObject(diff, incompleteInputs);
         gIsDiff = false;
       } catch (ex) {
         handleException(ex);
@@ -2203,6 +2228,8 @@ function appendAboutMemoryMain(
 ) {
   let pcollsByProcess = {};
   let infoByProcess = {};
+  // Maps each process with an incomplete-report marker to its description.
+  let incompleteProcesses = new Map();
 
   function handleReport(
     aProcess,
@@ -2228,6 +2255,12 @@ function appendAboutMemoryMain(
       "bad presence"
     );
 
+    // In a diff, the inputs are checked instead; see
+    // updateAboutMemoryFromTwoFiles().
+    if (aUnsafePath == gIncompleteReportPath && gIsDiff) {
+      return;
+    }
+
     // If the process is empty, that means this process -- which is the main
     // process, because this is chrome JS code -- is doing the dumping.
     // Generate the process identifier: `Main Process (pid $PID)`.
@@ -2251,6 +2284,18 @@ function appendAboutMemoryMain(
     }
     if (aUnsafePath == "resident-unique") {
       infoByProcess[process].residentUnique = aAmount;
+    }
+    // This is shown as warnings rather than as a measurement. It still gives
+    // the process a section, which a process that never started needs.
+    if (aUnsafePath == gIncompleteReportPath) {
+      incompleteProcesses.set(process, aDescription);
+      if (
+        stringMatchesFilter(aUnsafePath, aFilter) &&
+        !pcollsByProcess[process]
+      ) {
+        pcollsByProcess[process] = new PColl();
+      }
+      return;
     }
 
     // Ignore reports that don't match the current filter.
@@ -2489,12 +2534,22 @@ function appendAboutMemoryMain(
         pcolls._degenerates,
         pcolls._heapTotal,
         aHasMozMallocUsableSize,
-        aFilter != ""
+        aFilter != "",
+        incompleteProcesses.get(process)
       );
     }
 
     if (!sections.firstChild) {
       appendElementWithText(sections, "div", "section", "No results found.");
+    }
+
+    let incompleteWarning = makeIncompleteReportWarning(
+      processes,
+      incompleteProcesses,
+      pcollsByProcess
+    );
+    if (incompleteWarning) {
+      sections.prepend(incompleteWarning);
     }
 
     // Generate the process index.
@@ -2887,6 +2942,69 @@ function sortTreeAndInsertAggregateNodes(aTotalBytes, aT) {
 // each new process.
 let gUnsafePathsWithInvalidValuesForThisProcess = [];
 
+/**
+ * Makes the page-level warning about processes that didn't finish reporting.
+ *
+ * @param aProcesses
+ *        The sorted process names; a process's index gives its section anchor.
+ * @param aIncompleteProcesses
+ *        The processes with an incomplete-report marker.
+ * @param aPCollsByProcess
+ *        The displayed PColls, keyed by process; processes that the filter hid
+ *        have none.
+ * @return The warning element, or null if there is nothing to warn about.
+ */
+function makeIncompleteReportWarning(
+  aProcesses,
+  aIncompleteProcesses,
+  aPCollsByProcess
+) {
+  if (!gCurrentIncompleteDiffInputs.length && !aIncompleteProcesses.size) {
+    return null;
+  }
+
+  let div = newElement("div", "section");
+  div.classList.add("accuracyWarning", "incompleteReportWarning");
+  if (gCurrentIncompleteDiffInputs.length) {
+    appendElementWithText(
+      div,
+      "p",
+      "",
+      "WARNING: the following files contain processes that did not finish " +
+        "reporting. Measurements missing from those processes will show up " +
+        "in this diff as changes.\n"
+    );
+    let ul = appendElement(div, "ul");
+    for (let filename of gCurrentIncompleteDiffInputs) {
+      appendElementWithText(ul, "li", "", filename + "\n");
+    }
+  } else {
+    appendElementWithText(
+      div,
+      "p",
+      "",
+      "WARNING: the following processes did not finish reporting, so their " +
+        "measurements are incomplete or missing. See each process's " +
+        "section for details.\n"
+    );
+    let ul = appendElement(div, "ul");
+    for (let [i, process] of aProcesses.entries()) {
+      if (!aIncompleteProcesses.has(process)) {
+        continue;
+      }
+      let li = appendElement(ul, "li");
+      if (aPCollsByProcess[process]) {
+        let link = appendElementWithText(li, "a", "", process);
+        link.href = "#start" + i;
+      } else {
+        li.textContent = process;
+      }
+      appendTextNode(li, "\n");
+    }
+  }
+  return div;
+}
+
 function appendWarningElements(
   aP,
   aHasKnownHeapAllocated,
@@ -2978,6 +3096,9 @@ function appendWarningElements(
  *        Boolean indicating if moz_malloc_usable_size works.
  * @param aFiltered
  *        Boolean indicating whether the reports were filtered.
+ * @param aIncompleteDescription
+ *        If the process didn't finish reporting, the description of its
+ *        incomplete-report marker.
  * @return The generated text.
  */
 function appendProcessAboutMemoryElements(
@@ -2988,7 +3109,8 @@ function appendProcessAboutMemoryElements(
   aDegenerates,
   aHeapTotal,
   aHasMozMallocUsableSize,
-  aFiltered
+  aFiltered,
+  aIncompleteDescription
 ) {
   let appendLink = function (aHere, aThere, aArrow) {
     let link = appendElementWithText(aP, "a", "upDownArrow", aArrow);
@@ -3004,8 +3126,17 @@ function appendProcessAboutMemoryElements(
   appendElementWithText(aP, "h1", "", aProcess);
   appendLink("start", "end", "↓");
 
-  // We'll fill this in later.
+  // We'll fill in the explicit-tree warnings later; the incomplete-report
+  // warning, if any, goes first.
   let warningsDiv = appendElement(aP, "div", "accuracyWarning");
+  if (aIncompleteDescription !== undefined) {
+    appendElementWithText(
+      warningsDiv,
+      "p",
+      "incompleteReportProcessWarning",
+      "WARNING: " + aIncompleteDescription + "\n\n"
+    );
+  }
 
   // The explicit tree.
   let hasExplicitTree;
