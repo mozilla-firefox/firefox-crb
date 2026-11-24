@@ -260,6 +260,13 @@ class VRMemoryReporter : public MemoryReportingProcess {
     return 0;
   }
 
+  GeckoChildID GetGeckoChildID() const override {
+    if (VRChild* child = GetChild()) {
+      return child->OtherChildID();
+    }
+    return kInvalidGeckoChildID;
+  }
+
  private:
   VRChild* GetChild() const {
     if (VRProcessManager* vpm = VRProcessManager::Get()) {

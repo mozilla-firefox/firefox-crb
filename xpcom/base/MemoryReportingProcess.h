@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "mozilla/ProcessType.h"
 #include "nscore.h"
 
 namespace mozilla {
@@ -37,6 +38,10 @@ class MemoryReportingProcess {
       const Maybe<mozilla::ipc::FileDescriptor>& aDMDFile) = 0;
 
   virtual int32_t Pid() const = 0;
+
+  // The process's GeckoChildID, which identifies it uniquely for the
+  // session.
+  virtual GeckoChildID GetGeckoChildID() const = 0;
 };
 
 }  // namespace mozilla

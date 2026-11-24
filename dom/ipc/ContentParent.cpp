@@ -4552,7 +4552,8 @@ bool ContentParent::SendRequestMemoryReport(
     const uint32_t& aGeneration, const bool& aAnonymize,
     const bool& aMinimizeMemoryUsage, const Maybe<FileDescriptor>& aDMDFile) {
   // This automatically cancels the previous request.
-  mMemoryReportRequest = std::make_unique<MemoryReportRequestHost>(aGeneration);
+  mMemoryReportRequest =
+      std::make_unique<MemoryReportRequestHost>(aGeneration, OtherChildID());
   RefPtr<ContentParent> self(this);
   PContentParent::SendRequestMemoryReport(aGeneration, aAnonymize,
                                           aMinimizeMemoryUsage, aDMDFile)

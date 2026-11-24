@@ -7,6 +7,7 @@
 
 #include <functional>
 
+#include "mozilla/ProcessType.h"
 #include "mozilla/dom/MemoryReportTypes.h"
 #include "mozilla/ipc/FileDescriptor.h"
 #include "nsISupports.h"
@@ -19,7 +20,9 @@ class MemoryReport;
 
 class MemoryReportRequestHost final {
  public:
-  explicit MemoryReportRequestHost(uint32_t aGeneration);
+  // aChildID must match the MemoryReportingProcess::GetGeckoChildID() of
+  // the process.
+  MemoryReportRequestHost(uint32_t aGeneration, GeckoChildID aChildID);
   ~MemoryReportRequestHost();
 
   void RecvReport(const MemoryReport& aReport);
@@ -27,6 +30,7 @@ class MemoryReportRequestHost final {
 
  private:
   const uint32_t mGeneration;
+  const GeckoChildID mChildID;
   // Non-null if we haven't yet called EndProcessReport() on it.
   RefPtr<nsMemoryReporterManager> mReporterManager;
   bool mSuccess;

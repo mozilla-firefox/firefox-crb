@@ -351,6 +351,13 @@ class RDDMemoryReporter : public MemoryReportingProcess {
     return 0;
   }
 
+  GeckoChildID GetGeckoChildID() const override {
+    if (RDDChild* child = GetChild()) {
+      return child->OtherChildID();
+    }
+    return kInvalidGeckoChildID;
+  }
+
  private:
   RDDChild* GetChild() const {
     if (RDDProcessManager* rddpm = RDDProcessManager::Get()) {
