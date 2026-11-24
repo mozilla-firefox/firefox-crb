@@ -1760,6 +1760,9 @@ projects:
     path: components/feature/tab-settings
     publish: true
     upstream_dependencies:
+    - components:concept-base
+    - components:concept-fetch
+    - components:support-base
     - components:tooling-lint
   components:feature-tabdata-coordinator:
     description: Component gathering tab data, such as tabs and tab groups, from its
@@ -1769,6 +1772,7 @@ projects:
     upstream_dependencies:
     - components:concept-base
     - components:concept-fetch
+    - components:feature-tab-settings
     - components:feature-tabgroups-storage
     - components:support-base
     - components:support-utils
