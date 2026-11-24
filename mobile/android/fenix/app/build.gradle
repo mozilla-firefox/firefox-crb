@@ -537,6 +537,7 @@ dependencies {
     implementation project(':components:feature-syncedtabs')
     implementation project(':components:feature-toolbar')
     implementation project(':components:feature-tab-collections')
+    implementation project(':components:feature-tab-settings')
     implementation project(':components:feature-tabdata-coordinator')
     implementation project(':components:feature-tabgroups-storage')
     implementation project(':components:feature-tabs')
@@ -672,6 +673,7 @@ dependencies {
     testImplementation project(':components:support-test-fakes')
     testImplementation project(':components:support-test-libstate')
     testImplementation testFixtures(project(':components:support-utils'))
+    testImplementation testFixtures(project(':components:feature-tab-settings'))
     testImplementation testFixtures(project(':components:feature-tabgroups-storage'))
     testImplementation testFixtures(project(':components:feature-tabdata-coordinator'))
 

@@ -15,6 +15,7 @@ android {
 }
 
 dependencies {
+    api project(':components:feature-tab-settings')
     api project(':components:feature-tabgroups-storage')
 
     implementation project(':components:support-base')
@@ -29,6 +30,7 @@ dependencies {
     testImplementation libs.kotlin.test
     testImplementation libs.kotlinx.coroutines.test
     testFixturesImplementation libs.kotlinx.coroutines
+    testImplementation testFixtures(project(':components:feature-tab-settings'))
     testImplementation testFixtures(project(':components:feature-tabgroups-storage'))
     testImplementation testFixtures(project(':components:support-utils'))
 }

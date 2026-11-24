@@ -15,6 +15,8 @@ import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.HitResult
+import mozilla.components.feature.tab.settings.data.TabSettings
+import mozilla.components.feature.tab.settings.fakes.FakeTabSettingsRepository
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
 import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.feature.tabgroups.storage.data.TabGroup
@@ -206,8 +208,10 @@ class TabGroupContextMenuCandidateTest {
                         fenixBrowserUseCases = mockk(relaxed = true),
                     ),
                 tabGroupRepository = repository,
-                isInactiveTabsEnabled = { false },
-                isTabGroupsEnabled = { true },
+                tabSettingsRepository =
+                    FakeTabSettingsRepository(
+                        initialSettingsSnapshot = TabSettings(tabGroupsEnabled = true, inactiveTabsEnabled = false)
+                    ),
                 scope = backgroundScope,
                 dispatcher = StandardTestDispatcher(testScheduler),
             )
