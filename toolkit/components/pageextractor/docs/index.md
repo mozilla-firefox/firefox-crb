@@ -118,6 +118,72 @@ The limits:
   out.
 - A block nested too deeply to send to the parent is dropped.
 
+### Build a feature on it
+
+`StructuredMetadataReader.sys.mjs` interprets the result so each feature does
+not have to:
+
+```js
+const reader = new StructuredMetadataReader(
+  await pageExtractor.getStructuredMetadata()
+);
+reader.title; // The main item's headline or name, then og:title, twitter:title, <title>.
+reader.description;
+reader.image; // An absolute http(s) URL.
+reader.author;
+reader.publishedTime;
+reader.modifiedTime;
+reader.siteName;
+reader.canonicalUrl;
+reader.language;
+
+for (const event of reader.findItems("Event", "MusicEvent", "SportsEvent")) {
+  const place = reader.resolve(event.location);
+}
+```
+
+- Each common field takes the first value from the main schema.org item, Open
+  Graph, Twitter Cards, then HTML, or is `null` when none declares it.
+- `primaryItem` guesses the item the page is about. It considers items at the
+  root of a block, in its `@graph`, or inline as a `mainEntity`, and skips web
+  pages and the site-level types SEO plugins add to most pages, such as
+  `WebSite`, `Organization` and `BreadcrumbList`. It takes the first that
+  declares `mainEntityOfPage`, else the first candidate, else the first web
+  page. On a page with several products or articles it can pick the wrong
+  one, so a feature that knows which item it wants can set
+  `reader.primaryItem = item`, and the common fields follow it.
+- `findItems` matches types written as terms (`Recipe`), compact IRIs
+  (`schema:Recipe`) or IRIs, nested items included, such as an `ItemList`'s
+  events. It does not infer schema.org subtypes, so list the ones your feature
+  handles.
+- `resolve` follows a `{ "@id" }` reference to the item it names elsewhere on
+  the page.
+- `metaValues(name)` returns every value of a tag.
+
+#### Supported JSON-LD subset
+
+Types match by term, compact IRI or IRI. `@id` references resolve by exact
+string match. The reader does not support custom `@context` aliases, matching
+relative to absolute `@id` values, or schema.org type inheritance. Grow the
+subset only for a concrete consumer, with a fixture page in the tests, and not
+for one site's quirks.
+
+#### Example: read a product price
+
+```js
+const reader = new StructuredMetadataReader(
+  await pageExtractor.getStructuredMetadata()
+);
+const [product] = reader.findItems("Product");
+// offers may be one offer, a list of them, or a reference to one.
+const offers = [reader.resolve(product?.offers)].flat().map(offer =>
+  reader.resolve(offer)
+);
+const price =
+  offers.find(offer => offer?.price != null)?.price ??
+  reader.metaValues("product:price:amount")[0];
+```
+
 Treat the values as untrusted hints. They can be long, missing, wrong, or
 contradict the page's own content, so keep your feature working without them.
 
