@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2026-11-23T03:56:56.319645+00:00'
+updated_at: '2026-11-24T18:49:20.346513+00:00'
 export:
   path: ./docs/mots/index.md
   format: md
@@ -3913,32 +3913,6 @@ modules:
         peers: []
         machine_name: enterprise_policies
 
-      - name: Experiments/Rollouts
-        description: Desktop clients for our experiments and off-train deployments
-          systems.
-        includes:
-          - browser/components/nimbus/**/*
-          - toolkit/components/nimbus/**/*
-        meta:
-          owners_emeritus:
-            - Michael Cooper
-          peers_emeritus:
-            - Daniel Thorn
-            - Gijs Kruitbosch
-          components:
-            - Firefox::Normandy
-            - Firefox::Nimbus Desktop Client
-          review_group: nimbus-reviewers
-          url: <https://experimenter.info/>
-        owners:
-          - *beth
-        peers:
-          - *emcminn
-          - *charlie
-          - *aminomancer
-          - *ralkhulaidi
-        machine_name: normandy
-
       - machine_name: firefox_view
         name: Firefox View
         description: The Firefox View page and its modules.
@@ -4089,6 +4063,31 @@ modules:
           - *ninapy
           - *rhamoui
         machine_name: new_tab_page
+
+      - name: Nimbus
+        description: >
+          Desktop client for studies, rollouts, and opt-in experimentation.
+        includes:
+          - browser/components/nimbus/**/*
+          - toolkit/components/nimbus/**/*
+        meta:
+          owners_emeritus:
+            - Michael Cooper
+          peers_emeritus:
+            - Daniel Thorn
+            - Gijs Kruitbosch
+          components:
+            - Firefox::Nimbus Desktop Client
+          review_group: nimbus-reviewers
+          url: <https://experimenter.info/>
+        owners:
+          - *beth
+        peers:
+          - *emcminn
+          - *charlie
+          - *aminomancer
+          - *ralkhulaidi
+        machine_name: nimbus
 
       - name: Password Manager
         description: Managing, saving and filling logins.
@@ -5091,5 +5090,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: 9d42ec3c8428a1b061bc10db19763aee4ca742d1
-  export: 3babfd93f376e24df32b5d7757453060d569f766
+  config: 76bce5ba2b7837ce8943de44b88ba540725b4529
+  export: cf94d0bcc294e9d598e0157530621cca3124ccde
