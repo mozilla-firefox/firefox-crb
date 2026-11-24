@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 :host {
+  --aitab-table-image-max-width: 144px;
   --aitab-table-margin-top: 32px;
   --aitab-table-content-border-color: light-dark(var(--color-gray-20), var(--color-gray-50));
   --aitab-table-content-header-border-color: var(--border-color);
@@ -92,4 +93,11 @@ tbody tr + tr {
 .aitab-table-subtitle {
   color: var(--text-color-deemphasized);
   font-size: var(--font-size-small);
+}
+
+.aitab-table-header-group {
+  align-items: center;
+  display: grid;
+  gap: var(--space-large);
+  grid-template-columns: minmax(0, var(--aitab-table-image-max-width)) auto;
 }
