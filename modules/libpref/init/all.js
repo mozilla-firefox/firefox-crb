@@ -3660,6 +3660,9 @@ pref("browser.ml.overridePipelineOptions", "{}");
 pref("browser.ml.pageExtractor.headlessTimeoutMs", 15000);
 // Report a headless page behind a captcha as blocked instead of reading it.
 pref("browser.ml.pageExtractor.captchaDetection.enabled", true);
+// How long a short headless read waits for a captcha widget whose script the
+// page requested, in ms.
+pref("browser.ml.pageExtractor.captchaWidgetWaitMs", 1500);
 
 // Extract video metadata and the transcript from YouTube watch pages during
 // page extraction.

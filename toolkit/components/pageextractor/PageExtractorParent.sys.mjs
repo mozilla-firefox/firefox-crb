@@ -20,6 +20,8 @@ const lazy = XPCOMUtils.declareLazy({
     "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs",
   findCaptchaFrame:
     "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs",
+  captchaTypeForLoaderScript:
+    "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs",
   HiddenBrowserManager: "resource://gre/modules/HiddenFrame.sys.mjs",
   console: () =>
     console.createInstance({
@@ -36,6 +38,10 @@ const lazy = XPCOMUtils.declareLazy({
   headlessTimeoutMs: {
     pref: "browser.ml.pageExtractor.headlessTimeoutMs",
     default: 15000,
+  },
+  captchaWidgetWaitMs: {
+    pref: "browser.ml.pageExtractor.captchaWidgetWaitMs",
+    default: 1500,
   },
   useCaptchaDetection: {
     pref: "browser.ml.pageExtractor.captchaDetection.enabled",
@@ -91,13 +97,16 @@ class HeadlessCaptchaWatcher {
   /**
    * "watching" until a captcha is reported, then "captcha-shown", or
    * "blocked" once one blocks the page. "blocked" is final: the read ends.
+   * A page that requests a captcha widget's script before any is reported is
+   * "widget-requested" until one is.
    *
-   * @type {"watching" | "captcha-shown" | "blocked"}
+   * @type {"watching" | "widget-requested" | "captcha-shown" | "blocked"}
    */
   #state = "watching";
 
   /**
-   * The latest captcha reported in the page, outside "watching".
+   * The latest captcha reported in the page, in "captcha-shown" and
+   * "blocked".
    *
    * @type {CaptchaUpdate | null}
    */
@@ -109,8 +118,12 @@ class HeadlessCaptchaWatcher {
   #loadEvent;
   /** @type {PageExtractorEvent} */
   #detectedEvent;
+  /** @type {PageExtractorEvent} */
+  #scriptEvent;
   /** @type {PromiseWithResolvers<CaptchaUpdate>} */
   #blocked = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
+  #captchaReported = Promise.withResolvers();
 
   /**
    * @param {Element} browser - The hidden <browser>, before it loads the page.
@@ -125,6 +138,10 @@ class HeadlessCaptchaWatcher {
       lazy.Phase.captchaDetected,
       { process: "parent", traceId: loadEvent.traceId }
     );
+    this.#scriptEvent = new lazy.PageExtractorEvent(lazy.Phase.captchaScript, {
+      process: "parent",
+      traceId: loadEvent.traceId,
+    });
   }
 
   /**
@@ -150,13 +167,59 @@ class HeadlessCaptchaWatcher {
   start() {
     HeadlessCaptchaWatcher.#watchers.set(this.#browser, this);
     Services.obs.addObserver(this, "captcha-detection-message");
+    Services.obs.addObserver(this, "http-on-modify-request");
     Services.obs.addObserver(this, "http-on-examine-response");
   }
 
   stop() {
     HeadlessCaptchaWatcher.#watchers.delete(this.#browser);
     Services.obs.removeObserver(this, "captcha-detection-message");
+    Services.obs.removeObserver(this, "http-on-modify-request");
     Services.obs.removeObserver(this, "http-on-examine-response");
+  }
+
+  /**
+   * Waits briefly for a captcha widget whose script the page requested, when
+   * a read of `textLength` code units is short enough to be the bot check.
+   * The script can insert the widget after a fast page is already readable.
+   *
+   * @param {TraceId} traceId - The read's trace.
+   * @param {number} textLength
+   */
+  async waitForRequestedWidget(traceId, textLength) {
+    if (
+      this.#state !== "widget-requested" ||
+      textLength >= CAPTCHA_PAGE_MAX_TEXT_LENGTH
+    ) {
+      return;
+    }
+    let timeoutId;
+    try {
+      await lazy.PageExtractorEvent.trace(
+        lazy.Phase.captchaWait,
+        { process: "parent", traceId },
+        async waitEvent => {
+          const appeared = await this.raceWithCaptchaBlock(
+            this.#captchaReported.promise.then(() => true),
+            new Promise(resolve => {
+              timeoutId = lazy.setTimeout(
+                () => resolve(false),
+                lazy.captchaWidgetWaitMs
+              );
+              if (Cu.isInAutomation) {
+                Services.obs.notifyObservers(
+                  null,
+                  "page-extractor-captcha-wait"
+                );
+              }
+            })
+          );
+          waitEvent.finish({ status: appeared ? "appeared" : "gave-up" });
+        }
+      );
+    } finally {
+      lazy.clearTimeout(timeoutId);
+    }
   }
 
   /**
@@ -191,7 +254,9 @@ class HeadlessCaptchaWatcher {
    * @param {string} data
    */
   observe(subject, topic, data) {
-    if (topic === "http-on-examine-response") {
+    if (topic === "http-on-modify-request") {
+      this.#onRequest(subject);
+    } else if (topic === "http-on-examine-response") {
       this.#onResponse(subject);
     } else if (subject === this.#browser) {
       const update = lazy.captchaUpdateFromMessage(JSON.parse(data));
@@ -210,6 +275,24 @@ class HeadlessCaptchaWatcher {
       BrowsingContext.get(channel.loadInfo.browsingContextID)?.browserId ===
       this.#browser.browserId
     );
+  }
+
+  /** @param {nsISupports} channel */
+  #onRequest(channel) {
+    if (
+      this.#state !== "watching" ||
+      !(channel instanceof Ci.nsIHttpChannel) ||
+      channel.loadInfo.externalContentPolicyType !==
+        Ci.nsIContentPolicy.TYPE_SCRIPT
+    ) {
+      return;
+    }
+    const type = lazy.captchaTypeForLoaderScript(channel.URI);
+    if (!type || !this.#isOwnChannel(channel)) {
+      return;
+    }
+    this.#state = "widget-requested";
+    this.#scriptEvent.finish({ status: "requested", captchaType: type });
   }
 
   /**
@@ -250,8 +333,9 @@ class HeadlessCaptchaWatcher {
     if (this.#state === "blocked") {
       return;
     }
+    this.#captchaReported.resolve();
     lazy.console.log("Captcha update in headless page", update);
-    if (this.#state === "watching") {
+    if (this.#state === "watching" || this.#state === "widget-requested") {
       this.#detectedEvent.finish({
         status: "detected",
         captchaType: update.type,
@@ -449,6 +533,10 @@ export class PageExtractorParent extends JSWindowActorParent {
           event.finish({ status: "unavailable" });
           return null;
         }
+        await captchaWatcher?.waitForRequestedWidget(
+          event.traceId,
+          result.text.length
+        );
         const captcha = captchaWatcher?.captchaInsteadOfPage(
           result.text.length
         );

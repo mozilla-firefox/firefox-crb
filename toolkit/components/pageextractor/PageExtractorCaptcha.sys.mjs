@@ -34,6 +34,32 @@ const ARKOSE_LABS_FRAMES = new MatchPatternSet([
   "https://client-api.arkoselabs.com/fc/assets/ec-game-core/game-core/*",
 ]);
 
+// Scripts that render a captcha widget, requested before its frame exists.
+// Only list scripts whose widget CaptchaDetectionChild reports, or a read
+// would wait for a report that never comes.
+const RECAPTCHA_V2_SCRIPTS = new MatchPatternSet([
+  "https://www.google.com/recaptcha/api.js",
+  "https://www.google.com/recaptcha/api.js?*",
+  "https://www.google.com/recaptcha/enterprise.js",
+  "https://www.google.com/recaptcha/enterprise.js?*",
+]);
+
+const HCAPTCHA_SCRIPTS = new MatchPatternSet([
+  "https://js.hcaptcha.com/1/api.js",
+  "https://js.hcaptcha.com/1/api.js?*",
+]);
+
+// Only served on DataDome's block page, beside its captcha frame.
+const DATADOME_SCRIPTS = new MatchPatternSet([
+  "https://ct.captcha-delivery.com/c.js",
+  "https://ct.captcha-delivery.com/c.js?*",
+]);
+
+const CF_TURNSTILE_SCRIPTS = new MatchPatternSet([
+  "https://challenges.cloudflare.com/turnstile/v0/api.js",
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?*",
+]);
+
 /**
  * Captcha states in which the check went against the visitor.
  *
@@ -177,6 +203,54 @@ export function setTestFrames(patterns) {
     throw new Error("Only available in automation.");
   }
   testFrames = patterns && new MatchPatternSet(patterns);
+}
+
+/**
+ * Test-only loader scripts, matched as Cloudflare Turnstile's.
+ *
+ * @type {MatchPatternSet | null}
+ */
+let testScripts = null;
+
+/**
+ * Matches `patterns` as Cloudflare Turnstile loader scripts, for tests.
+ *
+ * @param {string[] | null} patterns - null resets.
+ */
+export function setTestScripts(patterns) {
+  if (!Cu.isInAutomation) {
+    throw new Error("Only available in automation.");
+  }
+  testScripts = patterns && new MatchPatternSet(patterns);
+}
+
+/**
+ * The captcha provider whose widget-loading script `uri` is, if any.
+ *
+ * @param {nsIURI} uri
+ * @returns {string | null}
+ */
+export function captchaTypeForLoaderScript(uri) {
+  if (testScripts?.matches(uri)) {
+    return "cf-turnstile";
+  }
+  if (RECAPTCHA_V2_SCRIPTS.matches(uri)) {
+    // reCAPTCHA v3 loads as api.js?render=<site key> and only ever renders an
+    // invisible frame, which GoogleRecaptchaV2Handler skips. Explicit v2
+    // rendering passes render=explicit instead.
+    const render = URL.fromURI(uri).searchParams.get("render");
+    return render && render !== "explicit" ? null : "g-recaptcha-v2";
+  }
+  if (HCAPTCHA_SCRIPTS.matches(uri)) {
+    return "hCaptcha";
+  }
+  if (DATADOME_SCRIPTS.matches(uri)) {
+    return "datadome";
+  }
+  if (CF_TURNSTILE_SCRIPTS.matches(uri)) {
+    return "cf-turnstile";
+  }
+  return null;
 }
 
 /**

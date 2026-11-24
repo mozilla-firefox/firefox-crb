@@ -151,7 +151,12 @@ let nextId = 1;
 const DEFAULT_MARKER_COLOR = "blue";
 // Statuses other than these or "error" (e.g. "unavailable", "blocked",
 // "empty") are handled outcomes, not thrown exceptions.
-const DEFAULT_COLOR_STATUSES = new Set(["success", "detected"]);
+const DEFAULT_COLOR_STATUSES = new Set([
+  "success",
+  "detected",
+  "requested",
+  "appeared",
+]);
 const HANDLED_OUTCOME_MARKER_COLOR = "yellow";
 const ERROR_MARKER_COLOR = "red";
 
@@ -167,6 +172,8 @@ const STATUS_DESCRIPTIONS = new Map([
   ["document-hidden", "page is in a background tab"],
   ["not-readerable", "Reader Mode declined, read as is"],
   ["document-unloaded", "page replaced before it was ready"],
+  ["appeared", "it appeared"],
+  ["gave-up", "it never appeared, so the page is read without it"],
 ]);
 
 /**
@@ -222,6 +229,8 @@ function describeOutcome(data) {
         ? `${captcha}, found by ${DETECTED_BY_DESCRIPTIONS.get(data.detectedBy)}`
         : captcha;
     }
+    case "requested":
+      return lazy.CAPTCHA_PROVIDER_NAMES.get(data.captchaType);
     case "error":
       return `failed with ${data.errorName ?? "an error"}`;
   }
@@ -326,9 +335,17 @@ export class PageExtractorEvent {
       name: "headless-navigate",
       label: "Navigate to page",
     },
+    captchaScript: {
+      name: "captcha-script",
+      label: "Page requested a bot check's script",
+    },
     captchaDetected: {
       name: "captcha-detected",
       label: "Bot check appeared on page",
+    },
+    captchaWait: {
+      name: "captcha-wait",
+      label: "Wait for the bot check to appear",
     },
     waitForReady: {
       name: "wait-for-ready",

@@ -13,20 +13,31 @@ const { PageExtractorParent } = ChromeUtils.importESModule(
 const { ProfilerTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/ProfilerTestUtils.sys.mjs"
 );
-const { captchaUpdateFromMessage, setTestFrames } = ChromeUtils.importESModule(
-  "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs"
-);
+const { captchaUpdateFromMessage, setTestFrames, setTestScripts } =
+  ChromeUtils.importESModule(
+    "moz-src:///toolkit/components/pageextractor/PageExtractorCaptcha.sys.mjs"
+  );
 
 const TEST_DIR = getRootDirectory(gTestPath).replace(
   "chrome://mochitests/content",
   ""
 );
 const CAPTCHA_FRAME = `https://example.org${TEST_DIR}captcha_frame.html`;
+const CAPTCHA_LOADER = `https://example.org${TEST_DIR}captcha_loader.js`;
 const CAPTCHA_TOPIC = "captcha-detection-message";
 
-add_setup(() => {
+add_setup(async () => {
+  // A read's wait ends when a test inserts the widget, not on a timer. The
+  // time-limit test sets its own limit.
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.ml.pageExtractor.captchaWidgetWaitMs", 600000]],
+  });
   setTestFrames([`${CAPTCHA_FRAME}*`]);
-  registerCleanupFunction(() => setTestFrames(null));
+  setTestScripts([`${CAPTCHA_LOADER}*`]);
+  registerCleanupFunction(() => {
+    setTestFrames(null);
+    setTestScripts(null);
+  });
 });
 
 /**
@@ -55,6 +66,49 @@ function captchaUpdate(event) {
     (_subject, data) =>
       captchaUpdateFromMessage(JSON.parse(data))?.event === event
   );
+}
+
+/**
+ * Starts a read and runs `whileWaiting` once it waits on a captcha widget.
+ *
+ * @param {PageExtractorParent} pageExtractor
+ * @param {TraceId} traceId
+ * @param {() => Promise<void> | void} whileWaiting
+ * @returns {Promise<object>}
+ */
+async function readWhileWaitingForWidget(pageExtractor, traceId, whileWaiting) {
+  const waiting = TestUtils.topicObserved("page-extractor-captcha-wait");
+  const read = pageExtractor.getText({}, traceId);
+  await Promise.race([
+    waiting,
+    read.then(
+      () => {
+        throw new Error("getText() returned before the widget wait started.");
+      },
+      error => {
+        throw new Error("getText() failed before the widget wait started.", {
+          cause: error,
+        });
+      }
+    ),
+  ]);
+  await whileWaiting();
+  return read;
+}
+
+/**
+ * Inserts the widget's frame, as a provider's script would.
+ *
+ * @param {object} pageExtractor
+ * @param {"fail"|"success"} [state]
+ */
+function insertCaptchaFrame(pageExtractor, state) {
+  const frameUrl = state ? `${CAPTCHA_FRAME}?state=${state}` : CAPTCHA_FRAME;
+  return SpecialPowers.spawn(pageExtractor.browsingContext, [frameUrl], url => {
+    const iframe = content.document.createElement("iframe");
+    iframe.src = url;
+    content.document.body.append(iframe);
+  });
 }
 
 /**
@@ -188,6 +242,115 @@ add_task(async function test_failure_beside_shown_captcha_is_not_a_block() {
 });
 
 /**
+ * A read waits for a widget whose script the page requested.
+ */
+add_task(async function test_read_waits_for_requested_captcha_widget() {
+  Services.fog.testResetFOG();
+  const { html } = MLTestUtils.serveHTML();
+  const { url, cleanup } = html`
+    <p>Checking your browser.</p>
+    <script src=${CAPTCHA_LOADER}></script>
+  `;
+
+  try {
+    await Assert.rejects(
+      PageExtractorParent.getHeadlessExtractor({
+        urlString: url,
+        callback: (pageExtractor, traceId) =>
+          readWhileWaitingForWidget(pageExtractor, traceId, () =>
+            insertCaptchaFrame(pageExtractor)
+          ),
+      }),
+      error =>
+        error.name === "BlockedError" &&
+        error.blockReason === "captcha" &&
+        error.captchaEvent === "shown",
+      "The read waits for the widget and sees the page is behind it."
+    );
+  } finally {
+    await cleanup();
+  }
+
+  is(
+    findParentPhaseEvent("captcha-wait")?.extra.status,
+    "appeared",
+    "Telemetry records that the wait ended on the widget showing up."
+  );
+});
+
+/**
+ * A long page is read without waiting for a widget whose script it requested:
+ * a widget beside that much text never counts as the bot check.
+ */
+add_task(async function test_long_page_does_not_wait_for_widget() {
+  Services.fog.testResetFOG();
+  const text = "An article beside a comment form. ".repeat(50).trim();
+  const { html } = MLTestUtils.serveHTML();
+  const { url, cleanup } = html`
+    <p>${text}</p>
+    <script src=${CAPTCHA_LOADER}></script>
+  `;
+
+  try {
+    const result = await PageExtractorParent.getHeadlessExtractor({
+      urlString: url,
+      callback: (pageExtractor, traceId) => pageExtractor.getText({}, traceId),
+    });
+    is(result.text, text, "The page is read.");
+  } finally {
+    await cleanup();
+  }
+
+  is(
+    findParentPhaseEvent("captcha-script")?.extra.status,
+    "requested",
+    "The page did request the widget's script."
+  );
+  Assert.strictEqual(
+    findParentPhaseEvent("captcha-wait"),
+    undefined,
+    "The read did not wait."
+  );
+});
+
+/**
+ * A short read gives up on a widget that never appears once its time runs
+ * out, and the page is read as is.
+ */
+add_task(async function test_read_wait_for_captcha_widget_is_bounded() {
+  Services.fog.testResetFOG();
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.ml.pageExtractor.captchaWidgetWaitMs", 0]],
+  });
+  const { html } = MLTestUtils.serveHTML();
+  const { url, cleanup } = html`
+    <p>Checking your browser.</p>
+    <script src=${CAPTCHA_LOADER}></script>
+  `;
+
+  try {
+    const result = await PageExtractorParent.getHeadlessExtractor({
+      urlString: url,
+      callback: (pageExtractor, traceId) => pageExtractor.getText({}, traceId),
+    });
+    is(
+      result.text,
+      "Checking your browser.",
+      "The page is read once the wait for a widget runs out."
+    );
+  } finally {
+    await cleanup();
+    await SpecialPowers.popPrefEnv();
+  }
+
+  is(
+    findParentPhaseEvent("captcha-wait")?.extra.status,
+    "gave-up",
+    "Telemetry records that the wait ran out."
+  );
+});
+
+/**
  * A captcha frame on the page counts even if its actor never reported in.
  * With the actor off, only the frame's URL can give it away.
  */
@@ -278,6 +441,11 @@ add_task(async function test_captcha_beside_content_is_read() {
     await cleanup();
   }
 
+  Assert.strictEqual(
+    findParentPhaseEvent("captcha-wait"),
+    undefined,
+    "A page that requested no captcha script records no wait."
+  );
   is(
     findParentPhaseEvent("headless-extractor").extra.captcha_type,
     "cf-turnstile",
@@ -428,4 +596,79 @@ add_task(async function test_page_at_widget_address_is_read() {
     },
   });
   is(result.text, "", "The page is read, not taken for a bot check.");
+});
+
+/**
+ * A profile shows, on the read's track, how the bot check was found and
+ * why the read was blocked.
+ */
+add_task(async function test_captcha_story_in_profile() {
+  const { html } = MLTestUtils.serveHTML();
+  const { url, cleanup } = html`
+    <p>Checking your browser.</p>
+    <script src=${CAPTCHA_LOADER}></script>
+  `;
+
+  await ProfilerTestUtils.startProfilerForMarkerTests();
+  let profile;
+  try {
+    await Assert.rejects(
+      PageExtractorParent.getHeadlessExtractor({
+        urlString: url,
+        callback: (pageExtractor, traceId) =>
+          readWhileWaitingForWidget(pageExtractor, traceId, () =>
+            insertCaptchaFrame(pageExtractor)
+          ),
+      }),
+      error => error.name === "BlockedError",
+      "The read is blocked."
+    );
+    profile = await ProfilerTestUtils.stopNowAndGetProfile();
+  } finally {
+    if (Services.profiler.IsActive()) {
+      await Services.profiler.StopProfiler();
+    }
+    await cleanup();
+  }
+
+  const markers = ProfilerTestUtils.getPayloadsOfTypeFromAllThreads(
+    profile,
+    "PageExtractor"
+  ).filter(m => m.process === "parent");
+  const load = markers.find(m => m.phase === "headless-extractor");
+  const onTrack = phase =>
+    markers.find(m => m.phase === phase && m.traceId === load.traceId);
+
+  const script = onTrack("captcha-script");
+  is(
+    script?.outcome,
+    "Cloudflare Turnstile",
+    "The first sign of the bot check is the page requesting its script."
+  );
+  is(
+    onTrack("captcha-wait")?.outcome,
+    "it appeared",
+    "The read waits for the widget, which appears."
+  );
+  is(
+    onTrack("captcha-detected")?.detectedBy,
+    "frame-report",
+    "The widget is found by its frame reporting in."
+  );
+  is(
+    onTrack("get-text")?.outcome,
+    `blocked by Cloudflare Turnstile (widget shown), only ${"Checking your browser.".length} characters on the page`,
+    "The read says the page was only the bot check."
+  );
+  is(
+    load.outcome,
+    "blocked by Cloudflare Turnstile (widget shown)",
+    "The load says who blocked it."
+  );
+  ok(
+    [script, onTrack("captcha-wait"), onTrack("captcha-detected")].every(
+      m => m.color === "blue"
+    ),
+    "Finding the bot check is not an error."
+  );
 });
