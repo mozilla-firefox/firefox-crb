@@ -65,6 +65,7 @@ import mozilla.components.feature.search.ext.buildSearchUrl
 import mozilla.components.feature.search.ext.waitForSelectedOrDefaultSearchEngine
 import mozilla.components.feature.summarize.settings.SummarizationSettings
 import mozilla.components.feature.syncedtabs.commands.GlobalSyncedTabsCommandsProvider
+import mozilla.components.feature.tab.settings.migration.LegacyTabSettings
 import mozilla.components.lib.crash.CrashReporter
 import mozilla.components.service.fxa.manager.SyncEnginesStorage
 import mozilla.components.service.merino.sports.GlobalMerinoSportsDependencyProvider
@@ -114,6 +115,7 @@ import org.mozilla.fenix.autofill.AutofillService
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.components.Components
 import org.mozilla.fenix.components.Core
+import org.mozilla.fenix.components.SharedPreferencesLegacyTabSettings
 import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.components.initializeGlean
 import org.mozilla.fenix.components.metrics.MozillaProductDetector
@@ -160,7 +162,7 @@ private const val BYTES_TO_MEGABYTES_CONVERSION = 1024.0 * 1024.0
  * initializes [Glean] in fenix builds and setup [Megazord] in the main process.
  */
 @Suppress("Registered", "TooManyFunctions", "LargeClass")
-open class FenixApplication : Application(), Provider, ThemeProvider {
+open class FenixApplication : Application(), Provider, ThemeProvider, LegacyTabSettings.Provider {
     init {
         // [TIMER] Record startup timestamp as early as reasonable with some degree of consistency.
         //
@@ -194,6 +196,9 @@ open class FenixApplication : Application(), Provider, ThemeProvider {
         )
 
     open val components by lazy { Components(this, applicationScope) }
+
+    override val legacyTabSettings: LegacyTabSettings
+        get() = SharedPreferencesLegacyTabSettings(context = this, preferences = components.settings.preferences)
 
     var visibilityLifecycleCallback: VisibilityLifecycleCallback? = null
         private set

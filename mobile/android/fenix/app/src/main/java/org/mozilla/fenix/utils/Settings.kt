@@ -1131,13 +1131,6 @@ class Settings(
         }
     }
 
-    /** Indicates if the user has enabled the inactive tabs feature. */
-    var inactiveTabsAreEnabled by
-        booleanPreference(
-            appContext.getPreferenceKey(R.string.pref_key_inactive_tabs),
-            default = true,
-        )
-
     /** Indicates if the user has completed successfully first translation. */
     var showFirstTimeTranslation: Boolean by
         booleanPreference(
@@ -3346,13 +3339,6 @@ class Settings(
         booleanPreference(
             key = appContext.getPreferenceKey(R.string.pref_key_tab_manager_opening_animation),
             default = { DefaultTabManagementFeatureHelper.openingAnimationEnabled },
-        )
-
-    /** Whether the Tab Groups feature is enabled. */
-    var tabGroupsEnabled by
-        booleanPreference(
-            key = appContext.getPreferenceKey(R.string.pref_key_tab_groups),
-            default = { DefaultTabManagementFeatureHelper.tabGroupsEnabled },
         )
 
     /** Whether drag and drop is enabled for the Tab Groups feature. */
