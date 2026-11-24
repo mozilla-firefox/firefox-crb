@@ -2326,6 +2326,31 @@ export class BackupService extends EventTarget {
   }
 
   /**
+   * Removes the folder that backup archives are decompressed into, so that
+   * files from a previous recovery attempt cannot leak into the next one.
+   *
+   * @param {string} recoveryFolderPath
+   *   The path to the recovery folder to remove.
+   * @returns {Promise<undefined>}
+   * @throws {BackupError}
+   *   In the event that the recovery folder could not be removed.
+   */
+  async #removeRecoveryFolder(recoveryFolderPath) {
+    try {
+      await IOUtils.remove(recoveryFolderPath, {
+        recursive: true,
+        retryReadonly: true,
+        ignoreAbsent: true,
+      });
+    } catch (e) {
+      throw new BackupError(
+        `Could not remove recovery folder: ${e.message}`,
+        ERRORS.FILE_SYSTEM_ERROR
+      );
+    }
+  }
+
+  /**
    * A helper method that recursively decompresses any children within a folder
    * within a compressed archive.
    *
@@ -3172,8 +3197,8 @@ export class BackupService extends EventTarget {
    * 1. Potentially decrypts, and then extracts the compressed backup snapshot
    *    from the archive to a file named BackupService.RECOVERY_ZIP_FILE_NAME in
    *    the PROFILE_FOLDER_NAME folder.
-   * 2. Decompresses that file into a subdirectory of PROFILE_FOLDER_NAME named
-   *    "recovery".
+   * 2. Removes any existing subdirectory of PROFILE_FOLDER_NAME named
+   *    "recovery", then decompresses that file into it.
    * 3. Deletes the BackupService.RECOVERY_ZIP_FILE_NAME file.
    * 4. Calls into recoverFromSnapshotFolder on the decompressed "recovery"
    *    folder.
@@ -3238,6 +3263,11 @@ export class BackupService extends EventTarget {
     });
 
     let currentStep = RESTORE_STEPS.RESTORE_ENTRYPOINT;
+    const RECOVERY_FOLDER_DEST_PATH = PathUtils.join(
+      profilePath,
+      BackupService.PROFILE_FOLDER_NAME,
+      "recovery"
+    );
     try {
       this.#_state.recoveryInProgress = true;
       this.#_state.recoveryErrorCode = 0;
@@ -3265,12 +3295,8 @@ export class BackupService extends EventTarget {
           recoveryCode
         )) ?? {};
 
-      const RECOVERY_FOLDER_DEST_PATH = PathUtils.join(
-        profilePath,
-        BackupService.PROFILE_FOLDER_NAME,
-        "recovery"
-      );
       currentStep = RESTORE_STEPS.RESTORE_DECOMPRESS;
+      await this.#removeRecoveryFolder(RECOVERY_FOLDER_DEST_PATH);
       await this.decompressRecoveryFile(
         RECOVERY_FILE_DEST_PATH,
         RECOVERY_FOLDER_DEST_PATH
@@ -3401,6 +3427,13 @@ export class BackupService extends EventTarget {
         }
       }
     } catch (ex) {
+      await this.#removeRecoveryFolder(RECOVERY_FOLDER_DEST_PATH).catch(
+        cleanupError =>
+          lazy.logConsole.warn(
+            "Could not remove recovery folder after failed restore",
+            cleanupError
+          )
+      );
       let restoreStep = ex.resourceKey
         ? "RECOVER_RESOURCE:" + ex.resourceKey
         : ex.restoreStep || currentStep;
