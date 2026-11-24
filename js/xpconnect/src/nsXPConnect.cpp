@@ -17,12 +17,14 @@
 #include "mozilla/Likely.h"
 #include "mozilla/ScriptPreloader.h"
 #include "mozilla/StaticPrefs_javascript.h"
+#include "mozilla/net/DNS.h"
 
 #include "AccessCheck.h"
 #include "GeckoProfiler.h"
 #include "jsfriendapi.h"
 #include "JSServices.h"
 #include "mozJSModuleLoader.h"
+#include "nsCharSeparatedTokenizer.h"
 #include "nsContentUtils.h"
 #include "nsCycleCollector.h"
 #include "nsDOMJSUtils.h"
@@ -33,6 +35,7 @@
 #include "nsIOService.h"
 #include "nsJSEnvironment.h"
 #include "nsJSUtils.h"
+#include "nsNetUtil.h"
 #include "nsRFPService.h"
 #include "nsScriptError.h"
 #include "nsScriptSecurityManager.h"
@@ -554,6 +557,51 @@ void InitGlobalObjectOptions(JS::RealmOptions& aOptions,
     aOptions.behaviors().setLocaleOverride(
         PromiseFlatCString(aLanguageOverride).get());
   }
+}
+
+bool IsWasmExempted(nsIPrincipal* aPrincipal) {
+  MOZ_ASSERT(NS_IsMainThread());
+  static constexpr uint32_t kMaxListLength = 4096;
+
+  if (!aPrincipal || !aPrincipal->GetIsContentPrincipal() ||
+      !(aPrincipal->SchemeIs("http") || aPrincipal->SchemeIs("https")) ||
+      Preferences::IsLocked("javascript.options.wasm")) {
+    return false;
+  }
+
+  nsAutoCString list;
+  if (NS_FAILED(Preferences::GetCString(
+          "javascript.options.wasm.exemptedDomains", list)) ||
+      list.IsEmpty() || list.Length() > kMaxListLength) {
+    return false;
+  }
+
+  nsAutoCString host;
+  if (NS_FAILED(aPrincipal->GetAsciiHost(host)) || host.IsEmpty()) {
+    return false;
+  }
+  ToLowerCase(host);
+  const bool hostIsIP = mozilla::net::HostIsIPLiteral(host);
+
+  for (const auto& entry : nsCCharSeparatedTokenizer(list, ',').ToRange()) {
+    if (entry.FindCharInSet("/:?#@[]") != kNotFound) {
+      continue;
+    }
+    const bool wildcard = StringBeginsWith(entry, "*."_ns);
+    nsAutoCString ascii;
+    if (NS_FAILED(NS_DomainToASCII(wildcard ? Substring(entry, 2) : entry,
+                                   ascii))) {
+      continue;
+    }
+    bool matches = !wildcard && host.Equals(ascii);
+    if (wildcard && !hostIsIP && !host.Equals(ascii)) {
+      (void)mozilla::net::HasRootDomain(host, ascii, &matches);
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool InitGlobalObject(JSContext* aJSContext, JS::Handle<JSObject*> aGlobal,

@@ -23,6 +23,7 @@
 #include "nsIReferrerInfo.h"
 #include "nsNetUtil.h"
 #include "nsScriptSecurityManager.h"
+#include "xpcpublic.h"
 
 namespace mozilla {
 
@@ -107,6 +108,7 @@ nsresult WorkerLoadInfo::SetPrincipalsOnMainThread(
 
   mPrincipal = aPrincipal;
   mPartitionedPrincipal = aPartitionedPrincipal;
+  mWasmExempted = xpc::IsWasmExempted(aPrincipal);
 
   mLoadGroup = aLoadGroup;
 

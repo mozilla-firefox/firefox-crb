@@ -6,6 +6,7 @@
 #define mozilla_dom_worklet_WorkletImpl_h
 
 #include "MainThreadUtils.h"
+#include "mozilla/Atomics.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/OriginAttributes.h"
@@ -85,6 +86,8 @@ class WorkletImpl {
   const Maybe<nsID>& GetAgentClusterId() const { return mAgentClusterId; }
 
   bool IsSharedMemoryAllowed() const { return mSharedMemoryAllowed; }
+  bool IsWasmExempted() const { return mWasmExempted; }
+  void UpdateWasmExemptedOnMainThread();
   bool IsSystemPrincipal() const { return mPrincipal->IsSystemPrincipal(); }
   bool ShouldResistFingerprinting(RFPTarget aTarget) const {
     return mShouldResistFingerprinting &&
@@ -120,6 +123,9 @@ class WorkletImpl {
   // Modified only in constructor.
   ipc::PrincipalInfo mPrincipalInfo;
   nsCOMPtr<nsIPrincipal> mPrincipal;
+  // mPrincipal is opaque, so WebAssembly exemptions use the owning document's
+  // principal instead.
+  const nsCOMPtr<nsIPrincipal> mDocumentPrincipal;
   Maybe<ipc::PolicyContainerArgs> mPolicyContainer;
 
   const WorkletLoadInfo mWorkletLoadInfo;
@@ -138,6 +144,7 @@ class WorkletImpl {
   bool mSharedMemoryAllowed : 1;
   bool mShouldResistFingerprinting : 1;
   bool mIsPrivateBrowsing : 1;
+  Atomic<bool> mWasmExempted{false};
   // The granular fingerprinting protection overrides applied to the worklet.
   // This will only get populated if these is one that comes from the local
   // granular override pref or WebCompat. Otherwise, a value of Nothing()
