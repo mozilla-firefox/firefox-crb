@@ -374,8 +374,36 @@ class CaptchaDetectionParent extends JSWindowActorParent {
     lazy.console.debug("Incremented metric", metric);
   }
 
+  // PageExtractor's hidden browsers load pages for Firefox, not the user, so
+  // their captchas stay out of the ping.
+  get #inHeadlessBrowser() {
+    return (
+      this.browsingContext.top.embedderElement?.getAttribute(
+        "messagemanagergroup"
+      ) === "headless-browsers"
+    );
+  }
+
   async receiveMessage(message) {
     lazy.console.debug("receiveMessage", message);
+
+    if (
+      this.#inHeadlessBrowser &&
+      (message.name === "CaptchaState:Update" ||
+        message.name === "CaptchaHandler:Constructed")
+    ) {
+      // `topLevel` marks a captcha whose document is the page itself.
+      Services.obs.notifyObservers(
+        this.browsingContext.top.embedderElement,
+        "captcha-detection-message",
+        JSON.stringify({
+          ...message.data,
+          name: message.name,
+          topLevel: !this.browsingContext.parent,
+        })
+      );
+      return null;
+    }
 
     switch (message.name) {
       case "CaptchaState:Update":
@@ -415,7 +443,7 @@ class CaptchaDetectionParent extends JSWindowActorParent {
           case "datadome":
             return this.#datadomeInit();
           case "arkoseLabs":
-            return this.#arkoseLabsInit();
+            return this.#inHeadlessBrowser ? null : this.#arkoseLabsInit();
         }
         break;
       default:
