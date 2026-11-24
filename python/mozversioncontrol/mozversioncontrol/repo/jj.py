@@ -46,6 +46,35 @@ def _git_root(jj: str, path: str) -> str:
     ).stdout
 
 
+def _files_matching_diff_filter(lines, diff_filter):
+    """Given lines of "status\tsource\ttarget" rendered from jj diff entries,
+    return the paths diff_filter selects. A renamed file counts as its source
+    deleted and its target added, and a copied file as its target added."""
+    files = []
+    for line in lines:
+        op, source, target = line.split("\t")
+        if op == "modified":
+            if "M" in diff_filter:
+                files.append(source)
+        elif op == "added":
+            if "A" in diff_filter:
+                files.append(source)
+        elif op == "removed":
+            if "D" in diff_filter:
+                files.append(source)
+        elif op == "copied":
+            if "A" in diff_filter:
+                files.append(target)
+        elif op == "renamed":
+            if "A" in diff_filter:
+                files.append(target)
+            if "D" in diff_filter:
+                files.append(source)
+        else:
+            raise Exception(f"unexpected jj file status '{op}'")
+    return files
+
+
 class JjVersionError(Exception):
     """Raised when the installed jj version is too old."""
 
@@ -237,30 +266,7 @@ class JujutsuRepository(Repository):
             "--template",
             'diff.files().map(|f| surround("", "\n", separate("\t", f.status(), f.source().path(), f.target().path()))).join("")',
         )
-        changed = []
-        for line in out.splitlines():
-            op, source, target = line.split("\t")
-            if op == "modified":
-                if "M" in diff_filter:
-                    changed.append(source)
-            elif op == "added":
-                if "A" in diff_filter:
-                    changed.append(source)
-            elif op == "removed":
-                if "D" in diff_filter:
-                    changed.append(source)
-            elif op == "copied":
-                if "A" in diff_filter:
-                    changed.append(target)
-            elif op == "renamed":
-                if "A" in diff_filter:
-                    changed.append(target)
-                if "D" in diff_filter:
-                    changed.append(source)
-            else:
-                raise Exception(f"unexpected jj file status '{op}'")
-
-        return changed
+        return _files_matching_diff_filter(out.splitlines(), diff_filter)
 
     # Convert a line in a regexp-based ignore file (in this case,
     # .clang-format-ignore) to a jj fileset expression. Support the small number
@@ -324,15 +330,12 @@ class JujutsuRepository(Repository):
             upstream,
             "--to",
             "@",
-            "--summary",
+            "--template",
+            'separate("\t", status, source.path(), target.path()) ++ "\n"',
         ).splitlines()
-
-        outgoing = []
-        for line in lines:
-            op, file = line.split(" ", 1)
-            if op.upper() in diff_filter:
-                outgoing.append(mozpath.normsep(file))
-        return outgoing
+        return [
+            mozpath.normsep(f) for f in _files_matching_diff_filter(lines, diff_filter)
+        ]
 
     def add_remove_files(self, *paths: Union[str, Path], force: bool = False):
         if not paths:
