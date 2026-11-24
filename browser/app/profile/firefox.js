@@ -76,6 +76,13 @@ pref("extensions.webextensions.pageActionIconDarkModeFilter.enabled", false);
 pref("extensions.langpacks.signatures.required", true);
 pref("xpinstall.signatures.required", true);
 
+// When true, langpacks that an application update left incompatible are
+// updated at startup, so the background update task can also run for profiles
+// that have langpacks. When false, the background update task isn't scheduled
+// for those profiles, and incompatible langpacks are only updated by the
+// periodic add-on update check.
+pref("extensions.langpacks.updateAtStartup.featureGate", true);
+
 // Enable data collection permissions.
 pref("extensions.dataCollectionPermissions.enabled", true);
 

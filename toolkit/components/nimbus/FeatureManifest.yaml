@@ -5039,6 +5039,23 @@ backgroundUpdate:
         branch: user
         pref: app.update.background.allowUpdatesForUnelevatedInstallations
 
+langpackUpdateAtStartup:
+  description: >-
+    Updates the langpacks that an application update left incompatible at
+    startup, and lets the background update task run for profiles with
+    langpacks.
+  owner: install-update@mozilla.com
+  hasExposure: false
+  variables:
+    enabled:
+      description: >-
+        Whether langpacks are updated at startup. Meant as a remote kill switch
+        for this startup step.
+      type: boolean
+      setPref:
+        branch: user
+        pref: extensions.langpacks.updateAtStartup.featureGate
+
 bookmarks:
   description: Prefs to control aspects of the bookmarks system.
   owner: omc-core@mozilla.com

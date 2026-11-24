@@ -1770,6 +1770,15 @@ unsigned-addons-disabled-learn-more =
     .label = Learn More
     .accesskey = L
 
+## Notification shown at startup after an application update, while the
+## installed language packs are updated to match the new version. Until they
+## are, the interface is shown in the default language.
+
+langpack-update-in-progress-message = { -brand-short-name } is finishing the update and will switch back to your language when it’s done.
+langpack-update-slow-message = { -brand-short-name } is still finishing the update and will switch back to your language when it’s done.
+langpack-update-done-message = { -brand-short-name } is back in your language.
+langpack-update-failed-message = { -brand-short-name } couldn’t switch back to your language. It will try again the next time it starts.
+
 ## Process hang notification ("ProcessHangMonitor.sys.mjs")
 
 process-hang-selected-tab-message = This page is slowing down { -brand-short-name }. To speed up your browser, stop this page.
