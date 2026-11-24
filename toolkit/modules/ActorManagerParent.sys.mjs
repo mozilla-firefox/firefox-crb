@@ -324,10 +324,11 @@ let JSWINDOWACTORS = {
         ? [
             "https://example.com/tests/toolkit/components/captchadetection/tests/mochitest/*",
             "https://example.org/tests/toolkit/components/captchadetection/tests/mochitest/*",
+            "https://example.org/browser/toolkit/components/pageextractor/tests/browser/*",
           ]
         : []),
     ],
-    messageManagerGroups: ["browsers"],
+    messageManagerGroups: ["browsers", "headless-browsers"],
     allFrames: true,
     enablePreference: "captchadetection.actor.enabled",
     safeForUntrustedWebProcess: true,
