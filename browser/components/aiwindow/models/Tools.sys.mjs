@@ -1233,6 +1233,8 @@ export class GetPageContent {
    * extracted text on success and a sentence explaining what went wrong
    * otherwise, so `ok` is the only way to tell the two apart: callers that
    * feed this to a model must not let a failure reach it as page text.
+   * `accessDenied` is set on a failure that the conversation's security
+   * properties refused, as opposed to a page that could not be read.
    *
    * @param {object} toolParams
    * @param {string[]} toolParams.url_list
@@ -1240,7 +1242,8 @@ export class GetPageContent {
    *   (and tears down any headless browser) when it aborts.
    * @param {number} [toolParams.settleDelayMs] - Extra wait for headless loads.
    * @param {ChatConversation} conversation
-   * @returns {Promise<Array<{url: ?string, ok: boolean, content: string}>>}
+   * @returns {Promise<Array<{url: ?string, ok: boolean, content: string,
+   *   accessDenied?: true}>>}
    */
   static async getPageContent(
     { url_list, signal, settleDelayMs },
@@ -1282,7 +1285,7 @@ export class GetPageContent {
         }
         const startTime = ChromeUtils.now();
         try {
-          const { ok, content } =
+          const { ok, content, accessDenied } =
             await GetPageContent.#getPageContentsForSingleURL(
               url,
               mentionedUrls,
@@ -1295,7 +1298,9 @@ export class GetPageContent {
             { startTime },
             `Tool:get_page_content(${url})`
           );
-          return { url, ok, content };
+          return accessDenied
+            ? { url, ok, content, accessDenied }
+            : { url, ok, content };
         } catch (error) {
           if (signal?.aborted) {
             return {
@@ -1408,7 +1413,7 @@ export class GetPageContent {
    *   headless browser) when it aborts.
    * @param {number} [settleDelayMs] - Extra wait for headless loads.
    *
-   * @returns {Promise<{ok: boolean, content: string}>}
+   * @returns {Promise<{ok: boolean, content: string, accessDenied?: true}>}
    *   ok is false when content is a failure description rather than page text.
    */
   static async #getPageContentsForSingleURL(
@@ -1481,6 +1486,7 @@ export class GetPageContent {
       }
       return {
         ok: false,
+        accessDenied: true,
         content:
           `Access is not allowed for ${url} because of untrusted and private content ` +
           "in the conversation.",
@@ -1733,6 +1739,8 @@ const AITAB_ERROR_GUIDANCE = Object.freeze({
     "Tell the user this page has reached its edit limit, and offer to generate a new page instead. Do not try to modify it again.",
   pages_unreadable:
     "Tell the user the pages could not be read and suggest trying different pages. Do not retry with the same pages.",
+  pages_access_denied:
+    "Tell the user the pages were blocked to protect their private data, because this conversation already contains untrusted web content. They can open the pages in a tab or @mention them to include them, or start a new conversation. Do not retry with the same pages.",
   canceled:
     "The user canceled page generation. Do not try again unless they ask.",
 });
@@ -1833,6 +1841,10 @@ export async function createAITab(
     };
   }
 
+  const deniedNote = result.deniedUrls?.length
+    ? ` Access to ${result.deniedUrls.join(", ")} was blocked because the conversation contains both private data and untrusted web content, so the page was built without them. Tell the user, and that they can open those pages in a tab or @mention them to include them.`
+    : "";
+
   // slug addresses the page in its URL and is shared by every version, and
   // is what modify_slug takes to revise this page on a later turn. Lets a
   // later turn find this page from the conversation's tool messages.
@@ -1841,7 +1853,7 @@ export async function createAITab(
   if (isModification) {
     return {
       success: true,
-      toolResult: { message: "The page was modified.", page },
+      toolResult: { message: `The page was modified.${deniedNote}`, page },
     };
   }
 
@@ -1865,7 +1877,7 @@ export async function createAITab(
   return {
     success: true,
     toolResult: {
-      message: `The page was created. Link the user to it as [${title}](§url_token: ${token}§).`,
+      message: `The page was created. Link the user to it as [${title}](§url_token: ${token}§).${deniedNote}`,
       page,
     },
     uiData: {

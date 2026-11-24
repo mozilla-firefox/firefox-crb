@@ -261,6 +261,11 @@ add_task(async function test_blocks_url_the_model_chose() {
       `The tool refuses: ${toolResult}`
     );
     Assert.ok(
+      toolResult.includes(`access to ${ATTACKER_URL} was blocked`) &&
+        toolResult.includes("blocked to protect their private data"),
+      `The refusal is reported as a security block: ${toolResult}`
+    );
+    Assert.ok(
       !mockEngine.engines.has(lazy.MODEL_FEATURES.AITAB),
       "No generation engine was ever created, so the page the model asked " +
         "for was never composed from anything."
@@ -270,6 +275,101 @@ add_task(async function test_blocks_url_the_model_chose() {
       [],
       "Nothing is stored, so no page is built out of the refusal text."
     );
+  });
+});
+
+add_task(async function test_denied_read_is_flagged() {
+  await withAITab(async ({ conversation }) => {
+    markPrivateAndUntrusted(conversation);
+    conversation.addSerpUrlsForAnonymousFetch([SOURCE_URL]);
+
+    const [denied, allowed] = await lazy.GetPageContent.getPageContent(
+      { url_list: [ATTACKER_URL, SOURCE_URL] },
+      conversation
+    );
+
+    Assert.ok(
+      !denied.ok && denied.accessDenied,
+      "A read refused for security is flagged as denied."
+    );
+    Assert.ok(
+      allowed.ok && !("accessDenied" in allowed),
+      "A read that went through carries no denial flag."
+    );
+  });
+});
+
+/**
+ * When nothing can be read, a security refusal is reported over any other
+ * failure, since only the user can bring a refused page in.
+ */
+add_task(async function test_access_denial_outranks_other_failures() {
+  await withAITab(async ({ runExpectingRefusal }) => {
+    const stub = sinon.stub(lazy.GetPageContent, "getPageContent");
+    try {
+      stub.resolves([
+        {
+          url: ATTACKER_URL,
+          ok: false,
+          accessDenied: true,
+          content: "Access is not allowed",
+        },
+        { url: SOURCE_URL, ok: false, content: "Timed out" },
+      ]);
+      let toolResult = await runExpectingRefusal([ATTACKER_URL, SOURCE_URL]);
+      Assert.ok(
+        toolResult.includes(`access to ${ATTACKER_URL} was blocked`) &&
+          !toolResult.includes(SOURCE_URL),
+        `Only the denied URL is reported as blocked: ${toolResult}`
+      );
+      Assert.ok(
+        !toolResult.includes("suggest trying different pages"),
+        "The model is not told to try other pages."
+      );
+
+      stub.resolves([
+        { url: ATTACKER_URL, ok: false, content: "No content" },
+        { url: SOURCE_URL, ok: false, content: "Timed out" },
+      ]);
+      toolResult = await runExpectingRefusal([ATTACKER_URL, SOURCE_URL]);
+      Assert.ok(
+        toolResult.includes("none of the requested pages could be read") &&
+          !toolResult.includes("blocked"),
+        `Without a denial the pages are reported unreadable: ${toolResult}`
+      );
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
+/** A page built without some of its URLs names the ones that were refused. */
+add_task(async function test_partial_read_reports_denied_urls() {
+  await withAITab(async ({ conversation, run }) => {
+    markPrivateAndUntrusted(conversation);
+    conversation.addSerpUrlsForAnonymousFetch([SOURCE_URL]);
+
+    const { sourceText, toolResult } = await run([ATTACKER_URL, SOURCE_URL]);
+
+    Assert.ok(
+      sourceText.includes(SOURCE_MARKER),
+      "The readable page reaches the generation model."
+    );
+    Assert.ok(
+      toolResult.message.startsWith("The page was created."),
+      `The tool reported success: ${toolResult.message}`
+    );
+    Assert.ok(
+      toolResult.message.includes(`Access to ${ATTACKER_URL} was blocked`),
+      `The denied URL is reported: ${toolResult.message}`
+    );
+    Assert.ok(
+      !toolResult.message.includes(SOURCE_URL),
+      "The URL that was read is not reported as blocked."
+    );
+
+    const [page] = await lazy.AITabStore.getAITabPagesByConvId(conversation.id);
+    await lazy.ConversationStore.deleteConversationById(page.toolConvId);
   });
 });
 
@@ -1091,6 +1191,10 @@ add_task(async function test_raw_content_builds_a_page_when_no_url_is_read() {
     Assert.ok(
       toolResult.message.startsWith("The page was created."),
       `The tool reported success: ${toolResult.message}`
+    );
+    Assert.ok(
+      toolResult.message.includes(`Access to ${ATTACKER_URL} was blocked`),
+      `The denied URL is reported: ${toolResult.message}`
     );
 
     const [page] = await lazy.AITabStore.getAITabPagesByConvId(conversation.id);
