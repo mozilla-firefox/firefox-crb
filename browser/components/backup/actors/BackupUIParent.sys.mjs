@@ -269,9 +269,16 @@ export class BackupUIParent extends JSWindowActorParent {
         source,
       });
     } else if (message.name == "ProbeDefaultBackupDir") {
-      let readAccessGranted = await this.#bs.probeDefaultDirAccess(
-        this.#bs.state.embeddedComponentPersistentData?.path || undefined
-      );
+      let { backupDirPath } = this.#bs.state;
+      let probePath;
+      if (backupDirPath) {
+        // Probe the backup folder if it already exists. Otherwise, probe the folder
+        // it will be created in, which is usually the one the user picked.
+        probePath = (await IOUtils.exists(backupDirPath))
+          ? backupDirPath
+          : PathUtils.parent(backupDirPath);
+      }
+      let readAccessGranted = await this.#bs.probeDefaultDirAccess(probePath);
       return { readAccessGranted };
     } else if (message.name == "PrepareRestoreDialog") {
       let { source } = message.data;

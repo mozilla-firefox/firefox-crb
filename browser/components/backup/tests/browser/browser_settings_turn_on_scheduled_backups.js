@@ -144,7 +144,8 @@ add_task(async function test_turn_on_scheduled_backups_confirm() {
 /**
  * Tests that the turn on scheduled backups dialog displays the default input field
  * and a filepicker to choose a custom backup file path, updates the input field to show
- * that path, and sets browser.backup.location to the path from the settings page.
+ * that path, and sets browser.backup.location to the path from the settings page,
+ * even when the default folder can't be read.
  */
 add_task(async function test_turn_on_custom_location_filepicker() {
   Services.telemetry.clearEvents();
@@ -153,9 +154,14 @@ add_task(async function test_turn_on_custom_location_filepicker() {
   await BrowserTestUtils.withNewTab("about:preferences#sync", async browser => {
     let sandbox = sinon.createSandbox();
     sandbox.stub(BackupService.prototype, "createBackup").resolves(true);
-    sandbox
+    let originalProbe = BackupService.prototype.probeDefaultDirAccess;
+    let probeStub = sandbox
       .stub(BackupService.prototype, "probeDefaultDirAccess")
-      .resolves(true);
+      .callsFake(function (path) {
+        return !path || path == BackupService.DEFAULT_PARENT_DIR_PATH
+          ? Promise.resolve(false)
+          : originalProbe.call(this, path);
+      });
 
     const mockCustomParentDir = await IOUtils.createUniqueDirectory(
       PathUtils.tempDir,
@@ -247,6 +253,12 @@ add_task(async function test_turn_on_custom_location_filepicker() {
       locationPrefVal,
       PathUtils.join(mockCustomParentDir, BackupService.BACKUP_DIR_NAME),
       "Backup location pref should be updated"
+    );
+
+    Assert.deepEqual(
+      probeStub.args,
+      [[mockCustomParentDir]],
+      "Only the chosen folder should be probed since the backup folder doesn't exist yet"
     );
 
     await IOUtils.remove(mockCustomParentDir, {
@@ -530,7 +542,7 @@ add_task(async function test_turn_on_scheduled_backups_encryption_error() {
  * change the backup location pref.
  */
 add_task(async function test_default_location_selected() {
-  const INITIAL_LOCATION = "backup dir path";
+  const INITIAL_LOCATION = PathUtils.join(PathUtils.tempDir, "backup dir path");
   await SpecialPowers.pushPrefEnv({
     set: [["browser.backup.location", INITIAL_LOCATION]],
   });
