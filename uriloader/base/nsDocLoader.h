@@ -270,6 +270,10 @@ class nsDocLoader : public nsIDocumentLoader,
 
   nsCOMPtr<nsIRequest> mDocumentRequest;  // [OWNER] ???compare with document
 
+  // javascript: document loads in this load group whose script has not
+  // finished running yet.
+  nsTArray<nsCOMPtr<nsIRequest>> mJavascriptURIRequests;
+
   nsDocLoader* mParent;  // [WEAK]
 
   typedef nsAutoTObserverArray<nsListenerInfo, 8> ListenerArray;
