@@ -30,6 +30,11 @@ export default [
   // Ignore VSCode files
   ".vscode/",
 
+  // Probe bodies that run inside an async function, with a top-level await or
+  // return.
+  ".agents/skills/desktop-theme-screenshots/scripts/regimes/*.js",
+  ".claude/skills/desktop-theme-screenshots/scripts/regimes/*.js",
+
   // Always ignore node_modules.
   "**/node_modules/",
 
