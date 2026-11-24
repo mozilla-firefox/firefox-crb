@@ -14,10 +14,12 @@ export const SUBMIT_ICON =
  * A prompt for creating widgets.
  *
  * @property {string} value - The text of the prompt.
+ * @property {boolean} submitDisabled - Whether submitting the prompt is disabled.
  */
 export class WidgetComposer extends MozLitElement {
   static properties = {
     value: { type: String },
+    submitDisabled: { type: Boolean },
     focused: { type: Boolean, state: true },
   };
 
@@ -29,6 +31,7 @@ export class WidgetComposer extends MozLitElement {
   constructor() {
     super();
     this.value = "";
+    this.submitDisabled = false;
     this.focused = false;
     this.addEventListener("keydown", event => this.#onHostKeyDown(event));
   }
@@ -63,7 +66,7 @@ export class WidgetComposer extends MozLitElement {
 
   #submit() {
     let text = this.value.trim();
-    if (!text) {
+    if (!text || this.submitDisabled) {
       return;
     }
     this.dispatchEvent(
@@ -76,6 +79,7 @@ export class WidgetComposer extends MozLitElement {
 
   render() {
     let hasText = !!this.value.trim();
+    let canSubmit = hasText && !this.submitDisabled;
     return html`
       <link
         rel="stylesheet"
@@ -95,10 +99,10 @@ export class WidgetComposer extends MozLitElement {
         <div class="actions">
           <moz-button
             class="submit"
-            type=${hasText ? "primary" : "ghost icon"}
+            type=${canSubmit ? "primary" : "ghost icon"}
             iconsrc=${SUBMIT_ICON}
             data-l10n-id="widget-composer-submit-button"
-            ?disabled=${!hasText}
+            ?disabled=${!canSubmit}
             @click=${this.#submit}
           ></moz-button>
         </div>
