@@ -136,7 +136,7 @@ async function viewArchivedVersion(queryMap) {
   let data;
   try {
     const response = await fetch(
-      "https://archive.org/wayback/available?url=" +
+      "https://ff.archive.org/wayback/available?url=" +
         encodeURIComponent(queryMap.archiveUrl)
     );
     if (!response.ok) {
