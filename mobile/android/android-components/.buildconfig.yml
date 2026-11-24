@@ -1755,6 +1755,12 @@ projects:
     - components:ui-icons
     - components:ui-tabcounter
     - components:ui-widgets
+  components:feature-tab-settings:
+    description: Component for persisting tab-related user settings.
+    path: components/feature/tab-settings
+    publish: true
+    upstream_dependencies:
+    - components:tooling-lint
   components:feature-tabdata-coordinator:
     description: Component gathering tab data, such as tabs and tab groups, from its
       various sources into a single consumable location.

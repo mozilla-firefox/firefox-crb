@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2026-11-23T03:56:56.319645+00:00'
+updated_at: '2026-11-24T20:22:38.962903+00:00'
 export:
   path: ./docs/mots/index.md
   format: md
@@ -4439,6 +4439,7 @@ modules:
           - mobile/android/android-components/components/feature/tabs/**/*
           - mobile/android/android-components/components/feature/tabgroups-storage/**/*
           - mobile/android/android-components/components/feature/tabdata-coordinator/**/*
+          - mobile/android/android-components/components/feature/tab-settings/**/*
           - mobile/android/fenix/app/src/*/java/org/mozilla/fenix/tabstray/**/*
           - mobile/android/fenix/app/src/*/java/org/mozilla/fenix/tabgroups/**/*
           - mobile/android/fenix/app/src/*/java/org/mozilla/fenix/components/tabs/**/*
@@ -5091,5 +5092,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: 9d42ec3c8428a1b061bc10db19763aee4ca742d1
-  export: 3babfd93f376e24df32b5d7757453060d569f766
+  config: c3ec029312861fa7d04954f66b10666719b60ec7
+  export: 58013c31c58e5a4c11791025b0cb056c8a8923e2
