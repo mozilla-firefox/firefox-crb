@@ -560,42 +560,28 @@ add_task(
     );
     const sandbox = sinon.createSandbox();
 
-    const deferredOpenForPrincipalCallReceived = Promise.withResolvers();
-    const deferredOpenForPrincipalCallResult = Promise.withResolvers();
-
     // Mock the objectStoreNames to be missing by stubbing the helper method.
     sandbox
       .stub(ExtensionStorageLocalIDB, "isMissingObjectStore")
-      .callsFake(() => true);
+      .returns(true);
     // Spy on the resetForPrincipal method.
     sandbox.spy(ExtensionStorageLocalIDB, "resetForPrincipal");
 
-    // Intercept calls to super.openForPrincipal originated from
-    // ExtensionStorageLocalIDB.openForPrincipal, as part of recreating
-    // the scenario where the add-on becomes inactive after super.openForPrincipal
-    // has successfully resolved and verify that we don't call resetForPrincipal
-    // is the add-on is already inactive.
-    const openForPrincipalStub = sandbox
-      .stub(Object.getPrototypeOf(ExtensionStorageLocalIDB), "openForPrincipal")
-      .callsFake(async (...args) => {
-        const result = await openForPrincipalStub.wrappedMethod.apply(
-          ExtensionStorageLocalIDB,
-          args
-        );
-        deferredOpenForPrincipalCallReceived.resolve();
-        await deferredOpenForPrincipalCallResult.promise;
-        return result;
-      });
+    // Hold the successful storage open so we can unload the extension before
+    // ExtensionStorageLocalIDB receives the result.
+    using openForPrincipalController = TestUtils.asyncControlProxy(
+      Object.getPrototypeOf(ExtensionStorageLocalIDB)
+    ).openForPrincipal(receiver => receiver === ExtensionStorageLocalIDB);
 
     const openCallPromise = ExtensionStorageIDB.open(storagePrincipal);
 
-    info("Wait for call to super.openForPrincipal sinon stub to be received");
-    await deferredOpenForPrincipalCallReceived.promise;
-    info(
-      "Unload test extension while super.openForPrincipal async call is still pending resolution"
-    );
+    await openForPrincipalController.waitForInterception();
+    await openForPrincipalController.waitForResult();
+
+    info("Unload the extension before the caller receives the storage result");
     await extension.unload();
-    deferredOpenForPrincipalCallResult.resolve();
+
+    openForPrincipalController.releaseResult();
     await Assert.rejects(
       openCallPromise,
       err => err.message === `${ERROR_OPEN_ON_INACTIVE_POLICY} (${id})`,
