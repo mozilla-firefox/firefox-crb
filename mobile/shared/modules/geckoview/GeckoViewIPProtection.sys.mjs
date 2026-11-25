@@ -30,7 +30,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///toolkit/components/ipprotection/IPProtectionService.sys.mjs",
 });
 
-const { debug } = GeckoViewUtils.initLoggingConsole("GeckoViewIPProtection");
+const { debug } = GeckoViewUtils.initLoggingConsole(
+  console.createInstance({
+    logModule: "GeckoView.IPProtection",
+    maxLogLevel: "Warn",
+  })
+);
 
 function sendRequest(message, data) {
   debug`send ${message} ${data}`;
