@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <spawn.h>
+#include <string>
 #include <string.h>
 #include <sys/clonefile.h>
 #include <SystemConfiguration/SystemConfiguration.h>
@@ -417,6 +418,36 @@ bool GetInstallClonePath(char* aPath, size_t aLength) {
   }
   strlcpy(aPath, gInstallClonePath, aLength);
   return true;
+}
+
+bool ReadInstallCloneVersion(std::string& aOut) {
+  if (!gInstallClonePath[0]) {
+    return false;
+  }
+  std::string path =
+      std::string(gInstallClonePath) + "/Contents/Resources/application.ini";
+  FILE* file = fopen(path.c_str(), "r");
+  if (!file) {
+    return false;
+  }
+  // The version is the Version key of the [App] section.
+  bool isInAppSection = false;
+  bool isFound = false;
+  char line[1024];
+  while (!isFound && fgets(line, sizeof(line), file)) {
+    std::string entry(line);
+    while (!entry.empty() && (entry.back() == '\n' || entry.back() == '\r')) {
+      entry.pop_back();
+    }
+    if (!entry.empty() && entry[0] == '[') {
+      isInAppSection = entry == "[App]";
+    } else if (isInAppSection && entry.compare(0, 8, "Version=") == 0) {
+      aOut = entry.substr(8);
+      isFound = !aOut.empty();
+    }
+  }
+  fclose(file);
+  return isFound;
 }
 
 bool IsPinnedInstallDirAtPath() {
