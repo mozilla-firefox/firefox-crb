@@ -7468,6 +7468,9 @@
       "resource://testing-common/AppData.sys.mjs": [
         "../../../testing/modules/AppData.sys.mjs"
       ],
+      "resource://testing-common/AsyncControlProxy.sys.mjs": [
+        "../../../testing/modules/AsyncControlProxy.sys.mjs"
+      ],
       "resource://testing-common/AsyncSpellCheckTestHelper.sys.mjs": [
         "../../../editor/AsyncSpellCheckTestHelper.sys.mjs"
       ],
