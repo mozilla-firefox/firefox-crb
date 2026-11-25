@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mozilla.components.browser.state.action.DebugAction
 import mozilla.components.browser.state.action.LastAccessAction
-import mozilla.components.browser.state.selector.normalTabs
 import mozilla.components.browser.state.selector.privateTabs
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.state.BrowserState
@@ -26,6 +25,7 @@ import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.downloads.ui.DownloadCancelDialogFragment
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.state.DelicateAction
 import mozilla.components.service.fxa.manager.FxaAccountManager
@@ -197,8 +197,9 @@ interface TabManagerController : SyncedTabsController, InactiveTabsController, T
  * @param showUndoSnackbarForTab Lambda used to display an undo snackbar when a normal or private tab is closed.
  * @param showUndoSnackbarForInactiveTab Lambda used to display an undo snackbar when an inactive tab is closed.
  * @param showUndoSnackbarForSyncedTab Lambda used to display an undo snackbar when a synced tab is closed.
- * @param showUndoSnackbarForMultipleTabs Lambda used to display an undo snackbar when multiple normal or private tabs
- *   are closed.
+ * @param showUndoSnackbarForMultipleTabs Lambda used to display an undo snackbar when multiple private tabs are closed.
+ * @param showUndoSnackbarForBulkClose Lambda used to display an undo snackbar when normal tabs and tab groups are
+ *   closed in bulk.
  * @property showCancelledDownloadWarning Lambda used to display a cancelled download warning.
  * @param showBookmarkSnackbar Lambda used to display a snackbar upon saving tabs as bookmarks.
  * @param currentTimeMillis provider for the current time in milliseconds, injectable for testing.
@@ -226,6 +227,7 @@ class DefaultTabManagerController(
     private val showUndoSnackbarForInactiveTab: (Int) -> Unit,
     private val showUndoSnackbarForSyncedTab: (CloseTabsUseCases.UndoableOperation) -> Unit,
     private val showUndoSnackbarForMultipleTabs: (isPrivate: Boolean, count: Int) -> Unit,
+    private val showUndoSnackbarForBulkClose: (result: BulkCloseResult) -> Unit,
     internal val showCancelledDownloadWarning: (downloadCount: Int, tabId: String?, source: String?) -> Unit,
     private val showBookmarkSnackbar: (tabSize: Int, parentFolderTitle: String?) -> Unit,
     private val currentTimeMillis: () -> Long = { System.currentTimeMillis() },
@@ -375,16 +377,16 @@ class DefaultTabManagerController(
 
     /**
      * Calculates the IDs of normal tabs that should be protected from being selected after other tabs are deleted. This
-     * includes all inactive tabs and tabs inside open (visible) tab groups.
+     * includes all inactive tabs and tabs inside tab groups, whether the groups are open or closed.
      */
     private fun getExcludedFallbackNormalTabIds(): Set<String> {
         val state = tabsTrayStore.state
 
         val inactiveTabIds = state.inactiveTabs.tabs.map { it.id }
 
-        val openGroupTabIds = state.tabGroupState.groups.filterNot { it.closed }.toTabList().map { it.id }
+        val groupedTabIds = state.tabGroupState.groups.toTabList().map { it.id }
 
-        return (inactiveTabIds + openGroupTabIds).toSet()
+        return (inactiveTabIds + groupedTabIds).toSet()
     }
 
     /**
@@ -413,27 +415,42 @@ class DefaultTabManagerController(
 
     override fun handleDeleteSelectedTabsClicked() {
         val tabs = tabsTrayStore.state.mode.selectedTabs
+        val tabGroups = tabsTrayStore.state.mode.selectedTabGroups
 
         TabsTray.closeSelectedTabs.record(TabsTray.CloseSelectedTabsExtra(tabCount = tabs.size))
 
-        deleteMultipleTabs(tabs)
+        deleteMultipleTabs(tabs = tabs, tabGroups = tabGroups)
 
         tabsTrayStore.dispatch(TabsTrayAction.ExitSelectMode)
     }
 
-    /** Helper function to delete multiple tabs and offer an undo option. */
+    /**
+     * Helper function to delete multiple tabs, close tab groups without deleting their tabs, and offer an undo option.
+     *
+     * @param tabs The tabs to delete.
+     * @param tabGroups The tab groups to close.
+     */
     @VisibleForTesting
-    internal fun deleteMultipleTabs(tabs: Collection<TabsTrayItem.Tab>) {
+    internal fun deleteMultipleTabs(
+        tabs: Collection<TabsTrayItem.Tab>,
+        tabGroups: Collection<TabsTrayItem.TabGroup> = emptyList(),
+    ) {
         val isPrivate = tabs.any { it.private }
-        val isNormal = !isPrivate
 
-        val closingTabIds = tabs.map { it.id }.toSet()
+        val closingTabIds = tabs.map { it.id }.toSet() + tabGroups.toList().toTabList().map { it.id }
 
         if (willTabsRemainAfterDeletion(isPrivate = isPrivate, closingTabIds = closingTabIds)) {
-            val excludedFallbackTabIds = if (isNormal) getExcludedFallbackNormalTabIds() else emptySet()
-
-            tabsUseCases.removeTabs(excludedFallbackTabIds = excludedFallbackTabIds, ids = tabs.map { it.id })
-            showUndoSnackbarForMultipleTabs(isPrivate, tabs.size)
+            if (isPrivate) {
+                tabsUseCases.removeTabs(excludedFallbackTabIds = emptySet(), ids = tabs.map { it.id })
+                showUndoSnackbarForMultipleTabs(true, tabs.size)
+            } else {
+                val result =
+                    tabDataCoordinator.closeTabsAndTabGroups(
+                        tabIds = tabs.map { it.id },
+                        tabGroupIds = tabGroups.map { it.id },
+                    )
+                showUndoSnackbarForBulkClose(result)
+            }
         } else {
             handleRemoveAllTabs(
                 isHomepageAsNewTabEnabled = settings.enableHomepageAsNewTab,
@@ -742,18 +759,19 @@ class DefaultTabManagerController(
             return
         }
 
-        val tabsCount =
-            when (sessionId) {
-                ALL_NORMAL_TABS -> browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
-                ALL_ACTIVE_NORMAL_TABS -> {
-                    val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = false)
-                    result.removedTabCount
-                }
-                ALL_PRIVATE_TABS -> browserStore.state.privateTabs.size.also { tabsUseCases.removePrivateTabs() }
-                else -> return
+        when (sessionId) {
+            ALL_NORMAL_TABS -> {
+                val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = true)
+                showUndoSnackbarForBulkClose(result)
             }
-
-        val isPrivate = sessionId == ALL_PRIVATE_TABS
-        showUndoSnackbarForMultipleTabs(isPrivate, tabsCount)
+            ALL_ACTIVE_NORMAL_TABS -> {
+                val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = false)
+                showUndoSnackbarForBulkClose(result)
+            }
+            ALL_PRIVATE_TABS -> {
+                val tabsCount = browserStore.state.privateTabs.size.also { tabsUseCases.removePrivateTabs() }
+                showUndoSnackbarForMultipleTabs(true, tabsCount)
+            }
+        }
     }
 }

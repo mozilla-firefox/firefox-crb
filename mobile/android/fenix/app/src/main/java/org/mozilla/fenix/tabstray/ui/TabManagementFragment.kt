@@ -58,6 +58,7 @@ import mozilla.components.compose.draggable.ItemInteractionHandler
 import mozilla.components.concept.base.crash.Breadcrumb
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.downloads.ui.DownloadCancelDialogFragment
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
 import mozilla.components.lib.state.helpers.StoreProvider.Companion.storeProvider
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
@@ -72,6 +73,7 @@ import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.compose.navigation.BottomSheetSceneStrategy
+import org.mozilla.fenix.ext.bulkCloseUndoMessage
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.hideToolbar
 import org.mozilla.fenix.ext.registerForActivityResult
@@ -243,6 +245,7 @@ class TabManagementFragment : Fragment() {
                 showUndoSnackbarForInactiveTab = ::showUndoSnackbarForInactiveTab,
                 showUndoSnackbarForSyncedTab = ::showUndoSnackbarForSyncedTab,
                 showUndoSnackbarForMultipleTabs = ::showUndoSnackbarForMultipleTabs,
+                showUndoSnackbarForBulkClose = ::showUndoSnackbarForBulkClose,
                 showCancelledDownloadWarning = ::showCancelledDownloadWarning,
                 showBookmarkSnackbar = ::showBookmarkSnackbar,
             )
@@ -935,6 +938,30 @@ class TabManagementFragment : Fragment() {
                     }
                 },
             )
+        }
+    }
+
+    private fun showUndoSnackbarForBulkClose(result: BulkCloseResult) {
+        context?.let { context ->
+            val requireComponents = context.components
+
+            lifecycleScope.launch {
+                snackbarHostState.displaySnackbar(
+                    message =
+                        context.bulkCloseUndoMessage(
+                            tabCount = result.removedTabCount,
+                            tabGroupCount = result.closedTabGroupIds.size,
+                        ),
+                    actionLabel = getString(R.string.snackbar_deleted_undo),
+                    timeout = requireComponents.settings.getSnackbarTimeout(hasAction = true),
+                    onActionPerformed = {
+                        requireComponents.tabDataCoordinator.undoBulkClose(result)
+                        runIfFragmentIsAttached {
+                            tabsTrayStore.dispatch(TabsTrayAction.PageSelected(Page.NormalTabs))
+                        }
+                    },
+                )
+            }
         }
     }
 

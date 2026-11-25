@@ -160,6 +160,24 @@ fun Context.tabsClosedUndoMessage(count: Int): String =
     }
 
 /**
+ * Returns the message to be shown when tabs and tab groups are closed together.
+ *
+ * @param tabCount The number of tabs that were closed.
+ * @param tabGroupCount The number of tab groups that were closed.
+ */
+fun Context.bulkCloseUndoMessage(tabCount: Int, tabGroupCount: Int): String =
+    when {
+        tabGroupCount == 0 -> tabsClosedUndoMessage(count = tabCount)
+        tabCount == 0 -> resources.getQuantityString(R.plurals.snackbar_tab_groups_closed, tabGroupCount, tabGroupCount)
+        else ->
+            getString(
+                R.string.snackbar_tabs_and_tab_groups_closed,
+                resources.getQuantityString(R.plurals.snackbar_closed_tabs_count, tabCount, tabCount),
+                resources.getQuantityString(R.plurals.snackbar_closed_tab_groups_count, tabGroupCount, tabGroupCount),
+            )
+    }
+
+/**
  * Helper function used to determine whether the app's total *window* size is at least that of a tablet. This relies on
  * the window size check from [AcornWindowSize]. To determine whether the device's *physical* size is at least the size
  * of a tablet, use [Context.isLargeScreenSize] instead.

@@ -2309,6 +2309,23 @@
     <string name="snackbar_tab_closed">Tab closed</string>
     <!-- Text shown in snackbar when user closes multiple inactive tabs. %1$s will be replaced with the number of tabs closed. -->
     <string name="snackbar_num_tabs_closed">Tabs closed: %1$s</string>
+    <!-- Text shown in snackbar when user closes tabs and tab groups together, for example with “Close all tabs”. Closed tab groups are saved and can be reopened. %1$s will be replaced with the number of tabs closed (snackbar_closed_tabs_count), and %2$s with the number of tab groups closed (snackbar_closed_tab_groups_count). -->
+    <string name="snackbar_tabs_and_tab_groups_closed">%1$s, %2$s closed and saved</string>
+    <!-- The number of tabs closed, used in snackbar_tabs_and_tab_groups_closed. %d is the number of tabs closed. -->
+    <plurals name="snackbar_closed_tabs_count">
+        <item quantity="one">%d tab</item>
+        <item quantity="other">%d tabs</item>
+    </plurals>
+    <!-- The number of tab groups closed, used in snackbar_tabs_and_tab_groups_closed. %d is the number of tab groups closed. -->
+    <plurals name="snackbar_closed_tab_groups_count">
+        <item quantity="one">%d tab group</item>
+        <item quantity="other">%d tab groups</item>
+    </plurals>
+    <!-- Text shown in snackbar when user closes only tab groups, for example by selecting them and choosing “Close”. Closed tab groups are saved and can be reopened. %d is the number of tab groups closed. -->
+    <plurals name="snackbar_tab_groups_closed">
+        <item quantity="one">%d tab group closed and saved</item>
+        <item quantity="other">%d tab groups closed and saved</item>
+    </plurals>
     <!-- Text shown in snackbar when user bookmarks a list of tabs. %s is the name of the folder the bookmark was saved into. -->
     <string name="snackbar_message_bookmarks_saved_in_2">Bookmarks saved in “%s”</string>
     <!-- Text shown in snackbar when user adds a site to shortcuts -->
