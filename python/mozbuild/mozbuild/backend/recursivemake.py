@@ -937,6 +937,8 @@ class RecursiveMakeBackend(MakeBackend):
             if not dep:
                 continue
             producer_dir, producer_tier = dep
+            if not relobjdir and not producer_dir:
+                continue
             if producer_dir:
                 prerequisite = mozpath.join(producer_dir, producer_tier)
             else:
