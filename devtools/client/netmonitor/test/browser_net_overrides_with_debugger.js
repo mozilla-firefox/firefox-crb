@@ -34,7 +34,7 @@ add_task(async function setOverrideInDebugger_removeOverrideInNetmonitor() {
   const isStylesheetsInDebuggerEnabled = Services.prefs.getBoolPref(
     "devtools.debugger.features.stylesheets-in-debugger"
   );
-  const treeSources = ["script.js"];
+  const treeSources = ["index.html", "script.js"];
   if (isStylesheetsInDebuggerEnabled) {
     treeSources.push("style.css");
   }
@@ -131,7 +131,7 @@ add_task(async function setOverrideInNetmonitor_removeOverrideInDebugger() {
   const isStylesheetsInDebuggerEnabled = Services.prefs.getBoolPref(
     "devtools.debugger.features.stylesheets-in-debugger"
   );
-  const treeSources = ["script.js"];
+  const treeSources = ["index.html", "script.js"];
   if (isStylesheetsInDebuggerEnabled) {
     treeSources.push("style.css");
   }

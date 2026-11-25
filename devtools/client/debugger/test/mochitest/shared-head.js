@@ -229,6 +229,24 @@ async function waitForSelectedLocation(dbg, line, column) {
 }
 
 /**
+ * Wait for at least one source actor to be registered for a given source.
+ *
+ * An html source is created as soon as its target is available, before the
+ * source actors of its inline <script>'s are registered. Anything which needs
+ * to run code against the source, like setting a breakpoint, has to wait for
+ * those actors.
+ *
+ * @param {object} dbg
+ * @param {object} source
+ */
+function waitForSourceActors(dbg, source) {
+  return waitFor(
+    () => !!dbg.selectors.getSourceActorsForSource(source.id).length,
+    `source actors for ${source.url}`
+  );
+}
+
+/**
  * Wait for a given source to be selected and ready.
  *
  * @memberof mochitest/waits
@@ -275,8 +293,11 @@ function waitForSelectedSource(dbg, sourceOrUrl) {
       }
 
       // Finaly wait for breakable lines to be set
-      if (location.source.isHTML) {
-        // For HTML sources we need to wait for each source actor to be processed.
+      if (
+        location.source.isHTML ||
+        location.source.isNonFrameTargetInlineSource
+      ) {
+        // For HTML sources and for content process target sources we need to wait for each source actor to be processed.
         // getBreakableLines will return the aggregation without being able to know
         // if that's complete, with all the source actors.
         const sourceActors = getSourceActorsForSource(location.source.id);
@@ -3063,10 +3084,16 @@ async function waitForNodeToGainFocus(dbg, index) {
   });
 }
 
-async function assertNodeIsFocused(dbg, index) {
+async function assertNodeIsFocused(dbg, index, expectedNodeValue) {
   await waitForNodeToGainFocus(dbg, index);
   const node = findElement(dbg, "sourceNode", index);
   ok(node.classList.contains("focused"), `node ${index} is focused`);
+  if (expectedNodeValue) {
+    ok(
+      node.innerText.includes(expectedNodeValue),
+      `The node displayed value "${expectedNodeValue}" is correct`
+    );
+  }
 }
 
 /**

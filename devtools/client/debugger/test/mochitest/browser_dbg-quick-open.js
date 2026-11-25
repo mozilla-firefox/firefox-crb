@@ -14,7 +14,7 @@ add_task(async function () {
     gBrowser.selectedBrowser,
     [],
     function () {
-      const sources = [];
+      const sources = ["doc-script-switching.html"];
       for (let i = 1; i <= 200; i++) {
         const value = String(i).padStart(3, "0");
         content.eval(
@@ -37,8 +37,8 @@ add_task(async function () {
 
   info("Testing the number of results for source search");
   await quickOpen(dbg, "sw");
-  await waitForResults(dbg, [undefined, undefined]);
-  is(resultCount(dbg), 2, "two file results");
+  await waitForResults(dbg, [undefined, undefined, undefined]);
+  is(resultCount(dbg), 3, "three file results");
   pressKey(dbg, "Escape");
 
   // We ensure that sources after maxResult limit are visible
@@ -164,7 +164,6 @@ async function quickOpen(dbg, query, shortcut = "quickOpen") {
 
 async function waitForResults(dbg, results) {
   await waitForAllElements(dbg, "resultItems", results.length, true);
-
   for (let i = 0; i < results.length; ++i) {
     if (results[i] !== undefined) {
       await waitForElement(dbg, "resultItemName", results[i], i + 1);

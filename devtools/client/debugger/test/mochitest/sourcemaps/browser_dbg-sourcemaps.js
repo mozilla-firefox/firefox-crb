@@ -39,7 +39,14 @@ add_task(async function () {
   await clickElement(dbg, "sourceDirectoryLabel", 4);
   await waitForSourcesInSourceTree(
     dbg,
-    ["entry.js", "output.js", "times2.js", "opts.js", "bundle.js"],
+    [
+      "entry.js",
+      "output.js",
+      "times2.js",
+      "opts.js",
+      "bundle.js",
+      "doc-sourcemaps.html",
+    ],
     { noExpand: true }
   );
 

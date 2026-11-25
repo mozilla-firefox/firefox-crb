@@ -53,6 +53,7 @@ add_task(async function testOpenDebuggerReload() {
   );
   const toolbox = getToolbox(devtoolsWindow);
   const { panelWin } = toolbox.getCurrentPanel();
+  const dbg = createDebuggerContext(toolbox);
 
   info("Check the state of redux");
   ok(
@@ -72,6 +73,12 @@ add_task(async function testOpenDebuggerReload() {
   info("Check whether the element displays correctly");
   let sourceList = panelWin.document.querySelector(".sources-list");
   ok(sourceList, "Source list element displays correctly");
+
+  // The background page is visible in the source tree, but it is not automatically expanded.
+  await clickElement(dbg, "sourceDirectoryLabel", 3);
+  await waitFor(() =>
+    sourceList?.textContent.includes("temporary-web-extension")
+  );
   ok(
     sourceList.textContent.includes("temporary-web-extension"),
     "Extension name displays correctly"
@@ -95,6 +102,7 @@ add_task(async function testOpenDebuggerReload() {
   toolbox.win.focus();
   synthesizeKeyShortcut(L10N.getStr("toolbox.reload.key"), toolbox.win);
   await onDomCompleteResource;
+  await clickElement(dbg, "sourceDirectoryLabel", 3);
 
   info("Wait until a new background log message is logged");
   await waitFor(() => {
@@ -143,8 +151,8 @@ add_task(async function testAddAndRemoveBreakpoint() {
   const sourceTreeThreads = findAllElements(dbg, "sourceTreeThreads");
   is(
     sourceTreeThreads.length,
-    1,
-    "There is one thread with source in the Source Tree"
+    2,
+    "There are two threads with source in the Source Tree"
   );
   is(
     sourceTreeThreads[sourceTreeThreads.length - 1].textContent,
