@@ -617,6 +617,11 @@ class BrowserMenuConfigurationTest {
         )
     }
 
+    @Test
+    fun `WHEN getting the items which can only be directly in their section THEN only extensions is returned`() {
+        assertEquals(setOf(Extensions.id), BrowserMenuConfiguration.topLevelOnlyItemIds())
+    }
+
     private fun menuInfo(shown: List<String>, hidden: List<String> = emptyList()) =
         CustomizedMenuInfo(visibleSectionIds = shown, hiddenSectionIds = hidden)
 
