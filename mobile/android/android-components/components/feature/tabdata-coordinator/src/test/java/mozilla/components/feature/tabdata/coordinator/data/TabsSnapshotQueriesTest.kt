@@ -184,6 +184,34 @@ class TabsSnapshotQueriesTest {
         assertEquals(expected = "1", actual = snapshot.lastTabIdInTabGroup(tabGroupId = "group1"))
     }
 
+    @Test
+    fun `WHEN fetching the grouped tab IDs THEN the IDs of the normal tabs in any group are returned`() {
+        val snapshot =
+            TabsSnapshot(
+                normalTabs =
+                    listOf(
+                        createTab(id = "1", tabGroupId = "group1"),
+                        createTab(id = "2"),
+                        createTab(id = "3", tabGroupId = "group2"),
+                    ),
+                privateTabs = listOf(createTab(id = "4", private = true, tabGroupId = "group1")),
+                tabGroups =
+                    listOf(
+                        createTabGroup(id = "group1", tabIds = listOf("1")),
+                        createTabGroup(id = "group2", tabIds = listOf("3")).copy(closed = true),
+                    ),
+            )
+
+        assertEquals(expected = setOf("1", "3"), actual = snapshot.groupedTabIds())
+    }
+
+    @Test
+    fun `GIVEN no tabs are grouped WHEN fetching the grouped tab IDs THEN an empty set is returned`() {
+        val snapshot = TabsSnapshot(normalTabs = listOf(createTab(id = "1"), createTab(id = "2")))
+
+        assertTrue(snapshot.groupedTabIds().isEmpty())
+    }
+
     private fun createTab(id: String, private: Boolean = false, tabGroupId: String? = null) =
         Tab(id = id, url = "https://$id.com", title = id, private = private, inactive = false, tabGroupId = tabGroupId)
 
