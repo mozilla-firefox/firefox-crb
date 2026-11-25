@@ -7,6 +7,8 @@
 "use strict";
 
 ChromeUtils.defineESModuleGetters(this, {
+  GeolocationUtils:
+    "moz-src:///browser/components/urlbar/private/GeolocationUtils.sys.mjs",
   MerinoClient: "moz-src:///browser/components/urlbar/MerinoClient.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   NimbusTestUtils: "resource://testing-common/NimbusTestUtils.sys.mjs",
@@ -829,8 +831,17 @@ add_task(async function ohttp_noConfig() {
   UrlbarPrefs.set("merino.ohttpRelayURL", "https://example.com/relay");
 
   let client = new MerinoClient("ohttp client", { allowOhttp: true });
-  let suggestions = await client.fetch({ query: "test" });
+  let results = [];
+  let suggestions = await client.fetch({
+    query: "test",
+    onResult: (...args) => results.push(args),
+  });
 
+  Assert.deepEqual(
+    results,
+    [["http_error", { httpStatus: null }]],
+    "onResult should have been called with http_error and no HTTP status"
+  );
   Assert.equal(
     ObliviousHTTP.getOHTTPConfig.callCount,
     1,
@@ -850,6 +861,261 @@ add_task(async function ohttp_noConfig() {
 
   sandbox.restore();
 });
+
+// `onResult` should be called once with the status and the HTTP status of the
+// request, and the status should be the same as `lastFetchStatus`.
+add_task(async function onResult_statuses() {
+  let tests = [
+    { response: {}, expected: ["success", { httpStatus: 200 }] },
+    {
+      response: { body: { request_id: "request_id", suggestions: [] } },
+      expected: ["no_suggestion", { httpStatus: 200 }],
+    },
+    {
+      response: { contentType: "text/plain", body: "not json" },
+      expected: ["no_suggestion", { httpStatus: 200 }],
+    },
+    {
+      response: { status: 204 },
+      expected: ["no_suggestion", { httpStatus: 204 }],
+    },
+    {
+      response: { status: 404 },
+      expected: ["http_error", { httpStatus: 404 }],
+    },
+    {
+      response: { status: 500 },
+      expected: ["http_error", { httpStatus: 500 }],
+    },
+  ];
+
+  for (let { response, expected } of tests) {
+    info("Testing response: " + JSON.stringify(response));
+    MerinoTestUtils.server.reset();
+    Object.assign(MerinoTestUtils.server.response, response);
+
+    let client = new MerinoClient("onResult");
+    let results = await fetchAndGetResults(client, { query: "search" });
+
+    Assert.deepEqual(results, [expected], "onResult should be called once");
+    Assert.equal(
+      client.lastFetchStatus,
+      expected[0],
+      "lastFetchStatus should be the status passed to onResult"
+    );
+  }
+
+  MerinoTestUtils.server.reset();
+});
+
+add_task(async function onResult_networkError() {
+  let client = new MerinoClient("onResult");
+  let results;
+  await MerinoTestUtils.server.withNetworkError(async () => {
+    results = await fetchAndGetResults(client, { query: "search" });
+  });
+
+  Assert.deepEqual(results, [["network_error", { httpStatus: null }]]);
+  Assert.equal(client.lastFetchStatus, "network_error");
+});
+
+// A request that times out should be reported once, as a timeout, even when
+// its response arrives later with an HTTP error.
+add_task(async function onResult_timeoutThenLateResponse() {
+  MerinoTestUtils.server.response = { status: 500, delay: 400 };
+
+  let client = new MerinoClient("onResult");
+  let responsePromise = client.waitForNextResponse();
+  let results = await fetchAndGetResults(client, {
+    query: "search",
+    timeoutMs: 1,
+  });
+
+  Assert.deepEqual(results, [["timeout", { httpStatus: null }]]);
+
+  let httpResponse = await responsePromise;
+  Assert.equal(httpResponse.status, 500, "The late response was received");
+  Assert.deepEqual(
+    results,
+    [["timeout", { httpStatus: null }]],
+    "onResult should not be called again for the late response"
+  );
+  Assert.equal(client.lastFetchStatus, "timeout");
+
+  MerinoTestUtils.server.reset();
+});
+
+// `onResult` should not be called for a fetch that a newer fetch aborts.
+add_task(async function onResult_abortedByNewerFetch() {
+  MerinoTestUtils.server.response.delay = 100 * TEST_TIMEOUT_MS;
+
+  let client = new MerinoClient("onResult");
+  let firstResults = [];
+  let requestPromise = MerinoTestUtils.server.waitForNextRequest();
+  let firstFetch = client.fetch({
+    query: "first",
+    onResult: (...args) => firstResults.push(args),
+  });
+  await requestPromise;
+
+  delete MerinoTestUtils.server.response.delay;
+  let secondResults = await fetchAndGetResults(client, { query: "second" });
+
+  Assert.deepEqual(await firstFetch, [], "The first fetch returns nothing");
+  Assert.deepEqual(
+    firstResults,
+    [],
+    "onResult should not be called for the aborted fetch"
+  );
+  Assert.deepEqual(secondResults, [["success", { httpStatus: 200 }]]);
+
+  MerinoTestUtils.server.reset();
+});
+
+// `onResult` should not be called when no request is sent.
+add_task(async function onResult_noRequest() {
+  let client = new MerinoClient("onResult");
+
+  Assert.deepEqual(
+    await fetchAndGetResults(client, {
+      query: "search",
+      endpointUrl: "not a url",
+    }),
+    [],
+    "onResult should not be called for an invalid endpoint URL"
+  );
+
+  let originalURL = UrlbarPrefs.get("merino.endpointURL");
+  UrlbarPrefs.set("merino.endpointURL", "");
+  Assert.deepEqual(
+    await fetchAndGetResults(client, { query: "search" }),
+    [],
+    "onResult should not be called when there is no endpoint URL"
+  );
+  UrlbarPrefs.set("merino.endpointURL", originalURL);
+
+  MerinoTestUtils.server.checkAndClearRequests([]);
+});
+
+// `onResult` should not be called for a fetch that's served from the cache.
+add_task(async function onResult_cache() {
+  MerinoTestUtils.enableClientCache(true);
+
+  let client = new MerinoClient("onResult", { cachePeriodMs: 60 * 1000 });
+  let args = { query: "search", providers: ["test-provider"] };
+
+  Assert.deepEqual(
+    await fetchAndGetResults(client, args),
+    [["success", { httpStatus: 200 }]],
+    "onResult should be called for the fetch that sends a request"
+  );
+  Assert.deepEqual(
+    await fetchAndGetResults(client, args),
+    [],
+    "onResult should not be called for the fetch served from the cache"
+  );
+  Assert.equal(
+    MerinoTestUtils.server.requests.length,
+    1,
+    "Only one request should have been sent"
+  );
+
+  MerinoTestUtils.enableClientCache(false);
+  MerinoTestUtils.server.reset();
+});
+
+// An exception thrown by `onResult` should not change what `fetch()` returns,
+// including when it's thrown from the timeout timer.
+add_task(async function onResult_throws() {
+  let onResult = () => {
+    throw new Error("Error thrown by onResult");
+  };
+
+  let client = new MerinoClient("onResult");
+  Assert.deepEqual(
+    await client.fetch({ query: "search", onResult }),
+    EXPECTED_MERINO_SUGGESTIONS,
+    "fetch() should return the suggestions"
+  );
+  Assert.equal(client.lastFetchStatus, "success");
+
+  MerinoTestUtils.server.response.delay = 400;
+  let responsePromise = client.waitForNextResponse();
+  Assert.deepEqual(
+    await client.fetch({ query: "search", timeoutMs: 1, onResult }),
+    [],
+    "fetch() should return an empty array on timeout"
+  );
+  Assert.equal(client.lastFetchStatus, "timeout");
+  await responsePromise;
+
+  MerinoTestUtils.server.reset();
+});
+
+// `GeolocationUtils.geolocation()` should pass `onResult` to the fetch that
+// sends the request, and not to callers that share it or hit the cache.
+add_task(async function onResult_geolocation() {
+  MerinoTestUtils.server.reset();
+  MerinoTestUtils.server.response.body.suggestions = [
+    MerinoTestUtils.GEOLOCATION_SUGGESTION,
+  ];
+
+  let makeCallback = () => {
+    let results = [];
+    return { results, onResult: (...args) => results.push(args) };
+  };
+
+  // Two concurrent calls share one request.
+  let first = makeCallback();
+  let second = makeCallback();
+  let [firstGeolocation, secondGeolocation] = await Promise.all([
+    GeolocationUtils.geolocation({ onResult: first.onResult }),
+    GeolocationUtils.geolocation({ onResult: second.onResult }),
+  ]);
+  Assert.deepEqual(firstGeolocation, MerinoTestUtils.GEOLOCATION);
+  Assert.deepEqual(secondGeolocation, MerinoTestUtils.GEOLOCATION);
+  Assert.equal(MerinoTestUtils.server.requests.length, 1, "One request");
+  Assert.deepEqual(first.results, [["success", { httpStatus: 200 }]]);
+  Assert.deepEqual(
+    second.results,
+    [],
+    "onResult should not be called for the call that shared the request"
+  );
+
+  // A call that hits the cache sends no request.
+  MerinoTestUtils.enableClientCache(true);
+  let third = makeCallback();
+  let fourth = makeCallback();
+  await GeolocationUtils.geolocation({ onResult: third.onResult });
+  await GeolocationUtils.geolocation({ onResult: fourth.onResult });
+  Assert.equal(MerinoTestUtils.server.requests.length, 2, "Two requests");
+  Assert.deepEqual(third.results, [["success", { httpStatus: 200 }]]);
+  Assert.deepEqual(
+    fourth.results,
+    [],
+    "onResult should not be called for the call served from the cache"
+  );
+  MerinoTestUtils.enableClientCache(false);
+
+  // A failed request is reported too.
+  MerinoTestUtils.server.response = { status: 500 };
+  let fifth = makeCallback();
+  Assert.strictEqual(
+    await GeolocationUtils.geolocation({ onResult: fifth.onResult }),
+    null,
+    "geolocation() should return null when the request fails"
+  );
+  Assert.deepEqual(fifth.results, [["http_error", { httpStatus: 500 }]]);
+
+  MerinoTestUtils.server.reset();
+});
+
+async function fetchAndGetResults(client, args) {
+  let results = [];
+  await client.fetch({ ...args, onResult: (...a) => results.push(a) });
+  client.resetSession();
+  return results;
+}
 
 async function fetchAndCheckSuggestions({
   expected,
