@@ -151,6 +151,7 @@ support-files = [
   "file_upgrade_insecure_loopback.html",
   "file_upgrade_insecure_loopback_form.html",
   "file_upgrade_insecure_loopback_server.sjs",
+  "file_upgrade_insecure_multiple_policies_server.sjs",
   "file_report_for_import.css",
   "file_report_for_import.html",
   "file_report_for_import_server.sjs",
@@ -785,6 +786,12 @@ support-files = [
   "file_upgrade_insecure_navigation_redirect_same_origin.html",
   "file_upgrade_insecure_navigation_redirect_cross_origin.html",
 ]
+skip-if = [
+  "http2",
+  "http3",
+]
+
+["test_upgrade_insecure_multiple_policies.html"]
 skip-if = [
   "http2",
   "http3",
