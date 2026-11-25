@@ -146,6 +146,10 @@
 // code-signing check.
 #define ELEVATED_UPDATE_SIGNATURE_ERROR 113
 
+// The privileged macOS updater helper refused an install whose version it
+// couldn't read or isn't its own.
+#define ELEVATED_UPDATE_VERSION_MISMATCH_ERROR 114
+
 // The macOS updater couldn't install its privileged helper, and the user
 // didn't dismiss the authentication dialog.
 #define ELEVATED_UPDATE_HELPER_INSTALL_ERROR 115
