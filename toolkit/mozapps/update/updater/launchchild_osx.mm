@@ -6,6 +6,8 @@
 #include <CoreServices/CoreServices.h>
 #include <Security/Security.h>
 #include <crt_externs.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <spawn.h>
@@ -15,6 +17,7 @@
 #include <unistd.h>
 #include "readstrings.h"
 #include "updatecommon.h"
+#include "updaterfileutils_osx.h"
 #include "UpdaterCodeSigningRequirements.h"
 #import "UpdaterHelperProtocol.h"
 
@@ -526,6 +529,19 @@ bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
   aMARStrings->MARChannelID =
       std::make_unique<char[]>(strlen(channelIDStr) + 1);
   strcpy(aMARStrings->MARChannelID.get(), channelIDStr);
+
+  // Installing the helper again sends this process SIGTERM, followed by SIGKILL
+  // after the plist's ExitTimeOut. Ignore SIGTERM from here on, so that an
+  // update in progress gets that long to finish instead of stopping halfway.
+  signal(SIGTERM, SIG_IGN);
+  // Firefox checks this file before it installs the helper again, because
+  // installing it stops the running helper.
+  int pidFd = open(UPDATER_HELPER_PID_FILE_PATH,
+                   O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0644);
+  if (pidFd >= 0) {
+    dprintf(pidFd, "%d\n", getpid());
+    close(pidFd);
+  }
   return true;
 }
 
@@ -577,6 +593,8 @@ void CleanupElevatedMacUpdate(bool aFailureOccurred) {
   [manager removeItemAtPath:helperPath error:nil];
   [manager removeItemAtPath:daemonPath error:nil];
 
+  signal(SIGTERM, SIG_DFL);
+  unlink(UPDATER_HELPER_PID_FILE_PATH);
   // The following call will terminate the current process.
   LaunchTask(@"/bin/launchctl", @[ @"remove", kUpdaterHelperMachServiceName ]);
   exit(aFailureOccurred ? 1 : 0);
