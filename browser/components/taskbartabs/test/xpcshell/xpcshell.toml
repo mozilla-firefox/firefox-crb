@@ -12,6 +12,9 @@ support-files = [
     "test_taskbarTabs_nonames.json",
 ]
 
+["test_taskbarTabs_alertAppIdProvider.js"]
+run-if = ["os == 'linux'"]
+
 ["test_taskbarTabs_existingInstalledCountMetric.js"]
 
 ["test_taskbarTabs_iconSaving.js"]

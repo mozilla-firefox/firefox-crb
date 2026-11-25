@@ -56,6 +56,32 @@ export const TaskbarTabs = new (class {
     await this.#ready;
   }
 
+  /**
+   * Finds the Taskbar Tab matching the URL and container without waiting for
+   * the registry to load, for callers that cannot wait.
+   *
+   * @param {nsIURL} aUrl - The URL to match.
+   * @param {number} aUserContextId - The container to match.
+   * @returns {?TaskbarTab} The matching Taskbar Tab, or null if none match or
+   * the registry is still loading.
+   */
+  findTaskbarTabIfLoaded(aUrl, aUserContextId) {
+    return this.#registry?.findTaskbarTab(aUrl, aUserContextId) ?? null;
+  }
+
+  /**
+   * Finds the Taskbar Tabs on the host and container without waiting for the
+   * registry to load, for callers that cannot wait.
+   *
+   * @param {string} aHost - The host to match.
+   * @param {number} aUserContextId - The container to match.
+   * @returns {TaskbarTab[]} The matching Taskbar Tabs, or none if the registry
+   * is still loading.
+   */
+  findTaskbarTabsForHostIfLoaded(aHost, aUserContextId) {
+    return this.#registry?.findTaskbarTabsForHost(aHost, aUserContextId) ?? [];
+  }
+
   async getTaskbarTab(...args) {
     await this.#ready;
     return this.#registry.getTaskbarTab(...args);

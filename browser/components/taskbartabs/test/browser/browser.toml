@@ -11,6 +11,10 @@ prefs = [
   "browser.shell.desktop-entry-api=filesystem",
 ]
 
+["browser_taskbarTabs_alertAppId.js"]
+run-if = ["os == 'linux'"]
+support-files = ["file_showNotification.serviceworker.js"]
+
 ["browser_taskbarTabs_chromeTest.js"]
 skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && ccov", # Bug 2057867

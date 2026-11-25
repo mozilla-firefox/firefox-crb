@@ -14,6 +14,9 @@ graph TD;
 
   cmdline([command line handling])
   cmdline --> TaskbarTabsCmd --> TaskbarTabs
+
+  alerts([alerts service])
+  alerts -- on GTK --> TaskbarTabsAlertAppIdProvider --> TaskbarTabs
 ```
 
 The main entrypoint for everything around web apps is {searchfox}`TaskbarTabs.sys.mjs <browser/components/taskbartabs/TaskbarTabs.sys.mjs>`. Behind the scenes, there's a few more modules that do most of the work.
@@ -32,6 +35,10 @@ Some rules of thumb for where things might be implemented:
 This file ties the rest of the Web App infrastructure together, providing functions that generally wrap an internal TaskbarTabsRegistry instance with additional features. In particular, it loads the primary `taskbartabs.json` file and is responsible for selecting the icon to use for each web app, as well as interpreting any Web App Manifest.
 
 When a new Web App is created, the icon to use for it is determined by iterating through sources (manifests, favicons) until a valid icon is found. An existing Web App saves its icon on the filesystem and loads it when needed.
+
+## TaskbarTabsAlertAppIdProvider
+
+On GTK, the alerts service asks this module for the app ID of each web notification, so that the desktop shows notifications from a web app's site as coming from the web app. It returns the desktop entry of the only web app on the notification's host and container, using the URL to choose when there are several. The alerts service calls it synchronously, so it only uses the `*IfLoaded` lookups of TaskbarTabs.sys.mjs and returns no app ID while the registry is loading.
 
 ## TaskbarTabsChrome
 

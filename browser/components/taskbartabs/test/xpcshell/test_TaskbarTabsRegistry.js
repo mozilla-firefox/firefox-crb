@@ -117,6 +117,29 @@ add_task(async function test_remove_taskbar_tab() {
   );
 });
 
+add_task(async function test_find_taskbar_tabs_for_host() {
+  const registry = createInMemoryRegistry();
+  const createWithScope = (aScope, aUserContextId) =>
+    createTaskbarTab(registry, Services.io.newURI(aScope), aUserContextId, {
+      manifest: { scope: aScope },
+    });
+  const mail = createWithScope("https://www.test.com/mail/", 0);
+  const calendar = createWithScope("https://www.test.com/calendar/", 0);
+  createWithScope("https://www.test.com/mail/", 1);
+  createWithScope("https://sub.www.test.com/mail/", 0);
+
+  Assert.deepEqual(
+    registry.findTaskbarTabsForHost("www.test.com", 0),
+    [mail, calendar],
+    "Taskbar Tabs on the host and container are found, whatever their prefix"
+  );
+  Assert.deepEqual(
+    registry.findTaskbarTabsForHost("other.test.com", 0),
+    [],
+    "No Taskbar Tab is found for another host"
+  );
+});
+
 add_task(async function test_container_mismatch() {
   const url = Services.io.newURI("https://www.test.com/start");
   const userContextId = 0;

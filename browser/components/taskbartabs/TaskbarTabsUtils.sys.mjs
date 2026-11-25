@@ -260,6 +260,26 @@ export const TaskbarTabsUtils = {
   _determineNewDesktopEntryName(aTaskbarTabId) {
     return `${lazy.ShellService.getGlibPrgname()}.webapp-${aTaskbarTabId}`;
   },
+
+  /**
+   * Gets the ID of the desktop entry already created for a Taskbar Tab on
+   * Linux.
+   *
+   * @param {TaskbarTab} aTaskbarTab - The Taskbar Tab to check.
+   * @returns {?string} The desktop entry ID, excluding the '.desktop' suffix,
+   * or null if no desktop entry was created.
+   */
+  getExistingDesktopEntryId(aTaskbarTab) {
+    let relativePath = aTaskbarTab.shortcutRelativePath;
+    if (!relativePath) {
+      return null;
+    }
+    let fileName = relativePath.split("/").at(-1);
+    if (!fileName.endsWith(".desktop")) {
+      return null;
+    }
+    return fileName.slice(0, -".desktop".length);
+  },
 };
 
 /**

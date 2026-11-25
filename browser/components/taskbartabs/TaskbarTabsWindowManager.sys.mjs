@@ -470,12 +470,9 @@ function getInitialLinuxWindowClass(aTaskbarTab) {
 }
 
 function getLinuxWindowClass(aTaskbarTab) {
-  if (aTaskbarTab.shortcutRelativePath) {
-    // Use the existing desktop entry, removing the .desktop extension and any earlier subdirectories.
-    let subdir = aTaskbarTab.shortcutRelativePath.split("/");
-    return subdir[subdir.length - 1].replace(/\.desktop$/, "");
-  }
-
-  // It hasn't been saved yet, use the name that will be used.
-  return lazy.TaskbarTabsUtils._determineNewDesktopEntryName(aTaskbarTab.id);
+  return (
+    lazy.TaskbarTabsUtils.getExistingDesktopEntryId(aTaskbarTab) ??
+    // It hasn't been saved yet, use the name that will be used.
+    lazy.TaskbarTabsUtils._determineNewDesktopEntryName(aTaskbarTab.id)
+  );
 }

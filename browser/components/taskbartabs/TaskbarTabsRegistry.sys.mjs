@@ -348,6 +348,22 @@ export class TaskbarTabsRegistry {
   }
 
   /**
+   * Searches for the Taskbar Tabs with a scope on the host in the container,
+   * whatever the scope's prefix.
+   *
+   * @param {string} aHost - The host to match.
+   * @param {number} aUserContextId - The container to match.
+   * @returns {TaskbarTab[]} The matching Taskbar Tabs.
+   */
+  findTaskbarTabsForHost(aHost, aUserContextId) {
+    return this.#taskbarTabs.filter(
+      aTaskbarTab =>
+        aTaskbarTab.userContextId === aUserContextId &&
+        aTaskbarTab.scopes.some(aScope => aScope.hostname === aHost)
+    );
+  }
+
+  /**
    * Retrieves the Taskbar Tab matching the ID.
    *
    * @param {string} aId - The ID of the Taskbar Tab.
