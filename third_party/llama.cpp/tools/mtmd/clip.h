@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <map>
 
@@ -60,6 +61,8 @@ struct clip_init_result {
 };
 
 struct clip_init_result clip_init(const char * fname, struct clip_context_params ctx_params);
+
+struct clip_init_result clip_init_from_file_ptr(FILE * file, struct clip_context_params ctx_params);
 
 void clip_free(struct clip_ctx * ctx);
 
@@ -118,3 +121,5 @@ struct clip_cap {
     bool has_audio;
 };
 struct clip_cap clip_get_cap(const char * fname);
+
+struct clip_cap clip_get_cap_from_file_ptr(FILE * file);

@@ -73,6 +73,7 @@ EXPORTS += [
   "ggml/include/ggml-opt.h",
   "ggml/include/ggml.h",
   "ggml/include/gguf.h",
+  "include/llama.h",
 ]
 
 DEFINES["_GNU_SOURCE"] = 1
