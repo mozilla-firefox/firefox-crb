@@ -248,15 +248,25 @@ export class BasePopup {
               // to be fully flushed makes us sure that when the popup panel grabs the focus
               // nsMenuPopupFrame::LayoutPopup has already been colled and set the frame
               // visibility to `ViewVisibility::Show`).
-              this.browser.documentGlobal.promiseDocumentFlushed(() => {
-                if (this.destroyed) {
-                  return;
-                }
-                this.browser.messageManager.sendAsyncMessage(
-                  "Extension:GrabFocus",
-                  {}
-                );
-              });
+              return this.browser.documentGlobal.promiseDocumentFlushed(
+                () => {}
+              );
+            })
+            .then(() => {
+              if (this.destroyed) {
+                return;
+              }
+              // The window was deactivated before the popup finished opening,
+              // so nothing will roll it up. Grabbing the focus would raise the
+              // window back.
+              if (Services.focus.activeWindow != this.window) {
+                this.closePopup();
+                return;
+              }
+              this.browser.messageManager.sendAsyncMessage(
+                "Extension:GrabFocus",
+                {}
+              );
             })
             .catch(() => {
               // If the panel closes too fast an exception is raised here and tests will fail.
