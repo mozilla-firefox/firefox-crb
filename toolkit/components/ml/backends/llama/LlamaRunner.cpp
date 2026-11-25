@@ -16,7 +16,6 @@
 #include "nsXPCOM.h"
 #include "prsystem.h"
 #include "mozilla/Casting.h"
-#include "mozilla/ScopeExit.h"
 #include "mozilla/UniquePtrExtensions.h"
 #include <cstddef>
 #include "mozilla/dom/Promise.h"
@@ -853,33 +852,40 @@ class MetadataCallback final : public nsIFileMetadataCallback {
 
 NS_IMPL_ISUPPORTS(MetadataCallback, nsIFileMetadataCallback)
 
-void LlamaRunner::OnMetadataReceived() {
-  mMetadataCallback = nullptr;
-  const nsCOMPtr<nsIFileMetadata> fileMetadata = do_QueryInterface(mStream);
+namespace {
+
+struct FileCloser {
+  void operator()(FILE* aFp) const { fclose(aFp); }
+};
+using FileUPtr = mozilla::UniquePtr<FILE, FileCloser>;
+
+// Duplicates aStream's descriptor and wraps it in a FILE*, or returns nullptr.
+FileUPtr StreamToFile(nsIInputStream* aStream) {
+  const nsCOMPtr<nsIFileMetadata> fileMetadata = do_QueryInterface(aStream);
   if (NS_WARN_IF(!fileMetadata)) {
     LOGE_RUNNER("QI fileMetadata failed");
-    return;
+    return nullptr;
   }
   PRFileDesc* fileDesc;
   const nsresult rv = fileMetadata->GetFileDescriptor(&fileDesc);
   if (NS_WARN_IF(NS_FAILED(rv))) {
     LOGE_RUNNER("GetFileDescriptor failed");
-    return;
+    return nullptr;
   }
 
   MOZ_ASSERT(fileDesc);
 
-  // fileDesc stays owned by mStream, which closes it when this LlamaRunner is
+  // fileDesc stays owned by aStream, which closes it when this LlamaRunner is
   // destroyed. _open_osfhandle()/fdopen() below take ownership of the handle
   // they are given and fclose() closes it, so hand them a duplicate to avoid
-  // closing mStream's handle twice (on Windows the reused handle value is then
+  // closing aStream's handle twice (on Windows the reused handle value is then
   // closed again by an unrelated owner, crashing the process).
   mozilla::UniqueFileHandle dupHandle = mozilla::DuplicateFileHandle(
       mozilla::ipc::FileDescriptor::PlatformHandleType(
           PR_FileDesc2NativeHandle(fileDesc)));
   if (!dupHandle) {
     LOGE_RUNNER("DuplicateFileHandle failed");
-    return;
+    return nullptr;
   }
 
 #ifdef XP_WIN
@@ -888,21 +894,47 @@ void LlamaRunner::OnMetadataReceived() {
   int fd = _open_osfhandle(dupHandle.release(), _O_RDONLY);
   if (fd == -1) {
     LOGE_RUNNER("Convertion to integer fd failed");
-    return;
+    return nullptr;
   }
-  FILE* fp = fdopen(fd, "rb");
+  FileUPtr fp(fdopen(fd, "rb"));
 #else
   // fdopen() takes ownership of the duplicated fd.
-  FILE* fp = fdopen(dupHandle.release(), "r");
+  FileUPtr fp(fdopen(dupHandle.release(), "r"));
 #endif
   if (!fp) {
     LOGE_RUNNER("Conversion to FILE* failed");
+    return nullptr;
+  }
+  return fp;
+}
+
+}  // namespace
+
+void LlamaRunner::OnMetadataReceived() {
+  MOZ_ASSERT(mPendingMetadata > 0);
+  if (--mPendingMetadata > 0) {
     return;
   }
 
-  auto closeFp = mozilla::MakeScopeExit([fp] { fclose(fp); });
+  mMetadataCallback = nullptr;
 
-  auto result = mBackend->Reinitialize(LlamaModelOptions(mModelOptions), fp);
+  FileUPtr modelFp = StreamToFile(mModelStream);
+  if (!modelFp) {
+    mInitPromise->MaybeReject(NS_ERROR_FAILURE);
+    return;
+  }
+
+  FileUPtr mmprojFp;
+  if (mMmprojStream) {
+    mmprojFp = StreamToFile(mMmprojStream);
+    if (!mmprojFp) {
+      mInitPromise->MaybeReject(NS_ERROR_FAILURE);
+      return;
+    }
+  }
+
+  auto result = mBackend->Reinitialize(LlamaModelOptions(mModelOptions),
+                                       modelFp.get(), mmprojFp.get());
 
   LOGD_RUNNER("LLamaRunner: Reinitialize OK");
 
@@ -916,7 +948,8 @@ void LlamaRunner::OnMetadataReceived() {
 }
 
 already_AddRefed<Promise> LlamaRunner::Initialize(
-    const LlamaModelOptions& aOptions, Blob& aModelBlob, ErrorResult& aRv) {
+    const LlamaModelOptions& aOptions, Blob& aModelBlob, Blob* aMmprojBlob,
+    ErrorResult& aRv) {
   LOGD_RUNNER("Entered {}", __PRETTY_FUNCTION__);
   RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
   if (aRv.Failed()) {
@@ -926,21 +959,44 @@ already_AddRefed<Promise> LlamaRunner::Initialize(
   mModelOptions = aOptions;
 
   RefPtr<Blob> domBlob = do_QueryObject(&aModelBlob);
-  domBlob->CreateInputStream(getter_AddRefs(mStream), aRv);
-  const nsCOMPtr<nsIFileMetadata> fileMetadata = do_QueryInterface(mStream);
-  if (NS_WARN_IF(!fileMetadata)) {
+  domBlob->CreateInputStream(getter_AddRefs(mModelStream), aRv);
+  const nsCOMPtr<nsIFileMetadata> modelMetadata =
+      do_QueryInterface(mModelStream);
+  if (NS_WARN_IF(!modelMetadata)) {
     return nullptr;
+  }
+
+  if (aMmprojBlob) {
+    RefPtr<Blob> mmprojDomBlob = do_QueryObject(aMmprojBlob);
+    mmprojDomBlob->CreateInputStream(getter_AddRefs(mMmprojStream), aRv);
+    const nsCOMPtr<nsIFileMetadata> mmprojMetadata =
+        do_QueryInterface(mMmprojStream);
+    if (NS_WARN_IF(!mmprojMetadata)) {
+      return nullptr;
+    }
   }
 
   mInitPromise = promise;
   nsCOMPtr<nsIEventTarget> eventTarget = mozilla::GetCurrentSerialEventTarget();
-  nsCOMPtr<nsIAsyncFileMetadata> asyncFileMetadata = do_QueryInterface(mStream);
   mMetadataCallback = MakeAndAddRef<MetadataCallback>(this);
-  nsresult rv = asyncFileMetadata->AsyncFileMetadataWait(
-      mMetadataCallback.get(), eventTarget);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    LOGD_RUNNER("{} AsyncFileMetadataWait failed", __PRETTY_FUNCTION__);
-    return nullptr;
+
+  // Set before any wait starts, so that a wait which fails to start leaves the
+  // count above zero rather than letting the other callback proceed with a
+  // handle that was never readied.
+  mPendingMetadata = mMmprojStream ? 2 : 1;
+
+  for (nsIInputStream* stream : {mModelStream.get(), mMmprojStream.get()}) {
+    if (!stream) {
+      continue;
+    }
+    nsCOMPtr<nsIAsyncFileMetadata> asyncFileMetadata =
+        do_QueryInterface(stream);
+    nsresult rv = asyncFileMetadata->AsyncFileMetadataWait(
+        mMetadataCallback.get(), eventTarget);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      LOGD_RUNNER("{} AsyncFileMetadataWait failed", __PRETTY_FUNCTION__);
+      return nullptr;
+    }
   }
 
   LOGD_RUNNER("{} Initialization successfully complete", __PRETTY_FUNCTION__);
