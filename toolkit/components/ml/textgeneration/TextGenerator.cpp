@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "llama.h"
+#include "mozilla/ml/MLImagePacking.h"
 
 #include "mozilla/dom/Blob.h"
 #include "mozilla/dom/Promise.h"
@@ -101,57 +102,19 @@ static Result<mozilla::ipc::FileDescriptor, const char*> BlobToModelFd(
   return modelFd;
 }
 
-// Mirrors PackImages in LlamaRunner.cpp: same validation, same RGBA alpha
-// drop. Kept separate because the two paths take different dictionaries, and
-// both go away with the content-process path.
 static bool PackImage(const dom::TextGenerationImage& aImage, size_t aIndex,
                       GenerateImage& aOut, ErrorResult& aRv) {
-  if (aImage.mChannels != 3 && aImage.mChannels != 4) {
-    aRv.ThrowTypeError(
-        nsFmtCString("image {} has {} channels, expected 3 (RGB) or 4 (RGBA)",
-                     aIndex, aImage.mChannels));
-    return false;
-  }
-  if (aImage.mWidth == 0 || aImage.mHeight == 0) {
-    aRv.ThrowTypeError(nsFmtCString("image {} is empty ({}x{})", aIndex,
-                                    aImage.mWidth, aImage.mHeight));
-    return false;
-  }
-  CheckedInt<size_t> expected(aImage.mWidth);
-  expected *= aImage.mHeight;
-  expected *= aImage.mChannels;
-  if (!expected.isValid()) {
-    aRv.ThrowTypeError(nsFmtCString("image {} dimensions overflow ({}x{}x{})",
-                                    aIndex, aImage.mWidth, aImage.mHeight,
-                                    aImage.mChannels));
-    return false;
-  }
-
   aOut.width() = aImage.mWidth;
   aOut.height() = aImage.mHeight;
 
   return aImage.mData.ProcessFixedData([&](const Span<const uint8_t>& aData) {
-    if (aData.Length() != expected.value()) {
-      aRv.ThrowTypeError(
-          nsFmtCString("image {} has {} bytes, expected {} ({}x{}x{})", aIndex,
-                       aData.Length(), expected.value(), aImage.mWidth,
-                       aImage.mHeight, aImage.mChannels));
+    auto result = mozilla::ml::PackRgb(aData, aImage.mWidth, aImage.mHeight,
+                                       aImage.mChannels);
+    if (result.isErr()) {
+      mozilla::ml::ThrowPackRgbError(result.unwrapErr(), aIndex, aRv);
       return false;
     }
-    const size_t numPixels = size_t(aImage.mWidth) * aImage.mHeight;
-    if (!aOut.rgb().SetLength(numPixels * 3, fallible)) {
-      aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
-      return false;
-    }
-    if (aImage.mChannels == 3) {
-      memcpy(aOut.rgb().Elements(), aData.Elements(), numPixels * 3);
-    } else {
-      for (size_t p = 0; p < numPixels; ++p) {
-        aOut.rgb()[p * 3 + 0] = aData[p * 4 + 0];
-        aOut.rgb()[p * 3 + 1] = aData[p * 4 + 1];
-        aOut.rgb()[p * 3 + 2] = aData[p * 4 + 2];
-      }
-    }
+    aOut.rgb() = result.unwrap();
     return true;
   });
 }

@@ -50,10 +50,12 @@ MOZ_SRC_FILES += [
 ]
 
 UNIFIED_SOURCES += [
+    "MLImagePacking.cpp",
     "MLUtils.cpp",
 ]
 
 EXPORTS.mozilla.ml += [
+    "MLImagePacking.h",
     "MLProfilerMarkers.h",
     "MLUtils.h",
 ]

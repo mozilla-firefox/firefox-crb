@@ -33,6 +33,7 @@
 #include "mozilla/dom/ContentChild.h"
 
 #include "mozilla/llama/LlamaBackend.h"
+#include "mozilla/ml/MLImagePacking.h"
 #include "mozilla/Logging.h"
 #include "nsThread.h"
 #include "nsThreadManager.h"
@@ -701,60 +702,19 @@ static bool PackImages(const Sequence<LlamaImageInput>& aImages,
 
   for (size_t i = 0; i < aImages.Length(); ++i) {
     const LlamaImageInput& image = aImages[i];
-
-    if (image.mChannels != 3 && image.mChannels != 4) {
-      aRv.ThrowTypeError(
-          nsFmtCString("image {} has {} channels, expected 3 (RGB) or 4 (RGBA)",
-                       i, image.mChannels));
-      return false;
-    }
-
-    // Otherwise the expected length below is zero, which any buffer satisfies.
-    if (image.mWidth == 0 || image.mHeight == 0) {
-      aRv.ThrowTypeError(nsFmtCString("image {} is empty ({}x{})", i,
-                                      image.mWidth, image.mHeight));
-      return false;
-    }
-
-    CheckedInt<size_t> expected(image.mWidth);
-    expected *= image.mHeight;
-    expected *= image.mChannels;
-    if (!expected.isValid()) {
-      aRv.ThrowTypeError(nsFmtCString("image {} dimensions overflow ({}x{}x{})",
-                                      i, image.mWidth, image.mHeight,
-                                      image.mChannels));
-      return false;
-    }
-
     mozilla::llama::LlamaImageData packed;
     packed.mWidth = image.mWidth;
     packed.mHeight = image.mHeight;
 
     bool ok = image.mData.ProcessFixedData(
         [&](const Span<const uint8_t>& aData) -> bool {
-          if (aData.Length() != expected.value()) {
-            aRv.ThrowTypeError(
-                nsFmtCString("image {} has {} bytes, expected {} ({}x{}x{})", i,
-                             aData.Length(), expected.value(), image.mWidth,
-                             image.mHeight, image.mChannels));
+          auto result = mozilla::ml::PackRgb(aData, image.mWidth, image.mHeight,
+                                             image.mChannels);
+          if (result.isErr()) {
+            mozilla::ml::ThrowPackRgbError(result.unwrapErr(), i, aRv);
             return false;
           }
-
-          const size_t numPixels = size_t(image.mWidth) * image.mHeight;
-          if (!packed.mRgb.SetLength(numPixels * 3, fallible)) {
-            aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
-            return false;
-          }
-
-          if (image.mChannels == 3) {
-            memcpy(packed.mRgb.Elements(), aData.Elements(), numPixels * 3);
-          } else {
-            for (size_t p = 0; p < numPixels; ++p) {
-              packed.mRgb[p * 3 + 0] = aData[p * 4 + 0];
-              packed.mRgb[p * 3 + 1] = aData[p * 4 + 1];
-              packed.mRgb[p * 3 + 2] = aData[p * 4 + 2];
-            }
-          }
+          packed.mRgb = result.unwrap();
           return true;
         });
 
@@ -762,7 +722,6 @@ static bool PackImages(const Sequence<LlamaImageInput>& aImages,
       MOZ_ASSERT(aRv.Failed());
       return false;
     }
-
     aOut.AppendElement(std::move(packed));
   }
 
