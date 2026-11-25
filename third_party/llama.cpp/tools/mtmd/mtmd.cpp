@@ -303,7 +303,8 @@ struct mtmd_context {
     mtmd_context(const char * mmproj_fname,
                    const llama_model * text_model,
                    const mtmd_context_params & ctx_params,
-                   bool no_alloc = false) :
+                   bool no_alloc = false,
+                   FILE * mmproj_file = nullptr) :
         print_timings   (ctx_params.print_timings),
         n_threads       (ctx_params.n_threads),
         media_marker    (ctx_params.media_marker),
@@ -349,11 +350,13 @@ struct mtmd_context {
             /* no_alloc          */ no_alloc,
         };
 
-        auto res = clip_init(mmproj_fname, ctx_clip_params);
+        auto res = mmproj_file ? clip_init_from_file_ptr(mmproj_file, ctx_clip_params)
+                               : clip_init(mmproj_fname, ctx_clip_params);
         ctx_v = res.ctx_v;
         ctx_a = res.ctx_a;
         if (!ctx_v && !ctx_a) {
-            throw std::runtime_error(string_format("Failed to load CLIP model from %s\n", mmproj_fname));
+            throw std::runtime_error(string_format("Failed to load CLIP model from %s\n",
+                mmproj_fname ? mmproj_fname : "<file handle>"));
         }
 
         // if both vision and audio mmproj are present, we need to validate their n_embd
@@ -794,6 +797,17 @@ mtmd_context * mtmd_init_from_file(const char * mmproj_fname,
         const struct mtmd_context_params ctx_params) {
     try {
         return new mtmd_context(mmproj_fname, text_model, ctx_params);
+    } catch (const std::exception & e) {
+        LOG_ERR("%s: error: %s\n", __func__, e.what());
+        return nullptr;
+    }
+}
+
+mtmd_context * mtmd_init_from_file_handle(FILE * mmproj_file,
+        const struct llama_model * text_model,
+        const struct mtmd_context_params ctx_params) {
+    try {
+        return new mtmd_context(nullptr, text_model, ctx_params, /* no_alloc= */ false, mmproj_file);
     } catch (const std::exception & e) {
         LOG_ERR("%s: error: %s\n", __func__, e.what());
         return nullptr;
@@ -2015,6 +2029,19 @@ struct mtmd_caps mtmd_get_cap_from_file(const char * fname) {
         return cap;
     } catch (const std::exception & e) {
         LOG_ERR("%s: failed to get capabilities from file '%s': %s\n", __func__, fname, e.what());
+        return mtmd_caps{ false, false };
+    }
+}
+
+struct mtmd_caps mtmd_get_cap_from_file_handle(FILE * mmproj_file) {
+    try {
+        auto tmp = clip_get_cap_from_file_ptr(mmproj_file);
+        mtmd_caps cap;
+        cap.inp_audio  = tmp.has_audio;
+        cap.inp_vision = tmp.has_vision;
+        return cap;
+    } catch (const std::exception & e) {
+        LOG_ERR("%s: failed to get capabilities from the file handle: %s\n", __func__, e.what());
         return mtmd_caps{ false, false };
     }
 }

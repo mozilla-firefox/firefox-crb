@@ -1036,11 +1036,54 @@ static std::unique_ptr<clip_graph> clip_get_graph_builder(clip_ctx * ctx, const 
 // clip_model_loader
 //
 
+struct clip_file_reader {
+    std::ifstream stream;
+    FILE * fp = nullptr; // not owned
+    bool ok = false;
+
+    clip_file_reader(const std::string & fname, FILE * file) {
+        if (file) {
+            fp = file;
+            ok = std::fseek(fp, 0, SEEK_SET) == 0;
+        } else {
+            stream.open(fname, std::ios::binary);
+            ok = (bool) stream;
+        }
+    }
+
+    explicit operator bool() const { return ok; }
+
+    void seekg(size_t offset, std::ios_base::seekdir) {
+        if (fp) {
+            ok = ok && std::fseek(fp, (long) offset, SEEK_SET) == 0;
+        } else {
+            stream.seekg(offset, std::ios::beg);
+            ok = (bool) stream;
+        }
+    }
+
+    void read(char * dst, size_t size) {
+        if (fp) {
+            ok = ok && std::fread(dst, 1, size, fp) == size;
+        } else {
+            stream.read(dst, size);
+            ok = (bool) stream;
+        }
+    }
+
+    void close() {
+        if (!fp) {
+            stream.close();
+        }
+    }
+};
+
 struct clip_model_loader {
     ggml_context_ptr ctx_meta;
     gguf_context_ptr ctx_gguf;
 
     std::string fname;
+    FILE * fp = nullptr;
 
     size_t model_size = 0; // in bytes
 
@@ -1048,7 +1091,8 @@ struct clip_model_loader {
     bool has_audio  = false;
 
     // TODO @ngxson : we should not pass clip_ctx here, it should be clip_model
-    clip_model_loader(const char * fname, bool skip_tensors = false) : fname(fname) {
+    clip_model_loader(const char * fname, bool skip_tensors = false, FILE * file = nullptr)
+            : fname(fname ? fname : "<file handle>"), fp(file) {
         struct ggml_context * meta = nullptr;
 
         struct gguf_init_params params = {
@@ -1056,9 +1100,17 @@ struct clip_model_loader {
             /*.ctx      = */ &meta,
         };
 
-        ctx_gguf = gguf_context_ptr(gguf_init_from_file(fname, params));
+        if (fp) {
+            // gguf_init_from_file_ptr() reads from the current position.
+            if (std::fseek(fp, 0, SEEK_SET) != 0) {
+                throw std::runtime_error(string_format("%s: failed to rewind the CLIP model file handle\n", __func__));
+            }
+            ctx_gguf = gguf_context_ptr(gguf_init_from_file_ptr(fp, params));
+        } else {
+            ctx_gguf = gguf_context_ptr(gguf_init_from_file(fname, params));
+        }
         if (!ctx_gguf.get()) {
-            throw std::runtime_error(string_format("%s: failed to load CLIP model from %s. Does this file exist?\n", __func__, fname));
+            throw std::runtime_error(string_format("%s: failed to load CLIP model from %s. Does this file exist?\n", __func__, this->fname.c_str()));
         }
 
         ctx_meta.reset(meta);
@@ -1738,7 +1790,7 @@ struct clip_model_loader {
         std::map<std::string, size_t> tensor_offset;
         std::vector<ggml_tensor *> tensors_to_load;
 
-        auto fin = std::ifstream(fname, std::ios::binary);
+        clip_file_reader fin(fname, fp);
         if (!fin) {
             throw std::runtime_error(string_format("%s: failed to open %s\n", __func__, fname.c_str()));
         }
@@ -3074,12 +3126,12 @@ struct clip_model_loader {
     }
 };
 
-struct clip_init_result clip_init(const char * fname, struct clip_context_params ctx_params) {
+static struct clip_init_result clip_init_impl(const char * fname, FILE * file, struct clip_context_params ctx_params) {
     clip_ctx * ctx_vision = nullptr;
     clip_ctx * ctx_audio = nullptr;
 
     try {
-        clip_model_loader loader(fname);
+        clip_model_loader loader(fname, /* skip_tensors= */ false, file);
         bool skip_audio = false;
 
         if (loader.has_vision) {
@@ -3107,7 +3159,7 @@ struct clip_init_result clip_init(const char * fname, struct clip_context_params
         }
 
     } catch (const std::exception & e) {
-        LOG_ERR("%s: failed to load model '%s': %s\n", __func__, fname, e.what());
+        LOG_ERR("%s: failed to load model '%s': %s\n", __func__, fname ? fname : "<file handle>", e.what());
 
         delete ctx_vision;
         delete ctx_audio;
@@ -3118,9 +3170,25 @@ struct clip_init_result clip_init(const char * fname, struct clip_context_params
     return {ctx_vision, ctx_audio};
 }
 
+struct clip_init_result clip_init(const char * fname, struct clip_context_params ctx_params) {
+    return clip_init_impl(fname, nullptr, ctx_params);
+}
+
+struct clip_init_result clip_init_from_file_ptr(FILE * file, struct clip_context_params ctx_params) {
+    return clip_init_impl(nullptr, file, ctx_params);
+}
+
 struct clip_cap clip_get_cap(const char * fname) {
     clip_cap res;
     clip_model_loader loader(fname, /* skip_tensors= */ true);
+    res.has_vision = loader.has_vision;
+    res.has_audio  = loader.has_audio;
+    return res;
+}
+
+struct clip_cap clip_get_cap_from_file_ptr(FILE * file) {
+    clip_cap res;
+    clip_model_loader loader(nullptr, /* skip_tensors= */ true, file);
     res.has_vision = loader.has_vision;
     res.has_audio  = loader.has_audio;
     return res;

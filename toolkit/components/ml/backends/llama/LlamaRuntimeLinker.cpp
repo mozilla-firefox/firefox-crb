@@ -209,6 +209,7 @@ bool LlamaRuntimeLinker::Init() {
   }
 
   sLlamaLib.llama_log_set(LlamaLogCallback, nullptr);
+  sLlamaLib.mtmd_helper_log_set(LlamaLogCallback, nullptr);
 
 #ifdef XP_MACOSX
   // Content-process inference is CPU-only. Attempting to register a metal

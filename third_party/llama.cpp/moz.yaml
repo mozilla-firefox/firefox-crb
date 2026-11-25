@@ -119,3 +119,4 @@ vendoring:
      - wordpiece-tokenizer.patch # match HF/transformers.js WordPiece normalization
      - mtmd-exceptions.patch # same treatment as exceptions.patch, for libmtmd
      - mtmd-no-image-audio-decoders.patch # drop the bundled stb_image/miniaudio decoders, Gecko decodes media
+     - mtmd-load-from-file-handle.patch # load an mmproj from an fd, like load-from-buffer-or-fd.patch does for the model
