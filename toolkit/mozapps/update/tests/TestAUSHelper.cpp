@@ -3,6 +3,7 @@
  */
 
 #include "updatedefines.h"
+#include "updatecommon.h"
 
 #ifdef XP_WIN
 #  include "commonupdatedir.h"
@@ -225,6 +226,7 @@ int NS_main(int argc, NS_tchar** argv) {
         "   or: remove-symlink basedir dir1 dir2 file symlink\n"
         "   or: check-symlink symlink\n"
         "   or: check-umask existing-umask\n"
+        "   or: create-and-open-file path contents\n"
         "   or: post-update-sync\n"
         "   or: post-update-async\n"
         "   or: post-update-environment\n"
@@ -256,6 +258,25 @@ int NS_main(int argc, NS_tchar** argv) {
         "Note: All paths must be relative.\n"
         "\n");
     return 1;
+  }
+
+  if (!NS_tstrcmp(argv[1], NS_T("create-and-open-file"))) {
+#ifdef XP_UNIX
+    // Writes the contents to the path through the updater's CreateAndOpenFile.
+    if (argc < 4) {
+      return 1;
+    }
+    FILE* file = CreateAndOpenFile(argv[2], /* binary = */ true);
+    if (!file) {
+      return 2;
+    }
+    fputs(argv[3], file);
+    fclose(file);
+    return 0;
+#else
+    // Not implemented on non-Unix platforms
+    return 1;
+#endif
   }
 
   if (!NS_tstrcmp(argv[1], NS_T("check-signature"))) {

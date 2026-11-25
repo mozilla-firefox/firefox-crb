@@ -14,7 +14,9 @@
 #endif
 
 #if defined(XP_MACOSX)
+#  include <fcntl.h>
 #  include <os/log.h>
+#  include <sys/stat.h>
 #endif
 
 #include <stdio.h>
@@ -206,16 +208,16 @@ void UpdateLog::WarnPrintf(const char* fmt, ...) {
  *
  * @param filePath  The path of the log file.
  * @param binary  If the file should be opened as binary (ignored on
- * macOS/Linux).
+ * macOS).
  * @return a pointer to the FILE struct or nullptr on error.
  */
 FILE* CreateAndOpenFile(NS_tchar* filePath, [[maybe_unused]] bool binary) {
-#ifdef XP_WIN
+#ifndef XP_MACOSX
   return NS_tfopen(filePath, binary ? NS_T("wb+") : NS_T("w+"));
 #else
   LogToOS(NS_T("Opening logfile"));
-  NS_tchar* lastSeperator = NS_tstrrchr(filePath, '/');
-  if (lastSeperator == nullptr) {
+  NS_tchar* lastSeparator = NS_tstrrchr(filePath, '/');
+  if (lastSeparator == nullptr) {
     // No separator, disable logging.
     return nullptr;
   }
@@ -223,7 +225,7 @@ FILE* CreateAndOpenFile(NS_tchar* filePath, [[maybe_unused]] bool binary) {
   const NS_tchar templateSuffix[] = NS_T("/temp.XXXXXX");
   size_t templateLen = NS_tstrlen(templateSuffix);
 
-  long dirLength = lastSeperator - filePath;
+  long dirLength = lastSeparator - filePath;
   // +1 to account for the \0 terminator
   if (dirLength < 0 ||
       (unsigned long)dirLength >= MAXPATHLEN - (templateLen + 1)) {
@@ -235,24 +237,56 @@ FILE* CreateAndOpenFile(NS_tchar* filePath, [[maybe_unused]] bool binary) {
   // Use memcpy here to only copy the directory portion of filePath
   // and using strncpy triggered GCC's stringop-truncation error because
   // filePath's \0 terminator wasn't being carried over. This isn't a problem
-  // here because the next strncpy adds it.
+  // here because tmpFilePath is zero-initialized.
   memcpy(tmpFilePath, filePath, dirLength);
-  NS_tstrncpy(tmpFilePath + dirLength, templateSuffix, MAXPATHLEN - dirLength);
+  // The elevated updater runs as root but writes into the user's update
+  // directory, and mkstemp creates files that only their owner can access.
+  // Hand new files to the directory's owner so that Firefox can still read
+  // and write them. Everything below goes through dirFd so that the owner
+  // is read from the directory the file is created in, even if the path
+  // changes in the meantime.
+  int dirFd = open(dirLength ? tmpFilePath : NS_T("/"),
+                   O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (dirFd == -1) {
+    LogToOS(NS_T("Failed to open directory"));
+    return nullptr;
+  }
 
-  int fd = mkstemp(tmpFilePath);
+  NS_tchar tmpFileName[] = NS_T("temp.XXXXXX");
+  int fd = mkostempsat_np(dirFd, tmpFileName, 0, O_CLOEXEC);
   if (fd == -1) {
     LogToOS(NS_T("Failed to open tmp"));
+    close(dirFd);
     return nullptr;
   }
 
-  if (rename(tmpFilePath, filePath) == -1) {
+  if (geteuid() == 0) {
+    struct stat dirInfo;
+    if (fstat(dirFd, &dirInfo) == -1 ||
+        fchown(fd, dirInfo.st_uid, dirInfo.st_gid) == -1) {
+      LogToOS(NS_T("Failed to change owner of tmp"));
+      close(fd);
+      unlinkat(dirFd, tmpFileName, 0);
+      close(dirFd);
+      return nullptr;
+    }
+  }
+
+  if (renameat(dirFd, tmpFileName, dirFd, lastSeparator + 1) == -1) {
     LogToOS(NS_T("Failed to rename"));
     close(fd);
+    unlinkat(dirFd, tmpFileName, 0);
+    close(dirFd);
     return nullptr;
   }
+  close(dirFd);
 
   LogToOS(NS_T("Opening file*"));
-  return fdopen(fd, "w+");
+  FILE* file = fdopen(fd, "w+");
+  if (!file) {
+    close(fd);
+  }
+  return file;
 #endif
 }
 
