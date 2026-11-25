@@ -52,3 +52,7 @@ fun TabsSnapshot.firstTabIdInTabGroup(tabGroupId: String): String? =
  */
 fun TabsSnapshot.lastTabIdInTabGroup(tabGroupId: String): String? =
     normalTabs.lastOrNull { it.tabGroupId == tabGroupId }?.id
+
+/** Fetches the IDs of the open tabs which are assigned to any tab group, whether the group is open or closed. */
+fun TabsSnapshot.groupedTabIds(): Set<String> =
+    normalTabs.mapNotNullTo(mutableSetOf()) { tab -> tab.id.takeIf { tab.tabGroupId != null } }
