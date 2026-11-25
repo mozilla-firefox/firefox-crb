@@ -24,6 +24,7 @@ import { AuthProvider } from "moz-src:///browser/components/aiwindow/models/Auth
 import { Chat } from "moz-src:///browser/components/aiwindow/models/Chat.sys.mjs";
 import { openAIEngine } from "moz-src:///browser/components/aiwindow/models/openAIEngine.sys.mjs";
 import {
+  FEATURE_MAJOR_VERSIONS,
   MODEL_FEATURES,
   PURPOSES,
   SERVICE_TYPES,
@@ -40,6 +41,19 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
 });
+
+/**
+ * @param {ModelFeature} feature
+ * @returns {string} The prompt record version for the feature's current
+ *   FEATURE_MAJOR_VERSIONS entry, e.g. "v12.0".
+ */
+export function promptRecordVersion(feature) {
+  const major = FEATURE_MAJOR_VERSIONS[feature];
+  if (major === undefined) {
+    throw new Error(`No FEATURE_MAJOR_VERSIONS entry for "${feature}"`);
+  }
+  return `v${major}.0`;
+}
 
 /**
  * A bare chat conversation, as a tool call receives one.

@@ -256,8 +256,6 @@ export const PURPOSES = Object.freeze({
  * - Update this constant
  * - Ensure Remote Settings has configs for the new major version
  * - Old clients will continue using old major version
- *
- * Keep ui/test/browser/head.js MOCK_RS_RECORDS aligned with this table.
  */
 export const FEATURE_MAJOR_VERSIONS = Object.freeze({
   [MODEL_FEATURES.CHAT]: 12,
@@ -293,7 +291,7 @@ export const FEATURE_MAJOR_VERSIONS = Object.freeze({
   [MODEL_FEATURES.SEARCH_ANSWER_GENERATION]: 1,
   // aitab structured-page generation. Paired with the `version` major in
   // models/aitab/component_schema.json (AITabValidation.loadAssets rejects a mismatch).
-  // Bump both, plus the aitab records in the packaged dump, in one patch.
+  // Bump both in one patch, once the packaged dump has the matching records.
   [MODEL_FEATURES.AITAB]: 2,
 });
 

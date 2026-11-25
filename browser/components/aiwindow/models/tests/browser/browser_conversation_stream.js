@@ -18,17 +18,17 @@ const { Conversation } = ChromeUtils.importESModule(
 const { MemoryStore } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/services/MemoryStore.sys.mjs"
 );
-const { FEATURE_MAJOR_VERSIONS, MODEL_FEATURES, SERVICE_TYPES, PURPOSES } =
-  ChromeUtils.importESModule(
-    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
-  );
+const { MODEL_FEATURES, SERVICE_TYPES, PURPOSES } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
+);
 
 const { PlacesTestUtils } = ChromeUtils.importESModule(
   "resource://testing-common/PlacesTestUtils.sys.mjs"
 );
-const { AIWindowTestUtils, MockEngineManager } = ChromeUtils.importESModule(
-  "resource://testing-common/AIWindowTestUtils.sys.mjs"
-);
+const { AIWindowTestUtils, MockEngineManager, promptRecordVersion } =
+  ChromeUtils.importESModule(
+    "resource://testing-common/AIWindowTestUtils.sys.mjs"
+  );
 const { AIWindowUI } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/AIWindowUI.sys.mjs"
 );
@@ -610,23 +610,21 @@ add_task(async function test_run_forwards_params_to_model_request() {
 });
 
 async function setupSmartPageChatEnvironment() {
-  const version = feature => `v${FEATURE_MAJOR_VERSIONS[feature]}.0`;
   const records = [
-    MODEL_FEATURES.CHAT,
     MODEL_FEATURES.TITLE_GENERATION,
     MODEL_FEATURES.CONVERSATION_STARTERS_SIDEBAR_SYSTEM,
     MODEL_FEATURES.CONVERSATION_SUGGESTIONS_SIDEBAR_STARTER,
     MODEL_FEATURES.CONVERSATION_SUGGESTIONS_ASSISTANT_LIMITATIONS,
   ].map(feature => ({
     feature,
-    model: feature === MODEL_FEATURES.CHAT ? "generic" : "test-model",
+    model: "test-model",
     service_type: "ai",
     parameters: {},
     prompts:
       feature === MODEL_FEATURES.CONVERSATION_SUGGESTIONS_SIDEBAR_STARTER
         ? "Generate {n} prompts for {current_tab}.\nOpen tabs: {open_tabs}"
         : "Test system prompt.",
-    version: version(feature),
+    version: promptRecordVersion(feature),
     is_default: true,
   }));
   records.push({
@@ -637,7 +635,7 @@ async function setupSmartPageChatEnvironment() {
     service_type: "ai",
     purpose: "chat",
     parameters: {},
-    version: version(MODEL_FEATURES.CHAT),
+    version: promptRecordVersion(MODEL_FEATURES.CHAT),
     is_default: true,
   });
 

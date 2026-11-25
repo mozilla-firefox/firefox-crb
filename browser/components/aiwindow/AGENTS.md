@@ -34,7 +34,7 @@ This component grew quickly, and much of the existing code across this directory
 - Validate model output with `toolkit/modules/JsonSchema.sys.mjs`. Accept only http(s) URLs: `isAllowedURLProtocol`, whose changes need security review.
 - Render templates in a single pass so substituted values are never expanded again.
 - Don't run inference without user intent, per tab, or when a new tab opens. Bound queries, and make timeouts cancel the underlying work (`Promise.race` alone does not).
-- Adding a model feature updates `MODEL_FEATURES` and `FEATURE_MAJOR_VERSIONS` (`models/Utils.sys.mjs`), `FEATURE_PURPOSES` (`models/PromptLoader.sys.mjs`), the Remote Settings records and dump (`services/settings/dumps/main/ai-window-prompts.json`, in its own patch), and `MOCK_RS_RECORDS` in `ui/test/browser/head.js`. Keep prompts in Remote Settings rather than inline.
+- Adding a model feature updates `MODEL_FEATURES` and `FEATURE_MAJOR_VERSIONS` (`models/Utils.sys.mjs`), `FEATURE_PURPOSES` (`models/PromptLoader.sys.mjs`) and `MOCK_RS_RECORDS` in `ui/test/browser/head.js`. Publish its Remote Settings records first: automation syncs them into `services/settings/dumps/main/ai-window-prompts.json`, so land a version bump only after the dump has them. Keep prompts in Remote Settings rather than inline.
 - Chat uses v2 modular prompts with no fallback to v1. Remote Settings parsing must tolerate record changes, because old Firefox versions keep running.
 - Re-request `#ai-security-reviewers` review when code that handles model input or output is actually hooked up.
 
@@ -42,7 +42,7 @@ This component grew quickly, and much of the existing code across this directory
 - Add metrics to the `smart_window` category and reuse the YAML anchors for shared extra keys. Set data classification and get data review. Keep extra keys single-purpose. Record metrics from the feature's module, and test them; if a metric lands without a test, file a bug and reference it in a comment.
 
 ## Patch scope and review
-- Keep Remote Settings dump updates, toolkit reusable-component changes and drive-by fixes in separate patches. Rebase the stack before asking for review.
+- Keep toolkit reusable-component changes and drive-by fixes in separate patches. Rebase the stack before asking for review.
 - Pref-gated early work may defer polish to filed bugs, but don't land code that isn't hooked up.
 
 ## Testing
