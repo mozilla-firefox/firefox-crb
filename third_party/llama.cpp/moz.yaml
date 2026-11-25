@@ -28,6 +28,7 @@ vendoring:
     - update-moz-build
 
   keep:
+    - tools/mtmd/moz.build
     - generate_sources_mozbuild.py
     - generate_sources_mozbuild.sh
     - cmakeparser.py
@@ -42,6 +43,9 @@ vendoring:
   exclude:
     - "**"
     - src/llama-quant.cpp
+    # libmtmd's command-line tools, which link llama-common and are not built.
+    - tools/mtmd/mtmd-cli.cpp
+    - tools/mtmd/deprecation-warning.cpp
 
   include:
     - LICENSE
@@ -52,6 +56,13 @@ vendoring:
     - src/CMakeLists.txt
     - CMakeLists.txt
     - include/llama.h
+    - tools/mtmd/*.cpp
+    - tools/mtmd/*.h
+    - tools/mtmd/models/*.cpp
+    - tools/mtmd/models/*.h
+    - tools/mtmd/debug/mtmd-debug.h
+    - tools/mtmd/CMakeLists.txt
+    - tools/mtmd/README.md
     - ggml/src/*
     - ggml/src/*.cpp
     - ggml/src/*.h
@@ -106,3 +117,5 @@ vendoring:
      - gemma4-chat-template.patch # render the Gemma 4 chat template
      - vec-dot-signatures.patch # give the f32/f16/bf16 dot kernels the ggml_vec_dot_t signature, for UBSan
      - wordpiece-tokenizer.patch # match HF/transformers.js WordPiece normalization
+     - mtmd-exceptions.patch # same treatment as exceptions.patch, for libmtmd
+     - mtmd-no-image-audio-decoders.patch # drop the bundled stb_image/miniaudio decoders, Gecko decodes media
