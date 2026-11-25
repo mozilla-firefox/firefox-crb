@@ -16,15 +16,17 @@ import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
+import mozilla.components.feature.tabdata.coordinator.data.groupedTabIds
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.base.feature.LifecycleAwareFeature
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.actualInactiveTabs
+import org.mozilla.fenix.ext.bulkCloseUndoMessage
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.tabClosedUndoMessage
-import org.mozilla.fenix.ext.tabsClosedUndoMessage
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_ACTIVE_NORMAL_TABS
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_NORMAL_TABS
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_PRIVATE_TABS
@@ -100,16 +102,25 @@ class TabsCleanupFeature(
         // homepage tab before the tabs are removed.
         val isRestoringHomepageTab = browserStore.state.selectedTab?.content?.url == ABOUT_HOME_URL
 
-        val tabsCount =
-            when (sessionCode) {
-                ALL_PRIVATE_TABS -> removeAllPrivateTabs()
-                ALL_NORMAL_TABS -> removeAllNormalTabs()
-                ALL_ACTIVE_NORMAL_TABS -> removeAllActiveNormalTabs()
-                else -> return
+        val bulkCloseResult: BulkCloseResult?
+        val tabsCount: Int
+        when (sessionCode) {
+            ALL_PRIVATE_TABS -> {
+                bulkCloseResult = null
+                tabsCount = removeAllPrivateTabs()
             }
+            ALL_NORMAL_TABS,
+            ALL_ACTIVE_NORMAL_TABS -> {
+                bulkCloseResult =
+                    tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = sessionCode == ALL_NORMAL_TABS)
+                tabsCount = bulkCloseResult.removedTabCount
+            }
+            else -> return
+        }
 
         var tabId: String? = null
-        if (settings.enableHomepageAsNewTab) {
+        // The tab data coordinator may have already added a tab to select in place of a tab in a closed tab group.
+        if (settings.enableHomepageAsNewTab && bulkCloseResult?.addedTabId == null) {
             // Add a new tab after all the tabs are removed to ensure there's always 1 tab.
             // Hold onto the new tab ID so that the new tab can be removed if the tabs are restored
             // by the undo action.
@@ -117,11 +128,16 @@ class TabsCleanupFeature(
         }
 
         showUndoSnackbar(
-            message = context.tabsClosedUndoMessage(count = tabsCount),
+            message =
+                context.bulkCloseUndoMessage(
+                    tabCount = tabsCount,
+                    tabGroupCount = bulkCloseResult?.closedTabGroupIds?.size ?: 0,
+                ),
             onCancel = {
                 onUndoTabsRemoved(
                     tabId = tabId,
                     isRestoringHomepageTab = isRestoringHomepageTab,
+                    bulkCloseResult = bulkCloseResult,
                 )
             },
         )
@@ -129,13 +145,6 @@ class TabsCleanupFeature(
 
     private fun removeAllPrivateTabs(): Int =
         browserStore.state.privateTabs.size.also { tabsUseCases.removePrivateTabs() }
-
-    private fun removeAllNormalTabs(): Int = browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
-
-    private fun removeAllActiveNormalTabs(): Int {
-        val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = false)
-        return result.removedTabCount
-    }
 
     private fun removeTabAndShowSnackbar(sessionId: String) {
         val tab = browserStore.state.findTab(sessionId) ?: return
@@ -149,9 +158,10 @@ class TabsCleanupFeature(
                 browserStore.state.normalTabs.size > 1
             }
 
-        val inactiveTabs = browserStore.state.actualInactiveTabs(settings = settings)
+        val inactiveTabIds = browserStore.state.actualInactiveTabs(settings = settings).map { it.id }
+        val groupedTabIds = tabDataCoordinator.tabsSnapshot.value?.groupedTabIds().orEmpty()
 
-        tabsUseCases.removeTab(tabId = sessionId, excludedFallbackTabIds = inactiveTabs.map { it.id }.toSet())
+        tabsUseCases.removeTab(tabId = sessionId, excludedFallbackTabIds = inactiveTabIds.toSet() + groupedTabIds)
 
         var tabId = ""
         if (settings.enableHomepageAsNewTab && !hasTabsRemaining) {
@@ -177,13 +187,20 @@ class TabsCleanupFeature(
      *
      * @param tabId Optional ID of the tab that should be removed after the tab removal is undone.
      * @param isRestoringHomepageTab Whether the restored selected tab is a homepage tab.
+     * @param bulkCloseResult The [BulkCloseResult] of closing normal tabs in bulk, which is undone instead of only
+     *   restoring the removed tabs.
      */
     @VisibleForTesting
     internal fun onUndoTabsRemoved(
         tabId: String?,
         isRestoringHomepageTab: Boolean = false,
+        bulkCloseResult: BulkCloseResult? = null,
     ) {
-        tabsUseCases.undo.invoke()
+        if (bulkCloseResult != null) {
+            tabDataCoordinator.undoBulkClose(bulkCloseResult)
+        } else {
+            tabsUseCases.undo.invoke()
+        }
 
         if (tabId?.isNotBlank() == true) {
             tabsUseCases.removeTab.invoke(tabId)
