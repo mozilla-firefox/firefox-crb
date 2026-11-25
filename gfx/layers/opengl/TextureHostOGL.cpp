@@ -964,7 +964,8 @@ AndroidImageReaderImageTextureHost::AndroidImageReaderImageTextureHost(
       mImageReaderId(aDescriptor.imageReaderId()),
       mFrameId(aDescriptor.frameId()),
       mSize(aDescriptor.size()),
-      mFormat(aDescriptor.format()) {}
+      mFormat(aDescriptor.format()),
+      mReaderUsage(AndroidImageReaderUsage::GetForId(mImageReaderId)) {}
 
 AndroidImageReaderImageTextureHost::~AndroidImageReaderImageTextureHost() {}
 
@@ -979,8 +980,8 @@ void AndroidImageReaderImageTextureHost::CreateRenderTexture(
   MOZ_ASSERT(mExternalImageId.isSome());
 
   RefPtr<wr::RenderTextureHost> texture =
-      new wr::RenderAndroidImageReaderImageTextureHost(mImageReaderId, mFrameId,
-                                                       mSize, mFormat);
+      new wr::RenderAndroidImageReaderImageTextureHost(
+          mImageReaderId, mFrameId, mSize, mFormat, mReaderUsage);
   wr::RenderThread::Get()->RegisterExternalImage(aExternalImageId,
                                                  texture.forget());
 }

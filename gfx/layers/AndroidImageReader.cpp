@@ -10,7 +10,10 @@
 #include <android/native_window_jni.h>
 #include <media/NdkImage.h>
 #include <media/NdkImageReader.h>
+#include <time.h>
 
+#include <algorithm>
+#include <limits>
 #include <mutex>
 
 #include "GLContext.h"
@@ -98,6 +101,69 @@ static bool EnsureAImageSnapshotContext() MOZ_REQUIRES(sAImageReadbackMutex) {
 }
 
 namespace {
+constexpr int64_t kDormantFlushFrameAcquisitionWaitMs = 100;
+
+int64_t MonotonicMilliseconds() {
+  timespec now{};
+  MOZ_RELEASE_ASSERT(clock_gettime(CLOCK_MONOTONIC, &now) == 0);
+  return int64_t(now.tv_sec) * 1000 + now.tv_nsec / 1000000;
+}
+
+TimeStamp TimeStampFromMonotonicMilliseconds(int64_t aMilliseconds) {
+  constexpr int64_t kNanosecondsPerMillisecond = 1'000'000;
+  if (aMilliseconds <= 0 ||
+      aMilliseconds >
+          std::numeric_limits<int64_t>::max() / kNanosecondsPerMillisecond) {
+    return TimeStamp();
+  }
+  // Binder carries CLOCK_MONOTONIC milliseconds. Android's TimeStamp uses
+  // the same clock in nanoseconds.
+  return TimeStamp::FromSystemTime(aMilliseconds * kNanosecondsPerMillisecond);
+}
+
+// The compositor sends a Binder acknowledgment after trying to acquire the
+// selected frame, even if acquisition fails. The callback wakes the codec
+// task queue so it can flush. The decoder sends End after that flush.
+class RemoteDormantFlushReply final {
+ public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(RemoteDormantFlushReply)
+  explicit RemoteDormantFlushReply(int64_t aRequest) : mRequest(aRequest) {}
+  void Complete() {
+    MonitorAutoLock lock(mMonitor);
+    mComplete = true;
+    mMonitor.NotifyAll();
+  }
+  void WaitUntil(TimeStamp aDeadline) {
+    MonitorAutoLock lock(mMonitor);
+    while (!mComplete) {
+      const auto remaining = aDeadline - TimeStamp::Now();
+      if (remaining <= TimeDuration()) {
+        return;
+      }
+      mMonitor.Wait(remaining);
+    }
+  }
+  const int64_t mRequest;
+
+ private:
+  ~RemoteDormantFlushReply() = default;
+  Monitor mMonitor{"RemoteImageReaderDormantFlush"};
+  bool mComplete MOZ_GUARDED_BY(mMonitor) = false;
+};
+
+using RemoteDormantFlushReplies =
+    std::unordered_map<uint64_t, RefPtr<RemoteDormantFlushReply>>;
+MOZ_RUNINIT static StaticDataMutex<RemoteDormantFlushReplies>
+    sRemoteDormantFlushReplies("RemoteImageReaderDormantFlushReplies");
+
+RefPtr<RemoteDormantFlushReply> FindRemoteDormantFlushReply(
+    uint64_t aReaderId) {
+  auto replies = sRemoteDormantFlushReplies.Lock();
+  auto it = replies->find(aReaderId);
+  // Keep the reply alive after unlocking so Complete() can take its monitor.
+  return it != replies->end() ? it->second : nullptr;
+}
+
 // Codec-side callbacks are grouped by reader so flush only visits that reader.
 using FrameReleaseCallback = SurfaceTextureImage::SetCurrentCallback;
 using FrameCallbackMap =
@@ -150,6 +216,13 @@ class ImageReaderFrameRegistry final {
     MOZ_ASSERT(inserted);
   }
 
+  static bool HasFrame(uint64_t aReaderId, uint64_t aFrameId) {
+    auto readers = sReaderFrames.Lock();
+    const auto reader = readers->find(aReaderId);
+    return reader != readers->end() &&
+           reader->second.find(aFrameId) != reader->second.end();
+  }
+
   static bool ReleaseFrame(uint64_t aReaderId, uint64_t aFrameId,
                            bool aRender) {
     UniquePtr<FrameReleaseCallback> callback;
@@ -181,8 +254,13 @@ class ImageReaderFrameRegistry final {
   }
 };
 
-// Only remote RDD decoding uses JNI; local GPU readers call the registry
-// directly.
+// JNI entry points for SurfaceAllocator callbacks in the RDD process.
+// Forward compositor requests to ImageReaderFrameRegistry to release
+// MediaCodec output buffers, optionally rendering them to the output
+// Surface. A matching dormancy flush reply wakes the decoder after the
+// compositor tries to acquire the selected frame. On disconnect, remove
+// the reader's callback registrations and wake any pending flush waiter.
+// GPU-process decoders use ImageReaderFrameRegistry directly.
 class NativeImageReaderFrames final
     : public java::SurfaceAllocator::Natives<NativeImageReaderFrames> {
  public:
@@ -192,8 +270,23 @@ class NativeImageReaderFrames final
                                                   uint64_t(aFrameId), aRender);
   }
 
+  static void NotifyImageReaderFlushPrepared(int64_t aReaderId,
+                                             int64_t aRequest) {
+    auto reply = FindRemoteDormantFlushReply(uint64_t(aReaderId));
+    // A late acknowledgment can arrive while the same reader is waiting for
+    // a newer request.
+    if (reply && reply->mRequest == aRequest) {
+      reply->Complete();
+    }
+  }
+
   static void DiscardImageReaderFrames(int64_t aReaderId) {
     ImageReaderFrameRegistry::UnregisterReader(uint64_t(aReaderId));
+    // The connection is gone. Wake the codec so it can flush without waiting
+    // for a reply from the compositor.
+    if (auto reply = FindRemoteDormantFlushReply(uint64_t(aReaderId))) {
+      reply->Complete();
+    }
   }
 };
 
@@ -264,7 +357,24 @@ class NativeImageReaderAllocator final
     }
   }
 
-  static void DisposeImageReaderSurface(int64_t aHandle) {
+  static void BeginImageReaderDormancyFlushNative(int64_t aHandle,
+                                                  int64_t aRequest,
+                                                  int64_t aFrameId,
+                                                  int64_t aDeadlineMs) {
+    if (auto reader = GetReader(aHandle)) {
+      reader->BeginRemoteDormancyFlush(
+          aRequest, AndroidMediaCodecFrameId{uint64_t(aFrameId)}, aDeadlineMs);
+    }
+  }
+
+  static void EndImageReaderDormancyFlushNative(int64_t aHandle,
+                                                int64_t aRequest) {
+    if (auto reader = GetReader(aHandle)) {
+      reader->EndRemoteDormancyFlush(aRequest);
+    }
+  }
+
+  static void DisposeImageReaderSurface(int64_t aHandle, bool aGraceful) {
     RefPtr<AndroidImageReader> reader;
     {
       auto readers = sRemoteReaders.Lock();
@@ -275,7 +385,13 @@ class NativeImageReaderAllocator final
       reader = std::move(it->second);
       readers->mReaders.erase(it);
     }
-    reader->DisconnectRemote();
+    // Graceful shutdown can leave a frame available to display users.
+    // An unexpected disconnect drops the cached image.
+    if (aGraceful) {
+      reader->OnDecoderShutdown();
+    } else {
+      reader->DisconnectRemote();
+    }
   }
 
  private:
@@ -286,6 +402,9 @@ class NativeImageReaderAllocator final
   }
 };
 
+// Codec-side client for decoding in the GPU process. It holds a strong
+// reference to the reader, calls it directly for first-frame rendering,
+// dormancy flush, and decoder shutdown, and can retain it for display.
 class LocalAndroidImageReaderClient final : public AndroidImageReaderClient {
  public:
   static already_AddRefed<AndroidImageReaderClient> Create() {
@@ -304,7 +423,14 @@ class LocalAndroidImageReaderClient final : public AndroidImageReaderClient {
     return client.forget();
   }
 
-  void Shutdown() override { mReader->Shutdown(); }
+  bool BeginDormancyFlush(AndroidMediaCodecFrameId aFrameId) override {
+    return mReader->BeginDormancyFlush(aFrameId);
+  }
+  void EndDormancyFlush() override { mReader->EndDormancyFlush(); }
+  void Shutdown() override { mReader->OnDecoderShutdown(); }
+  RefPtr<AndroidImageReaderUsage> RetainLocalReaderForDisplay() override {
+    return mReader->RetainReaderForDisplay();
+  }
 
  private:
   LocalAndroidImageReaderClient(AndroidImageReader* aReader,
@@ -321,6 +447,13 @@ class LocalAndroidImageReaderClient final : public AndroidImageReaderClient {
   const RefPtr<AndroidImageReader> mReader;
 };
 
+// Codec-side client for decoding in the RDD process. It holds a
+// GeckoSurface for the GPU-process reader and uses Binder via
+// SurfaceAllocator to request first-frame rendering and coordinate
+// dormancy flush. It waits up to the shared deadline for the selected
+// frame acquisition attempt before the codec flush, and sends End after
+// the flush if Begin was sent. On decoder shutdown, it releases the
+// remote Surface allocation.
 class RemoteAndroidImageReaderClient final : public AndroidImageReaderClient {
  public:
   static already_AddRefed<AndroidImageReaderClient> Create() {
@@ -342,12 +475,47 @@ class RemoteAndroidImageReaderClient final : public AndroidImageReaderClient {
     return AndroidImageReaderClient::IsValid() && !mAllocation->IsReleased();
   }
 
-  void Shutdown() override {
-    // Unregister first so no new callbacks can be registered while disposing
-    // the Surface allocation disconnects the compositor reader.
-    UnregisterReader();
-    java::SurfaceAllocator::DisposeSurface(mAllocation);
+  bool BeginDormancyFlush(AndroidMediaCodecFrameId aFrameId) override {
+    if (!IsValid()) {
+      return false;
+    }
+    const int64_t request = ++mDormantFlushRequest;
+    const int64_t deadlineMs =
+        MonotonicMilliseconds() + kDormantFlushFrameAcquisitionWaitMs;
+    const auto deadline = TimeStampFromMonotonicMilliseconds(deadlineMs);
+    MOZ_ASSERT(!deadline.IsNull());
+    RefPtr<RemoteDormantFlushReply> reply =
+        new RemoteDormantFlushReply(request);
+    {
+      auto replies = sRemoteDormantFlushReplies.Lock();
+      // Register before sending Begin so an immediate acknowledgment has a
+      // reply object to signal.
+      [[maybe_unused]] const bool inserted =
+          replies->emplace(mImageReaderId.mId, reply).second;
+      MOZ_ASSERT(inserted);
+    }
+    const bool sent = java::SurfaceAllocator::BeginImageReaderDormancyFlush(
+        mAllocation->GetHandle(), request, int64_t(aFrameId.mId), deadlineMs);
+    if (sent) {
+      // Share the compositor's absolute deadline. Time spent delivering
+      // Begin also counts toward this wait.
+      reply->WaitUntil(deadline);
+    }
+    {
+      auto replies = sRemoteDormantFlushReplies.Lock();
+      replies->erase(mImageReaderId.mId);
+    }
+    // End a sent Begin even if the acknowledgment times out. The compositor
+    // may already be in State::FlushingForDormancy.
+    return sent;
   }
+
+  void EndDormancyFlush() override {
+    java::SurfaceAllocator::EndImageReaderDormancyFlush(
+        mAllocation->GetHandle(), mDormantFlushRequest);
+  }
+
+  void Shutdown() override { Dispose(true); }
 
  private:
   explicit RemoteAndroidImageReaderClient(
@@ -364,7 +532,12 @@ class RemoteAndroidImageReaderClient final : public AndroidImageReaderClient {
     }
   }
 
-  ~RemoteAndroidImageReaderClient() override { Shutdown(); }
+  ~RemoteAndroidImageReaderClient() override { Dispose(false); }
+
+  void Dispose(bool aGraceful) {
+    UnregisterReader();
+    java::SurfaceAllocator::DisposeImageReaderSurface(mAllocation, aGraceful);
+  }
 
   void RenderFirstFrame(AndroidMediaCodecFrameId aFrameId) override {
     AUTO_PROFILER_MARKER_TEXT("RDD ImageReader first frame IPC", MEDIA_PLAYBACK,
@@ -374,6 +547,7 @@ class RemoteAndroidImageReaderClient final : public AndroidImageReaderClient {
   }
 
   const java::GeckoSurface::GlobalRef mAllocation;
+  int64_t mDormantFlushRequest = 0;  // Decoder task queue only.
 };
 
 }  // namespace
@@ -404,18 +578,63 @@ java::sdk::Surface::LocalRef AndroidImageReaderClient::GetSurface() const {
   return java::sdk::Surface::LocalRef(mOutputSurface);
 }
 
-void AndroidImageReaderClient::MaybeRenderFirstFrame(
+void AndroidImageReaderClient::OnFrameSelected(
     AndroidMediaCodecFrameId aFrameId) {
   if (!IsValid()) {
     return;
   }
+  {
+    MutexAutoLock lock(mSelectionMutex);
+    if (aFrameId <= mDiscardedThrough) {
+      return;
+    }
+    mSelectedFrameId = Some(aFrameId);
+  }
+  // Rendering can call into the reader or wait on Binder.
   RenderFirstFrame(aFrameId);
 }
 
-// Drop this reader's callbacks without invoking them. On flush, the decoder
-// releases codec buffers through its frame map before discarding these
-// callbacks.
+AndroidImageReaderClient::CodecFlushGuard::CodecFlushGuard() = default;
+
+AndroidImageReaderClient::CodecFlushGuard::CodecFlushGuard(
+    AndroidImageReaderClient* aClient)
+    : mClient(aClient) {}
+
+AndroidImageReaderClient::CodecFlushGuard::CodecFlushGuard(
+    CodecFlushGuard&&) noexcept = default;
+
+AndroidImageReaderClient::CodecFlushGuard::~CodecFlushGuard() {
+  if (mClient) {
+    mClient->EndDormancyFlush();
+  }
+}
+
+AndroidImageReaderClient::CodecFlushGuard
+AndroidImageReaderClient::PrepareForDormancyFlush() {
+  // Copy the ID under the selection lock, then release the lock before
+  // trying to acquire the selected frame, which can wait on the reader or
+  // on Binder.
+  Maybe<AndroidMediaCodecFrameId> selectedFrameId;
+  {
+    MutexAutoLock lock(mSelectionMutex);
+    selectedFrameId = mSelectedFrameId;
+  }
+  if (!selectedFrameId || !BeginDormancyFlush(*selectedFrameId)) {
+    return {};
+  }
+  return CodecFlushGuard(this);
+}
+
+// Invalidate the codec-side selection and drop this reader's callbacks.
+// The decoder has already released the codec buffers through its frame map.
 void AndroidImageReaderClient::DiscardFrames() {
+  {
+    MutexAutoLock lock(mSelectionMutex);
+    // Reserve a cutoff ID on the codec task queue, between the IDs for
+    // frames created before and after this discard.
+    mDiscardedThrough = AndroidMediaCodecFrameId::GetNext();
+    mSelectedFrameId.reset();
+  }
   ImageReaderFrameRegistry::DiscardFrames(mImageReaderId.mId);
 }
 
@@ -430,6 +649,12 @@ void AndroidImageReaderClient::RegisterFrame(
 }
 
 void AndroidImageReaderClient::ForgetFrame(AndroidMediaCodecFrameId aFrameId) {
+  {
+    MutexAutoLock lock(mSelectionMutex);
+    if (mSelectedFrameId && *mSelectedFrameId == aFrameId) {
+      mSelectedFrameId.reset();
+    }
+  }
   ImageReaderFrameRegistry::ReleaseFrame(mImageReaderId.mId, aFrameId.mId,
                                          false);
 }
@@ -479,6 +704,8 @@ void AndroidImageReader::ExpireRemoteFrame() {
   // frame. Images carry no frame ID.
   gfxCriticalNoteOnce << "Remote ImageReader frame timed out";
   RefPtr<AndroidImageWrapper> image = DisconnectRemoteLocked();
+  // The last reference can delete the AImage. Keep that native call
+  // outside the monitor so reader callbacks can still take it.
   MonitorAutoUnlock unlock(mMonitor);
   image = nullptr;
 }
@@ -491,15 +718,14 @@ void AndroidImageReader::StartRemoteFrameRequest() {
   mRemoteState->mFrameTimeoutScheduled = false;
 }
 
-bool AndroidImageReader::HandleRemoteFrameNoBuffer() {
+void AndroidImageReader::HandleRemoteFrameNoBuffer() {
   MOZ_ASSERT(mRemoteState.isSome());
   if (TimeStamp::Now() >= mRemoteState->mFrameDeadline) {
     ExpireRemoteFrame();
-    return true;
+    return;
   }
   // Keep recovery armed even if the compositor stops requesting frames.
   ScheduleRemoteFrameTimeout();
-  return false;
 }
 
 void AndroidImageReader::ScheduleRemoteFrameTimeout() {
@@ -540,7 +766,8 @@ void AndroidImageReader::OnRemoteFrameTimeout(AndroidMediaCodecFrameId aFrameId,
       mRemoteState->mFrameDeadline != aDeadline) {
     return;
   }
-  // An update in progress will attempt acquisition and check the deadline.
+  mRemoteState->mFrameTimeoutScheduled = false;
+  // An update in progress or the end of the flush can rearm the timeout.
   if (mIsPendingNextImage) {
     return;
   }
@@ -560,7 +787,8 @@ AndroidImageReaderImage::AndroidImageReaderImage(
       mFrameId(AndroidMediaCodecFrameId::GetNext()),
       mSize(aSize),
       mHasAlpha(aHasAlpha),
-      mClient(aClient) {}
+      mClient(aClient),
+      mReaderUsage(aClient->RetainLocalReaderForDisplay()) {}
 
 AndroidImageReaderImage::~AndroidImageReaderImage() {
   mClient->ForgetFrame(mFrameId);
@@ -571,7 +799,7 @@ Maybe<SurfaceDescriptor> AndroidImageReaderImage::GetDesc() {
 }
 
 void AndroidImageReaderImage::OnSetCurrent() {
-  mClient->MaybeRenderFirstFrame(mFrameId);
+  mClient->OnFrameSelected(mFrameId);
 }
 
 nsresult AndroidImageReaderImage::BuildSurfaceDescriptorBuffer(
@@ -650,7 +878,7 @@ AndroidImageWrapper::AndroidImageWrapper(
       mImage(aImage),
       mWriteFenceFd(std::move(aWriteFenceFd)) {
   MOZ_ASSERT(mImageReader);
-  mImageReader->mAcquiredImageCount++;
+  mImageReader->OnImageAcquired();
 }
 
 AndroidImageWrapper::~AndroidImageWrapper() {
@@ -662,7 +890,7 @@ AndroidImageWrapper::~AndroidImageWrapper() {
   } else {
     AImage_delete(mImage);
   }
-  mImageReader->mAcquiredImageCount--;
+  mImageReader->OnImageReleased();
 }
 
 bool AndroidImageWrapper::WaitForWriteFence(gl::GLContext* aGL) {
@@ -834,19 +1062,215 @@ AndroidImageReader::~AndroidImageReader() {
   ReleaseResources();
 }
 
-void AndroidImageReader::Shutdown() {
+AndroidImageReaderUsage::AndroidImageReaderUsage(AndroidImageReader* aReader)
+    : mReader(aReader) {}
+
+AndroidImageReaderUsage::~AndroidImageReaderUsage() {
+  mReader->ReleaseDisplayUsage();
+}
+
+RefPtr<AndroidImageReaderUsage> AndroidImageReaderUsage::GetForId(
+    GpuProcessAndroidImageReaderId aReaderId) {
+  auto map = GpuProcessAndroidImageReaderMap::Get();
+  RefPtr<AndroidImageReader> reader =
+      map ? map->GetImageReader(aReaderId) : nullptr;
+  return reader ? reader->RetainReaderForDisplay() : nullptr;
+}
+
+RefPtr<AndroidImageReaderUsage> AndroidImageReader::RetainReaderForDisplay() {
+  RefPtr<AndroidImageReaderUsage> usage = new AndroidImageReaderUsage(this);
+  MonitorAutoLock lock(mMonitor);
+  ++mDisplayUsages;
+  return usage;
+}
+
+void AndroidImageReader::ReleaseDisplayUsage() {
   RefPtr<AndroidImageWrapper> image;
   {
     MonitorAutoLock lock(mMonitor);
-    mShuttingDown = true;
-    // AndroidImageWrapper holds a strong reference to this reader. Break the
-    // cycle while the decoder still owns the reader; consumers may retain
-    // images.
-    image.swap(mCurrentImage);
+    MOZ_ASSERT(mDisplayUsages);
+    --mDisplayUsages;
+    if (!mDisplayUsages && mState == State::Shutdown) {
+      image.swap(mCurrentImage);
+    }
+  }
+  // The wrapper holds a reader reference. Break the cycle outside the monitor.
+}
+
+bool AndroidImageReader::HasCurrentFrame(
+    AndroidMediaCodecFrameId aFrameId) const {
+  return mCurrentImage && mCurrentFrameId == aFrameId;
+}
+
+bool AndroidImageReader::HasCachedSelectedFrame() const {
+  return mSelectedFrameId.isSome() && HasCurrentFrame(mSelectedFrameId.value());
+}
+
+// Same-process decoder entry points.
+bool AndroidImageReader::BeginDormancyFlush(AndroidMediaCodecFrameId aFrameId) {
+  MonitorAutoLock lock(mMonitor);
+  MOZ_ASSERT(mRemoteState.isNothing());
+  if (!CanUpdate(State::Running)) {
+    return false;
+  }
+  const auto deadline =
+      TimeStamp::Now() +
+      TimeDuration::FromMilliseconds(kDormantFlushFrameAcquisitionWaitMs);
+  BeginDormancyFlushLocked(lock, aFrameId, deadline);
+  return true;
+}
+
+void AndroidImageReader::EndDormancyFlush() {
+  MonitorAutoLock lock(mMonitor);
+  MOZ_ASSERT(mRemoteState.isNothing());
+  EndDormancyFlushLocked();
+}
+
+// Selected frame acquisition and state transitions shared by both paths.
+void AndroidImageReader::BeginDormancyFlushLocked(
+    const MonitorAutoLock& aProofOfLock, AndroidMediaCodecFrameId aFrameId,
+    TimeStamp aFrameAcquisitionDeadline) {
+  MOZ_ASSERT(CanUpdate(State::Running));
+  mSelectedFrameId = Some(aFrameId);
+  mState = State::FlushingForDormancy;
+  // Wake ordinary acquisition attempts so they can see the state change.
+  mMonitor.NotifyAll();
+
+  // Try to acquire the selected frame while updates are allowed and the
+  // frame is missing from the cache.
+  const auto shouldAcquireSelectedFrame = [&]() MOZ_REQUIRES(mMonitor) {
+    return CanUpdate(State::FlushingForDormancy) && !HasCurrentFrame(aFrameId);
+  };
+  const auto retryDelay = TimeDuration::FromMilliseconds(1);
+  while (shouldAcquireSelectedFrame() &&
+         TimeStamp::Now() < aFrameAcquisitionDeadline) {
+    AcquireFrame(aProofOfLock, aFrameId, State::FlushingForDormancy,
+                 CachePolicy::EvictOnFull, aFrameAcquisitionDeadline);
+    if (!shouldAcquireSelectedFrame()) {
+      return;
+    }
+    // A local frame cannot arrive once both its codec callback and any
+    // outstanding submission are gone. RDD owns the remote callbacks.
+    if (mRemoteState.isNothing() && mPendingFrameId.isNothing() &&
+        !ImageReaderFrameRegistry::HasFrame(mImageReaderId.mId, aFrameId.mId)) {
+      return;
+    }
+    const auto remaining = aFrameAcquisitionDeadline - TimeStamp::Now();
+    if (remaining <= TimeDuration()) {
+      return;
+    }
+    // Retry while a buffer or an acquisition slot can still become available.
+    mMonitor.Wait(std::min(remaining, retryDelay));
+  }
+}
+
+void AndroidImageReader::EndDormancyFlushLocked() {
+  if (mState != State::FlushingForDormancy) {
+    return;
+  }
+  mState = State::Running;
+  mMonitor.NotifyAll();
+}
+
+// RDD decoder entry points and timeout handling.
+void AndroidImageReader::BeginRemoteDormancyFlush(
+    int64_t aRequest, AndroidMediaCodecFrameId aFrameId, int64_t aDeadlineMs) {
+  MonitorAutoLock lock(mMonitor);
+  MOZ_ASSERT(mRemoteState.isSome());
+  if (!CanUpdate(State::Running) ||
+      aRequest <= mRemoteState->mLastDormantFlushRequest) {
+    return;
+  }
+  mRemoteState->mLastDormantFlushRequest = aRequest;
+  // Use the RDD deadline so delivering Begin counts against the time allowed
+  // for frame acquisition.
+  const auto deadline = TimeStampFromMonotonicMilliseconds(aDeadlineMs);
+  const auto now = TimeStamp::Now();
+  if (deadline.IsNull() || deadline <= now) {
+    return;
+  }
+  const auto latestFrameAcquisitionDeadline =
+      now + TimeDuration::FromMilliseconds(kDormantFlushFrameAcquisitionWaitMs);
+  BeginDormancyFlushLocked(lock, aFrameId,
+                           std::min(deadline, latestFrameAcquisitionDeadline));
+  // Keep ordinary acquisition blocked after trying to acquire the selected
+  // frame. RDD still needs to release output buffers and flush MediaCodec.
+  // Wait for End before allowing ordinary acquisition again.
+  ScheduleRemoteDormantFlushTimeout(aRequest);
+}
+
+void AndroidImageReader::EndRemoteDormancyFlush(int64_t aRequest) {
+  MonitorAutoLock lock(mMonitor);
+  MOZ_ASSERT(mRemoteState.isSome());
+  if (IsStopped() || aRequest < mRemoteState->mLastDormantFlushRequest) {
+    return;
+  }
+  // Record End even without an active flush. A late Begin for this request
+  // must not reopen it.
+  mRemoteState->mLastDormantFlushRequest = aRequest;
+
+  // A remote frame can still be outstanding after the acquisition deadline.
+  // Arm its timeout before allowing ordinary updates again.
+  if (mState == State::FlushingForDormancy && mPendingFrameId.isSome()) {
+    ScheduleRemoteFrameTimeout();
+  }
+  EndDormancyFlushLocked();
+}
+
+void AndroidImageReader::ScheduleRemoteDormantFlushTimeout(int64_t aRequest) {
+  auto map = GpuProcessAndroidImageReaderMap::Get();
+  TaskQueue* target = map ? map->mRemoteFrameTimeoutQueue.get() : nullptr;
+  if (!target) {
+    return;
+  }
+
+  // Use the same background queue as the frame timeout. This separate timer
+  // gives the RDD codec time to finish flushing and send End.
+  constexpr uint32_t kDormantFlushEndTimeoutMs = 5000;
+  (void)target->DelayedDispatch(
+      NS_NewRunnableFunction(
+          "AndroidImageReader::OnRemoteDormantFlushTimeout",
+          [weakReader = ThreadSafeWeakPtr<AndroidImageReader>(this), aRequest] {
+            if (auto reader =
+                    static_cast<RefPtr<AndroidImageReader>>(weakReader)) {
+              reader->OnRemoteDormantFlushTimeout(aRequest);
+            }
+          }),
+      kDormantFlushEndTimeoutMs);
+}
+
+void AndroidImageReader::OnRemoteDormantFlushTimeout(int64_t aRequest) {
+  RefPtr<AndroidImageWrapper> image;
+  {
+    MonitorAutoLock lock(mMonitor);
+    MOZ_ASSERT(mRemoteState.isSome());
+    if (!CanUpdate(State::FlushingForDormancy) ||
+        aRequest != mRemoteState->mLastDormantFlushRequest) {
+      return;
+    }
+    // Without End, the producer may still be flushing. Disconnect the remote
+    // reader and drop its cache. Release the image after unlocking the monitor.
+    gfxCriticalNoteOnce << "Remote ImageReader flush did not complete";
+    image = DisconnectRemoteLocked();
+  }
+}
+
+void AndroidImageReader::OnDecoderShutdown() {
+  RefPtr<AndroidImageWrapper> image;
+  {
+    MonitorAutoLock lock(mMonitor);
+    mState = State::Shutdown;
+    if (mRemoteState.isSome()) {
+      // The remote producer has shut down. Discard its pending submission.
+      ClearPendingFrame();
+    }
+    // Keep the cached frame for existing display users. If they still hold
+    // the reader, the last AndroidImageReaderUsage releases this cache entry.
+    if (!mDisplayUsages) {
+      image.swap(mCurrentImage);
+    }
     mMonitor.NotifyAll();
   }
-  // Release the cached image outside the monitor, since its destructor may
-  // call AImage_delete() or AImage_deleteAsync().
 }
 
 bool AndroidImageReader::Init() {
@@ -931,7 +1355,7 @@ void AndroidImageReader::OnFrameAvailable(void* aContext,
 
 void AndroidImageReader::NotifyFrameAvailable() {
   MonitorAutoLock lock(mMonitor);
-  if (IsRemoteDisconnected()) {
+  if (IsStopped()) {
     return;
   }
   // The notification wakes the waiter. Acquisition uses the pending frame
@@ -943,8 +1367,8 @@ void AndroidImageReader::NotifyFrameAvailable() {
 RefPtr<AndroidImageWrapper> AndroidImageReader::AcquireImage(
     AndroidMediaCodecFrameId aFrameId) {
   MonitorAutoLock lock(mMonitor);
-  DoUpdateTexImage(lock, aFrameId, CachePolicy::EvictOnFull);
-  if (IsStopped() || mCurrentFrameId != aFrameId) {
+  UpdateImage(lock, aFrameId, CachePolicy::EvictOnFull);
+  if (IsRemoteDisconnected() || !HasCurrentFrame(aFrameId)) {
     return nullptr;
   }
   return mCurrentImage;
@@ -956,9 +1380,12 @@ RefPtr<AndroidImageWrapper> AndroidImageReader::AcquireImageForCanvas(
   // unlocking.
   RefPtr<AndroidImageWrapper> fallback;
   MonitorAutoLock lock(mMonitor);
+  if (IsStopped()) {
+    return nullptr;
+  }
   // Retain the cached image in case it is cleared while waiting.
   fallback = mCurrentImage;
-  DoUpdateTexImage(lock, aFrameId, CachePolicy::PreserveOnFull);
+  UpdateImage(lock, aFrameId, CachePolicy::PreserveOnFull);
   if (IsStopped()) {
     return nullptr;
   }
@@ -968,33 +1395,61 @@ RefPtr<AndroidImageWrapper> AndroidImageReader::AcquireImageForCanvas(
 void AndroidImageReader::MaybeRenderFirstFrame(
     AndroidMediaCodecFrameId aFrameId) {
   MonitorAutoLock lock(mMonitor);
-  if (mCurrentImage) {
-    return;
+  if (mRemoteState.isNothing() && mState == State::Running) {
+    mSelectedFrameId = Some(aFrameId);
+    mMonitor.NotifyAll();
   }
-  DoUpdateTexImage(lock, aFrameId, CachePolicy::EvictOnFull);
+  if (!mCurrentImage) {
+    UpdateImage(lock, aFrameId, CachePolicy::EvictOnFull);
+  }
 }
 
-bool AndroidImageReader::DoUpdateTexImage(const MonitorAutoLock& aProofOfLock,
-                                          AndroidMediaCodecFrameId aFrameId,
-                                          CachePolicy aCachePolicy) {
-  MOZ_ASSERT(mAcquiredImageCount.load() <= mMaxImageCount);
+void AndroidImageReader::UpdateImage(const MonitorAutoLock& aProofOfLock,
+                                     AndroidMediaCodecFrameId aFrameId,
+                                     CachePolicy aCachePolicy) {
+  if (mRemoteState.isNothing() && mState == State::Shutdown) {
+    if (mDisplayUsages && !HasCurrentFrame(aFrameId)) {
+      TryAcquireSubmittedFrame(aFrameId, aCachePolicy);
+    }
+    return;
+  }
+  AcquireFrame(aProofOfLock, aFrameId, State::Running, aCachePolicy);
+}
 
-  if (IsStopped() || mCurrentFrameId == aFrameId) {
-    return false;
+void AndroidImageReader::AcquireFrame(
+    const MonitorAutoLock& aProofOfLock, AndroidMediaCodecFrameId aFrameId,
+    State aExpectedState, CachePolicy aCachePolicy,
+    const TimeStamp& aFrameAcquisitionDeadline) {
+  MOZ_ASSERT(mAcquiredImageCount.load() <= mMaxImageCount);
+  const bool remote = mRemoteState.isSome();
+  // For RDD, the last acquired ID prevents a duplicate request even after
+  // cache eviction. A local reader checks for the matching cached image.
+  const auto shouldAcquireRequestedFrame = [&]() MOZ_REQUIRES(mMonitor) {
+    return CanUpdate(aExpectedState) &&
+           !(remote ? mCurrentFrameId == aFrameId : HasCurrentFrame(aFrameId));
+  };
+  if (!shouldAcquireRequestedFrame()) {
+    return;
   }
 
   // Only one thread can update the reader at a time.
-  const TimeDuration concurrentUpdateTimeout =
-      TimeDuration::FromMilliseconds(20);
-  while (mIsPendingNextImage && !IsStopped()) {
-    CVStatus status = mMonitor.Wait(concurrentUpdateTimeout);
+  const auto updateWait = TimeDuration::FromMilliseconds(20);
+  while (mIsPendingNextImage && CanUpdate(aExpectedState)) {
+    const TimeDuration timeout =
+        aFrameAcquisitionDeadline.IsNull()
+            ? updateWait
+            : aFrameAcquisitionDeadline - TimeStamp::Now();
+    if (timeout <= TimeDuration()) {
+      return;
+    }
+    CVStatus status = mMonitor.Wait(timeout);
     if (status == CVStatus::Timeout) {
       gfxCriticalNoteOnce << "Pending next image wait timeout";
-      return false;
+      return;
     }
   }
-  if (IsStopped()) {
-    return false;
+  if (!CanUpdate(aExpectedState)) {
+    return;
   }
   MOZ_ASSERT(!mIsPendingNextImage);
 
@@ -1007,36 +1462,27 @@ bool AndroidImageReader::DoUpdateTexImage(const MonitorAutoLock& aProofOfLock,
 
   // Bound the total notification wait in this call, including an older frame
   // left outstanding by a previous timeout.
-  const TimeStamp notificationDeadline =
-      TimeStamp::Now() + TimeDuration::FromMilliseconds(20);
-  // Acquiring an older outstanding frame counts as an update, even if the
-  // requested frame is still pending.
-  bool acquiredAnyImage = false;
-  auto ensureCapacity = [&]() MOZ_REQUIRES(mMonitor) {
-    if (mAcquiredImageCount.load() < mMaxImageCount) {
-      return true;
-    }
-    if (aCachePolicy == CachePolicy::PreserveOnFull) {
-      // A canvas fallback must not lose the most recently acquired image just
-      // because the next submission is temporarily blocked by native capacity.
-      return false;
-    }
-    // Release only the replaceable cache. Consumers retain their own images.
-    // Keep this update in progress while dropping the monitor for release.
-    RefPtr<AndroidImageWrapper> previous;
-    previous.swap(mCurrentImage);
-    {
-      MonitorAutoUnlock unlock(mMonitor);
-      previous = nullptr;
-    }
-    return mAcquiredImageCount.load() < mMaxImageCount;
-  };
+  const TimeStamp notificationDeadline = aFrameAcquisitionDeadline.IsNull()
+                                             ? TimeStamp::Now() + updateWait
+                                             : aFrameAcquisitionDeadline;
 
-  while (mCurrentFrameId != aFrameId) {
+  while (shouldAcquireRequestedFrame()) {
     if (mPendingFrameId.isNothing()) {
+      if (!remote && !ImageReaderFrameRegistry::HasFrame(mImageReaderId.mId,
+                                                         aFrameId.mId)) {
+        return;
+      }
       if (aCachePolicy == CachePolicy::PreserveOnFull &&
-          mAcquiredImageCount >= mMaxImageCount) {
-        return acquiredAnyImage;
+          mAcquiredImageCount.load() >= mMaxImageCount) {
+        return;
+      }
+      if (aExpectedState == State::FlushingForDormancy &&
+          (!EnsureImageCapacity(aCachePolicy) || !CanUpdate(aExpectedState))) {
+        return;
+      }
+      if (!aFrameAcquisitionDeadline.IsNull() &&
+          TimeStamp::Now() >= aFrameAcquisitionDeadline) {
+        return;
       }
       MOZ_ASSERT(!mWaitingFrameAvailable);
       mPendingFrameId = Some(aFrameId);
@@ -1046,64 +1492,53 @@ bool AndroidImageReader::DoUpdateTexImage(const MonitorAutoLock& aProofOfLock,
       }
       const bool released = MaybeReleaseFrameToCodec(aProofOfLock, aFrameId,
                                                      /* aRender */ true);
-      // Releasing the codec buffer drops the monitor. Recheck whether the
-      // reader stopped and whether the same frame is still pending before
-      // handling the release result.
-      if (IsStopped()) {
-        return false;
-      }
-      if (!IsPendingFrame(aFrameId)) {
-        return acquiredAnyImage;
-      }
-      if (!released) {
+      // The callback ran with the monitor unlocked. Clear a failed submission
+      // only if it still matches, even if a flush has started in the meantime.
+      if (!released && IsPendingFrame(aFrameId)) {
         ClearPendingFrame();
-        return acquiredAnyImage;
+      }
+      if (!CanUpdate(aExpectedState) || !IsPendingFrame(aFrameId)) {
+        return;
       }
     }
 
-    WaitForFrameNotification(notificationDeadline);
+    WaitForFrameNotification(notificationDeadline, aExpectedState);
 
-    // The wait releases the monitor. Recheck whether the reader stopped or
-    // the pending request was cleared before acquiring an image.
-    if (IsStopped()) {
-      return false;
+    // The wait releases the monitor. Recheck that updates are still allowed
+    // in the expected state and a frame is still pending.
+    if (!CanUpdate(aExpectedState)) {
+      return;
     }
 
     if (mPendingFrameId.isNothing()) {
       // RDD reported that the codec did not release the pending frame.
-      return acquiredAnyImage;
+      return;
     }
 
     // OnFrameAvailable does not carry a frame ID. Consume the outstanding
     // frame before releasing another, even when aFrameId has since changed.
-    const bool hasCapacity = ensureCapacity();
+    const bool hasCapacity = EnsureImageCapacity(aCachePolicy);
     // Evicting the cached image can drop the monitor and let Binder callbacks
     // clear the request or disconnect the reader.
-    if (IsStopped()) {
-      return false;
-    }
-    if (!hasCapacity || mPendingFrameId.isNothing()) {
-      return acquiredAnyImage;
+    if (!CanUpdate(aExpectedState) || !hasCapacity ||
+        mPendingFrameId.isNothing()) {
+      return;
     }
     const auto result = AcquirePendingImage();
     if (result == AcquireImageResult::Success) {
-      acquiredAnyImage = true;
       continue;
     }
 
-    if (mRemoteState.isSome() &&
-        result == AcquireImageResult::NoBufferAvailable &&
-        HandleRemoteFrameNoBuffer()) {
-      return false;
+    if (remote && result == AcquireImageResult::NoBufferAvailable) {
+      HandleRemoteFrameNoBuffer();
     }
-    return acquiredAnyImage;
+    return;
   }
-
-  return acquiredAnyImage;
 }
 
-void AndroidImageReader::WaitForFrameNotification(TimeStamp aDeadline) {
-  while (mWaitingFrameAvailable && !IsStopped()) {
+void AndroidImageReader::WaitForFrameNotification(TimeStamp aDeadline,
+                                                  State aExpectedState) {
+  while (mWaitingFrameAvailable && CanUpdate(aExpectedState)) {
     const TimeDuration remaining = aDeadline - TimeStamp::Now();
     if (remaining <= TimeDuration()) {
       gfxCriticalNoteOnce << "UpdateTexImage wait timeout";
@@ -1128,9 +1563,50 @@ static Maybe<gfx::IntRect> GetImageCropRect(AImage* aImage,
                            crop.bottom - crop.top));
 }
 
+void AndroidImageReader::TryAcquireSubmittedFrame(
+    AndroidMediaCodecFrameId aFrameId, CachePolicy aCachePolicy) {
+  if (mIsPendingNextImage || !IsPendingFrame(aFrameId)) {
+    return;
+  }
+  mIsPendingNextImage = true;
+  auto finish = MakeScopeExit([&]() MOZ_REQUIRES(mMonitor) {
+    mIsPendingNextImage = false;
+    mMonitor.NotifyAll();
+  });
+  if (EnsureImageCapacity(aCachePolicy) && IsPendingFrame(aFrameId)) {
+    AcquirePendingImage();
+  }
+}
+
+void AndroidImageReader::OnImageAcquired() { ++mAcquiredImageCount; }
+
+void AndroidImageReader::OnImageReleased() { --mAcquiredImageCount; }
+
+bool AndroidImageReader::EnsureImageCapacity(CachePolicy aCachePolicy) {
+  MOZ_ASSERT(mIsPendingNextImage);
+  if (mAcquiredImageCount.load() < mMaxImageCount) {
+    return true;
+  }
+  // Respect the canvas fallback policy and retain the selected image during
+  // a dormancy flush or after the producer shuts down.
+  if (aCachePolicy == CachePolicy::PreserveOnFull ||
+      (mState != State::Running && HasCachedSelectedFrame())) {
+    return false;
+  }
+  RefPtr<AndroidImageWrapper> image;
+  image.swap(mCurrentImage);
+  {
+    // Dropping the cache reference can delete the AImage. Unlock for
+    // deletion, then check the slot count with the monitor held again.
+    MonitorAutoUnlock unlock(mMonitor);
+    image = nullptr;
+  }
+  return mAcquiredImageCount.load() < mMaxImageCount;
+}
+
 AndroidImageReader::AcquireImageResult
 AndroidImageReader::AcquirePendingImage() {
-  if (IsStopped()) {
+  if (IsRemoteDisconnected()) {
     return AcquireImageResult::Failure;
   }
   MOZ_ASSERT(mPendingFrameId.isSome());
@@ -1198,9 +1674,18 @@ AndroidImageReader::AcquirePendingImage() {
     }
     return AcquireImageResult::Failure;
   }
+
+  RefPtr<AndroidImageWrapper> previous;
+  previous.swap(mCurrentImage);
   mCurrentImage = new AndroidImageWrapper(this, image, nativeBuffer, size,
                                           format, std::move(fence), *crop);
   mCurrentFrameId = frameId;
+  if (previous) {
+    // Publish the new image and its ID under the monitor, then unlock
+    // before dropping the reference that may delete the old AImage.
+    MonitorAutoUnlock unlock(mMonitor);
+    previous = nullptr;
+  }
 
   MOZ_ASSERT(mAcquiredImageCount.load() <= mMaxImageCount);
 
@@ -1230,9 +1715,9 @@ bool AndroidImageReader::MaybeReleaseFrameToCodec(
     return false;
   }
   if (mRemoteState.isSome()) {
-    // Copy the handle under mMonitor, then unlock before calling Binder so
-    // frame notifications and release-failure callbacks can update the reader.
     const int64_t handle = mRemoteState->mHandle;
+    // Drop the monitor across Binder IPC so frame notifications and
+    // release-failure callbacks can take it to update the reader.
     MonitorAutoUnlock unlock(mMonitor);
     // Binder reports whether it accepted the request. RDD reports render
     // failures asynchronously.
@@ -1240,7 +1725,8 @@ bool AndroidImageReader::MaybeReleaseFrameToCodec(
         handle, int64_t(mImageReaderId.mId), int64_t(aFrameId.mId), aRender);
   }
 
-  // Local callbacks can reenter the reader and return the codec release result.
+  // Drop the monitor before invoking the local codec callback, which can
+  // reenter the reader and take the same monitor.
   MonitorAutoUnlock unlock(mMonitor);
   return ImageReaderFrameRegistry::ReleaseFrame(mImageReaderId.mId,
                                                 aFrameId.mId, aRender);
@@ -1379,37 +1865,44 @@ RefPtr<AndroidImageConsumer> GpuProcessAndroidImageReaderMap::GetImageConsumer(
   MOZ_ASSERT(wr::RenderThread::IsInRenderThread());
   MOZ_ASSERT(aGL);
 
-  MonitorAutoLock lock(mMonitor);
-
-  const auto it = mImageReaders.find(aImageReaderId);
-  if (it == mImageReaders.end()) {
-    return nullptr;
-  }
-
-  auto* holder = it->second.get();
-
-  if (holder->mImageConsumer) {
-    if (holder->mImageConsumer->mGL == aGL) {
-      return holder->mImageConsumer;
+  // Strong references outlive each lock scope, including on failure. Their
+  // destructors may ultimately unregister the reader from this map.
+  RefPtr<AndroidImageReader> imageReader;
+  {
+    MonitorAutoLock lock(mMonitor);
+    const auto it = mImageReaders.find(aImageReaderId);
+    if (it == mImageReaders.end()) {
+      return nullptr;
     }
-    MOZ_ASSERT_UNREACHABLE("unexpected to be called");
-    return nullptr;
+    auto* holder = it->second.get();
+    if (holder->mImageConsumer) {
+      if (holder->mImageConsumer->mGL == aGL) {
+        return holder->mImageConsumer;
+      }
+      MOZ_ASSERT_UNREACHABLE("unexpected GL context");
+      return nullptr;
+    }
+    imageReader = RefPtr<AndroidImageReader>(holder->mImageReader);
   }
-
-  RefPtr<AndroidImageReader> imageReader(holder->mImageReader);
   if (!imageReader) {
     return nullptr;
   }
 
-  RefPtr<AndroidImageConsumer> imageConsumer;
-  imageConsumer = AndroidImageConsumer::Create(imageReader, aGL);
+  RefPtr<AndroidImageConsumer> imageConsumer =
+      AndroidImageConsumer::Create(imageReader, aGL);
   if (!imageConsumer) {
-    MOZ_ASSERT_UNREACHABLE("unexpected to be called");
     return nullptr;
   }
-
-  holder->mImageConsumer = imageConsumer;
-
+  {
+    MonitorAutoLock lock(mMonitor);
+    const auto it = mImageReaders.find(aImageReaderId);
+    if (it == mImageReaders.end()) {
+      return nullptr;
+    }
+    // Consumer creation/destruction is serialized on the render thread.
+    MOZ_ASSERT(!it->second->mImageConsumer);
+    it->second->mImageConsumer = imageConsumer;
+  }
   return imageConsumer;
 }
 

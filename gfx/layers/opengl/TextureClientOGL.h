@@ -31,6 +31,7 @@ namespace layers {
 #ifdef MOZ_WIDGET_ANDROID
 
 class AndroidHardwareBuffer;
+class AndroidImageReaderUsage;
 
 class AndroidSurfaceTextureData : public TextureData {
  public:
@@ -157,6 +158,9 @@ class AndroidImageReaderImageTextureData : public TextureData {
   const layers::AndroidMediaCodecFrameId mFrameId;
   const gfx::IntSize mSize;
   const bool mHasAlpha;
+  // TextureChild retains this data through actor destruction, bridging the
+  // asynchronous descriptor handoff to the host's own usage reference.
+  const RefPtr<AndroidImageReaderUsage> mReaderUsage;
 };
 
 #endif  // MOZ_WIDGET_ANDROID

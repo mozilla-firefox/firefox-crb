@@ -54,6 +54,7 @@ already_AddRefed<gfx::SourceSurface> GetAndroidImageReaderSurfaceForCanvas(
 
 class AndroidHardwareBuffer;
 class AndroidImageConsumer;
+class AndroidImageReaderUsage;
 class SurfaceDescriptorAndroidHardwareBuffer;
 class TextureImageTextureSourceOGL;
 class GLTextureSource;
@@ -618,6 +619,11 @@ class AndroidImageReaderImageTextureHost : public TextureHost {
   const layers::AndroidMediaCodecFrameId mFrameId;
   const gfx::IntSize mSize;
   const gfx::SurfaceFormat mFormat;
+
+ private:
+  // Acquired when the descriptor is received, before lazy render creation.
+  // The render host shares it so deferred render-thread deletion is covered.
+  const RefPtr<AndroidImageReaderUsage> mReaderUsage;
 };
 
 #endif  // MOZ_WIDGET_ANDROID

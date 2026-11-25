@@ -13,6 +13,7 @@ namespace mozilla {
 
 namespace layers {
 class AndroidImageConsumer;
+class AndroidImageReaderUsage;
 class AndroidHardwareBuffer;
 }  // namespace layers
 
@@ -24,7 +25,8 @@ class RenderAndroidImageReaderImageTextureHost final
   explicit RenderAndroidImageReaderImageTextureHost(
       const layers::GpuProcessAndroidImageReaderId aImageReaderId,
       const layers::AndroidMediaCodecFrameId aFrameId, const gfx::IntSize aSize,
-      const gfx::SurfaceFormat aFormat);
+      const gfx::SurfaceFormat aFormat,
+      layers::AndroidImageReaderUsage* aReaderUsage);
 
   wr::WrExternalImage Lock(uint8_t aChannelIndex, gl::GLContext* aGL) override;
   void Unlock() override;
@@ -62,6 +64,9 @@ class RenderAndroidImageReaderImageTextureHost final
 
   RefPtr<gl::GLContext> mGL;
 
+  // Shared with TextureHost and retained until render-thread destruction.
+  // This reference covers the time before lazy consumer creation as well.
+  const RefPtr<layers::AndroidImageReaderUsage> mReaderUsage;
   RefPtr<layers::AndroidImageConsumer> mAndroidImageConsumer;
 
   RefPtr<gfx::DataSourceSurface> mReadback;

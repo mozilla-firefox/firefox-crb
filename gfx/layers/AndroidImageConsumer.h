@@ -25,6 +25,7 @@ class GLContext;
 namespace layers {
 
 class AndroidImageReader;
+class AndroidImageReaderUsage;
 class AndroidImageWrapper;
 
 /**
@@ -57,6 +58,8 @@ class AndroidImageConsumer final {
   virtual ~AndroidImageConsumer();
 
   RefPtr<AndroidImageReader> mImageReader;
+  // Other users can retain a consumer beyond a single render texture host.
+  const RefPtr<AndroidImageReaderUsage> mReaderUsage;
   AndroidMediaCodecFrameId mCurrentFrameId;
   RefPtr<AndroidImageWrapper> mCurrentImage;
 };

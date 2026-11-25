@@ -11,6 +11,10 @@ interface ISurfaceAllocator {
     GeckoSurface acquireSurface(in int width, in int height, in boolean singleBufferMode);
     GeckoSurface acquireImageReaderSurface(in IImageReaderFrameCallback callback);
     void releaseSurface(in long handle);
+    oneway void beginImageReaderDormancyFlush(
+        in long handle, in long request, in long frameId, in long deadlineMs);
+    oneway void endImageReaderDormancyFlush(in long handle, in long request);
+    void releaseImageReaderSurface(in long handle, in boolean graceful);
     void maybeRenderImageReaderFirstFrame(in long handle, in long frameId);
     oneway void notifyImageReaderFrameReleaseFailed(in long handle, in long frameId);
 }

@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <memory>
 
+#include "mozilla/ScopeExit.h"
 #include "mozilla/ToString.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/layers/KnowsCompositor.h"
@@ -2553,8 +2554,25 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageV4L2(
 }
 #endif
 
+#ifdef MOZ_WIDGET_ANDROID
+RefPtr<MediaDataDecoder::FlushPromise>
+FFmpegVideoDecoder<LIBAV_VER>::FlushForReason(FlushReason aReason) {
+  if (aReason != FlushReason::Dormancy) {
+    return this->Flush();
+  }
+  return InvokeAsync(mTaskQueue, __func__, [self = RefPtr{this}, aReason] {
+    return self->ProcessFlushWithReason(aReason);
+  });
+}
+#endif
+
 RefPtr<MediaDataDecoder::FlushPromise>
 FFmpegVideoDecoder<LIBAV_VER>::ProcessFlush() {
+  return ProcessFlushWithReason(FlushReason::Normal);
+}
+
+RefPtr<MediaDataDecoder::FlushPromise> FFmpegVideoDecoder<
+    LIBAV_VER>::ProcessFlushWithReason([[maybe_unused]] FlushReason aReason) {
   FFMPEG_LOG("ProcessFlush()");
   MOZ_ASSERT(mTaskQueue->IsOnCurrentThread());
 #if LIBAVCODEC_VERSION_MAJOR >= 58
@@ -2572,6 +2590,17 @@ FFmpegVideoDecoder<LIBAV_VER>::ProcessFlush() {
   }
 #endif
 #ifdef MOZ_WIDGET_ANDROID
+  auto readerClient = mAndroidImageReaderClient;
+  if (readerClient) {
+    // Releasing a MediaCodec frame for acquisition can otherwise queue a drain.
+    mShouldResumeDrain = false;
+  }
+  // Try to acquire the selected frame before releasing the codec buffers and
+  // their callbacks. The guard ends the reader's dormancy flush when the
+  // base codec flush returns. MediaFormatReader requests shutdown separately.
+  auto readerFlush = readerClient && aReason == FlushReason::Dormancy
+                         ? readerClient->PrepareForDormancyFlush()
+                         : layers::AndroidImageReaderClient::CodecFlushGuard{};
   ReleaseFramesMediaCodec();
 #endif
   mSeekTarget.reset();
@@ -2744,6 +2773,8 @@ void FFmpegVideoDecoder<LIBAV_VER>::ProcessShutdown() {
   mShouldResumeDrain = false;
   ReleaseFramesMediaCodec();
   if (mAndroidImageReaderClient) {
+    // Retire the producer. Display references can still keep the image
+    // acquired during the dormancy flush alive in the compositor.
     mAndroidImageReaderClient->Shutdown();
     mAndroidImageReaderClient = nullptr;
   }

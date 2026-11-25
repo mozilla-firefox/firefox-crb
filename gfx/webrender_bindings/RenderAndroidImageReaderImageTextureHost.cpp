@@ -21,11 +21,13 @@ RenderAndroidImageReaderImageTextureHost::
     RenderAndroidImageReaderImageTextureHost(
         const layers::GpuProcessAndroidImageReaderId aImageReaderId,
         const layers::AndroidMediaCodecFrameId aFrameId,
-        const gfx::IntSize aSize, const gfx::SurfaceFormat aFormat)
+        const gfx::IntSize aSize, const gfx::SurfaceFormat aFormat,
+        layers::AndroidImageReaderUsage* aReaderUsage)
     : mImageReaderId(aImageReaderId),
       mFrameId(aFrameId),
       mSize(aSize),
-      mFormat(aFormat) {
+      mFormat(aFormat),
+      mReaderUsage(aReaderUsage) {
   MOZ_COUNT_CTOR_INHERITED(RenderAndroidImageReaderImageTextureHost,
                            RenderTextureHost);
 }

@@ -6,6 +6,7 @@ package org.mozilla.gecko.gfx;
 
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.util.Log;
 import android.util.LongSparseArray;
 import android.view.Surface;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,7 +39,49 @@ public final class RemoteSurfaceAllocator extends ISurfaceAllocator.Stub
 
   /** Removes the native allocation and disconnects the reader from its remote frame callback. */
   @WrapForJNI
-  private static native void disposeImageReaderSurface(long handle);
+  private static native void disposeImageReaderSurface(long handle, boolean graceful);
+
+  @WrapForJNI
+  private static native void beginImageReaderDormancyFlushNative(
+      long handle, long request, long frameId, long deadlineMs);
+
+  @WrapForJNI
+  private static native void endImageReaderDormancyFlushNative(long handle, long request);
+
+  @Override
+  public void beginImageReaderDormancyFlush(
+      final long handle, final long request, final long frameId, final long deadlineMs) {
+    synchronized (this) {
+      if (!mClientConnected || mOwnedHandles.get(handle) != AllocationType.IMAGE_READER) {
+        return;
+      }
+    }
+    final IImageReaderFrameCallback callback;
+    synchronized (sImageReaderCallbacks) {
+      callback = sImageReaderCallbacks.get(handle);
+    }
+    if (callback == null) {
+      return;
+    }
+    // Release the allocator locks before native code tries to acquire the selected frame.
+    beginImageReaderDormancyFlushNative(handle, request, frameId, deadlineMs);
+    // Notify the waiting RDD decoder even if native code acquired no frame.
+    try {
+      callback.flushPrepared(handle | REMOTE_IMAGE_READER_ID_BIT, request);
+    } catch (final RemoteException e) {
+      Log.w(LOGTAG, "Failed to report ImageReader flush preparation", e);
+    }
+  }
+
+  @Override
+  public void endImageReaderDormancyFlush(final long handle, final long request) {
+    synchronized (this) {
+      if (!mClientConnected || mOwnedHandles.get(handle) != AllocationType.IMAGE_READER) {
+        return;
+      }
+    }
+    endImageReaderDormancyFlushNative(handle, request);
+  }
 
   /**
    * Requests the reader's initial image in native code. Call without the allocator instance lock so
@@ -131,12 +174,12 @@ public final class RemoteSurfaceAllocator extends ISurfaceAllocator.Stub
    * callback, or decrements a SurfaceTexture's use count. The caller holds the allocator instance
    * lock and removes the ownership entry after release, or clears all entries after client death.
    */
-  private void releaseOwnedSurface(final long handle) {
+  private void releaseOwnedSurface(final long handle, final boolean graceful) {
     if (mOwnedHandles.get(handle) == AllocationType.IMAGE_READER) {
       synchronized (sImageReaderCallbacks) {
         sImageReaderCallbacks.remove(handle);
       }
-      disposeImageReaderSurface(handle);
+      disposeImageReaderSurface(handle, graceful);
       return;
     }
     final GeckoSurfaceTexture gst = GeckoSurfaceTexture.lookup(handle);
@@ -207,7 +250,17 @@ public final class RemoteSurfaceAllocator extends ISurfaceAllocator.Stub
   @Override
   public synchronized void releaseSurface(final long handle) {
     ensureOwned(handle);
-    releaseOwnedSurface(handle);
+    releaseOwnedSurface(handle, false);
+    mOwnedHandles.remove(handle);
+  }
+
+  @Override
+  public synchronized void releaseImageReaderSurface(final long handle, final boolean graceful) {
+    ensureOwned(handle);
+    if (mOwnedHandles.get(handle) != AllocationType.IMAGE_READER) {
+      return;
+    }
+    releaseOwnedSurface(handle, graceful);
     mOwnedHandles.remove(handle);
   }
 
@@ -215,7 +268,7 @@ public final class RemoteSurfaceAllocator extends ISurfaceAllocator.Stub
   public synchronized void binderDied() {
     mClientConnected = false;
     for (int i = 0; i < mOwnedHandles.size(); i++) {
-      releaseOwnedSurface(mOwnedHandles.keyAt(i));
+      releaseOwnedSurface(mOwnedHandles.keyAt(i), false);
     }
     mOwnedHandles.clear();
   }

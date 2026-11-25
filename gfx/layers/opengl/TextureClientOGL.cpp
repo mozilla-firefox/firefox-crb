@@ -17,6 +17,7 @@
 #  include "mozilla/UniquePtrExtensions.h"
 #  include "mozilla/ipc/FileDescriptor.h"
 #  include "mozilla/layers/AndroidHardwareBuffer.h"
+#  include "mozilla/layers/AndroidImageReader.h"
 #endif
 
 using namespace mozilla::gl;
@@ -208,7 +209,8 @@ AndroidImageReaderImageTextureData::AndroidImageReaderImageTextureData(
     : mImageReaderId(aImageReaderId),
       mFrameId(aFrameId),
       mSize(aSize),
-      mHasAlpha(aHasAlpha) {}
+      mHasAlpha(aHasAlpha),
+      mReaderUsage(AndroidImageReaderUsage::GetForId(aImageReaderId)) {}
 
 AndroidImageReaderImageTextureData::~AndroidImageReaderImageTextureData() {}
 

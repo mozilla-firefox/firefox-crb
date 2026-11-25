@@ -14,6 +14,7 @@
 #include "mozilla/Atomics.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/Monitor.h"
+#include "mozilla/Mutex.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/StaticPtr.h"
 #include "mozilla/ThreadSafeWeakPtr.h"
@@ -41,9 +42,29 @@ namespace layers {
 class AndroidImageConsumer;
 class AndroidImageReader;
 
+// A ref-counted display reference that keeps the reader alive. Images and
+// textures can hold it so the reader retains its cached frame after decoder
+// shutdown. When the last display usage ends after shutdown, drop the
+// reader's cached image reference outside its monitor to break the reference
+// cycle between the reader and the cached image.
+class AndroidImageReaderUsage final {
+ public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(AndroidImageReaderUsage)
+  static RefPtr<AndroidImageReaderUsage> GetForId(
+      GpuProcessAndroidImageReaderId aReaderId);
+
+ private:
+  friend class AndroidImageReader;
+  explicit AndroidImageReaderUsage(AndroidImageReader* aReader);
+  ~AndroidImageReaderUsage();
+
+  const RefPtr<AndroidImageReader> mReader;
+};
+
 /**
  * Common codec-side API for a compositor-owned AndroidImageReader. The base
- * class holds the output Surface and manages frame callback registration.
+ * class holds the output Surface, registers frame callbacks, and tracks the
+ * frame ID selected for display.
  * The local client forwards GPU decoder requests directly to the reader.
  * The remote client forwards RDD decoder requests through SurfaceAllocator.
  * Image acquisition and readback run in the compositor process.
@@ -54,11 +75,39 @@ class AndroidImageReaderClient {
   static already_AddRefed<AndroidImageReaderClient> Create();
   virtual bool IsValid() const;
   java::sdk::Surface::LocalRef GetSurface() const;
-  void MaybeRenderFirstFrame(AndroidMediaCodecFrameId aFrameId);
+  void OnFrameSelected(AndroidMediaCodecFrameId aFrameId);
   void DiscardFrames();
 
-  // Stop the local reader or dispose the remote Surface allocation to drop
-  // the reader's cached image. Consumers may still hold acquired images.
+  // Keep this guard on the codec task queue until the codec flush returns.
+  // An active guard keeps the client alive and calls EndDormancyFlush()
+  // on destruction, even if no frame was acquired. Moving the guard
+  // transfers that responsibility. An empty guard has no effect.
+  class CodecFlushGuard final {
+   public:
+    CodecFlushGuard();
+    CodecFlushGuard(CodecFlushGuard&&) noexcept;
+    CodecFlushGuard& operator=(CodecFlushGuard&&) = delete;
+    CodecFlushGuard(const CodecFlushGuard&) = delete;
+    CodecFlushGuard& operator=(const CodecFlushGuard&) = delete;
+    ~CodecFlushGuard();
+
+   private:
+    friend class AndroidImageReaderClient;
+    explicit CodecFlushGuard(AndroidImageReaderClient* aClient);
+
+    RefPtr<AndroidImageReaderClient> mClient;
+  };
+
+  // On the codec task queue, try to acquire the selected frame before
+  // MediaCodec releases its output buffers. If a flush was started, the guard
+  // calls EndDormancyFlush() when it goes out of scope after the codec flush.
+  [[nodiscard]] CodecFlushGuard PrepareForDormancyFlush();
+  virtual RefPtr<AndroidImageReaderUsage> RetainLocalReaderForDisplay() {
+    return nullptr;
+  }
+
+  // Retire the codec producer when the decoder shuts down. Display references
+  // can keep the compositor-side reader and its cached image alive.
   virtual void Shutdown() = 0;
 
   void RegisterFrame(
@@ -76,14 +125,24 @@ class AndroidImageReaderClient {
   void UnregisterReader();
 
  private:
+  // Return true when an EndDormancyFlush call is required, even if frame
+  // acquisition times out.
+  virtual bool BeginDormancyFlush(AndroidMediaCodecFrameId aFrameId) = 0;
+  virtual void EndDormancyFlush() = 0;
   virtual void RenderFirstFrame(AndroidMediaCodecFrameId aFrameId) = 0;
   const java::sdk::Surface::GlobalRef mOutputSurface;
+  Mutex mSelectionMutex{"AndroidImageReaderClient::mSelectionMutex"};
+  // Reject delayed OnSetCurrent notifications for frames from before a flush.
+  AndroidMediaCodecFrameId mDiscardedThrough MOZ_GUARDED_BY(mSelectionMutex);
+  Maybe<AndroidMediaCodecFrameId> mSelectedFrameId
+      MOZ_GUARDED_BY(mSelectionMutex);
 };
 
 /**
  * Identifies a decoded frame and retains its codec-side ImageReader client.
- * OnSetCurrent requests the reader's first image. Destruction asks the client
- * to release the codec buffer without rendering if its callback is unconsumed.
+ * OnSetCurrent records the selected frame ID in the client and requests
+ * first-frame rendering. Destruction releases the codec buffer without
+ * rendering if its callback is still registered.
  */
 class AndroidImageReaderImage final : public Image {
  public:
@@ -121,6 +180,7 @@ class AndroidImageReaderImage final : public Image {
   virtual ~AndroidImageReaderImage();
 
   const RefPtr<AndroidImageReaderClient> mClient;
+  const RefPtr<AndroidImageReaderUsage> mReaderUsage;
 };
 
 /**
@@ -192,10 +252,26 @@ class AndroidImageReader final
   void NotifyRemoteFrameReleaseFailed(AndroidMediaCodecFrameId aFrameId);
   void DisconnectRemote();
 
-  // Stop acquiring images and drop the cached image when the decoder shuts
-  // down. Images retained by consumers keep this reader alive until they are
-  // released.
-  void Shutdown();
+  // Begin lets the compositor try to acquire the selected frame before the
+  // RDD decoder releases its MediaCodec output buffers. End tells the
+  // compositor the codec flush has finished and ordinary acquisition can
+  // resume. The request ID orders the messages and identifies the timeout.
+  void BeginRemoteDormancyFlush(int64_t aRequest,
+                                AndroidMediaCodecFrameId aFrameId,
+                                int64_t aDeadlineMs);
+  void EndRemoteDormancyFlush(int64_t aRequest);
+
+  // The GPU decoder calls these directly on its codec task queue.
+  // A successful Begin requires End even if no image was acquired.
+  bool BeginDormancyFlush(AndroidMediaCodecFrameId aFrameId);
+  void EndDormancyFlush();
+
+  // Handle decoder shutdown on the reader side. During dormancy, this
+  // follows the flush. Display users can keep the cached image alive.
+  void OnDecoderShutdown();
+
+  // Keep this compositor-owned reader and its cache alive for display.
+  RefPtr<AndroidImageReaderUsage> RetainReaderForDisplay();
 
   // Retain the requested frame before releasing the monitor.
   RefPtr<AndroidImageWrapper> AcquireImage(AndroidMediaCodecFrameId aFrameId);
@@ -226,12 +302,60 @@ class AndroidImageReader final
 
  protected:
   friend class AndroidImageWrapper;
+  friend class AndroidImageReaderUsage;
+
+  void ReleaseDisplayUsage();
+
+  // An RDD disconnect blocks further updates independently of this state.
+  enum class State {
+    // Ordinary frame acquisition can request output from the decoder.
+    Running,
+    // The reader can request output to acquire the selected frame. Ordinary
+    // acquisition stays blocked until the codec flush ends.
+    FlushingForDormancy,
+    // Decoder shutdown blocks new output requests. Display users can still
+    // use the cached frame. A local reader can also acquire an already
+    // submitted frame for display.
+    Shutdown
+  };
+  enum class CachePolicy {
+    // When all acquisition slots are in use, keep the cached image available
+    // as a Remote Canvas fallback and stop this acquisition attempt.
+    PreserveOnFull,
+    // When all acquisition slots are in use, try dropping the cached image
+    // reference to free a slot. Keep a matching selected image during a
+    // dormancy flush or after decoder shutdown.
+    EvictOnFull,
+  };
+
+  // Try to acquire the selected frame within the deadline. Ordinary
+  // submissions stay blocked until EndDormancyFlushLocked() resumes them.
+  void BeginDormancyFlushLocked(const MonitorAutoLock& aProofOfLock,
+                                AndroidMediaCodecFrameId aFrameId,
+                                TimeStamp aFrameAcquisitionDeadline)
+      MOZ_REQUIRES(mMonitor);
+  void EndDormancyFlushLocked() MOZ_REQUIRES(mMonitor);
+  void AcquireFrame(const MonitorAutoLock& aProofOfLock,
+                    AndroidMediaCodecFrameId aFrameId, State aExpectedState,
+                    CachePolicy aCachePolicy,
+                    const TimeStamp& aFrameAcquisitionDeadline = TimeStamp())
+      MOZ_REQUIRES(mMonitor);
+  bool CanUpdate(State aExpectedState) const MOZ_REQUIRES(mMonitor) {
+    return mState == aExpectedState && !IsRemoteDisconnected();
+  }
+  bool HasCurrentFrame(AndroidMediaCodecFrameId aFrameId) const
+      MOZ_REQUIRES(mMonitor);
+  bool HasCachedSelectedFrame() const MOZ_REQUIRES(mMonitor);
+  bool EnsureImageCapacity(CachePolicy aCachePolicy) MOZ_REQUIRES(mMonitor);
+  void TryAcquireSubmittedFrame(AndroidMediaCodecFrameId aFrameId,
+                                CachePolicy aCachePolicy)
+      MOZ_REQUIRES(mMonitor);
 
   enum class AcquireImageResult { Success, NoBufferAvailable, Failure };
   AcquireImageResult AcquirePendingImage() MOZ_REQUIRES(mMonitor);
 
   bool IsStopped() const MOZ_REQUIRES(mMonitor) {
-    return mShuttingDown || IsRemoteDisconnected();
+    return mState == State::Shutdown || IsRemoteDisconnected();
   }
 
   bool Init();
@@ -239,9 +363,11 @@ class AndroidImageReader final
 
   static void OnFrameAvailable(void* aContext, AImageReader* aReader);
 
-  // Waits until the notification is received, the pending request is
-  // cleared, the reader stops, or the deadline expires.
-  void WaitForFrameNotification(TimeStamp aDeadline) MOZ_REQUIRES(mMonitor);
+  // Waits for a frame notification or until the request is cleared, the
+  // reader leaves the expected state, RDD disconnects, or the deadline
+  // expires.
+  void WaitForFrameNotification(TimeStamp aDeadline, State aExpectedState)
+      MOZ_REQUIRES(mMonitor);
   bool IsPendingFrame(AndroidMediaCodecFrameId aFrameId) const
       MOZ_REQUIRES(mMonitor) {
     return mPendingFrameId.isSome() && mPendingFrameId.value() == aFrameId;
@@ -251,8 +377,8 @@ class AndroidImageReader final
     return mRemoteState.isSome() && mRemoteState->mDisconnected;
   }
   void StartRemoteFrameRequest() MOZ_REQUIRES(mMonitor);
-  // Returns true if the deadline has expired and the reader was disconnected.
-  bool HandleRemoteFrameNoBuffer() MOZ_REQUIRES(mMonitor);
+  // Disconnects an expired request or schedules another timeout check.
+  void HandleRemoteFrameNoBuffer() MOZ_REQUIRES(mMonitor);
   // Marks the remote reader as disconnected and transfers its cached image
   // to the caller. Release the image after unlocking mMonitor.
   RefPtr<AndroidImageWrapper> DisconnectRemoteLocked() MOZ_REQUIRES(mMonitor);
@@ -260,6 +386,10 @@ class AndroidImageReader final
   void ScheduleRemoteFrameTimeout() MOZ_REQUIRES(mMonitor);
   void OnRemoteFrameTimeout(AndroidMediaCodecFrameId aFrameId,
                             TimeStamp aDeadline);
+
+  // RDD dormancy flush recovery when the decoder does not send End.
+  void ScheduleRemoteDormantFlushTimeout(int64_t aRequest);
+  void OnRemoteDormantFlushTimeout(int64_t aRequest);
 
   struct RemoteState {
     explicit RemoteState(int64_t aHandle) : mHandle(aHandle) {}
@@ -271,6 +401,9 @@ class AndroidImageReader final
     // or deadline no longer matches.
     bool mFrameTimeoutScheduled = false;
     bool mDisconnected = false;
+    // Newest dormancy flush request ID seen in Begin or End.
+    // Recording End also rejects a late Begin for the same request.
+    int64_t mLastDormantFlushRequest = 0;
   };
 
   Monitor mMonitor;
@@ -290,23 +423,23 @@ class AndroidImageReader final
   Maybe<AndroidMediaCodecFrameId> mPendingFrameId MOZ_GUARDED_BY(mMonitor);
   bool mWaitingFrameAvailable MOZ_GUARDED_BY(mMonitor) = false;
   bool mIsPendingNextImage MOZ_GUARDED_BY(mMonitor) = false;
-  bool mShuttingDown MOZ_GUARDED_BY(mMonitor) = false;
+  State mState MOZ_GUARDED_BY(mMonitor) = State::Running;
+  // Frame selected for display. When acquisition slots are full, retain a
+  // matching cached image during a dormancy flush or after decoder shutdown.
+  Maybe<AndroidMediaCodecFrameId> mSelectedFrameId MOZ_GUARDED_BY(mMonitor);
+  // Excludes the cache wrapper's back-reference to the reader.
+  size_t mDisplayUsages MOZ_GUARDED_BY(mMonitor) = 0;
 
   mozilla::Atomic<int32_t> mAcquiredImageCount{0};
 
  private:
-  enum class CachePolicy {
-    // When all acquisition slots are in use, keep the cached image available
-    // as a Remote Canvas fallback and stop this acquisition attempt.
-    PreserveOnFull,
-    // When all acquisition slots are in use, drop the reader's cached image
-    // reference and continue only if a slot becomes available.
-    EvictOnFull,
-  };
+  // Image release can run on another thread without holding mMonitor.
+  void OnImageAcquired();
+  void OnImageReleased();
 
-  bool DoUpdateTexImage(const MonitorAutoLock& aProofOfLock,
-                        AndroidMediaCodecFrameId aFrameId,
-                        CachePolicy aCachePolicy) MOZ_REQUIRES(mMonitor);
+  void UpdateImage(const MonitorAutoLock& aProofOfLock,
+                   AndroidMediaCodecFrameId aFrameId, CachePolicy aCachePolicy)
+      MOZ_REQUIRES(mMonitor);
 };
 
 /**

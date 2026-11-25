@@ -21,6 +21,11 @@ import org.mozilla.gecko.process.GeckoServiceChildProcess;
   private static final IBinder sClient = new Binder();
   private static final IImageReaderFrameCallback sImageReaderCallback =
       new IImageReaderFrameCallback.Stub() {
+        @Override
+        public void flushPrepared(final long readerId, final long request) {
+          notifyImageReaderFlushPrepared(readerId, request);
+        }
+
         // Forward compositor requests to the native frame registry in RDD.
         @Override
         public void releaseFrame(
@@ -62,6 +67,64 @@ import org.mozilla.gecko.process.GeckoServiceChildProcess;
    */
   @WrapForJNI
   private static native void discardImageReaderFrames(long readerId);
+
+  @WrapForJNI
+  private static native void notifyImageReaderFlushPrepared(long readerId, long request);
+
+  private static synchronized ISurfaceAllocator imageReaderAllocator(final long handle) {
+    final GeckoSurface surface = sSurfaces.get(handle);
+    return surface != null && surface.getImageReaderId() != 0 ? sAllocator : null;
+  }
+
+  @WrapForJNI
+  private static boolean beginImageReaderDormancyFlush(
+      final long handle, final long request, final long frameId, final long deadlineMs) {
+    final ISurfaceAllocator allocator = imageReaderAllocator(handle);
+    if (allocator == null) {
+      return false;
+    }
+    try {
+      allocator.beginImageReaderDormancyFlush(handle, request, frameId, deadlineMs);
+      return true;
+    } catch (final RemoteException | SecurityException e) {
+      Log.w(LOGTAG, "Failed to begin ImageReader flush", e);
+      return false;
+    }
+  }
+
+  @WrapForJNI
+  private static void endImageReaderDormancyFlush(final long handle, final long request) {
+    final ISurfaceAllocator allocator = imageReaderAllocator(handle);
+    if (allocator == null) {
+      return;
+    }
+    try {
+      allocator.endImageReaderDormancyFlush(handle, request);
+    } catch (final RemoteException | SecurityException e) {
+      Log.w(LOGTAG, "Failed to end ImageReader flush", e);
+    }
+  }
+
+  @WrapForJNI
+  private static void disposeImageReaderSurface(
+      final GeckoSurface surface, final boolean graceful) {
+    final ISurfaceAllocator allocator;
+    synchronized (SurfaceAllocator.class) {
+      if (surface.isReleased()) {
+        return;
+      }
+      sSurfaces.remove(surface.getHandle());
+      surface.release();
+      allocator = sAllocator;
+    }
+    if (allocator != null) {
+      try {
+        allocator.releaseImageReaderSurface(surface.getHandle(), graceful);
+      } catch (final RemoteException | SecurityException e) {
+        Log.w(LOGTAG, "Failed to release remote ImageReader surface", e);
+      }
+    }
+  }
 
   /**
    * Requests the initial image from the compositor-owned reader through a synchronous Binder call.

@@ -3,5 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 package org.mozilla.gecko.gfx;
 oneway interface IImageReaderFrameCallback {
+    void flushPrepared(in long readerId, in long request);
     void releaseFrame(in long handle, in long readerId, in long frameId, in boolean render);
 }

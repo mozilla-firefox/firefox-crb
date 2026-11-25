@@ -162,6 +162,10 @@ class FFmpegVideoDecoder<LIBAV_VER>
 
  private:
   RefPtr<FlushPromise> ProcessFlush() override;
+  RefPtr<FlushPromise> ProcessFlushWithReason(FlushReason aReason);
+#ifdef MOZ_WIDGET_ANDROID
+  RefPtr<FlushPromise> FlushForReason(FlushReason aReason) override;
+#endif
 #if LIBAVCODEC_VERSION_MAJOR >= 58
   // Creates the image for mFrame with the current decoding backend.
   MediaResult CreateImageForFrame(int64_t aOffset, int64_t aPts,
