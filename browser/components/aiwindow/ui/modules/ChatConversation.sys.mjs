@@ -70,7 +70,7 @@ const lazy = XPCOMUtils.declareLazy({
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
   ToolUI: "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
   CONFIRMATION_UI_TYPES:
-    "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
+    "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs",
   isTabGroupMember: "chrome://browser/content/urlbar/SmartbarMentionUtils.mjs",
   fluentStrings: () => {
     return new Localization(["browser/firefoxView.ftl"], true);

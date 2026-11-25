@@ -3,11 +3,17 @@
 
 "use strict";
 
-const { UI_TYPES, ToolUI } = ChromeUtils.importESModule(
+const { ToolUI } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs"
+);
+const { UI_TYPES } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs"
 );
 
 // Import toolFns to drive the manageTabs function
+const { ToolUITelemetry } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ToolUITelemetry.sys.mjs"
+);
 const { toolFns } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs"
 );
@@ -757,7 +763,7 @@ add_task(async function test_display_telemetry_per_card_type() {
       },
       { uiType: UI_TYPES.AI_ACTION_RESULT, properties: {} },
     ]) {
-      ToolUI.handleUIDisplayTelemetry(toolUIData, telemetryData);
+      ToolUITelemetry.recordPromptDisplay(toolUIData, telemetryData);
     }
     await Services.fog.testFlushAllChildren();
 
