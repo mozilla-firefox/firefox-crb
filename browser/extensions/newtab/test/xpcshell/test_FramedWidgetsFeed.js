@@ -7,7 +7,10 @@ ChromeUtils.defineESModuleGetters(this, {
   actionTypes: "resource://newtab/common/Actions.mjs",
   sinon: "resource://testing-common/Sinon.sys.mjs",
   FramedWidgetsFeed: "resource://newtab/lib/Widgets/FramedWidgetsFeed.sys.mjs",
+  MerinoClient: "moz-src:///browser/components/urlbar/MerinoClient.sys.mjs",
   MerinoTestUtils: "resource://testing-common/MerinoTestUtils.sys.mjs",
+  Store: "resource://newtab/lib/Store.sys.mjs",
+  TestUtils: "resource://testing-common/TestUtils.sys.mjs",
 });
 
 MerinoTestUtils.init(this);
@@ -200,18 +203,47 @@ add_task(async function test_system_tick_retries_failed_fetch() {
 });
 
 add_task(async function test_fetch_error_uses_stale_cache() {
-  const sandbox = sinon.createSandbox();
-  const feed = makeFeed(sandbox, {
-    cache: {
-      frames: { environment: "prod", manifest: MANIFEST, lastUpdated: 1 },
-    },
+  const feed = new FramedWidgetsFeed();
+  const store = new Store();
+  store.dispatch({
+    type: actionTypes.PREFS_INITIAL_VALUES,
+    data: ENABLED_PREFS,
   });
-  stubMerino(sandbox, feed, { data: null, error: "load_error" });
+  feed.store = store;
+  await feed.cache.set("frames", {
+    environment: "prod",
+    manifest: MANIFEST,
+    lastUpdated: 1,
+  });
 
-  await feed.onAction({ type: actionTypes.INIT });
+  using fetchController = TestUtils.asyncControlProxy(
+    Cu.getGlobalForObject(MerinoClient)
+  ).fetch((_, [url]) => {
+    Assert.equal(
+      url.origin + url.pathname,
+      PROD_ENDPOINT,
+      "Merino fetches the production widget manifest"
+    );
 
-  Assert.deepEqual(lastUpdate(feed), FRAMES, "Falls back to the stale cache");
-  sandbox.restore();
+    return true;
+  });
+
+  const loading = feed.onAction({ type: actionTypes.INIT });
+  await fetchController.waitForInterception();
+  Assert.deepEqual(
+    store.getState().FramedWidgets,
+    {},
+    "The fetch is still pending"
+  );
+
+  fetchController.rejectResult(new TypeError("Network request failed"));
+  await loading;
+
+  Assert.deepEqual(
+    store.getState().FramedWidgets,
+    FRAMES,
+    "Falls back to the stale cache"
+  );
 });
 
 add_task(async function test_no_manifest_broadcasts_empty() {
