@@ -50,6 +50,7 @@ support-files = [
   "test_signed_apps/**",
   "test_trust_anchors/**",
   "tlsserver/**",
+  "!/netwerk/test/unit/http2-ca.pem",
 ]
 
 ["test_add_preexisting_cert.js"]

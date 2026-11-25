@@ -18,6 +18,11 @@
 // 6. Patches to update certificates get created.
 // 6.1. Update certificates in security/manager/ssl/tests/unit with
 //      ./mach generate-test-certs
+//      This also regenerates netwerk/test/unit/http2-ca.pem and
+//      testing/xpcshell/moz-http2/http2-cert.pem. Copy them to the other
+//      places that hold a copy, e.g. testing/mochitest/DoHServer,
+//      testing/raptor/browsertime/utils and
+//      browser/components/backup/tests/marionette.
 // 6.2. Update more certificates with
 //      ./mach python build/pgo/genpgocert.py
 // 6.3. Temporarily uncomment the code in security/manager/ssl/tests/unit/test_signed_apps/moz.build,
@@ -53,5 +58,18 @@ add_task(async function () {
     threeWeeksFromNowInSeconds,
     false,
     "test.example.com"
+  );
+});
+
+add_task(async function test_http2_ca_not_expiring() {
+  let http2CA = constructCertFromFile(
+    "../../../../../netwerk/test/unit/http2-ca.pem"
+  );
+  let threeWeeksFromNowInMicroseconds =
+    (Date.now() / 1000 + 3 * 7 * 24 * 60 * 60) * 1e6;
+  Assert.greater(
+    http2CA.validity.notAfter,
+    threeWeeksFromNowInMicroseconds,
+    "http2-ca.pem should not expire within the next three weeks"
   );
 });
