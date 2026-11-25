@@ -262,53 +262,32 @@ describe("sidebar conversation starter prompts", () => {
     const aiWindow = sidebarBrowser.contentDocument.querySelector("ai-window");
     const tab = gAiWindow.gBrowser.selectedTab;
     const sandbox = sinon.createSandbox();
-    const loads = Array.from({ length: 3 }, () => ({
-      entered: Promise.withResolvers(),
-      release: Promise.withResolvers(),
-    }));
-    const generationStarted = Promise.withResolvers();
-    const releaseGeneration = Promise.withResolvers();
-    const formatValues = aiWindow.ownerDocument.l10n.formatValues.bind(
-      aiWindow.ownerDocument.l10n
-    );
-    const loadSystemPrompt = aiWindow.conversation.loadSystemPrompt.bind(
-      aiWindow.conversation
-    );
-    let loadIndex = 0;
-    let olderLoad, newerLoad;
-
-    sandbox
-      .stub(aiWindow.ownerDocument.l10n, "formatValues")
-      .callsFake(async (...args) => {
-        const load = loads[loadIndex++];
-        const values = await formatValues(...args);
-        load.entered.resolve();
-        await load.release.promise;
-        return values;
-      });
-    sandbox
-      .stub(aiWindow.conversation, "loadSystemPrompt")
-      .callsFake(async (...args) => {
-        generationStarted.resolve();
-        await releaseGeneration.promise;
-        return loadSystemPrompt(...args);
-      });
+    const l10n = aiWindow.ownerDocument.l10n;
+    const l10nProxy = TestUtils.asyncControlProxy(l10n);
+    let firstStarterLoad, secondStarterLoad;
 
     try {
+      using firstFormatValuesController = l10nProxy.formatValues();
       aiWindow.conversation.transientStarterUrl = null;
-      olderLoad = aiWindow.loadStarterPrompts(true, tab);
-      await loads[0].entered.promise;
+      firstStarterLoad = aiWindow.loadStarterPrompts(true, tab);
+      await firstFormatValuesController.waitForResult();
 
+      using secondFormatValuesController = l10nProxy.formatValues();
       aiWindow.conversation.transientStarterUrl = null;
-      newerLoad = aiWindow.loadStarterPrompts(true, tab);
-      await loads[1].entered.promise;
+      secondStarterLoad = aiWindow.loadStarterPrompts(true, tab);
+      await secondFormatValuesController.waitForResult();
 
-      loads[0].release.resolve();
-      await olderLoad;
+      firstFormatValuesController.releaseResult();
+      await firstStarterLoad;
+
+      using loadSystemPromptController = TestUtils.asyncControlProxy(
+        aiWindow.conversation
+      ).loadSystemPrompt();
 
       await typeInSmartbar(sidebarBrowser, "Hello world");
       await submitSmartbar(sidebarBrowser);
-      await generationStarted.promise;
+      await loadSystemPromptController.waitForInterception();
+
       Assert.equal(
         aiWindow.conversationMessageCount,
         0,
@@ -316,17 +295,17 @@ describe("sidebar conversation starter prompts", () => {
       );
 
       Assert.ok(aiWindow.isGenerating, "Chat generation is in progress");
-      loads[2].release.resolve();
+
+      const formatValuesSpy = sandbox.spy(l10n, "formatValues");
       aiWindow.conversation.transientStarterUrl = null;
       await aiWindow.loadStarterPrompts(true, tab);
-      Assert.equal(
-        loadIndex,
-        2,
+      Assert.ok(
+        formatValuesSpy.notCalled,
         "No new starter load begins while chat initialization is in progress"
       );
 
-      loads[1].release.resolve();
-      await newerLoad;
+      secondFormatValuesController.releaseResult();
+      await secondStarterLoad;
       await aiWindow.updateComplete;
       Assert.ok(
         !aiWindow.showStarters,
@@ -338,14 +317,10 @@ describe("sidebar conversation starter prompts", () => {
         "Canceled starter prompts should not reappear before messages arrive"
       );
 
-      releaseGeneration.resolve();
+      loadSystemPromptController.releaseResult();
       await gMockEngineManager.respondTo({ purpose: "chat", response: "Hi" });
     } finally {
-      for (const load of loads) {
-        load.release.resolve();
-      }
-      releaseGeneration.resolve();
-      await Promise.allSettled([olderLoad, newerLoad]);
+      await Promise.allSettled([firstStarterLoad, secondStarterLoad]);
       sandbox.restore();
       await TestUtils.waitForCondition(
         () => !aiWindow.isGenerating,
