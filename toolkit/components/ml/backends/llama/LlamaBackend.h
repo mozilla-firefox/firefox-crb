@@ -57,7 +57,7 @@ const nsTArray<Device>& Devices(const LlamaLibWrapper* aLib);
 //
 // Usage Pattern:
 // 1. Construct the class using the default constructor.
-// 2. Call `Reinitialize(...)` to load a model.
+// 2. Call `Reinitialize(...)` to load a model (or model pair for MTMD).
 // 3. (Optional) Use `FormatChat(...)` to build a prompt from chat messages.
 // 4. Call `Generate(...)` to start streaming token output. Each call creates
 // a context for its prompt and maxGeneratedTokens.
@@ -74,7 +74,10 @@ class LlamaBackend {
 
   // Loads the model. The context is created by Generate, sized to its
   // request.
-  ResultStatus Reinitialize(const LlamaModelOptions& aOptions, FILE* aFp);
+  //
+  // aMmprojFp is an optional handle to a multimodal projector (mmproj) GGUF.
+  ResultStatus Reinitialize(const LlamaModelOptions& aOptions, FILE* aFp,
+                            FILE* aMmprojFp = nullptr);
 
   // Converts structured chat messages into a flat prompt string.
   // Useful for models expecting a plain-text prompt.
@@ -118,6 +121,10 @@ class LlamaBackend {
     void operator()(llama_sampler* aSmpl) const;
   };
 
+  struct MtmdContextDeleter {
+    void operator()(mtmd_context* aCtx) const;
+  };
+
   // Smart pointer types for safe resource cleanup
   using GgmlThreadpoolUPtr =
       mozilla::UniquePtr<struct ggml_threadpool, GgmlThreadpoolDeleter>;
@@ -126,6 +133,7 @@ class LlamaBackend {
       mozilla::UniquePtr<llama_context, LlamaContextDeleter>;
   using LlamaSamplerUPtr =
       mozilla::UniquePtr<llama_sampler, LlamaSamplerDeleter>;
+  using MtmdContextUPtr = mozilla::UniquePtr<mtmd_context, MtmdContextDeleter>;
 
   // sampler result alias
   using SamplerResult = mozilla::Result<LlamaSamplerUPtr, Error>;
@@ -153,6 +161,9 @@ class LlamaBackend {
 
   // Holds the model data. Initialized once & reused across generation sessions.
   LlamaModelUPtr mModel;
+
+  // Borrows mModel, so it must not outlive it.
+  MtmdContextUPtr mMtmdCtx;
 
   // Threadpool used for processing single tokens, usually during decoding.
   // Initialized with the model & reused across generation sessions.

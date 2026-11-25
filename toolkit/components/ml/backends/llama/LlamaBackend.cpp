@@ -58,6 +58,14 @@ void LlamaBackend::LlamaSamplerDeleter::operator()(llama_sampler* aSmpl) const {
   }
 }
 
+void LlamaBackend::MtmdContextDeleter::operator()(mtmd_context* aCtx) const {
+  if (auto* lib = LlamaRuntimeLinker::Get()) {
+    if (lib->mtmd_free) {
+      lib->mtmd_free(aCtx);
+    }
+  }
+}
+
 #define LOGD(fmt, ...) \
   MOZ_LOG_FMT(gLlamaBackendLog, LogLevel::Debug, fmt, ##__VA_ARGS__)
 
@@ -261,7 +269,7 @@ LlamaBackend::~LlamaBackend() {
 }
 
 ResultStatus LlamaBackend::Reinitialize(const LlamaModelOptions& aOptions,
-                                        FILE* aFp) {
+                                        FILE* aFp, FILE* aMmprojFp) {
   LOGV("Entered {}", __PRETTY_FUNCTION__);
 
   if (!mLib) {
@@ -287,6 +295,9 @@ ResultStatus LlamaBackend::Reinitialize(const LlamaModelOptions& aOptions,
   mDevice.Truncate();
   mDeviceKind = dom::HWInferenceDeviceKind::Cpu;
 
+  // Drop any previous mmproj before the model it borrows goes away.
+  mMtmdCtx.reset();
+
   auto loaded = LoadOnFirstDevice(aOptions, aFp, modelParams);
   if (loaded.isErr()) {
     return loaded;
@@ -306,6 +317,30 @@ ResultStatus LlamaBackend::Reinitialize(const LlamaModelOptions& aOptions,
         "Unable to extract the name of the model. Logging message will not "
         "include it.");
     mModelGeneralName = ""_ns;
+  }
+
+  if (aMmprojFp) {
+    mtmd_context_params mtmdParams = mLib->mtmd_context_params_default();
+    mtmdParams.use_gpu = false;
+    mtmdParams.print_timings = false;
+    mtmdParams.n_threads = std::max(1, aOptions.mContext.mNThreads);
+
+    mMtmdCtx.reset(
+        mLib->mtmd_init_from_file_handle(aMmprojFp, mModel.get(), mtmdParams));
+    if (!mMtmdCtx) {
+      auto msg = nsFmtCString("{}: Unable to load the mmproj {}",
+                              __PRETTY_FUNCTION__, mModelGeneralName);
+      LOGE("{}", msg);
+      return mozilla::Err(Error{std::move(msg)});
+    }
+
+    if (!mLib->mtmd_support_vision(mMtmdCtx.get())) {
+      mMtmdCtx.reset();
+      auto msg = nsFmtCString("{}: The mmproj has no vision encoder {}",
+                              __PRETTY_FUNCTION__, mModelGeneralName);
+      LOGE("{}", msg);
+      return mozilla::Err(Error{std::move(msg)});
+    }
   }
 
   LOGV("{}: Successfully Initialized {}", __PRETTY_FUNCTION__,
