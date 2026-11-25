@@ -315,6 +315,9 @@ class Thread {
 static NS_tchar gPatchDirPath[MAXPATHLEN];
 static NS_tchar gInstallDirPath[MAXPATHLEN];
 static NS_tchar gWorkingDirPath[MAXPATHLEN];
+// The directory that the manifest and patch files are extracted to while the
+// update is applied. It is removed once the update has finished.
+static NS_tchar gUpdatingDirPath[MAXPATHLEN];
 constinit static ArchiveReader gArchiveReader;
 static bool gSucceeded = false;
 #ifdef XP_MACOSX
@@ -2058,8 +2061,8 @@ PatchFile::~PatchFile() {
     UnlockFile((HANDLE)_get_osfhandle(fileno(mPatchStream)), 0, 0, -1, -1);
   }
 #endif
-  // Patch files are written to the <working_dir>/updating directory which is
-  // removed after the update has finished so don't delete patch files here.
+  // Patch files are written to gUpdatingDirPath, which is removed after the
+  // update has finished, so don't delete patch files here.
 }
 
 int PatchFile::LoadSourceFile(FILE* ofile) {
@@ -2162,7 +2165,7 @@ int PatchFile::Prepare() {
   mPatchIndex = sPatchIndex++;
 
   NS_tsnprintf(mPatchPath, sizeof(mPatchPath) / sizeof(mPatchPath[0]),
-               NS_T("%s/updating/%d.patch"), gWorkingDirPath, mPatchIndex);
+               NS_T("%s/%d.patch"), gUpdatingDirPath, mPatchIndex);
 
   // The removal of pre-existing patch files here is in case a previous update
   // crashed and left these files behind.
@@ -2399,8 +2402,8 @@ int PatchFile::ApplyPatchTo(PatchDest aDest) {
   // Set mPatchStream to nullptr to make AutoFile close the file,
   // so it can be deleted on Windows.
   mPatchStream = nullptr;
-  // Patch files are written to the <working_dir>/updating directory which is
-  // removed after the update has finished so don't delete patch files here.
+  // Patch files are written to gUpdatingDirPath, which is removed after the
+  // update has finished, so don't delete patch files here.
   mPatchPath[0] = NS_T('\0');
   mBuf.reset();
   mBufSize = 0;
@@ -3423,6 +3426,34 @@ static int GetUpdateFileName(NS_tchar* fileName, int maxChars) {
   return OK;
 }
 
+// Sets gUpdatingDirPath and creates the directory. On macOS it is a private
+// directory in the temporary directory, so that an update doesn't add it to
+// the application bundle.
+static int CreateUpdatingDir() {
+#ifdef XP_MACOSX
+  char tempDir[MAXPATHLEN];
+  size_t tempDirLen = confstr(_CS_DARWIN_USER_TEMP_DIR, tempDir, MAXPATHLEN);
+  if (tempDirLen == 0 || tempDirLen > MAXPATHLEN) {
+    LOG(("CreateUpdatingDir: unable to get the temporary directory"));
+    return WRITE_ERROR;
+  }
+  NS_tsnprintf(gUpdatingDirPath,
+               sizeof(gUpdatingDirPath) / sizeof(gUpdatingDirPath[0]),
+               NS_T("%sorg.mozilla.updater.XXXXXX"), tempDir);
+  if (!mkdtemp(gUpdatingDirPath)) {
+    LOG(("CreateUpdatingDir: unable to create " LOG_S ", err: %d",
+         gUpdatingDirPath, errno));
+    gUpdatingDirPath[0] = NS_T('\0');
+    return WRITE_ERROR;
+  }
+#else
+  NS_tsnprintf(gUpdatingDirPath,
+               sizeof(gUpdatingDirPath) / sizeof(gUpdatingDirPath[0]),
+               NS_T("%s/updating"), gWorkingDirPath);
+#endif
+  return OK;
+}
+
 static void UpdateThreadFunc([[maybe_unused]] void* param) {
   // open ZIP archive and process...
   int rv;
@@ -3491,12 +3522,12 @@ static void UpdateThreadFunc([[maybe_unused]] void* param) {
     }
 
     if (rv == OK) {
+      rv = CreateUpdatingDir();
+    }
+    if (rv == OK) {
       rv = DoUpdate();
       gArchiveReader.Close();
-      NS_tchar updatingDir[MAXPATHLEN];
-      NS_tsnprintf(updatingDir, sizeof(updatingDir) / sizeof(updatingDir[0]),
-                   NS_T("%s/updating"), gWorkingDirPath);
-      ensure_remove_recursive(updatingDir);
+      ensure_remove_recursive(gUpdatingDirPath);
     }
   }
 
@@ -5679,7 +5710,7 @@ int AddPreCompleteActions(ActionList* list) {
 int DoUpdate() {
   NS_tchar manifest[MAXPATHLEN];
   NS_tsnprintf(manifest, sizeof(manifest) / sizeof(manifest[0]),
-               NS_T("%s/updating/update.manifest"), gWorkingDirPath);
+               NS_T("%s/update.manifest"), gUpdatingDirPath);
   ensure_parent_dir(manifest);
 
   // extract the manifest
@@ -5690,8 +5721,8 @@ int DoUpdate() {
   }
 
   NS_tchar* buf = GetManifestContents(manifest);
-  // The manifest is located in the <working_dir>/updating directory which is
-  // removed after the update has finished so don't delete it here.
+  // The manifest is located in gUpdatingDirPath, which is removed after the
+  // update has finished, so don't delete it here.
   if (!buf) {
     LOG(("DoUpdate: error opening manifest file: " LOG_S, manifest));
     return READ_ERROR;
