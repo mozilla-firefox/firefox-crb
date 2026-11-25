@@ -38,6 +38,19 @@ class nsAlertsIconListener : public nsISupports {
 
   static void MaybeSetActivationToken(NotifyNotification* aNotification);
 
+  /**
+   * Returns the desktop-entry hint to give libnotify.
+   *
+   * @param aAppId The app ID given by the alert, possibly empty.
+   * @param aSnapName The Snap instance name, or null outside of Snap.
+   * @param aDesktopFileName The MOZ_DESKTOP_FILE_NAME variable, or null.
+   * @param aRemotingName The application's remoting name.
+   */
+  static nsCString GetDesktopEntryHint(const nsACString& aAppId,
+                                       const char* aSnapName,
+                                       const char* aDesktopFileName,
+                                       const char* aRemotingName);
+
  protected:
   virtual ~nsAlertsIconListener();
 

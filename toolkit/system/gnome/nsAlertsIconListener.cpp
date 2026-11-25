@@ -16,6 +16,7 @@
 #include "mozilla/XREAppData.h"
 #include "mozilla/GRefPtr.h"
 #include "mozilla/GUniquePtr.h"
+#include "mozilla/WidgetUtilsGtk.h"
 
 #include "nsGTKToolkit.h"
 
@@ -54,6 +55,36 @@ nsAlertsIconListener::notify_notification_set_timeout_t
     nsAlertsIconListener::notify_notification_set_timeout = nullptr;
 nsAlertsIconListener::notify_notification_get_activation_token_t
     nsAlertsIconListener::notify_notification_get_activation_token = nullptr;
+
+/* static */
+nsCString nsAlertsIconListener::GetDesktopEntryHint(
+    const nsACString& aAppId, const char* aSnapName,
+    const char* aDesktopFileName, const char* aRemotingName) {
+  // Prefer the app ID given by the alert (e.g. a web app), then the
+  // MOZ_DESKTOP_FILE_NAME variable, then gAppData->remotingName.
+  //
+  // Under Snap, libnotify treats the hint as relative to the snap, prefixing
+  // it with "<snap>_". Since libnotify 0.8.7, it keeps the hint instead if GIO
+  // finds its desktop entry from inside the snap, so a hint relative to the
+  // snap works with both. See try_prepend_snap_desktop() in
+  // https://gitlab.gnome.org/GNOME/libnotify/-/blob/0.8.8/libnotify/notification.c
+  nsCString desktopEntry;
+  if (!aAppId.IsEmpty()) {
+    desktopEntry = aAppId;
+  } else {
+    // Send the desktop name to identify the application
+    // The desktop-entry is the part before the .desktop
+    desktopEntry = aDesktopFileName ? aDesktopFileName : aRemotingName;
+  }
+  if (aSnapName) {
+    nsAutoCString snapPrefix(aSnapName);
+    snapPrefix.Append('_');
+    if (StringBeginsWith(desktopEntry, snapPrefix)) {
+      desktopEntry.Cut(0, snapPrefix.Length());
+    }
+  }
+  return desktopEntry;
+}
 
 void nsAlertsIconListener::MaybeSetActivationToken(
     NotifyNotification* aNotification) {
@@ -222,22 +253,11 @@ nsresult nsAlertsIconListener::ShowAlert(imgIContainer* aImage) {
     notify_notification_set_hint(mNotification, "suppress-sound",
                                  g_variant_new_boolean(mAlertIsSilent));
 
-    // Prefer the app ID given by the alert (e.g. a web app), then the
-    // MOZ_DESKTOP_FILE_NAME variable, then gAppData->remotingName.
-    if (!mAlertAppId.IsEmpty()) {
-      notify_notification_set_hint(mNotification, "desktop-entry",
-                                   g_variant_new("s", mAlertAppId.get()));
-    } else if (getenv("MOZ_DESKTOP_FILE_NAME")) {
-      // Send the desktop name to identify the application
-      // The desktop-entry is the part before the .desktop
-      notify_notification_set_hint(
-          mNotification, "desktop-entry",
-          g_variant_new("s", getenv("MOZ_DESKTOP_FILE_NAME")));
-    } else {
-      notify_notification_set_hint(
-          mNotification, "desktop-entry",
-          g_variant_new("s", (const char*)gAppData->remotingName));
-    }
+    nsCString desktopEntry = GetDesktopEntryHint(
+        mAlertAppId, widget::GetSnapInstanceName(),
+        getenv("MOZ_DESKTOP_FILE_NAME"), gAppData->remotingName);
+    notify_notification_set_hint(mNotification, "desktop-entry",
+                                 g_variant_new("s", desktopEntry.get()));
   }
 
   if (notify_notification_set_timeout && mAlertRequiresInteraction) {
