@@ -169,6 +169,9 @@ For more information about the review process, see the {doc}`Code_Review_FAQ`.
    * - #desktop-theme-reviewers
      - `User interface CSS </mots/index.html#desktop-theme>`__
      - `Member list <https://phabricator.services.mozilla.com/project/members/141/>`__
+   * - #desktop-integrations-reviewers
+     - `Desktop Integrations modules </mots/index.html#shell-integration>`__
+     - `Member list <https://phabricator.services.mozilla.com/project/members/282/>`__
    * - #devtools-reviewers
      - `Firefox DevTools </mots/index.html#devtools>`__
      - `Member list <https://phabricator.services.mozilla.com/project/members/153/>`__
