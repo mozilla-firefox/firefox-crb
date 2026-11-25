@@ -49,8 +49,10 @@ border-color: var(--button-border-color);      /* → ButtonText in forced-color
 
 | Query | Fires for |
 |---|---|
-| `forced-colors: active` | Windows HCM, Firefox HCM |
+| `forced-colors` | Windows HCM, Firefox HCM |
 | `prefers-contrast: more` | macOS Increase Contrast **and** most `forced-colors` users (contrast ratio > 7:1) |
+
+Chrome and content style sheets interpret `(forced-colors: active)` differently, so write the boolean `(forced-colors)`, which works in both. [HCM media queries](/accessible/HCMMediaQueries.md#forced-colors) explains the difference, and the [use-boolean-forced-colors-query](/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-boolean-forced-colors-query.md) stylelint rule enforces the boolean form.
 
 **It is important to note:**: most HCM users also trigger `prefers-contrast`. A bare `@media (prefers-contrast)` block applies to *both* IC and HCM users. If that is not your intent, you must use a more specific media query.
 
