@@ -24,6 +24,9 @@ typedef NS_ENUM(NSInteger, UpdaterHelperApplyResult) {
   UpdaterHelperApplyResultNotRecorded = 2,
   // The helper was already handling another request and didn't take this one.
   UpdaterHelperApplyResultBusy = 3,
+  // The helper was already handling a request from the same user for the same
+  // update directory, and didn't take this one.
+  UpdaterHelperApplyResultBusyWithSameUpdate = 4,
 };
 
 // XPC interface exposed by the privileged helper tool to the unelevated

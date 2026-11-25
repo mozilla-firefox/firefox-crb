@@ -94,6 +94,9 @@
 // These functions are defined in launchchild_osx.mm
 [[noreturn]] void CleanupElevatedMacUpdate(bool aFailureOccurred);
 bool DidHelperRecordStatus();
+bool DidHelperReply();
+bool WasHelperBusy();
+bool WasHelperBusyWithSameUpdate();
 bool IsOwnedByGroupAdmin(const char* aAppBundle);
 bool IsRecursivelyWritable(const char* aPath);
 // Pass a valid pid as aWaitForPid to wait for that process to go away before
@@ -3549,11 +3552,21 @@ static void UpdateThreadFunc([[maybe_unused]] void* param) {
 }
 
 #ifdef XP_MACOSX
+int GetPatchDirArgIndex() { return kPatchDirIndex; }
+
 static void ServeElevatedUpdateThreadFunc(void* param) {
   UpdateServerThreadArgs* threadArgs = (UpdateServerThreadArgs*)param;
   gSucceeded = ServeElevatedUpdate(threadArgs->argc, threadArgs->argv,
                                    threadArgs->marChannelID);
-  if (!DidHelperRecordStatus()) {
+  if (WasHelperBusyWithSameUpdate()) {
+    // The helper records the result of that update in the same status file,
+    // so leave it alone.
+    LOG(("The privileged helper is already handling this update"));
+  } else if (WasHelperBusy()) {
+    WriteStatusFile(ELEVATED_UPDATE_IN_PROGRESS_ERROR);
+  } else if (!DidHelperReply()) {
+    WriteStatusFile(ELEVATED_UPDATE_HELPER_LOST_ERROR);
+  } else if (!DidHelperRecordStatus()) {
     WriteStatusFile(ELEVATION_CANCELED);
   }
   QuitProgressUI();
