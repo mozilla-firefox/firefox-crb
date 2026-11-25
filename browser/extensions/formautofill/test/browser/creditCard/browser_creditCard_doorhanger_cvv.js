@@ -220,7 +220,7 @@ add_task(async function test_save_doorhanger_content() {
     );
     is(
       notification.getAttribute("secondarybuttonlabel"),
-      await formatLabel("credit-card-capture-dismiss-button"),
+      await formatLabel("credit-card-capture-cancel-button"),
       "The secondary button dismisses the doorhanger"
     );
     is(
@@ -909,7 +909,7 @@ async function checkSecurityCodeUpdateContent(content) {
   );
   is(
     notification.getAttribute("secondarybuttonlabel"),
-    await formatLabel("credit-card-capture-dismiss-button"),
+    await formatLabel("credit-card-capture-cancel-button"),
     "The secondary button dismisses the doorhanger"
   );
   ok(
@@ -1153,7 +1153,7 @@ add_task(
         {
           header: "credit-card-save-security-code-doorhanger-header",
           main: "credit-card-capture-save-button",
-          secondary: "credit-card-capture-dismiss-button",
+          secondary: "credit-card-capture-cancel-button",
           dropdown: true,
         },
         "With the toggle back on"
