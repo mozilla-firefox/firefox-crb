@@ -343,6 +343,9 @@ constinit static ArchiveReader gArchiveReader;
 static bool gSucceeded = false;
 #ifdef XP_MACOSX
 static bool sDidWriteStatusFile = false;
+// The update.mar that the elevated updater checked, which it reads from
+// instead of opening the path again.
+static int gElevatedMarFd = -1;
 #endif
 static bool sStagedUpdate = false;
 static bool sReplaceRequest = false;
@@ -3484,7 +3487,17 @@ static void UpdateThreadFunc([[maybe_unused]] void* param) {
     NS_tchar dataFile[MAXPATHLEN];
     rv = GetUpdateFileName(dataFile, sizeof(dataFile) / sizeof(dataFile[0]));
     if (rv == OK) {
+#ifdef XP_MACOSX
+      if (gElevatedMarFd >= 0) {
+        rv = gArchiveReader.Open(gElevatedMarFd);
+        close(gElevatedMarFd);
+        gElevatedMarFd = -1;
+      } else {
+        rv = gArchiveReader.Open(dataFile);
+      }
+#else
       rv = gArchiveReader.Open(dataFile);
+#endif
     }
 
 #ifdef MOZ_VERIFY_MAR_SIGNATURE
@@ -4169,6 +4182,26 @@ int NS_main(int argc, NS_tchar** argv) {
     }
     strlcpy(gInstallDirPath, pinnedPath, sizeof(gInstallDirPath));
     strlcpy(gWorkingDirPath, pinnedPath, sizeof(gWorkingDirPath));
+    // The client owns the patch directory, so require update.mar to be a plain
+    // file opened without following a link, and read the update from the file
+    // that was checked.
+    NS_tchar marPath[MAXPATHLEN];
+    NS_tsnprintf(marPath, sizeof(marPath) / sizeof(marPath[0]),
+                 NS_T("%s/update.mar"), gPatchDirPath);
+    gElevatedMarFd =
+        open(marPath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    struct stat marStat;
+    if (gElevatedMarFd < 0 || fstat(gElevatedMarFd, &marStat) != 0 ||
+        !S_ISREG(marStat.st_mode)) {
+      if (gElevatedMarFd >= 0) {
+        close(gElevatedMarFd);
+        gElevatedMarFd = -1;
+      }
+      WriteStatusFile(READ_ERROR);
+      LogToOS(NS_T("update.mar is not a regular file. Not updating."));
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
   }
 #endif
 

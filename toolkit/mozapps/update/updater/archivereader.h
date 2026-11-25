@@ -23,6 +23,10 @@ class ArchiveReader {
   ~ArchiveReader() { Close(); }
 
   int Open(const NS_tchar* path);
+#ifndef XP_WIN
+  // Opens the archive from an open file descriptor, which the caller keeps.
+  int Open(int fd);
+#endif
   int VerifySignature();
   int VerifyProductInformation(const char* MARChannelID,
                                const char* appVersion);
@@ -33,6 +37,8 @@ class ArchiveReader {
 
  private:
   int ExtractItemToStream(const MarItem* item, FILE* fp);
+  int PrepareToOpen();
+  int FinishOpen(MarReadResult result);
 
   MarFile* mArchive = nullptr;
   uint8_t* mInBuf = nullptr;
