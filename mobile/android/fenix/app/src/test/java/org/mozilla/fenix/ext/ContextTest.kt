@@ -189,4 +189,34 @@ class ContextTest {
 
         assertFalse(testContext.isToolbarAtBottom())
     }
+
+    @Test
+    fun `GIVEN no tab groups were closed WHEN getting the bulk close message THEN the tabs closed message is returned`() {
+        assertEquals("Tabs closed: 3", testContext.bulkCloseUndoMessage(tabCount = 3, tabGroupCount = 0))
+        assertEquals("Tab closed", testContext.bulkCloseUndoMessage(tabCount = 1, tabGroupCount = 0))
+    }
+
+    @Test
+    fun `GIVEN only tab groups were closed WHEN getting the bulk close message THEN the tab groups closed message is returned`() {
+        assertEquals(
+            "1 tab group closed and saved",
+            testContext.bulkCloseUndoMessage(tabCount = 0, tabGroupCount = 1),
+        )
+        assertEquals(
+            "2 tab groups closed and saved",
+            testContext.bulkCloseUndoMessage(tabCount = 0, tabGroupCount = 2),
+        )
+    }
+
+    @Test
+    fun `GIVEN tabs and tab groups were closed WHEN getting the bulk close message THEN both counts are in the message`() {
+        assertEquals(
+            "1 tab, 1 tab group closed and saved",
+            testContext.bulkCloseUndoMessage(tabCount = 1, tabGroupCount = 1),
+        )
+        assertEquals(
+            "3 tabs, 2 tab groups closed and saved",
+            testContext.bulkCloseUndoMessage(tabCount = 3, tabGroupCount = 2),
+        )
+    }
 }
