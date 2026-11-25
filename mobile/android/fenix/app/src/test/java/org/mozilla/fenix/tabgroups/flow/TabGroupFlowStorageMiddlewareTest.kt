@@ -484,6 +484,7 @@ class TabGroupFlowStorageMiddlewareTest {
                         browserStore = browserStore,
                         tabsUseCases = tabsUseCases,
                         fenixBrowserUseCases = fenixBrowserUseCases,
+                        isHomepageAsNewTabEnabled = { false },
                     ),
                 tabGroupRepository = repository,
                 isInactiveTabsEnabled = { false },

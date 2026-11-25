@@ -24,11 +24,13 @@ import org.mozilla.fenix.tabstray.ext.toDisplayTitle
  * @param browserStore The [BrowserStore] holding the open tabs to observe.
  * @param tabsUseCases The [TabsUseCases] used to update the open tabs.
  * @param fenixBrowserUseCases The [FenixBrowserUseCases] used to open new homepage tabs.
+ * @param isHomepageAsNewTabEnabled Whether homepage as a new tab is enabled, which allows a fallback tab to be opened.
  */
 class DefaultTabRepository(
     browserStore: BrowserStore,
     private val tabsUseCases: TabsUseCases,
     private val fenixBrowserUseCases: FenixBrowserUseCases,
+    private val isHomepageAsNewTabEnabled: () -> Boolean,
 ) : TabRepository {
 
     override val tabFlow: Flow<TabRepository.Data> =
@@ -58,6 +60,12 @@ class DefaultTabRepository(
     }
 
     override fun addNewTab(): String = fenixBrowserUseCases.addNewHomepageTab(selectTab = false)
+
+    override fun addFallbackTab(): String? = if (isHomepageAsNewTabEnabled()) addNewTab() else null
+
+    override fun undoRemovedTabs() {
+        tabsUseCases.undo.invoke()
+    }
 }
 
 private fun TabSessionState.toTab(): Tab =
