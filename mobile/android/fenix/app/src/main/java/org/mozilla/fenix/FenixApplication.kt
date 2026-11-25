@@ -400,9 +400,12 @@ open class FenixApplication : Application(), Provider, ThemeProvider {
 
         initializeRemoteSettingsSupport()
 
+        // Create [appStore] deterministically.  It is generally first used for Messaging.
+        components.appStore
+
         restoreBrowserState()
         restoreDownloads()
-        restoreMessaging()
+        applicationScope.launch(ioDispatcher) { restoreMessaging() }
 
         maybeReconcileOnboardingCompletionState()
 
@@ -806,9 +809,10 @@ open class FenixApplication : Application(), Provider, ThemeProvider {
     }
 
     @VisibleForTesting
-    internal fun restoreMessaging() {
+    internal suspend fun restoreMessaging() {
         if (components.settings.isExperimentationEnabled) {
-            components.appStore.dispatch(AppAction.MessagingAction.Restore)
+            val messages = components.nimbus.messaging.getMessages()
+            components.appStore.dispatch(AppAction.MessagingAction.UpdateMessages(messages))
         }
     }
 

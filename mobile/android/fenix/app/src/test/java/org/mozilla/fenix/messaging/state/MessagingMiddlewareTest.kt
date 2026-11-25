@@ -26,7 +26,6 @@ import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MessageCl
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MessageDismissed
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MicrosurveyAction
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MicrosurveyAction.Dismissed
-import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.Restore
 import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.messaging.FenixMessageSurfaceId
 import org.mozilla.fenix.messaging.MessagingState
@@ -37,23 +36,6 @@ class MessagingMiddlewareTest {
     @Before
     fun setUp() {
         controller = mockk(relaxed = true)
-    }
-
-    @Test
-    fun `WHEN restored THEN get messages from the storage`() = runTest {
-        val store =
-            AppStore(
-                AppState(messaging = MessagingState(messages = emptyList())),
-                listOf(MessagingMiddleware(controller, this)),
-            )
-        val message = createMessage()
-
-        coEvery { controller.getMessages() } returns listOf(message)
-
-        store.dispatch(Restore)
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(listOf(message), store.state.messaging.messages)
     }
 
     @Test
