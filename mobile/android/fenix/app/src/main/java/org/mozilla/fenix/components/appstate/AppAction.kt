@@ -179,9 +179,6 @@ sealed class AppAction : Action {
 
     /** [Action]s related to interactions with the Messaging Framework. */
     sealed class MessagingAction : AppAction() {
-        /** Restores the [Message] state from the storage. */
-        object Restore : MessagingAction()
-
         /**
          * Evaluates if a new messages should be shown to users.
          *

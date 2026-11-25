@@ -17,7 +17,6 @@ import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.Evaluate
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MessageClicked
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MessageDismissed
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MicrosurveyAction
-import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.Restore
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.UpdateMessageToShow
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.UpdateMessages
 import org.mozilla.fenix.components.appstate.AppState
@@ -35,13 +34,6 @@ class MessagingMiddleware(
         action: AppAction,
     ) {
         when (action) {
-            is Restore -> {
-                coroutineScope.launch {
-                    val messages = controller.getMessages()
-                    store.dispatch(UpdateMessages(messages))
-                }
-            }
-
             is Evaluate -> {
                 val message =
                     controller.getNextMessage(

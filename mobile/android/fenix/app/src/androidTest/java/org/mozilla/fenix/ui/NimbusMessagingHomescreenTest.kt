@@ -6,6 +6,7 @@ package org.mozilla.fenix.ui
 
 import android.content.Intent
 import androidx.compose.ui.test.junit4.v2.AndroidComposeTestRule as AndroidComposeTestRuleV2
+import kotlinx.coroutines.runBlocking
 import mozilla.components.service.nimbus.messaging.FxNimbusMessaging
 import mozilla.components.service.nimbus.messaging.MessageData
 import mozilla.components.service.nimbus.messaging.Messaging
@@ -20,7 +21,6 @@ import org.mozilla.fenix.helpers.FenixTestRule
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
 import org.mozilla.fenix.helpers.RetryTestRule
 import org.mozilla.fenix.helpers.RetryableComposeTestRule
-import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.perf.DetectMemoryLeaksRule
 import org.mozilla.fenix.messaging.FenixMessageSurfaceId
 import org.mozilla.fenix.nimbus.FxNimbus
@@ -100,13 +100,7 @@ class NimbusMessagingHomescreenTest {
         }
         // refresh message store
         val application = (composeTestRule.activity.application as FenixApplication)
-        application.restoreMessaging()
-        // restoreMessaging() dispatches Restore, which loads messages on Dispatchers.IO.
-        // Wait for UpdateMessages to land before re-evaluating, so getNextMessage sees
-        // the test message rather than an empty list.
-        composeTestRule.waitUntil(waitingTime) {
-            application.components.appStore.state.messaging.messages.any { it.id == "test-message" }
-        }
+        runBlocking { application.restoreMessaging() }
         application.components.appStore.dispatch(AppAction.MessagingAction.Evaluate(FenixMessageSurfaceId.HOMESCREEN))
     }
 
