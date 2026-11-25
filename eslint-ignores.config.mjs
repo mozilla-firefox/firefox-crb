@@ -30,6 +30,11 @@ export default [
   // Ignore VSCode files
   ".vscode/",
 
+  // Function bodies that firefox-probe.py runs inside an async function. They
+  // use top-level await and return, which neither a script nor a module parses.
+  ".agents/skills/desktop-theme-screenshots/scripts/regimes/*.js",
+  ".claude/skills/desktop-theme-screenshots/scripts/regimes/*.js",
+
   // Always ignore node_modules.
   "**/node_modules/",
 
