@@ -85,10 +85,12 @@ namespace mozilla::llama {
 // Constructed with strong ownership of the backend (RefPtr),
 // and a weak reference to the stream to avoid keeping it alive.
 LlamaGenerateTask::LlamaGenerateTask(RefPtr<LlamaBackend> aBackend,
-                                     const LlamaChatOptions& aOptions)
+                                     const LlamaChatOptions& aOptions,
+                                     nsTArray<LlamaImageData>&& aImages)
     : CancelableRunnable("LlamaGenerateTask"),
       mBackend(std::move(aBackend)),
       mChatOptions(aOptions),
+      mImages(std::move(aImages)),
       mMessagesQueue(5) {}
 
 LlamaGenerateTask::~LlamaGenerateTask() {
@@ -143,8 +145,8 @@ nsresult LlamaGenerateTask::Run() {
        self =
            this](const mozilla::dom::LlamaChatResponse& chunk) -> ResultStatus {
     LOGV_RUNNER("Entered {}", __PRETTY_FUNCTION__);
-    // Flush if phase has changed
-    if ((response.mPhase != chunk.mPhase) && !response.mTokens.IsEmpty()) {
+    // Not mTokens: an image chunk has a count but no ids.
+    if ((response.mPhase != chunk.mPhase) && response.mTokenCount != 0) {
       LOGV_RUNNER("{}: Pushing completed chunk", __PRETTY_FUNCTION__);
       // Push the completed chunk
       if (MOZ_LIKELY(self->PushMessage(mozilla::Some(response)))) {
@@ -174,11 +176,12 @@ nsresult LlamaGenerateTask::Run() {
       return mozilla::Err(Error{std::move(msg)});
     }
 
+    response.mTokenCount += chunk.mTokenCount;
     response.mPhase = chunk.mPhase;
     response.mIsPhaseCompleted = chunk.mIsPhaseCompleted;
 
     // Flush if buffer is full or phase is complete
-    if ((response.mTokens.Length() >= mozilla::AssertedCast<size_t>(bufSize)) ||
+    if ((response.mTokenCount >= mozilla::AssertedCast<uint32_t>(bufSize)) ||
         response.mIsPhaseCompleted) {
       LOGV_RUNNER("{}: Pushing completed chunk", __PRETTY_FUNCTION__);
 
@@ -195,7 +198,8 @@ nsresult LlamaGenerateTask::Run() {
   };
 
   // Start generation using provided callbacks
-  auto result = mBackend->Generate(mChatOptions, tokenCallback, cancelCallback);
+  auto result =
+      mBackend->Generate(mChatOptions, tokenCallback, cancelCallback, mImages);
 
   // Generation done, clearing backend
   mBackend = nullptr;
@@ -388,12 +392,14 @@ bool LlamaGenerateTask::IsActive() const {
 
 namespace mozilla::dom {
 
-LlamaStreamSource::LlamaStreamSource(nsIGlobalObject* aGlobal,
-                                     RefPtr<LlamaBackend> aBackend,
-                                     const LlamaChatOptions& aOptions)
+LlamaStreamSource::LlamaStreamSource(
+    nsIGlobalObject* aGlobal, RefPtr<LlamaBackend> aBackend,
+    const LlamaChatOptions& aOptions,
+    nsTArray<mozilla::llama::LlamaImageData>&& aImages)
     : GlobalTeardownObserver(aGlobal),
       mBackend(std::move(aBackend)),
-      mChatOptions(aOptions) {
+      mChatOptions(aOptions),
+      mImages(std::move(aImages)) {
   LOGD_RUNNER("LlamaStreamSource created and bound to global");
 }
 
@@ -582,9 +588,11 @@ already_AddRefed<Promise> LlamaStreamSource::PullCallbackImpl(
     }
 
     LOGD_RUNNER("{}: Creating LlamaGenerateTask", __PRETTY_FUNCTION__);
-    //  Create task with backend and weak stream reference
-    mTask =
-        MakeRefPtr<mozilla::llama::LlamaGenerateTask>(mBackend, mChatOptions);
+    //  Create task with backend and weak stream reference.
+    // Moving empties mImages; re-entry would need a pull after the dispatch
+    // below failed, which throws and so errors the stream.
+    mTask = MakeRefPtr<mozilla::llama::LlamaGenerateTask>(
+        mBackend, mChatOptions, std::move(mImages));
 
     LOGD_RUNNER("{}: Starting LlamaGenerateTask", __PRETTY_FUNCTION__);
     // Dispatch task to background thread
@@ -684,8 +692,87 @@ LlamaRunner::LlamaRunner(const GlobalObject& aGlobal)
     : mBackend(MakeRefPtr<LlamaBackend>()),
       mGlobal(do_QueryInterface(aGlobal.GetAsSupports())) {}
 
+static bool PackImages(const Sequence<LlamaImageInput>& aImages,
+                       nsTArray<mozilla::llama::LlamaImageData>& aOut,
+                       ErrorResult& aRv) {
+  if (!aOut.SetCapacity(aImages.Length(), fallible)) {
+    aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
+    return false;
+  }
+
+  for (size_t i = 0; i < aImages.Length(); ++i) {
+    const LlamaImageInput& image = aImages[i];
+
+    if (image.mChannels != 3 && image.mChannels != 4) {
+      aRv.ThrowTypeError(
+          nsFmtCString("image {} has {} channels, expected 3 (RGB) or 4 (RGBA)",
+                       i, image.mChannels));
+      return false;
+    }
+
+    // Otherwise the expected length below is zero, which any buffer satisfies.
+    if (image.mWidth == 0 || image.mHeight == 0) {
+      aRv.ThrowTypeError(nsFmtCString("image {} is empty ({}x{})", i,
+                                      image.mWidth, image.mHeight));
+      return false;
+    }
+
+    CheckedInt<size_t> expected(image.mWidth);
+    expected *= image.mHeight;
+    expected *= image.mChannels;
+    if (!expected.isValid()) {
+      aRv.ThrowTypeError(nsFmtCString("image {} dimensions overflow ({}x{}x{})",
+                                      i, image.mWidth, image.mHeight,
+                                      image.mChannels));
+      return false;
+    }
+
+    mozilla::llama::LlamaImageData packed;
+    packed.mWidth = image.mWidth;
+    packed.mHeight = image.mHeight;
+
+    bool ok = image.mData.ProcessFixedData(
+        [&](const Span<const uint8_t>& aData) -> bool {
+          if (aData.Length() != expected.value()) {
+            aRv.ThrowTypeError(
+                nsFmtCString("image {} has {} bytes, expected {} ({}x{}x{})", i,
+                             aData.Length(), expected.value(), image.mWidth,
+                             image.mHeight, image.mChannels));
+            return false;
+          }
+
+          const size_t numPixels = size_t(image.mWidth) * image.mHeight;
+          if (!packed.mRgb.SetLength(numPixels * 3, fallible)) {
+            aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
+            return false;
+          }
+
+          if (image.mChannels == 3) {
+            memcpy(packed.mRgb.Elements(), aData.Elements(), numPixels * 3);
+          } else {
+            for (size_t p = 0; p < numPixels; ++p) {
+              packed.mRgb[p * 3 + 0] = aData[p * 4 + 0];
+              packed.mRgb[p * 3 + 1] = aData[p * 4 + 1];
+              packed.mRgb[p * 3 + 2] = aData[p * 4 + 2];
+            }
+          }
+          return true;
+        });
+
+    if (!ok) {
+      MOZ_ASSERT(aRv.Failed());
+      return false;
+    }
+
+    aOut.AppendElement(std::move(packed));
+  }
+
+  return true;
+}
+
 already_AddRefed<ReadableStream> LlamaRunner::CreateGenerationStream(
-    const LlamaChatOptions& aOptions, ErrorResult& aRv) {
+    const LlamaChatOptions& aOptions, const Sequence<LlamaImageInput>& aImages,
+    ErrorResult& aRv) {
   LOGD_RUNNER("Entered {}", __PRETTY_FUNCTION__);
 
   // Guard against concurrent use: LLamaBackend is not thread-safe.
@@ -699,8 +786,13 @@ already_AddRefed<ReadableStream> LlamaRunner::CreateGenerationStream(
     return nullptr;
   }
 
+  nsTArray<mozilla::llama::LlamaImageData> images;
+  if (!aImages.IsEmpty() && !PackImages(aImages, images, aRv)) {
+    return nullptr;
+  }
+
   RefPtr<LlamaStreamSource> source =
-      new LlamaStreamSource(mGlobal, mBackend, aOptions);
+      new LlamaStreamSource(mGlobal, mBackend, aOptions, std::move(images));
 
   AutoJSAPI jsapi;
   if (!jsapi.Init(mGlobal)) {

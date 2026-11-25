@@ -29,9 +29,23 @@ enum LlamaChatPhase {
 [GenerateConversionToJS]
 dictionary LlamaChatResponse {
   required UTF8String piece;
+  // Empty for image chunks, which are projected straight to embeddings.
   required sequence<long> tokens;
+  required unsigned long tokenCount;
   required LlamaChatPhase phase;
   required boolean isPhaseCompleted;
+};
+
+dictionary LlamaImageInput {
+  // `width * height * channels` bytes, row-major with no padding.
+  required ArrayBufferView data;
+
+  required unsigned long width;
+
+  required unsigned long height;
+
+  // 3 (RGB) or 4 (RGBA, alpha dropped); anything else is rejected.
+  unsigned long channels = 4;
 };
 
 dictionary LlamaFormatChatOptions {
@@ -336,6 +350,9 @@ dictionary LlamaChatOptions {
 
   /**
    * Input prompt text to process.
+   *
+   * Must contain the media marker (`<__media__>`) once per image passed to
+   * createGenerationStream, where that image belongs.
    */
   required UTF8String prompt;
 
@@ -372,5 +389,7 @@ interface LlamaRunner {
 
   [Throws] Promise<UTF8String> formatChat(LlamaFormatChatOptions options);
 
-  [NewObject, Throws] ReadableStream createGenerationStream(LlamaChatOptions options);
+  [NewObject, Throws] ReadableStream createGenerationStream(
+      LlamaChatOptions options,
+      optional sequence<LlamaImageInput> images = []);
 };
