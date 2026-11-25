@@ -213,6 +213,10 @@ class EMEDecryptor final : public MediaDataDecoder,
   }
 
   RefPtr<FlushPromise> Flush() override {
+    return FlushForReason(FlushReason::Normal);
+  }
+
+  RefPtr<FlushPromise> FlushForReason(FlushReason aReason) override {
     MOZ_ASSERT(mThread->IsOnCurrentThread());
     MOZ_ASSERT(!mIsShutdown);
     mKeyRequest.DisconnectIfExists();
@@ -226,7 +230,7 @@ class EMEDecryptor final : public MediaDataDecoder,
       iter.Remove();
     }
     RefPtr<SamplesWaitingForKey> k = mSamplesWaitingForKey;
-    return mDecoder->Flush()->Then(mThread, __func__, [k]() {
+    return mDecoder->FlushForReason(aReason)->Then(mThread, __func__, [k]() {
       k->Flush();
       return FlushPromise::CreateAndResolve(true, __func__);
     });
@@ -344,12 +348,17 @@ RefPtr<MediaDataDecoder::DecodePromise> EMEMediaDataDecoderProxy::Decode(
 }
 
 RefPtr<MediaDataDecoder::FlushPromise> EMEMediaDataDecoderProxy::Flush() {
+  return FlushForReason(FlushReason::Normal);
+}
+
+RefPtr<MediaDataDecoder::FlushPromise> EMEMediaDataDecoderProxy::FlushForReason(
+    FlushReason aReason) {
   RefPtr<EMEMediaDataDecoderProxy> self = this;
-  return InvokeAsync(mThread, __func__, [self, this]() {
+  return InvokeAsync(mThread, __func__, [self, this, aReason]() {
     mKeyRequest.DisconnectIfExists();
     mDecodeRequest.DisconnectIfExists();
     mDecodePromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
-    return MediaDataDecoderProxy::Flush();
+    return MediaDataDecoderProxy::FlushForReason(aReason);
   });
 }
 

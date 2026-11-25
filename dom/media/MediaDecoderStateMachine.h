@@ -221,7 +221,9 @@ class MediaDecoderStateMachine
   // Resets all states related to decoding and aborts all pending requests
   // to the decoders.
   void ResetDecode(const TrackSet& aTracks = TrackSet(TrackInfo::kAudioTrack,
-                                                      TrackInfo::kVideoTrack));
+                                                      TrackInfo::kVideoTrack),
+                   MediaDataDecoder::FlushReason aReason =
+                       MediaDataDecoder::FlushReason::Normal);
 
   void SetVideoDecodeModeInternal(VideoDecodeMode aMode);
 

@@ -162,11 +162,11 @@ class MediaFormatReader final
   // Request*Data() calls after this is called. Calls to Request*Data()
   // made after this should be processed as usual.
   //
-  // Normally this call preceedes a Seek() call, or shutdown.
-  //
-  // aParam is a set of TrackInfo::TrackType enums specifying which
-  // queues need to be reset, defaulting to both audio and video tracks.
-  nsresult ResetDecode(const TrackSet& aTracks);
+  // This usually precedes a seek or shutdown. aTracks selects the tracks
+  // to reset. aReason applies to the video flush. Audio uses a normal flush.
+  nsresult ResetDecode(const TrackSet& aTracks,
+                       MediaDataDecoder::FlushReason aReason =
+                           MediaDataDecoder::FlushReason::Normal);
 
   // Destroys the decoding state. The reader cannot be made usable again.
   // This is different from ReleaseMediaResources() as it is irreversable,
@@ -355,7 +355,8 @@ class MediaFormatReader final
   // Initializes mLayersBackendType if possible.
   void InitLayersBackendType();
 
-  void Reset(TrackType aTrack);
+  void Reset(TrackType aTrack, MediaDataDecoder::FlushReason aReason =
+                                   MediaDataDecoder::FlushReason::Normal);
   void DropDecodedSamples(TrackType aTrack);
 
   // Return a target timeunit which the reader should skip to, this would be
@@ -602,7 +603,8 @@ class MediaFormatReader final
 
     // Flush the decoder if present and reset decoding related data.
     // Following a flush, the decoder is ready to accept any new data.
-    void Flush();
+    void Flush(MediaDataDecoder::FlushReason aReason =
+                   MediaDataDecoder::FlushReason::Normal);
 
     bool CancelWaitingForKey() {
       if (!mWaitingForKey) {

@@ -46,7 +46,8 @@ class ReaderProxy {
   RefPtr<ShutdownPromise> Shutdown();
 
   void ReleaseResources();
-  void ResetDecode(TrackSet aTracks);
+  void ResetDecode(TrackSet aTracks, MediaDataDecoder::FlushReason aReason =
+                                         MediaDataDecoder::FlushReason::Normal);
 
   nsresult Init() { return mReader->Init(); }
   bool UseBufferingHeuristics() const {

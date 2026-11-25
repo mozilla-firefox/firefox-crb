@@ -36,7 +36,8 @@ class RemoteDecoderParent : public ShmemRecycleAllocator<RemoteDecoderParent>,
   IPCResult RecvInit(InitResolver&& aResolver);
   IPCResult RecvDecode(NotNull<ArrayOfRemoteMediaRawData*> aData,
                        DecodeResolver&& aResolver);
-  IPCResult RecvFlush(FlushResolver&& aResolver);
+  IPCResult RecvFlush(const MediaDataDecoder::FlushReason& aReason,
+                      FlushResolver&& aResolver);
   IPCResult RecvDrain(DrainResolver&& aResolver);
   IPCResult RecvShutdown(ShutdownResolver&& aResolver);
   IPCResult RecvSetSeekThreshold(const media::TimeUnit& aTime);

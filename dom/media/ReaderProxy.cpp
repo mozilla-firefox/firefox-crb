@@ -157,11 +157,13 @@ void ReaderProxy::ReleaseResources() {
   (void)rv;
 }
 
-void ReaderProxy::ResetDecode(TrackSet aTracks) {
+void ReaderProxy::ResetDecode(TrackSet aTracks,
+                              MediaDataDecoder::FlushReason aReason) {
   MOZ_ASSERT(mOwnerThread->IsCurrentThreadIn());
-  nsCOMPtr<nsIRunnable> r =
-      NewRunnableMethod<TrackSet>("MediaFormatReader::ResetDecode", mReader,
-                                  &MediaFormatReader::ResetDecode, aTracks);
+  nsCOMPtr<nsIRunnable> r = NS_NewRunnableFunction(
+      "MediaFormatReader::ResetDecode", [reader = mReader, aTracks, aReason] {
+        reader->ResetDecode(aTracks, aReason);
+      });
   nsresult rv = mReader->OwnerThread()->Dispatch(r.forget());
   MOZ_DIAGNOSTIC_ASSERT(NS_SUCCEEDED(rv));
   (void)rv;
