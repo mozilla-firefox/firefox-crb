@@ -217,11 +217,11 @@ promise_test(async (t) => {
     frameDOMException,
     frameSpeechRecognition.install(options),
     "install should reject with NotAllowedError if " +
-    "'install-on-device-speech-recognition' Permission Policy is " +
+    "'on-device-speech-recognition' Permission Policy is " +
     "disabled."
   );
 }, "SpeechRecognition.install rejects for on-device if " +
-  "'install-on-device-speech-recognition' Permission Policy is disabled.");
+  "'on-device-speech-recognition' Permission Policy is disabled.");
 
 promise_test(async (t) => {
   const html = `
