@@ -13,6 +13,7 @@
   ./mach theme resolve-token DIR --before REV            the same diff, sheets committed at REV vs DIR
   ./mach theme resolve-token --history <token> [<range>] per-revision declarations, every sheet
   ./mach theme resolve-token --declared <token> <file>.. which of these sheets declare it
+  ./mach theme resolve-token DIR --check                 exit 1 if any token resolves broken
 
 A realm is two sheets: chrome is tokens-shared.css + tokens-platform.css,
 in-content is tokens-shared.css + tokens-brand.css. --name and --diff pair them
@@ -72,6 +73,15 @@ Such a keyword inside a function, as in `light-dark(inherit, #fff)`, prints
 `[invalid: unset]`: it makes the whole value invalid in both schemes. A bare
 `revert-layer` prints `[revert-layer]`, since the token sheets are layered and
 an earlier layer can supply the value; the script does not resolve it.
+
+--check resolves every token in both realms, both as it wins in each
+environment and as each declaration resolves in its own regime, and exits 1 if
+any value is `[invalid: unset]`, a cycle, the depth limit or a var() without a
+fallback to a token these sheets don't declare. It prints one entry per token,
+realm and value: the reason, the declared value, the var() chain to the token
+holding the CSS-wide keyword, the resolved value, the environments it wins in
+and the contexts that declare it. `[empty: unset]` and `[revert-layer]` pass,
+since a token can be set to a CSS-wide keyword on purpose.
 
 --history walks the sheets by wildcard pathspec so it follows the directory
 moves, which costs about three minutes of `git log` over full history; pass a range
@@ -312,7 +322,7 @@ class Sheet:
                 file=sys.stderr,
             )
         self.lightweight = not stray
-        self._lookups, self._effective = {}, {}
+        self._lookups, self._effective, self._winners = {}, {}, {}
 
     def effective(self, env):
         """{name: (value, winning context)} as the cascade resolves it in env."""
@@ -325,11 +335,17 @@ class Sheet:
                 ):
                     best[name] = (key, val, ctx)
             lookup = {n: v for n, (_k, v, _c) in best.items()}
+            self._winners[env] = lookup
             self._effective[env] = {
                 n: (resolve(v, lookup) + (" !important" if k[0] else ""), c)
                 for n, (k, v, c) in best.items()
             }
         return self._effective[env]
+
+    def winners(self, env):
+        """{name: unresolved value} of the declarations that win in env."""
+        self.effective(env)
+        return self._winners[env]
 
     def lookup(self, ctx):
         """{name: value} as it resolves for a declaration in this context."""
@@ -694,6 +710,84 @@ def declared(name, paths):
         print(f"{'yes' if name in names else 'no ':<4} {path}")
 
 
+CYCLE = "a var() cycle"
+DEPTH_LIMIT = "more than 32 nested var() references"
+
+
+def broken(value):
+    """Why a resolved value fails a property that reads it, or None."""
+    if "<cycle " in value:
+        return CYCLE
+    if "<depth limit " in value:
+        return DEPTH_LIMIT
+    if m := re.search(r"var\(\s*(--[\w-]+)\s*\)", value):
+        return f"`{m.group(1)}` is undefined"
+    if mark(value) == "  [invalid: unset]":
+        bare = IMPORTANT.sub("", value).strip()
+        for m in WIDE.finditer(bare):
+            depth = 0
+            for k in range(m.start() - 1, -1, -1):
+                depth += {")": 1, "(": -1}.get(bare[k], 0)
+                if depth < 0:
+                    fn = re.search(r"[\w-]*$", bare[:k]).group()
+                    return f"`{m.group()}` inside {fn}()"
+    return None
+
+
+def keyword_source(val, lookup, seen=()):
+    """The var() chain from val to a token whose value is a CSS-wide keyword, or ()."""
+    for m in re.finditer(r"var\(\s*(--[\w-]+)", val):
+        name = m.group(1)
+        if name in seen or name not in lookup:
+            continue
+        if WIDE.fullmatch(lookup[name].strip()):
+            return (name,)
+        if chain := keyword_source(lookup[name], lookup, seen + (name,)):
+            return (name,) + chain
+    return ()
+
+
+def check(directory):
+    """Report every token that resolves broken, in any environment or declaration."""
+    found = {}
+
+    def add(name, realm, raw, value, lookup, why):
+        chain = () if why in (CYCLE, DEPTH_LIMIT) else keyword_source(raw, lookup)
+        via = f"{' -> '.join(chain)}: {lookup[chain[-1]]}" if chain else ""
+        value = IMPORTANT.sub("", value).strip()
+        key = (name, realm, why, squash(raw), via, squash(value))
+        return found.setdefault(key, ([], []))
+
+    for realm, importer in REALMS:
+        sheet = Sheet(directory, importer)
+        for env in environments(sheet.features):
+            where = env_label(env, sheet.features, sheet.lightweight)
+            winners = sheet.winners(env)
+            for name, (value, _ctx) in sheet.effective(env).items():
+                if why := broken(value):
+                    add(name, realm, winners[name], value, winners, why)[0].append(
+                        where
+                    )
+        for ctx, name in sheet.decls:
+            value = sheet.value(ctx, sheet.decls[(ctx, name)][0])
+            if why := broken(value):
+                raw, lookup = sheet.decls[(ctx, name)][0], sheet.lookup(ctx)
+                add(name, realm, raw, value, lookup, why)[1].append(label(ctx))
+    for (name, realm, why, raw, via, value), (envs, contexts) in sorted(found.items()):
+        print(f"{name} in {realm}: {why}" + (f", from {via}" if via else ""))
+        print(f"  declared as: {raw}")
+        print(f"  resolves to: {value}")
+        if envs:
+            print(f"  wins in: {'; '.join(envs)}")
+        if contexts:
+            print(f"  declared in: {'; '.join(dict.fromkeys(contexts))}")
+    if found:
+        print(f"{len(found)} broken token value(s)")
+        return 1
+    print("every token resolves")
+    return 0
+
+
 def usage(message):
     sys.exit(f"{message}\n{__doc__}")
 
@@ -729,6 +823,10 @@ def main(argv):
         usage(
             f"{mode} takes no directory; put it first: ./mach theme resolve-token {mode} ..."
         )
+    if mode == "--check":
+        if rest:
+            usage("--check takes no arguments")
+        return check(directory)
     if mode == "--diff":
         if len(rest) != 1:
             usage("--diff takes one directory")
@@ -763,4 +861,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    sys.exit(main(sys.argv))

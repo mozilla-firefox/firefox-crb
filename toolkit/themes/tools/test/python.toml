@@ -1,4 +1,8 @@
 [DEFAULT]
 subsuite = "desktop-theme"
 
+["test_token_resolve.py"]
+
+["test_tree_tokens.py"]
+
 ["test_virtualenv.py"]
