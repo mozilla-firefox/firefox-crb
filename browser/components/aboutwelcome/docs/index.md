@@ -13,16 +13,13 @@ No build step is necessary. Use `mach` and run mochitests according to your regu
 
 ### Prerequisites
 
-You will need the following:
-
-- Node.js 10+ (On Mac, the best way to install Node.js is to use the install link on the [Node.js homepage])
-- npm (packaged with Node.js)
+Ensure you have installed the environment per the {doc}`contributors quick reference guide </contributing/contribution_quickref>`.
 
 To install dependencies, run the following from the root of the Firefox repository.
 (Using `mach` to call `npm` and `node` commands will ensure you're using the correct versions of Node and npm.)
 
 ```shell
-(cd browser/components/aboutwelcome && ../../../mach npm install)
+(cd browser/components/aboutwelcome && ../../../mach npm ci)
 ```
 
 ### Which files should you edit?
@@ -48,41 +45,12 @@ Do not use the `watchmc` task for profiling or performance testing!
 
 ## Running tests
 
-<About:welcome> unit tests are written using
-[mocha](https://mochajs.org), and other errors that may show up there are
-[SCSS](https://sass-lang.com/documentation/syntax) issues flagged by
-[stylelint](https://stylelint.io). These things are all run using
-`npm test` under the `aboutwelcome` slug in Treeherder/Try, so if that slug turns
-red, these tests are what is failing. To execute them, do this:
+<About:welcome> unit tests are written using xpcshell. To execute them, do this:
 
 ```shell
-./mach npm test --prefix=browser/components/aboutwelcome
+./mach xpcshell-test --prefix=browser/components/aboutwelcome
 ```
 
-Windows isn't currently supported by `npm test`
-([path/invocation difference](https://bugzilla.mozilla.org/show_bug.cgi?id=1737419)).
-To run tests that aren't covered by `mach lint` and
-`mach test`:
-
-```shell
-./mach npm run lint:stylelint --prefix=browser/components/aboutwelcome
-./mach npm run testmc:build --prefix=browser/components/aboutwelcome
-./mach npm run testmc:unit --prefix=browser/components/aboutwelcome
-```
-
-Mochitests run normally, using `mach test browser/components/aboutwelcome`.
-
-## Code Coverage
-
-Our testing setup will run code coverage tools in addition to just the unit
-tests. It will error out if the code coverage metrics don't meet certain thresholds.
-
-If you see any missing test coverage, you can inspect the coverage report by
-running
-
-```shell
-./mach npm test --prefix=browser/components/aboutwelcome &&
-./mach npm run debugcoverage --prefix=browser/components/aboutwelcome
-```
+Mochitests run normally, using `./mach mochitest browser/components/aboutwelcome`.
 
 [node.js homepage]: https://nodejs.org/
