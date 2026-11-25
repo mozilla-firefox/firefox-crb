@@ -11,6 +11,10 @@ AllowCompilerWarnings()
 
 include('sources.mozbuild')
 
+# libmtmd. Its own directory because some of its model sources share a basename
+# with llama.cpp's, which mozbuild does not allow within a single moz.build.
+DIRS += ['tools/mtmd']
+
 SOURCES += files["COMMON_SOURCES"]
 
 if CONFIG['TARGET_CPU'] == 'x86_64':

@@ -1,0 +1,91 @@
+# -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
+# vim: set filetype=python:
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+with Files('**'):
+    BUG_COMPONENT = ("Core", "Machine Learning: General")
+
+AllowCompilerWarnings()
+
+# libmtmd, llama.cpp's multimodal front-end: it loads an mmproj (a vision or
+# audio encoder plus its projection into the text model's embedding space),
+# encodes media into embeddings and splices them into the token stream.
+#
+# The source list mirrors upstream's add_library(mtmd ...) in CMakeLists.txt,
+# which the CMake parser that generates sources.mozbuild does not descend into
+# (it runs with ENABLE_TOOLS=0). Keep the two in sync on a vendor bump.
+#
+# This lives in its own moz.build rather than the parent's because five of the
+# model sources below share a basename with one under llama.cpp's src/models/,
+# and mozbuild requires basenames to be unique per moz.build.
+SOURCES += [
+    "clip.cpp",
+    "models/cogvlm.cpp",
+    "models/conformer.cpp",
+    "models/deepseekocr.cpp",
+    "models/deepseekocr2.cpp",
+    "models/dotsocr.cpp",
+    "models/exaone4_5.cpp",
+    "models/gemma4a.cpp",
+    "models/gemma4ua.cpp",
+    "models/gemma4uv.cpp",
+    "models/gemma4v.cpp",
+    "models/glm4v.cpp",
+    "models/granite-speech.cpp",
+    "models/granite4-vision.cpp",
+    "models/hunyuanvl.cpp",
+    "models/internvl.cpp",
+    "models/kimik25.cpp",
+    "models/kimivl.cpp",
+    "models/llama4.cpp",
+    "models/llava.cpp",
+    "models/mimovl.cpp",
+    "models/minicpmv.cpp",
+    "models/mobilenetv5.cpp",
+    "models/nemotron-v2-vl.cpp",
+    "models/paddleocr.cpp",
+    "models/pixtral.cpp",
+    "models/qwen2vl.cpp",
+    "models/qwen3a.cpp",
+    "models/qwen3vl.cpp",
+    "models/siglip.cpp",
+    "models/step3vl.cpp",
+    "models/whisper-enc.cpp",
+    "models/yasa2.cpp",
+    "models/youtuvl.cpp",
+    "mtmd-audio.cpp",
+    "mtmd-helper.cpp",
+    "mtmd-image.cpp",
+    "mtmd.cpp",
+]
+
+EXPORTS.mtmd += [
+    "mtmd-helper.h",
+    "mtmd.h",
+]
+
+LOCAL_INCLUDES += [
+    # moz-overrides.h, which stands in for the exceptions mtmd is patched to
+    # not use.
+    "/third_party/llama.cpp/",
+    "/third_party/llama.cpp/ggml/include/",
+    "/third_party/llama.cpp/include/",
+]
+
+# MTMD_VIDEO is left undefined. Upstream defaults to ON, which shells out to ffmpeg
+DEFINES["GGML_SHARED"] = "1"
+DEFINES["GGML_BUILD"] = "1"
+DEFINES["LLAMA_SHARED"] = "1"
+DEFINES["LLAMA_BUILD"] = "1"
+
+CXXFLAGS += [
+    "-Wno-implicit-fallthrough",
+    "-Wno-sign-compare",
+    "-Wno-tautological-unsigned-enum-zero-compare",
+    "-Wno-unreachable-code",
+    "-Wno-unused-function",
+]
+
+FINAL_LIBRARY = "mozinference"
