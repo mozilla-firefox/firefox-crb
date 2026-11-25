@@ -157,14 +157,14 @@
       "Set the icon correctly.",
     );
     is(
-      downloadViewUI._downloadTarget.value,
+      downloadViewUI._downloadTarget.textContent,
       kTestDisplayName,
-      "Set the value correctly on the target.",
+      "Set the value correctly on the target."
     );
     is(
-      downloadViewUI._downloadTarget.getAttribute("tooltiptext"),
+      downloadViewUI._downloadTarget.getAttribute("title"),
       kTestDisplayName,
-      "Set the tooltiptext correctly on the target.",
+      "Set the title correctly on the target."
     );
 
     // showDisplayNameAndIcon can also accept a structure for a Fluent string
@@ -202,29 +202,25 @@
       "Should not be using a Fluent string here.",
     );
     is(
-      downloadViewUI._downloadDetailsNormal.getAttribute("value"),
+      downloadViewUI._downloadDetailsNormal.textContent,
       kTestStatus,
-      "Should have set the test status on the normal details element.",
+      "Should have set the test status on the normal details element."
     );
-    is(
-      downloadViewUI._downloadDetailsNormal.getAttribute("tooltiptext"),
-      kTestStatus,
-      "Should have set the test status on the normal details element tooltiptext.",
-    );
+    is(downloadViewUI._downloadDetailsNormal.getAttribute("title"), kTestStatus, "Should have set the test status on the normal details element tooltiptext.");
 
     ok(
       !downloadViewUI._downloadDetailsHover.hasAttribute("data-l10n-id"),
       "Should not be using a Fluent string here.",
     );
     is(
-      downloadViewUI._downloadDetailsHover.getAttribute("value"),
+      downloadViewUI._downloadDetailsHover.textContent,
       kTestStatus,
-      "Should have set the test status on the hover details element.",
+      "Should have set the test status on the hover details element."
     );
     is(
-      downloadViewUI._downloadDetailsHover.getAttribute("tooltiptext"),
+      downloadViewUI._downloadDetailsHover.getAttribute("title"),
       kTestStatus,
-      "Should have set the test status on the hover details element tooltiptext.",
+      "Should have set the test status on the hover details element tooltiptext."
     );
 
     // showStatus can also accept a structure for a Fluent string
@@ -271,14 +267,14 @@
       "Should have set the Fluent args on the normal details element.",
     );
     is(
-      downloadViewUI._downloadDetailsHover.getAttribute("value"),
+      downloadViewUI._downloadDetailsHover.textContent,
       kTestStatus,
-      "Should have set the test status on the hover details element.",
+      "Should have set the test status on the hover details element."
     );
     is(
-      downloadViewUI._downloadDetailsHover.getAttribute("tooltiptext"),
+      downloadViewUI._downloadDetailsHover.getAttribute("title"),
       kTestStatus,
-      "Should have set the test status on the hover details element tooltiptext.",
+      "Should have set the test status on the hover details element tooltiptext."
     );
 
     // And test that we can override the hover details with a Fluent string.
@@ -349,11 +345,10 @@
         ),
         "The button has the downloadButton class.",
       );
-      ok(
-        nonPanelDownloadViewUI._downloadButton.classList.contains(
-          buttonData.iconClass,
-        ),
-        "The button has the iconClass class.",
+      is(
+        nonPanelDownloadViewUI._downloadButton.iconSrc,
+        buttonData.iconSrc,
+        "The button has the iconSrc set."
       );
       ok(
         !nonPanelDownloadViewUI._downloadButton.hasAttribute("hidden"),
@@ -399,11 +394,10 @@
         panelDownloadViewUI._downloadButton.classList.contains("downloadButton"),
         "The button has the downloadButton class.",
       );
-      ok(
-        panelDownloadViewUI._downloadButton.classList.contains(
-          buttonData.iconClass,
-        ),
-        "The button has the iconClass class.",
+      is(
+        panelDownloadViewUI._downloadButton.iconSrc,
+        buttonData.iconSrc,
+        "The button has the iconSrc set."
       );
       ok(
         !panelDownloadViewUI._downloadButton.hasAttribute("hidden"),
