@@ -12,7 +12,6 @@ import io.mockk.Runs
 import io.mockk.every
 import io.mockk.impl.annotations.RelaxedMockK
 import io.mockk.just
-import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
 import io.mockk.verifyOrder
@@ -22,13 +21,17 @@ import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
+import mozilla.components.feature.tabgroups.storage.fakes.FakeTabGroupRepository
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.test.robolectric.testContext
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
+import org.mozilla.fenix.components.tabs.DefaultTabRepository
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.tabsClosedUndoMessage
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_ACTIVE_NORMAL_TABS
@@ -55,6 +58,27 @@ class TabsCleanupFeatureTest {
 
     @RelaxedMockK private lateinit var fenixBrowserUseCases: FenixBrowserUseCases
 
+    private val tabDataCoordinator by lazy {
+        DefaultTabDataCoordinator(
+                tabRepository =
+                    DefaultTabRepository(
+                        browserStore = browserStore,
+                        tabsUseCases = TabsUseCases(browserStore),
+                        fenixBrowserUseCases = fenixBrowserUseCases,
+                        isHomepageAsNewTabEnabled = { false },
+                    ),
+                tabGroupRepository = FakeTabGroupRepository(),
+                isInactiveTabsEnabled = { settings.inactiveTabsAreEnabled },
+                isTabGroupsEnabled = { true },
+                scope = testCoroutineScope,
+                dispatcher = testDispatcher,
+            )
+            .also {
+                it.initialize()
+                testDispatcher.scheduler.runCurrent()
+            }
+    }
+
     @RelaxedMockK private lateinit var settings: Settings
 
     private val snackbarHostState = SnackbarHostState()
@@ -69,6 +93,7 @@ class TabsCleanupFeatureTest {
                     navController = navController,
                     settings = settings,
                     tabsUseCases = tabsUseCases,
+                    tabDataCoordinator = tabDataCoordinator,
                     fenixBrowserUseCases = fenixBrowserUseCases,
                     snackbarHostState = snackbarHostState,
                     viewLifecycleScope = testCoroutineScope,
@@ -86,34 +111,10 @@ class TabsCleanupFeatureTest {
     fun `GIVEN all active normal tabs to delete WHEN feature is started THEN remove all active normal tabs and show undo snackbar`() {
         val tabs =
             listOf(
-                createTab(
-                    id = "1",
-                    url = "https://mozilla.org/1",
-                    private = false,
-                    lastAccess = System.currentTimeMillis(),
-                    createdAt = System.currentTimeMillis(),
-                ),
-                createTab(
-                    id = "2",
-                    url = "https://mozilla.org/2",
-                    private = false,
-                    lastAccess = System.currentTimeMillis(),
-                    createdAt = System.currentTimeMillis(),
-                ),
-                createTab(
-                    id = "3",
-                    url = "https://mozilla.org/3",
-                    private = false,
-                    lastAccess = System.currentTimeMillis(),
-                    createdAt = System.currentTimeMillis(),
-                ),
-                createTab(
-                    id = "inactive_tab",
-                    url = "https://mozilla.org/4",
-                    private = false,
-                    lastAccess = 0L,
-                    createdAt = 0L,
-                ),
+                createTab(id = "1", url = "https://mozilla.org/1"),
+                createTab(id = "2", url = "https://mozilla.org/2"),
+                createTab(id = "3", url = "https://mozilla.org/3"),
+                createTab(id = "inactive_tab", url = "https://mozilla.org/4", lastAccess = 0L, createdAt = 0L),
             )
 
         every { settings.inactiveTabsAreEnabled } returns true
@@ -122,9 +123,8 @@ class TabsCleanupFeatureTest {
 
         feature.start()
 
+        assertEquals(listOf("inactive_tab"), browserStore.state.tabs.map { it.id })
         verify {
-            tabsUseCases.removeTabs(listOf("1", "2", "3"), setOf("inactive_tab"))
-
             feature.showUndoSnackbar(
                 testContext.tabsClosedUndoMessage(3),
                 any(),
@@ -273,11 +273,7 @@ class TabsCleanupFeatureTest {
         val private = true
         val sessionId = "1"
 
-        val tab: TabSessionState = mockk {
-            every { content.private } returns private
-            every { content.url } returns "https://www.mozilla.org"
-            every { id } returns sessionId
-        }
+        val tab: TabSessionState = createTab(id = sessionId, url = "https://www.mozilla.org", private = private)
 
         browserStore = BrowserStore(BrowserState(tabs = listOf(tab)))
         every { viewModel.sessionToDelete } returns sessionId
@@ -300,11 +296,7 @@ class TabsCleanupFeatureTest {
     fun `GIVEN homepage as a new tab is enabled and the last tab is to be removed WHEN feature is started THEN remove tab, show undo snackbar and ensure a new tab remains`() {
         val private = true
         val sessionId = "1"
-        val tab: TabSessionState = mockk {
-            every { content.private } returns private
-            every { content.url } returns "https://www.mozilla.org"
-            every { id } returns sessionId
-        }
+        val tab: TabSessionState = createTab(id = sessionId, url = "https://www.mozilla.org", private = private)
 
         every { settings.enableHomepageAsNewTab } returns true
         every { browsingModeManager.mode.isPrivate } returns private
@@ -333,16 +325,9 @@ class TabsCleanupFeatureTest {
         val private = true
         val sessionId = "1"
 
-        val tab: TabSessionState = mockk {
-            every { content.private } returns private
-            every { content.url } returns "https://www.mozilla.org"
-            every { id } returns sessionId
-        }
+        val tab: TabSessionState = createTab(id = sessionId, url = "https://www.mozilla.org", private = private)
 
-        val secondTab: TabSessionState = mockk {
-            every { content.private } returns private
-            every { id } returns "2"
-        }
+        val secondTab: TabSessionState = createTab(id = "2", url = "https://www.mozilla.org", private = private)
 
         every { settings.enableHomepageAsNewTab } returns true
         every { browsingModeManager.mode.isPrivate } returns private
