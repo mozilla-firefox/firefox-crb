@@ -204,6 +204,7 @@ class TabGroupContextMenuCandidateTest {
                         browserStore = browserStore,
                         tabsUseCases = TabsUseCases(browserStore),
                         fenixBrowserUseCases = mockk(relaxed = true),
+                        isHomepageAsNewTabEnabled = { false },
                     ),
                 tabGroupRepository = repository,
                 isInactiveTabsEnabled = { false },

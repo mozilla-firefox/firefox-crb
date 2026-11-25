@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.data.TabGroup
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
@@ -967,6 +968,366 @@ class DefaultTabDataCoordinatorTest {
         assertEquals(expected = listOf(group1.id, group3.id), actual = snapshot?.openTabGroups?.map { it.id })
         assertEquals(expected = listOf("1", "3"), actual = snapshot?.browsableNormalTabs?.map { it.id })
     }
+
+    @Test
+    fun `WHEN all normal tabs are closed THEN the ungrouped active tabs are removed and the open groups are closed`() =
+        runTest {
+            val openGroup = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val closedGroup = createStoredTabGroup(id = "group-2", closed = true, tabIds = listOf("4"))
+            val tabRepository =
+                createTabRepository(
+                    selectedTabId = "1",
+                    tabs =
+                        listOf(
+                            createTab(id = "1"),
+                            createTab(id = "2"),
+                            createTab(id = "3", inactive = true),
+                            createTab(id = "4"),
+                            createTab(id = "5"),
+                            createTab(id = "6", private = true),
+                        ),
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(openGroup, closedGroup),
+                            tabGroupAssignments = mapOf("2" to openGroup.id, "4" to closedGroup.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeAllNormalTabs(includeInactiveTabs = false)
+            runCurrent()
+
+            assertEquals(
+                expected =
+                    BulkCloseResult(
+                        removedTabCount = 2,
+                        closedTabGroupIds = listOf(openGroup.id),
+                        previousSelectedTabId = "1",
+                    ),
+                actual = result,
+            )
+            assertEquals(expected = listOf("2", "3", "4", "6"), actual = tabRepository.tabs.map { it.id })
+            assertEquals(expected = setOf("2", "3", "4"), actual = tabRepository.excludedFallbackTabIds)
+            assertEquals(expected = emptyList(), actual = coordinator.tabsSnapshot.value?.openTabGroups)
+        }
+
+    @Test
+    fun `GIVEN inactive tabs are included WHEN all normal tabs are closed THEN the ungrouped inactive tabs are also removed`() =
+        runTest {
+            val group = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val tabRepository =
+                createTabRepository(
+                    tabs = listOf(createTab(id = "1"), createTab(id = "2"), createTab(id = "3", inactive = true))
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group),
+                            tabGroupAssignments = mapOf("2" to group.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeAllNormalTabs(includeInactiveTabs = true)
+            runCurrent()
+
+            assertEquals(expected = 2, actual = result.removedTabCount)
+            assertEquals(expected = listOf("2"), actual = tabRepository.tabs.map { it.id })
+        }
+
+    @Test
+    fun `GIVEN tab groups are disabled WHEN all normal tabs are closed THEN every normal tab is removed and no groups are closed`() =
+        runTest {
+            val group = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val tabRepository =
+                createTabRepository(
+                    tabs = listOf(createTab(id = "1"), createTab(id = "2"), createTab(id = "3", private = true))
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group),
+                            tabGroupAssignments = mapOf("2" to group.id),
+                        ),
+                    isTabGroupsEnabled = { false },
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeAllNormalTabs(includeInactiveTabs = true)
+            runCurrent()
+
+            assertEquals(expected = BulkCloseResult(removedTabCount = 2), actual = result)
+            assertEquals(expected = listOf("3"), actual = tabRepository.tabs.map { it.id })
+        }
+
+    @Test
+    fun `GIVEN the selected tab is grouped WHEN all normal tabs are closed THEN a fallback tab is added and selected`() =
+        runTest {
+            val group = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val tabRepository =
+                createTabRepository(selectedTabId = "2", tabs = listOf(createTab(id = "1"), createTab(id = "2")))
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group),
+                            tabGroupAssignments = mapOf("2" to group.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeAllNormalTabs(includeInactiveTabs = false)
+            runCurrent()
+
+            assertEquals(expected = "new-tab-0", actual = result.addedTabId)
+            assertEquals(expected = "2", actual = result.previousSelectedTabId)
+            assertEquals(expected = "new-tab-0", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
+
+    @Test
+    fun `GIVEN the selected tab is grouped and no fallback tab is added WHEN all normal tabs are closed THEN the selection is kept`() =
+        runTest {
+            val group = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val tabRepository =
+                createTabRepository(selectedTabId = "2", tabs = listOf(createTab(id = "1"), createTab(id = "2")))
+                    .apply {
+                        canAddFallbackTab = false
+                    }
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group),
+                            tabGroupAssignments = mapOf("2" to group.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeAllNormalTabs(includeInactiveTabs = false)
+            runCurrent()
+
+            assertNull(result.addedTabId)
+            assertEquals(expected = "2", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
+
+    @Test
+    fun `WHEN tabs and tab groups are closed THEN the tabs are removed and only the requested open groups are closed`() =
+        runTest {
+            val group1 = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+            val group2 = createStoredTabGroup(id = "group-2", closed = true, tabIds = listOf("3"))
+            val group3 = createStoredTabGroup(id = "group-3", tabIds = listOf("4"))
+            val tabRepository =
+                createTabRepository(
+                    selectedTabId = "5",
+                    tabs =
+                        listOf(
+                            createTab(id = "1"),
+                            createTab(id = "2"),
+                            createTab(id = "3"),
+                            createTab(id = "4"),
+                            createTab(id = "5"),
+                        ),
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group1, group2, group3),
+                            tabGroupAssignments = mapOf("2" to group1.id, "3" to group2.id, "4" to group3.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result =
+                coordinator.closeTabsAndTabGroups(tabIds = listOf("1"), tabGroupIds = listOf(group1.id, group2.id))
+            runCurrent()
+
+            assertEquals(
+                expected =
+                    BulkCloseResult(
+                        removedTabCount = 1,
+                        closedTabGroupIds = listOf(group1.id),
+                        previousSelectedTabId = "5",
+                    ),
+                actual = result,
+            )
+            assertEquals(expected = listOf("2", "3", "4", "5"), actual = tabRepository.tabs.map { it.id })
+            assertEquals(
+                expected = listOf(group3.id),
+                actual = coordinator.tabsSnapshot.value?.openTabGroups?.map { it.id },
+            )
+            assertEquals(expected = "5", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
+
+    @Test
+    fun `GIVEN only tab groups are closed WHEN tabs and tab groups are closed THEN no tabs are removed`() = runTest {
+        val group = createStoredTabGroup(id = "group-1", tabIds = listOf("2"))
+        val tabRepository = createTabRepository(tabs = listOf(createTab(id = "1"), createTab(id = "2")))
+        val coordinator =
+            createCoordinator(
+                tabRepository = tabRepository,
+                tabGroupRepository =
+                    createTabGroupRepository(tabGroups = listOf(group), tabGroupAssignments = mapOf("2" to group.id)),
+            )
+
+        coordinator.initialize()
+        runCurrent()
+
+        val result = coordinator.closeTabsAndTabGroups(tabIds = emptyList(), tabGroupIds = listOf(group.id))
+        runCurrent()
+
+        assertEquals(expected = 0, actual = result.removedTabCount)
+        assertEquals(expected = listOf("1", "2"), actual = tabRepository.tabs.map { it.id })
+        assertEquals(expected = emptySet(), actual = tabRepository.excludedFallbackTabIds)
+    }
+
+    @Test
+    fun `GIVEN the selected tab is in a closed group WHEN tabs and tab groups are closed THEN the nearest ungrouped active tab that is not removed is selected`() =
+        runTest {
+            val group1 = createStoredTabGroup(id = "group-1", tabIds = listOf("4"))
+            val group2 = createStoredTabGroup(id = "group-2", tabIds = listOf("5"))
+            val tabRepository =
+                createTabRepository(
+                    selectedTabId = "4",
+                    tabs =
+                        listOf(
+                            createTab(id = "1"),
+                            createTab(id = "2"),
+                            createTab(id = "3", inactive = true),
+                            createTab(id = "4"),
+                            createTab(id = "5"),
+                            createTab(id = "6"),
+                        ),
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group1, group2),
+                            tabGroupAssignments = mapOf("4" to group1.id, "5" to group2.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            val result = coordinator.closeTabsAndTabGroups(tabIds = listOf("6"), tabGroupIds = listOf(group1.id))
+            runCurrent()
+
+            assertNull(result.addedTabId)
+            assertEquals(expected = "2", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
+
+    @Test
+    fun `GIVEN the coordinator is not initialized WHEN tabs are closed in bulk THEN nothing is removed or closed`() =
+        runTest {
+            val tabRepository = createTabRepository(tabs = listOf(createTab(id = "1")))
+            val coordinator = createCoordinator(tabRepository = tabRepository)
+
+            assertEquals(
+                expected = BulkCloseResult(),
+                actual = coordinator.closeAllNormalTabs(includeInactiveTabs = true),
+            )
+            assertEquals(
+                expected = BulkCloseResult(),
+                actual = coordinator.closeTabsAndTabGroups(tabIds = listOf("1"), tabGroupIds = emptyList()),
+            )
+            assertEquals(expected = listOf("1"), actual = tabRepository.tabs.map { it.id })
+        }
+
+    @Test
+    fun `WHEN a bulk close is undone THEN the tabs are restored, the groups are reopened, the added tab is removed, and the selection is restored`() =
+        runTest {
+            val group = createStoredTabGroup(id = "group-1", closed = true, tabIds = listOf("1"))
+            val tabRepository =
+                createTabRepository(
+                    selectedTabId = "new-tab",
+                    tabs = listOf(createTab(id = "1"), createTab(id = "new-tab")),
+                )
+            val coordinator =
+                createCoordinator(
+                    tabRepository = tabRepository,
+                    tabGroupRepository =
+                        createTabGroupRepository(
+                            tabGroups = listOf(group),
+                            tabGroupAssignments = mapOf("1" to group.id),
+                        ),
+                )
+
+            coordinator.initialize()
+            runCurrent()
+
+            coordinator.undoBulkClose(
+                BulkCloseResult(
+                    removedTabCount = 2,
+                    closedTabGroupIds = listOf(group.id),
+                    previousSelectedTabId = "1",
+                    addedTabId = "new-tab",
+                )
+            )
+            runCurrent()
+
+            assertEquals(expected = 1, actual = tabRepository.undoRemovedTabsCount)
+            assertEquals(expected = listOf("1"), actual = tabRepository.tabs.map { it.id })
+            assertEquals(
+                expected = listOf(group.id),
+                actual = coordinator.tabsSnapshot.value?.openTabGroups?.map { it.id },
+            )
+            assertEquals(expected = "1", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
+
+    @Test
+    fun `GIVEN no tabs were removed WHEN a bulk close is undone THEN tab removals are not undone`() = runTest {
+        val tabRepository = createTabRepository(tabs = listOf(createTab(id = "1")))
+        val coordinator = createCoordinator(tabRepository = tabRepository)
+
+        coordinator.initialize()
+        runCurrent()
+
+        coordinator.undoBulkClose(BulkCloseResult(closedTabGroupIds = listOf("group-1")))
+        runCurrent()
+
+        assertEquals(expected = 0, actual = tabRepository.undoRemovedTabsCount)
+    }
+
+    @Test
+    fun `GIVEN the previously selected tab is no longer open WHEN a bulk close is undone THEN it is not reselected`() =
+        runTest {
+            val tabRepository = createTabRepository(selectedTabId = "2", tabs = listOf(createTab(id = "2")))
+            val coordinator = createCoordinator(tabRepository = tabRepository)
+
+            coordinator.initialize()
+            runCurrent()
+
+            coordinator.undoBulkClose(BulkCloseResult(removedTabCount = 1, previousSelectedTabId = "1"))
+            runCurrent()
+
+            assertEquals(expected = "2", actual = coordinator.tabsSnapshot.value?.selectedTab?.id)
+        }
 
     @Test
     fun `WHEN a grouped tab is closed and there are other tabs remaining in the group THEN the tab is closed`() =
