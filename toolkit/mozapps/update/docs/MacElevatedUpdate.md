@@ -10,6 +10,10 @@ update flow is:
 - Needed once to update from Admin users other than the installing user.
 - Needed every time for non-Admin users.
 
+## Which installs the privileged helper updates
+
+The privileged helper only applies an update directly to the installation, and refuses staged and replace requests. It resolves the installation's path once and keeps it open, and the working directory has to be the installation itself. It refuses an installation on a volume that root didn't mount or that ignores ownership, and records `ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR`.
+
 ## Concurrent elevated updates
 
 Installing the helper with `SMJobBless` stops a helper that is already running, even one with the same version. Once the helper has taken a request, it ignores the SIGTERM that this sends, and launchd only kills it after the `ExitTimeOut` of 60 seconds in its plist, so an update in progress usually gets to finish. Without that key, launchd killed the helper 5 seconds after SIGTERM on macOS 27. While the helper handles an update, it records its process ID in `/private/var/run/org.mozilla.updater.pid`, and Firefox doesn't install the helper again while that process runs. The updater then gets a busy result from the running helper and records `ELEVATED_UPDATE_IN_PROGRESS_ERROR`, so that Firefox tries again later. Firefox versions that don't check that file still install the helper over a running one, and then wait in `SMJobBless` until it has exited.

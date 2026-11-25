@@ -132,6 +132,10 @@
 // unelevated updater doesn't send.
 #define ELEVATED_UPDATE_INVALID_REQUEST_ERROR 108
 
+// The privileged macOS updater helper refused an install on a volume where
+// ownership doesn't protect it.
+#define ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR 109
+
 // Error codes 110 and 111 are reserved for UpdateService.sys.mjs
 
 // The macOS updater couldn't install its privileged helper, and the user
