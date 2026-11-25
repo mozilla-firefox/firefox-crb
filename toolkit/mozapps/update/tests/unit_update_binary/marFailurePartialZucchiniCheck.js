@@ -50,7 +50,7 @@ async function run_test() {
   // behind.
   runUpdate(STATE_APPLYING, false, EXIT_VALUE_CRASHED, true);
 
-  checkAppBundleModTime();
+  checkAppBundleModTime(false);
   checkPostUpdateRunningFile(false);
 
   let draftFile = getApplyDirFile(CRASH_DRAFT_REL_PATH);
@@ -67,7 +67,11 @@ async function run_test() {
   // left nothing else behind and didn't touch the installed files.
   draftFile.remove(false);
   patchDraftFile.remove(false);
-  getApplyDirFile("updating").remove(true);
+  // On macOS the patch files are extracted to a temporary directory outside of
+  // the application, so there's no updating directory to remove.
+  if (AppConstants.platform != "macosx") {
+    getApplyDirFile("updating").remove(true);
+  }
 
   checkFilesAfterUpdateFailure(
     getApplyDirFile,

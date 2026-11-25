@@ -22,7 +22,7 @@ async function run_test() {
     USE_EXECV ? 0 : 1,
     true
   );
-  checkAppBundleModTime();
+  checkAppBundleModTime(false);
   checkNoUpdateTelemetry();
   await testPostUpdateProcessing();
   checkPostUpdateRunningFile(false);
