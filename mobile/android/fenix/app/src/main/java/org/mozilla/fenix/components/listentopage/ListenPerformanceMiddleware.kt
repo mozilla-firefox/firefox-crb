@@ -295,6 +295,10 @@ class ListenPerformanceMiddleware(
 
             ListenToPageFacts.Items.CHUNK_SYNTHESIZED -> fact.recordChunkSynthesized()
             ListenToPageFacts.Items.ENGINE_BOUND -> fact.recordEngineBound()
+            ListenToPageFacts.Items.AUDIO_RECLAIMED -> {
+                ListenToPage.chunkAudioReclaimed.add()
+                summary?.addReclaimed()
+            }
         }
     }
 
@@ -359,6 +363,7 @@ class ListenPerformanceMiddleware(
         private var kilobytes = 0L
         private var gaps = 0
         private var gapMs = 0L
+        private var reclaimed = 0
 
         @Synchronized
         fun addChunk(chunk: ListenToPageFacts.ChunkSynthesis) {
@@ -373,6 +378,11 @@ class ListenPerformanceMiddleware(
                 sizedChunks++
                 kilobytes += it
             }
+        }
+
+        @Synchronized
+        fun addReclaimed() {
+            reclaimed++
         }
 
         @Synchronized
@@ -395,6 +405,7 @@ class ListenPerformanceMiddleware(
                 gaps = gaps,
                 gapMsTotal = gapMs.toInt(),
                 playbackSpeedEnd = playbackSpeed,
+                chunksReclaimed = reclaimed,
             )
         }
     }
