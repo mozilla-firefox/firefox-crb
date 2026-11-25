@@ -25,7 +25,7 @@
         "prefersContrast": "{card.border.color}",
         "nova": {
           "value": {
-            "default": "var(--chrome-content-separator-color)",
+            "default": "var(--chrome-content-separator-color, {card.border.color})",
             "nativeTheme": "-moz-sidebarborder"
           }
         }

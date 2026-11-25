@@ -280,7 +280,7 @@
     --popup-border-radius: var(--border-radius-xlarge);
 
     /** sidebar **/
-    --sidebar-border-color: var(--chrome-content-separator-color);
+    --sidebar-border-color: var(--chrome-content-separator-color, var(--card-border-color));
 
     /** table **/
 
