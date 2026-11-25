@@ -13,6 +13,11 @@ support-files = [
   "searchTelemetryAd_components_text.html",
 ]
 
+["browser_search_telemetry_actor_registration.js"]
+support-files = [
+  "searchTelemetryAd.html",
+]
+
 ["browser_search_telemetry_adImpression_component.js"]
 support-files = [
   "searchTelemetryAd_components_carousel.html",

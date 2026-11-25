@@ -35,7 +35,6 @@ const known_scripts = {
     "resource:///actors/AboutReaderChild.sys.mjs",
     "resource:///actors/InteractionsChild.sys.mjs",
     "resource:///actors/LinkHandlerChild.sys.mjs",
-    "resource:///actors/SearchSERPTelemetryChild.sys.mjs",
     "moz-src:///toolkit/actors/ContentMetaChild.sys.mjs",
     "resource://gre/modules/Readerable.sys.mjs",
 
@@ -76,6 +75,9 @@ const intermittently_loaded_scripts = {
     "resource://gre/modules/sessionstore/SessionHistory.sys.mjs",
 
     "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+
+    // Search telemetry (only loaded when a SERP match pattern fires)
+    "resource:///actors/SearchSERPTelemetryChild.sys.mjs",
 
     // Canonical URL detection behind pref `browser.tabs.notes.enabled`
     "resource:///actors/CanonicalURLChild.sys.mjs",

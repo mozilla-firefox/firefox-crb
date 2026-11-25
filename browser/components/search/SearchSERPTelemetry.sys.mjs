@@ -313,6 +313,101 @@ const AD_COMPONENTS = [
  * @typedef {ChannelWrapper & ChannelClickMetadata} TrackedChannel
  */
 
+const SERP_TELEMETRY_ACTOR = "SearchSERPTelemetry";
+
+/**
+ * Manages dynamic registration of the SearchSERPTelemetry window actor
+ * based on computed match patterns from provider info.
+ */
+class SERPTelemetryActorHelper {
+  #matchPatterns = null;
+
+  /**
+   * The number of times the actor has been successfully registered. Only
+   * intended for tests.
+   */
+  registrationCount = 0;
+
+  /**
+   * Registers the SearchSERPTelemetry window actor with match patterns derived
+   * from the given provider infos, or re-registers it if the resulting patterns
+   * have changed since the last registration. If the patterns are identical to
+   * the currently registered ones, this is a no-op. If none of the provider
+   * infos have `searchPageMatches`, falls back to matching all https URLs
+   * (`https://*\/*`).
+   *
+   * Patterns may deliberately over-match, such as `https://*\/search*` for
+   * providers served from many hosts, as the child checks `searchPageRegexp`
+   * before doing any work.
+   *
+   * @param { { searchPageMatches: ?string[] }[]} providerInfos
+   *   Raw provider info array from Remote Settings.
+   */
+  maybeRegisterOrReplaceActor(providerInfos) {
+    let matchPatterns = [
+      ...new Set(providerInfos.flatMap(p => p.searchPageMatches ?? [])),
+    ];
+    let patterns = matchPatterns.length ? matchPatterns : ["https://*/*"];
+
+    if (
+      this.#matchPatterns &&
+      patterns.length == this.#matchPatterns.length &&
+      patterns.every((p, i) => p === this.#matchPatterns[i])
+    ) {
+      return;
+    }
+
+    try {
+      ChromeUtils.unregisterWindowActor(SERP_TELEMETRY_ACTOR);
+    } catch (ex) {
+      // Actor may not be registered yet.
+    }
+
+    this.#matchPatterns = null;
+    try {
+      ChromeUtils.registerWindowActor(SERP_TELEMETRY_ACTOR, {
+        parent: {
+          esModuleURI: "resource:///actors/SearchSERPTelemetryParent.sys.mjs",
+        },
+        child: {
+          esModuleURI: "resource:///actors/SearchSERPTelemetryChild.sys.mjs",
+          events: {
+            DOMContentLoaded: {},
+            pageshow: { mozSystemGroup: true },
+            pagehide: { createActor: false },
+            load: { mozSystemGroup: true, capture: true },
+          },
+        },
+        matches: patterns,
+        safeForUntrustedWebProcess: true,
+      });
+    } catch (ex) {
+      lazy.logConsole.error(
+        "Failed to register SearchSERPTelemetry actor.",
+        ex
+      );
+      return;
+    }
+    this.#matchPatterns = patterns;
+    this.registrationCount++;
+  }
+
+  uninit() {
+    if (!this.#matchPatterns) {
+      return;
+    }
+    try {
+      ChromeUtils.unregisterWindowActor(SERP_TELEMETRY_ACTOR);
+    } catch (ex) {
+      lazy.logConsole.error(
+        "Failed to unregister SearchSERPTelemetry actor.",
+        ex
+      );
+    }
+    this.#matchPatterns = null;
+  }
+}
+
 /**
  * TelemetryHandler is the main class handling Search Engine Result Page (SERP)
  * telemetry. It primarily deals with tracking of what pages are loaded into tabs.
@@ -340,6 +435,13 @@ class TelemetryHandler {
 
   // The promise of the initialization in progress or completed.
   #initPromise = null;
+
+  // Helper to manage dynamic registration of the window actor.
+  #actorHelper = new SERPTelemetryActorHelper();
+
+  // Incremented by uninit() so an in-progress #init() can tell that teardown
+  // has happened since it started, and bail out.
+  #initGeneration = 0;
 
   // _browserInfoByURL is a map of tracked search urls to objects containing:
   // * {object} info
@@ -415,12 +517,18 @@ class TelemetryHandler {
   }
 
   async #init() {
+    let generation = this.#initGeneration;
+
     this._telemetrySettings = lazy.RemoteSettings(TELEMETRY_SETTINGS_KEY);
     let rawProviderInfo = [];
     try {
       rawProviderInfo = await this._telemetrySettings.get();
     } catch (ex) {
       lazy.logConsole.error("Could not get settings:", ex);
+    }
+
+    if (generation != this.#initGeneration) {
+      return;
     }
 
     this.#telemetrySettingsSync = event => this.#onSettingsSync(event);
@@ -432,6 +540,8 @@ class TelemetryHandler {
 
     // Now convert the regexps into RegExp objects
     this._setSearchProviderInfo(rawProviderInfo);
+
+    this.#actorHelper.maybeRegisterOrReplaceActor(rawProviderInfo);
 
     for (let win of Services.wm.getEnumerator("navigator:browser")) {
       this._registerWindow(win);
@@ -449,6 +559,7 @@ class TelemetryHandler {
       );
       this._originalProviderInfo = current;
       this._setSearchProviderInfo(current);
+      this.#actorHelper.maybeRegisterOrReplaceActor(current);
       Services.ppmm.sharedData.set(
         SEARCH_TELEMETRY_SHARED.PROVIDER_INFO,
         current
@@ -466,11 +577,15 @@ class TelemetryHandler {
    * Uninitializes the TelemetryHandler and its ContentHandler.
    */
   uninit() {
+    this.#initGeneration++;
+    this.#initPromise = null;
+
     if (!this._initialized) {
       return;
     }
 
     this._contentHandler.uninit();
+    this.#actorHelper.uninit();
 
     for (let win of Services.wm.getEnumerator("navigator:browser")) {
       this._unregisterWindow(win);
@@ -489,7 +604,6 @@ class TelemetryHandler {
     this.#telemetrySettingsSync = null;
 
     this._initialized = false;
-    this.#initPromise = null;
   }
 
   /**
@@ -571,6 +685,17 @@ class TelemetryHandler {
     let info = providerInfo ? providerInfo : this._originalProviderInfo;
     this._contentHandler.overrideSearchTelemetryForTests(info);
     this._setSearchProviderInfo(info);
+    this.#actorHelper.maybeRegisterOrReplaceActor(info);
+  }
+
+  /**
+   * Test-only getter for the number of times the window actor has been
+   * registered.
+   *
+   * @returns {number}
+   */
+  get actorRegistrationCountForTests() {
+    return this.#actorHelper.registrationCount;
   }
 
   /**
