@@ -138,6 +138,10 @@
 
 // Error codes 110 and 111 are reserved for UpdateService.sys.mjs
 
+// The privileged macOS updater helper refused an install that the user who
+// asked for the update, or another user that it doesn't accept, can change.
+#define ELEVATED_UPDATE_CHANGEABLE_INSTALL_ERROR 112
+
 // The macOS updater couldn't install its privileged helper, and the user
 // didn't dismiss the authentication dialog.
 #define ELEVATED_UPDATE_HELPER_INSTALL_ERROR 115
