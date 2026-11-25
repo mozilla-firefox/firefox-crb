@@ -10,6 +10,7 @@ ChromeUtils.defineESModuleGetters(this, {
   GeolocationTestUtils:
     "resource://testing-common/GeolocationTestUtils.sys.mjs",
   MerinoTestUtils: "resource://testing-common/MerinoTestUtils.sys.mjs",
+  UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
   WeatherFeed: "resource://newtab/lib/WeatherFeed.sys.mjs",
   Region: "resource://gre/modules/Region.sys.mjs",
 });
@@ -21,6 +22,12 @@ MerinoTestUtils.init(this);
 const WEATHER_ENABLED = "browser.newtabpage.activity-stream.showWeather";
 const SYS_WEATHER_ENABLED =
   "browser.newtabpage.activity-stream.system.showWeather";
+
+add_setup(async () => {
+  do_get_profile();
+  Services.fog.initializeFOG();
+  await MerinoTestUtils.server.start();
+});
 
 add_task(async function test_MerinoClient_wrapper_passes_correct_args() {
   let sandbox = sinon.createSandbox();
@@ -334,7 +341,7 @@ add_task(async function test_fetchLocationAutocomplete_broadcasts_results() {
     },
   };
   let autoComplete = sandbox.stub();
-  feed.merino = { autoCompleteWeatherLocation: autoComplete };
+  feed.merinoLocationSearch = { autoCompleteWeatherLocation: autoComplete };
 
   const toronto = { key: "55488", localized_name: "Toronto" };
   const cases = [
@@ -496,6 +503,7 @@ add_task(async function test_fetch_weather_with_geolocation() {
         locationName: undefined,
         ...expected,
         timeoutMs: 7000,
+        onResult: sinon.match.func,
       });
     } else {
       sinon.assert.notCalled(stub);
@@ -677,10 +685,10 @@ add_task(async function test_detect_location_with_geolocation() {
         return { Prefs: { values: {} } };
       },
     };
-    feed.merino = { fetch: () => {} };
+    feed.merinoLocationDetect = { fetch: () => {} };
 
     // Stub merino client
-    let stub = sandbox.stub(feed.merino, "fetch").resolves(null);
+    let stub = sandbox.stub(feed.merinoLocationDetect, "fetch").resolves(null);
     // Stub geolocation
     let cleanupGeolocationStub =
       GeolocationTestUtils.stubGeolocation(geolocation);
@@ -693,6 +701,7 @@ add_task(async function test_detect_location_with_geolocation() {
         providers: ["accuweather"],
         query: expected,
         timeoutMs: 7000,
+        onResult: sinon.match.func,
       });
     } else {
       sinon.assert.notCalled(stub);
@@ -1130,4 +1139,571 @@ add_task(async function test_optin_regions_in_default_region_weather_config() {
       `Opt-in region ${region} is in the default region-weather-config pref`
     );
   }
+});
+
+const MERINO_KEYS = [
+  "weather_report",
+  "weather_forecast",
+  "weather_location_search",
+  "weather_location_detect",
+  "weather_geolocation",
+];
+const MERINO_CATEGORIES = [
+  "success",
+  "no_suggestion",
+  "timeout",
+  "network_error",
+  "http_4xx",
+  "http_5xx",
+];
+const UNREACHABLE_URL = "http://localhost/valid-but-unreachable-url";
+const REPORT_SUCCESS = {
+  body: { request_id: "report", suggestions: [WEATHER_SUGGESTION] },
+};
+const EMPTY_RESPONSE = { body: { request_id: "empty", suggestions: [] } };
+const HOURLY_FORECASTS = [
+  {
+    date_time: "2026-11-20T10:00:00-05:00",
+    epoch_date_time: 1795186800,
+    icon_id: 1,
+    temperature: { c: 5, f: 41 },
+    url: "https://example.com/hourly",
+  },
+];
+const TORONTO = { key: "55488", localized_name: "Toronto" };
+const LOCATION_SUCCESS = {
+  body: { request_id: "location", suggestions: [{ locations: [TORONTO] }] },
+};
+const LOCATION_NO_MATCH = {
+  body: { request_id: "location", suggestions: [{ locations: [] }] },
+};
+const GEOLOCATION_WITHOUT_CITY = {
+  body: {
+    request_id: "geolocation",
+    suggestions: [
+      {
+        provider: "geolocation",
+        custom_details: { geolocation: { country_code: "US" } },
+      },
+    ],
+  },
+};
+const GEOLOCATION_SUCCESS = {
+  body: {
+    request_id: "geolocation",
+    suggestions: [MerinoTestUtils.GEOLOCATION_SUGGESTION],
+  },
+};
+const FORECAST_PREFS = {
+  "weather.display": "detailed",
+  "widgets.system.weatherForecast.enabled": true,
+  "widgets.weather.size": "large",
+};
+
+/**
+ * @returns {object}
+ *   The recorded widgets_merino_result counts, as { key: { category: n } }.
+ */
+function getMerinoResults() {
+  let results = {};
+  for (let key of MERINO_KEYS) {
+    for (let category of MERINO_CATEGORIES) {
+      let value = Glean.newtab.widgetsMerinoResult
+        .get(key, category)
+        .testGetValue();
+      if (value) {
+        results[key] ??= {};
+        results[key][category] = value;
+      }
+    }
+  }
+  return results;
+}
+
+/**
+ * Makes the mock Merino server answer each kind of request with its own
+ * response. All of them are sent to the same URL.
+ *
+ * @param {object} [responses]
+ * @param {object} [responses.report]
+ * @param {object} [responses.hourly]
+ * @param {object} [responses.location]
+ * @param {object} [responses.geolocation]
+ */
+function respondByRequestType({
+  report = REPORT_SUCCESS,
+  hourly = { body: HOURLY_FORECASTS },
+  location = LOCATION_SUCCESS,
+  geolocation = GEOLOCATION_SUCCESS,
+} = {}) {
+  MerinoTestUtils.server.requestHandler = request => {
+    let params = new URLSearchParams(request.queryString);
+    if (params.get("providers") === "geolocation") {
+      return geolocation;
+    }
+    switch (params.get("request_type")) {
+      case "weather":
+        return report;
+      case "location":
+        return location;
+      default:
+        return hourly;
+    }
+  };
+}
+
+async function withMerinoPrefs(prefs, callback) {
+  let original = {};
+  for (let [name, value] of Object.entries(prefs)) {
+    original[name] = UrlbarPrefs.get(name);
+    UrlbarPrefs.set(name, value);
+  }
+  try {
+    await callback();
+  } finally {
+    for (let [name, value] of Object.entries(original)) {
+      UrlbarPrefs.set(name, value);
+    }
+  }
+}
+
+/**
+ * Creates a WeatherFeed that talks to the mock Merino server through real
+ * MerinoClients.
+ *
+ * @param {object} sandbox
+ * @param {object} [prefValues]
+ * @param {object} [cache]
+ *   Stands in for the feed's PersistentCache.
+ * @returns {WeatherFeed}
+ */
+function makeMerinoFeed(
+  sandbox,
+  prefValues = {},
+  cache = { set: () => {}, get: () => {} }
+) {
+  sandbox.stub(WeatherFeed.prototype, "restartFetchTimer").returns(undefined);
+  sandbox.stub(WeatherFeed.prototype, "PersistentCache").returns(cache);
+  let feed = new WeatherFeed();
+  feed.store = {
+    dispatch: sinon.spy(),
+    getState() {
+      return {
+        Prefs: { values: prefValues },
+        Weather: { locationSearchString: "Tor" },
+      };
+    },
+  };
+  feed.locationData = {
+    city: "Toronto",
+    adminName: { id: "ON" },
+    country: { id: "CA" },
+  };
+  feed.merino = feed.MerinoClient("HNT_WEATHER_FEED");
+  return feed;
+}
+
+add_task(async function test_merino_result_weather_report() {
+  const cases = [
+    { report: REPORT_SUCCESS, expected: "success" },
+    { report: EMPTY_RESPONSE, expected: "no_suggestion" },
+    { report: { status: 204 }, expected: "no_suggestion" },
+    { report: { status: 404 }, expected: "http_4xx" },
+    { report: { status: 500 }, expected: "http_5xx" },
+    { report: { ...REPORT_SUCCESS, delay: 1000 }, expected: "timeout" },
+  ];
+  for (let { report, expected } of cases) {
+    info(`Report response ${JSON.stringify(report)}`);
+    Services.fog.testResetFOG();
+    MerinoTestUtils.server.reset();
+    respondByRequestType({ report });
+    let sandbox = sinon.createSandbox();
+    let feed = makeMerinoFeed(sandbox);
+    if (expected === "timeout") {
+      feed.merinoTimeoutMs = 200;
+    }
+
+    let results = await feed._fetchHelper(0, "Toronto");
+
+    Assert.equal(
+      results.suggestions.length,
+      expected === "success" ? 1 : 0,
+      "Got the report only on success"
+    );
+    Assert.deepEqual(
+      getMerinoResults(),
+      { weather_report: { [expected]: 1 } },
+      `Recorded weather_report ${expected}`
+    );
+    sandbox.restore();
+  }
+});
+
+add_task(async function test_merino_result_weather_report_network_error() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox);
+
+  await withMerinoPrefs(
+    { "merino.weather.reportEndpointURL": UNREACHABLE_URL },
+    () => feed._fetchHelper(0, "Toronto")
+  );
+
+  Assert.deepEqual(getMerinoResults(), {
+    weather_report: { network_error: 1 },
+  });
+  sandbox.restore();
+});
+
+add_task(async function test_merino_result_weather_forecast() {
+  const cases = [
+    { hourly: { body: HOURLY_FORECASTS }, expected: "success" },
+    { hourly: { status: 500, body: HOURLY_FORECASTS }, expected: "http_5xx" },
+    { hourly: { status: 404 }, expected: "http_4xx" },
+    {
+      hourly: { contentType: "text/plain", body: "not json" },
+      expected: "no_suggestion",
+    },
+    { hourly: { body: { detail: "oops" } }, expected: "no_suggestion" },
+    { hourly: { body: "[]" }, expected: "no_suggestion" },
+    {
+      hourly: { body: HOURLY_FORECASTS, delay: 1000 },
+      expected: "timeout",
+    },
+  ];
+  for (let { hourly, expected } of cases) {
+    info(`Hourly response ${JSON.stringify(hourly)}`);
+    Services.fog.testResetFOG();
+    MerinoTestUtils.server.reset();
+    respondByRequestType({ hourly });
+    let sandbox = sinon.createSandbox();
+    let feed = makeMerinoFeed(sandbox, FORECAST_PREFS);
+    if (expected === "timeout") {
+      feed.merinoTimeoutMs = 200;
+    }
+
+    let results = await feed._fetchHelper(0, "Toronto");
+
+    Assert.equal(results.suggestions.length, 1, "Got the weather report");
+    Assert.deepEqual(
+      results.hourlyForecasts,
+      expected === "success" ? HOURLY_FORECASTS : [],
+      "Got the hourly forecasts only on success"
+    );
+    Assert.deepEqual(
+      getMerinoResults(),
+      {
+        weather_report: { success: 1 },
+        weather_forecast: { [expected]: 1 },
+      },
+      `Recorded weather_forecast ${expected}`
+    );
+    sandbox.restore();
+  }
+});
+
+add_task(async function test_merino_result_weather_forecast_network_error() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  respondByRequestType();
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox, FORECAST_PREFS);
+
+  let results;
+  await withMerinoPrefs(
+    { "merino.weather.hourlyEndpointURL": UNREACHABLE_URL },
+    async () => {
+      results = await feed._fetchHelper(0, "Toronto");
+    }
+  );
+
+  Assert.deepEqual(results.hourlyForecasts, [], "Got no hourly forecasts");
+  Assert.deepEqual(getMerinoResults(), {
+    weather_report: { success: 1 },
+    weather_forecast: { network_error: 1 },
+  });
+  sandbox.restore();
+});
+
+// With no location set, the feed asks Merino for the geolocation first. That
+// request is counted, and when it fails no weather request is sent.
+add_task(async function test_merino_result_weather_geolocation() {
+  const cases = [
+    {
+      geolocation: GEOLOCATION_SUCCESS,
+      expected: {
+        weather_geolocation: { success: 1 },
+        weather_report: { success: 1 },
+      },
+      expectedRequests: 2,
+    },
+    {
+      geolocation: EMPTY_RESPONSE,
+      expected: { weather_geolocation: { no_suggestion: 1 } },
+      expectedRequests: 1,
+    },
+    {
+      geolocation: GEOLOCATION_WITHOUT_CITY,
+      expected: { weather_geolocation: { no_suggestion: 1 } },
+      expectedRequests: 1,
+    },
+    {
+      geolocation: { status: 500 },
+      expected: { weather_geolocation: { http_5xx: 1 } },
+      expectedRequests: 1,
+    },
+  ];
+  for (let { geolocation, expected, expectedRequests } of cases) {
+    info(`Geolocation response ${JSON.stringify(geolocation)}`);
+    Services.fog.testResetFOG();
+    MerinoTestUtils.server.reset();
+    respondByRequestType({ geolocation });
+    let sandbox = sinon.createSandbox();
+    let feed = makeMerinoFeed(sandbox);
+
+    await feed._fetchHelper(0);
+
+    Assert.deepEqual(getMerinoResults(), expected, "Recorded results");
+    Assert.equal(
+      MerinoTestUtils.server.requests.length,
+      expectedRequests,
+      "Number of requests sent"
+    );
+    sandbox.restore();
+  }
+});
+
+add_task(async function test_merino_result_not_counted_without_request() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox, FORECAST_PREFS);
+
+  await withMerinoPrefs(
+    {
+      "merino.endpointURL": "",
+      "merino.weather.reportEndpointURL": "",
+      "merino.weather.hourlyEndpointURL": "",
+    },
+    async () => {
+      await feed._fetchHelper(0, "Toronto");
+      await feed.fetchLocationAutocomplete();
+    }
+  );
+
+  Assert.deepEqual(getMerinoResults(), {}, "Nothing is recorded");
+  Assert.equal(MerinoTestUtils.server.requests.length, 0, "No requests");
+  sandbox.restore();
+});
+
+add_task(async function test_merino_result_superseded_report_not_counted() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  let requestCount = 0;
+  MerinoTestUtils.server.requestHandler = () =>
+    requestCount++ ? REPORT_SUCCESS : { ...REPORT_SUCCESS, delay: 60000 };
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox);
+
+  let requestPromise = MerinoTestUtils.server.waitForNextRequest();
+  let firstFetch = feed._fetchHelper(0, "Toronto");
+  await requestPromise;
+  let second = await feed._fetchHelper(0, "Toronto");
+  let first = await firstFetch;
+
+  Assert.equal(first.suggestions.length, 0, "The first fetch was superseded");
+  Assert.equal(second.suggestions.length, 1, "The second fetch got a report");
+  Assert.deepEqual(
+    getMerinoResults(),
+    { weather_report: { success: 1 } },
+    "Only the second request is counted"
+  );
+  MerinoTestUtils.server.reset();
+  sandbox.restore();
+});
+
+add_task(async function test_merino_result_weather_location_search() {
+  const cases = [
+    { location: LOCATION_SUCCESS, expected: "success" },
+    { location: EMPTY_RESPONSE, expected: "no_suggestion" },
+    { location: LOCATION_NO_MATCH, expected: "no_suggestion" },
+    { location: { status: 500 }, expected: "http_5xx" },
+  ];
+  for (let { location, expected } of cases) {
+    Services.fog.testResetFOG();
+    MerinoTestUtils.server.reset();
+    respondByRequestType({ location });
+    let sandbox = sinon.createSandbox();
+    let feed = makeMerinoFeed(sandbox);
+
+    await feed.fetchLocationAutocomplete();
+
+    Assert.deepEqual(
+      getMerinoResults(),
+      { weather_location_search: { [expected]: 1 } },
+      `Recorded weather_location_search ${expected}`
+    );
+    sandbox.restore();
+  }
+});
+
+// Location search has its own MerinoClient, so it doesn't abort a weather
+// report that is in flight.
+add_task(async function test_merino_result_location_search_keeps_report() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  respondByRequestType({ report: { ...REPORT_SUCCESS, delay: 300 } });
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox);
+
+  let requestPromise = MerinoTestUtils.server.waitForNextRequest();
+  let reportFetch = feed._fetchHelper(0, "Toronto");
+  await requestPromise;
+  await feed.fetchLocationAutocomplete();
+  let results = await reportFetch;
+
+  Assert.equal(results.suggestions.length, 1, "The report was not aborted");
+  Assert.deepEqual(getMerinoResults(), {
+    weather_report: { success: 1 },
+    weather_location_search: { success: 1 },
+  });
+  sandbox.restore();
+});
+
+// So does location detect.
+add_task(async function test_merino_result_location_detect_keeps_report() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  respondByRequestType({ report: { ...REPORT_SUCCESS, delay: 300 } });
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox);
+
+  let requestPromise = MerinoTestUtils.server.waitForNextRequest();
+  let reportFetch = feed._fetchHelper(0, "Toronto");
+  await requestPromise;
+  let location = await feed._fetchNormalizedLocation();
+  let results = await reportFetch;
+
+  Assert.deepEqual(location, TORONTO, "The location was detected");
+  Assert.equal(results.suggestions.length, 1, "The report was not aborted");
+  Assert.deepEqual(getMerinoResults(), {
+    weather_report: { success: 1 },
+    weather_geolocation: { success: 1 },
+    weather_location_detect: { success: 1 },
+  });
+  sandbox.restore();
+});
+
+add_task(async function test_merino_result_weather_location_detect() {
+  const cases = [
+    {
+      responses: {},
+      expectedLocation: TORONTO,
+      expected: {
+        weather_geolocation: { success: 1 },
+        weather_location_detect: { success: 1 },
+      },
+    },
+    {
+      responses: { location: { status: 404 } },
+      expectedLocation: undefined,
+      expected: {
+        weather_geolocation: { success: 1 },
+        weather_location_detect: { http_4xx: 1 },
+      },
+    },
+    {
+      responses: { location: LOCATION_NO_MATCH },
+      expectedLocation: undefined,
+      expected: {
+        weather_geolocation: { success: 1 },
+        weather_location_detect: { no_suggestion: 1 },
+      },
+    },
+    {
+      responses: { geolocation: { status: 500 } },
+      expectedLocation: null,
+      expected: { weather_geolocation: { http_5xx: 1 } },
+    },
+    {
+      responses: { geolocation: GEOLOCATION_WITHOUT_CITY },
+      expectedLocation: null,
+      expected: { weather_geolocation: { no_suggestion: 1 } },
+    },
+  ];
+  for (let { responses, expectedLocation, expected } of cases) {
+    info(`Responses ${JSON.stringify(responses)}`);
+    Services.fog.testResetFOG();
+    MerinoTestUtils.server.reset();
+    respondByRequestType(responses);
+    let sandbox = sinon.createSandbox();
+    let feed = makeMerinoFeed(sandbox);
+
+    let location = await feed._fetchNormalizedLocation();
+
+    Assert.deepEqual(location, expectedLocation, "Detected location");
+    Assert.deepEqual(getMerinoResults(), expected, "Recorded results");
+    sandbox.restore();
+  }
+});
+
+// The cache is only written after a fetch that returned data, so a failing
+// client fetches again on every SYSTEM_TICK and a succeeding one doesn't.
+add_task(async function test_merino_result_failed_fetch_retried_each_tick() {
+  Services.fog.testResetFOG();
+  MerinoTestUtils.server.reset();
+  respondByRequestType({ report: { status: 500 } });
+  let sandbox = sinon.createSandbox();
+  let cached = {};
+  let feed = makeMerinoFeed(
+    sandbox,
+    { "weather.query": "Toronto" },
+    {
+      get: async () => cached,
+      set: async (key, value) => {
+        cached[key] = value;
+      },
+    }
+  );
+  sandbox.stub(feed, "isEnabled").returns(true);
+
+  await feed.onAction({ type: actionTypes.SYSTEM_TICK });
+  await feed.onAction({ type: actionTypes.SYSTEM_TICK });
+  Assert.deepEqual(
+    getMerinoResults(),
+    { weather_report: { http_5xx: 2 } },
+    "A failed fetch is retried on the next tick"
+  );
+
+  respondByRequestType();
+  await feed.onAction({ type: actionTypes.SYSTEM_TICK });
+  await feed.onAction({ type: actionTypes.SYSTEM_TICK });
+  Assert.deepEqual(
+    getMerinoResults(),
+    { weather_report: { http_5xx: 2, success: 1 } },
+    "After a successful fetch, the next tick sends no request"
+  );
+  sandbox.restore();
+});
+
+// On a Firefox whose MerinoClient predates onResult, the options are ignored:
+// the feed still gets its data, and nothing is recorded.
+add_task(async function test_merino_result_client_without_onResult() {
+  Services.fog.testResetFOG();
+  let sandbox = sinon.createSandbox();
+  let feed = makeMerinoFeed(sandbox, FORECAST_PREFS);
+  feed.merino = {
+    fetchWeatherReport: async () => WEATHER_SUGGESTION,
+    fetchHourlyForecasts: async () => HOURLY_FORECASTS,
+  };
+
+  let results = await feed._fetchHelper(0, "Toronto");
+
+  Assert.deepEqual(results, {
+    suggestions: [WEATHER_SUGGESTION],
+    hourlyForecasts: HOURLY_FORECASTS,
+  });
+  Assert.deepEqual(getMerinoResults(), {}, "Nothing is recorded");
+  sandbox.restore();
 });
