@@ -43,72 +43,6 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
       isSourceOnSourceMapIgnoreList(state, _source);
     const selectedSource = getSelectedSource(state);
 
-    const deleteSelfLabel = L10N.getStr("breakpointMenuItem.deleteSelf2.label");
-    const deleteAllLabel = L10N.getStr("breakpointMenuItem.deleteAll2.label");
-    const deleteOthersLabel = L10N.getStr(
-      "breakpointMenuItem.deleteOthers2.label"
-    );
-    const enableSelfLabel = L10N.getStr("breakpointMenuItem.enableSelf2.label");
-    const enableAllLabel = L10N.getStr("breakpointMenuItem.enableAll2.label");
-    const enableOthersLabel = L10N.getStr(
-      "breakpointMenuItem.enableOthers2.label"
-    );
-    const disableSelfLabel = L10N.getStr(
-      "breakpointMenuItem.disableSelf2.label"
-    );
-    const disableAllLabel = L10N.getStr("breakpointMenuItem.disableAll2.label");
-    const disableOthersLabel = L10N.getStr(
-      "breakpointMenuItem.disableOthers2.label"
-    );
-    const enableDbgStatementLabel = L10N.getStr(
-      "breakpointMenuItem.enabledbg.label"
-    );
-    const disableDbgStatementLabel = L10N.getStr(
-      "breakpointMenuItem.disabledbg.label"
-    );
-    const removeConditionLabel = L10N.getStr(
-      "breakpointMenuItem.removeCondition2.label"
-    );
-    const addConditionLabel = L10N.getStr(
-      "breakpointMenuItem.addCondition2.label"
-    );
-    const editConditionLabel = L10N.getStr(
-      "breakpointMenuItem.editCondition2.label"
-    );
-
-    const deleteSelfKey = L10N.getStr(
-      "breakpointMenuItem.deleteSelf2.accesskey"
-    );
-    const deleteAllKey = L10N.getStr("breakpointMenuItem.deleteAll2.accesskey");
-    const deleteOthersKey = L10N.getStr(
-      "breakpointMenuItem.deleteOthers2.accesskey"
-    );
-    const enableSelfKey = L10N.getStr(
-      "breakpointMenuItem.enableSelf2.accesskey"
-    );
-    const enableAllKey = L10N.getStr("breakpointMenuItem.enableAll2.accesskey");
-    const enableOthersKey = L10N.getStr(
-      "breakpointMenuItem.enableOthers2.accesskey"
-    );
-    const disableSelfKey = L10N.getStr(
-      "breakpointMenuItem.disableSelf2.accesskey"
-    );
-    const disableAllKey = L10N.getStr(
-      "breakpointMenuItem.disableAll2.accesskey"
-    );
-    const disableOthersKey = L10N.getStr(
-      "breakpointMenuItem.disableOthers2.accesskey"
-    );
-    const removeConditionKey = L10N.getStr(
-      "breakpointMenuItem.removeCondition2.accesskey"
-    );
-    const editConditionKey = L10N.getStr(
-      "breakpointMenuItem.editCondition2.accesskey"
-    );
-    const addConditionKey = L10N.getStr(
-      "breakpointMenuItem.addCondition2.accesskey"
-    );
-
     const selectedLocation = getSelectedLocation(breakpoint, selectedSource);
     const otherBreakpoints = breakpoints.filter(b => b.id !== breakpoint.id);
     const enabledBreakpoints = breakpoints.filter(b => !b.disabled);
@@ -122,8 +56,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const deleteSelfItem = {
       id: "node-menu-delete-self",
-      label: deleteSelfLabel,
-      accesskey: deleteSelfKey,
+      l10nID: "debugger-breakpoint-remove",
       disabled: false,
       click: () => {
         dispatch(removeBreakpoint(breakpoint));
@@ -132,24 +65,21 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const deleteAllItem = {
       id: "node-menu-delete-all",
-      label: deleteAllLabel,
-      accesskey: deleteAllKey,
+      l10nID: "debugger-breakpoint-remove-all",
       disabled: false,
       click: () => dispatch(removeAllBreakpoints()),
     };
 
     const deleteOthersItem = {
       id: "node-menu-delete-other",
-      label: deleteOthersLabel,
-      accesskey: deleteOthersKey,
+      l10nID: "debugger-breakpoint-remove-others",
       disabled: false,
       click: () => dispatch(removeBreakpoints(otherBreakpoints)),
     };
 
     const enableSelfItem = {
       id: "node-menu-enable-self",
-      label: enableSelfLabel,
-      accesskey: enableSelfKey,
+      l10nID: "debugger-breakpoint-enable",
       disabled: isLineBlackboxed(
         blackboxedRangesForSource,
         breakpoint.location.line,
@@ -162,8 +92,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const enableAllItem = {
       id: "node-menu-enable-all",
-      label: enableAllLabel,
-      accesskey: enableAllKey,
+      l10nID: "debugger-breakpoint-enable-all",
       disabled: isLineBlackboxed(
         blackboxedRangesForSource,
         breakpoint.location.line,
@@ -174,8 +103,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const enableOthersItem = {
       id: "node-menu-enable-others",
-      label: enableOthersLabel,
-      accesskey: enableOthersKey,
+      l10nID: "debugger-breakpoint-enable-others",
       disabled: isLineBlackboxed(
         blackboxedRangesForSource,
         breakpoint.location.line,
@@ -186,8 +114,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const disableSelfItem = {
       id: "node-menu-disable-self",
-      label: disableSelfLabel,
-      accesskey: disableSelfKey,
+      l10nID: "debugger-breakpoint-disable",
       disabled: false,
       click: () => {
         dispatch(toggleDisabledBreakpoint(breakpoint));
@@ -196,22 +123,20 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const disableAllItem = {
       id: "node-menu-disable-all",
-      label: disableAllLabel,
-      accesskey: disableAllKey,
+      l10nID: "debugger-breakpoint-disable-all",
       disabled: false,
       click: () => dispatch(toggleAllBreakpoints(true)),
     };
 
     const disableOthersItem = {
       id: "node-menu-disable-others",
-      label: disableOthersLabel,
-      accesskey: disableOthersKey,
+      l10nID: "debugger-breakpoint-disable-others",
       click: () => dispatch(toggleBreakpoints(true, otherEnabledBreakpoints)),
     };
 
     const enableDbgStatementItem = {
       id: "node-menu-enable-dbgStatement",
-      label: enableDbgStatementLabel,
+      l10nID: "debugger-pause-here",
       disabled: false,
       click: () =>
         dispatch(
@@ -224,7 +149,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const disableDbgStatementItem = {
       id: "node-menu-disable-dbgStatement",
-      label: disableDbgStatementLabel,
+      l10nID: "debugger-never-pause-here",
       disabled: false,
       click: () =>
         dispatch(
@@ -237,8 +162,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const removeConditionItem = {
       id: "node-menu-remove-condition",
-      label: removeConditionLabel,
-      accesskey: removeConditionKey,
+      l10nID: "debugger-breakpoint-remove-condition",
       disabled: false,
       click: () =>
         dispatch(
@@ -251,8 +175,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const addConditionItem = {
       id: "node-menu-add-condition",
-      label: addConditionLabel,
-      accesskey: addConditionKey,
+      l10nID: "debugger-breakpoint-add-condition",
       click: async () => {
         await dispatch(selectSpecificLocation(selectedLocation));
         await dispatch(openConditionalPanel(selectedLocation));
@@ -264,8 +187,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const editConditionItem = {
       id: "node-menu-edit-condition",
-      label: editConditionLabel,
-      accesskey: editConditionKey,
+      l10nID: "debugger-breakpoint-edit-condition",
       click: async () => {
         await dispatch(selectSpecificLocation(selectedLocation));
         await dispatch(openConditionalPanel(selectedLocation));
@@ -277,8 +199,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const addLogPointItem = {
       id: "node-menu-add-log-point",
-      label: L10N.getStr("editor.addLogPoint"),
-      accesskey: L10N.getStr("editor.addLogPoint.accesskey"),
+      l10nID: "debugger-add-log-point",
       disabled: false,
       click: async () => {
         await dispatch(selectSpecificLocation(selectedLocation));
@@ -291,8 +212,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const editLogPointItem = {
       id: "node-menu-edit-log-point",
-      label: L10N.getStr("editor.editLogPoint"),
-      accesskey: L10N.getStr("editor.editLogPoint.accesskey"),
+      l10nID: "debugger-edit-log-point",
       disabled: false,
       click: async () => {
         await dispatch(selectSpecificLocation(selectedLocation));
@@ -305,8 +225,7 @@ export function showBreakpointContextMenu(event, breakpoint, source) {
 
     const removeLogPointItem = {
       id: "node-menu-remove-log",
-      label: L10N.getStr("editor.removeLogPoint.label"),
-      accesskey: L10N.getStr("editor.removeLogPoint.accesskey"),
+      l10nID: "debugger-remove-log-point",
       disabled: false,
       click: () =>
         dispatch(

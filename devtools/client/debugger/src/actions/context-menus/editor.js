@@ -109,25 +109,22 @@ export function showEditorGutterContextMenu(event, line, location, lineText) {
 
 // Menu Items
 const continueToHereItem = (location, isPaused, dispatch) => ({
-  accesskey: L10N.getStr("editor.continueToHere.accesskey"),
   disabled: !isPaused,
   click: () => dispatch(continueToHere(location)),
   id: "node-menu-continue-to-here",
-  label: L10N.getStr("editor.continueToHere.label"),
+  l10nID: "debugger-editor-continue-to-here",
 });
 
 const copyToClipboardItem = selectionText => ({
   id: "node-menu-copy-to-clipboard",
-  label: L10N.getStr("copyToClipboard.label"),
-  accesskey: L10N.getStr("copyToClipboard.accesskey"),
+  l10nID: "debugger-editor-copy-to-clipboard",
   disabled: selectionText.length === 0,
   click: () => copyToTheClipboard(selectionText),
 });
 
 const copySourceItem = selectedContent => ({
   id: "node-menu-copy-source",
-  label: L10N.getStr("copySource.label"),
-  accesskey: L10N.getStr("copySource.accesskey"),
+  l10nID: "debugger-copy-source",
   disabled: false,
   click: () =>
     selectedContent.type === "text" &&
@@ -136,29 +133,23 @@ const copySourceItem = selectedContent => ({
 
 const copySourceUri2Item = selectedSource => ({
   id: "node-menu-copy-source-url",
-  label: L10N.getStr("copySourceUri2"),
-  accesskey: L10N.getStr("copySourceUri2.accesskey"),
+  l10nID: "debugger-copy-source-uri",
   disabled: !selectedSource.url,
   click: () => copyToTheClipboard(getRawSourceURL(selectedSource.url)),
 });
 
 const jumpToMappedLocationItem = (location, hasMappedLocation, dispatch) => ({
   id: "node-menu-jump",
-  label: L10N.getFormatStr(
-    "editor.jumpToMappedLocation1",
-    location.source.isOriginal
-      ? L10N.getStr("generated")
-      : L10N.getStr("original")
-  ),
-  accesskey: L10N.getStr("editor.jumpToMappedLocation1.accesskey"),
+  l10nID: location.source.isOriginal
+    ? "debugger-editor-jump-to-generated-location"
+    : "debugger-editor-jump-to-original-location",
   disabled: !hasMappedLocation,
   click: () => dispatch(jumpToMappedLocation(location)),
 });
 
 const showSourceMenuItem = (selectedSource, dispatch) => ({
   id: "node-menu-show-source",
-  label: L10N.getStr("sourceTabs.revealInTree"),
-  accesskey: L10N.getStr("sourceTabs.revealInTree.accesskey"),
+  l10nID: "debugger-reveal-in-tree",
   disabled: !selectedSource.url,
   click: () => dispatch(showSource(selectedSource.id)),
 });
@@ -172,12 +163,9 @@ const blackBoxMenuItem = (
   const isBlackBoxed = !!blackboxedRanges[selectedSource.url];
   return {
     id: "node-menu-blackbox",
-    label: isBlackBoxed
-      ? L10N.getStr("ignoreContextItem.unignore")
-      : L10N.getStr("ignoreContextItem.ignore"),
-    accesskey: isBlackBoxed
-      ? L10N.getStr("ignoreContextItem.unignore.accesskey")
-      : L10N.getStr("ignoreContextItem.ignore.accesskey"),
+    l10nID: isBlackBoxed
+      ? "debugger-unignore-source"
+      : "debugger-ignore-source",
     disabled: isSourceOnIgnoreList || !shouldBlackbox(selectedSource),
     click: () => dispatch(toggleBlackBox(selectedSource)),
   };
@@ -223,12 +211,9 @@ const blackBoxLineMenuItem = (
 
   return {
     id: "node-menu-blackbox-line",
-    label: !selectedLineIsBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLine")
-      : L10N.getStr("ignoreContextItem.unignoreLine"),
-    accesskey: !selectedLineIsBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLine.accesskey")
-      : L10N.getStr("ignoreContextItem.unignoreLine.accesskey"),
+    l10nID: !selectedLineIsBlackBoxed
+      ? "debugger-editor-ignore-line"
+      : "debugger-editor-unignore-line",
     disabled: shouldDisable,
     click: () => {
       const selectionRange = {
@@ -274,12 +259,9 @@ const blackBoxLinesMenuItem = (
 
   return {
     id: "node-menu-blackbox-lines",
-    label: !selectedLinesAreBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLines")
-      : L10N.getStr("ignoreContextItem.unignoreLines"),
-    accesskey: !selectedLinesAreBlackBoxed
-      ? L10N.getStr("ignoreContextItem.ignoreLines.accesskey")
-      : L10N.getStr("ignoreContextItem.unignoreLines.accesskey"),
+    l10nID: !selectedLinesAreBlackBoxed
+      ? "debugger-editor-ignore-lines"
+      : "debugger-editor-unignore-lines",
     disabled: isSourceOnIgnoreList,
     click: () => {
       const selectionRange = {
@@ -306,37 +288,35 @@ const blackBoxLinesMenuItem = (
 
 const watchExpressionItem = (selectedSource, selectionText, dispatch) => ({
   id: "node-menu-add-watch-expression",
-  label: L10N.getStr("expressions.label"),
-  accesskey: L10N.getStr("expressions.accesskey"),
+  l10nID: "debugger-editor-add-watch-expression",
   click: () => dispatch(addExpression(selectionText)),
 });
 
 const evaluateInConsoleItem = (selectedSource, selectionText, dispatch) => ({
   id: "node-menu-evaluate-in-console",
-  label: L10N.getStr("evaluateInConsole.label"),
+  l10nID: "debugger-editor-evaluate-in-console",
   click: () => dispatch(evaluateInConsole(selectionText)),
 });
 
 const downloadFileItem = (selectedSource, selectedContent) => ({
   id: "node-menu-download-file",
-  label: L10N.getStr("downloadFile.label"),
-  accesskey: L10N.getStr("downloadFile.accesskey"),
+  l10nID: "debugger-download-file",
   click: () => downloadFile(selectedContent, selectedSource.shortName),
 });
 
 const inlinePreviewItem = dispatch => ({
   id: "node-menu-inline-preview",
-  label: features.inlinePreview
-    ? L10N.getStr("inlinePreview.hide.label")
-    : L10N.getStr("inlinePreview.show.label"),
+  l10nID: features.inlinePreview
+    ? "debugger-editor-hide-inline-preview"
+    : "debugger-editor-show-inline-preview",
   click: () => dispatch(toggleInlinePreview(!features.inlinePreview)),
 });
 
 const editorWrappingItem = (editorWrappingEnabled, dispatch) => ({
   id: "node-menu-editor-wrapping",
-  label: editorWrappingEnabled
-    ? L10N.getStr("editorWrapping.hide.label")
-    : L10N.getStr("editorWrapping.show.label"),
+  l10nID: editorWrappingEnabled
+    ? "debugger-editor-unwrap-lines"
+    : "debugger-editor-wrap-lines",
   click: () => dispatch(toggleEditorWrapping(!editorWrappingEnabled)),
 });
 
