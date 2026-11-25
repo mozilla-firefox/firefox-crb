@@ -6,6 +6,7 @@ package mozilla.components.compose.menu.ui.customize
 
 import mozilla.components.compose.menu.data.CustomizableMenuItem
 import mozilla.components.compose.menu.data.ExpandableMenuItem
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import mozilla.components.compose.menu.data.hasShownSubItems
 import mozilla.components.compose.menu.ui.customize.CustomizeMenuItemKey.HIDDEN_TITLE
 
@@ -93,6 +94,22 @@ private fun containerOf(parentId: String?, isHidden: Boolean): Container =
  */
 private data class Placement(val container: Container, val nextToId: String?, val placeAfter: Boolean)
 
+/** What dropping an item does to the items of a screen customizing the items of a menu section. */
+internal sealed interface DropOutcome {
+    /**
+     * The item is moved.
+     *
+     * @property items The items after the move.
+     */
+    data class Moved(val items: CustomizeMenuItems) : DropOutcome
+
+    /** A group item is dropped inside another item, which is not allowed, and the user is told. */
+    data object RejectedAsSubItem : DropOutcome
+
+    /** Nothing changes. */
+    data object Unchanged : DropOutcome
+}
+
 /**
  * The items of a screen customizing the items of a menu section.
  *
@@ -131,32 +148,39 @@ internal data class CustomizeMenuItems(
         return shown.without(key).none { it.isVisible }
     }
 
-    override fun drop(key: Any, target: CustomizeMenuDropTarget): CustomizeMenuItems = move(key, target)
+    override fun drop(key: Any, target: CustomizeMenuDropTarget): CustomizeMenuItems =
+        (dropOutcome(key, target) as? DropOutcome.Moved)?.items ?: this
 
     /**
-     * Move an item next to the target, in the container of the target, hiding it or showing it again if the container
-     * is a hidden one or a shown one. An expandable item can only be moved to the top level, hidden or shown, and keeps
-     * its sub-items. Items the app does not show keep their index in the container the item is placed in, and their
-     * order in the one it leaves. Nothing changes if the target is the item itself, or if the item is the last one
-     * shown on the screen and would be hidden.
+     * What dropping an item next to the target does: move it next to the target, in the container of the target, hiding
+     * it or showing it again if the container is a hidden one or a shown one. An expandable item, or one whose
+     * [CustomizableMenuItem.affinity] is [MenuItemAffinity.GROUP], can only be moved to the top level, hidden or shown,
+     * and an expandable item keeps its sub-items. Items the app does not show keep their index in the container the
+     * item is placed in, and their order in the one it leaves. Nothing changes if the target is the item itself, or if
+     * the item is the last one shown on the screen and would be hidden.
      *
      * @param key Id of the item to move.
      * @param target Where to move the item to.
      */
-    fun move(key: Any, target: CustomizeMenuDropTarget): CustomizeMenuItems {
-        val (source, container) = locate(key) ?: return this
-        val placement = placementOf(target) ?: return this
-        if (placement.nextToId == key) return this
-        if (!placement.container.isTop && source.item is ExpandableMenuItem) return this
-        if (placement.container.isHidden && cannotBeHidden(key)) return this
-
-        if (placement.container == container) {
-            return updated(container) { it.reordered(key, placement) } ?: this
+    fun dropOutcome(key: Any, target: CustomizeMenuDropTarget): DropOutcome {
+        val (source, container) = locate(key) ?: return DropOutcome.Unchanged
+        val placement = placementOf(target) ?: return DropOutcome.Unchanged
+        if (placement.nextToId == key) return DropOutcome.Unchanged
+        if (!placement.container.isTop && source.affinity == MenuItemAffinity.GROUP) {
+            return DropOutcome.RejectedAsSubItem
         }
+        if (!placement.container.isTop && source.item is ExpandableMenuItem) return DropOutcome.Unchanged
+        if (placement.container.isHidden && cannotBeHidden(key)) return DropOutcome.Unchanged
 
-        return copy(shown = shown.without(key), hidden = hidden.without(key)).updated(placement.container) {
-            it.inserted(source, placement)
-        } ?: this
+        val moved =
+            if (placement.container == container) {
+                updated(container) { it.reordered(key, placement) }
+            } else {
+                copy(shown = shown.without(key), hidden = hidden.without(key)).updated(placement.container) {
+                    it.inserted(source, placement)
+                }
+            }
+        return if (moved == null || moved == this) DropOutcome.Unchanged else DropOutcome.Moved(moved)
     }
 
     private fun locate(key: Any): Pair<CustomizableMenuItem, Container>? =
