@@ -289,6 +289,7 @@ def build_docs(
 
 def _install_landing_page(savedir):
     shutil.copytree(LANDING_ROOT, savedir, dirs_exist_ok=True)
+    _write_redirects(os.path.join(savedir, "redirects.js"))
     images_dir = os.path.join(savedir, "images")
     os.makedirs(images_dir, exist_ok=True)
     for image in LANDING_IMAGES:
@@ -445,6 +446,23 @@ def _find_doc_dir(path):
 
 def _publishes(project):
     return project == "main" and os.environ.get("MOZ_SCM_LEVEL") == "3"
+
+
+def _write_redirects(path):
+    """Write the docs redirects as a script for 404.html to apply.
+
+    Neither GCS nor the CDN in front of it can redirect by prefix, so the
+    redirects happen client side when a request misses.
+    """
+    with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
+        redirects = yaml.safe_load(fh)["redirects"]
+
+    redirects = [
+        [f"/{DOCS_PREFIX}/{k.strip('/')}", f"/{DOCS_PREFIX}/{v.strip('/')}"]
+        for k, v in redirects.items()
+    ]
+    with open(path, "w") as fh:
+        fh.write(f"const DOCS_REDIRECTS = {json.dumps(redirects, indent=1)};\n")
 
 
 def _s3_upload(root, project, unique_id, version=None):
