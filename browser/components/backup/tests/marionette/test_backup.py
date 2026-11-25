@@ -14,7 +14,7 @@ from marionette_harness import MarionetteTestCase
 class BackupTest(MarionetteTestCase):
     # This is the DB key that will be computed for the http2-ca.pem certificate
     # that's included in a support-file for this test.
-    _cert_db_key = "AAAAAAAAAAAAAAAUAAAAG0Wbze8lahTcE4RhwEqMtTpThrzjMBkxFzAVBgNVBAMMDiBIVFRQMiBUZXN0IENB"
+    _cert_db_key = "AAAAAAAAAAAAAAAUAAAAG2Ga71GVZjQ8FCJRAW3AhgD0Fg8fMBkxFzAVBgNVBAMMDiBIVFRQMiBUZXN0IENB"
 
     def setUp(self):
         MarionetteTestCase.setUp(self)
