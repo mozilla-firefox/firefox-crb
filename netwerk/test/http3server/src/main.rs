@@ -1788,7 +1788,7 @@ async fn main() -> Result<(), io::Error> {
         Http3TestServer::new(
             Http3Server::new(
                 Instant::now(),
-                &[" HTTP2 Test Cert"],
+                &["HTTP2 Test Cert"],
                 PROTOCOLS,
                 anti_replay(),
                 cid_mgr.clone(),
@@ -1811,7 +1811,7 @@ async fn main() -> Result<(), io::Error> {
         Server(
             neqo_transport::server::Server::new(
                 Instant::now(),
-                &[" HTTP2 Test Cert"],
+                &["HTTP2 Test Cert"],
                 PROTOCOLS,
                 anti_replay(),
                 Box::new(AllowZeroRtt {}),
@@ -1829,7 +1829,7 @@ async fn main() -> Result<(), io::Error> {
         let mut server = Http3TestServer::new(
             Http3Server::new(
                 Instant::now(),
-                &[" HTTP2 Test Cert"],
+                &["HTTP2 Test Cert"],
                 PROTOCOLS,
                 anti_replay(),
                 cid_mgr.clone(),
@@ -1856,7 +1856,7 @@ async fn main() -> Result<(), io::Error> {
             let server_config = if env::var("MOZ_HTTP3_MOCHITEST").is_ok() {
                 ("mochitest-cert", 8888)
             } else {
-                (" HTTP2 Test Cert", -1)
+                ("HTTP2 Test Cert", -1)
             };
             let server = Http3ReverseProxyServer::new(
                 Http3Server::new(
@@ -1889,7 +1889,7 @@ async fn main() -> Result<(), io::Error> {
         Http3ConnectProxyServer::new(
             Http3Server::new(
                 Instant::now(),
-                &[" HTTP2 Test Cert"],
+                &["HTTP2 Test Cert"],
                 PROTOCOLS,
                 anti_replay(),
                 cid_mgr,
