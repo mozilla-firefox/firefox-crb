@@ -207,6 +207,9 @@ skip-if = [
   "http3",
 ]
 
+["test_frame_visibility_top_layer.html"]
+support-files = ["frame_visibility_top_layer.html"]
+
 ["test_grid_track_sizing_algo_001.html"]
 
 ["test_grid_track_sizing_algo_002.html"]

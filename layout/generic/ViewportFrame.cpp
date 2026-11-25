@@ -149,6 +149,13 @@ static void BuildDisplayListForTopLayerFrame(nsDisplayListBuilder* aBuilder,
   nsDisplayListBuilder::AutoBuildingDisplayList buildingForChild(
       aBuilder, aFrame, visible, dirty);
 
+  // Like nsIFrame::BuildDisplayListForChild does for other frames, mark the
+  // top layer frame as visible since we're painting it.
+  if (aBuilder->IsPaintingToWindow() && aFrame->TrackingVisibility() &&
+      aFrame->IsVisibleForPainting()) {
+    aFrame->PresShell()->EnsureFrameInApproximatelyVisibleList(aFrame);
+  }
+
   nsDisplayList list;
   aFrame->BuildDisplayListForStackingContext(aBuilder, &list);
   aList->AppendToTop(&list);

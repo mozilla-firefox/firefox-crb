@@ -1,0 +1,70 @@
+<!DOCTYPE HTML>
+<!-- Any copyright is dedicated to the Public Domain.
+   - https://creativecommons.org/publicdomain/zero/1.0/ -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>A video element in the top layer is visible</title>
+</head>
+<body style="margin: 0;">
+<video id="video" style="width: 200px; height: 150px;"></video>
+<script>
+const add_task = window.opener.add_task;
+const SimpleTest = window.opener.SimpleTest;
+const ok = window.opener.ok;
+const original_finish = window.opener.SimpleTest.finish;
+
+SimpleTest.finish = function finish() {
+  self.close();
+  original_finish();
+};
+
+// HTMLMediaElement fires "visibilitychanged" while media.test.video-suspend is
+// set.
+async function waitForInViewPort(aElement, aExpected) {
+  const video = SpecialPowers.wrap(aElement);
+  while (video.isInViewPort != aExpected) {
+    await new Promise(resolve =>
+      aElement.addEventListener("visibilitychanged", resolve, { once: true })
+    );
+  }
+}
+
+async function waitForPaintsAndTasks() {
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  // The refresh driver dispatches frame visibility updates as separate tasks.
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+add_task(async () => {
+  const video = document.getElementById("video");
+  await waitForInViewPort(video, true);
+
+  // Make a layout change and let the frame visibility update that it schedules
+  // run, so that layout.visibility.min-recompute-interval-ms keeps any other
+  // update from running during the test.
+  video.style.height = "160px";
+  await waitForPaintsAndTasks();
+
+  await video.requestFullscreen();
+  // Entering the top layer reconstructs the video's frame. Flush now so that
+  // happens before the next paints.
+  video.getBoundingClientRect();
+  await waitForPaintsAndTasks();
+  ok(
+    SpecialPowers.wrap(video).isInViewPort,
+    "The fullscreen video element is in view after it is painted"
+  );
+
+  await document.exitFullscreen();
+  video.getBoundingClientRect();
+  await waitForPaintsAndTasks();
+  ok(
+    SpecialPowers.wrap(video).isInViewPort,
+    "The video element is in view after leaving fullscreen"
+  );
+});
+</script>
+</body>
+</html>
