@@ -68,6 +68,12 @@ run-if = [
   "os == 'mac'",
 ]
 
+["elevatedUpdateInProgress.js"]
+run-if = [
+  "os == 'mac'",
+]
+reason = "Elevated updates through the privileged helper are macOS-only."
+
 ["ensureExperimentToRolloutTransitionPerformed.js"]
 run-if = [
   "os == 'win' && appname == 'firefox'",

@@ -123,10 +123,19 @@
 #define SILENT_UPDATE_NEEDED_ELEVATION_ERROR 105
 #define BACKGROUND_TASK_SHARING_VIOLATION 106
 
+// The privileged macOS updater helper was already handling another elevated
+// update when this one tried to reach it. This is not a failure of the update
+// itself, so UpdateService.sys.mjs retries it without counting a cancellation.
+#define ELEVATED_UPDATE_IN_PROGRESS_ERROR 107
+
 // Error codes 110 and 111 are reserved for UpdateService.sys.mjs
 
 // The macOS updater couldn't install its privileged helper, and the user
 // didn't dismiss the authentication dialog.
 #define ELEVATED_UPDATE_HELPER_INSTALL_ERROR 115
+
+// The privileged macOS updater helper went away before it replied to the
+// unelevated updater, for example because it crashed.
+#define ELEVATED_UPDATE_HELPER_LOST_ERROR 116
 
 #endif  // UPDATEERRORS_H
