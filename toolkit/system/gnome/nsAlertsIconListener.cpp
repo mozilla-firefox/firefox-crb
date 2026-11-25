@@ -222,9 +222,12 @@ nsresult nsAlertsIconListener::ShowAlert(imgIContainer* aImage) {
     notify_notification_set_hint(mNotification, "suppress-sound",
                                  g_variant_new_boolean(mAlertIsSilent));
 
-    // If MOZ_DESKTOP_FILE_NAME variable is set, use it as the application id,
-    // otherwise use gAppData->name
-    if (getenv("MOZ_DESKTOP_FILE_NAME")) {
+    // Prefer the app ID given by the alert (e.g. a web app), then the
+    // MOZ_DESKTOP_FILE_NAME variable, then gAppData->remotingName.
+    if (!mAlertAppId.IsEmpty()) {
+      notify_notification_set_hint(mNotification, "desktop-entry",
+                                   g_variant_new("s", mAlertAppId.get()));
+    } else if (getenv("MOZ_DESKTOP_FILE_NAME")) {
       // Send the desktop name to identify the application
       // The desktop-entry is the part before the .desktop
       notify_notification_set_hint(
@@ -392,6 +395,11 @@ nsresult nsAlertsIconListener::InitAlert(nsIAlertNotification* aAlert,
 
   rv = aAlert->GetRequireInteraction(&mAlertRequiresInteraction);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  nsAutoString appId;
+  if (NS_SUCCEEDED(aAlert->GetAppId(appId))) {
+    CopyUTF16toUTF8(appId, mAlertAppId);
+  }
 
   nsAutoString title;
   rv = aAlert->GetTitle(title);

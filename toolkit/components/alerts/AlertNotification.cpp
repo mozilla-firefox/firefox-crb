@@ -17,6 +17,7 @@
 #include "nsServiceManagerUtils.h"
 #include "MainThreadUtils.h"
 #include "mozilla/BasePrincipal.h"
+#include "nsXULAppAPI.h"
 
 namespace mozilla {
 
@@ -55,6 +56,7 @@ AlertNotification::Init(const nsAString& aName, const nsAString& aImageURL,
   mSilent = aSilent;
   mVibrate = aVibrate.Clone();
 
+  InitAppId();
   return InitId();
 }
 
@@ -86,6 +88,7 @@ AlertNotification::InitWithObject(nsIAlertNotification* aAlertNotification) {
       }
     }
   };
+  InitAppId();
   return InitId();
 }
 
@@ -131,6 +134,35 @@ nsresult AlertNotification::InitId() {
   HashNumber hash = HashString(id);
   mId.AppendPrintf("%010u", hash);
   return NS_OK;
+}
+
+void AlertNotification::InitAppId() {
+  mAppId.Truncate();
+
+  // Only web content alerts can belong to an installed web app. Private ones
+  // stay attributed to the browser, so that private browsing isn't tied to an
+  // app that outlives it. Installed web apps are only known to the parent
+  // process.
+  if (!XRE_IsParentProcess() || mInPrivateBrowsing || !mPrincipal ||
+      !mPrincipal->GetIsContentPrincipal()) {
+    return;
+  }
+
+  nsCOMPtr<nsIURI> uri = mPrincipal->GetURI();
+  if (!uri) {
+    return;
+  }
+
+  nsCOMPtr<nsIAlertAppIdProvider> provider =
+      do_GetService(ALERT_APP_ID_PROVIDER_CONTRACTID);
+  if (!provider) {
+    return;
+  }
+
+  if (NS_FAILED(provider->GetAppId(
+          uri, mPrincipal->OriginAttributesRef().mUserContextId, mAppId))) {
+    mAppId.Truncate();
+  }
 }
 
 NS_IMETHODIMP AlertNotification::GetId(nsAString& aId) {
@@ -303,6 +335,12 @@ AlertNotification::GetOpaqueRelaunchData(nsAString& aOpaqueRelaunchData) {
 NS_IMETHODIMP
 AlertNotification::SetOpaqueRelaunchData(const nsAString& aOpaqueRelaunchData) {
   mOpaqueRelaunchData = aOpaqueRelaunchData;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+AlertNotification::GetAppId(nsAString& aAppId) {
+  aAppId = mAppId;
   return NS_OK;
 }
 

@@ -13,6 +13,7 @@ interface nsIURI;
 
 %{C++
 #define ALERT_NOTIFICATION_CONTRACTID "@mozilla.org/alert-notification;1"
+#define ALERT_APP_ID_PROVIDER_CONTRACTID "@mozilla.org/alert-app-id-provider;1"
 
 #include "nsString.h"
 static constexpr nsLiteralString kAlertActionDisable = u"snooze"_ns;
@@ -247,6 +248,16 @@ interface nsIAlertNotification : nsISupports
   attribute AString opaqueRelaunchData;
 
   /**
+   * Identifier of the application the alert should be attributed to, when it
+   * differs from the browser itself (e.g. an installed web app). On Linux,
+   * this is a desktop entry ID without the ".desktop" suffix. An empty string
+   * means the browser's own identity is used. It is computed by init() and
+   * initWithObject() by asking nsIAlertAppIdProvider, in the parent process
+   * only.
+   */
+  readonly attribute AString appId;
+
+  /**
    * Retrieves the action object by the action name or null if not.
    *
    * @param aName The action name corresponding to nsIAlertAction.action.
@@ -399,4 +410,26 @@ interface nsIAlertsDoNotDisturb : nsISupports
    * API.
    */
   attribute boolean suppressForScreenSharing;
+};
+
+/**
+ * Optionally implemented by the application to attribute web notifications to
+ * an installed web app rather than to the browser itself. It is queried when
+ * initializing a non-private web content alert, in the parent process.
+ */
+[scriptable, uuid(621fe402-aa6c-4dba-9958-f6fcb2b6026c)]
+interface nsIAlertAppIdProvider : nsISupports
+{
+  /**
+   * Returns the value to use as nsIAlertNotification.appId for a notification.
+   *
+   * @param aURI The URI of the principal of the notification, e.g. the
+   *             document URL for a window, the script URL for a service
+   *             worker, or the push subscription scope for a declarative push
+   *             message.
+   * @param aUserContextId The container the notification was created in.
+   * @returns The app ID, or an empty string if the notification should be
+   *          attributed to the browser.
+   */
+  AString getAppId(in nsIURI aURI, in unsigned long aUserContextId);
 };

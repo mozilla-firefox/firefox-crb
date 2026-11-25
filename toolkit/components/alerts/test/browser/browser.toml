@@ -1,5 +1,7 @@
 [DEFAULT]
 
+["browser_alert_appId.js"]
+
 ["browser_alert_capture.js"]
 support-files = ["file_empty.html"]
 

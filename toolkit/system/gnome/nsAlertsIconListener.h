@@ -72,6 +72,7 @@ class nsAlertsIconListener : public nsISupports {
   nsCOMPtr<nsICancelable> mIconRequest;
   nsCString mAlertTitle;
   nsCString mAlertText;
+  nsCString mAlertAppId;
 
   nsCOMPtr<nsIAlertCallbacks> mAlertCallbacks;
   nsString mAlertName;

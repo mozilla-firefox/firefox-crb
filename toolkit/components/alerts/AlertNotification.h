@@ -29,6 +29,9 @@ class AlertNotification : public nsIAlertNotification {
 
  private:
   nsresult InitId();
+  // Asks nsIAlertAppIdProvider for the app ID of a web content alert, based on
+  // its principal.
+  void InitAppId();
 
   uint64_t mCountId;
   nsString mId;
@@ -49,6 +52,7 @@ class AlertNotification : public nsIAlertNotification {
   nsTArray<uint32_t> mVibrate;
   nsTArray<RefPtr<nsIAlertAction>> mActions;
   nsString mOpaqueRelaunchData;
+  nsString mAppId;
 };
 
 class AlertAction : public nsIAlertAction {
