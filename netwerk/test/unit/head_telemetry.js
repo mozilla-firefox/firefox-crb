@@ -488,6 +488,28 @@ var HandshakeTelemetryHelpers = {
     "__other__",
   ],
 
+  // Subset of RESULTS that is actually read. Every testGetValue() call on
+  // tls_handshake.result is a separate blocking read, and reading all of
+  // RESULTS for every flavor made tests time out on slow machines.
+  // Any result a test expects must be listed here.
+  TRACKED_RESULTS: [
+    "Success",
+    "PR_CONNECT_RESET_ERROR",
+    "PR_END_OF_FILE_ERROR",
+    "PR_CONNECT_REFUSED_ERROR",
+    "SSL_ERROR_NO_CYPHER_OVERLAP",
+    "SSL_ERROR_BAD_CERT_DOMAIN",
+    "SSL_ERROR_HANDSHAKE_FAILURE_ALERT",
+    "SSL_ERROR_PROTOCOL_VERSION_ALERT",
+    "SSL_ERROR_ECH_RETRY_WITH_ECH",
+    "SSL_ERROR_ECH_RETRY_WITHOUT_ECH",
+    "SSL_ERROR_ECH_FAILED",
+    "SSL_ERROR_ECH_REQUIRED_ALERT",
+    "SEC_ERROR_UNKNOWN_ISSUER",
+    "MOZILLA_PKIX_ERROR_SELF_SIGNED_CERT",
+    "__other__",
+  ],
+
   _baseline: null,
   _fogInitialized: false,
 
@@ -518,7 +540,7 @@ var HandshakeTelemetryHelpers = {
         Assert.ok(false, `Unknown result flavor: ${flavor}`);
         return null;
     }
-    for (let category of this.RESULTS) {
+    for (let category of this.TRACKED_RESULTS) {
       metrics.values[category] = Glean.tlsHandshake.result
         .get(key, category)
         .testGetValue();
@@ -648,6 +670,10 @@ var HandshakeTelemetryHelpers = {
    * @param {number} resultCount The number of handshake results expected.
    */
   checkEntry(flavors, resultString, resultCount) {
+    Assert.ok(
+      this.TRACKED_RESULTS.includes(resultString),
+      `${resultString} must be in HandshakeTelemetryHelpers.TRACKED_RESULTS`
+    );
     for (let f of flavors) {
       let delta = this.resultDelta(f);
       info(
