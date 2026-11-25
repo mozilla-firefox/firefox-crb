@@ -360,26 +360,22 @@ export var GeckoViewUtils = {
   },
 
   /**
-   * Like initLogging, but forwards to a ConsoleInstance named
-   * "GeckoView.<aTag>", whose logModule names its MOZ_LOG module, so
-   * about:logging can capture the messages along with their stack traces.
-   * Interpolated values are handed to the console as-is rather than formatted
-   * into the message, so they stay inspectable.
+   * Like initLogging, but forwards to a ConsoleInstance, conventionally
+   * created with a "GeckoView.<tag>" logModule, which names its MOZ_LOG
+   * module, so about:logging can capture the messages along with their
+   * stack traces. Interpolated values are handed to the console as-is rather
+   * than formatted into the message, so they stay inspectable.
    *
-   * @param aTag Name of the console instance to forward logs to.
+   * The instance is expected to be created with maxLogLevel: "Warn". This is
+   * deliberately not tied to "geckoview.logging": that pref holds "Fatal" when
+   * logging is off, which is not a ConsoleLogLevel. Debug messages are gated on
+   * the MOZ_LOG module instead.
+   *
+   * @param aInstance Console instance to forward logs to.
    * @param aScope Scope to add the logging functions to.
    */
-  initLoggingConsole(aTag, aScope) {
+  initLoggingConsole(aInstance, aScope) {
     aScope = aScope || {};
-    const tag = "GeckoView." + aTag.replace(/^GeckoView\.?/, "");
-
-    // Deliberately not tied to "geckoview.logging": that pref holds "Fatal"
-    // when logging is off, which is not a ConsoleLogLevel. Debug messages are
-    // gated on the MOZ_LOG module instead.
-    const instance = console.createInstance({
-      logModule: tag,
-      maxLogLevel: "Warn",
-    });
 
     for (const level of ["debug", "warn"]) {
       const log = (strings, ...exprs) => {
@@ -387,7 +383,7 @@ export var GeckoViewUtils = {
         // template has one more string than values, hence the trailing slice;
         // the odd indices are the values, kept even when empty.
         const args = strings.flatMap((str, i) => [str.trim(), exprs[i]]);
-        instance[level](
+        aInstance[level](
           ...args.slice(0, -1).filter((arg, i) => i % 2 || arg !== "")
         );
       };
