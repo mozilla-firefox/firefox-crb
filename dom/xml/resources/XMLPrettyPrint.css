@@ -67,3 +67,12 @@
 .space-preserve {
   white-space: pre-wrap;
 }
+
+.raw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.raw-children {
+  margin-inline-start: 1em;
+}

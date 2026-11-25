@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>XML pretty-print modes for document size</title>
+<script src="/tests/SimpleTest/SimpleTest.js"></script>
+<link rel="stylesheet" href="/tests/SimpleTest/test.css">
+<script>
+SimpleTest.requestLongerTimeout(3);
+
+// Each item adds 3 elements and 1 attribute to the size that
+// XMLPrettyPrint.xsl compares with large-size (100000) and huge-size (200000).
+async function openPrettyPrinted(items) {
+  const url = new URL(`file_prettyprint_size.sjs?items=${items}`, location.href)
+    .href;
+  const win = window.open(url);
+  await SimpleTest.promiseWaitForCondition(
+    () => win.location.href === url && win.document.readyState === "complete",
+    `The XML document with ${items} items loaded`
+  );
+  const shadowRoot = SpecialPowers.wrap(
+    win.document.documentElement
+  ).openOrClosedShadowRoot;
+  ok(shadowRoot, "The document is pretty-printed");
+  return { win, tree: shadowRoot.getElementById("tree") };
+}
+
+function detailsOf(tree, name) {
+  return [...tree.querySelectorAll("details")].filter(
+    details =>
+      details.querySelector(".start-tag").textContent === name
+  );
+}
+
+add_task(async function testNormal() {
+  const { win, tree } = await openPrettyPrinted(10);
+  is(tree.className, "highlight", "The tree view is used");
+  const items = detailsOf(tree, "item");
+  is(items.length, 10, "All items are expandable");
+  ok(items.every(details => details.open), "All items are open");
+  win.close();
+});
+
+add_task(async function testLarge() {
+  const { win, tree } = await openPrettyPrinted(25000);
+  is(tree.className, "highlight", "The tree view is used");
+  ok(detailsOf(tree, "root")[0].open, "The root element is open");
+  ok(detailsOf(tree, "group")[0].open, "The child of the root is open");
+  const items = detailsOf(tree, "item");
+  is(items.length, 25000, "All items are expandable");
+  ok(items.every(details => !details.open), "All items are closed");
+  win.close();
+});
+
+add_task(async function testHuge() {
+  const { win, tree } = await openPrettyPrinted(50000);
+  is(tree.className, "raw", "The plain text view is used");
+  is(tree.querySelector("details"), null, "Nothing is expandable");
+  ok(
+    tree.textContent.includes('<item n="49999">'),
+    "The text contains the markup of the last item"
+  );
+  win.close();
+});
+</script>
