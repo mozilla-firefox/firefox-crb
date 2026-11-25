@@ -1,0 +1,30 @@
+<!DOCTYPE HTML>
+<!-- Any copyright is dedicated to the Public Domain.
+   - https://creativecommons.org/publicdomain/zero/1.0/ -->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/tests/SimpleTest/SimpleTest.js"></script>
+<link rel="stylesheet" href="/tests/SimpleTest/test.css"/>
+</head>
+<body>
+<script>
+SimpleTest.waitForExplicitFinish();
+SpecialPowers.pushPrefEnv(
+  {
+    set: [
+      ["full-screen-api.allow-trusted-requests-only", false],
+      ["full-screen-api.transition-duration.enter", "0 0"],
+      ["full-screen-api.transition-duration.leave", "0 0"],
+      // Only painting can mark the video as visible within this test.
+      ["layout.visibility.min-recompute-interval-ms", 100000],
+      ["media.test.video-suspend", true],
+    ],
+  },
+  () => {
+    window.open("frame_visibility_top_layer.html", "_blank");
+  }
+);
+</script>
+</body>
+</html>
