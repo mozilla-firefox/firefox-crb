@@ -72,6 +72,16 @@ dictionary TextGenerationSampler {
   unsigned long seed;
 };
 
+/** Decoded pixels. The caller decodes; no image parser runs in the generator. */
+dictionary TextGenerationImage {
+  /** `width * height * channels` bytes, row-major with no padding. */
+  required ArrayBufferView data;
+  required unsigned long width;
+  required unsigned long height;
+  /** 3 (RGB) or 4 (RGBA, alpha dropped); anything else is rejected. */
+  unsigned long channels = 4;
+};
+
 dictionary TextGenerationRequest {
   required sequence<TextGenerationMessage> messages;
   /** Capped at the model's trained context. Sizes the context with the prompt. */
@@ -81,6 +91,8 @@ dictionary TextGenerationRequest {
   sequence<TextGenerationSampler> samplers = [];
   sequence<long> stopTokens = [];
   boolean stopOnEndOfGenerationTokens = true;
+  /** Requires a generator created with an mmproj. */
+  sequence<TextGenerationImage> images = [];
 };
 
 [GenerateConversionToJS]

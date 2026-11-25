@@ -246,6 +246,26 @@ class TextGenerationChild::Generation {
     nsCString prompt = formatted.unwrap();
     mPromptCodePoints = CountCodePoints(prompt);
 
+    // The parent packs to RGB, but the length is re-checked rather than
+    // trusted across the process boundary: LlamaImageData is read as
+    // width * height * 3.
+    nsTArray<llama::LlamaImageData> images;
+    for (const auto& image : mRequest.images()) {
+      CheckedInt<size_t> expected(image.width());
+      expected *= image.height();
+      expected *= 3;
+      if (!expected.isValid() || image.rgb().Length() != expected.value()) {
+        Reply(GenerateResponse(
+            GenerateError("TextGenerator: malformed image payload"_ns)));
+        return;
+      }
+      llama::LlamaImageData data;
+      data.mWidth = image.width();
+      data.mHeight = image.height();
+      data.mRgb = image.rgb().Clone();
+      images.AppendElement(std::move(data));
+    }
+
     mGenerateStart = TimeStamp::Now();
     auto status = mChild->mBackend->Generate(
         ToLlamaChatOptions(mRequest, mMaxTokens, std::move(prompt)),
@@ -254,7 +274,8 @@ class TextGenerationChild::Generation {
         },
         [self = RefPtr{this}]() -> bool {
           return self->mCancelled || self->mChild->mShutdown;
-        });
+        },
+        images);
     Flush();
     if (status.isErr()) {
       Reply(GenerateResponse(GenerateError(status.unwrapErr().mMessage)));

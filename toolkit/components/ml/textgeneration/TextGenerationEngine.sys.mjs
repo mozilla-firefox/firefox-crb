@@ -153,6 +153,9 @@ function toGenerateRequest(request) {
     generateRequest.stopOnEndOfGenerationTokens =
       request.stopOnEndOfGenerationTokens;
   }
+  if (request.images != null) {
+    generateRequest.images = request.images;
+  }
   return generateRequest;
 }
 
