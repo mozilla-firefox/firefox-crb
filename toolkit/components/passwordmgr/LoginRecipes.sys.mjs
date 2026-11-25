@@ -24,7 +24,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () =>
-  lazy.LoginHelper.createLogger("LoginRecipes")
+  console.createInstance({
+    logModule: "LoginRecipes",
+    maxLogLevelPref: "signon.loglevel",
+  })
 );
 
 /**

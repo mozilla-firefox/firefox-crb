@@ -10,7 +10,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginRelatedRealms");
+  let logger = console.createInstance({
+    logModule: "LoginRelatedRealms",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger;
 });
 

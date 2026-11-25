@@ -66,11 +66,17 @@ XPCOMUtils.defineLazyServiceGetter(
 );
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginManagerParent");
+  let logger = console.createInstance({
+    logModule: "LoginManagerParent",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });
 ChromeUtils.defineLazyGetter(lazy, "debug", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginManagerParent");
+  let logger = console.createInstance({
+    logModule: "LoginManagerParent",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.debug.bind(logger);
 });
 

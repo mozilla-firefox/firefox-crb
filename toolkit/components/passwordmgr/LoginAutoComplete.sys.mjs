@@ -21,7 +21,10 @@ XPCOMUtils.defineLazyServiceGetter(
   Ci.nsIFormFillController
 );
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("LoginAutoComplete");
+  return console.createInstance({
+    logModule: "LoginAutoComplete",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });
 ChromeUtils.defineLazyGetter(lazy, "passwordMgrBundle", () => {
   return Services.strings.createBundle(
