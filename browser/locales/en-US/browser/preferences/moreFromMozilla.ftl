@@ -14,18 +14,6 @@ more-from-moz-firefox-mobile =
 
 more-from-moz-learn-more-link = Learn more
 
-## These strings are for the Thunderbird card in about:preferences moreFromMozilla page
-
-more-from-moz-thunderbird-title = { -thunderbird-brand-name }
-more-from-moz-thunderbird-description = Free email, calendar, and contacts — organized your way.
-more-from-moz-thunderbird-button = Get { -thunderbird-brand-short-name }
-
-## These strings are for the Mozilla New Products card in about:preferences moreFromMozilla page
-
-more-from-moz-new-products-title = { -vendor-short-name } New Products
-more-from-moz-new-products-description = Discover the latest products from { -vendor-short-name }.
-more-from-moz-new-products-button = See new products
-
 ## These strings are for the config-based (SRD) moreFromMozilla page using
 ## moz-promo, moz-fieldset (.label/.description), and moz-box-link (.label).
 

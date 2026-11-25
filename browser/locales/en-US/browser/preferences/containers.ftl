@@ -11,9 +11,6 @@ containers-window-update-settings3 =
     .title = { $name } Container Settings
     .style = min-width: 32em
 
-containers-window-close =
-    .key = w
-
 containers-name-label2 =
     .label = Name
     .placeholder = Add a name

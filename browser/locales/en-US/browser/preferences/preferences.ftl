@@ -46,10 +46,6 @@ search-input-box2 =
     .style = width: 15.4em
     .placeholder = Find in Settings
 
-managed-notice = Your browser is being managed by your organization.
-managed-notice-info-icon =
-    .alt = Information
-
 managed-notice-nav =
     .label = Your browser is being managed by your organization.
 
@@ -166,9 +162,6 @@ extension-controlling-proxy-config = <img data-l10n-name ="icon"/> <strong>{ $na
 extension-controlled-enable = To enable the extension go to <img data-l10n-name="addons-icon"/> Add-ons in the <img data-l10n-name="menu-icon"/> menu.
 
 extension-controlled-enable-2 = To re-enable this extension visit <a data-l10n-name="addons-link">Extensions and themes</a>.
-# This string is shown to notify the user that their home page or new tab preferences
-# are being controlled by an extension.
-extension-controlling-homepage = { $name } controls some of your homepage settings.
 
 ## Preferences UI Search Results
 
@@ -299,8 +292,6 @@ browser-containers-enabled-2 =
     .label = Use Container Tabs
     .accesskey = n
 
-browser-containers-learn-more = Learn more
-
 browser-containers-settings-2 =
     .label = Manage settings
     .accesskey = i
@@ -380,16 +371,10 @@ preferences-web-appearance-choice-dark2 =
   .label = Dark
   .title = Use a dark appearance for website backgrounds and content.
 
-web-appearance-group =
-  .aria-label = Website appearance
-
 # This can appear when using windows HCM or "Override colors: always" without
 # system colors.
 preferences-web-appearance-override-warning3 =
     .message = Your contrast control settings are overriding website appearance.
-
-preferences-web-appearance-link =
-    .label = Manage { -brand-short-name } themes in Extensions & Themes
 
 preferences-contrast-control-group =
     .label = Website contrast
@@ -693,8 +678,6 @@ play-drm-content =
     .label = Play DRM-controlled content
     .accesskey = P
 
-play-drm-content-learn-more = Learn more
-
 ## About Firefox
 
 about-firefox-header =
@@ -796,22 +779,9 @@ performance-use-recommended-settings-checkbox-2 =
     .description = These settings are tailored to your hardware and operating system.
     .accesskey = U
 
-performance-settings-learn-more = Learn more
-
 performance-allow-hw-accel =
     .label = Use hardware acceleration when available
     .accesskey = r
-
-performance-limit-content-process-option = Content process limit
-    .accesskey = l
-
-performance-limit-content-process-enabled-desc = Additional content processes can improve performance when using multiple tabs, but will also use more memory.
-performance-limit-content-process-blocked-desc = Modifying the number of content processes is only possible with multiprocess { -brand-short-name }. <a data-l10n-name="learn-more">Learn how to check if multiprocess is enabled</a>
-
-# Variables:
-#   $num (number) - Default value of the `dom.ipc.processCount` pref.
-performance-default-content-process-count =
-    .label = { $num } (default)
 
 ## General Section - Browsing
 
@@ -1068,9 +1038,6 @@ addressbar-locbar-openpage-option =
 addressbar-locbar-shortcuts-option =
     .label = Shortcuts
     .accesskey = S
-addressbar-locbar-topsites-option =
-    .label = Top sites
-    .accesskey = T
 addressbar-locbar-showrecentsearches-option-2 =
     .label = Recent searches
     .accesskey = r
@@ -1263,8 +1230,6 @@ sync-sign-in =
 sync-cwts-migration-notification =
     .message = Your sync choices now apply only to this device.
 
-prefs-syncing-on = Syncing: ON
-
 prefs-syncing-on-2 =
     .label = Syncing is ON
 
@@ -1402,10 +1367,6 @@ sync-device-name-save =
 sync-connect-another-device-2 =
     .label = Connect another device
 
-## Privacy Section
-
-privacy-header = Browser Privacy
-
 ## Privacy Section - Passwords
 
 forms-passwords-header =
@@ -1437,16 +1398,9 @@ privacy-panel-breach-alerts =
     .label = Show breach messages
     .accesskey = s
 
-# Checkbox which controls filling saved logins into fields automatically when they appear, in some cases without user interaction.
-forms-fill-usernames-and-passwords =
-    .label = Fill usernames and passwords automatically
-    .accesskey = F
 forms-fill-usernames-and-passwords-2 =
     .label = Save and autofill usernames and passwords
     .accesskey = f
-forms-saved-passwords =
-    .label = Saved passwords
-    .accesskey = d
 forms-saved-passwords-2 =
     .label = Manage saved passwords
     .accesskey = d
@@ -1455,9 +1409,6 @@ forms-saved-passwords-searchkeywords = Logins for the following sites are stored
 # Header for additional protections when managing password settings.
 forms-additional-protections-header =
     .label = Additional protections
-forms-primary-pw-use =
-    .label = Use a primary password
-    .accesskey = U
 forms-primary-pw-use-2 =
     .label = Use a primary password
     .description = Adds an extra layer of security to protect your saved passwords.
@@ -1470,15 +1421,8 @@ forms-primary-pw-change-2 =
 # Label for button to disable primary password.
 forms-primary-pw-turn-off =
     .label = Turn it off
-# This operation requires the user to authenticate with the operating system (device sign-in)
-forms-os-reauth =
-    .label = Require device sign in to fill and manage passwords
 forms-os-reauth-2 =
     .label = Require device sign in to manage passwords
-forms-primary-pw-change =
-    .label = Change Primary Password…
-    .accesskey = P
-
 forms-primary-pw-fips-title = You are currently in FIPS mode. FIPS requires a non-empty Primary Password.
 forms-master-pw-fips-desc = Password Change Failed
 forms-windows-sso =
@@ -1508,8 +1452,6 @@ autofill-creditcard-os-auth-dialog-caption = { -brand-full-name }
 payments-group =
     .label = Payment methods
 
-autofill-payment-methods-header =
-    .aria-label = Payment methods
 autofill-payment-methods-checkbox-message-2 =
     .label = Save and autofill payment info
     .accesskey = p
@@ -1736,9 +1678,6 @@ sitedata-cookies-exceptions3 =
 
 content-blocking-learn-more = Learn more
 
-content-blocking-cryptominers = Cryptominers
-content-blocking-fingerprinters = Fingerprinters
-
 content-blocking-baseline-exceptions-3 =
     .label = Fix major site issues (recommended)
     .description = Helps load sites and features by unblocking only essential elements that may contain trackers. Covers most common problems.
@@ -1752,8 +1691,6 @@ content-blocking-baseline-uncheck-warning-dialog-title = Are you sure you want t
 content-blocking-baseline-uncheck-warning-dialog-body = This setting helps fix the most common site problems. If you turn it off, some sites may not work, and { -brand-short-name } won’t be able to help troubleshoot those issues.
 content-blocking-baseline-uncheck-warning-dialog-ok-button = Turn fixes off
 content-blocking-baseline-uncheck-warning-dialog-cancel-button = Keep fixes on
-
-content-blocking-reload-description = You will need to reload your tabs to apply these changes.
 
 content-blocking-tracking-protection-option-all-windows =
   .label = In all windows
@@ -1948,15 +1885,6 @@ addon-recommendations3 =
     .label = Allow personalized extension recommendations
     .description = Get extension recommendations to improve your browsing experience.
 
-# This message is displayed above disabled data sharing options in developer builds
-# or builds with no Telemetry support available.
-collection-health-report-disabled2 = Data reporting is disabled for this build configuration.
-
-collection-backlogged-crash-reports2 =
-    .label = Automatically send crash reports
-    .accesskey = c
-collection-backlogged-crash-reports-description = This helps { -vendor-short-name } diagnose and fix issues with the browser. Reports may include personal or sensitive data.
-
 ## Privacy Section - Security
 ##
 ## It is important that wording follows the guidelines outlined on this page:
@@ -1969,8 +1897,6 @@ browsing-protection-group2 =
 security-enable-safe-browsing =
     .label = Block dangerous and deceptive content
     .accesskey = B
-security-enable-safe-browsing-link = Learn more
-
 security-safe-browsing-warning =
     .message = Turning this off reduces protection against scams, malicious sites, and dangerous downloads.
 
@@ -2019,8 +1945,6 @@ httpsonly-group =
 httpsonly-label2 =
     .aria-label = { httpsonly-group.label }
 
-httpsonly-learn-more2 = How HTTPS-Only works
-
 httpsonly-radio-enabled =
     .label = Enable HTTPS-Only Mode in all windows
 
@@ -2039,14 +1963,8 @@ dns-over-https-group2 =
 
 preferences-doh-description2 = Domain Name System (DNS) over HTTPS sends your request for a domain name through an encrypted connection, providing a secure DNS and making it harder for others to see which website you’re about to access.
 
-# Variables:
-#   $status (string) - The status of the DoH connection
-preferences-doh-status = Status: { $status }
-
 preferences-doh-radio-group =
     .aria-label = Enable DNS over HTTPS using:
-
-preferences-doh-select-resolver = Choose provider:
 
 preferences-doh-overview-default =
     .label = Default protection
