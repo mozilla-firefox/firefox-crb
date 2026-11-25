@@ -14,14 +14,22 @@ import mozilla.components.feature.tabdata.coordinator.repository.TabRepository
  * real tab data source, so the sequencing performed by grouping operations can be asserted on [tabFlow].
  *
  * @param initialData The [Data] the repository starts off emitting.
+ * @property canAddFallbackTab Whether [addFallbackTab] opens a new tab, rather than returning null.
  */
-class FakeTabRepository(initialData: TabRepository.Data = TabRepository.Data()) : TabRepository {
+class FakeTabRepository(
+    initialData: TabRepository.Data = TabRepository.Data(),
+    var canAddFallbackTab: Boolean = true,
+) : TabRepository {
 
     override val tabFlow: Flow<TabRepository.Data>
         field = MutableStateFlow(initialData)
 
     /** The IDs of the tabs that have been excluded from selection by the removals performed on this repository. */
     var excludedFallbackTabIds: Set<String> = emptySet()
+        private set
+
+    /** The number of times [undoRemovedTabs] was called. */
+    var undoRemovedTabsCount: Int = 0
         private set
 
     /** The current list of tabs, in order. */
@@ -71,6 +79,12 @@ class FakeTabRepository(initialData: TabRepository.Data = TabRepository.Data()) 
     override fun selectTab(tabId: String) {
         tabFlow.value = tabFlow.value.copy(selectedTabId = tabId)
     }
+
+    override fun undoRemovedTabs() {
+        undoRemovedTabsCount++
+    }
+
+    override fun addFallbackTab(): String? = if (canAddFallbackTab) addNewTab() else null
 
     override fun addNewTab(): String {
         val id = "new-tab-${nextNewTabIndex++}"

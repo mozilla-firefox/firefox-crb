@@ -6,6 +6,7 @@ package mozilla.components.feature.tabdata.coordinator.fakes
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
 
 /**
@@ -18,6 +19,9 @@ import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
  * @property addNewTabToGroupIds The group IDs passed to [addNewTabToTabGroup], in call order.
  * @property openedTabGroupIds The group IDs passed to [openTabGroup] and [openTabGroups], in call order.
  * @property closedTabGroupIds The group IDs passed to [closeTabGroup] and [closeTabGroups], in call order.
+ * @property closeAllNormalTabsCalls The `includeInactiveTabs` values passed to [closeAllNormalTabs], in call order.
+ * @property closeTabsAndTabGroupsCalls The tab IDs and group IDs passed to [closeTabsAndTabGroups], in call order.
+ * @property undoneBulkCloseResults The results passed to [undoBulkClose], in call order.
  */
 class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDataCoordinator {
 
@@ -30,6 +34,12 @@ class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDat
     val openedTabGroupIds = mutableListOf<String>()
 
     val closedTabGroupIds = mutableListOf<String>()
+
+    val closeAllNormalTabsCalls = mutableListOf<Boolean>()
+
+    val closeTabsAndTabGroupsCalls = mutableListOf<Pair<List<String>, List<String>>>()
+
+    val undoneBulkCloseResults = mutableListOf<BulkCloseResult>()
 
     override fun initialize() = Unit
 
@@ -80,6 +90,20 @@ class FakeTabDataCoordinator(initialTabsSnapshot: TabsSnapshot? = null) : TabDat
     override suspend fun closeTabGroups(tabGroupIds: List<String>) {
         closedTabGroupIds.addAll(tabGroupIds)
         updateTabGroupClosedState(tabGroupIds = tabGroupIds.toSet(), closed = true)
+    }
+
+    override fun closeAllNormalTabs(includeInactiveTabs: Boolean): BulkCloseResult {
+        closeAllNormalTabsCalls.add(includeInactiveTabs)
+        return BulkCloseResult()
+    }
+
+    override fun closeTabsAndTabGroups(tabIds: List<String>, tabGroupIds: List<String>): BulkCloseResult {
+        closeTabsAndTabGroupsCalls.add(tabIds to tabGroupIds)
+        return BulkCloseResult()
+    }
+
+    override fun undoBulkClose(result: BulkCloseResult) {
+        undoneBulkCloseResults.add(result)
     }
 
     override suspend fun removeTabFromTabGroup(tabGroupId: String, tabId: String) = Unit

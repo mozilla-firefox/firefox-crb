@@ -4,6 +4,7 @@
 
 package mozilla.components.feature.tabdata.coordinator
 
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +18,14 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.data.TabGroup
 import mozilla.components.feature.tabdata.coordinator.data.TabsSnapshot
+import mozilla.components.feature.tabdata.coordinator.data.findTab
 import mozilla.components.feature.tabdata.coordinator.data.findTabGroup
 import mozilla.components.feature.tabdata.coordinator.data.firstTabIdInTabGroup
+import mozilla.components.feature.tabdata.coordinator.data.groupedTabIds
 import mozilla.components.feature.tabdata.coordinator.data.lastTabIdInTabGroup
 import mozilla.components.feature.tabdata.coordinator.data.tabIdsInTabGroup
 import mozilla.components.feature.tabdata.coordinator.repository.TabRepository
@@ -181,6 +185,38 @@ interface TabDataCoordinator {
     suspend fun closeTabGroups(tabGroupIds: List<String>)
 
     /**
+     * Removes the normal tabs that are not assigned to a tab group, and closes all of the open tab groups, leaving
+     * their tabs open. Grouped and inactive tabs are excluded from being selected after the removal.
+     *
+     * If the selected tab belongs to a group, a new tab is added and selected, if possible.
+     *
+     * @param includeInactiveTabs Whether ungrouped inactive tabs are also removed.
+     * @return The [BulkCloseResult] needed to undo the operation with [undoBulkClose].
+     */
+    fun closeAllNormalTabs(includeInactiveTabs: Boolean): BulkCloseResult
+
+    /**
+     * Removes the normal tabs with [tabIds], and closes the open groups among [tabGroupIds], leaving their tabs open.
+     * Grouped and inactive tabs are excluded from being selected after the removal.
+     *
+     * If the selected tab belongs to a closed group, the nearest normal tab that is neither grouped, inactive, nor
+     * removed is selected instead. When there is no such tab, a new tab is added and selected, if possible.
+     *
+     * @param tabIds The IDs of the normal tabs to remove.
+     * @param tabGroupIds The IDs of the groups to close.
+     * @return The [BulkCloseResult] needed to undo the operation with [undoBulkClose].
+     */
+    fun closeTabsAndTabGroups(tabIds: List<String>, tabGroupIds: List<String>): BulkCloseResult
+
+    /**
+     * Undoes a bulk close operation by restoring the removed tabs, reopening the closed groups, removing the added tab,
+     * and restoring the selected tab.
+     *
+     * @param result The [BulkCloseResult] returned by [closeAllNormalTabs] or [closeTabsAndTabGroups].
+     */
+    fun undoBulkClose(result: BulkCloseResult)
+
+    /**
      * Closes [tabId] if the group with [tabGroupId] has other tabs. A group is never left without tabs, so closing the
      * last tab of a group is a no-op; delete the group instead.
      *
@@ -213,6 +249,7 @@ interface TabDataCoordinator {
  * @param dispatcher [CoroutineDispatcher] the tab data transformation is performed on.
  * @param dateTimeProvider [DateTimeProvider] used to stamp tab group updates.
  */
+@Suppress("TooManyFunctions")
 class DefaultTabDataCoordinator(
     private val tabRepository: TabRepository,
     private val tabGroupRepository: TabGroupRepository,
@@ -374,6 +411,43 @@ class DefaultTabDataCoordinator(
         tabGroupIds.forEach { tabGroupRepository.closeTabGroup(tabGroupId = it) }
     }
 
+    override fun closeAllNormalTabs(includeInactiveTabs: Boolean): BulkCloseResult {
+        val snapshot =
+            tabsSnapshot.value ?: return BulkCloseResult().also { logger.warn("closeAllNormalTabs: No tab data.") }
+        val groupedTabIds = snapshot.groupedTabIds()
+        val keptTabIds = if (includeInactiveTabs) groupedTabIds else groupedTabIds + snapshot.inactiveTabIds()
+
+        return bulkClose(
+            snapshot = snapshot,
+            tabIdsToRemove = snapshot.normalTabs.map { it.id }.filterNot { it in keptTabIds },
+            tabGroupIdsToClose = snapshot.openTabGroups.mapTo(mutableSetOf()) { it.id },
+        )
+    }
+
+    override fun closeTabsAndTabGroups(tabIds: List<String>, tabGroupIds: List<String>): BulkCloseResult {
+        val snapshot =
+            tabsSnapshot.value ?: return BulkCloseResult().also { logger.warn("closeTabsAndTabGroups: No tab data.") }
+
+        return bulkClose(snapshot = snapshot, tabIdsToRemove = tabIds, tabGroupIdsToClose = tabGroupIds.toSet())
+    }
+
+    override fun undoBulkClose(result: BulkCloseResult) {
+        if (result.removedTabCount > 0) {
+            tabRepository.undoRemovedTabs()
+        }
+
+        if (result.closedTabGroupIds.isNotEmpty()) {
+            scope.launch { openTabGroups(tabGroupIds = result.closedTabGroupIds) }
+        }
+
+        result.addedTabId?.let { tabRepository.removeTabs(tabIds = listOf(it)) }
+
+        // A removed tab is reselected when it's restored, so only reselect a tab which is still open.
+        result.previousSelectedTabId
+            ?.takeIf { tabsSnapshot.value?.findTab(id = it) != null }
+            ?.let { tabRepository.selectTab(tabId = it) }
+    }
+
     override suspend fun removeTabFromTabGroup(tabGroupId: String, tabId: String) {
         val groupedTabIds = tabsSnapshot.value?.tabIdsInTabGroup(tabGroupId = tabGroupId) ?: emptyList()
 
@@ -415,6 +489,49 @@ class DefaultTabDataCoordinator(
         }
 
         tabRepository.moveTabs(tabIds = sourceTabIds, targetTabId = targetTabId, placeAfter = placeAfter)
+    }
+
+    /**
+     * Removes [tabIdsToRemove] and closes the open groups among [tabGroupIdsToClose]. If the selected tab is hidden in
+     * a closed group, the nearest normal tab that is neither grouped, inactive, nor removed is selected, otherwise a
+     * new tab is added and selected, if possible.
+     */
+    private fun bulkClose(
+        snapshot: TabsSnapshot,
+        tabIdsToRemove: List<String>,
+        tabGroupIdsToClose: Set<String>,
+    ): BulkCloseResult {
+        val previousSelectedTabId = snapshot.selectedTab?.id
+        val unselectableTabIds = snapshot.groupedTabIds() + snapshot.inactiveTabIds()
+
+        if (tabIdsToRemove.isNotEmpty()) {
+            tabRepository.removeTabs(tabIds = tabIdsToRemove, excludedFallbackTabIds = unselectableTabIds)
+        }
+
+        val closingTabGroups = snapshot.openTabGroups.filter { it.id in tabGroupIdsToClose }
+        val closingTabGroupIds = closingTabGroups.map { it.id }
+        if (closingTabGroupIds.isNotEmpty()) {
+            scope.launch { closeTabGroups(tabGroupIds = closingTabGroupIds) }
+        }
+
+        val hiddenTabIds = closingTabGroups.flatMapTo(mutableSetOf()) { it.tabIds }
+        var addedTabId: String? = null
+
+        if (previousSelectedTabId != null && previousSelectedTabId in hiddenTabIds) {
+            val excludedTabIds = unselectableTabIds + tabIdsToRemove
+            val fallbackTabId =
+                snapshot.findNearbyNormalTabId(tabId = previousSelectedTabId, excludedTabIds = excludedTabIds)
+                    ?: tabRepository.addFallbackTab().also { addedTabId = it }
+
+            fallbackTabId?.let { tabRepository.selectTab(tabId = it) }
+        }
+
+        return BulkCloseResult(
+            removedTabCount = tabIdsToRemove.size,
+            closedTabGroupIds = closingTabGroupIds,
+            previousSelectedTabId = previousSelectedTabId,
+            addedTabId = addedTabId,
+        )
     }
 
     /**
@@ -538,4 +655,18 @@ class DefaultTabDataCoordinator(
 private fun StoredTabGroup.confirmedTabGroupAssignments(tabList: List<Tab>): List<String> {
     val groupDatabaseAssignments = tabIds.toHashSet()
     return tabList.filter { it.id in groupDatabaseAssignments }.map { it.id }
+}
+
+private fun TabsSnapshot.inactiveTabIds(): Set<String> = inactiveTabs.mapTo(mutableSetOf()) { it.id }
+
+/** Finds the ID of the normal tab nearest to [tabId] which isn't in [excludedTabIds]. */
+private fun TabsSnapshot.findNearbyNormalTabId(tabId: String, excludedTabIds: Set<String>): String? {
+    val index = normalTabs.indexOfFirst { it.id == tabId }
+
+    return normalTabs
+        .withIndex()
+        .filter { (_, tab) -> tab.id !in excludedTabIds }
+        .minByOrNull { (candidateIndex, _) -> abs(candidateIndex - index) }
+        ?.value
+        ?.id
 }
