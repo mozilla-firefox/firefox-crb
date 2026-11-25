@@ -190,6 +190,11 @@ main-context-menu-copy-clean-link =
     .label = Copy Clean Link
     .accesskey = u
 
+# When default stripping is on, this shows instead of "Copy Clean Link". It copies the link as it is.
+main-context-menu-copy-original-link =
+    .label = Copy Original Link
+    .accesskey = u
+
 ## Media (video/audio) controls
 ##
 ## The accesskey for "Play" and "Pause" are the

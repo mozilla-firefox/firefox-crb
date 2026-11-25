@@ -2760,7 +2760,8 @@ pref("browser.contentblocking.database.enabled", true);
 
 // Enable Strip on Share by default on desktop
 pref("privacy.query_stripping.strip_on_share.enabled", true);
-
+// Clean Link by default pref, disabled unless explicity enables in about:config
+pref("privacy.query_stripping.strip_on_share.default_clean_copy", false);
 pref("browser.contentblocking.cryptomining.preferences.ui.enabled", true);
 pref("browser.contentblocking.fingerprinting.preferences.ui.enabled", true);
 

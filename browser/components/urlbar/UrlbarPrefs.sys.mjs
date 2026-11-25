@@ -806,6 +806,7 @@ const PREF_OTHER_DEFAULTS = /** @type {PreferenceDefinition[]} */ ([
   ["browser.smartwindow.smartbarMentions.logLevel", "Error"],
   ["keyword.enabled", true],
   ["privacy.query_stripping.strip_on_share.enabled", true],
+  ["privacy.query_stripping.strip_on_share.default_clean_copy", false],
   ["privacy.userContext.enabled", true],
   ["security.insecure_connection_text.enabled", true],
   [TelemetryReportingPolicy.TOU_ACCEPTED_DATE_PREF, 0],

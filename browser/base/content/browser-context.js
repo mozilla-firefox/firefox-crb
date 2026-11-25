@@ -76,6 +76,9 @@ document.addEventListener(
         case "context-stripOnShareLink":
           gContextMenu.copyStrippedLink();
           break;
+        case "context-copyOriginalLink":
+          gContextMenu.copyLink();
+          break;
         case "context-media-play":
           gContextMenu.mediaCommand("play");
           break;

@@ -4382,6 +4382,29 @@ ${
   }
 
   /**
+   * Returns the string the copy command should put on the clipboard. This is
+   * the stripped URL when cleaning is the default and the selection is a URL
+   * with something to strip, otherwise the selection as it is.
+   *
+   * @returns {string}
+   */
+  _getSelectedValueForCopy() {
+    let selectedVal = this._getSelectedValueForClipboard();
+    if (
+      selectedVal &&
+      UrlbarPrefs.get("privacy.query_stripping.strip_on_share.enabled") &&
+      UrlbarPrefs.get(
+        "privacy.query_stripping.strip_on_share.default_clean_copy"
+      ) &&
+      this.#isClipboardURIValid() &&
+      this.#canStrip()
+    ) {
+      return this.#stripURI().displaySpec;
+    }
+    return selectedVal;
+  }
+
+  /**
    * Restores the untrimmed value in the urlbar.
    *
    * @param {object} [options]
@@ -4476,10 +4499,11 @@ ${
       createItems: () => {
         let fragment = document.createDocumentFragment();
         fragment.appendChild(this.#createStripOnShareItem());
+        fragment.appendChild(this.#createCopyOriginalItem());
         return fragment;
       },
-      onShowing: (input, [stripOnShare]) => {
-        this.#updateStripOnShareItem(stripOnShare);
+      onShowing: (input, [stripOnShare, copyOriginal]) => {
+        this.#updateStripOnShareItem(stripOnShare, copyOriginal);
       },
     });
   }
@@ -4505,10 +4529,30 @@ ${
 
     return stripOnShare;
   }
+  /**
+   * Builds the copy-original menuitem.
+   *
+   * @returns {Element} A newly created menuitem
+   */
+  #createCopyOriginalItem() {
+    let copyOriginal = document.createXULElement("menuitem");
+    document.l10n.setAttributes(copyOriginal, "text-action-copy-original-link");
+    copyOriginal.setAttribute("anonid", "copy-original");
+    copyOriginal.id = "copy-original";
+
+    copyOriginal.addEventListener("command", () => {
+      lazy.ClipboardHelper.copyString(this._getSelectedValueForClipboard());
+    });
+
+    return copyOriginal;
+  }
 
   // Hide the menu item if there is nothing to copy.
-  #updateStripOnShareItem(stripOnShare) {
-    // feature is not enabled
+  #updateStripOnShareItem(stripOnShare, copyOriginal) {
+    let copyItem = document.getElementById("edit-contextmenu-copy");
+    copyOriginal.setAttribute("hidden", true);
+
+    // feature is not enabled, transitive to default stripping
     if (!UrlbarPrefs.get("privacy.query_stripping.strip_on_share.enabled")) {
       stripOnShare.setAttribute("hidden", true);
       return;
@@ -4523,11 +4567,39 @@ ${
       return;
     }
     stripOnShare.removeAttribute("hidden");
-    if (!this.#canStrip()) {
-      stripOnShare.setAttribute("disabled", true);
-      return;
+
+    let cleanByDefault = UrlbarPrefs.get(
+      "privacy.query_stripping.strip_on_share.default_clean_copy"
+    );
+    let stripOnShareL10nId;
+    if (cleanByDefault) {
+      stripOnShareL10nId = "text-action-copy";
+    } else {
+      stripOnShareL10nId = "text-action-copy-clean-link";
     }
-    stripOnShare.removeAttribute("disabled");
+    if (stripOnShare.getAttribute("data-l10n-id") != stripOnShareL10nId) {
+      document.l10n.setAttributes(stripOnShare, stripOnShareL10nId);
+    }
+
+    // hide the usual copy item if the default is to strip
+    if (cleanByDefault) {
+      copyItem.toggleAttribute("hidden", true);
+      //popup menu containing "Copy"
+      copyItem.parentElement.addEventListener(
+        "popuphidden",
+        () => {
+          copyItem.toggleAttribute("hidden", false);
+        },
+        { once: true }
+      );
+      copyOriginal.removeAttribute("hidden");
+    }
+    if (this.#canStrip()) {
+      stripOnShare.removeAttribute("disabled");
+    } else {
+      stripOnShare.setAttribute("disabled", true);
+    }
+    copyOriginal.removeAttribute("disabled");
   }
 
   #initPasteAndGo() {
@@ -4722,11 +4794,15 @@ ${
         });
         fragment.appendChild(qrCodeItem);
         fragment.appendChild(this.#createStripOnShareItem());
+        fragment.appendChild(this.#createCopyOriginalItem());
 
         return fragment;
       },
-      onShowing: (input, [, shareItem, qrCodeItem, stripOnShare]) => {
-        this.#updateStripOnShareItem(stripOnShare);
+      onShowing: (
+        input,
+        [, shareItem, qrCodeItem, stripOnShare, copyOriginal]
+      ) => {
+        this.#updateStripOnShareItem(stripOnShare, copyOriginal);
         let browser = this.browserWindow?.gBrowser?.selectedBrowser;
         let browserRef = browser ? Cu.getWeakReference(browser) : null;
         shareItem.contextBrowserToShare = browserRef;
@@ -6502,6 +6578,10 @@ class CopyCutController {
         detail: 0,
       });
       urlbar.inputField.dispatchEvent(event);
+    }
+
+    if (command == "cmd_copy") {
+      val = urlbar._getSelectedValueForCopy();
     }
 
     lazy.ClipboardHelper.copyString(

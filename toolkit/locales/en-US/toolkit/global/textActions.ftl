@@ -41,6 +41,11 @@ text-action-copy-clean-link =
     .label = Copy Clean Link
     .accesskey = n
 
+# When default stripping is on, this shows instead of "Copy Clean Link". It copies the link as it is.
+text-action-copy-original-link =
+    .label = Copy Original Link
+    .accesskey = n
+
 text-action-paste =
     .label = Paste
     .accesskey = P

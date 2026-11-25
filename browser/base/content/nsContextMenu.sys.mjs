@@ -76,6 +76,12 @@ XPCOMUtils.defineLazyPreferenceGetter(
   "privacy.query_stripping.strip_on_share.enabled",
   false
 );
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "DEFAULT_CLEAN_COPY",
+  "privacy.query_stripping.strip_on_share.default_clean_copy",
+  false
+);
 
 XPCOMUtils.defineLazyPreferenceGetter(
   lazy,
@@ -1113,26 +1119,70 @@ export class nsContextMenu {
     // Copy phone link depends on whether we're on a phone link.
     this.showItem("context-copyphone", this.onTelLink);
 
+    // Showing "Copy Clean link" depends on whether the strip-on-share feature is enabled
+    // and the user is selecting a valid link to be stripped
+    let canOfferCleanCopy =
+      lazy.STRIP_ON_SHARE_ENABLED &&
+      (this.onLink || this.onPlainTextLink) &&
+      !this.onMailtoLink &&
+      !this.onTelLink &&
+      !this.onMozExtLink &&
+      !this.isSecureAboutPage();
+    let canStrip = this.#canStripParams();
+    let cleanByDefault = canOfferCleanCopy && lazy.DEFAULT_CLEAN_COPY;
+
+    // When selecting plain text that is a link, we hide the "Copy" item and show "Copy Clean Link" instead.
+    if (
+      cleanByDefault &&
+      this.isContentSelected &&
+      this.onPlainTextLink &&
+      !this.onTextInput
+    ) {
+      this.showItem("context-copy", false);
+    }
+
     // Copy link location depends on whether we're on a non-mailto link.
+    // When cleaning is the default, "Copy Link" is the strip item instead.
     this.showItem(
       "context-copylink",
-      this.onLink && !this.onMailtoLink && !this.onTelLink
+      this.onLink && !this.onMailtoLink && !this.onTelLink && !cleanByDefault
     );
 
-    // Showing "Copy Clean link" depends on whether the strip-on-share feature is enabled
-    // and the user is selecting a URL
-    this.showItem(
-      "context-stripOnShareLink",
-      lazy.STRIP_ON_SHARE_ENABLED &&
-        (this.onLink || this.onPlainTextLink) &&
-        !this.onMailtoLink &&
-        !this.onTelLink &&
-        !this.onMozExtLink &&
-        !this.isSecureAboutPage()
+    this.showItem("context-stripOnShareLink", canOfferCleanCopy);
+    this.showItem("context-copyOriginalLink", cleanByDefault);
+
+    // id= context-stripOnShareLink, data-l10n-id= main-context-menu-copy-clean-link , label = Copy Clean Link
+    let stripOnShareItem = this.document.getElementById(
+      "context-stripOnShareLink"
     );
 
-    let disabledAttr = this.#canStripParams() ? null : true;
-    this.setItemAttr("context-stripOnShareLink", "disabled", disabledAttr);
+    // If Default Copy Clean Link is on, show label "Copy Link", otherwise show "Copy Clean Link"
+    let stripOnShareItemL10nId;
+
+    if (cleanByDefault) {
+      stripOnShareItemL10nId = "main-context-menu-copy-link-simple";
+    } else {
+      stripOnShareItemL10nId = "main-context-menu-copy-clean-link";
+    }
+    // First right-click sets the label, every subsequent one compares two strings and does nothing
+    // If the label the element has now is different from the label it should have, update the label
+    if (
+      stripOnShareItem.getAttribute("data-l10n-id") != stripOnShareItemL10nId
+    ) {
+      this.document.l10n.setAttributes(
+        stripOnShareItem,
+        stripOnShareItemL10nId
+      );
+    }
+
+    if (canStrip) {
+      this.setItemAttr("context-stripOnShareLink", "disabled", null);
+      // keep the original link enabled so the user can decide, copy clean link is set to default copy link anyway
+      this.setItemAttr("context-copyOriginalLink", "disabled", null);
+    } else {
+      this.setItemAttr("context-stripOnShareLink", "disabled", true);
+      this.setItemAttr("context-copyOriginalLink", "disabled", null);
+    }
 
     this.showItem("context-copyvideourl", this.onVideo);
     this.showItem("context-copyaudiourl", this.onAudio);
