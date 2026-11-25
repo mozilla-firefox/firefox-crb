@@ -2,12 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const lazy = {};
-
-ChromeUtils.defineESModuleGetters(lazy, {
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
-});
-
 export function LoginManagerCrypto_SDR() {
   // Ensure NSS is initialized.
   Cc["@mozilla.org/psm;1"].getService(Ci.nsISupports);
@@ -312,6 +306,9 @@ LoginManagerCrypto_SDR.prototype = {
 }; // end of nsLoginManagerCrypto_SDR implementation
 
 ChromeUtils.defineLazyGetter(LoginManagerCrypto_SDR.prototype, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginCrypto");
+  let logger = console.createInstance({
+    logModule: "LoginCrypto",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });

@@ -16,7 +16,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 ChromeUtils.defineLazyGetter(lazy, "logger", () => {
-  let logger = lazy.LoginHelper.createLogger("storage-json");
+  let logger = console.createInstance({
+    logModule: "storage-json",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger;
 });
 

@@ -11,7 +11,6 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   FormLikeFactory: "resource://gre/modules/FormLikeFactory.sys.mjs",
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
   LoginOriginUtils:
     "moz-src:///toolkit/components/passwordmgr/shared/LoginOriginUtils.sys.mjs",
   LoginHelperDOM:
@@ -19,7 +18,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("LoginFormFactory");
+  return console.createInstance({
+    logModule: "LoginFormFactory",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });
 
 export const LoginFormFactory = {

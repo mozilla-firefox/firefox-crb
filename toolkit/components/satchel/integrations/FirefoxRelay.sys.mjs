@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import {
-  LoginHelper,
   OptInFeature,
   ParentAutocompleteOption,
 } from "resource://gre/modules/LoginHelper.sys.mjs";
@@ -46,7 +45,10 @@ const gConfig = (function () {
 })();
 
 ChromeUtils.defineLazyGetter(lazy, "log", () =>
-  LoginHelper.createLogger("FirefoxRelay")
+  console.createInstance({
+    logModule: "FirefoxRelay",
+    maxLogLevelPref: "signon.loglevel",
+  })
 );
 ChromeUtils.defineLazyGetter(lazy, "fxAccounts", () =>
   ChromeUtils.importESModule(

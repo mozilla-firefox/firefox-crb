@@ -1065,5 +1065,8 @@ export class LoginManagerPrompter {
 Services.obs.addObserver(observer, "autocomplete-did-enter-text");
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("LoginManagerPrompter");
+  return console.createInstance({
+    logModule: "LoginManagerPrompter",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });

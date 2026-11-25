@@ -5,7 +5,6 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
 });
 
 import {
@@ -35,7 +34,10 @@ export class BreachAlertStorage {
       return BreachAlertStorage._instance;
     }
     BreachAlertStorage._instance = this;
-    this.#logger = lazy.LoginHelper.createLogger("BreachAlertStorage");
+    this.#logger = console.createInstance({
+      logModule: "BreachAlertStorage",
+      maxLogLevelPref: "signon.loglevel",
+    });
   }
 
   initialize() {

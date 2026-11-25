@@ -13,7 +13,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   GeckoViewAutocomplete: "resource://gre/modules/GeckoViewAutocomplete.sys.mjs",
   LoginEntry: "resource://gre/modules/GeckoViewAutocomplete.sys.mjs",
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
 });
 
 export class LoginManagerStorage extends LoginManagerStorage_json {
@@ -268,6 +267,9 @@ export class LoginManagerStorage extends LoginManagerStorage_json {
 }
 
 ChromeUtils.defineLazyGetter(LoginManagerStorage.prototype, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginStorage");
+  let logger = console.createInstance({
+    logModule: "LoginStorage",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });
