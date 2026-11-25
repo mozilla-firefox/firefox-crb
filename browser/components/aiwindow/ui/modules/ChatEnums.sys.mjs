@@ -37,6 +37,27 @@ export const TOOL_RESULT_TYPE = Object.freeze({
 });
 
 /**
+ * UI labels for tool results and follow-ups.
+ */
+export const UI_TYPES = {
+  AITAB: "aitab",
+  WEBSITE_CONFIRMATION: "website-confirmation",
+  TAB_GROUP_CONFIRMATION: "tab-group-confirmation",
+  AI_ACTION_RESULT: "ai-action-result",
+  CANCELLED_COMPONENT: "cancelled-component",
+  RETRY_COMPONENT: "retry-component",
+};
+
+/**
+ * UI types that represent confirmation dialogs with stateful behavior
+ * These UIs can be cancelled and need special handling when restored from DB
+ */
+export const CONFIRMATION_UI_TYPES = [
+  UI_TYPES.WEBSITE_CONFIRMATION,
+  UI_TYPES.TAB_GROUP_CONFIRMATION,
+];
+
+/**
  * @typedef {0 | 1 | 2} MemoriesFlagSource
  */
 

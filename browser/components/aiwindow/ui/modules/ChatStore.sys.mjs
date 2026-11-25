@@ -6,7 +6,7 @@
 const lazy = XPCOMUtils.declareLazy({
   DeferredTask: "resource://gre/modules/DeferredTask.sys.mjs",
   CONFIRMATION_UI_TYPES:
-    "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
+    "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs",
 });
 
 import {

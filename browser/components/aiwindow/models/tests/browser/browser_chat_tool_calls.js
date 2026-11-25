@@ -21,8 +21,11 @@ const { SearchService } = ChromeUtils.importESModule(
 const { MESSAGE_ROLE } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/AIWindowConstants.sys.mjs"
 );
-const { ToolUI, UI_TYPES, UI_UPDATE_TYPES } = ChromeUtils.importESModule(
+const { ToolUI, UI_UPDATE_TYPES } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs"
+);
+const { UI_TYPES } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs"
 );
 const { MODEL_FEATURES, SERVICE_TYPES, PURPOSES } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
