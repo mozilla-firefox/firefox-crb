@@ -92,7 +92,8 @@
 
 #if defined(XP_MACOSX)
 // These functions are defined in launchchild_osx.mm
-void CleanupElevatedMacUpdate(bool aFailureOccurred);
+[[noreturn]] void CleanupElevatedMacUpdate(bool aFailureOccurred);
+bool DidHelperRecordStatus();
 bool IsOwnedByGroupAdmin(const char* aAppBundle);
 bool IsRecursivelyWritable(const char* aPath);
 // Pass a valid pid as aWaitForPid to wait for that process to go away before
@@ -103,6 +104,7 @@ bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
                             MARChannelStringTable* aMARStrings);
 bool ServeElevatedUpdate(int aArgc, const char** aArgv,
                          const char* aMARChannelID);
+void RemoveLeftoverHelper();
 void SetGroupOwnershipAndPermissions(const char* aAppBundle);
 struct UpdateServerThreadArgs {
   int argc;
@@ -312,6 +314,9 @@ static NS_tchar gInstallDirPath[MAXPATHLEN];
 static NS_tchar gWorkingDirPath[MAXPATHLEN];
 constinit static ArchiveReader gArchiveReader;
 static bool gSucceeded = false;
+#ifdef XP_MACOSX
+static bool sDidWriteStatusFile = false;
+#endif
 static bool sStagedUpdate = false;
 static bool sReplaceRequest = false;
 // When the updater needs to elevate, we generally run the updater again with
@@ -2910,8 +2915,20 @@ static bool WriteToFile(const NS_tchar* aFilename, const char* aStatus) {
  * @return true on success.
  */
 static bool WriteStatusFile(const char* aStatus) {
-  return WriteToFile(NS_T("update.status"), aStatus);
+  bool didWrite = WriteToFile(NS_T("update.status"), aStatus);
+#ifdef XP_MACOSX
+  if (didWrite) {
+    sDidWriteStatusFile = true;
+  }
+#endif
+  return didWrite;
 }
+
+#ifdef XP_MACOSX
+// Used by the elevated updater to tell the unelevated updater whether it has
+// recorded a result in the status file.
+bool DidWriteStatusFile() { return sDidWriteStatusFile; }
+#endif
 
 /**
  * Writes a string to the update.status file based on the status param.
@@ -3536,7 +3553,7 @@ static void ServeElevatedUpdateThreadFunc(void* param) {
   UpdateServerThreadArgs* threadArgs = (UpdateServerThreadArgs*)param;
   gSucceeded = ServeElevatedUpdate(threadArgs->argc, threadArgs->argv,
                                    threadArgs->marChannelID);
-  if (!gSucceeded) {
+  if (!DidHelperRecordStatus()) {
     WriteStatusFile(ELEVATION_CANCELED);
   }
   QuitProgressUI();
@@ -3674,6 +3691,20 @@ bool ShouldRunSilently(int argc, NS_tchar** argv) {
 int NS_main(int argc, NS_tchar** argv) {
   LogToOS(NS_T("Updater started"));
 
+#ifdef XP_MACOSX
+  // LaunchElevatedUpdate sets this when the privileged helper couldn't be
+  // installed, for example because the user dismissed the authentication
+  // dialog. Clear it so that nothing this process launches inherits it.
+  const char* helperNotInstalled = getenv("MOZ_UPDATER_HELPER_NOT_INSTALLED");
+  int helperInstallError = OK;
+  if (helperNotInstalled && *helperNotInstalled) {
+    helperInstallError = strcmp(helperNotInstalled, "canceled") == 0
+                             ? ELEVATION_CANCELED
+                             : ELEVATED_UPDATE_HELPER_INSTALL_ERROR;
+  }
+  unsetenv("MOZ_UPDATER_HELPER_NOT_INSTALLED");
+#endif
+
   sElevationType = getElevationType(argc, argv);
   if (sElevationType == ElevationType::Error ||
       sElevationType == ElevationType::Unknown) {
@@ -3810,15 +3841,33 @@ int NS_main(int argc, NS_tchar** argv) {
       break;
     case UpdaterInvocation::Error:
       fprintf(stderr, "Error invocation of updater.exe\n");
+#ifdef XP_MACOSX
+      if (isElevationTypeElevated(sElevationType)) {
+        freeArguments(argc, argv);
+        CleanupElevatedMacUpdate(true);
+      }
+#endif
       return 1;
     default:
       fprintf(stderr, "Unknown invocation of updater.exe\n");
+#ifdef XP_MACOSX
+      if (isElevationTypeElevated(sElevationType)) {
+        freeArguments(argc, argv);
+        CleanupElevatedMacUpdate(true);
+      }
+#endif
       return 1;
   }
   if (!isValidInvocationForElevationType(gInvocation, sElevationType)) {
     fprintf(stderr, "Error: invocation <%s> not valid with elevation type %s\n",
             updaterInvocationToString(gInvocation),
             elevationTypeToString(sElevationType));
+#ifdef XP_MACOSX
+    if (isElevationTypeElevated(sElevationType)) {
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
+#endif
     return 1;
   }
 
@@ -4019,6 +4068,16 @@ int NS_main(int argc, NS_tchar** argv) {
   }
 
 #ifdef XP_MACOSX
+  if (helperInstallError != OK && !isElevationTypeElevated(sElevationType)) {
+    // Don't update. A helper left installed by an earlier update would still
+    // accept a connection, so ask it to remove itself.
+    LogToOS(NS_T("The privileged helper couldn't be installed. Not updating."));
+    RemoveLeftoverHelper();
+    WriteStatusFile(helperInstallError);
+    LaunchCallbackAndPostProcessApps(argc, argv, std::move(umaskContext));
+    return 1;
+  }
+
   if (!isElevationTypeElevated(sElevationType) &&
       !IsRecursivelyWritable(argv[kInstallDirIndex])) {
     // If the app directory isn't recursively writeable, an elevated helper
@@ -5024,7 +5083,7 @@ int NS_main(int argc, NS_tchar** argv) {
   if (isElevationTypeElevated(sElevationType)) {
     SetGroupOwnershipAndPermissions(gInstallDirPath);
     freeArguments(argc, argv);
-    CleanupElevatedMacUpdate(false);
+    CleanupElevatedMacUpdate(!gSucceeded);
   } else if (IsOwnedByGroupAdmin(gInstallDirPath)) {
     // If the group ownership of the Firefox .app bundle was set to the "admin"
     // group during a previous elevated update, we need to ensure that all files
