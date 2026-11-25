@@ -1558,6 +1558,23 @@ auto nsWindow::Bounds::ComputeX11(const nsWindow* aWindow) -> Bounds {
   const auto toplevelBounds = GetBounds(toplevel);
   LOG_WIN(aWindow, "  toplevelBounds %s", ToString(toplevelBounds).c_str());
 
+  // While the window manager reparents a newly mapped window, the frame can
+  // still be at its initial position with a placeholder size, smaller than the
+  // window it contains. The position read from it then is bogus (e.g. 0,0), so
+  // keep the previous bounds until the configure event that follows.
+  if (aWindow->mClientMargin == DesktopIntMargin() &&
+      (toplevelBoundsWithTitlebar.width < toplevelBounds.width ||
+       toplevelBoundsWithTitlebar.height < toplevelBounds.height)) {
+    LOG_WIN(aWindow, "  frame smaller than toplevel, not framed yet");
+    PROFILER_MARKER_FMT("Window bounds from X11", GRAPHICS, {},
+                        "{} frame {} smaller than toplevel {}, skipped",
+                        static_cast<const void*>(aWindow),
+                        ToString(toplevelBoundsWithTitlebar),
+                        ToString(toplevelBounds));
+    return {.mClientArea = aWindow->mClientArea,
+            .mClientMargin = aWindow->mClientMargin};
+  }
+
   // Offset from system decoration to gtk decoration.
   const auto systemDecorationOffset = [&] {
     auto offset =
