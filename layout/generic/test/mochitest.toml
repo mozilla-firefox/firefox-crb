@@ -197,6 +197,9 @@ skip-if = [
 
 ["test_flex_interrupt.html"]
 
+["test_frame_visibility_deferred_update.html"]
+support-files = ["frame_visibility_deferred_update.html"]
+
 ["test_frame_visibility_in_iframe.html"]
 support-files = [
   "frame_visibility_in_iframe.html",

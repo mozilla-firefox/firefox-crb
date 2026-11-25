@@ -32,6 +32,7 @@ class nsPresContext;
 
 class imgIRequest;
 class nsIRunnable;
+class nsITimer;
 
 struct DocumentFrameCallbacks;
 
@@ -429,6 +430,10 @@ class nsRefreshDriver final : public mozilla::layers::TransactionIdAllocator,
   void EnsureTimerStarted(EnsureTimerStartedFlags aFlags = eNone);
   void StopTimer();
 
+  // Schedules a frame visibility update if one is needed, or arms
+  // mFrameVisibilityUpdateTimer if the last one was too recent.
+  void UpdateFrameVisibilityIfNeeded(mozilla::TimeStamp aNow);
+
   bool HasObservers() const;
   void AppendObserverDescriptionsToString(nsACString& aStr) const;
   // Note: This should only be called in the dtor of nsRefreshDriver.
@@ -477,6 +482,7 @@ class nsRefreshDriver final : public mozilla::layers::TransactionIdAllocator,
   mozilla::RefreshDriverTimer* ChooseTimer();
   mozilla::RefreshDriverTimer* mActiveTimer;
   RefPtr<mozilla::RefreshDriverTimer> mOwnTimer;
+  RefPtr<nsITimer> mFrameVisibilityUpdateTimer;
   mozilla::UniquePtr<mozilla::ProfileChunkedBuffer> mRefreshTimerStartedCause;
 
   // nsPresContext passed in constructor and unset in Disconnect.

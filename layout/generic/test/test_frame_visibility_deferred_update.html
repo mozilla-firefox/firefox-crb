@@ -1,0 +1,26 @@
+<!DOCTYPE HTML>
+<!-- Any copyright is dedicated to the Public Domain.
+   - https://creativecommons.org/publicdomain/zero/1.0/ -->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/tests/SimpleTest/SimpleTest.js"></script>
+<link rel="stylesheet" href="/tests/SimpleTest/test.css"/>
+</head>
+<body>
+<script>
+SimpleTest.waitForExplicitFinish();
+SpecialPowers.pushPrefEnv(
+  {
+    set: [
+      ["layout.visibility.min-recompute-interval-ms", 1000],
+      ["media.test.video-suspend", true],
+    ],
+  },
+  () => {
+    window.open("frame_visibility_deferred_update.html", "_blank");
+  }
+);
+</script>
+</body>
+</html>

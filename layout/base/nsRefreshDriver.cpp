@@ -2555,13 +2555,7 @@ void nsRefreshDriver::Tick(VsyncId aId, TimeStamp aNowTime,
 
   // Recompute approximate frame visibility if it's necessary and enough time
   // has passed since the last time we did it.
-  if (mNeedToRecomputeVisibility && !mThrottled &&
-      aNowTime >= mNextRecomputeVisibilityTick &&
-      !presShell->IsPaintingSuppressed()) {
-    mNextRecomputeVisibilityTick = aNowTime + mMinRecomputeVisibilityInterval;
-    mNeedToRecomputeVisibility = false;
-    presShell->ScheduleApproximateFrameVisibilityUpdateNow();
-  }
+  UpdateFrameVisibilityIfNeeded(aNowTime);
 
   // Step 18: For each doc of docs, perform pending transition operations for
   // doc.
@@ -3072,10 +3066,45 @@ bool nsRefreshDriver::IsRegularRateTimerTicking() {
   return false;
 }
 
+void nsRefreshDriver::UpdateFrameVisibilityIfNeeded(TimeStamp aNow) {
+  if (!mNeedToRecomputeVisibility || mThrottled || !mPresContext) {
+    return;
+  }
+  PresShell* presShell = mPresContext->GetPresShell();
+  if (!presShell || presShell->IsPaintingSuppressed()) {
+    return;
+  }
+
+  if (aNow < mNextRecomputeVisibilityTick) {
+    // The refresh driver may stop ticking before mNextRecomputeVisibilityTick,
+    // so make sure the update still happens on an idle page.
+    if (!mFrameVisibilityUpdateTimer) {
+      NS_NewTimerWithCallback(
+          getter_AddRefs(mFrameVisibilityUpdateTimer),
+          [self = RefPtr{this}](nsITimer*) {
+            self->mFrameVisibilityUpdateTimer = nullptr;
+            self->UpdateFrameVisibilityIfNeeded(TimeStamp::Now());
+          },
+          mNextRecomputeVisibilityTick - aNow, nsITimer::TYPE_ONE_SHOT,
+          "nsRefreshDriver::UpdateFrameVisibilityIfNeeded"_ns);
+    }
+    return;
+  }
+
+  mNextRecomputeVisibilityTick = aNow + mMinRecomputeVisibilityInterval;
+  mNeedToRecomputeVisibility = false;
+  presShell->ScheduleApproximateFrameVisibilityUpdateNow();
+}
+
 void nsRefreshDriver::Disconnect() {
   MOZ_ASSERT(NS_IsMainThread());
 
   StopTimer();
+
+  if (mFrameVisibilityUpdateTimer) {
+    mFrameVisibilityUpdateTimer->Cancel();
+    mFrameVisibilityUpdateTimer = nullptr;
+  }
 
   mEarlyRunners.Clear();
 

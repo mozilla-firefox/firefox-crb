@@ -1,0 +1,61 @@
+<!DOCTYPE HTML>
+<!-- Any copyright is dedicated to the Public Domain.
+   - https://creativecommons.org/publicdomain/zero/1.0/ -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Frame visibility is updated after a layout change on an idle page</title>
+</head>
+<body style="margin: 0; overflow: hidden;">
+<div id="spacer" style="height: 10px;"></div>
+<div style="position: relative; width: 200px; height: 200px; overflow: clip;">
+  <video id="video" style="position: absolute; left: 0; top: 0; width: 100px; height: 100px;"></video>
+</div>
+<script>
+const add_task = window.opener.add_task;
+const SimpleTest = window.opener.SimpleTest;
+const ok = window.opener.ok;
+const original_finish = window.opener.SimpleTest.finish;
+
+SimpleTest.finish = function finish() {
+  self.close();
+  original_finish();
+};
+
+// HTMLMediaElement fires "visibilitychanged" while media.test.video-suspend is
+// set.
+async function waitForInViewPort(aElement, aExpected) {
+  const video = SpecialPowers.wrap(aElement);
+  while (video.isInViewPort != aExpected) {
+    await new Promise(resolve =>
+      aElement.addEventListener("visibilitychanged", resolve, { once: true })
+    );
+  }
+}
+
+add_task(async () => {
+  const video = document.getElementById("video");
+  await waitForInViewPort(video, true);
+
+  // Make a layout change and let the frame visibility update that it schedules
+  // run, so that the update for the layout change below falls inside
+  // layout.visibility.min-recompute-interval-ms.
+  document.getElementById("spacer").style.height = "20px";
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  ok(SpecialPowers.wrap(video).isInViewPort, "The video element is in view");
+
+  // Painting can mark a frame as visible but never as not visible, so only a
+  // frame visibility update notices this. Nothing keeps the refresh driver
+  // ticking afterwards.
+  video.style.left = "5000px";
+  await waitForInViewPort(video, false);
+  ok(
+    !SpecialPowers.wrap(video).isInViewPort,
+    "The video element is out of view once the page is idle"
+  );
+});
+</script>
+</body>
+</html>
