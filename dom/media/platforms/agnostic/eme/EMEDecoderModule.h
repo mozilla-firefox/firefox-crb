@@ -50,6 +50,7 @@ class EMEMediaDataDecoderProxy
 
   RefPtr<DecodePromise> Decode(MediaRawData* aSample) override;
   RefPtr<FlushPromise> Flush() override;
+  RefPtr<FlushPromise> FlushForReason(FlushReason aReason) override;
   RefPtr<ShutdownPromise> Shutdown() override;
 
  private:

@@ -116,13 +116,12 @@ void MediaFormatReader::DecoderData::ShutdownDecoder() {
   }
 
   if (mFlushing) {
-    // Flush is is in action. Shutdown will be initiated after flush completes.
+    // The flush continuation holds the decoder alive and calls Shutdown()
+    // once the flush settles, even if the flush fails.
     MOZ_DIAGNOSTIC_ASSERT(mShutdownPromise);
     mOwner->mShutdownPromisePool->Track(mShutdownPromise->Ensure(__func__));
-    // The order of decoder creation and shutdown is handled by LocalAllocPolicy
-    // and ShutdownPromisePool. MFR can now reset these members to a fresh state
-    // and be ready to create new decoders again without explicitly waiting for
-    // flush/shutdown to complete.
+    // LocalAllocPolicy and ShutdownPromisePool order decoder recreation
+    // with shutdown. Clear the track's state while the continuation waits.
     mShutdownPromise = nullptr;
     mFlushing = false;
   } else {
@@ -140,7 +139,8 @@ void MediaFormatReader::DecoderData::ShutdownDecoder() {
                              : TrackType::kVideoTrack);
 }
 
-void MediaFormatReader::DecoderData::Flush() {
+void MediaFormatReader::DecoderData::Flush(
+    MediaDataDecoder::FlushReason aReason) {
   AUTO_PROFILER_LABEL("MediaFormatReader::Flush", MEDIA_PLAYBACK);
   MOZ_ASSERT(mOwner->OnTaskQueue());
 
@@ -167,7 +167,7 @@ void MediaFormatReader::DecoderData::Flush() {
     RefPtr<MediaDataDecoder> d = mDecoder;
     DDLOGEX2("MediaFormatReader::DecoderData", this, DDLogCategory::Log,
              "flushing", DDNoValue{});
-    mDecoder->Flush()->Then(
+    mDecoder->FlushForReason(aReason)->Then(
         mOwner->OwnerThread(), __func__,
         [type, this, p, d]() {
           AUTO_PROFILER_LABEL("MediaFormatReader::Flush:Resolved",
@@ -175,10 +175,8 @@ void MediaFormatReader::DecoderData::Flush() {
           DDLOGEX2("MediaFormatReader::DecoderData", this, DDLogCategory::Log,
                    "flushed", DDNoValue{});
           if (!p->IsEmpty()) {
-            // Shutdown happened before flush completes.
-            // Let's continue to shut down the decoder. Note
-            // we don't access |this| because this decoder
-            // is no longer managed by MFR::DecoderData.
+            // Shutdown was requested during the flush. Use only the captured
+            // decoder and promise holder because the track may have moved on.
             d->Shutdown()->ChainTo(p->Steal(), __func__);
             return;
           }
@@ -2870,7 +2868,8 @@ RefPtr<MediaFormatReader::WaitForDataPromise> MediaFormatReader::WaitForData(
   return p;
 }
 
-nsresult MediaFormatReader::ResetDecode(const TrackSet& aTracks) {
+nsresult MediaFormatReader::ResetDecode(const TrackSet& aTracks,
+                                        MediaDataDecoder::FlushReason aReason) {
   AUTO_PROFILER_LABEL("MediaFormatReader::ResetDecode", MEDIA_PLAYBACK);
   MOZ_ASSERT(OnTaskQueue());
   LOGV("");
@@ -2914,7 +2913,7 @@ nsresult MediaFormatReader::ResetDecode(const TrackSet& aTracks) {
   if (HasVideo() && aTracks.contains(TrackInfo::kVideoTrack)) {
     mVideo.ResetDemuxer();
     mVideo.mFirstFrameTime = Some(media::TimeUnit::Zero());
-    Reset(TrackInfo::kVideoTrack);
+    Reset(TrackInfo::kVideoTrack, aReason);
     if (mVideo.HasPromise()) {
       mVideo.RejectPromise(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
     }
@@ -2932,14 +2931,15 @@ nsresult MediaFormatReader::ResetDecode(const TrackSet& aTracks) {
   return NS_OK;
 }
 
-void MediaFormatReader::Reset(TrackType aTrack) {
+void MediaFormatReader::Reset(TrackType aTrack,
+                              MediaDataDecoder::FlushReason aReason) {
   MOZ_ASSERT(OnTaskQueue());
   LOG("Reset({}) BEGIN", TrackTypeToStr(aTrack));
 
   auto& decoder = GetDecoderData(aTrack);
 
   decoder.ResetState();
-  decoder.Flush();
+  decoder.Flush(aReason);
 
   LOG("Reset({}) END", TrackTypeToStr(aTrack));
 }

@@ -32,7 +32,9 @@ class RemoteDecoderChild : public ShmemRecycleAllocator<RemoteDecoderChild>,
   RefPtr<MediaDataDecoder::DecodePromise> Decode(
       const nsTArray<RefPtr<MediaRawData>>& aSamples);
   RefPtr<MediaDataDecoder::DecodePromise> Drain();
-  RefPtr<MediaDataDecoder::FlushPromise> Flush();
+  RefPtr<MediaDataDecoder::FlushPromise> Flush(
+      MediaDataDecoder::FlushReason aReason =
+          MediaDataDecoder::FlushReason::Normal);
   RefPtr<mozilla::ShutdownPromise> Shutdown();
   bool IsHardwareAccelerated(nsACString& aFailureReason) const;
   nsCString GetDescriptionName() const;

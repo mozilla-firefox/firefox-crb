@@ -1023,6 +1023,11 @@ RefPtr<MediaDataDecoder::DecodePromise> MediaChangeMonitor::Decode(
 }
 
 RefPtr<MediaDataDecoder::FlushPromise> MediaChangeMonitor::Flush() {
+  return FlushForReason(FlushReason::Normal);
+}
+
+RefPtr<MediaDataDecoder::FlushPromise> MediaChangeMonitor::FlushForReason(
+    FlushReason aReason) {
   AssertOnThread();
   mDecodePromiseRequest.DisconnectIfExists();
   mDecodePromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
@@ -1068,7 +1073,7 @@ RefPtr<MediaDataDecoder::FlushPromise> MediaChangeMonitor::Flush() {
     return p;
   }
   if (mDecoder && mDecoderInitialized) {
-    return mDecoder->Flush();
+    return mDecoder->FlushForReason(aReason);
   }
   return FlushPromise::CreateAndResolve(true, __func__);
 }

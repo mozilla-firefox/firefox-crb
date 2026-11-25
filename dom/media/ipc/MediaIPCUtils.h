@@ -195,6 +195,13 @@ struct ParamTraits<mozilla::MediaDataDecoder::ConversionRequired>
               mozilla::MediaDataDecoder::ConversionRequired::kNeedHVCC)> {};
 
 template <>
+struct ParamTraits<mozilla::MediaDataDecoder::FlushReason>
+    : public ContiguousEnumSerializerInclusive<
+          mozilla::MediaDataDecoder::FlushReason,
+          mozilla::MediaDataDecoder::FlushReason::Normal,
+          mozilla::MediaDataDecoder::FlushReason::Dormancy> {};
+
+template <>
 struct MOZ_ENUM_SERIALIZER_ALLOW_SENTINEL_UPPER_BOUND
     ParamTraits<mozilla::MediaDataDecoder::PropertyName>
     : public ContiguousEnumSerializerInclusive<

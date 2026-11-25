@@ -138,6 +138,9 @@ class AllocationWrapper final : public MediaDataDecoder {
   }
   RefPtr<DecodePromise> Drain() override { return mDecoder->Drain(); }
   RefPtr<FlushPromise> Flush() override { return mDecoder->Flush(); }
+  RefPtr<FlushPromise> FlushForReason(FlushReason aReason) override {
+    return mDecoder->FlushForReason(aReason);
+  }
   bool IsHardwareAccelerated(nsACString& aFailureReason) const override {
     return mDecoder->IsHardwareAccelerated(aFailureReason);
   }

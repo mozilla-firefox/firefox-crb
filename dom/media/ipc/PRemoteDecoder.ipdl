@@ -7,6 +7,7 @@ include "mozilla/dom/MediaIPCUtils.h";
 include protocol PRemoteMediaManager;
 
 using mozilla::MediaDataDecoder::ConversionRequired from "PlatformDecoderModule.h";
+using mozilla::MediaDataDecoder::FlushReason from "PlatformDecoderModule.h";
 using mozilla::MediaDataDecoder::PropertyName from "PlatformDecoderModule.h";
 using mozilla::MediaDataDecoder::PropertyValue from "PlatformDecoderModule.h";
 using mozilla::TrackInfo::TrackType from "MediaInfo.h";
@@ -75,7 +76,9 @@ parent:
   // must be released explicitly using DeallocateSurfaceDescriptorGPUVideo
   // on the manager protocol.
   async Decode(ArrayOfRemoteMediaRawData data) returns (DecodeResultIPDL result);
-  async Flush() returns (MediaResult error);
+  // A decoder that supports dormancy frame preservation uses its own
+  // frame selection when the reason is Dormancy.
+  async Flush(FlushReason reason) returns (MediaResult error);
   async Drain() returns (DecodeResultIPDL result);
   async Shutdown() returns (bool unused);
   // To clear the threshold, call with INT64_MIN.

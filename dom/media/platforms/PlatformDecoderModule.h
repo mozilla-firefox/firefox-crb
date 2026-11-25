@@ -581,6 +581,12 @@ class MediaDataDecoder : public DecoderDoctorLifeLogger<MediaDataDecoder> {
   // with NS_ERROR_DOM_MEDIA_CANCELED
   virtual RefPtr<FlushPromise> Flush() = 0;
 
+  enum class FlushReason : uint8_t { Normal, Dormancy };
+
+  // For Dormancy, an override may try to preserve the selected video frame
+  // before flushing the codec. The reader requests Shutdown() separately.
+  virtual RefPtr<FlushPromise> FlushForReason(FlushReason) { return Flush(); }
+
   // Cancels all init/decode/drain operations, and shuts down the decoder. The
   // platform decoder should clean up any resources it's using and release
   // memory etc. The shutdown promise will be resolved once the decoder has
