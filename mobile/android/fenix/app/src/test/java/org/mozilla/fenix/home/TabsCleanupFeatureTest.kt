@@ -12,6 +12,8 @@ import io.mockk.Runs
 import io.mockk.every
 import io.mockk.impl.annotations.RelaxedMockK
 import io.mockk.just
+import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.spyk
 import io.mockk.verify
 import io.mockk.verifyOrder
@@ -21,18 +23,25 @@ import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
+import mozilla.components.feature.tabgroups.storage.data.TabGroup as StoredTabGroup
+import mozilla.components.feature.tabgroups.storage.data.TabGroupData
 import mozilla.components.feature.tabgroups.storage.fakes.FakeTabGroupRepository
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
+import org.mozilla.fenix.components.AppStore
+import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.tabs.DefaultTabRepository
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
+import org.mozilla.fenix.ext.bulkCloseUndoMessage
 import org.mozilla.fenix.ext.tabsClosedUndoMessage
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_ACTIVE_NORMAL_TABS
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_NORMAL_TABS
@@ -58,16 +67,28 @@ class TabsCleanupFeatureTest {
 
     @RelaxedMockK private lateinit var fenixBrowserUseCases: FenixBrowserUseCases
 
+    private var tabGroupData = TabGroupData()
+
+    private val fallbackTabsUseCases: TabsUseCases = mockk(relaxed = true)
+
     private val tabDataCoordinator by lazy {
         DefaultTabDataCoordinator(
                 tabRepository =
                     DefaultTabRepository(
                         browserStore = browserStore,
                         tabsUseCases = TabsUseCases(browserStore),
-                        fenixBrowserUseCases = fenixBrowserUseCases,
-                        isHomepageAsNewTabEnabled = { false },
+                        fenixBrowserUseCases =
+                            FenixBrowserUseCases(
+                                appStore = AppStore(AppState()),
+                                tabsUseCases = fallbackTabsUseCases,
+                                loadUrlUseCase = mockk(relaxed = true),
+                                searchUseCases = mockk(relaxed = true),
+                                homepageTitle = "",
+                                profiler = null,
+                            ),
+                        isHomepageAsNewTabEnabled = { settings.enableHomepageAsNewTab },
                     ),
-                tabGroupRepository = FakeTabGroupRepository(),
+                tabGroupRepository = FakeTabGroupRepository(initialTabGroupData = tabGroupData),
                 isInactiveTabsEnabled = { settings.inactiveTabsAreEnabled },
                 isTabGroupsEnabled = { true },
                 scope = testCoroutineScope,
@@ -106,6 +127,22 @@ class TabsCleanupFeatureTest {
     fun setup() {
         MockKAnnotations.init(this)
     }
+
+    private fun createTabGroupData(tabIds: List<String>, groupId: String = "group1") =
+        TabGroupData(
+            tabGroups =
+                listOf(
+                    StoredTabGroup(
+                        id = groupId,
+                        title = groupId,
+                        theme = "",
+                        closed = false,
+                        lastModified = 0L,
+                        tabIds = tabIds,
+                    )
+                ),
+            tabGroupAssignments = tabIds.associateWith { groupId },
+        )
 
     @Test
     fun `GIVEN all active normal tabs to delete WHEN feature is started THEN remove all active normal tabs and show undo snackbar`() {
@@ -149,9 +186,8 @@ class TabsCleanupFeatureTest {
 
         feature.start()
 
+        assertTrue(browserStore.state.tabs.isEmpty())
         verify {
-            tabsUseCases.removeNormalTabs()
-
             feature.showUndoSnackbar(
                 testContext.tabsClosedUndoMessage(tabsCount),
                 any(),
@@ -159,6 +195,114 @@ class TabsCleanupFeatureTest {
 
             viewModel.sessionToDelete = null
         }
+    }
+
+    @Test
+    fun `GIVEN an open tab group and all normal tabs to delete WHEN feature is started THEN the ungrouped tabs are removed, the group is closed, and an undo snackbar is shown`() {
+        tabGroupData = createTabGroupData(tabIds = listOf("2"))
+        browserStore =
+            BrowserStore(
+                BrowserState(
+                    tabs =
+                        listOf(
+                            createTab(id = "1", url = "https://mozilla.org"),
+                            createTab(id = "2", url = "https://mozilla.org"),
+                        )
+                )
+            )
+        every { viewModel.sessionToDelete } returns ALL_NORMAL_TABS
+
+        feature.start()
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf("2"), browserStore.state.tabs.map { it.id })
+        assertTrue(tabDataCoordinator.tabsSnapshot.value!!.openTabGroups.isEmpty())
+        verify {
+            feature.showUndoSnackbar(
+                testContext.bulkCloseUndoMessage(tabCount = 1, tabGroupCount = 1),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GIVEN all normal tabs were closed with an open tab group WHEN the removal is undone THEN the group is reopened`() {
+        tabGroupData = createTabGroupData(tabIds = listOf("2"))
+        browserStore =
+            BrowserStore(
+                BrowserState(
+                    tabs =
+                        listOf(
+                            createTab(id = "1", url = "https://mozilla.org"),
+                            createTab(id = "2", url = "https://mozilla.org"),
+                        )
+                )
+            )
+        every { viewModel.sessionToDelete } returns ALL_NORMAL_TABS
+        val onCancel = slot<() -> Unit>()
+        every { feature.showUndoSnackbar(any(), capture(onCancel)) } just Runs
+
+        feature.start()
+        testDispatcher.scheduler.runCurrent()
+        onCancel.captured.invoke()
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf("group1"), tabDataCoordinator.tabsSnapshot.value!!.openTabGroups.map { it.id })
+        verify(exactly = 0) { tabsUseCases.undo.invoke() }
+        verify { navController.navigate(HomeFragmentDirections.actionGlobalBrowser(null)) }
+    }
+
+    @Test
+    fun `GIVEN homepage as a new tab is enabled and the selected tab is grouped WHEN all normal tabs are deleted THEN a second homepage tab is not added`() {
+        every { settings.enableHomepageAsNewTab } returns true
+        tabGroupData = createTabGroupData(tabIds = listOf("2"))
+        browserStore =
+            BrowserStore(
+                BrowserState(
+                    tabs =
+                        listOf(
+                            createTab(id = "1", url = "https://mozilla.org"),
+                            createTab(id = "2", url = "https://mozilla.org"),
+                        ),
+                    selectedTabId = "2",
+                )
+            )
+        every { viewModel.sessionToDelete } returns ALL_NORMAL_TABS
+
+        feature.start()
+
+        verify(exactly = 1) {
+            fallbackTabsUseCases.addTab.invoke(
+                url = ABOUT_HOME_URL,
+                title = "",
+                selectTab = false,
+                startLoading = true,
+                private = false,
+            )
+        }
+        verify(exactly = 0) { fenixBrowserUseCases.addNewHomepageTab(private = any()) }
+    }
+
+    @Test
+    fun `GIVEN a grouped tab WHEN a single tab is deleted THEN the grouped tab is not selected`() {
+        tabGroupData = createTabGroupData(tabIds = listOf("2"))
+        browserStore =
+            BrowserStore(
+                BrowserState(
+                    tabs =
+                        listOf(
+                            createTab(id = "1", url = "https://mozilla.org"),
+                            createTab(id = "2", url = "https://mozilla.org"),
+                            createTab(id = "3", url = "https://mozilla.org"),
+                        ),
+                    selectedTabId = "1",
+                )
+            )
+        every { viewModel.sessionToDelete } returns "1"
+
+        feature.start()
+
+        verify { tabsUseCases.removeTab(tabId = "1", excludedFallbackTabIds = setOf("2")) }
     }
 
     @Test
@@ -199,9 +343,8 @@ class TabsCleanupFeatureTest {
 
         feature.start()
 
+        assertTrue(browserStore.state.tabs.isEmpty())
         verifyOrder {
-            tabsUseCases.removeNormalTabs()
-
             fenixBrowserUseCases.addNewHomepageTab(private = browsingModeManager.mode.isPrivate)
 
             feature.showUndoSnackbar(
