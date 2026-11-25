@@ -111,11 +111,18 @@ void RemoveLeftoverHelper();
 void SetGroupOwnershipAndPermissions(const char* aAppBundle);
 // Resolves aInstallDir, checks that it is an app bundle on a volume that root
 // mounted with ownership enabled and that neither the client nor anyone the
-// helper doesn't accept can change it, and keeps a descriptor to it. Returns
-// OK or the error to record.
+// helper doesn't accept can change it, keeps a descriptor to it, clones it
+// into a root-only directory and checks that the clone's main executable is
+// signed as this application. Returns OK or the error to record.
 int ValidateAndPinInstallDir(const char* aInstallDir);
 // Copies the path of the directory that ValidateAndPinInstallDir pinned.
 bool GetPinnedInstallDirPath(char* aPath, size_t aLength);
+// Copies the path of the root-only clone of the pinned directory, which the
+// elevated updater applies the update to.
+bool GetInstallClonePath(char* aPath, size_t aLength);
+// Swaps the clone's Contents directory with the pinned directory's, if the
+// pinned directory is still at its path.
+bool SwapInstallCloneIntoPlace();
 struct UpdateServerThreadArgs {
   int argc;
   const NS_tchar** argv;
@@ -3563,6 +3570,24 @@ static void UpdateThreadFunc([[maybe_unused]] void* param) {
       gArchiveReader.Close();
       ensure_remove_recursive(gUpdatingDirPath);
     }
+#ifdef XP_MACOSX
+    // The elevated updater applied the update to its clone of the install.
+    // Swap the clone into the install's place, and from here on use the
+    // install's path again.
+    char pinnedPath[MAXPATHLEN];
+    if (rv == OK && isElevationTypeElevated(sElevationType)) {
+      if (SwapInstallCloneIntoPlace() &&
+          GetPinnedInstallDirPath(pinnedPath, sizeof(pinnedPath))) {
+        strlcpy(gInstallDirPath, pinnedPath, sizeof(gInstallDirPath));
+        strlcpy(gWorkingDirPath, pinnedPath, sizeof(gWorkingDirPath));
+      } else {
+        LogToOS(
+            NS_T("Couldn't swap the updated clone into the install "
+                 "directory's place. Not updating."));
+        rv = INVALID_INSTALL_DIR_PATH_ERROR;
+      }
+    }
+#endif
   }
 
   if (rv && (sReplaceRequest || sStagedUpdate)) {
@@ -4166,11 +4191,14 @@ int NS_main(int argc, NS_tchar** argv) {
       freeArguments(argc, argv);
       CleanupElevatedMacUpdate(true);
     }
-    // The elevated updater applies the update to the install directory in
-    // place, and from here on uses the resolved path of the pinned directory.
+    // The elevated updater applies the update to its clone of the install
+    // directory, which nobody else can change, and swaps it into place once
+    // the update has succeeded.
     char pinnedPath[MAXPATHLEN];
+    char clonePath[MAXPATHLEN];
     char workingPath[MAXPATHLEN];
     if (!GetPinnedInstallDirPath(pinnedPath, sizeof(pinnedPath)) ||
+        !GetInstallClonePath(clonePath, sizeof(clonePath)) ||
         !realpath(gWorkingDirPath, workingPath) ||
         strcmp(workingPath, pinnedPath) != 0) {
       WriteStatusFile(INVALID_APPLYTO_DIR_ERROR);
@@ -4180,8 +4208,8 @@ int NS_main(int argc, NS_tchar** argv) {
       freeArguments(argc, argv);
       CleanupElevatedMacUpdate(true);
     }
-    strlcpy(gInstallDirPath, pinnedPath, sizeof(gInstallDirPath));
-    strlcpy(gWorkingDirPath, pinnedPath, sizeof(gWorkingDirPath));
+    strlcpy(gInstallDirPath, clonePath, sizeof(gInstallDirPath));
+    strlcpy(gWorkingDirPath, clonePath, sizeof(gWorkingDirPath));
     // The client owns the patch directory, so require update.mar to be a plain
     // file opened without following a link, and read the update from the file
     // that was checked.
@@ -4345,6 +4373,15 @@ int NS_main(int argc, NS_tchar** argv) {
   LOG(("PATCH DIRECTORY " LOG_S, gPatchDirPath));
   LOG(("INSTALLATION DIRECTORY " LOG_S, gInstallDirPath));
   LOG(("WORKING DIRECTORY " LOG_S, gWorkingDirPath));
+#ifdef XP_MACOSX
+  // The elevated updater applies the update to a clone of the install, and
+  // then swaps the clone into the install's place.
+  char updatedInstallPath[MAXPATHLEN];
+  if (isElevationTypeElevated(sElevationType) &&
+      GetPinnedInstallDirPath(updatedInstallPath, sizeof(updatedInstallPath))) {
+    LOG(("UPDATED INSTALLATION DIRECTORY " LOG_S, updatedInstallPath));
+  }
+#endif
 
 #if defined(XP_WIN)
   // These checks are also performed in workmonitor.cpp since the maintenance
