@@ -4,7 +4,7 @@
 "use strict";
 
 const { MAX_CAPTURE_DIMENSION } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/screenshots/ScreenshotsUtils.sys.mjs"
+  "moz-src:///toolkit/modules/ScreenshotDimensions.sys.mjs"
 );
 
 const STRINGS_URI = "devtools/shared/locales/screenshot.properties";

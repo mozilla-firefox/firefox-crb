@@ -6,7 +6,7 @@
 
 const { LocalizationHelper } = require("resource://devtools/shared/l10n.js");
 const { clampDimensionsIfNeeded } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/screenshots/ScreenshotsUtils.sys.mjs",
+  "moz-src:///toolkit/modules/ScreenshotDimensions.sys.mjs",
   { global: "shared" }
 );
 
@@ -83,7 +83,7 @@ async function captureScreenshot(args, browsingContext) {
   let { left, top, width, height } = args.rect || {};
   let _showScreenshotTruncationWarning = false;
 
-  // Crop dimensions if necessary, using shared function from ScreenshotsUtils.
+  // Crop dimensions if necessary, using the same limits as Firefox Screenshots.
   if (width && height) {
     const result = clampDimensionsIfNeeded(width, height);
     width = result.width;

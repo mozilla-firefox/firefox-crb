@@ -26,7 +26,7 @@ const SHADOWROOT_TEST_PAGE = TEST_ROOT + "test-page-shadowRoot.html";
 const MISSING_TITLE_TEST_PAGE = TEST_ROOT + "missing-title-test-page.html";
 
 const { MAX_CAPTURE_DIMENSION, MAX_CAPTURE_AREA } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/screenshots/ScreenshotsUtils.sys.mjs"
+  "moz-src:///toolkit/modules/ScreenshotDimensions.sys.mjs"
 );
 
 const gScreenshotUISelectors = {
