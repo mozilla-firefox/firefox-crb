@@ -14,6 +14,11 @@ bool IsRecursivelyWritable(const char* aPath);
 
 // Returns whether the privileged updater helper is handling an update.
 bool IsUpdaterHelperBusy();
+
+// Returns whether aFd is on a volume that root mounted with ownership enabled.
+// The privileged updater helper refuses to update an install on any other
+// volume, where ownership doesn't protect it.
+bool IsOnVolumeHonoringOwnership(int aFd);
 }
 
 #endif

@@ -109,6 +109,12 @@ bool ServeElevatedUpdate(int aArgc, const char** aArgv,
                          const char* aMARChannelID);
 void RemoveLeftoverHelper();
 void SetGroupOwnershipAndPermissions(const char* aAppBundle);
+// Resolves aInstallDir, checks that it is an app bundle on a volume that root
+// mounted with ownership enabled, and keeps a descriptor to it. Returns OK or
+// the error to record.
+int ValidateAndPinInstallDir(const char* aInstallDir);
+// Copies the path of the directory that ValidateAndPinInstallDir pinned.
+bool GetPinnedInstallDirPath(char* aPath, size_t aLength);
 struct UpdateServerThreadArgs {
   int argc;
   const NS_tchar** argv;
@@ -4125,6 +4131,29 @@ int NS_main(int argc, NS_tchar** argv) {
       freeArguments(argc, argv);
       CleanupElevatedMacUpdate(true);
     }
+    int installDirResult = ValidateAndPinInstallDir(gInstallDirPath);
+    if (installDirResult != OK) {
+      WriteStatusFile(installDirResult);
+      LogToOS(NS_T("The install directory was refused. Not updating."));
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
+    // The elevated updater applies the update to the install directory in
+    // place, and from here on uses the resolved path of the pinned directory.
+    char pinnedPath[MAXPATHLEN];
+    char workingPath[MAXPATHLEN];
+    if (!GetPinnedInstallDirPath(pinnedPath, sizeof(pinnedPath)) ||
+        !realpath(gWorkingDirPath, workingPath) ||
+        strcmp(workingPath, pinnedPath) != 0) {
+      WriteStatusFile(INVALID_APPLYTO_DIR_ERROR);
+      LogToOS(
+          NS_T("The working directory must be the install directory. Not "
+               "updating."));
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
+    strlcpy(gInstallDirPath, pinnedPath, sizeof(gInstallDirPath));
+    strlcpy(gWorkingDirPath, pinnedPath, sizeof(gWorkingDirPath));
   }
 #endif
 
