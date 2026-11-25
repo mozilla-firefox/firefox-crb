@@ -373,9 +373,11 @@ class MediaDecoderStateMachine::DormantState
     RefPtr<MediaDecoder::SeekPromise> x =
         mPendingSeek.mPromise.Ensure(__func__);
 
-    // Reset the decoding state to ensure that any queued video frames are
-    // released and don't consume video memory.
-    mMaster->ResetDecode();
+    // Queue the dormancy flush before requesting decoder release so the
+    // decoder can preserve the selected video frame before shutting down.
+    mMaster->ResetDecode(
+        TrackSet(TrackInfo::kAudioTrack, TrackInfo::kVideoTrack),
+        MediaDataDecoder::FlushReason::Dormancy);
 
     // No need to call StopMediaSink() here.
     // We will do it during seeking when exiting dormant.
@@ -421,8 +423,7 @@ class MediaDecoderStateMachine::DormantState
   void MaybeReleaseResources() {
     if (!mMaster->mAudioDataRequest.Exists() &&
         !mMaster->mVideoDataRequest.Exists()) {
-      // Release decoders only when they are idle. Otherwise it might cause
-      // decode error later when resetting decoders during seeking.
+      // The reader shuts down both decoders after any in-flight flush settles.
       mMaster->mReader->ReleaseResources();
     }
   }
@@ -4316,7 +4317,8 @@ void MediaDecoderStateMachine::RunStateMachine() {
   mStateObj->Step();
 }
 
-void MediaDecoderStateMachine::ResetDecode(const TrackSet& aTracks) {
+void MediaDecoderStateMachine::ResetDecode(
+    const TrackSet& aTracks, MediaDataDecoder::FlushReason aReason) {
   MOZ_ASSERT(OnTaskQueue());
   LOG("MediaDecoderStateMachine::Reset");
 
@@ -4340,7 +4342,7 @@ void MediaDecoderStateMachine::ResetDecode(const TrackSet& aTracks) {
     mAudioWaitRequest.DisconnectIfExists();
   }
 
-  mReader->ResetDecode(aTracks);
+  mReader->ResetDecode(aTracks, aReason);
 }
 
 media::TimeUnit MediaDecoderStateMachine::GetClock(

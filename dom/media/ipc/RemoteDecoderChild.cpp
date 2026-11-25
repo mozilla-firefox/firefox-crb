@@ -159,13 +159,14 @@ RefPtr<MediaDataDecoder::DecodePromise> RemoteDecoderChild::Decode(
   return mDecodePromise.Ensure(__func__);
 }
 
-RefPtr<MediaDataDecoder::FlushPromise> RemoteDecoderChild::Flush() {
+RefPtr<MediaDataDecoder::FlushPromise> RemoteDecoderChild::Flush(
+    MediaDataDecoder::FlushReason aReason) {
   AssertOnManagerThread();
   mDecodePromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
   mDrainPromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
 
   RefPtr<RemoteDecoderChild> self = this;
-  SendFlush()->Then(
+  SendFlush(aReason)->Then(
       mThread, __func__,
       [self](const MediaResult& aResult) {
         if (NS_SUCCEEDED(aResult)) {

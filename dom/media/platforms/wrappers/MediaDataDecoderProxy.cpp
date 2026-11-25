@@ -48,13 +48,18 @@ RefPtr<MediaDataDecoder::DecodePromise> MediaDataDecoderProxy::DecodeBatch(
 }
 
 RefPtr<MediaDataDecoder::FlushPromise> MediaDataDecoderProxy::Flush() {
+  return FlushForReason(FlushReason::Normal);
+}
+
+RefPtr<MediaDataDecoder::FlushPromise> MediaDataDecoderProxy::FlushForReason(
+    FlushReason aReason) {
   MOZ_ASSERT(!mIsShutdown);
 
   if (!mProxyThread || mProxyThread->IsOnCurrentThread()) {
-    return mProxyDecoder->Flush();
+    return mProxyDecoder->FlushForReason(aReason);
   }
-  return InvokeAsync(mProxyThread, __func__, [self = RefPtr{this}] {
-    return self->mProxyDecoder->Flush();
+  return InvokeAsync(mProxyThread, __func__, [self = RefPtr{this}, aReason] {
+    return self->mProxyDecoder->FlushForReason(aReason);
   });
 }
 

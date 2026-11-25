@@ -113,13 +113,19 @@ RefPtr<MediaDataDecoder::DecodePromise> RemoteMediaDataDecoder::DecodeBatch(
 }
 
 RefPtr<MediaDataDecoder::FlushPromise> RemoteMediaDataDecoder::Flush() {
+  return FlushForReason(FlushReason::Normal);
+}
+
+RefPtr<MediaDataDecoder::FlushPromise> RemoteMediaDataDecoder::FlushForReason(
+    FlushReason aReason) {
   auto managerThread = RemoteMediaManagerChild::GetManagerThread();
   if (!managerThread) {
     return FlushPromise::CreateAndReject(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
   }
   RefPtr<RemoteMediaDataDecoder> self = this;
-  return InvokeAsync(managerThread, __func__,
-                     [self]() { return self->mChild->Flush(); });
+  return InvokeAsync(managerThread, __func__, [self, aReason]() {
+    return self->mChild->Flush(aReason);
+  });
 }
 
 RefPtr<MediaDataDecoder::DecodePromise> RemoteMediaDataDecoder::Drain() {

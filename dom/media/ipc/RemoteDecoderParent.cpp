@@ -189,7 +189,7 @@ mozilla::ipc::IPCResult RemoteDecoderParent::RecvDecode(
 }
 
 mozilla::ipc::IPCResult RemoteDecoderParent::RecvFlush(
-    FlushResolver&& aResolver) {
+    const MediaDataDecoder::FlushReason& aReason, FlushResolver&& aResolver) {
   MOZ_ASSERT(OnManagerThread());
   if (!mDecoder || mState != State::Initialized) {
     aResolver(MediaResult(NS_ERROR_ABORT, __func__));
@@ -201,7 +201,7 @@ mozilla::ipc::IPCResult RemoteDecoderParent::RecvFlush(
   mPendingFlushResolver.emplace(std::move(aResolver));
   RefPtr<RemoteDecoderParent> self = this;
   mFlushRequest.DisconnectIfExists();
-  mDecoder->Flush()
+  mDecoder->FlushForReason(aReason)
       ->Then(
           mManagerThread, __func__,
           [self](
