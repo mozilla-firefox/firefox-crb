@@ -182,6 +182,11 @@ async function mayBeSelectMappedSource(location, keepContext, thunkArgs) {
     return { shouldSelectOriginalLocation, newLocation: location };
   }
 
+  // No need to map HTML sources
+  if (location.source.isHTML) {
+    return { shouldSelectOriginalLocation: false, newLocation: location };
+  }
+
   if (keepContext) {
     if (shouldSelectOriginalLocation != location.source.isOriginal) {
       // Only try to map the location if the source is mapped:
@@ -336,6 +341,7 @@ export function selectLocation(
     // asynchronously fetch the related original location in order to display
     // the mapped location in the editor's footer.
     if (
+      !location.source.isHTML &&
       !location.source.isOriginal &&
       isSourceActorWithSourceMap(getState(), sourceActor.id)
     ) {
@@ -435,7 +441,10 @@ export function selectSpecificLocationOrSameUrl(location) {
         location.source.id
       );
       location = createLocation({ ...location, source, sourceActor });
-    } else if (!hasSourceActor(getState(), location.sourceActor.id)) {
+    } else if (
+      location.sourceActor !== null &&
+      !hasSourceActor(getState(), location.sourceActor.id)
+    ) {
       // If the specific source actor no longer exists, match any still available.
       const sourceActor = getFirstSourceActorForGeneratedSource(
         getState(),

@@ -185,10 +185,18 @@ export function makeScriptSourceId(sourceResource) {
   // while you might have many Source Actor objects in source-actors.js reducer.
   //
   // There is two distinct usecases here:
-  // * HTML pages, which will have one source object which represents the whole HTML page
+  // * HTML pages, which will have one target source object which represents the whole HTML page
   //   and it will relate to many source actors. One for each inline <script> tag.
   //   Each script tag's source actor will actually return the whole content of the html page
-  //   and not only this one script tag content.
+  //   and not only this one script tag content. The source id for the inline scripts will be the same as
+  //   that of its parent HTML page. Note: These only relate to frame targets, non frame targets.
+  if (
+    sourceResource.isInlineSource &&
+    sourceResource.targetFront.targetType === "frame"
+  ) {
+    return makeTargetSourceId(sourceResource.targetFront);
+  }
+
   // * Scripts with the same URL injected many times.
   //   For example, two <script src=""> with the same location
   //   Or by using eval("...// # SourceURL=")
@@ -216,6 +224,10 @@ export function makeStyleSheetSourceId(sourceResource) {
   return `source-actor-${sourceResource.resourceId}`;
 }
 
+export function makeTargetSourceId(targetFront) {
+  return `source-html-${targetFront.targetForm.actor}`;
+}
+
 /**
  * Create the source object for a generated source that is stored in the sources.js reducer.
  * These generated sources relate to JS code which run in the
@@ -237,7 +249,11 @@ export function createGeneratedSource(sourceResource) {
     }),
     // Script specific properties
     isWasm: !!features.wasm && sourceResource.introductionType === "wasm",
-    isHTML: !!sourceResource.isInlineSource,
+    // HTML sources are only created for frame targets, so the inline sources for non frame targets
+    // are generated sources with `isNonFrameTargetInlineSource` is true.
+    isNonFrameTargetInlineSource:
+      sourceResource.targetFront.targetType !== "frame" &&
+      !!sourceResource.isInlineSource,
     type: ResourceCommand.TYPES.SOURCE,
   };
 }
@@ -436,6 +452,28 @@ export function createPrettyPrintOriginalStyleSheetSource(
     }),
     isStyleSheet: generatedSource.isStyleSheet,
     type: ResourceCommand.TYPES.STYLESHEET,
+  };
+}
+
+/**
+ * Create the source object for a target that is stored in sources.js reducer.
+ * These sources relate to the top level document of a target.
+ * This is typically an HTML page, but it can be any other type of document.
+ *
+ * @param {object} targetFront
+ *        Target front coming from the ResourceCommand API.
+ * @returns {object}
+ *        Source actor object for the target.
+ */
+export function createTargetSource(targetFront) {
+  return {
+    ...createSourceObject({
+      id: makeTargetSourceId(targetFront),
+      url: targetFront.url,
+    }),
+    targetFront,
+    isHTML: true,
+    type: ResourceCommand.TYPES.HTML,
   };
 }
 

@@ -2,12 +2,38 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
-import { createThread } from "../client/firefox/create";
-import { getSourcesToRemoveForThread } from "../selectors/index";
+import {
+  createThread,
+  createTargetSource,
+  makeTargetSourceId,
+} from "../client/firefox/create";
+import { getSourcesToRemoveForThread, getSource } from "../selectors/index";
 import { removeSources } from "./sources/removeSources";
+import { checkNewSources } from "./sources/newSources";
 
 export function addTarget(targetFront) {
-  return { type: "INSERT_THREAD", newThread: createThread(targetFront) };
+  return async ({ dispatch }) => {
+    await dispatch({
+      type: "INSERT_THREAD",
+      newThread: createThread(targetFront),
+    });
+    if (
+      targetFront.targetType === "frame" &&
+      // @backward-compat { version 163 } Older servers fetch the html content through
+      // the inline scripts source actors, and do not handle html which do not have inline scripts,
+      // so we need to check for the trait to avoid fetching the html content on older servers.
+      // Remove this condition check when the client is on version 161 or higher..
+      targetFront.getTrait("supportsGetSourceContentForHTMLResource")
+    ) {
+      const targetSources = [createTargetSource(targetFront)];
+      await dispatch({
+        type: "ADD_SOURCES",
+        sources: targetSources,
+      });
+
+      await dispatch(checkNewSources(targetSources));
+    }
+  };
 }
 
 export function removeTarget(targetFront) {
@@ -24,6 +50,12 @@ export function removeTarget(targetFront) {
       getState(),
       threadActorID
     );
+
+    // If there are no inline scripts in the html, this means the target source
+    const targetSource = getSource(getState(), makeTargetSourceId(targetFront));
+    if (targetSource && !sources.includes(targetSource)) {
+      sources.push(targetSource);
+    }
 
     // Notify the reducers that a target/thread is being removed.
     // This will be fired on navigation for all existing targets.

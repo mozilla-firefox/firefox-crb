@@ -128,6 +128,8 @@ export function getSelectedMappedSource(state) {
   // the `selectLocation` action should compute the `selectedOriginalLocation` field.
   if (
     !selectedLocation.source.isOriginal &&
+    // Html and style sheet sources may be selected without any source actor
+    selectedLocation.sourceActor &&
     isSourceActorWithSourceMap(state, selectedLocation.sourceActor.id)
   ) {
     const { selectedOriginalLocation } = state.sources;
@@ -242,7 +244,7 @@ export function getRelevantSourceActorsForLocation(state, location) {
     : location.source;
 
   let sourceActors;
-  if (generatedSource.isHTML) {
+  if (generatedSource.isHTML || location.source.isNonFrameTargetInlineSource) {
     // The location may either be on the original pretty printed HTML,
     // or be non-original and be on a HTML page.
     //
@@ -288,6 +290,7 @@ export function canPrettyPrintSource(state, source, sourceActor) {
     !source ||
     source.isPrettyPrinted ||
     source.isOriginal ||
+    (source.isHTML && !getSourceActorsForSource(state, source.id).length) ||
     (prefs.clientSourceMapsEnabled && isSourceWithMap(state, source.id))
   ) {
     return false;

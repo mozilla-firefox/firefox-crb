@@ -171,6 +171,7 @@ export function isNotPrettyPrintable(source, sourceContent) {
   return (
     !isJavaScript(source, sourceContent) &&
     !source.isHTML &&
+    !source.isNonFrameTargetInlineSource &&
     !source.isStyleSheet
   );
 }

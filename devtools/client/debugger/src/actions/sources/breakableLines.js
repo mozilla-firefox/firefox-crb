@@ -53,7 +53,10 @@ export function setBreakableLines(location) {
         source: location.source,
         breakableLines,
       });
-    } else if (location.source.isHTML) {
+    } else if (
+      location.source.isHTML ||
+      location.source.isNonFrameTargetInlineSource
+    ) {
       // For a given HTML page, we get a unique Source (for the html page),
       // but many Source Actors (one per inline <script> tag and inlined event listeners).
       // So that we have to get the breakable lines for each of them.

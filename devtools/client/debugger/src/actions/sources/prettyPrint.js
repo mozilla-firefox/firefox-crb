@@ -38,6 +38,7 @@ import {
 
 import {
   getFirstSourceActorForGeneratedSource,
+  getSourceActorsForSource,
   getSource,
   getSelectedLocation,
   canPrettyPrintSource,
@@ -95,7 +96,7 @@ export async function prettyPrintSourceTextContent(
   const url = getPrettyOriginalSourceURL(generatedSource);
 
   let prettyPrintWorkerResult;
-  if (generatedSource.isHTML) {
+  if (generatedSource.isHTML || generatedSource.isNonFrameTargetInlineSource) {
     prettyPrintWorkerResult = await prettyPrintHtmlFile({
       prettyPrintWorker,
       generatedSource,
@@ -337,7 +338,7 @@ export async function doPrettyPrintSource(
   recordEvent("pretty_print");
 
   assert(
-    !source.isOriginal,
+    !source.isOriginal && !source.isHTML,
     "Pretty-printing only allowed on generated sources"
   );
 
@@ -418,7 +419,14 @@ export const prettyPrintSource = memoizeableAction("prettyPrintSource", {
 });
 
 export function prettyPrintAndSelectSource(source) {
-  return async ({ dispatch }) => {
+  return async ({ dispatch, getState }) => {
+    // If the source is an HTML file and it has no inline scripts, we don't want to pretty print it.
+    if (
+      source.isHTML &&
+      !getSourceActorsForSource(getState(), source.id).length
+    ) {
+      return source;
+    }
     const prettySource = await dispatch(prettyPrintSource({ source }));
 
     // Select the pretty/original source based on the location we may

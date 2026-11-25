@@ -22,7 +22,7 @@ export function getSourceTextContentForSource(
   source,
   sourceActor = null
 ) {
-  if (source.isOriginal) {
+  if (source.isOriginal || source.isHTML) {
     return state.sourcesContent.mutableSourceTextContentMapBySourceId.get(
       source.id
     );

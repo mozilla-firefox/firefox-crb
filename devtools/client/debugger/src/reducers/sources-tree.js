@@ -122,7 +122,37 @@ export default function update(state = initialSourcesTreeState(), action) {
       // Fork the array only once for all the sources
       const threadItems = [...state.threadItems];
       for (const source of validOriginalSources) {
-        changed |= addSource(threadItems, source, generatedSourceActor);
+        changed |= addSource(
+          threadItems,
+          source,
+          generatedSourceActor,
+          generatedSourceActor.thread
+        );
+      }
+      if (changed) {
+        return {
+          ...state,
+          threadItems,
+        };
+      }
+      return state;
+    }
+    case "ADD_SOURCES": {
+      // This action handles target sources (i.e. the html source related to a target)
+      const sources = action.sources.filter(source => source.isHTML);
+      if (!sources.length) {
+        return state;
+      }
+      let changed = false;
+      // Fork the array only once for all the sources
+      const threadItems = [...state.threadItems];
+      for (const source of sources) {
+        changed |= addSource(
+          threadItems,
+          source,
+          null,
+          source.targetFront.targetForm.threadActor
+        );
       }
       if (changed) {
         return {
@@ -163,7 +193,8 @@ export default function update(state = initialSourcesTreeState(), action) {
         changed |= addSource(
           threadItems,
           sourceActor.sourceObject,
-          sourceActor
+          sourceActor,
+          sourceActor.thread
         );
       }
       if (changed) {
@@ -430,17 +461,17 @@ let lastThreadItem = null;
 let lastGroupItem = null;
 let lastDirectoryItem = null;
 
-function addSource(threadItems, source, sourceActor) {
+function addSource(threadItems, source, sourceActor, threadActorID) {
   // Ensure creating or fetching the related Thread Item
   let threadItem;
-  if (lastThreadItem?.threadActorID == sourceActor.thread) {
+  if (lastThreadItem?.threadActorID == threadActorID) {
     threadItem = lastThreadItem;
   } else {
     threadItem = threadItems.find(item => {
-      return item.threadActorID == sourceActor.thread;
+      return item.threadActorID == threadActorID;
     });
     if (!threadItem) {
-      threadItem = createThreadTreeItem(sourceActor.thread);
+      threadItem = createThreadTreeItem(threadActorID);
       // Note that threadItems will be cloned once to force a state update
       // by the callsite of `addSourceActor`
       addSortedItem(threadItems, threadItem, sortThreadItems);
@@ -853,7 +884,10 @@ function getSourceItemForSelectedLocation(state, selectedLocation) {
     // Bail out if the current item doesn't match the source
     if (
       item.type == sourceTree.itemTypes.THREAD &&
-      item.threadActorID != sourceActor?.thread
+      item.threadActorID != sourceActor?.thread &&
+      // For html sources there might be a source actor so lets check the
+      // source target front.
+      item.threadActorID != source.targetFront?.targetForm.threadActor
     ) {
       return null;
     }
