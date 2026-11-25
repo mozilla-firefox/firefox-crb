@@ -66,7 +66,9 @@
 // light mode and the widget doesn't adapt to the photo. moz-button colors the icon
 // via --button-text-color-ghost, so override the token (a host `color` won't win).
 .picture-of-the-day-context-menu-button {
-  --button-text-color-ghost: var(--color-white);
+  @media (prefers-contrast: no-preference) {
+    --button-text-color-ghost: var(--color-white);
+  }
 }
 
 // In the populated state the title, attribution, and "…" menu reveal on
@@ -237,9 +239,15 @@
 
   --badge-padding-block: 1px;
   --badge-padding-inline: var(--space-small);
-  --badge-background-color-filled: var(--color-green-40);
+
+  @media (forced-colors: none) {
+    --badge-background-color-filled: var(--color-green-40);
+  }
   --badge-text-color: var(--badge-text-color-filled);
-  --badge-border-color: transparent;
+
+  @media (forced-colors: none) {
+    --badge-border-color: transparent;
+  }
 
   text-transform: uppercase;
 }

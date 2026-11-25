@@ -41,9 +41,15 @@
 
   --badge-padding-block: 1px;
   --badge-padding-inline: var(--space-small);
-  --badge-background-color-filled: var(--color-green-40);
+
+  @media (forced-colors: none) {
+    --badge-background-color-filled: var(--color-green-40);
+  }
   --badge-text-color: var(--badge-text-color-filled);
-  --badge-border-color: transparent;
+
+  @media (forced-colors: none) {
+    --badge-border-color: transparent;
+  }
 }
 
 // Keep the badge readable in High Contrast Mode by using the system accent.

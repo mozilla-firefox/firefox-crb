@@ -10,7 +10,9 @@
   @media not (forced-colors) {
     --button-background: linear-gradient(235deg, #d6b4fd -57%, #8341ca 219%);
     --button-background-dark: linear-gradient(65deg, #4e2e9d -5%, #c1a9ff 135%);
-    --button-border-color: color-mix(in srgb, white 20%, transparent);
+    @media not (prefers-contrast) {
+      --button-border-color: color-mix(in srgb, white 20%, transparent);
+    }
     --button-box-shadow: inset 0 0 0 var(--button-border-width) var(--button-border-color);
     --button-separator-color: color-mix(in srgb, white 60%, transparent);
     --button-stop-color: light-dark(var(--color-violet-50), var(--color-violet-40));
@@ -41,10 +43,12 @@ moz-button.input-cta {
     --button-background-color-ghost-disabled: var(--button-background-color-disabled);
     --button-background-color-ghost-hover: var(--button-background-color-hover);
     --button-background-color-ghost-selected: var(--button-background-color-selected);
-    --button-text-color-ghost: var(--button-text-color);
-    --button-text-color-ghost-active: var(--button-text-color-active);
-    --button-text-color-ghost-disabled: var(--button-text-color-disabled);
-    --button-text-color-ghost-hover: var(--button-text-color-hover);
+    @media not (prefers-contrast) {
+      --button-text-color-ghost: var(--button-text-color);
+      --button-text-color-ghost-active: var(--button-text-color-active);
+      --button-text-color-ghost-disabled: var(--button-text-color-disabled);
+      --button-text-color-ghost-hover: var(--button-text-color-hover);
+    }
     --button-text-color-ghost-selected: var(--button-text-color-selected);
   }
 
@@ -225,7 +229,9 @@ panel-item {
         --button-text-color-disabled: var(--button-text-color-primary-disabled);
         --button-text-color-hover: var(--button-text-color-primary);
         --button-text-color-selected: var(--button-text-color-primary-selected);
-        --button-border-color: var(--button-border-color-primary);
+        @media not (prefers-contrast) {
+          --button-border-color: var(--button-border-color-primary);
+        }
         --button-border-color-active: var(--button-border-color-primary-active);
         --button-border-color-disabled: var(--button-border-color-primary-disabled);
         --button-border-color-hover: var(--button-border-color-primary-hover);

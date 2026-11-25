@@ -3581,7 +3581,9 @@ toolbar:not(#TabsToolbar) #firefox-view-button {
 }
 
 #tab-group-suggestion-button {
-  --button-border-color-ghost: var(--border-color-selected);
+  @media not (prefers-contrast) {
+    --button-border-color-ghost: var(--border-color-selected);
+  }
   color: var(--color-accent-primary);
   width: auto;
   padding: 0;
@@ -3609,7 +3611,9 @@ toolbar:not(#TabsToolbar) #firefox-view-button {
 }
 
 #tab-group-suggestions-message-container {
-  --button-opacity-disabled: 1;
+  @media not (forced-colors) {
+    --button-opacity-disabled: 1;
+  }
   color: inherit;
   font-size: 0.85em;
   margin-bottom: var(--space-medium);
