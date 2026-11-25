@@ -1,0 +1,57 @@
+diff --git a/tools/mtmd/clip-impl.h b/tools/mtmd/clip-impl.h
+--- a/tools/mtmd/clip-impl.h
++++ b/tools/mtmd/clip-impl.h
+@@ -450,7 +450,7 @@ struct clip_image_u8 {
+ 
+     const std::vector<uint8_t> & get_ro_buf() const {
+         if (is_placeholder()) {
+-            throw std::runtime_error("this clip_image_u8 is a placeholder");
++            GGML_ABORT("this clip_image_u8 is a placeholder");
+         }
+         return buf;
+     }
+@@ -563,7 +563,7 @@ struct clip_image_f32 {
+ 
+     const std::vector<float> & get_ro_buf() const {
+         if (is_placeholder()) {
+-            throw std::runtime_error("this clip_image_f32 is a placeholder");
++            GGML_ABORT("this clip_image_f32 is a placeholder");
+         }
+         return buf;
+     }
+diff --git a/tools/mtmd/clip.cpp b/tools/mtmd/clip.cpp
+--- a/tools/mtmd/clip.cpp
++++ b/tools/mtmd/clip.cpp
+@@ -26,6 +26,8 @@
+ #include <functional>
+ #include <float.h>
+ 
++#include "moz-overrides.h"
++
+ struct clip_logger_state g_logger_state = {clip_log_callback_default, NULL};
+ 
+ //#define CLIP_DEBUG_FUNCTIONS
+diff --git a/tools/mtmd/mtmd-image.cpp b/tools/mtmd/mtmd-image.cpp
+--- a/tools/mtmd/mtmd-image.cpp
++++ b/tools/mtmd/mtmd-image.cpp
+@@ -4,6 +4,8 @@
+ #include <cmath>
+ #include <vector>
+ 
++#include "moz-overrides.h"
++
+ //
+ // base implementation
+ //
+diff --git a/tools/mtmd/mtmd.cpp b/tools/mtmd/mtmd.cpp
+--- a/tools/mtmd/mtmd.cpp
++++ b/tools/mtmd/mtmd.cpp
+@@ -24,6 +24,8 @@
+ #include <climits>
+ #include <vector>
+ 
++#include "moz-overrides.h"
++
+ // for still image data, layout is RGBRGBRGB...
+ // length of data must be nx * ny * 3 bytes
+ //

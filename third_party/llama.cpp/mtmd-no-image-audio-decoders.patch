@@ -1,0 +1,216 @@
+diff --git a/tools/mtmd/mtmd-helper.cpp b/tools/mtmd/mtmd-helper.cpp
+--- a/tools/mtmd/mtmd-helper.cpp
++++ b/tools/mtmd/mtmd-helper.cpp
+@@ -15,22 +15,10 @@
+ #include <cinttypes>
+ #include <vector>
+ 
+-//#define MTMD_AUDIO_DEBUG
+-
+-#define MINIAUDIO_IMPLEMENTATION
+-#ifndef MTMD_AUDIO_DEBUG
+-#   define MA_NO_ENCODING
+-#endif
+-#define MA_NO_DEVICE_IO
+-#define MA_NO_RESOURCE_MANAGER
+-#define MA_NO_NODE_GRAPH
+-#define MA_NO_ENGINE
+-#define MA_NO_GENERATION
+-#define MA_API static
+-#include "miniaudio/miniaudio.h"
+-
+-#define STB_IMAGE_IMPLEMENTATION
+-#include "stb/stb_image.h"
++// Firefox: miniaudio.h and stb_image.h are deliberately not vendored. They
++// back mtmd_helper_bitmap_init_from_buf/_from_file only, and Firefox decodes
++// media with Gecko's own decoders and hands libmtmd raw samples through
++// mtmd_bitmap_init(). Those two helpers are stubbed out below.
+ 
+ #ifdef MTMD_INTERNAL_HEADER
+ #error "mtmd-helper is a public library outside of mtmd. it must not include internal headers"
+@@ -437,176 +425,18 @@ int32_t mtmd_helper_eval_chunks(mtmd_context * ctx,
+     return 0;
+ }
+ 
+-namespace audio_helpers {
+-
+-static bool is_audio_file(const char * buf, size_t len) {
+-    if (len < 12) {
+-        return false;
+-    }
+-
+-    // RIFF ref: https://en.wikipedia.org/wiki/Resource_Interchange_File_Format
+-    // WAV ref: https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+-    bool is_wav = memcmp(buf, "RIFF", 4) == 0 && memcmp(buf + 8, "WAVE", 4) == 0;
+-    bool is_mp3 = len >= 3 && (
+-        memcmp(buf, "ID3", 3) == 0 ||
+-        // Check for MPEG sync word (simplified check)
+-        ((unsigned char)buf[0] == 0xFF && ((unsigned char)buf[1] & 0xE0) == 0xE0)
+-    );
+-    bool is_flac = memcmp(buf, "fLaC", 4) == 0;
+-
+-    return is_wav || is_mp3 || is_flac;
+-}
+-
+-// returns true if the buffer is a valid audio file
+-static bool decode_audio_from_buf(const unsigned char * buf_in, size_t len, int target_sampler_rate, std::vector<float> & pcmf32_mono) {
+-    ma_result result;
+-    const int channels = 1;
+-    ma_decoder_config decoder_config = ma_decoder_config_init(ma_format_f32, channels, target_sampler_rate);
+-    ma_decoder decoder;
+-
+-    result = ma_decoder_init_memory(buf_in, len, &decoder_config, &decoder);
+-    if (result != MA_SUCCESS) {
+-        return false;
+-    }
+-
+-    ma_uint64 frame_count;
+-    ma_uint64 frames_read;
+-    result = ma_decoder_get_length_in_pcm_frames(&decoder, &frame_count);
+-    if (result != MA_SUCCESS) {
+-        ma_decoder_uninit(&decoder);
+-        return false;
+-    }
+-
+-    pcmf32_mono.resize(frame_count);
+-    result = ma_decoder_read_pcm_frames(&decoder, pcmf32_mono.data(), frame_count, &frames_read);
+-    if (result != MA_SUCCESS) {
+-        ma_decoder_uninit(&decoder);
+-        return false;
+-    }
+-
+-#ifdef MTMD_AUDIO_DEBUG
+-    // save audio to wav file
+-    ma_encoder_config config = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 1, target_sampler_rate);
+-    ma_encoder encoder;
+-    ma_encoder_init_file("output.wav", &config, &encoder);
+-    ma_encoder_write_pcm_frames(&encoder, pcmf32_mono.data(), pcmf32_mono.size(), &frames_read);
+-    ma_encoder_uninit(&encoder);
+-#endif
+-
+-    ma_decoder_uninit(&decoder);
+-    return true;
+-}
+-
+-} // namespace audio_helpers
+-
+-// Computes FNV-1a hash of the data
+-static std::string fnv_hash(const uint8_t * data, size_t len) {
+-    const uint64_t fnv_prime = 0x100000001b3ULL;
+-    uint64_t hash = 0xcbf29ce484222325ULL;
+-
+-    for (size_t i = 0; i < len; ++i) {
+-        hash ^= data[i];
+-        hash *= fnv_prime;
+-    }
+-    return std::to_string(hash);
+-}
+-
+-mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len, bool placeholder) {
+-    // calculate the hash if needed
+-    std::string id;
+-    mtmd_bitmap * result = nullptr;
+-
+-    if (!placeholder) {
+-        id = fnv_hash(buf, len);
+-    }
+-
+-    if (audio_helpers::is_audio_file((const char *)buf, len)) {
+-        std::vector<float> pcmf32;
+-        const int sample_rate = mtmd_get_audio_sample_rate(ctx);
+-        if (sample_rate < 0) {
+-            LOG_ERR("This model does not support audio input\n");
+-            return {nullptr, nullptr};
+-        }
+-        if (!audio_helpers::decode_audio_from_buf(buf, len, sample_rate, pcmf32)) {
+-            LOG_ERR("Unable to read WAV audio file from buffer\n");
+-            return {nullptr, nullptr};
+-        }
+-        result = mtmd_bitmap_init_from_audio(pcmf32.size(), placeholder ? nullptr : pcmf32.data());
+-        mtmd_bitmap_set_id(result, id.empty() ? nullptr : id.c_str());
+-        return {result, nullptr};
+-    }
+-
+-    // otherwise, we assume it's an image
+-    if (!result) {
+-        int nx, ny, nc;
+-        auto * data = stbi_load_from_memory(buf, len, &nx, &ny, &nc, 3);
+-        if (data) {
+-            result = mtmd_bitmap_init(nx, ny, placeholder ? nullptr : data);
+-            mtmd_bitmap_set_id(result, id.empty() ? nullptr : id.c_str());
+-            stbi_image_free(data);
+-            return {result, nullptr};
+-        }
+-        // otherwise, fallthrough to video decoding (if supported)
+-    }
+-
+-    // last try: load as video
+-#ifdef MTMD_VIDEO
+-    if (!result) {
+-        auto params = mtmd_helper_video_init_params_default();
+-        auto video_ctx = mtmd_helper_video_init_from_buf(ctx, buf, len, params);
+-        if (!video_ctx) {
+-            LOG_ERR("%s: failed to decode buffer as either image/audio/video\n", __func__);
+-            return {nullptr, nullptr};
+-        }
+-        result = mtmd_bitmap_init_lazy(ctx,
+-            id.empty() ? nullptr : id.c_str(),
+-            video_ctx,
+-            [](size_t, void * user_data, mtmd_bitmap ** out_bitmap, char ** out_text) -> int {
+-                auto * vctx = static_cast<mtmd_helper_video *>(user_data);
+-                char * text = nullptr;
+-                int ret = mtmd_helper_video_read_next(vctx, out_bitmap, &text);
+-                *out_text = text; // heap-allocated by read_next; freed automatically by mtmd
+-                return ret;
+-            });
+-         return {result, video_ctx};
+-    }
+-#else
+-    if (!result) {
+-        LOG_ERR("%s: failed to decode buffer as either image or audio (video support not compiled in)\n", __func__);
+-        return {nullptr, nullptr};
+-    }
+-#endif
+-
+-    // should not reach here
++// Firefox: these two helpers decoded an encoded image/audio/video buffer with
++// stb_image, miniaudio and an ffmpeg subprocess respectively. None of those are
++// vendored, so they are stubbed out. Callers build bitmaps from decoded samples
++// with mtmd_bitmap_init() / mtmd_bitmap_init_from_audio() instead.
++mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context *, const unsigned char *, size_t, bool) {
++    LOG_ERR("%s: decoding encoded media buffers is not supported in this build\n", __func__);
+     return {nullptr, nullptr};
+ }
+ 
+-mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_file(mtmd_context * ctx, const char * fname, bool placeholder) {
+-    std::vector<unsigned char> buf;
+-    FILE * f = fopen(fname, "rb");
+-    if (!f) {
+-        LOG_ERR("Unable to open file %s: %s\n", fname, strerror(errno));
+-        return {nullptr, nullptr};
+-    }
+-
+-    fseek(f, 0, SEEK_END);
+-    long file_size = ftell(f);
+-    fseek(f, 0, SEEK_SET);
+-    if (file_size < 0) {
+-        LOG_ERR("Failed to get file size of %s\n", fname);
+-        fclose(f);
+-        return {nullptr, nullptr};
+-    }
+-    buf.resize(file_size);
+-
+-    size_t n_read = fread(buf.data(), 1, file_size, f);
+-    fclose(f);
+-    if (n_read != (size_t)file_size) {
+-        LOG_ERR("Failed to read entire file %s", fname);
+-        return {nullptr, nullptr};
+-    }
+-
+-    return mtmd_helper_bitmap_init_from_buf(ctx, buf.data(), buf.size(), placeholder);
++mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_file(mtmd_context *, const char *, bool) {
++    LOG_ERR("%s: decoding media files is not supported in this build\n", __func__);
++    return {nullptr, nullptr};
+ }
+ 
+ bool mtmd_helper_support_video(mtmd_context * ctx) {
