@@ -10,8 +10,10 @@
 
 #include "mozilla/Assertions.h"  // for MOZ_ASSERT, etc
 #include "mozilla/Attributes.h"  // for override
+#include "mozilla/Maybe.h"
 #include "mozilla/Range.h"
-#include "mozilla/RefPtr.h"               // for RefPtr, already_AddRefed, etc
+#include "mozilla/RefPtr.h"  // for RefPtr, already_AddRefed, etc
+#include "mozilla/TimeStamp.h"
 #include "mozilla/UniquePtr.h"            // for UniquePtr
 #include "mozilla/UniquePtrExtensions.h"  // for UniqueFileHandle
 #include "mozilla/dom/ipc/IdType.h"
@@ -703,6 +705,14 @@ class TextureHost : public AtomicRefCountedWithFinalize<TextureHost> {
    * Some API's can use the cross-process IOSurface directly, such as OpenVR
    */
   virtual MacIOSurface* GetMacIOSurface() { return nullptr; }
+
+  // Records when the frame in this texture is due on screen, for native
+  // layers that can present frames at a given time.
+  virtual void SetPresentationTime(const TimeStamp& aTime) {}
+
+  // Whether the native layer that showed this texture presented it at its
+  // presentation time. Nothing until a native layer has shown it.
+  virtual Maybe<bool> IsPresentedAtTime() { return Nothing(); }
 
   virtual bool NeedsYFlip() const;
 

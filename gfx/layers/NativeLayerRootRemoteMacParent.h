@@ -7,6 +7,7 @@
 
 #include "mozilla/layers/NativeLayerCA.h"
 #include "mozilla/layers/NativeLayerRemoteParent.h"
+#include "nsTHashSet.h"
 
 namespace mozilla {
 namespace layers {
@@ -45,11 +46,15 @@ class NativeLayerRootRemoteMacParent final : public NativeLayerRemoteParent {
                        Matrix4x4 aTransform, SamplingFilter aSamplingFilter,
                        bool aSurfaceIsFlipped);
   void HandleChangedSurface(uint64_t aID, IOSurfacePort aSurfacePort,
-                            bool aIsDRM, bool aIsHDR, IntSize aSize);
+                            bool aIsDRM, bool aIsHDR, IntSize aSize,
+                            const TimeStamp& aPresentationTime);
 
   RefPtr<NativeLayerRootCA> mRealNativeLayerRoot;
   UniquePtr<NativeLayerRootSnapshotter> mSnapshotter;
   nsTHashMap<uint64_t, RefPtr<NativeLayer>> mKnownLayers;
+  // The layers that present frames at their presentation time, as last told
+  // to the GPU process.
+  nsTHashSet<uint64_t> mLayersPresentingFramesAtTime;
 };
 
 }  // namespace layers

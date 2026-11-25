@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "mozilla/AutoRestore.h"
 #include "mozilla/ProfilerMarkers.h"
 #include "mozilla/ScopeExit.h"
 #include "mozilla/StaticPrefs_gfx.h"
@@ -329,6 +330,12 @@ TimeStamp WebRenderImageHost::GetCompositionTime() const {
   if (mCurrentAsyncImageManager) {
     time = mCurrentAsyncImageManager->GetCompositionTime();
   }
+  if (mIsChoosingFrameAhead && !time.IsNull()) {
+    // Frames enqueued this far ahead were measured to cost WindowServer far
+    // less than frames enqueued as they are due.
+    static constexpr double kFrameLeadMilliseconds = 100.0;
+    time += TimeDuration::FromMilliseconds(kFrameLeadMilliseconds);
+  }
   return time;
 }
 
@@ -363,7 +370,18 @@ TextureHost* WebRenderImageHost::GetAsTextureHostForComposite(
   const auto onExit =
       mozilla::MakeScopeExit([&]() { mCurrentAsyncImageManager = nullptr; });
 
-  int imageIndex = ChooseImageIndex();
+  if (mCurrentTextureHost) {
+    if (Maybe<bool> atTime = mCurrentTextureHost->IsPresentedAtTime()) {
+      mPresentsFramesAtTime = *atTime;
+    }
+  }
+
+  int imageIndex;
+  {
+    AutoRestore<bool> restore(mIsChoosingFrameAhead);
+    mIsChoosingFrameAhead = mPresentsFramesAtTime;
+    imageIndex = ChooseImageIndex();
+  }
   if (imageIndex < 0) {
     SetCurrentTextureHost(nullptr);
     return nullptr;
@@ -409,6 +427,7 @@ TextureHost* WebRenderImageHost::GetAsTextureHostForComposite(
     }
   }
 #endif
+  texture->SetPresentationTime(img->mTimeStamp);
   SetCurrentTextureHost(texture);
 
   if (mCurrentAsyncImageManager->GetCompositionTime()) {

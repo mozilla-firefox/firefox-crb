@@ -68,6 +68,10 @@ class GPUVideoTextureHost final : public TextureHost {
 
   void SetReadFence(Fence* aReadFence) override;
 
+  void SetPresentationTime(const TimeStamp& aTime) override;
+
+  Maybe<bool> IsPresentedAtTime() override;
+
   BufferTextureHost* AsBufferTextureHost() override;
 
   DXGITextureHostD3D11* AsDXGITextureHostD3D11() override;

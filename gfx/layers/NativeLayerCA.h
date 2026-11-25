@@ -10,6 +10,7 @@
 
 #include <ostream>
 
+#include "mozilla/Atomics.h"
 #include "mozilla/Mutex.h"
 #include "mozilla/TimeStamp.h"
 
@@ -278,6 +279,18 @@ class NativeLayerRootSnapshotterCA final : public NativeLayerRootSnapshotter {
 #endif
 
 // Wraps one CALayer representation of NativeLayerCA.
+// Counts the samples a video layer has enqueued with a time, so that a
+// delayed task can tell whether another one has arrived since it was
+// scheduled.
+class EnqueuedSampleCounter final {
+ public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(EnqueuedSampleCounter)
+  Atomic<uint64_t> mCount{0};
+
+ private:
+  ~EnqueuedSampleCounter() = default;
+};
+
 struct NativeLayerCARepresentation {
   using UpdateType = NativeLayerCAUpdateType;
 
@@ -289,7 +302,8 @@ struct NativeLayerCARepresentation {
     return mWrappingCALayerHasExtent ? mWrappingCALayer : nullptr;
   }
 
-  bool EnqueueSurface(IOSurfaceRef aSurfaceRef, bool aIsHDR);
+  bool EnqueueSurface(IOSurfaceRef aSurfaceRef, bool aIsHDR,
+                      const TimeStamp& aPresentationTime);
 
   // Applies buffered changes to the native CALayers. The contract with the
   // caller is as follows: If any of these values have changed since the last
@@ -310,7 +324,8 @@ struct NativeLayerCARepresentation {
                     gfx::SamplingFilter aSamplingFilter, bool aSpecializeVideo,
                     const CFTypeRefPtr<IOSurfaceRef>& aFrontSurface,
                     const Maybe<gfx::DeviceColor>& aColor, bool aIsVideo,
-                    bool aIsDRM, bool aIsHDR);
+                    bool aIsDRM, bool aIsHDR,
+                    const TimeStamp& aPresentationTime);
 
   // Return whether any aspects of this layer representation have been mutated
   // since the last call to ApplyChanges, i.e. whether ApplyChanges needs to
@@ -337,6 +352,10 @@ struct NativeLayerCARepresentation {
 #ifdef NIGHTLY_BUILD
   bool mLogNextVideoSurface = false;
 #endif
+
+  // Presentation time stamp of the last sample enqueued with a time.
+  CMTime mLastPresentationTimeStamp = kCMTimeInvalid;
+  RefPtr<EnqueuedSampleCounter> mEnqueuedSampleCounter;
 
   bool mWrappingCALayerHasExtent : 1;
 
@@ -404,7 +423,11 @@ class NativeLayerCA : public NativeLayer {
 
   // Used to force a specific IOSurfaceRef to be used.
   void SetSurfaceToPresent(CFTypeRefPtr<IOSurfaceRef> aSurfaceRef,
-                           gfx::IntSize& aSize, bool aIsDRM, bool aIsHDR);
+                           gfx::IntSize& aSize, bool aIsDRM, bool aIsHDR,
+                           const TimeStamp& aPresentationTime = TimeStamp());
+
+  // Whether this layer presents each video frame at its presentation time.
+  bool PresentsFramesAtTime();
 
   void DumpLayer(std::ostream& aOutputStream);
   static void LogSurface(const nsACString& aHeader, IOSurfaceRef aSurfaceRef,
@@ -504,6 +527,8 @@ class NativeLayerCA : public NativeLayer {
   bool mSpecializeVideo = false;
   bool mIsDRM = false;
   bool mIsHDR = false;
+  // When the attached video frame is due on screen, or null if it has no time.
+  TimeStamp mPresentationTime;
 
 #ifdef NIGHTLY_BUILD
   // Track the consistency of our caller's API usage. Layers that are drawn

@@ -82,6 +82,14 @@ void NativeLayerRemoteMac::AttachExternalImage(
   bool changedIsHDR = mIsHDR != isHDR;
   mIsHDR = isHDR;
 
+  mPresentationTime = TimeStamp();
+  if (wr::FramePresentation* presentation = texture->GetFramePresentation()) {
+    mPresentationTime = presentation->GetTime();
+    presentation->SetMode(mPresentsFramesAtTime
+                              ? wr::FramePresentation::Mode::AtTime
+                              : wr::FramePresentation::Mode::Immediate);
+  }
+
   mDirtyLayerInfo |= changedDisplayRect;
   mSnapshotLayer.mMutatedFrontSurface = true;
   mSnapshotLayer.mMutatedSize |= changedDisplayRect;
@@ -249,7 +257,7 @@ void NativeLayerRemoteMac::FlushDirtyLayerInfoToCommandQueue() {
 
     mCommandQueue->AppendCommand(mozilla::layers::CommandChangedSurface(
         ID, mozilla::layers::SurfaceTransferMacOS(std::move(surfacePort)),
-        IsDRM(), IsHDR(), GetSize()));
+        IsDRM(), IsHDR(), GetSize(), mPresentationTime));
     mDirtyChangedSurface = false;
   }
 
@@ -277,7 +285,7 @@ void NativeLayerRemoteMac::UpdateSnapshotLayer() {
       NativeLayerCAUpdateType::All, rect.Size(), mIsOpaque, rect.TopLeft(),
       mTransform, displayRect, mClipRect, mRoundedClipRect, mBackingScale,
       mSurfaceIsFlipped, mSamplingFilter, specializeVideo, surface, mColor,
-      isVideo, mIsDRM, mIsHDR);
+      isVideo, mIsDRM, mIsHDR, TimeStamp());
 }
 
 CALayer* NativeLayerRemoteMac::CALayerForSnapshot() {

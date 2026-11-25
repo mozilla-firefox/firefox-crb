@@ -8,6 +8,7 @@
 #include <IOSurface/IOSurfaceRef.h>
 
 #include "NativeLayerCA.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/layers/NativeLayer.h"
 #include "mozilla/layers/NativeLayerCommandQueue.h"
 #include "mozilla/layers/NativeLayerMacSurfaceHandler.h"
@@ -49,6 +50,11 @@ class NativeLayerRemoteMac final : public NativeLayer {
   bool IsOpaque() override;
   bool IsDRM() { return mIsDRM; }
   bool IsHDR() { return mIsHDR; }
+
+  // Whether the parent's layer presents each surface at its presentation time.
+  void SetPresentsFramesAtTime(bool aAtTime) {
+    mPresentsFramesAtTime = aAtTime;
+  }
   void SetClipRect(const Maybe<gfx::IntRect>& aClipRect) override;
   Maybe<gfx::IntRect> ClipRect() override;
   void SetRoundedClipRect(
@@ -100,6 +106,10 @@ class NativeLayerRemoteMac final : public NativeLayer {
   bool mIsDRM = false;
   bool mIsHDR = false;
   gfx::IntSize mSize;
+  // When the attached external image is due on screen, or null if it has no
+  // time.
+  TimeStamp mPresentationTime;
+  bool mPresentsFramesAtTime = false;
 };
 
 }  // namespace layers

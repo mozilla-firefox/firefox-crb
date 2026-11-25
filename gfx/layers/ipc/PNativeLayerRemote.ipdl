@@ -11,6 +11,7 @@ using mozilla::gfx::IntRect from "mozilla/gfx/Point.h";
 using mozilla::gfx::RoundedRect from "mozilla/gfx/Point.h";
 using mozilla::gfx::IntSize from "mozilla/gfx/Point.h";
 using mozilla::gfx::Matrix4x4 from "mozilla/gfx/Matrix.h";
+using mozilla::TimeStamp from "mozilla/TimeStamp.h";
 [MoveOnly] using mozilla::layers::IOSurfacePort from "mozilla/layers/IOSurfacePort.h";
 include LayersSurfaces;
 
@@ -81,6 +82,8 @@ struct CommandChangedSurface {
   bool IsDRM;
   bool IsHDR;
   IntSize Size;
+  // When the surface is due on screen, or null if it has no time.
+  TimeStamp PresentationTime;
 };
 
 // This protocol allows a NativeLayerRoot implementation on the GPU
@@ -98,6 +101,11 @@ parent:
   // Used for synchronous widget-initiated paints, most importantly
   // during window resize or when a new window is opened.
   sync Flush();
+
+child:
+  // Whether the parent's layer for ID presents each surface at its
+  // presentation time. Sent when that changes.
+  async PresentsFramesAtTime(uint64_t ID, bool AtTime);
 };
 
 } // layers

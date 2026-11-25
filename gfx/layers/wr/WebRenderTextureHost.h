@@ -77,6 +77,14 @@ class WebRenderTextureHost final : public TextureHost {
     return mWrappedTextureHost->AsDXGIYCbCrTextureHostD3D11();
   }
 
+  void SetPresentationTime(const TimeStamp& aTime) override {
+    mWrappedTextureHost->SetPresentationTime(aTime);
+  }
+
+  Maybe<bool> IsPresentedAtTime() override {
+    return mWrappedTextureHost->IsPresentedAtTime();
+  }
+
   bool IsWrappingSurfaceTextureHost() override;
 
   virtual void PrepareForUse() override;

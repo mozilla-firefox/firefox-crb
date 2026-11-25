@@ -7866,10 +7866,11 @@
 #endif
 
 #ifdef XP_DARWIN
-  # Present specialized video layers with less work for WindowServer: clear the
-  # first frame from the layer's static contents once it has been enqueued, and
-  # stop the layer's timebase, since each frame is displayed immediately. Set to
-  # false to keep the first frame and the running timebase as before.
+  # Present specialized video layers with less work for WindowServer: enqueue
+  # frames ahead with their presentation time, clear the first frame from the
+  # layer's static contents once it has been enqueued, and stop the layer's
+  # timebase while no frame is due. Set to false to enqueue each frame for
+  # immediate display as before.
 -   name: gfx.core-animation.specialize-video.low-power-presentation
     type: RelaxedAtomicBool
     value: true

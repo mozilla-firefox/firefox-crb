@@ -92,6 +92,12 @@ class WebRenderImageHost : public CompositableHost, public ImageComposite {
 
   CompositableTextureHostRef mCurrentTextureHost;
 
+  // Whether the native layer showing these frames presents each one at its
+  // presentation time, which lets us choose frames ahead of time.
+  bool mPresentsFramesAtTime = false;
+  // Set while choosing a frame ahead of the composition time.
+  bool mIsChoosingFrameAhead = false;
+
   std::deque<CompositableTextureHostRef> mPendingRemoteTextureWrappers;
   bool mWaitingReadyCallback = false;
   // Identifies the pending ready check, so that stale callbacks are ignored.

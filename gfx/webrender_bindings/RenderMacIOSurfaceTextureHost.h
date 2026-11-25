@@ -6,6 +6,9 @@
 #define MOZILLA_GFX_RENDERMACIOSURFACETEXTUREHOST_H
 
 #include "RenderTextureHostSWGL.h"
+#include "mozilla/Atomics.h"
+#include "mozilla/DataMutex.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/gfx/MacIOSurface.h"
 #include "mozilla/layers/GpuFence.h"
 #include "mozilla/layers/TextureHostOGL.h"
@@ -17,6 +20,38 @@ class SurfaceDescriptorMacIOSurface;
 }  // namespace layers
 
 namespace wr {
+
+// When a video frame is due on screen, and how the native layer showing it
+// presents frames. Shared between the frame's TextureHost on the compositor
+// thread and its RenderTextureHost on the render thread. WebRenderImageHost
+// uses the mode to choose frames ahead of time when the native layer presents
+// them at their time.
+class FramePresentation final {
+ public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(FramePresentation)
+
+  // Null if the frame has no time. Set when the frame is chosen for
+  // compositing.
+  void SetTime(const TimeStamp& aTime) {
+    auto time = mTime.Lock();
+    *time = aTime;
+  }
+  TimeStamp GetTime() {
+    auto time = mTime.Lock();
+    return *time;
+  }
+
+  // Set when a native layer shows the frame.
+  enum class Mode : uint32_t { Unknown, Immediate, AtTime };
+  void SetMode(Mode aMode) { mMode = aMode; }
+  Mode GetMode() const { return mMode; }
+
+ private:
+  ~FramePresentation() = default;
+
+  DataMutex<TimeStamp> mTime{"FramePresentation::mTime"};
+  Atomic<Mode> mMode{Mode::Unknown};
+};
 
 class RenderMacIOSurfaceTextureHost final : public RenderTextureHostSWGL {
  public:
@@ -50,6 +85,11 @@ class RenderMacIOSurfaceTextureHost final : public RenderTextureHostSWGL {
 
   RefPtr<layers::GpuFence> GetGpuFence();
 
+  void SetFramePresentation(FramePresentation* aFramePresentation) {
+    mFramePresentation = aFramePresentation;
+  }
+  FramePresentation* GetFramePresentation() const { return mFramePresentation; }
+
   const RefPtr<MacIOSurface> mSurface;
   const Maybe<layers::CompositeProcessFencesHolderId> mFencesHolderId;
 
@@ -58,6 +98,7 @@ class RenderMacIOSurfaceTextureHost final : public RenderTextureHostSWGL {
   void DeleteTextureHandle();
 
   RefPtr<gl::GLContext> mGL;
+  RefPtr<FramePresentation> mFramePresentation;
   GLuint mTextureHandles[3];
 };
 

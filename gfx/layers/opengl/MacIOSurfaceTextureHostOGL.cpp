@@ -22,7 +22,8 @@ MacIOSurfaceTextureHostOGL::MacIOSurfaceTextureHostOGL(
           aDescriptor.surfaceId(), aDescriptor.yUVColorSpace(),
           aDescriptor.transferFunction(),
           aDescriptor.isOpaque() ? MacIOSurface::AllowAlpha::No
-                                 : MacIOSurface::AllowAlpha::Yes)) {
+                                 : MacIOSurface::AllowAlpha::Yes)),
+      mFramePresentation(MakeRefPtr<wr::FramePresentation>()) {
   MOZ_COUNT_CTOR(MacIOSurfaceTextureHostOGL);
   if (!mSurface) {
     gfxCriticalNote << "Failed to look up MacIOSurface";
@@ -108,8 +109,26 @@ void MacIOSurfaceTextureHostOGL::CreateRenderTexture(
   bool isDRM = (bool)(mFlags & TextureFlags::DRM_SOURCE);
   texture->SetIsFromDRMSource(isDRM);
 
+  texture->SetFramePresentation(mFramePresentation);
   wr::RenderThread::Get()->RegisterExternalImage(aExternalImageId,
                                                  texture.forget());
+}
+
+void MacIOSurfaceTextureHostOGL::SetPresentationTime(const TimeStamp& aTime) {
+  mFramePresentation->SetTime(aTime);
+}
+
+Maybe<bool> MacIOSurfaceTextureHostOGL::IsPresentedAtTime() {
+  switch (mFramePresentation->GetMode()) {
+    case wr::FramePresentation::Mode::Unknown:
+      return Nothing();
+    case wr::FramePresentation::Mode::Immediate:
+      return Some(false);
+    case wr::FramePresentation::Mode::AtTime:
+      return Some(true);
+  }
+  MOZ_ASSERT_UNREACHABLE("Unexpected presentation mode");
+  return Nothing();
 }
 
 uint32_t MacIOSurfaceTextureHostOGL::NumSubTextures() {

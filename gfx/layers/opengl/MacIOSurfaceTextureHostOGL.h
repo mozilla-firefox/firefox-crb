@@ -13,6 +13,9 @@
 class MacIOSurface;
 
 namespace mozilla {
+namespace wr {
+class FramePresentation;
+}  // namespace wr
 namespace layers {
 
 /**
@@ -74,11 +77,15 @@ class MacIOSurfaceTextureHostOGL : public TextureHost {
   gfx::TransferFunction GetTransferFunction() const override;
   SurfaceDescriptor GetSurfaceDescriptor() override;
 
+  void SetPresentationTime(const TimeStamp& aTime) override;
+  Maybe<bool> IsPresentedAtTime() override;
+
   const SurfaceDescriptorMacIOSurface mDescriptor;
   const RefPtr<MacIOSurface> mSurface;
 
  protected:
   RefPtr<GLTextureSource> mTextureSource;
+  const RefPtr<wr::FramePresentation> mFramePresentation;
 };
 
 }  // namespace layers

@@ -13,7 +13,24 @@ namespace layers {
 class NativeLayerRemoteChild : public PNativeLayerRemoteChild {
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(NativeLayerRemoteChild);
 
+ public:
+  class Listener {
+   public:
+    virtual void PresentsFramesAtTime(uint64_t aID, bool aAtTime) = 0;
+  };
+  void SetListener(Listener* aListener) { mListener = aListener; }
+
+  mozilla::ipc::IPCResult RecvPresentsFramesAtTime(const uint64_t& aID,
+                                                   const bool& aAtTime) {
+    if (mListener) {
+      mListener->PresentsFramesAtTime(aID, aAtTime);
+    }
+    return IPC_OK();
+  }
+
  protected:
+  Listener* MOZ_NON_OWNING_REF mListener = nullptr;
+
   ~NativeLayerRemoteChild() = default;
 };
 

@@ -219,6 +219,19 @@ void GPUVideoTextureHost::SetReadFence(Fence* aReadFence) {
   }
 }
 
+void GPUVideoTextureHost::SetPresentationTime(const TimeStamp& aTime) {
+  if (TextureHost* wrapped = EnsureWrappedTextureHost()) {
+    wrapped->SetPresentationTime(aTime);
+  }
+}
+
+Maybe<bool> GPUVideoTextureHost::IsPresentedAtTime() {
+  if (TextureHost* wrapped = EnsureWrappedTextureHost()) {
+    return wrapped->IsPresentedAtTime();
+  }
+  return Nothing();
+}
+
 BufferTextureHost* GPUVideoTextureHost::AsBufferTextureHost() {
   if (EnsureWrappedTextureHost()) {
     return EnsureWrappedTextureHost()->AsBufferTextureHost();

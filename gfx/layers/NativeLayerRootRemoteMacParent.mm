@@ -70,10 +70,10 @@ NativeLayerRootRemoteMacParent::RecvCommitNativeLayerCommands(
         auto& transfer = changedSurface.Transfer();
         MOZ_ASSERT(transfer.type() == SurfaceTransfer::TSurfaceTransferMacOS);
         auto& transferMacOS = transfer.get_SurfaceTransferMacOS();
-        HandleChangedSurface(changedSurface.ID(),
-                             std::move(transferMacOS.Surface()),
-                             changedSurface.IsDRM(), changedSurface.IsHDR(),
-                             changedSurface.Size());
+        HandleChangedSurface(
+            changedSurface.ID(), std::move(transferMacOS.Surface()),
+            changedSurface.IsDRM(), changedSurface.IsHDR(),
+            changedSurface.Size(), changedSurface.PresentationTime());
         break;
       }
 
@@ -155,6 +155,7 @@ void NativeLayerRootRemoteMacParent::HandleCreateLayerForColor(
 
 void NativeLayerRootRemoteMacParent::HandleLayerDestroyed(uint64_t aID) {
   mKnownLayers.Remove(aID);
+  mLayersPresentingFramesAtTime.Remove(aID);
 }
 
 void NativeLayerRootRemoteMacParent::HandleSetLayers(
@@ -199,7 +200,7 @@ void NativeLayerRootRemoteMacParent::HandleLayerInfo(
 
 void NativeLayerRootRemoteMacParent::HandleChangedSurface(
     uint64_t aID, IOSurfacePort aSurfacePort, bool aIsDRM, bool aIsHDR,
-    IntSize aSize) {
+    IntSize aSize, const TimeStamp& aPresentationTime) {
   auto entry = mKnownLayers.MaybeGet(aID);
   if (!entry) {
     gfxWarning() << "Got a ChangedSurface for an unknown layer.";
@@ -210,7 +211,18 @@ void NativeLayerRootRemoteMacParent::HandleChangedSurface(
   MOZ_ASSERT(layer, "All of our known layers should be NativeLayerCA.");
 
   if (auto surface = aSurfacePort.GetSurface()) {
-    layer->SetSurfaceToPresent(surface, aSize, aIsDRM, aIsHDR);
+    layer->SetSurfaceToPresent(surface, aSize, aIsDRM, aIsHDR,
+                               aPresentationTime);
+  }
+
+  bool atTime = layer->PresentsFramesAtTime();
+  if (atTime != mLayersPresentingFramesAtTime.Contains(aID)) {
+    if (atTime) {
+      mLayersPresentingFramesAtTime.Insert(aID);
+    } else {
+      mLayersPresentingFramesAtTime.Remove(aID);
+    }
+    (void)SendPresentsFramesAtTime(aID, atTime);
   }
 }
 

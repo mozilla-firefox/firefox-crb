@@ -246,7 +246,7 @@ void NativeLayerRemoteWayland::FlushDirtyLayerInfoToCommandQueue() {
 
     mCommandQueue->AppendCommand(mozilla::layers::CommandChangedSurface(
         ID, mozilla::layers::SurfaceTransferWayland(std::move(desc)), IsDRM(),
-        IsHDR(), GetSize()));
+        IsHDR(), GetSize(), TimeStamp()));
     mDirtyChangedSurface = false;
   }
 

@@ -889,6 +889,18 @@ void NativeLayerCA::AttachExternalImage(wr::RenderTextureHost* aExternalImage) {
   bool changedSpecializeVideo = (mSpecializeVideo != specializeVideo);
   mSpecializeVideo = specializeVideo;
 
+  // Specialized video layers present frames at their presentation time.
+  mPresentationTime = TimeStamp();
+  if (wr::FramePresentation* presentation = texture->GetFramePresentation()) {
+    mPresentationTime = presentation->GetTime();
+    bool atTime =
+        specializeVideo &&
+        StaticPrefs::
+            gfx_core_animation_specialize_video_low_power_presentation();
+    presentation->SetMode(atTime ? wr::FramePresentation::Mode::AtTime
+                                 : wr::FramePresentation::Mode::Immediate);
+  }
+
 #ifdef NIGHTLY_BUILD
   if (changedSpecializeVideo &&
       StaticPrefs::gfx_core_animation_specialize_video_log()) {
@@ -1305,10 +1317,19 @@ void NativeLayerCA::SetDisplayRect(const gfx::IntRect& aDisplayRect) {
   }
 }
 
+bool NativeLayerCA::PresentsFramesAtTime() {
+  MutexAutoLock lock(mMutex);
+  return mSpecializeVideo &&
+         StaticPrefs::
+             gfx_core_animation_specialize_video_low_power_presentation();
+}
+
 void NativeLayerCA::SetSurfaceToPresent(CFTypeRefPtr<IOSurfaceRef> aSurfaceRef,
                                         gfx::IntSize& aSize, bool aIsDRM,
-                                        bool aIsHDR) {
+                                        bool aIsHDR,
+                                        const TimeStamp& aPresentationTime) {
   MutexAutoLock lock(mMutex);
+  mPresentationTime = aPresentationTime;
   MOZ_ASSERT(!mSurfaceHandler,
              "Shouldn't call this for layers that manage their own surfaces.");
   MOZ_ASSERT(!mTextureHost,
@@ -1526,7 +1547,8 @@ bool NativeLayerCA::ApplyChanges(WhichRepresentation aRepresentation,
   bool updateSucceeded = r.ApplyChanges(
       aUpdate, size, mIsOpaque, mPosition, mTransform, displayRect, mClipRect,
       mRoundedClipRect, mBackingScale, surfaceIsFlipped, mSamplingFilter,
-      mSpecializeVideo, surface, mColor, IsVideo(lock), mIsDRM, mIsHDR);
+      mSpecializeVideo, surface, mColor, IsVideo(lock), mIsDRM, mIsHDR,
+      mPresentationTime);
   bool hasExtentAfterUpdate = r.UnderlyingCALayer() != nullptr;
   if (hasExtentAfterUpdate != hadExtentBeforeUpdate) {
     *aMustRebuild = true;
@@ -1539,8 +1561,8 @@ CALayer* NativeLayerCA::UnderlyingCALayer(WhichRepresentation aRepresentation) {
   return GetRepresentation(aRepresentation).UnderlyingCALayer();
 }
 
-bool NativeLayerCARepresentation::EnqueueSurface(IOSurfaceRef aSurfaceRef,
-                                                 bool aIsHDR) {
+bool NativeLayerCARepresentation::EnqueueSurface(
+    IOSurfaceRef aSurfaceRef, bool aIsHDR, const TimeStamp& aPresentationTime) {
   MOZ_ASSERT(
       [mContentCALayer isKindOfClass:[AVSampleBufferDisplayLayer class]]);
   AVSampleBufferDisplayLayer* videoLayer =
@@ -1636,6 +1658,65 @@ bool NativeLayerCARepresentation::EnqueueSurface(IOSurfaceRef aSurfaceRef,
 #ifdef NIGHTLY_BUILD
   spoofTiming = StaticPrefs::gfx_core_animation_specialize_video_spoof_timing();
 #endif
+  CMTimebaseRef controlTimebase = [videoLayer controlTimebase];
+  bool presentAtTime =
+      !spoofTiming && !aPresentationTime.IsNull() &&
+      StaticPrefs::gfx_core_animation_specialize_video_low_power_presentation();
+  if (presentAtTime) {
+    // Run the timebase with the host clock, so that it reads presentation time
+    // stamps as host time, which TimeStamp is based on as well.
+    CMClockRef hostClock = CMClockGetHostTimeClock();
+    if (CMTimebaseGetRate(controlTimebase) != 1.0) {
+      CMTimebaseSetTime(controlTimebase, CMClockGetTime(hostClock));
+      CMTimebaseSetRate(controlTimebase, 1.0);
+    }
+    CMTime presentationTimeStamp = CMTimeAdd(
+        CMClockGetTime(hostClock),
+        CMTimeMakeWithSeconds(
+            (aPresentationTime - TimeStamp::Now()).ToSeconds(), NSEC_PER_SEC));
+    // A sample that is due before the previous one, after a seek for example,
+    // would otherwise wait behind the samples queued before it.
+    if (CMTIME_IS_VALID(mLastPresentationTimeStamp) &&
+        CMTimeCompare(presentationTimeStamp, mLastPresentationTimeStamp) < 0) {
+      [videoLayer flush];
+    }
+    mLastPresentationTimeStamp = presentationTimeStamp;
+    timingInfo = {.presentationTimeStamp = presentationTimeStamp};
+
+    if (StaticPrefs::
+            gfx_core_animation_specialize_video_low_power_presentation()) {
+      // Stop the timebase again once this sample has been shown, unless
+      // another one has been enqueued by then, so that paused video doesn't
+      // keep it running.
+      if (!mEnqueuedSampleCounter) {
+        mEnqueuedSampleCounter = MakeRefPtr<EnqueuedSampleCounter>();
+      }
+      uint64_t count = ++mEnqueuedSampleCounter->mCount;
+      RefPtr<EnqueuedSampleCounter> counter = mEnqueuedSampleCounter;
+      CFTypeRefPtr<CMTimebaseRef> timebase =
+          CFTypeRefPtr<CMTimebaseRef>::WrapUnderGetRule(controlTimebase);
+      // How long after the sample is due to wait before stopping the
+      // timebase, so that the sample has been shown by then.
+      static constexpr double kTimebaseStopDelayMilliseconds = 250.0;
+      TimeDuration delay =
+          (aPresentationTime - TimeStamp::Now()) +
+          TimeDuration::FromMilliseconds(kTimebaseStopDelayMilliseconds);
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                   int64_t(delay.ToSeconds() * NSEC_PER_SEC)),
+                     dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                       if (counter->mCount == count) {
+                         CMTimebaseSetRate(timebase.get(), 0.0);
+                       }
+                     });
+    }
+  } else {
+    mLastPresentationTimeStamp = kCMTimeInvalid;
+    if (StaticPrefs::
+            gfx_core_animation_specialize_video_low_power_presentation() &&
+        CMTimebaseGetRate(controlTimebase) != 0.0) {
+      CMTimebaseSetRate(controlTimebase, 0.0);
+    }
+  }
   if (spoofTiming) {
     // Since we don't have timing information for the sample, set the sample to
     // play at the current timestamp.
@@ -1662,7 +1743,7 @@ bool NativeLayerCARepresentation::EnqueueSurface(IOSurfaceRef aSurfaceRef,
   CFTypeRefPtr<CMSampleBufferRef> sampleBufferDeallocator =
       CFTypeRefPtr<CMSampleBufferRef>::WrapUnderCreateRule(sampleBuffer);
 
-  if (!spoofTiming) {
+  if (!spoofTiming && !presentAtTime) {
     // Since we don't have timing information for the sample, before we enqueue
     // it, we attach an attribute that specifies that the sample should be
     // played immediately.
@@ -1719,7 +1800,7 @@ bool NativeLayerCARepresentation::ApplyChanges(
     bool aSurfaceIsFlipped, gfx::SamplingFilter aSamplingFilter,
     bool aSpecializeVideo, const CFTypeRefPtr<IOSurfaceRef>& aFrontSurface,
     const Maybe<gfx::DeviceColor>& aColor, bool aIsVideo, bool aIsDRM,
-    bool aIsHDR) {
+    bool aIsHDR, const TimeStamp& aPresentationTime) {
   // If we have an OnlyVideo update, handle it and early exit.
   if (aUpdate == UpdateType::OnlyVideo) {
     // If we don't have any updates to do, exit early with success. This is
@@ -1735,7 +1816,7 @@ bool NativeLayerCARepresentation::ApplyChanges(
     bool updateSucceeded = false;
     if (aSpecializeVideo) {
       IOSurfaceRef surface = aFrontSurface.get();
-      updateSucceeded = EnqueueSurface(surface, aIsHDR);
+      updateSucceeded = EnqueueSurface(surface, aIsHDR, aPresentationTime);
 
       if (updateSucceeded) {
         mMutatedFrontSurface = false;
@@ -2075,7 +2156,7 @@ bool NativeLayerCARepresentation::ApplyChanges(
 
       // Attempt to enqueue this as a video frame. If we fail, we'll rebuild
       // our video layer in the next update.
-      bool isEnqueued = EnqueueSurface(surface, aIsHDR);
+      bool isEnqueued = EnqueueSurface(surface, aIsHDR, aPresentationTime);
       if (!isEnqueued) {
         // Set mMutatedSpecializeVideo, which will ensure that the next update
         // will rebuild the video layer.

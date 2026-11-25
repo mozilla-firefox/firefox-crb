@@ -15,7 +15,9 @@ namespace layers {
 // NativeLayerRootRemoteMacChild is a macOS-specific implementation of
 // NativeLayerRoot that runs on the GPU process, and sends updates
 // to the parent process.
-class NativeLayerRootRemoteMacChild final : public NativeLayerRoot {
+class NativeLayerRootRemoteMacChild final
+    : public NativeLayerRoot,
+      public NativeLayerRemoteChild::Listener {
  public:
   NativeLayerRootRemoteMacChild();
 
@@ -44,6 +46,9 @@ class NativeLayerRootRemoteMacChild final : public NativeLayerRoot {
   void WaitUntilCommitToScreenHasBeenProcessed() override;
 
   RefPtr<NativeLayerRemoteChild> GetRemoteChild() { return mRemoteChild; }
+
+  // NativeLayerRemoteChild::Listener
+  void PresentsFramesAtTime(uint64_t aID, bool aAtTime) override;
 
  protected:
   friend class NativeLayerRootRemoteMacSnapshotter;

@@ -199,9 +199,23 @@ bool NativeLayerRootRemoteMacChild::ReadbackPixelsFromParent(
 
 NativeLayerRootRemoteMacChild::NativeLayerRootRemoteMacChild()
     : mRemoteChild(MakeRefPtr<NativeLayerRemoteChild>()),
-      mCommandQueue(MakeRefPtr<NativeLayerCommandQueue>()) {}
+      mCommandQueue(MakeRefPtr<NativeLayerCommandQueue>()) {
+  mRemoteChild->SetListener(this);
+}
 
-NativeLayerRootRemoteMacChild::~NativeLayerRootRemoteMacChild() {}
+NativeLayerRootRemoteMacChild::~NativeLayerRootRemoteMacChild() {
+  mRemoteChild->SetListener(nullptr);
+}
+
+void NativeLayerRootRemoteMacChild::PresentsFramesAtTime(uint64_t aID,
+                                                         bool aAtTime) {
+  for (const auto& layer : mNativeLayers) {
+    if (reinterpret_cast<uint64_t>(layer.get()) == aID) {
+      layer->SetPresentsFramesAtTime(aAtTime);
+      return;
+    }
+  }
+}
 
 NativeLayerRootRemoteMacChild::SnapshotterDelegate::SnapshotterDelegate(
     NativeLayerRootRemoteMacChild* aLayerRoot)
