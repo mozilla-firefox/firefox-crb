@@ -395,7 +395,6 @@ let gPrimaryPasswordReauthDepth = 0;
  * Contains functions shared by different Login Manager components.
  */
 export const LoginHelper = {
-  debug: null,
   enabled: null,
   storageEnabled: null,
   formlessCaptureEnabled: null,
@@ -449,7 +448,6 @@ export const LoginHelper = {
     this.captureInputChanges = Services.prefs.getBoolPref(
       "signon.capture.inputChanges.enabled"
     );
-    this.debug = Services.prefs.getBoolPref("signon.debug");
     this.enabled = Services.prefs.getBoolPref("signon.rememberSignons");
     Glean.pwmgr.savingEnabled.set(this.enabled);
     this.storageEnabled = Services.prefs.getBoolPref(
@@ -543,26 +541,10 @@ export const LoginHelper = {
   },
 
   createLogger(aLogPrefix) {
-    let getMaxLogLevel = () => {
-      return this.debug ? "Debug" : "Warn";
-    };
-
-    // Create a new instance of the ConsoleAPI so we can control the maxLogLevel with a pref.
-    let consoleOptions = {
-      maxLogLevel: getMaxLogLevel(),
+    return console.createInstance({
+      maxLogLevelPref: "signon.loglevel",
       logModule: aLogPrefix,
-    };
-    let logger = console.createInstance(consoleOptions);
-
-    // Watch for pref changes and update this.debug and the maxLogLevel for created loggers
-    Services.prefs.addObserver("signon.debug", () => {
-      this.debug = Services.prefs.getBoolPref("signon.debug");
-      if (logger) {
-        logger.maxLogLevel = getMaxLogLevel();
-      }
     });
-
-    return logger;
   },
 
   /**

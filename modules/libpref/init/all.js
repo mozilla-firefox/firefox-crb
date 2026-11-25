@@ -2975,7 +2975,7 @@ pref("signon.privateBrowsingCapture.enabled",     true);
 pref("signon.storeWhenAutocompleteOff",     true);
 pref("signon.userInputRequiredToCapture.enabled", true);
 pref("signon.usernameOnlyForm.lookupThreshold",  5);
-pref("signon.debug",                        false);
+pref("signon.loglevel",                     "Warn");
 pref("signon.recipes.path", "resource://app/defaults/settings/main/password-recipes.json");
 pref("signon.recipes.remoteRecipes.enabled", true);
 pref("signon.relatedRealms.enabled", false);
