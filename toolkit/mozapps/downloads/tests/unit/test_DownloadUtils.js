@@ -357,11 +357,11 @@ function run_test() {
     Infinity,
   ]);
 
-  testFormattedTimeStatus(-1, "downloading-file-opens-in-some-time-2");
+  testFormattedTimeStatus(-1, "downloading-file-opens-in-some-time-3");
   // Passing in null will return a status of file-opens-in-seconds, as Math.floor(null) = 0
-  testFormattedTimeStatus(null, "downloading-file-opens-in-seconds-2");
-  testFormattedTimeStatus(0, "downloading-file-opens-in-seconds-2");
-  testFormattedTimeStatus(30, "downloading-file-opens-in-seconds-2");
+  testFormattedTimeStatus(null, "downloading-file-opens-in-seconds-3");
+  testFormattedTimeStatus(0, "downloading-file-opens-in-seconds-3");
+  testFormattedTimeStatus(30, "downloading-file-opens-in-seconds-3");
 
   testAllGetReadableDates();
 }

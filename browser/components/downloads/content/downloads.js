@@ -581,7 +581,7 @@ var DownloadsPanel = {
   _onSelect() {
     let richlistbox = DownloadsView.richListBox;
     richlistbox.itemChildren.forEach(item => {
-      let button = item.querySelector("button");
+      let button = item.querySelector("moz-button");
       if (item.selected) {
         button.removeAttribute("tabindex");
       } else {

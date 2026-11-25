@@ -455,7 +455,7 @@ export var DownloadUtils = {
    * @return status object, example:
    *  status = {
    *      l10n: {
-   *        id: "downloading-file-opens-in-minutes-and-seconds",
+   *        id: "downloading-file-opens-in-minutes-and-seconds-3",
    *        args: { minutes: 2, seconds: 30 },
    *      },
    *   };
@@ -465,11 +465,11 @@ export var DownloadUtils = {
     let l10n;
     if (!isFinite(aSeconds) || aSeconds < 0) {
       l10n = {
-        id: "downloading-file-opens-in-some-time-2",
+        id: "downloading-file-opens-in-some-time-3",
       };
     } else if (aSeconds < 60) {
       l10n = {
-        id: "downloading-file-opens-in-seconds-2",
+        id: "downloading-file-opens-in-seconds-3",
         args: { seconds: aSeconds },
       };
     } else if (aSeconds < 3600) {
@@ -478,15 +478,15 @@ export var DownloadUtils = {
       l10n = seconds
         ? {
             args: { seconds, minutes },
-            id: "downloading-file-opens-in-minutes-and-seconds-2",
+            id: "downloading-file-opens-in-minutes-and-seconds-3",
           }
-        : { args: { minutes }, id: "downloading-file-opens-in-minutes-2" };
+        : { args: { minutes }, id: "downloading-file-opens-in-minutes-3" };
     } else {
       let hours = Math.floor(aSeconds / 3600);
       let minutes = Math.floor((aSeconds % 3600) / 60);
       l10n = {
         args: { hours, minutes },
-        id: "downloading-file-opens-in-hours-and-minutes-2",
+        id: "downloading-file-opens-in-hours-and-minutes-3",
       };
     }
     return { l10n };
