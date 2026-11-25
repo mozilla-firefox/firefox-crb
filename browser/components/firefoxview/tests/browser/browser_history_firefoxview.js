@@ -496,19 +496,18 @@ add_task(async function test_search_ignores_stale_queries() {
   const historyEntries = createHistoryEntries();
   await PlacesUtils.history.insertMany(historyEntries);
 
-  let bogusQueryInProgress = false;
-  const searchDeferred = Promise.withResolvers();
   const realDatabase = await PlacesUtils.promiseLargeCacheDBConnection();
+  let staleQueryRejected = false;
   const mockDatabase = {
-    executeCached: async (sql, options) => {
-      if (options.query === "Bogus Query") {
-        bogusQueryInProgress = true;
-        await searchDeferred.promise;
-      }
-      return realDatabase.executeCached(sql, options);
+    executeCached: realDatabase.executeCached.bind(realDatabase),
+    interrupt() {
+      executeCachedController.rejectResult();
+      staleQueryRejected = true;
     },
-    interrupt: () => searchDeferred.reject(),
   };
+  using executeCachedController = TestUtils.asyncControlProxy(
+    mockDatabase
+  ).executeCached((_, [, options]) => options.query === "Bogus Query");
   const stub = sinon
     .stub(PlacesUtils, "promiseLargeCacheDBConnection")
     .resolves(mockDatabase);
@@ -527,10 +526,7 @@ add_task(async function test_search_ignores_stale_queries() {
     info("Input a bogus search query.");
     EventUtils.synthesizeMouseAtCenter(searchTextbox, {}, content);
     EventUtils.sendString("Bogus Query", content);
-    await TestUtils.waitForCondition(
-      () => bogusQueryInProgress,
-      "The bogus query to be in progress"
-    );
+    await executeCachedController.waitForInterception();
 
     info("Clear the bogus query.");
     let clearButton = SpecialPowers.getInputButton(searchTextbox.inputEl);
@@ -544,13 +540,10 @@ add_task(async function test_search_ignores_stale_queries() {
       const { rowEls } = historyComponent.lists[0];
       return rowEls.length === 1 && rowEls[0].mainEl.href === URLs[1];
     }, "There is one matching search result.");
-    searchDeferred.resolve();
-    await TestUtils.waitForTick();
+    ok(staleQueryRejected, "Interrupt rejected the stale search");
     const tabList = historyComponent.lists[0];
     ok(!tabList.emptyState, "Empty state should not be shown.");
-  });
-
-  stub.restore();
+  }).finally(() => stub.restore());
 });
 
 add_task(async function test_persist_collapse_card_after_view_change() {
