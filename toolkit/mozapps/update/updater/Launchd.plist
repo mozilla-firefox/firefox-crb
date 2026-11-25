@@ -6,5 +6,10 @@
   <string>org.mozilla.updater</string>
   <key>RunAtLoad</key>
   <true/>
+  <key>MachServices</key>
+  <dict>
+    <key>org.mozilla.updater</key>
+    <true/>
+  </dict>
 </dict>
 </plist>
