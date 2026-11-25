@@ -60,11 +60,10 @@ XPCOMUtils.defineLazyServiceGetter(
 );
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  let consoleOptions = {
+  return console.createInstance({
     maxLogLevelPref: "geo.provider.network.loglevel",
-    prefix: "NetworkGeolocationCache",
-  };
-  return console.createInstance(consoleOptions);
+    logModule: "NetworkGeolocationCache",
+  });
 });
 
 // Build a Set of access-point MAC addresses from a wifi list.
