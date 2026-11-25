@@ -137,8 +137,8 @@ ai-chat-grid::part(row) {
 
 :host([view="list"]) #list::part(button),
 :host([view="grid"]) #grid::part(button) {
-  --border-color: 1px solid var(--chrome-content-separator-color);
-
-  border: var(--border-color);
+  /* The separator color is a browser theme variable, not a design token. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+  border: var(--border-width) solid var(--chrome-content-separator-color);
   cursor: default;
 }
