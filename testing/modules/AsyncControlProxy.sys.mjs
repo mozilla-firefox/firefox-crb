@@ -23,6 +23,13 @@ const asyncControlProxies = new WeakSet();
 const stubTargetsByMethodName = new Map();
 
 /**
+ * Selects a call by its receiver and a shallow copy of its arguments.
+ *
+ * @template {unknown[]} MethodArgs
+ * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean} CallPredicate
+ */
+
+/**
  * The callable static properties of a class.
  *
  * @template {object} Owner
@@ -54,7 +61,8 @@ const stubTargetsByMethodName = new Map();
  *         ? MethodName
  *         : never
  *     : never]: Target[MethodName] extends (...args: infer MethodArgs) => PromiseLike<infer MethodResult>
- *       ? () => AsyncCallController<MethodName & string, MethodArgs, MethodResult>
+ *       ? (predicate?: CallPredicate<MethodArgs>)
+ *         => AsyncCallController<MethodName & string, MethodArgs, MethodResult>
  *       : never
  * }} AsyncControlMethods
  */
@@ -102,6 +110,13 @@ class AsyncCallController {
   #methodName;
 
   /**
+   * Selects the call to intercept.
+   *
+   * @type {CallPredicate<MethodArgs>}
+   */
+  #predicate;
+
+  /**
    * The original function that runs when a call proceeds.
    *
    * @type {(...args: MethodArgs) => PromiseLike<MethodResult>}
@@ -116,7 +131,7 @@ class AsyncCallController {
   #stub = null;
 
   /**
-   * The signal that tells tests when an intercepted call has been intercepted.
+   * The signal that tells tests when a matching call has been intercepted.
    *
    * @type {PromiseWithResolvers<void>}
    */
@@ -137,16 +152,30 @@ class AsyncCallController {
   #interceptedCall = null;
 
   /**
-   * Creates a controller for the next call.
+   * The predicate failure reported by later controller operations.
+   *
+   * @type {{ reason: unknown } | null}
+   */
+  #predicateFailure = null;
+
+  /**
+   * Creates a controller for the next matching call.
    *
    * @param {Record<MethodName, (...args: MethodArgs) => PromiseLike<MethodResult>>} stubTarget
    *   The object on which to install the stub.
    * @param {MethodName} methodName - The name of the method to intercept.
-   * @throws {TypeError} If the method cannot be wrapped.
+   * @param {CallPredicate<MethodArgs>} [predicate=() => true]
+   *   Selects calls to intercept.
+   * @throws {TypeError} If the predicate is invalid or the method cannot be wrapped.
    */
-  constructor(stubTarget, methodName) {
+  constructor(stubTarget, methodName, predicate = () => true) {
+    if (typeof predicate !== "function") {
+      throw new TypeError("The call predicate must be a function");
+    }
+
     this.#stubTarget = stubTarget;
     this.#methodName = methodName;
+    this.#predicate = predicate;
 
     const registeredTargets = this.#getStubTargetsForRegistration();
     this.#originalMethod = this.#getOriginalMethod();
@@ -177,10 +206,10 @@ class AsyncCallController {
   }
 
   /**
-   * Waits for an intercepted call before the original method starts.
+   * Waits for a matching call before the original method starts.
    *
-   * @returns {Promise<void>} Rejects with `AbortError` if the control
-   *   is restored before a call is intercepted.
+   * @returns {Promise<void>} Rejects with the predicate failure or with
+   *   `AbortError` if the control is restored before a call matches.
    */
   waitForInterception() {
     return this.#interceptionSignal.promise;
@@ -191,7 +220,7 @@ class AsyncCallController {
    * before releasing the result.
    * Safe to call more than once.
    *
-   * @throws {unknown} If no call was intercepted or the test rejected the call.
+   * @throws {unknown} If the predicate failed, no call matched, or the test rejected the call.
    */
   start() {
     this.#startOriginalMethod(this.#requireInterceptedCall());
@@ -202,7 +231,8 @@ class AsyncCallController {
    * before interception commits the matching call to running. The caller's
    * promise stays pending until the controller releases the result.
    *
-   * @returns {Promise<MethodResult>} Rejects if the method throws or rejects, or the controller is restored before interception.
+   * @returns {Promise<MethodResult>} Rejects if the predicate fails, the method throws or rejects, or the
+   *   controller is restored before interception.
    * @throws {Error} If the test already chose to reject the call.
    */
   waitForResult() {
@@ -225,7 +255,7 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} The same promise the caller received.
    *   Rejects if the original method throws or rejects.
-   * @throws {unknown} If no call was intercepted or the test rejected the call.
+   * @throws {unknown} If the predicate failed, no call matched, or the test rejected the call.
    */
   releaseResult() {
     const interceptedCall = this.#requireInterceptedCall();
@@ -387,7 +417,7 @@ class AsyncCallController {
   }
 
   /**
-   * Intercepts the next call while the stub is installed.
+   * Runs the call normally or intercepts it if the predicate matches.
    *
    * @param {unknown} receiver - The receiver of the original method call.
    * @param {MethodArgs} methodArgs - The original method arguments.
@@ -402,6 +432,41 @@ class AsyncCallController {
     if (!this.#stub) {
       return callOriginalMethod();
     }
+
+    const predicate = this.#predicate;
+    let predicateResult;
+
+    try {
+      predicateResult = predicate(receiver, [...methodArgs]);
+    } catch (reason) {
+      return this.#handlePredicateFailure(reason, callOriginalMethod);
+    }
+
+    return this.#applyMatchDecision(predicateResult, callOriginalMethod);
+  }
+
+  /**
+   * Intercepts a matching call or lets it proceed.
+   *
+   * @param {unknown} matchDecision - The value returned by the predicate.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #applyMatchDecision(matchDecision, callOriginalMethod) {
+    // Another call may have matched while we were evaluating this predicate,
+    // so we need to check that the stub is still installed.
+    if (!this.#stub || matchDecision === false) {
+      return callOriginalMethod();
+    }
+
+    if (matchDecision !== true) {
+      const failure = new TypeError(
+        `The call predicate for ${this.#methodName} must return a boolean`
+      );
+
+      return this.#handlePredicateFailure(failure, callOriginalMethod);
+    }
+
     this.#removeStub();
     this.#interceptedCall = {
       callerResultResolvers: Promise.withResolvers(),
@@ -444,6 +509,26 @@ class AsyncCallController {
   }
 
   /**
+   * Reports a predicate failure while the controller is waiting for a match.
+   *
+   * @param {unknown} reason - The predicate failure.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #handlePredicateFailure(reason, callOriginalMethod) {
+    if (!this.#stub) {
+      return callOriginalMethod();
+    }
+
+    this.#removeStub();
+    // We need to record the failure even when the rejection reason is undefined.
+    this.#predicateFailure = { reason };
+    this.#rejectInterception(reason);
+
+    return Promise.reject(reason);
+  }
+
+  /**
    * Rejects any wait for interception.
    *
    * @param {unknown} reason - Why interception could not happen.
@@ -461,9 +546,13 @@ class AsyncCallController {
    * Gets the intercepted call required by the controller operations.
    *
    * @returns {InterceptedCall<MethodResult>}
-   * @throws {unknown} If no call has been intercepted.
+   * @throws {unknown} If the predicate failed or no call has matched.
    */
   #requireInterceptedCall() {
+    if (this.#predicateFailure) {
+      throw this.#predicateFailure.reason;
+    }
+
     if (!this.#interceptedCall) {
       throw new Error(`No intercepted call to ${this.#methodName}`);
     }
@@ -590,7 +679,8 @@ export function asyncControlProxy(owner) {
         return undefined;
       }
 
-      return () => new AsyncCallController(stubTarget, propertyKey);
+      return predicate =>
+        new AsyncCallController(stubTarget, propertyKey, predicate);
     },
   });
 
