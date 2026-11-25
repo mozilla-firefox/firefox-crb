@@ -182,6 +182,8 @@ skip-if = ["os == 'win'"] # The action and its tests create symlinks, which Wind
 
 ["test_mach_cargo.py"]
 
+["test_mach_packaging.py"]
+
 ["test_mach_source_package.py"]
 
 ["test_makeutil.py"]
