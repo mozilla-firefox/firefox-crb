@@ -214,3 +214,8 @@ TEST_F(InstallTreeWalk, RefusesATreeDeeperThan128Levels) {
   ASSERT_EQ(mkdir(path.c_str(), 0755), 0);
   EXPECT_FALSE(IsProtected(getuid() + 1, true));
 }
+
+TEST_F(InstallTreeWalk, RefusesAnInstallOfTheCurrentUserBeforeElevation) {
+  EXPECT_EQ(GetElevatedUpdateRefusal(mRoot.c_str()),
+            ElevatedUpdateRefusal::ChangeableInstall);
+}
