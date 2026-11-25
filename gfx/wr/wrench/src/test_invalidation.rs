@@ -13,6 +13,7 @@ use crate::yaml_frame_reader::YamlFrameReader;
 use webrender::{PictureCacheDebugInfo, TileDebugInfo};
 use webrender::api::units::*;
 use webrender::api::BorderRadius;
+use webrender::render_api::DebugCommand;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum InvalidationOp {
@@ -150,6 +151,7 @@ impl<'a> TestHarness<'a> {
         self.test_backdrop_cross_slice_uncovered();
         self.test_backdrop_cross_slice_move_together();
         self.test_backdrop_own_slice_compositor_surfaces();
+        self.test_surface_downscale_partial_dirty();
 
         // Run manifest-based tests
         let manifest_path = PathBuf::from("invalidation/invalidation.list");
@@ -667,6 +669,34 @@ impl<'a> TestHarness<'a> {
         assert_eq!(
             self.render_yaml_overlays("backdrop_own_slice_overlay_inside"), 0,
             "Ensure an image in the area a backdrop-filter in its slice samples isn't promoted",
+        );
+    }
+
+    fn test_surface_downscale_partial_dirty(&mut self) {
+        // A surface larger than the maximum surface size is rendered at a
+        // reduced scale. Repainting only a small dirty region of it must use the
+        // same scale as a full repaint, or that region shows up sharper than the
+        // rest of the surface.
+        self.check_surface_downscale_partial_dirty("surface_downscale_partial");
+        // The same for a surface nested in another scaled down surface, which
+        // derives its scale from the parent's culling rect.
+        self.check_surface_downscale_partial_dirty("surface_downscale_nested");
+    }
+
+    fn check_surface_downscale_partial_dirty(&mut self, prefix: &str) {
+        self.wrench.api.send_debug_cmd(DebugCommand::SetMaximumSurfaceSize(Some(256)));
+        let probe = (322, 320);
+        let second = PathBuf::from(format!("invalidation/{}_2.yaml", prefix));
+        self.render_yaml("basic");
+        let expected = self.render_yaml_path_probe(&second, Some(probe)).probe_pixel.unwrap();
+        self.render_yaml("basic");
+        self.render_yaml(&format!("{}_1", prefix));
+        let actual = self.render_yaml_path_probe(&second, Some(probe)).probe_pixel.unwrap();
+        self.wrench.api.send_debug_cmd(DebugCommand::SetMaximumSurfaceSize(None));
+        assert!(
+            expected.iter().zip(actual.iter()).all(|(e, a)| (*e as i32 - *a as i32).abs() <= 8),
+            "{}: ensure a partial repaint of a scaled down surface matches a full repaint at {:?}: expected {:?}, got {:?}",
+            prefix, probe, expected, actual,
         );
     }
 
