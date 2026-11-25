@@ -250,8 +250,8 @@ forced colors is the regime there, while on Linux and macOS, where
 contrast entirely.
 
 [Scoping token overrides](/accessible/HCMMediaQueries.md#scoping-token-overrides-with-media-not-forced-colors)
-covers the companion case: an override that does sit in a layer still needs
-`@media (not (forced-colors))` to leave the token layer's system color in place.
+covers the companion case: an override that does sit in a layer still needs a
+guard so that the token layer's value stays in place.
 
 ### Overriding across a shadow boundary
 
