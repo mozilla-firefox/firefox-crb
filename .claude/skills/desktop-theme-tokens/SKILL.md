@@ -369,9 +369,14 @@ When a rebase conflicts only in generated files, resolve the source
 `git add` what it wrote and continue; never hand-merge the generated files.
 Build with `./mach buildtokens`, never `npm run build`, which skips the
 `build-figma-nova` step that rewrites the `*.nova.tokens.json` files. Before
-submitting, also run the CI check (`node tests/try-runner.js` from
-`toolkit/themes/shared/design-system/`); it does not cover Nova pruning, so it
-does not replace the fixed-point check (README "Testing").
+submitting, also run the CI checks: `node tests/try-runner.js` from
+`toolkit/themes/shared/design-system/`, and `./mach python-test --subsuite
+desktop-theme`, which fails on a token in `tokens-shared.css`,
+`tokens-platform.css` or `tokens-brand.css` that, in any environment, puts a
+CSS-wide keyword inside a function such as `light-dark()`, references an
+undeclared token without a fallback, forms a cycle or exceeds the depth limit.
+It reads only those three sheets. Neither covers Nova pruning, so they do not
+replace the fixed-point check (README "Testing").
 
 Before accepting or writing a `nova` or `ignoreFigma` key, read §1 "A `nova`
 block replaces Figma's Nova values for its token" in
