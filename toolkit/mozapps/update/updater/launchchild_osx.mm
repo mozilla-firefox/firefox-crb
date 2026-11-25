@@ -11,12 +11,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <spawn.h>
+#include <string.h>
 #include <SystemConfiguration/SystemConfiguration.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
 #include "readstrings.h"
 #include "updatecommon.h"
+#include "updatererrors.h"
 #include "updaterfileutils_osx.h"
 #include "UpdaterCodeSigningRequirements.h"
 #import "UpdaterHelperProtocol.h"
@@ -359,6 +362,59 @@ static bool ValidatePeerWithRequirement(audit_token_t aToken,
   }
   CFRelease(code);
   return ok;
+}
+
+// The install directory that ValidateAndPinInstallDir resolved and opened, and
+// its resolved path.
+static int gInstallDirFd = -1;
+static char gPinnedInstallDirPath[PATH_MAX];
+
+bool GetPinnedInstallDirPath(char* aPath, size_t aLength) {
+  if (gInstallDirFd < 0 || strlen(gPinnedInstallDirPath) >= aLength) {
+    return false;
+  }
+  strlcpy(aPath, gPinnedInstallDirPath, aLength);
+  return true;
+}
+
+int ValidateAndPinInstallDir(const char* aInstallDir) {
+  MacAutoreleasePool pool;
+
+  // Resolve the path once and keep the directory open.
+  char resolved[PATH_MAX];
+  if (!realpath(aInstallDir, resolved)) {
+    LogToOS(NS_T("Updater helper: can't resolve the install directory."));
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  NSString* resolvedPath = [NSString stringWithUTF8String:resolved];
+  if (![resolvedPath hasSuffix:@".app"]) {
+    LogToOS(NS_T("Updater helper: the install directory isn't an app bundle."));
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  int fd = open(resolved, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) {
+    LogToOS(NS_T("Updater helper: can't open the install directory."));
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  if (!IsOnVolumeHonoringOwnership(fd)) {
+    LogToOS(NS_T("Updater helper: the install directory isn't on a volume "
+                 "that root mounted with ownership enabled."));
+    close(fd);
+    return ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR;
+  }
+  // Make sure the path still leads to the directory that was opened.
+  struct stat fdStat;
+  struct stat pathStat;
+  if (fstat(fd, &fdStat) != 0 || lstat(resolved, &pathStat) != 0 ||
+      fdStat.st_dev != pathStat.st_dev || fdStat.st_ino != pathStat.st_ino) {
+    LogToOS(NS_T("Updater helper: the install directory changed while it was "
+                 "opened."));
+    close(fd);
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  gInstallDirFd = fd;
+  strlcpy(gPinnedInstallDirPath, resolved, sizeof(gPinnedInstallDirPath));
+  return OK;
 }
 
 @interface UpdaterHelperListenerDelegate

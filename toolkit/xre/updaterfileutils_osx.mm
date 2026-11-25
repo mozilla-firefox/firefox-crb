@@ -9,6 +9,7 @@
 #include <libproc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -74,4 +75,10 @@ bool IsUpdaterHelperBusy() {
   return pid > 0 && proc_pidpath(pid, path, sizeof(path)) > 0 &&
          strcmp(path, "/Library/PrivilegedHelperTools/org.mozilla.updater") ==
              0;
+}
+
+bool IsOnVolumeHonoringOwnership(int aFd) {
+  struct statfs volume;
+  return fstatfs(aFd, &volume) == 0 && volume.f_owner == 0 &&
+         !(volume.f_flags & MNT_IGNORE_OWNERSHIP);
 }
