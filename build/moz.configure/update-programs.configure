@@ -153,6 +153,20 @@ set_config(
     updater_smprivilegedexecutable_requirement,
 )
 
+
+# Code-signing requirement string for UpdateSettings.framework. The elevated
+# updater checks the framework it reads the accepted MAR channels from against
+# it. The framework's bundle id is the same for every edition.
+@depends("--enable-mac-elevated-updates-with-generic-certs", when=target_is_osx)
+def updater_smupdatesettings_requirement(relaxed):
+    return requirements_string("org.mozilla.updatesettings", relaxed)
+
+
+set_config(
+    "MOZ_UPDATER_SMUPDATESETTINGS_REQUIREMENT",
+    updater_smupdatesettings_requirement,
+)
+
 # MAR channel ID configuration
 # ==============================================================
 

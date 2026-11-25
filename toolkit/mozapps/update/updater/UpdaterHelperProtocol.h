@@ -42,7 +42,6 @@ typedef NS_ENUM(NSInteger, UpdaterHelperApplyResult) {
 // with UpdaterHelperApplyResultBusy right away. After the request that it
 // took, it waits for the client to disconnect and removes itself.
 - (void)applyUpdate:(NSArray<NSString*>*)arguments
-       marChannelID:(NSString*)marChannelID
               reply:(void (^)(NSInteger aResult))aReply;
 
 // Lets a client reach a helper that is still installed from an earlier update
