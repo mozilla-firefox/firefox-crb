@@ -213,7 +213,8 @@ class SourcesTree extends Component {
       }
       return directory;
     }
-    if (item.type == sourceTree.itemTypes.THREAD) {
+    if (item.type == sourceTree.itemTypes.THREAD
+      || item.type == sourceTree.itemTypes.SOURCE && item.children !== null) {
       return item.children;
     } else if (
       item.type == sourceTree.itemTypes.GROUP ||
@@ -235,6 +236,7 @@ class SourcesTree extends Component {
       if (
         directory.type == sourceTree.itemTypes.GROUP ||
         directory.type == sourceTree.itemTypes.THREAD ||
+        directory.type == sourceTree.itemTypes.SOURCE ||
         rootItems.includes(directory)
       ) {
         return directory;
