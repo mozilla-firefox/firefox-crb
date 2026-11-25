@@ -167,6 +167,20 @@ interface TabDataCoordinator {
     suspend fun closeTabGroup(tabGroupId: String)
 
     /**
+     * Marks the groups with [tabGroupIds] as open.
+     *
+     * @param tabGroupIds The IDs of the groups to open.
+     */
+    suspend fun openTabGroups(tabGroupIds: List<String>)
+
+    /**
+     * Marks the groups with [tabGroupIds] as closed, leaving their tabs open.
+     *
+     * @param tabGroupIds The IDs of the groups to close.
+     */
+    suspend fun closeTabGroups(tabGroupIds: List<String>)
+
+    /**
      * Closes [tabId] if the group with [tabGroupId] has other tabs. A group is never left without tabs, so closing the
      * last tab of a group is a no-op; delete the group instead.
      *
@@ -350,6 +364,14 @@ class DefaultTabDataCoordinator(
 
     override suspend fun closeTabGroup(tabGroupId: String) {
         tabGroupRepository.closeTabGroup(tabGroupId = tabGroupId)
+    }
+
+    override suspend fun openTabGroups(tabGroupIds: List<String>) {
+        tabGroupIds.forEach { tabGroupRepository.openTabGroup(tabGroupId = it) }
+    }
+
+    override suspend fun closeTabGroups(tabGroupIds: List<String>) {
+        tabGroupIds.forEach { tabGroupRepository.closeTabGroup(tabGroupId = it) }
     }
 
     override suspend fun removeTabFromTabGroup(tabGroupId: String, tabId: String) {
