@@ -66,6 +66,23 @@ void LlamaBackend::MtmdContextDeleter::operator()(mtmd_context* aCtx) const {
   }
 }
 
+void LlamaBackend::MtmdInputChunksDeleter::operator()(
+    mtmd_input_chunks* aChunks) const {
+  if (auto* lib = LlamaRuntimeLinker::Get()) {
+    if (lib->mtmd_input_chunks_free) {
+      lib->mtmd_input_chunks_free(aChunks);
+    }
+  }
+}
+
+void LlamaBackend::MtmdBitmapDeleter::operator()(mtmd_bitmap* aBitmap) const {
+  if (auto* lib = LlamaRuntimeLinker::Get()) {
+    if (lib->mtmd_bitmap_free) {
+      lib->mtmd_bitmap_free(aBitmap);
+    }
+  }
+}
+
 #define LOGD(fmt, ...) \
   MOZ_LOG_FMT(gLlamaBackendLog, LogLevel::Debug, fmt, ##__VA_ARGS__)
 
@@ -341,6 +358,9 @@ ResultStatus LlamaBackend::Reinitialize(const LlamaModelOptions& aOptions,
       LOGE("{}", msg);
       return mozilla::Err(Error{std::move(msg)});
     }
+
+    LOGV("{}: Initialized the mmproj for {}", __PRETTY_FUNCTION__,
+         mModelGeneralName);
   }
 
   LOGV("{}: Successfully Initialized {}", __PRETTY_FUNCTION__,
@@ -605,10 +625,37 @@ LlamaBackend::SamplerResult LlamaBackend::InitializeSampler(
   return SamplerResult(std::move(sampler));
 }
 
+LlamaBackend::BitmapsResult LlamaBackend::BuildBitmaps(
+    Span<const LlamaImageData> aImages) {
+  nsTArray<MtmdBitmapUPtr> bitmaps;
+  if (!bitmaps.SetCapacity(aImages.Length(), mozilla::fallible)) {
+    return mozilla::Err(
+        Error{nsFmtCString("{}: out of memory reserving {} bitmaps",
+                           __PRETTY_FUNCTION__, aImages.Length())});
+  }
+
+  for (size_t i = 0; i < aImages.Length(); ++i) {
+    const LlamaImageData& image = aImages[i];
+
+    MOZ_ASSERT(image.mRgb.Length() == size_t(image.mWidth) * image.mHeight * 3);
+
+    MtmdBitmapUPtr bitmap(mLib->mtmd_bitmap_init(image.mWidth, image.mHeight,
+                                                 image.mRgb.Elements()));
+    if (!bitmap) {
+      return mozilla::Err(
+          Error{nsFmtCString("{}: failed to create a bitmap for image {}",
+                             __PRETTY_FUNCTION__, i)});
+    }
+    bitmaps.AppendElement(std::move(bitmap));
+  }
+
+  return BitmapsResult{std::move(bitmaps)};
+}
+
 ResultStatus LlamaBackend::Generate(
     const LlamaChatOptions& aOptions,
     std::function<ResultStatus(const LlamaChatResponse&)> aTokenCallback,
-    std::function<bool()> aCancelCallback) {
+    std::function<bool()> aCancelCallback, Span<const LlamaImageData> aImages) {
   LOGV("Entered {}", __PRETTY_FUNCTION__, mModelGeneralName);
 
   MOZ_ASSERT(mLib, "No shared library pointer in Generate, fix this");
@@ -638,27 +685,87 @@ ResultStatus LlamaBackend::Generate(
 
   auto sampler = samplerResult.unwrap();
 
-  auto tokenize = [&](llama_token* aTokens, int32_t aMaxTokens) {
-    return mLib->llama_tokenize(
-        vocab, aOptions.mPrompt.get(), aOptions.mPrompt.Length(), aTokens,
-        aMaxTokens, aOptions.mTokenizationOptions.mAddBosAndEos,
-        aOptions.mTokenizationOptions.mParseSpecilControlTokens);
-  };
-  // An empty buffer returns minus the token count; INT32_MIN is an overflow.
-  int32_t nPromptTokens = tokenize(nullptr, 0);
-  nsTArray<llama_token> promptTokens;
-  if (nPromptTokens < 0 && nPromptTokens != INT32_MIN) {
-    promptTokens.SetLength(-nPromptTokens);
-    nPromptTokens = tokenize(promptTokens.Elements(), promptTokens.Length());
-  }
+  const bool useMedia = !aImages.IsEmpty();
 
-  if (nPromptTokens < 0) {
+  if (useMedia && !mMtmdCtx) {
     auto msg = nsFmtCString(
-        "{}: failed to tokenize the prompt{} {}", __PRETTY_FUNCTION__,
-        nPromptTokens == INT32_MIN ? ", the token count overflows" : "",
-        mModelGeneralName);
+        "{}: images were supplied but this backend has no mmproj {}",
+        __PRETTY_FUNCTION__, mModelGeneralName);
     LOGE("{}", msg);
     return mozilla::Err(Error{std::move(msg)});
+  }
+
+  MtmdInputChunksUPtr chunks;
+  nsTArray<MtmdBitmapUPtr> bitmaps;
+  nsTArray<llama_token> promptTokens;
+  int32_t nPromptTokens = 0;
+
+  if (useMedia) {
+    auto bitmapsResult = BuildBitmaps(aImages);
+    if (bitmapsResult.isErr()) {
+      LOGE("{}", bitmapsResult.inspectErr().mMessage);
+      return mozilla::Err(bitmapsResult.inspectErr());
+    }
+    bitmaps = bitmapsResult.unwrap();
+
+    nsTArray<const mtmd_bitmap*> bitmapPtrs;
+    for (const auto& bitmap : bitmaps) {
+      bitmapPtrs.AppendElement(bitmap.get());
+    }
+
+    chunks.reset(mLib->mtmd_input_chunks_init());
+    if (!chunks) {
+      auto msg = nsFmtCString("{}: failed to allocate the mtmd chunk list {}",
+                              __PRETTY_FUNCTION__, mModelGeneralName);
+      LOGE("{}", msg);
+      return mozilla::Err(Error{std::move(msg)});
+    }
+
+    mtmd_input_text text{};
+    text.text = aOptions.mPrompt.get();
+    text.add_special = aOptions.mTokenizationOptions.mAddBosAndEos;
+    text.parse_special =
+        aOptions.mTokenizationOptions.mParseSpecilControlTokens;
+
+    const int32_t rc =
+        mLib->mtmd_tokenize(mMtmdCtx.get(), chunks.get(), &text,
+                            bitmapPtrs.Elements(), bitmapPtrs.Length());
+    if (rc != 0) {
+      auto msg = nsFmtCString(
+          "{}: mtmd_tokenize failed ({}) for {} image(s); the prompt must "
+          "contain the media marker '{}' once per image {}",
+          __PRETTY_FUNCTION__, rc, bitmapPtrs.Length(),
+          mLib->mtmd_default_marker(), mModelGeneralName);
+      LOGE("{}", msg);
+      return mozilla::Err(Error{std::move(msg)});
+    }
+
+    // Every token takes a KV cell, even where M-RoPE gives an image fewer
+    // positions than tokens.
+    nPromptTokens = mozilla::AssertedCast<int32_t>(
+        mLib->mtmd_helper_get_n_tokens(chunks.get()));
+  } else {
+    auto tokenize = [&](llama_token* aTokens, int32_t aMaxTokens) {
+      return mLib->llama_tokenize(
+          vocab, aOptions.mPrompt.get(), aOptions.mPrompt.Length(), aTokens,
+          aMaxTokens, aOptions.mTokenizationOptions.mAddBosAndEos,
+          aOptions.mTokenizationOptions.mParseSpecilControlTokens);
+    };
+    // An empty buffer returns minus the token count; INT32_MIN is an overflow.
+    nPromptTokens = tokenize(nullptr, 0);
+    if (nPromptTokens < 0 && nPromptTokens != INT32_MIN) {
+      promptTokens.SetLength(-nPromptTokens);
+      nPromptTokens = tokenize(promptTokens.Elements(), promptTokens.Length());
+    }
+
+    if (nPromptTokens < 0) {
+      auto msg = nsFmtCString(
+          "{}: failed to tokenize the prompt{} {}", __PRETTY_FUNCTION__,
+          nPromptTokens == INT32_MIN ? ", the token count overflows" : "",
+          mModelGeneralName);
+      LOGE("{}", msg);
+      return mozilla::Err(Error{std::move(msg)});
+    }
   }
 
   const int32_t seqLen =
@@ -671,30 +778,61 @@ ResultStatus LlamaBackend::Generate(
   }
   LlamaContextUPtr ctx = contextResult.unwrap();
 
-  // Keep the last batch for the generation loop, which samples its logits.
   const size_t nBatch = mLib->llama_n_batch(ctx.get());
-  size_t fed = 0;
-  while (promptTokens.Length() - fed > nBatch) {
+  llama_batch batch{};
+  // The media prefill leaves logits in the context, so the loop below must not
+  // decode before its first sample.
+  bool logitsReady = false;
+
+  if (useMedia) {
     if (aCancelCallback()) {
       LOGD("{} Generation successfully cancelled. {}", __PRETTY_FUNCTION__,
            mModelGeneralName);
       return mozilla::Ok();
     }
-    llama_batch chunk =
-        mLib->llama_batch_get_one(promptTokens.Elements() + fed, nBatch);
-    if (mLib->llama_decode(ctx.get(), chunk) != 0) {
-      auto msg = nsFmtCString("{}: failed to decode the prompt {}",
-                              __PRETTY_FUNCTION__, mModelGeneralName);
+
+    LOGD("{} Prefilling {} mtmd chunk(s) for {}", __PRETTY_FUNCTION__,
+         mLib->mtmd_input_chunks_size(chunks.get()), mModelGeneralName);
+
+    // Runs to completion: a large image cannot be interrupted midway.
+    llama_pos newNPast = 0;
+    const int32_t rc = mLib->mtmd_helper_eval_chunks(
+        mMtmdCtx.get(), ctx.get(), chunks.get(), /* n_past */ 0,
+        /* seq_id */ 0, nBatch, /* logits_last */ true, &newNPast);
+    if (rc != 0) {
+      auto msg = nsFmtCString("{}: failed to prefill the mtmd chunks ({}) {}",
+                              __PRETTY_FUNCTION__, rc, mModelGeneralName);
       LOGE("{}", msg);
       return mozilla::Err(Error{std::move(msg)});
     }
-    fed += nBatch;
+
+    logitsReady = true;
+  } else {
+    // Keep the last batch for the generation loop, which samples its logits.
+    size_t fed = 0;
+    while (promptTokens.Length() - fed > nBatch) {
+      if (aCancelCallback()) {
+        LOGD("{} Generation successfully cancelled. {}", __PRETTY_FUNCTION__,
+             mModelGeneralName);
+        return mozilla::Ok();
+      }
+      llama_batch chunk =
+          mLib->llama_batch_get_one(promptTokens.Elements() + fed, nBatch);
+      if (mLib->llama_decode(ctx.get(), chunk) != 0) {
+        auto msg = nsFmtCString("{}: failed to decode the prompt {}",
+                                __PRETTY_FUNCTION__, mModelGeneralName);
+        LOGE("{}", msg);
+        return mozilla::Err(Error{std::move(msg)});
+      }
+      fed += nBatch;
+    }
+
+    LOGD("{} Creating llama.cpp batch from prompt tokens for {}",
+         __PRETTY_FUNCTION__, mModelGeneralName);
+    batch = mLib->llama_batch_get_one(promptTokens.Elements() + fed,
+                                      promptTokens.Length() - fed);
   }
 
-  LOGD("{} Creating llama.cpp batch from prompt tokens for {}",
-       __PRETTY_FUNCTION__, mModelGeneralName);
-  llama_batch batch = mLib->llama_batch_get_one(promptTokens.Elements() + fed,
-                                                promptTokens.Length() - fed);
   // To keep track of the id of the currently generated token
   llama_token token;
 
@@ -720,14 +858,24 @@ ResultStatus LlamaBackend::Generate(
     };
   }
 
-  auto onToken = [aTokenCallback](nsCString piece, nsTArray<int32_t> tokens,
-                                  LlamaChatPhase phase, bool completed) {
+  auto onTokenCounted = [aTokenCallback](nsCString piece,
+                                         nsTArray<int32_t> tokens,
+                                         uint32_t tokenCount,
+                                         LlamaChatPhase phase, bool completed) {
     LlamaChatResponse result;
     result.mPiece = std::move(piece);
     result.mTokens = std::move(tokens);
+    result.mTokenCount = tokenCount;
     result.mPhase = phase;
     result.mIsPhaseCompleted = completed;
     return aTokenCallback(result);
+  };
+
+  auto onToken = [&onTokenCounted](nsCString piece, nsTArray<int32_t> tokens,
+                                   LlamaChatPhase phase, bool completed) {
+    const uint32_t tokenCount = tokens.Length();
+    return onTokenCounted(std::move(piece), std::move(tokens), tokenCount,
+                          phase, completed);
   };
   while (true) {
     LOGV("{}: New iteration started {}", __PRETTY_FUNCTION__,
@@ -738,14 +886,18 @@ ResultStatus LlamaBackend::Generate(
       return mozilla::Ok();
     }
 
-    LOGV("{}: Decoding to generate next token probabilities {}",
-         __PRETTY_FUNCTION__, mModelGeneralName);
+    if (logitsReady) {
+      logitsReady = false;
+    } else {
+      LOGV("{}: Decoding to generate next token probabilities {}",
+           __PRETTY_FUNCTION__, mModelGeneralName);
 
-    if (mLib->llama_decode(ctx.get(), batch) != 0) {
-      auto msg = nsFmtCString("{}: failed to decode {}", __PRETTY_FUNCTION__,
-                              mModelGeneralName);
-      LOGE("{}", msg);
-      return mozilla::Err(Error{std::move(msg)});
+      if (mLib->llama_decode(ctx.get(), batch) != 0) {
+        auto msg = nsFmtCString("{}: failed to decode {}", __PRETTY_FUNCTION__,
+                                mModelGeneralName);
+        LOGE("{}", msg);
+        return mozilla::Err(Error{std::move(msg)});
+      }
     }
 
     LOGV("{}: Sampling the generated probabilities to generate next token {}",
@@ -762,12 +914,43 @@ ResultStatus LlamaBackend::Generate(
       LOGD("{}: Prompt processing successfully completed {}",
            __PRETTY_FUNCTION__, mModelGeneralName);
 
-      // move the promptTokens as we don't need it anymore
-      auto onTokenResult = onToken(aOptions.mPrompt, std::move(promptTokens),
-                                   LlamaChatPhase::Prompt, true);
-      if (onTokenResult.isErr()) {
-        LOGE("{}", onTokenResult.inspectErr().mMessage);
-        return onTokenResult;
+      if (useMedia) {
+        const size_t numChunks = mLib->mtmd_input_chunks_size(chunks.get());
+        for (size_t i = 0; i < numChunks; ++i) {
+          const mtmd_input_chunk* chunk =
+              mLib->mtmd_input_chunks_get(chunks.get(), i);
+          const uint32_t tokenCount =
+              mLib->mtmd_input_chunk_get_n_tokens(chunk);
+
+          nsTArray<int32_t> chunkTokens;
+          if (mLib->mtmd_input_chunk_get_type(chunk) ==
+              MTMD_INPUT_CHUNK_TYPE_TEXT) {
+            size_t numTextTokens = 0;
+            const llama_token* textTokens =
+                mLib->mtmd_input_chunk_get_tokens_text(chunk, &numTextTokens);
+            if (textTokens) {
+              chunkTokens.AppendElements(textTokens, numTextTokens);
+            }
+          }
+
+          const bool isLastChunk = i + 1 == numChunks;
+          auto onTokenResult =
+              onTokenCounted(isLastChunk ? aOptions.mPrompt : nsCString(),
+                             std::move(chunkTokens), tokenCount,
+                             LlamaChatPhase::Prompt, isLastChunk);
+          if (onTokenResult.isErr()) {
+            LOGE("{}", onTokenResult.inspectErr().mMessage);
+            return onTokenResult;
+          }
+        }
+      } else {
+        // move the promptTokens as we don't need it anymore
+        auto onTokenResult = onToken(aOptions.mPrompt, std::move(promptTokens),
+                                     LlamaChatPhase::Prompt, true);
+        if (onTokenResult.isErr()) {
+          LOGE("{}", onTokenResult.inspectErr().mMessage);
+          return onTokenResult;
+        }
       }
     }
 
