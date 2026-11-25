@@ -39,6 +39,8 @@ class RemoteProcessMonitor:
         self.log = log
         self.remoteLogFile = remoteLogFile
         self.selectedProcess = -1
+        self.process_name = None
+        self.stopped = threading.Event()
 
     @classmethod
     def pickUnusedProcess(cls):
@@ -54,7 +56,11 @@ class RemoteProcessMonitor:
         cls.processStatus[processId] = False
 
     def kill(self):
-        self.device.pkill(self.process_name, sig=9, attempts=1)
+        """Kill the process and end wait(): the slot may already belong to the
+        next test."""
+        self.stopped.set()
+        if self.process_name:
+            self.device.pkill(self.process_name, sig=9, attempts=1)
 
     def launch_service(self, extra_args, env, selectedProcess, test_name=None):
         with self._launchLock:
@@ -88,7 +94,7 @@ class RemoteProcessMonitor:
                 "%s | %s | Killing left-over process %s"
                 % (test_name, self.pid, self.process_name)
             )
-            self.kill()
+            self.device.pkill(self.process_name, sig=9, attempts=1)
             time.sleep(1)
             retries -= 1
 
@@ -122,8 +128,11 @@ class RemoteProcessMonitor:
                 % (test_name, self.remoteLogFile)
             )
 
-        while self.device.process_exist(self.process_name):
-            time.sleep(interval)
+        while not self.stopped.is_set() and self.device.process_exist(
+            self.process_name
+        ):
+            if self.stopped.wait(interval):
+                break
             timer += interval
             interval *= 1.5
             # We're using exponential back-off. To avoid unnecessarily waiting
@@ -137,7 +146,7 @@ class RemoteProcessMonitor:
                 )
                 self.kill()
                 break
-        return status
+        return status and not self.stopped.is_set()
 
     @property
     def pid(self):
@@ -159,6 +168,7 @@ class RemoteXPCShellTestThread(xpcshell.XPCShellTestThread):
         xpcshell.XPCShellTestThread.__init__(self, *args, **kwargs)
 
         self.shellReturnCode = None
+        self.rpm = None
         # embed the mobile params from the harness into the TestThread
         mobileArgs = kwargs.get("mobileArgs")
         for key in mobileArgs:
@@ -305,6 +315,7 @@ class RemoteXPCShellTestThread(xpcshell.XPCShellTestThread):
             self.log,
             self.remoteLogFile,
         )
+        self.rpm = rpm
 
         startTime = datetime.datetime.now()
 
@@ -367,7 +378,8 @@ class RemoteXPCShellTestThread(xpcshell.XPCShellTestThread):
         return None
 
     def kill(self, proc):
-        return self.device.pkill("xpcshell")
+        if self.rpm:
+            self.rpm.kill()
 
     def getReturnCode(self, proc):
         if self.shellReturnCode is not None:
