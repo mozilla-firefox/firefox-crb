@@ -726,3 +726,38 @@ add_task(async function test_ml_smoke_test_llama_golden_text() {
     }
   });
 });
+
+/**
+ * A pipeline that names an mmproj must actually fetch it. If mmprojFile were
+ * ignored, naming a file that does not exist would still produce a working
+ * text-only engine, and a vision pipeline would silently run blind.
+ */
+add_task(async function test_llama_mmproj_file_is_fetched() {
+  const { cleanup } = await setup();
+
+  let initFailed = false;
+  try {
+    const engine = await createEngine({
+      ...LLAMA_SMOKE_OPTIONS,
+      engineId: "ml-smoke-test-llama-mmproj-missing",
+      mmprojFile: "does-not-exist.gguf",
+    });
+    for await (const chunk of engine.runWithGenerator({
+      prompt: "Once upon a time",
+      nPredict: 1,
+    })) {
+      info(chunk.text);
+    }
+  } catch (error) {
+    initFailed = true;
+    info(`failed as expected: ${error.message}`);
+  }
+
+  Assert.ok(
+    initFailed,
+    "Naming a missing mmproj fails instead of falling back to text-only."
+  );
+
+  await EngineProcess.destroyMLEngine();
+  await cleanup();
+});
