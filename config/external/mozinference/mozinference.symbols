@@ -42,7 +42,11 @@ llama_batch_get_one
 llama_decode
 llama_vocab_is_eog
 llama_token_to_piece
+mtmd_context_params_default
+mtmd_free
 mtmd_helper_log_set
+mtmd_init_from_file_handle
+mtmd_support_vision
 #ifdef MOZ_WEBSPEECH
 parakeet_capi_abi_version
 parakeet_capi_free
