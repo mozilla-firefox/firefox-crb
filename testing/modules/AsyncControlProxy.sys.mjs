@@ -26,7 +26,7 @@ const stubTargetsByMethodName = new Map();
  * Selects a call by its receiver and a shallow copy of its arguments.
  *
  * @template {unknown[]} MethodArgs
- * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean} CallPredicate
+ * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean | PromiseLike<boolean>} CallPredicate
  */
 
 /**
@@ -88,7 +88,65 @@ const stubTargetsByMethodName = new Map();
  */
 
 /**
- * Controls whether a single async method call runs and what its caller receives.
+ * Controls one call to a promise-returning method so tests can exercise behavior
+ * that depends on when the method runs and when its caller receives the outcome.
+ *
+ * Invariants
+ *
+ * 1. One Interception
+ *
+ *      Each controller must capture at most one call. While waiting, the
+ *      controller must capture the first call confirmed to match. Once a
+ *      call is captured, other calls with pending predicates must proceed.
+ *
+ * 2. Exclusive Ownership
+ *
+ *      Controllers waiting for calls to methods of the same name must have
+ *      distinct targets. Neither target may be in the other target's
+ *      prototype chain.
+ *
+ * 3. Capture Before Execution
+ *
+ *      The original method must still be waiting to run at capture.
+ *      waitForInterception() must report capture without starting the
+ *      original method. The caller's promise must stay pending until the
+ *      controller releases or rejects the call. A successful call to
+ *      rejectResult() before capture must reject the caller's promise
+ *      when the matching call is captured.
+ *
+ * 4. One Branch
+ *
+ *      The first valid choice to run or reject must take effect synchronously.
+ *      Once the controller commits to a branch, operations on the other
+ *      branch must throw. A second rejectResult() must throw and preserve
+ *      the first rejection reason.
+ *
+ *      The test may invoke waitForResult() or rejectResult() before capture
+ *      to commit the controller to a branch. start() and releaseResult()
+ *      must throw before capture.
+ *
+ * 5. One Execution
+ *
+ *      On the run branch, the original method must run at most once with
+ *      the receiver and arguments of the intercepted call. On the reject
+ *      branch, the original method must never run.
+ *
+ * 6. Independent Delivery
+ *
+ *      On the run branch, the test must be able to observe the original
+ *      method's outcome while the caller's promise is pending.
+ *      releaseResult() must return the caller's promise and deliver the
+ *      original method's outcome. rejectResult() must reject the caller's
+ *      promise with the supplied or default reason.
+ *
+ * 7. Cleanup Preserves the Decision
+ *
+ *      If the controller is still waiting for a match, restore() must abort
+ *      the test's interception and result waits with AbortError and let
+ *      calls waiting on predicates proceed. After capture, restore() must
+ *      release the original outcome, starting the method if needed, or
+ *      preserve an injected rejection. restore() must preserve a predicate
+ *      failure already reported by the controller and be safe to repeat.
  *
  * @template {string} MethodName
  * @template {unknown[]} MethodArgs
@@ -143,6 +201,13 @@ class AsyncCallController {
    * @type {{ type: "run" } | { type: "reject", reason: unknown } | null}
    */
   #branch = null;
+
+  /**
+   * Lets calls waiting on async predicates proceed when the stub is removed.
+   *
+   * @type {Set<() => void>}
+   */
+  #predicateWaitCancelCallbacks = new Set();
 
   /**
    * The call captured by this controller, if any.
@@ -414,6 +479,12 @@ class AsyncCallController {
     ) {
       stubTargetsByMethodName.delete(this.#methodName);
     }
+
+    for (const cancelPredicateWait of this.#predicateWaitCancelCallbacks) {
+      cancelPredicateWait();
+    }
+
+    this.#predicateWaitCancelCallbacks.clear();
   }
 
   /**
@@ -442,34 +513,129 @@ class AsyncCallController {
       return this.#handlePredicateFailure(reason, callOriginalMethod);
     }
 
+    if (
+      predicateResult !== null &&
+      (typeof predicateResult === "object" ||
+        typeof predicateResult === "function")
+    ) {
+      return this.#interceptWithAsyncPredicate(
+        predicateResult,
+        callOriginalMethod
+      );
+    }
+
+    // We need to handle primitive results immediately so that the next call
+    // sees whether the controller is still waiting for a match.
     return this.#applyMatchDecision(predicateResult, callOriginalMethod);
+  }
+
+  /**
+   * Returns the caller's promise while the predicate is pending.
+   *
+   * @param {PromiseLike<boolean>} pendingDecision - The predicate's pending decision.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {Promise<MethodResult>}
+   */
+  #interceptWithAsyncPredicate(pendingDecision, callOriginalMethod) {
+    // We need to keep this promise if the predicate matches so that releaseResult()
+    // can return the same promise the caller received.
+    const callerResultResolvers = Promise.withResolvers();
+
+    this.#applyAsyncPredicateDecision(
+      pendingDecision,
+      callOriginalMethod,
+      callerResultResolvers
+    ).catch(callerResultResolvers.reject);
+
+    return callerResultResolvers.promise;
+  }
+
+  /**
+   * Waits for the predicate or for stub removal, then handles the call.
+   *
+   * @param {PromiseLike<boolean>} pendingDecision - The predicate's pending decision.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @param {PromiseWithResolvers<MethodResult>} callerResultResolvers
+   *   The caller's promise and the functions that settle it.
+   * @returns {Promise<void>}
+   */
+  async #applyAsyncPredicateDecision(
+    pendingDecision,
+    callOriginalMethod,
+    callerResultResolvers
+  ) {
+    const stubRemovedSignal = Promise.withResolvers();
+    const cancelPredicateWait = () => stubRemovedSignal.resolve(false);
+
+    if (this.#stub) {
+      this.#predicateWaitCancelCallbacks.add(cancelPredicateWait);
+    } else {
+      cancelPredicateWait();
+    }
+
+    let matchDecision;
+
+    try {
+      // If another call matches, or if the test restores the control, then we
+      // need to let this call proceed even though its predicate may still be pending.
+      // Even if it were to be a matching predicate, it is no longer relevant.
+      matchDecision = await Promise.race([
+        pendingDecision,
+        stubRemovedSignal.promise,
+      ]);
+    } catch (reason) {
+      callerResultResolvers.resolve(
+        this.#handlePredicateFailure(reason, callOriginalMethod)
+      );
+      return;
+    } finally {
+      this.#predicateWaitCancelCallbacks.delete(cancelPredicateWait);
+    }
+
+    this.#applyMatchDecision(
+      matchDecision,
+      callOriginalMethod,
+      callerResultResolvers
+    );
   }
 
   /**
    * Intercepts a matching call or lets it proceed.
    *
-   * @param {unknown} matchDecision - The value returned by the predicate.
+   * @param {unknown} matchDecision - The value returned or resolved by the predicate.
    * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @param {PromiseWithResolvers<MethodResult>} [callerResultResolvers]
+   *   The caller's promise if the predicate needed time to settle.
    * @returns {PromiseLike<MethodResult>}
    */
-  #applyMatchDecision(matchDecision, callOriginalMethod) {
+  #applyMatchDecision(
+    matchDecision,
+    callOriginalMethod,
+    callerResultResolvers
+  ) {
     // Another call may have matched while we were evaluating this predicate,
     // so we need to check that the stub is still installed.
     if (!this.#stub || matchDecision === false) {
-      return callOriginalMethod();
+      const originalResult = callOriginalMethod();
+
+      return this.#completeUninterceptedCall(
+        originalResult,
+        callerResultResolvers
+      );
     }
 
     if (matchDecision !== true) {
       const failure = new TypeError(
         `The call predicate for ${this.#methodName} must return a boolean`
       );
+      const result = this.#handlePredicateFailure(failure, callOriginalMethod);
 
-      return this.#handlePredicateFailure(failure, callOriginalMethod);
+      return this.#completeUninterceptedCall(result, callerResultResolvers);
     }
 
     this.#removeStub();
     this.#interceptedCall = {
-      callerResultResolvers: Promise.withResolvers(),
+      callerResultResolvers: callerResultResolvers ?? Promise.withResolvers(),
       runOriginalMethod: () => this.#invokeOriginalMethod(callOriginalMethod),
       methodResultPromise: null,
     };
@@ -480,6 +646,25 @@ class AsyncCallController {
     }
 
     return this.#interceptedCall.callerResultResolvers.promise;
+  }
+
+  /**
+   * Returns the result of a call that was not intercepted, using the promise
+   * the caller received if it had to wait for a predicate.
+   *
+   * @param {PromiseLike<MethodResult>} result - The outcome of the call.
+   * @param {PromiseWithResolvers<MethodResult> | undefined} callerResultResolvers
+   *   The caller's promise and the functions that settle it, if already created.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #completeUninterceptedCall(result, callerResultResolvers) {
+    if (!callerResultResolvers) {
+      return result;
+    }
+
+    callerResultResolvers.resolve(result);
+
+    return callerResultResolvers.promise;
   }
 
   /**
