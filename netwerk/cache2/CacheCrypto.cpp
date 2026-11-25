@@ -14,6 +14,7 @@
 #include "mozilla/StaticMutex.h"
 #include "mozilla/StaticPrefs_browser.h"
 #include "mozilla/StaticPtr.h"
+#include "mozilla/security/lockstore/ProfileKek.h"
 #include "nsTArray.h"
 #include "nsThreadUtils.h"
 #include "pk11pub.h"
@@ -25,10 +26,7 @@ namespace net {
 
 using mozilla::security::lockstore::LockstoreService;
 
-// Name of the disk cache's data encryption key in the profile keystore, and
-// the identifier of the "local" KEK wrapping it.
 static constexpr auto kDekName = "httpcache"_ns;
-static constexpr auto kKekIdentifier = "profile"_ns;
 
 // Written on the cache I/O thread when the key load finishes, and on the main
 // thread at lifecycle boundaries (InitForTesting/Shutdown), so every access
@@ -201,33 +199,39 @@ already_AddRefed<CacheCrypto> CacheCrypto::LoadFromKeystore(
     LockstoreService* aLockstore) {
   MOZ_ASSERT(!NS_IsMainThread());
 
-  // A non-empty identifier makes this a deterministic get-or-create, so the
-  // kekRef does not have to be persisted anywhere.
-  auto kekRef = aLockstore->DoCreateKek("local"_ns, kKekIdentifier, ""_ns, 0);
-  if (kekRef.isErr()) {
-    LOG(
-        ("CacheCrypto::LoadFromKeystore() - could not obtain the KEK "
-         "[rv=%" PRIx32 "]",
-         static_cast<uint32_t>(kekRef.unwrapErr())));
-    return nullptr;
-  }
-
-  auto dek = aLockstore->DoGetDek(kDekName, kekRef.inspect());
+  Result dek = aLockstore->DoGetDekAutomatic(kDekName);
   if (dek.isErr()) {
-    // No DEK yet, or one we cannot read -- a DEK wrapped under a KEK this code
-    // no longer asks for is out of reach for good, since the kek_ref is what
-    // the keystore looks it up by. Replace it rather than leave the pref on
-    // with no cipher, which fails every new entry closed; entries written
-    // under the old key reinitialize themselves once their metadata fails to
-    // decrypt. The delete is needed because a DEK cannot be created over an
-    // existing one.
+    Result active = security::lockstore::GetActiveProfileKek(*aLockstore);
+    if (active.isErr()) {
+      LOG(
+          ("CacheCrypto::LoadFromKeystore() - could not obtain the KEK "
+           "[rv=%" PRIx32 "]",
+           static_cast<uint32_t>(active.unwrapErr())));
+      return nullptr;
+    }
+
+    // A locked KEK cannot wrap a new DEK. Other consumers keep their DEKs
+    // under it too, so it is not up to the cache to replace it with a LocalKey.
+    bool unlocked = false;
+    nsresult rv = aLockstore->IsKekUnlocked(active.inspect(), &unlocked);
+    if (NS_FAILED(rv) || !unlocked) {
+      LOG(
+          ("CacheCrypto::LoadFromKeystore() - the KEK is locked "
+           "[rv=%" PRIx32 "]",
+           static_cast<uint32_t>(rv)));
+      return nullptr;
+    }
+
+    // Without a cipher every new entry fails closed, so a fresh key is better;
+    // entries under the old one reinitialize when their metadata fails to
+    // decrypt. DoCreateDek does not overwrite, hence the delete.
     (void)aLockstore->DoDeleteDek(kDekName);
 
     // Extractable: the cache does its own AES-GCM per block, binding the block
     // number as AAD, which the keystore's blob-oriented encrypt() cannot
     // express.
-    nsresult rv = aLockstore->DoCreateDek(kDekName, kekRef.inspect(),
-                                          /* aExtractable */ true, kKeyLength);
+    rv = aLockstore->DoCreateDek(kDekName, active.inspect(),
+                                 /* aExtractable */ true, kKeyLength);
     if (NS_FAILED(rv)) {
       LOG(
           ("CacheCrypto::LoadFromKeystore() - could not create the DEK "
@@ -236,7 +240,7 @@ already_AddRefed<CacheCrypto> CacheCrypto::LoadFromKeystore(
       return nullptr;
     }
 
-    dek = aLockstore->DoGetDek(kDekName, kekRef.inspect());
+    dek = aLockstore->DoGetDek(kDekName, active.inspect());
   }
 
   if (dek.isErr()) {

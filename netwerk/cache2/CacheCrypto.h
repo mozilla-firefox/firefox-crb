@@ -20,13 +20,11 @@ namespace net {
 // Authenticated block encryptor for the HTTP disk cache, using AES-256-GCM via
 // NSS. A single 32-byte master key is held in memory for the lifetime of the
 // process. The key is a data encryption key owned by the profile keystore
-// (security/lockstore) under the name "httpcache", wrapped by a "local" KEK
-// shared with the rest of the profile's encrypted storage; the
-// wrapping tier can later be switched to a password or PKCS#11 KEK via
-// nsILockstore::switchKek without touching the key itself, and therefore
-// without invalidating anything already on disk. Each block is encrypted
-// independently with a fresh random nonce, and the block number is bound as
-// additional authenticated data so a block cannot be moved to another position.
+// (security/lockstore) under the name "httpcache", wrapped by the active
+// profile KEK (see GetActiveProfileKek). Rewrapping leaves the key, and so the
+// data on disk, intact. Each block is encrypted independently with a fresh
+// random nonce, and the block number is bound as additional authenticated data
+// so a block cannot be moved to another position.
 //
 // On disk a block is laid out as [ciphertext(len)][tag][nonce]; the plaintext
 // only ever exists in memory. Data chunks use the chunk index as the block
@@ -94,9 +92,11 @@ class CacheCrypto {
                         uint8_t* aOut, const uint8_t* aAad = nullptr,
                         uint32_t aAadLen = 0);
 
-  // Fetches the key from the profile keystore, minting the KEK and DEK on
-  // first use. Returns null when no key could be obtained, which leaves
-  // encryption inactive for the session.
+  // Fetches the key from the profile keystore, creating it on first use.
+  // Returns null when no key could be obtained, which leaves encryption
+  // inactive for the session. A locked KEK is one such case: the key stays in
+  // the keystore, but new entries are failed closed, and an encrypted entry
+  // that is opened is reinitialized, since its metadata cannot be decrypted.
   //
   // Must not run on the main thread: Lockstore's synchronous tier asserts as
   // much. Init() calls it on the cache I/O thread; aLockstore has to be

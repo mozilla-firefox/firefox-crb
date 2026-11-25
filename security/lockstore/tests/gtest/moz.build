@@ -8,6 +8,7 @@ UNIFIED_SOURCES += [
 
 LOCAL_INCLUDES += [
     "/security/lockstore",
+    "/xpcom/tests/gtest",
 ]
 
 FINAL_LIBRARY = "xul-gtest"

@@ -62,19 +62,18 @@ static bool KekExists(LockstoreService* aLockstore, const nsACString& aKekRef) {
   return exists.isOk() && exists.unwrap();
 }
 
-// Requires the password KEK to be unlocked.
-static nsresult MoveProfileDeksToLocalKey(LockstoreService* aLockstore) {
+nsresult MoveProfileDeksToLocalKey(LockstoreService* aLockstore) {
   auto created = aLockstore->DoCreateKek("local"_ns, kProfileKekId, ""_ns,
                                          /* cache_timeout_ms */ 0);
   if (created.isErr()) {
     return created.unwrapErr();
   }
-  nsresult rv =
-      aLockstore->DoMigrateDeks(kProfilePasswordKek, created.unwrap());
-  NS_ENSURE_SUCCESS(rv, rv);
-  // The migrated-from KEK now wraps nothing, but its record alone is what
-  // later startups read as "the profile uses a password KEK", so drop it.
-  return aLockstore->DoDeleteKek(kProfilePasswordKek);
+  // The migrated-from KEK wraps nothing afterwards, but its record alone is
+  // what later startups read as "the profile uses a password KEK", so it is
+  // dropped in the same step, before a GetActiveProfileKek caller can wrap a
+  // new DEK under it.
+  return aLockstore->DoMigrateDeksAndDeleteKek(kProfilePasswordKek,
+                                               created.unwrap());
 }
 
 // Move the profile DEKs off the password KEK once the link is
@@ -270,6 +269,29 @@ bool SyncProfileKekAtStartup() {
   Preferences::RegisterCallback(&OnLockstoreUnlockPrefChanged,
                                 "security.lockstore.unlock.enabled"_ns);
   return canContinue;
+}
+
+Result<nsCString, nsresult> GetActiveProfileKek(LockstoreService& aLockstore) {
+  MOZ_ASSERT(!NS_IsMainThread());
+
+  Result exists = aLockstore.DoKekExists(kProfilePasswordKek);
+  if (exists.isErr()) {
+    NS_WARNING("Failed to probe password profile KEK");
+    return Err(exists.unwrapErr());
+  }
+  if (exists.unwrap()) {
+    return nsCString(kProfilePasswordKek);
+  }
+
+  // Get-or-create, so racing callers end up with the same LocalKey, and there
+  // is no need to probe the local KEK separately
+  Result created = aLockstore.DoCreateKek("local"_ns, kProfileKekId, ""_ns,
+                                          /* cache_timeout_ms */ 0);
+  if (created.isErr()) {
+    NS_WARNING("Failed to obtain local profile KEK");
+    return Err(created.unwrapErr());
+  }
+  return created.unwrap();
 }
 
 }  // namespace mozilla::security::lockstore

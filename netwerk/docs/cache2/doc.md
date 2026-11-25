@@ -647,22 +647,27 @@ the encrypted flag) is bound as AAD too, so it cannot be tampered with or
 downgraded. Decrypted content only ever exists in memory.
 
 The key is a 32-byte data encryption key owned by the profile keystore
-(`security/lockstore`) under the name `httpcache`, wrapped by the profile-wide
-`local` KEK `profile` that the rest of the profile's encrypted storage shares.
-It is fetched once per session, during `profile-do-change` and before the disk
-cache becomes reachable, and held in memory for the lifetime of the process.
-Because the cache only ever sees the DEK, the wrapping tier can later be moved
-to a password or PKCS#11 KEK via `nsILockstore::switchKek` without changing the
-key itself, and therefore without invalidating anything already on disk.
+(`security/lockstore`) under the name `httpcache`, wrapped by the active profile
+KEK (`GetActiveProfileKek`) that the rest of the profile's encrypted storage
+shares: the password KEK while the profile has a primary password, the `local`
+KEK `profile` otherwise. It is fetched once per session, during
+`profile-do-change` and before the disk cache becomes reachable, and held in
+memory for the lifetime of the process. Because the cache only ever sees the
+DEK, setting, changing or removing the primary password rewraps the key without
+changing it, and therefore without invalidating anything already on disk.
 
-If the keystore cannot hand the key back, the load deletes whatever is there
-and creates a new one. That covers the first run as well as a key the cache can
-no longer read, such as one encrypted under a KEK this build does not ask for.
-The alternative is worse: with the pref on and no cipher, every new entry
-is failed closed rather than written as plaintext, and the cache stops working
-altogether. Nothing has to be purged either, because metadata that fails to
-decrypt makes `CacheFile` reinitialize the entry, so what the previous key
-encrypted is dropped as it is read.
+If the keystore cannot hand the key back while the active KEK is unlocked, the
+load deletes whatever is there and creates a new one. That covers the first run
+as well as a key the cache can no longer read. The alternative is worse: with
+the pref on and no cipher, every new entry is failed closed rather than written
+as plaintext, and the cache stops working altogether. Nothing has to be purged
+either, because metadata that fails to decrypt makes `CacheFile` reinitialize
+the entry, so what the previous key encrypted is dropped as it is read.
+
+If the active KEK is locked, the load leaves the key in the keystore alone, as
+a locked KEK cannot wrap a new one, and the session runs without a cipher. New
+entries are failed closed, and an encrypted entry that is opened is
+reinitialized, since its metadata cannot be decrypted.
 
 An entry's encryption state is fixed when it is created and never flips; see the
 **encrypted** flag in the index below for how a change to the pref is handled.

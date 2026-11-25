@@ -5,9 +5,11 @@
 #include <cstring>
 
 #include "CacheCrypto.h"
+#include "Helpers.h"
 #include "LockstoreService.h"
 #include "gtest/gtest.h"
-#include "mozilla/SpinEventLoopUntil.h"
+#include "mozilla/gtest/MozAssertions.h"
+#include "mozilla/security/lockstore/ProfileKek.h"
 #include "nsCOMPtr.h"
 #include "nsIX509CertDB.h"
 #include "nsServiceManagerUtils.h"
@@ -16,7 +18,12 @@
 
 using namespace mozilla;
 using namespace mozilla::net;
+using mozilla::security::lockstore::kProfileKekId;
+using mozilla::security::lockstore::kProfileLocalKek;
+using mozilla::security::lockstore::kProfilePasswordKek;
 using mozilla::security::lockstore::LockstoreService;
+using mozilla::security::lockstore::MoveProfileDeksToLocalKey;
+using testing::RunOnBackground;
 
 namespace {
 
@@ -177,20 +184,8 @@ TEST(CacheCrypto, KeyIsRecoveredFromTheKeystore)
   ASSERT_TRUE(lockstore);
 
   auto load = [&lockstore]() -> RefPtr<CacheCrypto> {
-    // `crypto` and `done` are handed between the two threads by the spin
-    // below, which only reads them after the background task has finished.
     RefPtr<CacheCrypto> crypto;
-    bool done = false;
-    MOZ_ALWAYS_SUCCEEDS(NS_DispatchBackgroundTask(NS_NewRunnableFunction(
-        "TestCacheCrypto::Load", [&lockstore, &crypto, &done]() {
-          crypto = CacheCrypto::LoadFromKeystore(lockstore);
-          // Wake the spin from the main thread; see the same pattern in
-          // TestLockstoreService.cpp for why the completion has to be posted.
-          NS_DispatchToMainThread(NS_NewRunnableFunction(
-              "TestCacheCrypto::Load::Done", [&done] { done = true; }));
-        })));
-    MOZ_ALWAYS_TRUE(SpinEventLoopUntil("TestCacheCrypto::Load"_ns,
-                                       [&done]() { return done; }));
+    RunOnBackground([&] { crypto = CacheCrypto::LoadFromKeystore(lockstore); });
     return crypto;
   };
 
@@ -215,6 +210,183 @@ TEST(CacheCrypto, KeyIsRecoveredFromTheKeystore)
   EXPECT_EQ(NS_OK,
             second->DecryptBlock(0, block.Elements(), len, out.Elements()));
   EXPECT_EQ(0, memcmp(out.Elements(), msg, len));
+}
+
+namespace {
+
+constexpr auto kCacheDekName = "httpcache"_ns;
+constexpr auto kTestPassword = "cache-crypto-test"_ns;
+constexpr const char* kPayload = "cache contents behind a password KEK";
+
+RefPtr<CacheCrypto> LoadOnBackground(LockstoreService* aLockstore) {
+  RefPtr<CacheCrypto> crypto;
+  RunOnBackground([&] { crypto = CacheCrypto::LoadFromKeystore(aLockstore); });
+  return crypto;
+}
+
+nsTArray<uint8_t> EncryptPayload(CacheCrypto* aCrypto) {
+  const uint32_t len = strlen(kPayload);
+  nsTArray<uint8_t> block;
+  block.SetLength(len + CacheCrypto::kBlockOverhead);
+  EXPECT_EQ(NS_OK,
+            aCrypto->EncryptBlock(0, reinterpret_cast<const uint8_t*>(kPayload),
+                                  len, block.Elements()));
+  return block;
+}
+
+bool DecryptsToPayload(CacheCrypto* aCrypto, nsTArray<uint8_t> aBlock) {
+  const uint32_t len = strlen(kPayload);
+  nsTArray<uint8_t> out;
+  out.SetLength(len);
+  return NS_SUCCEEDED(aCrypto->DecryptBlock(0, aBlock.Elements(), len,
+                                            out.Elements())) &&
+         memcmp(out.Elements(), kPayload, len) == 0;
+}
+
+}  // namespace
+
+// The profile KEKs are process-wide, so no test may leave a password KEK.
+class CacheCryptoPasswordKekTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    nsCOMPtr<nsIX509CertDB> certDB(do_GetService(NS_X509CERTDB_CONTRACTID));
+    ASSERT_TRUE(certDB);
+    mLockstore = LockstoreService::GetSingleton();
+    ASSERT_TRUE(mLockstore);
+    bool passwordKekExists = true;
+    RunOnBackground([&] {
+      Result exists = mLockstore->DoKekExists(kProfilePasswordKek);
+      passwordKekExists = exists.isErr() || exists.unwrap();
+    });
+    ASSERT_FALSE(passwordKekExists)
+    << "a password profile KEK was left behind by an earlier test";
+  }
+
+  void TearDown() override {
+    if (!mLockstore) {
+      return;
+    }
+    RunOnBackground([&] {
+      Result exists = mLockstore->DoKekExists(kProfilePasswordKek);
+      if (exists.isErr() || !exists.unwrap()) {
+        return;
+      }
+      // The password KEK cannot be deleted while it wraps a DEK, and the other
+      // CacheCrypto tests expect the cache DEK under the LocalKey.
+      EXPECT_NS_SUCCEEDED(mLockstore->DoUnlockKek(kProfilePasswordKek,
+                                                  kTestPassword, UINT64_MAX));
+      EXPECT_NS_SUCCEEDED(MoveProfileDeksToLocalKey(mLockstore));
+
+      // Whatever failed above, the KEK must not be left to the next test.
+      exists = mLockstore->DoKekExists(kProfilePasswordKek);
+      if (exists.isOk() && !exists.unwrap()) {
+        return;
+      }
+      (void)mLockstore->DoDeleteDek(kCacheDekName);
+      EXPECT_NS_SUCCEEDED(mLockstore->DoDeleteKek(kProfilePasswordKek));
+    });
+  }
+
+  void CreatePasswordKek() {
+    RunOnBackground([&] {
+      Result created = mLockstore->DoCreateKek("password"_ns, kProfileKekId,
+                                               kTestPassword, UINT64_MAX);
+      ASSERT_TRUE(created.isOk());
+      EXPECT_EQ(created.unwrap(), kProfilePasswordKek);
+    });
+  }
+
+  // What adopting a primary password does.
+  void MoveCacheDekToPasswordKek() {
+    CreatePasswordKek();
+    RunOnBackground([&] {
+      EXPECT_NS_SUCCEEDED(mLockstore->DoSwitchKek(
+          kCacheDekName, kProfileLocalKek, kProfilePasswordKek));
+    });
+  }
+
+  nsTArray<nsCString> CacheDekKeks() {
+    nsTArray<nsCString> keks;
+    RunOnBackground([&] {
+      Result listed = mLockstore->DoListKeks(kCacheDekName);
+      ASSERT_TRUE(listed.isOk());
+      keks = listed.unwrap();
+    });
+    return keks;
+  }
+
+  RefPtr<LockstoreService> mLockstore;
+};
+
+TEST_F(CacheCryptoPasswordKekTest, NewKeyIsWrappedUnderThePasswordKek) {
+  RunOnBackground([&] { (void)mLockstore->DoDeleteDek(kCacheDekName); });
+  CreatePasswordKek();
+
+  ASSERT_TRUE(LoadOnBackground(mLockstore));
+
+  nsTArray<nsCString> keks = CacheDekKeks();
+  ASSERT_EQ(keks.Length(), 1u);
+  EXPECT_EQ(keks[0], kProfilePasswordKek);
+}
+
+// After adoption the load must not replace the DEK.
+TEST_F(CacheCryptoPasswordKekTest, KeyIsRecoveredFromThePasswordKek) {
+  RefPtr<CacheCrypto> first = LoadOnBackground(mLockstore);
+  ASSERT_TRUE(first);
+  nsTArray<uint8_t> block = EncryptPayload(first);
+
+  MoveCacheDekToPasswordKek();
+
+  RefPtr<CacheCrypto> second = LoadOnBackground(mLockstore);
+  ASSERT_TRUE(second);
+  EXPECT_TRUE(DecryptsToPayload(second, block.Clone()));
+
+  nsTArray<nsCString> keks = CacheDekKeks();
+  ASSERT_EQ(keks.Length(), 1u);
+  EXPECT_EQ(keks[0], kProfilePasswordKek);
+}
+
+// The DEK must survive until the KEK is unlocked. Entries opened in between do
+// not: without a cipher they are reinitialized.
+TEST_F(CacheCryptoPasswordKekTest, LockedPasswordKekLeavesTheKeyAlone) {
+  RefPtr<CacheCrypto> first = LoadOnBackground(mLockstore);
+  ASSERT_TRUE(first);
+  nsTArray<uint8_t> block = EncryptPayload(first);
+
+  MoveCacheDekToPasswordKek();
+  RunOnBackground(
+      [&] { EXPECT_NS_SUCCEEDED(mLockstore->DoLockKek(kProfilePasswordKek)); });
+
+  EXPECT_FALSE(LoadOnBackground(mLockstore));
+
+  nsTArray<nsCString> keks = CacheDekKeks();
+  ASSERT_EQ(keks.Length(), 1u);
+  EXPECT_EQ(keks[0], kProfilePasswordKek);
+
+  RunOnBackground([&] {
+    EXPECT_NS_SUCCEEDED(mLockstore->DoUnlockKek(kProfilePasswordKek,
+                                                kTestPassword, UINT64_MAX));
+  });
+
+  RefPtr<CacheCrypto> second = LoadOnBackground(mLockstore);
+  ASSERT_TRUE(second);
+  EXPECT_TRUE(DecryptsToPayload(second, block.Clone()));
+}
+
+// Without a DEK, a locked password KEK must not fall back to the LocalKey.
+TEST_F(CacheCryptoPasswordKekTest, LockedPasswordKekDoesNotCreateAKey) {
+  RunOnBackground([&] { (void)mLockstore->DoDeleteDek(kCacheDekName); });
+  CreatePasswordKek();
+  RunOnBackground(
+      [&] { EXPECT_NS_SUCCEEDED(mLockstore->DoLockKek(kProfilePasswordKek)); });
+
+  EXPECT_FALSE(LoadOnBackground(mLockstore));
+
+  RunOnBackground([&] {
+    Result exists = mLockstore->DoDekExists(kCacheDekName);
+    ASSERT_TRUE(exists.isOk());
+    EXPECT_FALSE(exists.unwrap());
+  });
 }
 
 #endif  // MOZ_WIDGET_ANDROID

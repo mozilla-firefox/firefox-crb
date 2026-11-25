@@ -5,16 +5,19 @@
 #include <atomic>
 #include <set>
 
+#include "Helpers.h"
 #include "LockstoreService.h"
 #include "gtest/gtest.h"
 #include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/gtest/MozAssertions.h"
+#include "mozilla/security/lockstore/ProfileKek.h"
 #include "nsString.h"
 #include "nsTArray.h"
 #include "nsThreadUtils.h"
 
 using namespace mozilla;
 using namespace mozilla::security::lockstore;
+using testing::RunOnBackground;
 
 namespace {
 
@@ -28,33 +31,6 @@ nsCString UniqueDekName(const char* aPrefix) {
   out.AppendLiteral("-");
   out.AppendInt(++sCounter);
   return out;
-}
-
-// Runs `aFn` on a background task and spins the main loop until it
-// completes. Used to drive the off-main-thread sync `Do*` methods from
-// gtest, which runs on the main thread.
-template <typename Fn>
-void RunOnBackground(Fn&& aFn) {
-  // `done` is touched only on the main thread (set by the completion
-  // runnable, read by the predicate), so it needs no synchronization.
-  bool done = false;
-  MOZ_ALWAYS_SUCCEEDS(NS_DispatchBackgroundTask(NS_NewRunnableFunction(
-      "TestLockstoreService::RunOnBackground",
-      [&done, fn = std::forward<Fn>(aFn)]() mutable {
-        fn();
-        // The predicate is satisfied from this background task, so post
-        // completion back to the main thread. This wakes the blocked
-        // NS_ProcessNextEvent inside SpinEventLoopUntil; otherwise the spin
-        // only re-checks `done` when unrelated event-loop traffic happens to
-        // wake the main thread, and those incidental wakeups grow sparse as
-        // the process quiesces -- stretching each wait until it trips the
-        // gtest no-output watchdog.
-        NS_DispatchToMainThread(NS_NewRunnableFunction(
-            "TestLockstoreService::RunOnBackground::Done",
-            [&done] { done = true; }));
-      })));
-  MOZ_ALWAYS_TRUE(
-      SpinEventLoopUntil("RunOnBackground"_ns, [&done]() { return done; }));
 }
 
 nsTArray<uint8_t> Bytes(const char* aLiteral) {
@@ -512,7 +488,7 @@ TEST_F(LockstoreServiceTest, ConcurrentEncryptsAllResolveUnique) {
             results[i] = r.unwrap();
           }
           // Record completion on the main thread so the spin loop is woken
-          // promptly (see RunOnBackground).
+          // promptly.
           NS_DispatchToMainThread(
               NS_NewRunnableFunction("ConcurrentEncryptsAllResolveUnique::done",
                                      [&doneCount]() { ++doneCount; }));
@@ -618,5 +594,139 @@ TEST_F(LockstoreServiceTest, ConcurrentMixedOpsAllComplete) {
                         << " should be gone but is still listed";
       }
     }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GetActiveProfileKek
+// ---------------------------------------------------------------------------
+
+// The profile KEKs are process-wide, so no test may leave a password KEK.
+class ActiveProfileKekTest : public ::testing::Test {
+ protected:
+  static constexpr auto kPassword = "active-profile-kek-test"_ns;
+
+  void SetUp() override {
+    mService = LockstoreService::GetSingleton();
+    ASSERT_TRUE(mService);
+    bool passwordKekExists = true;
+    RunOnBackground([&]() {
+      Result exists = mService->DoKekExists(kProfilePasswordKek);
+      passwordKekExists = exists.isErr() || exists.unwrap();
+    });
+    ASSERT_FALSE(passwordKekExists)
+    << "a password profile KEK was left behind by an earlier test";
+  }
+
+  void TearDown() override {
+    if (!mService) {
+      return;
+    }
+    RunOnBackground([&]() {
+      // Before the KEK, which cannot be deleted while it wraps a DEK.
+      for (const auto& dekName : mDeks) {
+        (void)mService->DoDeleteDek(dekName);
+      }
+      Result exists = mService->DoKekExists(kProfilePasswordKek);
+      if (exists.isErr() || !exists.unwrap()) {
+        return;
+      }
+      EXPECT_NS_SUCCEEDED(mService->DoDeleteKek(kProfilePasswordKek));
+    });
+  }
+
+  void CreatePasswordKek() {
+    RunOnBackground([&]() {
+      Result created = mService->DoCreateKek("password"_ns, kProfileKekId,
+                                             kPassword, UINT64_MAX);
+      ASSERT_TRUE(created.isOk());
+      EXPECT_EQ(created.unwrap(), kProfilePasswordKek);
+    });
+  }
+
+  // DEKs a test creates. Deleted in TearDown, which a failed ASSERT in a
+  // background lambda does not skip.
+  nsTArray<nsCString> mDeks;
+  RefPtr<LockstoreService> mService;
+};
+
+TEST_F(ActiveProfileKekTest, LocalKekWithoutPasswordKek) {
+  RunOnBackground([&]() {
+    // Other tests keep DEKs under the LocalKey, which cannot be deleted while
+    // it wraps them, so they wait under another KEK.
+    Result parked = mService->DoCreateKek("local"_ns, /*identifier=*/""_ns,
+                                          ""_ns, /* cache_timeout_ms */ 0);
+    ASSERT_TRUE(parked.isOk());
+    ASSERT_NS_SUCCEEDED(mService->DoMigrateDeksAndDeleteKek(kProfileLocalKek,
+                                                            parked.inspect()));
+    Result existedBefore = mService->DoKekExists(kProfileLocalKek);
+
+    Result active = GetActiveProfileKek(*mService);
+    Result existsAfter = mService->DoKekExists(kProfileLocalKek);
+
+    EXPECT_NS_SUCCEEDED(mService->DoMigrateDeksAndDeleteKek(parked.inspect(),
+                                                            kProfileLocalKek));
+
+    ASSERT_TRUE(existedBefore.isOk());
+    ASSERT_FALSE(existedBefore.unwrap());
+    ASSERT_TRUE(active.isOk());
+    EXPECT_EQ(active.unwrap(), kProfileLocalKek);
+    ASSERT_TRUE(existsAfter.isOk());
+    EXPECT_TRUE(existsAfter.unwrap())
+        << "the LocalKey must be created on demand";
+  });
+}
+
+TEST_F(ActiveProfileKekTest, PasswordKekWinsOverLocalKek) {
+  RunOnBackground([&]() {
+    Result local = mService->DoCreateKek("local"_ns, kProfileKekId, ""_ns,
+                                         /* cache_timeout_ms */ 0);
+    ASSERT_TRUE(local.isOk());
+  });
+  CreatePasswordKek();
+
+  RunOnBackground([&]() {
+    Result active = GetActiveProfileKek(*mService);
+    ASSERT_TRUE(active.isOk());
+    EXPECT_EQ(active.unwrap(), kProfilePasswordKek);
+  });
+}
+
+// Checking the lock is the caller's job.
+TEST_F(ActiveProfileKekTest, LockedPasswordKekIsStillActive) {
+  CreatePasswordKek();
+
+  RunOnBackground([&]() {
+    EXPECT_NS_SUCCEEDED(mService->DoLockKek(kProfilePasswordKek));
+    Result active = GetActiveProfileKek(*mService);
+    ASSERT_TRUE(active.isOk());
+    EXPECT_EQ(active.unwrap(), kProfilePasswordKek);
+  });
+}
+
+TEST_F(ActiveProfileKekTest, MoveProfileDeksToLocalKey) {
+  CreatePasswordKek();
+  nsCString dekName = UniqueDekName("move-to-local");
+  mDeks.AppendElement(dekName);
+
+  RunOnBackground([&]() {
+    ASSERT_NS_SUCCEEDED(mService->DoCreateDek(
+        dekName, kProfilePasswordKek, /*extractable=*/false, /*keySize=*/32));
+
+    EXPECT_NS_SUCCEEDED(MoveProfileDeksToLocalKey(mService));
+
+    Result exists = mService->DoKekExists(kProfilePasswordKek);
+    ASSERT_TRUE(exists.isOk());
+    EXPECT_FALSE(exists.unwrap());
+
+    auto refsResult = mService->DoListKeks(dekName);
+    ASSERT_TRUE(refsResult.isOk());
+    auto refs = refsResult.unwrap();
+    ASSERT_EQ(refs.Length(), 1u);
+    EXPECT_EQ(refs[0], kProfileLocalKek);
+
+    Result active = GetActiveProfileKek(*mService);
+    ASSERT_TRUE(active.isOk());
+    EXPECT_EQ(active.unwrap(), kProfileLocalKek);
   });
 }
