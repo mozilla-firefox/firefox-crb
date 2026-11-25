@@ -52,8 +52,11 @@ class ConversationStore extends SQLiteStoreBase {
     return "ConversationStore";
   }
 
-  get logLevelPref() {
-    return "browser.smartwindow.conversationStore.logLevel";
+  createLog() {
+    return console.createInstance({
+      logModule: "ConversationStore",
+      maxLogLevelPref: "browser.smartwindow.conversationStore.logLevel",
+    });
   }
 
   get shutdownBlockerName() {
