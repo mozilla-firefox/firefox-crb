@@ -702,7 +702,7 @@
 
     /** sidebar **/
     --sidebar-background-color: light-dark(white, rgb(28, 27, 34));
-    --sidebar-border-color: var(--chrome-content-separator-color);
+    --sidebar-border-color: var(--chrome-content-separator-color, var(--card-border-color));
     --sidebar-motion-duration-enter: 200ms;
     --sidebar-motion-duration-exit: 160ms;
     --sidebar-motion-easing: var(--motion-easing-emphasized);

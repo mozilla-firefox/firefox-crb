@@ -490,9 +490,9 @@
     "forcedColors": "{Theme$border/color/deemphasized}"
   },
   "sidebar/border/color": {
-    "light": "var(--chrome-content-separator-color)",
-    "dark": "var(--chrome-content-separator-color)",
-    "forcedColors": "var(--chrome-content-separator-color)"
+    "light": "var(--chrome-content-separator-color, {Theme$card/border/color})",
+    "dark": "var(--chrome-content-separator-color, {Theme$card/border/color})",
+    "forcedColors": "var(--chrome-content-separator-color, {Theme$card/border/color})"
   },
   "table/row/background/color/alternate": {
     "light": "{Colors$color/gray/20}",
