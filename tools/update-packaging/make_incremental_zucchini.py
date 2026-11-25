@@ -345,12 +345,22 @@ def reorder_instructions(manifest, appname):
 
     rank = {
         "dependentlibs.list": -1,
+        "Contents/Resources/dependentlibs.list": -1,
         # Any other member gets 0.
         "xul.dll": 1,
+        "libxul.so": 1,
+        "Contents/MacOS/XUL": 1,
         "browser/omni.ja": 2,
+        "Contents/Resources/browser/omni.ja": 2,
         "omni.ja": 3,
+        "Contents/Resources/omni.ja": 3,
+        # Linux has no mozglue member: it is linked statically into the program.
         "mozglue.dll": 4,
-        f"{appname}.exe": 5,
+        "Contents/MacOS/libmozglue.dylib": 4,
+        appname: 5,
+        f"{appname}.exe": 6,
+        f"{appname}-bin": 6,
+        f"Contents/MacOS/{appname}": 6,
     }
 
     # The sort is stable, so the other instructions keep their order.

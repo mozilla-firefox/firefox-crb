@@ -179,15 +179,24 @@ reorder_instructions() {
 
   notice ""
   notice "Reordering MAR instructions to a safer order"
+  deplibs='dependentlibs\.list|Contents/Resources/dependentlibs\.list'
+  xul='xul\.dll|libxul\.so|Contents/MacOS/XUL'
+  browseromni='browser/omni\.ja|Contents/Resources/browser/omni\.ja'
+  omni='omni\.ja|Contents/Resources/omni\.ja'
+  # Linux has no mozglue member: it is linked statically into the program.
+  mozglue='mozglue\.dll|Contents/MacOS/libmozglue\.dylib'
+  appbin="${appname}-bin"
+  app="${appname}\.exe|${appname}|Contents/MacOS/${appname}"
   {
     grep -E '^type '                 "$filev3"
-    grep -E '"dependentlibs\.list"$' "$filev3"
-    grep -vE "^type |\"(dependentlibs\.list|browser/omni\.ja|omni\.ja|xul\.dll|mozglue\.dll|${appname}\.exe)\"$" "$filev3"
-    grep -E '"xul\.dll"$'            "$filev3"
-    grep -E '"browser/omni\.ja"$'    "$filev3"
-    grep -E '"omni\.ja"$'            "$filev3"
-    grep -E '"mozglue\.dll"$'        "$filev3"
-    grep -E "\"${appname}\.exe\"$"   "$filev3"
+    grep -E "\"($deplibs)\"$"        "$filev3"
+    grep -vE "^type |\"($deplibs|$xul|$browseromni|$omni|$mozglue|$app|$appbin)\"$" "$filev3"
+    grep -E "\"($xul)\"$"            "$filev3"
+    grep -E "\"($browseromni)\"$"    "$filev3"
+    grep -E "\"($omni)\"$"           "$filev3"
+    grep -E "\"($mozglue)\"$"        "$filev3"
+    grep -E "\"($app)\"$"            "$filev3"
+    grep -E "\"($appbin)\"$"         "$filev3"
   } > "$filev3.reordered"
   mv -f "$filev3.reordered" "$filev3"
 }

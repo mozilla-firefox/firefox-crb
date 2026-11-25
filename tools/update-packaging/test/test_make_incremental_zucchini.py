@@ -591,7 +591,7 @@ def test_package_member_packages_the_smaller_of_patch_and_full_file(
     assert (partials_dir / expected_archive).read_bytes() == expected_bytes
 
 
-def test_reorder_instructions_uses_safer_order(tmp_path):
+def test_reorder_instructions_uses_safer_order_on_windows(tmp_path):
     manifest = tmp_path / "updatev3.manifest"
     manifest.write_text(
         "\n".join([
@@ -622,6 +622,70 @@ def test_reorder_instructions_uses_safer_order(tmp_path):
         'add "omni.ja"',
         'add "mozglue.dll"',
         'patch "firefox.exe.patch" "firefox.exe"',
+    ]
+
+
+def test_reorder_instructions_uses_safer_order_on_linux(tmp_path):
+    manifest = tmp_path / "updatev3.manifest"
+    manifest.write_text(
+        "\n".join([
+            'type "partial"',
+            'patch "libxul.so.patch" "libxul.so"',
+            'patch "firefox-bin.patch" "firefox-bin"',
+            'patch "firefox.patch" "firefox"',
+            'add "zz.txt"',
+            'add "dependentlibs.list"',
+            'patch "browser/omni.ja.patch" "browser/omni.ja"',
+            'patch "omni.ja.patch" "omni.ja"',
+        ])
+        + "\n"
+    )
+
+    mz.reorder_instructions(str(manifest), "firefox")
+
+    assert manifest.read_text().splitlines() == [
+        'type "partial"',
+        'add "dependentlibs.list"',
+        'add "zz.txt"',
+        'patch "libxul.so.patch" "libxul.so"',
+        'patch "browser/omni.ja.patch" "browser/omni.ja"',
+        'patch "omni.ja.patch" "omni.ja"',
+        'patch "firefox.patch" "firefox"',
+        'patch "firefox-bin.patch" "firefox-bin"',
+    ]
+
+
+def test_reorder_instructions_uses_safer_order_on_macos(tmp_path):
+    manifest = tmp_path / "updatev3.manifest"
+    manifest.write_text(
+        "\n".join([
+            'type "partial"',
+            'patch "Contents/Resources/omni.ja.patch" "Contents/Resources/omni.ja"',
+            'patch "Contents/Resources/browser/omni.ja.patch" '
+            '"Contents/Resources/browser/omni.ja"',
+            'patch "Contents/MacOS/libmozglue.dylib.patch" '
+            '"Contents/MacOS/libmozglue.dylib"',
+            'add "Contents/MacOS/firefox"',
+            'patch "Contents/MacOS/XUL.patch" "Contents/MacOS/XUL"',
+            'add "Contents/Resources/dependentlibs.list"',
+            'patch "Contents/Info.plist.patch" "Contents/Info.plist"',
+        ])
+        + "\n"
+    )
+
+    mz.reorder_instructions(str(manifest), "firefox")
+
+    assert manifest.read_text().splitlines() == [
+        'type "partial"',
+        'add "Contents/Resources/dependentlibs.list"',
+        'patch "Contents/Info.plist.patch" "Contents/Info.plist"',
+        'patch "Contents/MacOS/XUL.patch" "Contents/MacOS/XUL"',
+        'patch "Contents/Resources/browser/omni.ja.patch" '
+        '"Contents/Resources/browser/omni.ja"',
+        'patch "Contents/Resources/omni.ja.patch" "Contents/Resources/omni.ja"',
+        'patch "Contents/MacOS/libmozglue.dylib.patch" '
+        '"Contents/MacOS/libmozglue.dylib"',
+        'add "Contents/MacOS/firefox"',
     ]
 
 
