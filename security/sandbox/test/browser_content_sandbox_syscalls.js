@@ -213,7 +213,7 @@ function areContentSyscallsSandboxed(level) {
   // Windows, Mac, Linux, other.
   switch (Services.appinfo.OS) {
     case "WINNT":
-      syscallsSandboxMinLevel = 1;
+      syscallsSandboxMinLevel = 6;
       break;
     case "Darwin":
       syscallsSandboxMinLevel = 1;
