@@ -6,13 +6,19 @@
 
 package mozilla.components.feature.ipprotection.debug
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasAnySibling
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import kotlin.time.Instant
 import mozilla.components.ExperimentalAndroidComponentsApi
 import mozilla.components.compose.base.theme.AcornTheme
+import mozilla.components.concept.engine.ipprotection.CurrentAuthProvider
 import mozilla.components.concept.engine.ipprotection.ServiceState
 import mozilla.components.feature.ipprotection.store.state.AccountState
 import mozilla.components.feature.ipprotection.store.state.AccountStatus
@@ -101,6 +107,22 @@ class IPProtectionStateDebugTest {
         }
 
         composeTestRule.onNodeWithText("network-error").assertExists()
+    }
+
+    @Test
+    fun `GIVEN each auth provider WHEN rendered THEN the auth provider row shows that provider`() {
+        var authProvider by mutableStateOf(CurrentAuthProvider.Unknown)
+        composeTestRule.setContent {
+            AcornTheme {
+                IPProtectionStateDebugContent(state = IPProtectionState(currentAuthProvider = authProvider))
+            }
+        }
+
+        CurrentAuthProvider.entries.forEach { provider ->
+            composeTestRule.runOnIdle { authProvider = provider }
+
+            composeTestRule.onNode(hasText(provider.name) and hasAnySibling(hasText("authProvider"))).assertExists()
+        }
     }
 
     private val populatedState =

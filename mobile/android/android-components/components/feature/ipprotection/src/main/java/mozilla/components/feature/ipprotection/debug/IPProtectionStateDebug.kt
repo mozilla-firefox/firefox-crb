@@ -109,6 +109,10 @@ fun IPProtectionStateDebugContent(
                     state.serviceStatus.name,
                 )
                 DebugRow(
+                    stringResource(R.string.mozac_feature_ipprotection_auth_provider),
+                    state.currentAuthProvider.name,
+                )
+                DebugRow(
                     stringResource(R.string.mozac_feature_ipprotection_lasterror),
                     state.lastError ?: "null",
                 )

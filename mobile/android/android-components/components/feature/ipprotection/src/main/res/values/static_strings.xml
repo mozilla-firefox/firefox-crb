@@ -20,6 +20,7 @@
     <string name="mozac_feature_ipprotection_useddatagb">usedDataGb</string>
     <string name="mozac_feature_ipprotection_resetdate">resetDate</string>
     <string name="mozac_feature_ipprotection_unlimited">Unlimited</string>
+    <string name="mozac_feature_ipprotection_auth_provider">authProvider</string>
     <string name="mozac_feature_ipprotection_account">Account</string>
     <string name="mozac_feature_ipprotection_account_status">status</string>
 </resources>
