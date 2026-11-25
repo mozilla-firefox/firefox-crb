@@ -193,6 +193,7 @@ impl Quotes {
             "none" => Ok(Self::QuoteList(QuoteList::default())),
             "match-parent"
                 if context.in_ua_sheet()
+                    || context.url_data.chrome_rules_enabled()
                     || crate::pref!("layout.css.quotes.match-parent.enabled") =>
             {
                 Ok(Self::MatchParent)
