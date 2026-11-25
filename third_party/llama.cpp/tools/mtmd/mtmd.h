@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 #include <map>
@@ -115,6 +116,11 @@ MTMD_API struct mtmd_context_params mtmd_context_params_default(void);
 MTMD_API mtmd_context * mtmd_init_from_file(const char * mmproj_fname,
                                             const struct llama_model * text_model,
                                             const struct mtmd_context_params ctx_params);
+
+// return nullptr on failure
+MTMD_API mtmd_context * mtmd_init_from_file_handle(FILE * mmproj_file,
+                                                   const struct llama_model * text_model,
+                                                   const struct mtmd_context_params ctx_params);
 
 MTMD_API void mtmd_free(mtmd_context * ctx);
 
@@ -317,6 +323,8 @@ struct mtmd_caps {
     bool inp_audio;
 };
 MTMD_API struct mtmd_caps mtmd_get_cap_from_file(const char * mmproj_fname);
+
+MTMD_API struct mtmd_caps mtmd_get_cap_from_file_handle(FILE * mmproj_file);
 
 /////////////////////////////////////////
 

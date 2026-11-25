@@ -9,6 +9,8 @@
 #include "llama/llama.h"
 #include "ggml.h"
 #include "ggml-backend.h"
+#include "mtmd/mtmd.h"
+#include "mtmd/mtmd-helper.h"
 #ifdef MOZ_WEBSPEECH
 #  include "parakeet_capi.h"
 #endif
@@ -126,6 +128,9 @@ namespace mozilla::llama {
   X(ggml_backend_t, ggml_backend_dev_init,                                  \
     (ggml_backend_dev_t device, const char* params))                        \
   X(void, ggml_backend_free, (ggml_backend_t backend))                      \
+  /* libmtmd, llama.cpp's multimodal front-end */                           \
+  X(void, mtmd_helper_log_set,                                              \
+    (ggml_log_callback log_callback, void* user_data))                      \
   MOZINFERENCE_PARKEET_FUNCTION_LIST(X)                                     \
   MOZINFERENCE_METAL_FUNCTION_LIST(X)
 

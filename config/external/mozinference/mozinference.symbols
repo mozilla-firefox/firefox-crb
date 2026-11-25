@@ -42,6 +42,7 @@ llama_batch_get_one
 llama_decode
 llama_vocab_is_eog
 llama_token_to_piece
+mtmd_helper_log_set
 #ifdef MOZ_WEBSPEECH
 parakeet_capi_abi_version
 parakeet_capi_free
