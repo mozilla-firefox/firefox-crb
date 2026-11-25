@@ -380,6 +380,11 @@ bool GetPinnedInstallDirPath(char* aPath, size_t aLength) {
 int ValidateAndPinInstallDir(const char* aInstallDir) {
   MacAutoreleasePool pool;
 
+  if (gClientUid == (uid_t)-1) {
+    LogToOS(NS_T("Updater helper: the client is unknown."));
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+
   // Resolve the path once and keep the directory open.
   char resolved[PATH_MAX];
   if (!realpath(aInstallDir, resolved)) {
@@ -401,6 +406,15 @@ int ValidateAndPinInstallDir(const char* aInstallDir) {
                  "that root mounted with ownership enabled."));
     close(fd);
     return ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR;
+  }
+  // The helper only updates installs that neither the client nor anyone it
+  // doesn't accept can change.
+  if (!IsInstallTreeProtected(fd, gClientUid,
+                              /* aIsUncheckableRefused = */ true)) {
+    LogToOS(NS_T("Updater helper: the client can change the install "
+                 "directory."));
+    close(fd);
+    return ELEVATED_UPDATE_CHANGEABLE_INSTALL_ERROR;
   }
   // Make sure the path still leads to the directory that was opened.
   struct stat fdStat;
