@@ -25,6 +25,7 @@ import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.downloads.ui.DownloadCancelDialogFragment
+import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.state.DelicateAction
 import mozilla.components.service.fxa.manager.FxaAccountManager
@@ -48,7 +49,6 @@ import org.mozilla.fenix.ext.DEFAULT_ACTIVE_DAYS
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.openToBrowser
 import org.mozilla.fenix.ext.potentialInactiveTabs
-import org.mozilla.fenix.ext.removeAllActiveNormalTabs
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_ACTIVE_NORMAL_TABS
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_NORMAL_TABS
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_PRIVATE_TABS
@@ -185,6 +185,7 @@ interface TabManagerController : SyncedTabsController, InactiveTabsController, T
  * @param navigateToHomeAndDeleteSession Lambda used to return to the Homescreen and delete the current session.
  * @param profiler [Profiler] used to add profiler markers.
  * @param tabsUseCases Use case wrapper for interacting with tabs.
+ * @param tabDataCoordinator [TabDataCoordinator] used for removing tabs while accounting for tab groups.
  * @param fenixBrowserUseCases [FenixBrowserUseCases] used for adding new homepage tabs.
  * @param shareUseCases [ShareUseCases] for sharing content via the system share sheet or the in-app [ShareFragment].
  * @param closeSyncedTabsUseCases Use cases for closing synced tabs.
@@ -214,6 +215,7 @@ class DefaultTabManagerController(
     private val navigateToHomeAndDeleteSession: (String) -> Unit,
     private val profiler: Profiler?,
     private val tabsUseCases: TabsUseCases,
+    private val tabDataCoordinator: TabDataCoordinator,
     private val fenixBrowserUseCases: FenixBrowserUseCases,
     private val shareUseCases: ShareUseCases,
     private val closeSyncedTabsUseCases: CloseTabsUseCases,
@@ -743,8 +745,10 @@ class DefaultTabManagerController(
         val tabsCount =
             when (sessionId) {
                 ALL_NORMAL_TABS -> browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
-                ALL_ACTIVE_NORMAL_TABS ->
-                    tabsUseCases.removeAllActiveNormalTabs(state = browserStore.state, settings = settings)
+                ALL_ACTIVE_NORMAL_TABS -> {
+                    val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = false)
+                    result.removedTabCount
+                }
                 ALL_PRIVATE_TABS -> browserStore.state.privateTabs.size.also { tabsUseCases.removePrivateTabs() }
                 else -> return
             }

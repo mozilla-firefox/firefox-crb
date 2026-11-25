@@ -21,6 +21,7 @@ import io.mockk.verify
 import io.mockk.verifyOrder
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertNotNull
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import mozilla.appservices.places.BookmarkRoot
@@ -40,6 +41,12 @@ import mozilla.components.concept.storage.BookmarkNodeType
 import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.search.SearchUseCases
 import mozilla.components.feature.session.SessionUseCases
+import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
+import mozilla.components.feature.tabgroups.storage.data.TabGroup as StoredTabGroup
+import mozilla.components.feature.tabgroups.storage.data.TabGroupData
+import mozilla.components.feature.tabgroups.storage.fakes.FakeTabGroupRepository
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.support.test.middleware.CaptureActionsMiddleware
@@ -66,6 +73,7 @@ import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.bookmarks.BookmarksUseCase
 import org.mozilla.fenix.components.share.ShareSheetChooserAction
 import org.mozilla.fenix.components.share.ShareSource
+import org.mozilla.fenix.components.tabs.DefaultTabRepository
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.components.usecases.ShareUseCases
 import org.mozilla.fenix.ext.components
@@ -720,7 +728,7 @@ class DefaultTabManagerControllerTest {
 
         controller.deleteMultipleTabs(tabItems)
 
-        verify { tabsUseCases.removeTabs(listOf("1", "2"), setOf()) }
+        assertTrue(browserStore.state.tabs.isEmpty())
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
 
@@ -1024,7 +1032,7 @@ class DefaultTabManagerControllerTest {
         controller.deleteMultipleTabs(activeTabItems)
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        verify { tabsUseCases.removeTabs(listOf("active1", "active2"), setOf("inactiveId")) }
+        assertEquals(listOf("inactiveId"), browserStore.state.tabs.map { it.id })
 
         assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
@@ -1124,7 +1132,7 @@ class DefaultTabManagerControllerTest {
     }
 
     @Test
-    fun `GIVEN homepage as new tab is enabled and there are grouped tabs and an inactive tab WHEN deleteMultipleTabs is called on all grouped tabs THEN it flattens the group, does not navigate home, and deletes the grouped tabs only`() {
+    fun `GIVEN homepage as new tab is enabled and there are grouped tabs and an inactive tab WHEN deleteMultipleTabs is called on all grouped tabs THEN it does not navigate home and leaves the grouped tabs open`() {
         every { settings.enableHomepageAsNewTab } returns true
 
         val grouped1 = createTab(id = "grouped1", url = "https://mozilla.org", private = false)
@@ -1166,20 +1174,21 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(tabGroup)),
                     showUndoSnackbarForMultipleTabs = { isPrivate, count ->
                         undoSnackbarIsPrivate = isPrivate
                         undoSnackbarTabCount = count
-                    }
+                    },
                 )
             )
 
         controller.deleteMultipleTabs(itemsToDelete)
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        verify { tabsUseCases.removeTabs(listOf("grouped1", "grouped2"), setOf("inactive1")) }
+        assertEquals(listOf("grouped1", "grouped2", "inactive1"), browserStore.state.tabs.map { it.id })
 
         assertEquals(false, undoSnackbarIsPrivate)
-        assertEquals(2, undoSnackbarTabCount)
+        assertEquals(0, undoSnackbarTabCount)
     }
 
     @Test
@@ -1469,7 +1478,7 @@ class DefaultTabManagerControllerTest {
 
         controller.deleteMultipleTabs(tabs = normalTabItems)
 
-        verify { tabsUseCases.removeTabs(listOf("normal1", "normal2"), setOf()) }
+        assertTrue(browserStore.state.tabs.isEmpty())
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
         assertEquals(false, undoSnackbarIsPrivate)
@@ -1510,7 +1519,7 @@ class DefaultTabManagerControllerTest {
     }
 
     @Test
-    fun `GIVEN homepage as new tab is enabled and only open tab groups exist WHEN deleteMultipleTabs is called to close all normal tabs THEN it flattens the groups, deletes the normal tabs, and does not navigate home`() {
+    fun `GIVEN homepage as new tab is enabled and only open tab groups exist WHEN deleteMultipleTabs is called to close all normal tabs THEN it leaves the grouped tabs open and does not navigate home`() {
         every { settings.enableHomepageAsNewTab } returns true
         val groupedTab1 = createTab(id = "grouped1", url = "https://mozilla.org", private = false)
         val groupedTab2 = createTab(id = "grouped2", url = "https://mozilla.com", private = false)
@@ -1542,20 +1551,21 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(openTabGroup)),
                     showUndoSnackbarForMultipleTabs = { isPrivate, count ->
                         undoSnackbarIsPrivate = isPrivate
                         undoSnackbarTabCount = count
-                    }
+                    },
                 )
             )
 
         controller.deleteMultipleTabs(tabs = tabItemsToDelete)
 
-        verify { tabsUseCases.removeTabs(listOf("grouped1", "grouped2"), setOf()) }
+        assertEquals(listOf("grouped1", "grouped2"), browserStore.state.tabs.map { it.id })
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_NORMAL_TABS) }
         assertEquals(false, undoSnackbarIsPrivate)
-        assertEquals(2, undoSnackbarTabCount)
+        assertEquals(0, undoSnackbarTabCount)
     }
 
     @Test
@@ -1625,19 +1635,20 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(closedTabGroup)),
                     showUndoSnackbarForMultipleTabs = { isPrivate, count ->
                         undoSnackbarIsPrivate = isPrivate
                         undoSnackbarTabCount = count
-                    }
+                    },
                 )
             )
 
         controller.deleteMultipleTabs(listOf(visibleTabItem))
 
-        verify { tabsUseCases.removeTabs(listOf("visibleTab", "closedTabForTabGroup"), setOf()) }
+        assertEquals(listOf("closedTabForTabGroup"), browserStore.state.tabs.map { it.id })
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_NORMAL_TABS) }
         assertEquals(false, undoSnackbarIsPrivate)
-        assertEquals(2, undoSnackbarTabCount)
+        assertEquals(1, undoSnackbarTabCount)
     }
 
     @Test
@@ -1863,7 +1874,7 @@ class DefaultTabManagerControllerTest {
 
         controller.deleteMultipleTabs(tabs = itemsToDelete)
 
-        verify { tabsUseCases.removeTabs(listOf("normal_to_delete_1", "normal_to_delete_2"), setOf()) }
+        assertTrue(browserStore.state.tabs.isEmpty())
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_ACTIVE_NORMAL_TABS) }
 
@@ -1966,21 +1977,22 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(closedTabGroup)),
                     showUndoSnackbarForMultipleTabs = { isPrivate, count ->
                         undoSnackbarIsPrivate = isPrivate
                         undoSnackbarTabCount = count
-                    }
+                    },
                 )
             )
 
         controller.deleteMultipleTabs(tabs = itemsToDelete)
 
-        verify { tabsUseCases.removeTabs(listOf("visible_to_delete", "tab_in_closed_group"), setOf("inactive_tab")) }
+        assertEquals(listOf("inactive_tab", "tab_in_closed_group"), browserStore.state.tabs.map { it.id })
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_ACTIVE_NORMAL_TABS) }
 
         assertEquals(false, undoSnackbarIsPrivate)
-        assertEquals(2, undoSnackbarTabCount)
+        assertEquals(1, undoSnackbarTabCount)
     }
 
     @Test
@@ -2606,9 +2618,10 @@ class DefaultTabManagerControllerTest {
 
         val controller =
             createController(
+                tabDataCoordinator = FakeTabDataCoordinator(),
                 showUndoSnackbarForInactiveTab = {
                     showSnackbarInvoked = true
-                }
+                },
             )
 
         assertNull(TabsTray.closeAllInactiveTabs.testGetValue())
@@ -3276,7 +3289,46 @@ class DefaultTabManagerControllerTest {
             children = null,
         )
 
+    private fun createTabDataCoordinator(tabGroups: List<TabsTrayItem.TabGroup> = emptyList()): TabDataCoordinator =
+        DefaultTabDataCoordinator(
+                tabRepository =
+                    DefaultTabRepository(
+                        browserStore = browserStore,
+                        tabsUseCases = TabsUseCases(browserStore),
+                        fenixBrowserUseCases = fenixBrowserUseCases,
+                        isHomepageAsNewTabEnabled = { false },
+                    ),
+                tabGroupRepository =
+                    FakeTabGroupRepository(
+                        initialTabGroupData =
+                            TabGroupData(
+                                tabGroups =
+                                    tabGroups.map { group ->
+                                        StoredTabGroup(
+                                            id = group.id,
+                                            title = group.title,
+                                            theme = "",
+                                            closed = group.closed,
+                                            lastModified = 0L,
+                                            tabIds = group.tabs.map { it.id },
+                                        )
+                                    },
+                                tabGroupAssignments =
+                                    tabGroups.flatMap { group -> group.tabs.map { it.id to group.id } }.toMap(),
+                            )
+                    ),
+                isInactiveTabsEnabled = { settings.inactiveTabsAreEnabled },
+                isTabGroupsEnabled = { true },
+                scope = CoroutineScope(testDispatcher),
+                dispatcher = testDispatcher,
+            )
+            .also {
+                it.initialize()
+                testDispatcher.scheduler.runCurrent()
+            }
+
     private fun createController(
+        tabDataCoordinator: TabDataCoordinator = createTabDataCoordinator(),
         navigateToHomeAndDeleteSession: (String) -> Unit = {},
         showUndoSnackbarForTab: (Boolean) -> Unit = { _ -> },
         showUndoSnackbarForInactiveTab: (Int) -> Unit = { _ -> },
@@ -3296,6 +3348,7 @@ class DefaultTabManagerControllerTest {
             navigateToHomeAndDeleteSession = navigateToHomeAndDeleteSession,
             profiler = profiler,
             tabsUseCases = tabsUseCases,
+            tabDataCoordinator = tabDataCoordinator,
             fenixBrowserUseCases = fenixBrowserUseCases,
             shareUseCases = shareUseCases,
             closeSyncedTabsUseCases = closeSyncedTabsUseCases,

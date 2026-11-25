@@ -15,6 +15,7 @@ import mozilla.components.browser.state.selector.privateTabs
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
+import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.base.feature.LifecycleAwareFeature
 import org.mozilla.fenix.R
@@ -22,7 +23,6 @@ import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
 import org.mozilla.fenix.components.usecases.FenixBrowserUseCases
 import org.mozilla.fenix.ext.actualInactiveTabs
 import org.mozilla.fenix.ext.components
-import org.mozilla.fenix.ext.removeAllActiveNormalTabs
 import org.mozilla.fenix.ext.tabClosedUndoMessage
 import org.mozilla.fenix.ext.tabsClosedUndoMessage
 import org.mozilla.fenix.home.HomeScreenViewModel.Companion.ALL_ACTIVE_NORMAL_TABS
@@ -41,6 +41,7 @@ import org.mozilla.fenix.utils.getUndoDelay
  * @param browsingModeManager [BrowsingModeManager] used for fetching the current browsing mode.
  * @param navController [NavController] used for navigation.
  * @param tabsUseCases The [TabsUseCases] instance to perform tab actions.
+ * @param tabDataCoordinator [TabDataCoordinator] used for removing tabs while accounting for tab groups.
  * @param fenixBrowserUseCases [FenixBrowserUseCases] used for adding new homepage tabs.
  * @param settings [Settings] used to check the application shared preferences.
  * @param snackbarHostState The [SnackbarHostState] used to display snackbars.
@@ -54,6 +55,7 @@ class TabsCleanupFeature(
     private val browsingModeManager: BrowsingModeManager,
     private val navController: NavController,
     private val tabsUseCases: TabsUseCases,
+    private val tabDataCoordinator: TabDataCoordinator,
     private val fenixBrowserUseCases: FenixBrowserUseCases,
     private val settings: Settings,
     private val snackbarHostState: SnackbarHostState,
@@ -130,8 +132,10 @@ class TabsCleanupFeature(
 
     private fun removeAllNormalTabs(): Int = browserStore.state.normalTabs.size.also { tabsUseCases.removeNormalTabs() }
 
-    private fun removeAllActiveNormalTabs(): Int =
-        tabsUseCases.removeAllActiveNormalTabs(state = browserStore.state, settings = settings)
+    private fun removeAllActiveNormalTabs(): Int {
+        val result = tabDataCoordinator.closeAllNormalTabs(includeInactiveTabs = false)
+        return result.removedTabCount
+    }
 
     private fun removeTabAndShowSnackbar(sessionId: String) {
         val tab = browserStore.state.findTab(sessionId) ?: return

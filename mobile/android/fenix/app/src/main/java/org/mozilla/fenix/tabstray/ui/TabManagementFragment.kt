@@ -234,6 +234,7 @@ class TabManagementFragment : Fragment() {
                 navigateToHomeAndDeleteSession = ::navigateToHomeAndDeleteSession,
                 profiler = requireComponents.core.engine.profiler,
                 tabsUseCases = requireComponents.useCases.tabsUseCases,
+                tabDataCoordinator = requireComponents.tabDataCoordinator,
                 fenixBrowserUseCases = requireComponents.useCases.fenixBrowserUseCases,
                 shareUseCases = requireComponents.useCases.shareUseCases,
                 closeSyncedTabsUseCases = requireComponents.useCases.closeSyncedTabsUseCases,
