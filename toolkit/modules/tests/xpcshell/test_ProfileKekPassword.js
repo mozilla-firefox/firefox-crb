@@ -299,7 +299,7 @@ add_task(async function test_discard_without_kek_is_a_noop() {
 add_task(async function test_moveDeks_rolls_back_the_target_on_failure() {
   const deleted = [];
   const stub = {
-    migrateDeks: () => Promise.reject(new Error("migrate failed")),
+    migrateDeksAndDeleteKek: () => Promise.reject(new Error("migrate failed")),
     deleteKek: kekRef => {
       deleted.push(kekRef);
       return Promise.resolve();
@@ -317,31 +317,26 @@ add_task(async function test_moveDeks_rolls_back_the_target_on_failure() {
   );
 });
 
-add_task(async function test_moveDeks_drops_the_emptied_source() {
-  const deleted = [];
+add_task(async function test_moveDeks_drops_the_source_with_the_migration() {
+  const calls = [];
   const stub = {
-    migrateDeks: () => Promise.resolve(),
+    migrateDeksAndDeleteKek: (from, to) => {
+      calls.push(["migrateDeksAndDeleteKek", from, to]);
+      return Promise.resolve();
+    },
     deleteKek: kekRef => {
-      deleted.push(kekRef);
+      calls.push(["deleteKek", kekRef]);
       return Promise.resolve();
     },
   };
 
   await ProfileKekPassword.moveDeks(stub, PW_KEK, LOCAL_KEK);
 
-  Assert.deepEqual(deleted, [PW_KEK], "the emptied source KEK is dropped");
-});
-
-add_task(async function test_moveDeks_survives_a_failed_cleanup() {
-  const stub = {
-    migrateDeks: () => Promise.resolve(),
-    deleteKek: () => Promise.reject(new Error("delete failed")),
-  };
-
-  // A leftover source KEK is harmless; it must not turn a completed
-  // migration into a reported failure.
-  await ProfileKekPassword.moveDeks(stub, PW_KEK, LOCAL_KEK);
-  Assert.ok(true, "moveDeks resolved despite the cleanup failure");
+  Assert.deepEqual(
+    calls,
+    [["migrateDeksAndDeleteKek", PW_KEK, LOCAL_KEK]],
+    "the source KEK is dropped by the migration call, not a separate one"
+  );
 });
 
 add_task(async function test_changePassword_skips_unlock_when_locked() {

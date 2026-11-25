@@ -991,6 +991,52 @@ add_task(async function test_migrate_deks_round_trip() {
   await ls.deleteDek("migrate-c");
 });
 
+add_task(async function test_migrate_deks_and_delete_kek() {
+  const ls = getService();
+  const from = await mintLocalKek("migrate-delete-from");
+  const to = await mintLocalKek("migrate-delete-to");
+
+  await ls.createDek("migrate-delete-a", from, false, 32);
+
+  await ls.migrateDeksAndDeleteKek(from, to);
+
+  Assert.deepEqual(
+    await ls.listKeks("migrate-delete-a"),
+    [to],
+    "the collection is wrapped only by the target"
+  );
+  Assert.ok(!(await ls.kekExists(from)), "the source KEK record is deleted");
+
+  await ls.deleteDek("migrate-delete-a");
+  await ls.deleteKek(to);
+});
+
+add_task(async function test_migrate_deks_and_delete_kek_keeps_failed_source() {
+  const ls = getService();
+  const from = await mintLocalKek("migrate-fail-from");
+  // Starts locked, so it cannot wrap the DEK.
+  const to = await mintPasswordKek(PW);
+
+  await ls.createDek("migrate-fail-a", from, false, 32);
+
+  await Assert.rejects(
+    ls.migrateDeksAndDeleteKek(from, to),
+    /NS_ERROR_/,
+    "a migration to a locked KEK rejects"
+  );
+
+  Assert.deepEqual(
+    await ls.listKeks("migrate-fail-a"),
+    [from],
+    "the collection is still wrapped only by the source"
+  );
+  Assert.ok(await ls.kekExists(from), "the source KEK record is kept");
+
+  await ls.deleteDek("migrate-fail-a");
+  await ls.deleteKek(from);
+  await ls.deleteKek(to);
+});
+
 add_task(async function test_migrate_deks_empty_args_rejected() {
   const ls = getService();
   await Assert.rejects(

@@ -239,11 +239,9 @@ static bool SyncLockstoreWithPrimaryPassword() {
               // Every DEK created before the primary password is migrated. The
               // LocalKey unlocks without a secret, so a DEK left under it stays
               // readable without the primary password.
-              rv = lockstore->DoMigrateDeks(kProfileLocalKek,
-                                            kProfilePasswordKek);
-              if (NS_SUCCEEDED(rv)) {
-                rv = lockstore->DoDeleteKek(kProfileLocalKek);
-              } else {
+              rv = lockstore->DoMigrateDeksAndDeleteKek(kProfileLocalKek,
+                                                        kProfilePasswordKek);
+              if (NS_FAILED(rv)) {
                 // A password KEK wrapping nothing protects nothing; drop it so
                 // the next startup retries the adoption.
                 (void)lockstore->DoDeleteKek(kProfilePasswordKek);

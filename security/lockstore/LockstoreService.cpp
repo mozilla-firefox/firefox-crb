@@ -454,6 +454,18 @@ nsresult LockstoreService::DoMigrateDeks(const nsACString& aFromKekRef,
   return keystore_migrate_deks(mKeystore, &aFromKekRef, &aToKekRef);
 }
 
+nsresult LockstoreService::DoMigrateDeksAndDeleteKek(
+    const nsACString& aFromKekRef, const nsACString& aToKekRef) {
+  LOCKSTORE_SYNC_PREAMBLE;
+  MOZ_TRY(keystore_migrate_deks(mKeystore, &aFromKekRef, &aToKekRef));
+  // Callers act on whether the DEKs moved, and by now they have. Reporting a
+  // failed delete would make them treat the migration as not having happened.
+  if (NS_FAILED(keystore_delete_kek(mKeystore, &aFromKekRef))) {
+    NS_WARNING("Failed to delete the migrated KEK");
+  }
+  return NS_OK;
+}
+
 Result<nsTArray<nsCString>, nsresult> LockstoreService::DoListDeks() {
   LOCKSTORE_SYNC_PREAMBLE;
   nsTArray<nsCString> out;
@@ -639,6 +651,15 @@ LockstoreService::MigrateDeks(const nsACString& aFromKekRef,
                               const nsACString& aToKekRef, JSContext* aCx,
                               Promise** aPromise) {
   return ImplXpcomMethod(this, aCx, aPromise, &LockstoreService::DoMigrateDeks,
+                         nsCString{aFromKekRef}, nsCString{aToKekRef});
+}
+
+NS_IMETHODIMP
+LockstoreService::MigrateDeksAndDeleteKek(const nsACString& aFromKekRef,
+                                          const nsACString& aToKekRef,
+                                          JSContext* aCx, Promise** aPromise) {
+  return ImplXpcomMethod(this, aCx, aPromise,
+                         &LockstoreService::DoMigrateDeksAndDeleteKek,
                          nsCString{aFromKekRef}, nsCString{aToKekRef});
 }
 

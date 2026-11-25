@@ -106,19 +106,19 @@ export const ProfileKekPassword = {
     }
   },
 
-  // A failed migration leaves the DEKs under fromKek, so toKek is the only
-  // leftover. A successful one empties fromKek, whose record every kekExists
-  // check would still read as "the profile uses this KEK", so drop it -- but
-  // quietly, as the migration it follows has already succeeded.
+  // A successful migration empties fromKek, whose record every kekExists check
+  // would still read as "the profile uses this KEK", so it is dropped in the
+  // same lockstore call, before anything can wrap a new DEK under it. That
+  // call rejects only if the migration failed, which leaves the DEKs under
+  // fromKek, so toKek is the only leftover.
   async moveDeks(lockstore, fromKek, toKek) {
     try {
-      await lockstore.migrateDeks(fromKek, toKek);
+      await lockstore.migrateDeksAndDeleteKek(fromKek, toKek);
     } catch (e) {
       console.error("Failed to migrate lockstore DEKs to", toKek, e);
       await this.deleteKekQuietly(lockstore, toKek);
       throw e;
     }
-    await this.deleteKekQuietly(lockstore, fromKek);
   },
 
   // Cleanup only: a leftover KEK is harmless and must not mask the failure.

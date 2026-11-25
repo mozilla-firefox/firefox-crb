@@ -757,27 +757,31 @@ impl Keystore {
     /// migration never destroys a record the caller may still want.
     pub fn migrate_deks(&self, from_kek_ref: &str, to_kek_ref: &str) -> Result<(), LockstoreError> {
         let conn = self.acquire_connection()?;
-        let mut switched: Vec<String> = Vec::new();
+        // Every DEK is read before any is switched, so one that cannot be read
+        // fails the migration with nothing moved.
+        let mut pending: Vec<String> = Vec::new();
         for dek_name in conn.list_deks()? {
             // Propagated rather than skipped: a DEK whose metadata cannot be
             // read is still wrapped under `from_kek_ref` for all anyone knows,
             // and reporting the migration as complete would have the caller
             // delete a KEK that is still in use.
             let metadata = conn.load_metadata(&dek_name)?;
-            if !metadata
+            if metadata
                 .wrapped_deks
                 .iter()
                 .any(|w| w.kek_ref == from_kek_ref)
             {
-                continue;
+                pending.push(dek_name);
             }
-            if let Err(e) = self.switch_kek_locked(&conn, &dek_name, from_kek_ref, to_kek_ref) {
-                for done in &switched {
+        }
+
+        for (index, dek_name) in pending.iter().enumerate() {
+            if let Err(e) = self.switch_kek_locked(&conn, dek_name, from_kek_ref, to_kek_ref) {
+                for done in &pending[..index] {
                     let _ = self.switch_kek_locked(&conn, done, to_kek_ref, from_kek_ref);
                 }
                 return Err(e);
             }
-            switched.push(dek_name);
         }
 
         Ok(())
@@ -1816,8 +1820,34 @@ static SHARED_KEYSTORES: OnceLock<Mutex<HashMap<PathBuf, Weak<Keystore>>>> = Onc
 
 #[cfg(test)]
 mod tests {
-    use super::{unlock_deadline, KekType, WrappedDek, MAX_UNLOCK};
+    use super::{
+        unlock_deadline, Database, KekType, Key, Keystore, WrappedDek, DB_NAME, DEK_PREFIX,
+        MAX_UNLOCK,
+    };
+    use crate::utils;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn migrate_deks_moves_nothing_when_a_dek_is_unreadable() {
+        let keystore = Keystore::new_in_memory().unwrap();
+        let from = keystore
+            .create_kek(KekType::LocalKey, "", b"", Duration::ZERO)
+            .unwrap();
+        let to = keystore
+            .create_kek(KekType::LocalKey, "", b"", Duration::ZERO)
+            .unwrap();
+        keystore.create_dek("a", &from, true, 32).unwrap();
+
+        // Sorts after "a", so the migration reaches it second.
+        let key = Key::from(format!("{DEK_PREFIX}b").as_str());
+        let value = utils::bytes_to_value(b"not metadata").unwrap();
+        Database::new(&keystore.store, DB_NAME)
+            .put(&[(key, Some(value))])
+            .unwrap();
+
+        assert!(keystore.migrate_deks(&from, &to).is_err());
+        assert_eq!(keystore.list_keks("a").unwrap(), vec![from]);
+    }
 
     #[test]
     fn wrapped_dek_accepts_both_on_disk_keys() {
