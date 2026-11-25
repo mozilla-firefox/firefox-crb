@@ -14,7 +14,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/urlbar/private/GeolocationUtils.sys.mjs",
   MerinoClient: "moz-src:///browser/components/urlbar/MerinoClient.sys.mjs",
   PersistentCache: "resource://newtab/lib/PersistentCache.sys.mjs",
+  recordWidgetsMerinoResult:
+    "resource://newtab/lib/Widgets/WidgetsMerinoResult.sys.mjs",
   Region: "resource://gre/modules/Region.sys.mjs",
+  trackWidgetsMerinoResult:
+    "resource://newtab/lib/Widgets/WidgetsMerinoResult.sys.mjs",
 });
 
 import {
@@ -27,12 +31,26 @@ const WEATHER_UPDATE_TIME = 10 * 60 * 1000; // 10 minutes
 const MERINO_PROVIDER = ["accuweather"];
 const RETRY_DELAY_MS = 60 * 1000; // 1 minute in ms.
 const MERINO_CLIENT_KEY = "HNT_WEATHER_FEED";
+// A MerinoClient aborts its in-flight request when it starts another, so the
+// location requests get their own clients and can't abort a weather report.
+const MERINO_LOCATION_SEARCH_CLIENT_KEY = "HNT_WEATHER_LOCATION_SEARCH";
+const MERINO_LOCATION_DETECT_CLIENT_KEY = "HNT_WEATHER_LOCATION_DETECT";
 
 const PREF_WEATHER_QUERY = "weather.query";
 const PREF_SHOW_WEATHER = "showWeather";
 const PREF_SYSTEM_SHOW_WEATHER = "system.showWeather";
 const PREF_NOVA_ENABLED = "nova.enabled";
 const PREF_WIDGETS_WEATHER_ENABLED = "widgets.weather.enabled";
+
+/**
+ * Returns a MerinoClient `onResult` callback that counts the request's result
+ * under the given `newtab.widgets_merino_result` key.
+ *
+ * @param {string} key
+ * @returns {(status: string, details: {httpStatus: ?number}) => void}
+ */
+const merinoResultRecorder = key => (status, details) =>
+  lazy.recordWidgetsMerinoResult(key, status, details);
 
 /**
  * A feature that periodically fetches weather suggestions from Merino for HNT.
@@ -44,6 +62,9 @@ export class WeatherFeed {
   constructor() {
     this.loaded = false;
     this.merino = null;
+    this.merinoLocationSearch = null;
+    this.merinoLocationDetect = null;
+    this.merinoTimeoutMs = 7000;
     this.suggestions = [];
     this.hourlyForecasts = [];
     this.lastUpdated = null;
@@ -97,6 +118,8 @@ export class WeatherFeed {
     this.clearTimeout(this.fetchTimer);
     this.clearTimeout(this.retryTimer);
     this.merino = null;
+    this.merinoLocationSearch = null;
+    this.merinoLocationDetect = null;
     this.suggestions = null;
     this.hourlyForecasts = null;
     this.fetchTimer = 0;
@@ -187,18 +210,25 @@ export class WeatherFeed {
   }
 
   async fetchLocationAutocomplete() {
-    if (!this.merino) {
-      this.merino = await this.MerinoClient(MERINO_CLIENT_KEY);
+    if (!this.merinoLocationSearch) {
+      this.merinoLocationSearch = await this.MerinoClient(
+        MERINO_LOCATION_SEARCH_CLIENT_KEY
+      );
     }
 
     const query = this.store.getState().Weather.locationSearchString;
     let data;
 
-    data = await this.merino.autoCompleteWeatherLocation({
+    const merinoResult = lazy.trackWidgetsMerinoResult(
+      "weather_location_search"
+    );
+    data = await this.merinoLocationSearch.autoCompleteWeatherLocation({
       query,
       source: "newtab",
-      timeoutMs: 7000,
+      timeoutMs: this.merinoTimeoutMs,
+      onResult: merinoResult.onResult,
     });
+    merinoResult.record(!!data?.locations?.length);
 
     // Send an empty list when nothing matches so the previous query's
     // suggestions don't stay visible.
@@ -362,14 +392,21 @@ export class WeatherFeed {
           ) {
             return { suggestions: [], hourlyForecasts: [] };
           }
-          const geolocation = await lazy.GeolocationUtils.geolocation();
+          const geolocationResult = lazy.trackWidgetsMerinoResult(
+            "weather_geolocation"
+          );
+          const geolocation = await lazy.GeolocationUtils.geolocation({
+            onResult: geolocationResult.onResult,
+          });
           if (!geolocation) {
+            geolocationResult.record(false);
             return { suggestions: [], hourlyForecasts: [] };
           }
           country = geolocation.country_code;
           region =
             geolocation.region_code || geolocation.region || geolocation.city;
           city = geolocation.city || geolocation.region;
+          geolocationResult.record(!!(country && region && city));
           if (!country || !region || !city) {
             return { suggestions: [], hourlyForecasts: [] };
           }
@@ -401,7 +438,8 @@ export class WeatherFeed {
             city,
             region,
             country,
-            timeoutMs: 7000,
+            timeoutMs: this.merinoTimeoutMs,
+            onResult: merinoResultRecorder("weather_report"),
           }),
           weatherForecastWidgetEnabled
             ? // When locationName is set, city/region/country are unresolved
@@ -415,6 +453,8 @@ export class WeatherFeed {
                   city: city || this.locationData?.city,
                   region: region || this.locationData?.adminName?.id,
                   country: country || this.locationData?.country?.id,
+                  timeoutMs: this.merinoTimeoutMs,
+                  onResult: merinoResultRecorder("weather_forecast"),
                 })
                 .catch(() => null)
             : Promise.resolve(null),
@@ -446,34 +486,48 @@ export class WeatherFeed {
   }
 
   async _fetchNormalizedLocation() {
-    const geolocation = await lazy.GeolocationUtils.geolocation();
+    const geolocationResult = lazy.trackWidgetsMerinoResult(
+      "weather_geolocation"
+    );
+    const geolocation = await lazy.GeolocationUtils.geolocation({
+      onResult: geolocationResult.onResult,
+    });
     if (!geolocation) {
+      geolocationResult.record(false);
       return null;
     }
 
     // "region" might be able to be city if geolocation.city is null
     const city = geolocation.city || geolocation.region;
+    geolocationResult.record(!!city);
     if (!city) {
       return null;
     }
 
-    if (!this.merino) {
-      this.merino = await this.MerinoClient(MERINO_CLIENT_KEY);
+    if (!this.merinoLocationDetect) {
+      this.merinoLocationDetect = await this.MerinoClient(
+        MERINO_LOCATION_DETECT_CLIENT_KEY
+      );
     }
 
     try {
+      const detectResult = lazy.trackWidgetsMerinoResult(
+        "weather_location_detect"
+      );
       // We use the given city name look up to get the normalized merino response
-      const locationData = await this.merino.fetch({
+      const locationData = await this.merinoLocationDetect.fetch({
         query: city,
         providers: MERINO_PROVIDER,
-        timeoutMs: 7000,
+        timeoutMs: this.merinoTimeoutMs,
         otherParams: {
           request_type: "location",
           source: "newtab",
         },
+        onResult: detectResult.onResult,
       });
 
       const response = locationData?.[0]?.locations?.[0];
+      detectResult.record(!!response);
       return response;
     } catch (err) {
       console.error("WeatherFeed failed to get normalized location");

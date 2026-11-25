@@ -1644,6 +1644,62 @@ newtab:
     send_in_pings:
       - newtab
 
+  widgets_merino_result:
+    type: dual_labeled_counter
+    description: >
+      Merino requests sent by New Tab widgets, by request and result. Only
+      requests that were sent are counted: a fresh cache or a missing endpoint
+      sends none, and a request that a newer one on the same client replaced
+      is not counted. Failing clients retry sooner than succeeding ones, so
+      request counts overstate how many clients are affected; compare clients
+      rather than requests. Only recorded on Firefox versions whose
+      MerinoClient reports the result of each request (bug 2093851).
+    dual_labels:
+      key:
+        description: >
+          The request. `weather_geolocation` is the geolocation lookup the
+          weather widget makes when no location is set.
+        labels:
+          - weather_report
+          - weather_forecast
+          - weather_location_search
+          - weather_location_detect
+          - weather_geolocation
+          - stocks_quotes
+          - stocks_watchlist
+          - stocks_search
+          - picture_of_the_day
+          - framed_widgets
+      category:
+        description: >
+          The result. `success` means the widget could use the response.
+          `no_suggestion` is a response it couldn't use: an empty response, a
+          204, a body that isn't valid JSON, or one without what the widget
+          needs. For the search and watchlist requests it also means that
+          nothing matched, which is not a failure. `network_error` is any
+          failure without a response, including a client that is offline.
+          `http_4xx` and `http_5xx` are responses with those status codes.
+        labels:
+          - success
+          - no_suggestion
+          - timeout
+          - network_error
+          - http_4xx
+          - http_5xx
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093851
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093851
+    data_sensitivity:
+      - technical
+      - interaction
+    notification_emails:
+      - jbrown@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    send_in_pings:
+      - newtab
+
   widgets_ready:
     type: event
     description: >

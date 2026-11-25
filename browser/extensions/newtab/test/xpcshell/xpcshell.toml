@@ -106,3 +106,5 @@ tags = "remote-settings"
 ["test_WallpaperFileNames.js"]
 
 ["test_WeatherFeed.js"]
+
+["test_WidgetsMerinoResult.js"]
