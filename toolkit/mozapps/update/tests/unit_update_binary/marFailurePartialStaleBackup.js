@@ -22,7 +22,16 @@ async function run_test() {
   setTestFilesAndDirsForFailure();
   await setupUpdaterTest(FILE_PARTIAL_MAR, false);
   let staleBackup = getApplyDirFile(STALE_BACKUP_REL_PATH);
-  writeFile(staleBackup, STALE_BACKUP_CONTENTS);
+  // On macOS the updater renames a leftover backup back over the file it backs
+  // up before it applies an update, so give it the file's own contents and
+  // permissions there.
+  if (AppConstants.platform == "macosx") {
+    let original = getApplyDirFile(STALE_BACKUP_REL_PATH.slice(0, -11));
+    writeFile(staleBackup, readFileBytes(original));
+    staleBackup.permissions = original.permissions;
+  } else {
+    writeFile(staleBackup, STALE_BACKUP_CONTENTS);
+  }
 
   // If execv is used the updater process will turn into the callback process
   // and the updater's return code will be that of the callback process.
@@ -37,22 +46,35 @@ async function run_test() {
   await testPostUpdateProcessing();
   checkPostUpdateRunningFile(false);
 
-  Assert.ok(
-    staleBackup.exists(),
-    MSG_SHOULD_EXIST + getMsgPath(staleBackup.path)
-  );
-  Assert.equal(
-    readFileBytes(staleBackup),
-    STALE_BACKUP_CONTENTS,
-    "the stale backup contents" + MSG_SHOULD_EQUAL
-  );
-  checkUpdateLogContains(
-    "backup_restore: not restoring a backup that this action did not create: " +
-      STALE_BACKUP_REL_PATH
-  );
-  // The check for temporary files that checkFilesAfterUpdateFailure performs
-  // would find the stale backup, which the updater leaves in place on purpose.
-  staleBackup.remove(false);
+  if (AppConstants.platform == "macosx") {
+    // On macOS the updater renames what earlier updates left in the bundle
+    // back before it applies an update.
+    Assert.ok(
+      !staleBackup.exists(),
+      MSG_SHOULD_NOT_EXIST + getMsgPath(staleBackup.path)
+    );
+    checkUpdateLogLeftoverLine(
+      "restoring",
+      STALE_BACKUP_REL_PATH.slice(0, -11)
+    );
+  } else {
+    Assert.ok(
+      staleBackup.exists(),
+      MSG_SHOULD_EXIST + getMsgPath(staleBackup.path)
+    );
+    Assert.equal(
+      readFileBytes(staleBackup),
+      STALE_BACKUP_CONTENTS,
+      "the stale backup contents" + MSG_SHOULD_EQUAL
+    );
+    checkUpdateLogContains(
+      "backup_restore: not restoring a backup that this action did not create: " +
+        STALE_BACKUP_REL_PATH
+    );
+    // The check for temporary files that checkFilesAfterUpdateFailure performs
+    // would find the stale backup, which the updater leaves in place on purpose.
+    staleBackup.remove(false);
+  }
   checkFilesAfterUpdateFailure(getApplyDirFile);
 
   await waitForUpdateXMLFiles();

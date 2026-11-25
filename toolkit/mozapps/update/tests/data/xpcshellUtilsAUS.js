@@ -3878,6 +3878,13 @@ function checkUpdateLogContents(
   // Remove leading timestamps
   updateLogContents = removeTimeStamps(updateLogContents);
 
+  // Tests that leave leftovers of earlier updates behind check for these lines
+  // separately.
+  updateLogContents = updateLogContents.replace(
+    /^RemoveUpdateLeftovers: .*/gm,
+    ""
+  );
+
   const channelPrefs = getTestFileByName(FILE_CHANNEL_PREFS);
   if (channelPrefs && !channelPrefs.originalContents) {
     updateLogContents = updateLogContents.replace(/.*defaults\/.*/g, "");
@@ -4025,6 +4032,31 @@ function checkUpdateLogContents(
  * @param   aCheckString
  *          The string to check if the update log contains.
  */
+/**
+ * Checks that the update log has the line that RemoveUpdateLeftovers writes
+ * for a leftover of an earlier update. The updater logs the leftover's full
+ * path.
+ *
+ * @param  aAction
+ *         "removing" or "restoring".
+ * @param  aRelPath
+ *         The leftover's path, or for "restoring" the path of the file that its
+ *         backup is renamed over, relative to the apply-to directory.
+ */
+function checkUpdateLogLeftoverLine(aAction, aRelPath) {
+  let hasLine = getLogFileContents()
+    .split(/\r?\n/)
+    .some(
+      line =>
+        line.includes(`RemoveUpdateLeftovers: ${aAction} `) &&
+        line.endsWith("/" + aRelPath)
+    );
+  Assert.ok(
+    hasLine,
+    `the update log should have the line for ${aAction} ${aRelPath}`
+  );
+}
+
 function checkUpdateLogContains(aCheckString) {
   let updateLogContents = getLogFileContents();
   updateLogContents = updateLogContents.replace(/\r\n/g, "\n");

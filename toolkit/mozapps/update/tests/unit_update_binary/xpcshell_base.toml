@@ -346,6 +346,12 @@ reason = "Windows only test"
 
 ["marSuccessComplete.js"]
 
+["marSuccessCompleteRemovesLeftovers_mac.js"]
+run-if = [
+  "os == 'mac'",
+]
+reason = "macOS only test"
+
 ["marSuccessPartial.js"]
 
 ["marSuccessPartialStaleDraft.js"]

@@ -67,12 +67,17 @@ async function run_test() {
   // Writing the new contents of a file just truncates its stale draft, so the
   // update would succeed whether the updater discarded that draft or not. Check
   // that it did discard it, rather than rely on a side effect of not doing so.
+  // On macOS the updater removes what earlier updates left in the bundle
+  // before it applies an update, so the drafts are gone by then.
   for (const staleDraftFile of gStaleDraftFiles) {
-    checkUpdateLogContains(
-      "draft_discard: discarding draft file: " +
-        staleDraftFile.relPathDir +
-        staleDraftFile.fileName
-    );
+    let relPath = staleDraftFile.relPathDir + staleDraftFile.fileName;
+    if (AppConstants.platform == "macosx") {
+      checkUpdateLogLeftoverLine("removing", relPath);
+    } else {
+      checkUpdateLogContains(
+        "draft_discard: discarding draft file: " + relPath
+      );
+    }
   }
 
   checkUpdateLogContents(LOG_PARTIAL_SUCCESS);

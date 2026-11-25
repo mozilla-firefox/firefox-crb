@@ -64,6 +64,8 @@
 #ifdef XP_MACOSX
 #  include "UpdateSettingsUtil.h"
 #  include "updaterfileutils_osx.h"
+#  include <fts.h>
+#  include <removefile.h>
 #  include <sys/xattr.h>
 #endif  // XP_MACOSX
 
@@ -2969,6 +2971,47 @@ static bool WriteStatusFile(const char* aStatus) {
 // Used by the elevated updater to tell the unelevated updater whether it has
 // recorded a result in the status file.
 bool DidWriteStatusFile() { return sDidWriteStatusFile; }
+
+// Undoes what an earlier, interrupted update left in the bundle at aDir: each
+// .moz-backup file is renamed back over the file it backs up, .moz-draft files
+// are removed, and so is an updating directory at the bundle's root. They
+// break the bundle's code signature, and the updater only restores the backups
+// that its current run created.
+static void RemoveUpdateLeftovers(const NS_tchar* aDir) {
+  struct stat st;
+  std::string updatingPath = std::string(aDir) + "/updating";
+  if (lstat(updatingPath.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+    LOG(("RemoveUpdateLeftovers: removing " LOG_S, updatingPath.c_str()));
+    removefile(updatingPath.c_str(), nullptr, REMOVEFILE_RECURSIVE);
+  }
+  char* paths[] = {const_cast<char*>(aDir), nullptr};
+  FTS* fts = fts_open(paths, FTS_PHYSICAL | FTS_NOCHDIR, nullptr);
+  if (!fts) {
+    return;
+  }
+  size_t backupExtLen = strlen(BACKUP_EXT);
+  size_t draftExtLen = strlen(DRAFT_EXT);
+  FTSENT* entry;
+  while ((entry = fts_read(fts)) != nullptr) {
+    if (entry->fts_info != FTS_F && entry->fts_info != FTS_SL &&
+        entry->fts_info != FTS_SLNONE) {
+      continue;
+    }
+    size_t length = strlen(entry->fts_path);
+    if (length > backupExtLen &&
+        strcasecmp(entry->fts_path + length - backupExtLen, BACKUP_EXT) == 0) {
+      std::string original(entry->fts_path, length - backupExtLen);
+      LOG(("RemoveUpdateLeftovers: restoring " LOG_S, original.c_str()));
+      rename(entry->fts_path, original.c_str());
+    } else if (length > draftExtLen &&
+               strcasecmp(entry->fts_path + length - draftExtLen, DRAFT_EXT) ==
+                   0) {
+      LOG(("RemoveUpdateLeftovers: removing " LOG_S, entry->fts_path));
+      unlink(entry->fts_path);
+    }
+  }
+  fts_close(fts);
+}
 #endif
 
 /**
@@ -3573,6 +3616,13 @@ static void UpdateThreadFunc([[maybe_unused]] void* param) {
 #endif
     }
 
+#ifdef XP_MACOSX
+    // This is the install for a non-staged update, the copy that a staged
+    // update is applied to, and the elevated updater's root-only clone.
+    if (rv == OK) {
+      RemoveUpdateLeftovers(gWorkingDirPath);
+    }
+#endif
     if (rv == OK) {
       rv = CreateUpdatingDir();
     }
