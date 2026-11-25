@@ -110,8 +110,9 @@ bool ServeElevatedUpdate(int aArgc, const char** aArgv,
 void RemoveLeftoverHelper();
 void SetGroupOwnershipAndPermissions(const char* aAppBundle);
 // Resolves aInstallDir, checks that it is an app bundle on a volume that root
-// mounted with ownership enabled, and keeps a descriptor to it. Returns OK or
-// the error to record.
+// mounted with ownership enabled and that neither the client nor anyone the
+// helper doesn't accept can change it, and keeps a descriptor to it. Returns
+// OK or the error to record.
 int ValidateAndPinInstallDir(const char* aInstallDir);
 // Copies the path of the directory that ValidateAndPinInstallDir pinned.
 bool GetPinnedInstallDirPath(char* aPath, size_t aLength);
