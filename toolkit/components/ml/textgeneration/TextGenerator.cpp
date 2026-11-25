@@ -221,7 +221,8 @@ JSObject* TextGenerator::WrapObject(JSContext* aCx,
 /* static */
 already_AddRefed<Promise> TextGenerator::Create(
     const dom::GlobalObject& aGlobal, dom::Blob& aModel,
-    const dom::TextGeneratorCreateOptions& aOptions, ErrorResult& aRv) {
+    const dom::TextGeneratorCreateOptions& aOptions, dom::Blob* aMmproj,
+    ErrorResult& aRv) {
   AssertIsOnMainThread();
   nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
   RefPtr<Promise> promise = Promise::Create(global, aRv);
@@ -242,11 +243,23 @@ already_AddRefed<Promise> TextGenerator::Create(
     return promise.forget();
   }
   mozilla::ipc::FileDescriptor modelFd = fd.unwrap();
+
+  mozilla::ipc::FileDescriptor mmprojFd;
+  if (aMmproj) {
+    auto mmprojResult = BlobToModelFd(aGlobal.Context(), *aMmproj);
+    if (mmprojResult.isErr()) {
+      promise->MaybeRejectWithDataError(
+          nsDependentCString(mmprojResult.unwrapErr()));
+      return promise.forget();
+    }
+    mmprojFd = mmprojResult.unwrap();
+  }
+
   TextGenerationOptions options = ResolveTextGenerationOptions(aOptions);
 
   TimeStamp acquireStart = TimeStamp::Now();
   RefPtr<TextGenerationParent> actor =
-      TextGenerationParent::Create(modelFd, options);
+      TextGenerationParent::Create(modelFd, mmprojFd, options);
   if (!actor) {
     MarkFailed(acquireStart, "process acquire"_ns,
                "no inference process available"_ns);

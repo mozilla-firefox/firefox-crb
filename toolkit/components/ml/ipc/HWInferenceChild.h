@@ -28,7 +28,8 @@ class HWInferenceChild final : public PHWInferenceChild {
 
   mozilla::ipc::IPCResult RecvNewTextGeneration(
       Endpoint<hwinference::PTextGenerationChild>&& aEndpoint,
-      const ipc::FileDescriptor& aModel, const TextGenerationOptions& aOptions);
+      const ipc::FileDescriptor& aModel, const ipc::FileDescriptor& aMmproj,
+      const TextGenerationOptions& aOptions);
 
   mozilla::ipc::IPCResult RecvListDevices(ListDevicesResolver&& aResolver);
 

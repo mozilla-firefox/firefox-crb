@@ -40,7 +40,8 @@ class TextGenerationParent final : public PTextGenerationParent {
   // aModel, the model file the parent opened. Null if the process cannot be
   // launched. The caller ends it with Close().
   static already_AddRefed<TextGenerationParent> Create(
-      const ipc::FileDescriptor& aModel, const TextGenerationOptions& aOptions);
+      const ipc::FileDescriptor& aModel, const ipc::FileDescriptor& aMmproj,
+      const TextGenerationOptions& aOptions);
 
   // Whether Create() found the process already up.
   bool ProcessReused() const { return mProcessReused; }

@@ -26,6 +26,7 @@ class TextGenerationChild final : public PTextGenerationChild {
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(TextGenerationChild, override);
 
   TextGenerationChild(const ipc::FileDescriptor& aModel,
+                      const ipc::FileDescriptor& aMmproj,
                       const TextGenerationOptions& aOptions);
 
   // Call once the actor is bound; reports the load outcome with Ready.
@@ -51,6 +52,7 @@ class TextGenerationChild final : public PTextGenerationChild {
   void DispatchToActorThread(const char* aName, std::function<void()>&& aFn);
 
   ipc::FileDescriptor mModel;
+  ipc::FileDescriptor mMmproj;
   const TextGenerationOptions mOptions;
 
   // Model work and conversation history are confined to this thread.

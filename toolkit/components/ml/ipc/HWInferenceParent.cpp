@@ -197,10 +197,13 @@ void HWInferenceParent::StartContentSpeechRecognition(
 
 void HWInferenceParent::StartTextGeneration(
     Endpoint<PTextGenerationChild>&& aEndpoint,
-    const ipc::FileDescriptor& aModel, const TextGenerationOptions& aOptions) {
+    const ipc::FileDescriptor& aMmproj, const ipc::FileDescriptor& aModel,
+    const TextGenerationOptions& aOptions) {
   SendWhenReady([endpoint = std::move(aEndpoint), model = aModel,
+                 mmproj = aMmproj,
                  options = aOptions](HWInferenceParent& aSelf) mutable {
-    return aSelf.SendNewTextGeneration(std::move(endpoint), model, options);
+    return aSelf.SendNewTextGeneration(std::move(endpoint), model, mmproj,
+                                       options);
   });
 }
 
