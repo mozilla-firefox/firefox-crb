@@ -3310,6 +3310,19 @@
   num_temps: 1
   mir_op: true
 
+- name: WasmArrayCopyInlineIfSmall
+  result_type: WordSized
+  operands:
+    instance: WordSized
+    dstArray: WordSized
+    dstData: WordSized
+    dstIndex: WordSized
+    srcData: WordSized
+    srcIndex: WordSized
+    numElements: WordSized
+  num_temps: 6
+  mir_op: true
+
 # Generational write barrier used when writing an object to another object.
 - name: WasmPostWriteBarrierWholeCell
   operands:

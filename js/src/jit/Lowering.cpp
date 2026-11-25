@@ -7207,6 +7207,24 @@ void LIRGenerator::visitWasmStoreRef(MWasmStoreRef* ins) {
       ins);
 }
 
+void LIRGenerator::visitWasmArrayCopyInlineIfSmall(
+    MWasmArrayCopyInlineIfSmall* ins) {
+  // The instance and destination array are only read for reference elements.
+  // The output register is also used as a scratch register, so no input may
+  // share it. The values are moved through the four SIMD temps.
+  LAllocation instance =
+      ins->refs() ? useRegister(ins->instance()) : useAny(ins->instance());
+  LAllocation dstArray =
+      ins->refs() ? useRegister(ins->dstArray()) : useAny(ins->dstArray());
+  define(
+      new (alloc()) LWasmArrayCopyInlineIfSmall(
+          instance, dstArray, useRegister(ins->dstData()),
+          useRegister(ins->dstIndex()), useRegister(ins->srcData()),
+          useRegister(ins->srcIndex()), useRegister(ins->numElements()), temp(),
+          temp(), tempSimd128(), tempSimd128(), tempSimd128(), tempSimd128()),
+      ins);
+}
+
 void LIRGenerator::visitWasmPostWriteBarrierWholeCell(
     MWasmPostWriteBarrierWholeCell* ins) {
   // No post-write barrier needed for null stores.

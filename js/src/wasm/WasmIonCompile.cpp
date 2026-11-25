@@ -5457,6 +5457,38 @@ class FunctionCompiler {
     curBlock_->end(test);
     curBlock_ = copyBlock;
 
+#if defined(JS_CODEGEN_ARM64) || \
+    (defined(JS_CODEGEN_X64) && defined(ENABLE_JIT_SIMD))
+    // Copy up to 64 bytes inline with SIMD loads and stores when no GC barrier
+    // is needed, otherwise call the builtin. A reference copy into an array
+    // that isn't freshly allocated usually needs a barrier, so it always calls
+    // the builtin. The inline copy doesn't mask its indices, so it is not used
+    // with Spectre index masking.
+    if ((!elemsAreRefTyped || dstArrayObject->isWasmNewArrayObject()) &&
+        !JitOptions.spectreIndexMasking) {
+      const uint32_t maxInlineBytes = 64;
+      MDefinition* dstData = getWasmArrayObjectData(dstArrayObject);
+      MDefinition* srcData = getWasmArrayObjectData(srcArrayObject);
+      if (!dstData || !srcData) {
+        return false;
+      }
+      auto* copied = MWasmArrayCopyInlineIfSmall::New(
+          alloc(), instancePointer_, dstArrayObject, dstData, dstArrayIndex,
+          srcData, srcArrayIndex, numElements, elemSize,
+          maxInlineBytes / uint32_t(elemSize), elemsAreRefTyped);
+      curBlock_->add(copied);
+      MBasicBlock* callBlock = nullptr;
+      if (!newBlock(curBlock_, &callBlock)) {
+        return false;
+      }
+      curBlock_->end(MTest::New(alloc(), copied, joinBlock, callBlock));
+      if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
+        return false;
+      }
+      curBlock_ = callBlock;
+    }
+#endif
+
     if (elemsAreRefTyped) {
       MOZ_RELEASE_ASSERT(elemSize == sizeof(void*));
 
@@ -5486,6 +5518,8 @@ class FunctionCompiler {
     if (!joinBlock->addPredecessor(alloc(), curBlock_)) {
       return false;
     }
+    // The call block was created after the join block.
+    mirGraph().moveBlockToEnd(joinBlock);
     curBlock_ = joinBlock;
     return true;
   }

@@ -11543,6 +11543,114 @@ void CodeGenerator::visitWasmStoreElementRef(LWasmStoreElementRef* ins) {
   // The postbarrier is handled separately.
 }
 
+void CodeGenerator::visitWasmArrayCopyInlineIfSmall(
+    LWasmArrayCopyInlineIfSmall* lir) {
+#if defined(JS_CODEGEN_ARM64) || \
+    (defined(JS_CODEGEN_X64) && defined(ENABLE_JIT_SIMD))
+  const MWasmArrayCopyInlineIfSmall* mir = lir->mir();
+  uint32_t elemSize = mir->elemSize();
+  uint32_t shift = mozilla::FloorLog2(elemSize);
+  Register numElements = ToRegister(lir->numElements());
+  Register dst = ToRegister(lir->temp0());
+  Register src = ToRegister(lir->temp1());
+  FloatRegister v0 = ToFloatRegister(lir->temp2());
+  FloatRegister v1 = ToFloatRegister(lir->temp3());
+  FloatRegister v2 = ToFloatRegister(lir->temp4());
+  FloatRegister v3 = ToFloatRegister(lir->temp5());
+  // The scratch register for the checks, then the number of bytes to copy.
+  Register bytes = ToRegister(lir->output());
+
+  Label notCopied, copied;
+  masm.branch32(Assembler::Above, numElements, Imm32(mir->maxElements()),
+                &notCopied);
+  if (mir->refs()) {
+    masm.loadPtr(
+        Address(ToRegister(lir->instance()),
+                wasm::Instance::offsetOfAddressOfNeedsMarkingBarrier()),
+        bytes);
+    masm.branchTest32(Assembler::NonZero, Address(bytes, 0), Imm32(0x1),
+                      &notCopied);
+    masm.branchPtrInNurseryChunk(
+        Assembler::NotEqual, ToRegister(lir->dstArray()), bytes, &notCopied);
+  }
+  masm.move32ZeroExtendToPtr(ToRegister(lir->dstIndex()), dst);
+  masm.lshiftPtr(Imm32(shift), dst);
+  masm.addPtr(ToRegister(lir->dstData()), dst);
+  masm.move32ZeroExtendToPtr(ToRegister(lir->srcIndex()), src);
+  masm.lshiftPtr(Imm32(shift), src);
+  masm.addPtr(ToRegister(lir->srcData()), src);
+  masm.move32ZeroExtendToPtr(numElements, bytes);
+  masm.lshiftPtr(Imm32(shift), bytes);
+
+  // Copy the 1..64 bytes as memmove does: load everything, then store, with
+  // two (or four) possibly overlapping accesses at the start and the end.
+  auto tail = [&](Register base, int32_t size) {
+    return BaseIndex(base, bytes, TimesOne, -size);
+  };
+  Label from4, from8, from16, from33;
+  if (elemSize == 1) {
+    // 1 or 2 bytes, as 3 would need two GPRs.
+    Label notOne;
+    masm.branchPtr(Assembler::NotEqual, bytes, Imm32(1), &notOne);
+    masm.load8ZeroExtend(Address(src, 0), bytes);
+    masm.store8(bytes, Address(dst, 0));
+    masm.jump(&copied);
+    masm.bind(&notOne);
+    masm.branchPtr(Assembler::Equal, bytes, Imm32(3), &notCopied);
+  }
+  if (elemSize <= 2) {
+    masm.branchPtr(Assembler::AboveOrEqual, bytes, Imm32(4), &from4);
+    masm.load16ZeroExtend(Address(src, 0), bytes);
+    masm.store16(bytes, Address(dst, 0));
+    masm.jump(&copied);
+  }
+  masm.bind(&from4);
+  if (elemSize <= 4) {
+    masm.branchPtr(Assembler::AboveOrEqual, bytes, Imm32(8), &from8);
+    masm.loadFloat32(Address(src, 0), v0.asSingle());
+    masm.loadFloat32(tail(src, 4), v1.asSingle());
+    masm.storeFloat32(v0.asSingle(), Address(dst, 0));
+    masm.storeFloat32(v1.asSingle(), tail(dst, 4));
+    masm.jump(&copied);
+  }
+  masm.bind(&from8);
+  if (elemSize <= 8) {
+    masm.branchPtr(Assembler::AboveOrEqual, bytes, Imm32(16), &from16);
+    masm.loadDouble(Address(src, 0), v0.asDouble());
+    masm.loadDouble(tail(src, 8), v1.asDouble());
+    masm.storeDouble(v0.asDouble(), Address(dst, 0));
+    masm.storeDouble(v1.asDouble(), tail(dst, 8));
+    masm.jump(&copied);
+  }
+  masm.bind(&from16);
+  masm.branchPtr(Assembler::Above, bytes, Imm32(32), &from33);
+  masm.loadUnalignedSimd128(Address(src, 0), v0);
+  masm.loadUnalignedSimd128(tail(src, 16), v1);
+  masm.storeUnalignedSimd128(v0, Address(dst, 0));
+  masm.storeUnalignedSimd128(v1, tail(dst, 16));
+  masm.jump(&copied);
+  masm.bind(&from33);
+  masm.loadUnalignedSimd128(Address(src, 0), v0);
+  masm.loadUnalignedSimd128(Address(src, 16), v1);
+  masm.loadUnalignedSimd128(tail(src, 32), v2);
+  masm.loadUnalignedSimd128(tail(src, 16), v3);
+  masm.storeUnalignedSimd128(v0, Address(dst, 0));
+  masm.storeUnalignedSimd128(v1, Address(dst, 16));
+  masm.storeUnalignedSimd128(v2, tail(dst, 32));
+  masm.storeUnalignedSimd128(v3, tail(dst, 16));
+
+  Label done;
+  masm.bind(&copied);
+  masm.move32(Imm32(1), bytes);
+  masm.jump(&done);
+  masm.bind(&notCopied);
+  masm.move32(Imm32(0), bytes);
+  masm.bind(&done);
+#else
+  MOZ_CRASH("No inline wasm array.copy on this platform");
+#endif
+}
+
 void CodeGenerator::visitWasmPostWriteBarrierWholeCell(
     LWasmPostWriteBarrierWholeCell* lir) {
   Register object = ToRegister(lir->object());
