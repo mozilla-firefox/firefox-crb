@@ -1367,7 +1367,7 @@ function setAppBundleModTime() {
  * directory has been updated when an update has been successfully applied
  * (bug 600098).
  */
-function checkAppBundleModTime() {
+function checkAppBundleModTime(aShouldChange = true) {
   if (AppConstants.platform != "macosx") {
     return;
   }
@@ -1378,6 +1378,15 @@ function checkAppBundleModTime() {
   let now = Date.now();
   let applyToDir = getApplyDirFile();
   let timeDiff = Math.abs(applyToDir.lastModifiedTime - now);
+  if (!aShouldChange) {
+    Assert.greaterOrEqual(
+      timeDiff,
+      MAC_MAX_TIME_DIFFERENCE,
+      "the last modified time on the apply to directory should not " +
+        "change after a failed update"
+    );
+    return;
+  }
   Assert.less(
     timeDiff,
     MAC_MAX_TIME_DIFFERENCE,
