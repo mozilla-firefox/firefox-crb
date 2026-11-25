@@ -10,15 +10,16 @@ const {
 } = require("resource://devtools/client/shared/unicode-url.js");
 
 export function getFilenameFromPath(pathname) {
-  let filename = "";
-  if (pathname) {
-    filename = pathname.substring(pathname.lastIndexOf("/") + 1);
-    // This file does not have a name. Default should be (index).
-    if (filename == "") {
-      filename = "(index)";
-    } else if (filename == ":formatted") {
-      filename = "(index:formatted)";
-    }
+  if (!pathname) {
+    return "";
+  }
+
+  const filename = pathname.substring(pathname.lastIndexOf("/") + 1);
+  // This file does not have a name. Default should be (index).
+  if (filename == "") {
+    return "(index)";
+  } else if (filename == ":formatted") {
+    return "(index:formatted)";
   }
   return filename;
 }

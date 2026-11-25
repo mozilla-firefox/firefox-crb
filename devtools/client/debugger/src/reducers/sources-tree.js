@@ -138,7 +138,7 @@ export default function update(state = initialSourcesTreeState(), action) {
       return state;
     }
     case "ADD_SOURCES": {
-      // This action handles target sources (i.e. the html source related to a target)
+      // This action only handles target sources (i.e. the html source related to a target)
       const sources = action.sources.filter(source => source.isHTML);
       if (!sources.length) {
         return state;
@@ -460,6 +460,7 @@ function addSortedItem(array, newValue, comparator) {
 let lastThreadItem = null;
 let lastGroupItem = null;
 let lastDirectoryItem = null;
+const directoryItemSources = new Map();
 
 function addSource(threadItems, source, sourceActor, threadActorID) {
   // Ensure creating or fetching the related Thread Item
@@ -506,33 +507,51 @@ function addSource(threadItems, source, sourceActor, threadActorID) {
     lastDirectoryItem = null;
   }
 
+  let { path, filename } = displayURL;
+
   // Then ensure creating or fetching all possibly nested Directory Item(s)
-  const { path } = displayURL;
   const parentPath = path.substring(0, path.lastIndexOf("/"));
   let directoryItem;
   if (lastDirectoryItem?.path == parentPath) {
     directoryItem = lastDirectoryItem;
   } else {
-    directoryItem = addOrGetParentDirectory(groupItem, parentPath);
+    directoryItem = addOrGetParentDirectory(
+      groupItem,
+      parentPath,
+      directoryItemSources
+    );
     lastDirectoryItem = directoryItem;
   }
-
   // Check if a previous source actor registered this source.
   // It happens if we load the same url multiple times, or,
   // for inline sources (=HTML pages with inline scripts).
   const existing = directoryItem.children.find(item => {
-    return item.type == sourceTree.itemTypes.SOURCE && item.source == source;
+    return item.type == sourceTree.itemTypes.SOURCE &&
+      item.source == source &&
+      !sourceActor?.isInlineStyle
   });
+
   if (existing) {
     return false;
   }
 
-  // Finaly, create the Source Item and register it in its parent Directory Item
-  const sourceItem = createSourceTreeItem(source, sourceActor, directoryItem);
-  // Copy children in order to force updating react in case we picked
-  // this directory as a project root
-  directoryItem.children = [...directoryItem.children];
-  addSortedItem(directoryItem.children, sourceItem, sortItems);
+  // Find the target source got the inline style source actor, and update the source item to include the new source actor.
+  const existingSourceTreeItem = directoryItem.children.find(item => {
+    return item.type == sourceTree.itemTypes.SOURCE &&
+      sourceActor?.isInlineStyle &&
+      item.source.id == sourceActor?.source;
+  });
+
+  if (!existingSourceTreeItem) {
+    // Finally, create the Source Item and register it in its parent Directory Item
+    const sourceItem = createSourceTreeItem(source, sourceActor, directoryItem);
+    // Copy children in order to force updating react in case we picked
+    // this directory as a project root
+    directoryItem.children = [...directoryItem.children];
+    addSortedItem(directoryItem.children, sourceItem, sortItems);
+  } else {
+    updateSourceItem(existingSourceTreeItem, source, sourceActor);
+  }
 
   return true;
 }
@@ -689,10 +708,16 @@ function addOrGetParentDirectory(groupItem, path) {
   // It doesn't exists, so we will create a new Directory Item.
   // But now, lookup recursively for the parent Item for this to-be-create Directory Item
   const parentPath = path.substring(0, path.lastIndexOf("/"));
-  const parentDirectory = addOrGetParentDirectory(groupItem, parentPath);
+  const parentDirectory = addOrGetParentDirectory(
+    groupItem,
+    parentPath
+  );
 
   // We can now create the new Directory Item and register it in its parent Item.
-  const directory = createDirectoryTreeItem(path, parentDirectory);
+  const directory = createDirectoryTreeItem(
+    path,
+    parentDirectory
+  );
   // Copy children in order to force updating react in case we picked
   // this directory as a project root
   parentDirectory.children = [...parentDirectory.children];
@@ -712,7 +737,7 @@ function addOrGetParentDirectory(groupItem, path) {
 // Highlights the attributes that all Source Tree Item should expose
 function createBaseTreeItem({ type, parent, uniquePath, children }) {
   return {
-    // Can be: thread, group, directory or source
+    // Can be: thread, group, directory, source or directory-sour e
     type,
     // Reference to the parent TreeItem
     parent,
@@ -803,18 +828,31 @@ function createDirectoryTreeItem(path, parent) {
   };
 }
 function createSourceTreeItem(source, sourceActor, parent) {
+  const itemId = sourceActor?.isInlineStyle
+    ? `${source.id}|${sourceActor.actor}`
+    : source.id;
+
   return {
     ...createBaseTreeItem({
       type: sourceTree.itemTypes.SOURCE,
       parent,
-      uniquePath: `${parent.uniquePath}|${source.id}`,
-      // Sources items are leaves of the SourceTree
+      uniquePath: `${parent.uniquePath}|${itemId}`,
+      // Sources items with no children are leaves of the SourceTree
       children: null,
     }),
-
     source,
     sourceActor,
+    longName: sourceActor?.isInlineStyle
+      ? `#style xxxx ${sourceActor?.index}`
+      : source.longName,
+    title: `${source.url}${sourceActor?.isInlineStyle ? `#style ${sourceActor?.index}` : ""}`,
   };
+}
+
+function updateSourceItem(sourceTreeItem, source, sourceActor) {
+  const childSourceTreeItem = createSourceTreeItem(source, sourceActor, sourceTreeItem);
+  const children = sourceTreeItem.children || [];
+  sourceTreeItem.children = [...children, childSourceTreeItem];
 }
 
 /**

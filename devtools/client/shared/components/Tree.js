@@ -52,6 +52,7 @@ class ArrowExpander extends Component {
   static get propTypes() {
     return {
       expanded: PropTypes.bool,
+      onClick: PropTypes.func,
     };
   }
 
@@ -71,6 +72,7 @@ class ArrowExpander extends Component {
     return dom.button({
       className: classNames.join(" "),
       title,
+      onClick: this.props.onClick,
     });
   }
 }
@@ -202,12 +204,14 @@ class TreeNode extends Component {
       expanded,
       renderItem,
       isExpandable,
+      onClick
     } = this.props;
 
     const arrow = isExpandable
       ? ArrowExpanderFactory({
           item,
           expanded,
+          onClick
         })
       : null;
 

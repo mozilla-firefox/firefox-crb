@@ -17,7 +17,9 @@ import {
   getFormattedSourceId,
 } from "../../utils/source";
 import { createLocation } from "../../utils/location";
-import { getDisplayURL } from "../../utils/sources-tree/getURL";
+import {
+  getDisplayURL,
+} from "../../utils/sources-tree/getURL";
 
 const ResourceCommand = require("resource://devtools/shared/commands/resource/resource-command.js");
 
@@ -218,7 +220,15 @@ export function makeScriptSourceId(sourceResource) {
   return `source-actor-${sourceResource.actor}`;
 }
 
+export function makeStyleSheetSourceUrl(sourceResource) {
+  const href = sourceResource.href || sourceResource.nodeHref;
+  return href;
+}
+
 export function makeStyleSheetSourceId(sourceResource) {
+  if (sourceResource.isInlineStyle) {
+    return makeTargetSourceId(sourceResource.targetFront);
+  }
   // Base the source id on the actor as we can have multiple stylesheets with the same href
   // (e.g. link to same external style sheet within the HTML page)
   return `source-actor-${sourceResource.resourceId}`;
@@ -269,7 +279,7 @@ export function createStyleSheet(stylesheetResource) {
   return {
     ...createSourceObject({
       id: makeStyleSheetSourceId(stylesheetResource),
-      url: stylesheetResource.href,
+      url: makeStyleSheetSourceUrl(stylesheetResource),
     }),
     // Stylesheet specific properties
     isStyleSheet: true,
@@ -516,7 +526,7 @@ export function createScriptSourceActor(sourceResource, sourceObject) {
  *        STYLESHEET resource coming from the ResourceCommand API.
  *        This represents the `StyleSheetsActor` from the server codebase.
  * @param {object} styleSheetObject
- *        style sheet object stored in redux, i.e. created via createSourceObject.
+ *        style sheet object stored in redux, this is created via createSourceObject or createTargetSource for inline stylesheets.
  */
 export function createStyleSheetActor(stylesheetResource, styleSheetObject) {
   return {
@@ -532,6 +542,8 @@ export function createStyleSheetActor(stylesheetResource, styleSheetObject) {
     sourceMapURL: stylesheetResource.sourceMapURL,
     // There is no `url` for stylesheets, lets use the href
     url: stylesheetResource.href,
+    isInlineStyle: stylesheetResource.isInlineStyle,
+    index: stylesheetResource.styleSheetIndex,
   };
 }
 
