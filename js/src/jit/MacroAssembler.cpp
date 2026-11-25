@@ -851,6 +851,28 @@ void MacroAssembler::copySlotsFromTemplate(
   }
 }
 
+void MacroAssembler::zeroWords(Address base, uint32_t numWords) {
+  uint32_t i = 0;
+#if defined(JS_CODEGEN_ARM64)
+  for (; i + 2 <= numWords; i += 2) {
+    Stp(vixl::xzr, vixl::xzr,
+        toMemOperand(Address(base.base, base.offset + i * sizeof(void*))));
+  }
+#elif defined(JS_CODEGEN_X64) && defined(ENABLE_JIT_SIMD)
+  if (numWords >= 2) {
+    ScratchSimd128Scope zero(*this);
+    vxorps(zero, zero, zero);
+    for (; i + 2 <= numWords; i += 2) {
+      storeUnalignedSimd128(
+          zero, Address(base.base, base.offset + i * sizeof(void*)));
+    }
+  }
+#endif
+  for (; i < numWords; i++) {
+    storePtr(ImmWord(0), Address(base.base, base.offset + i * sizeof(void*)));
+  }
+}
+
 void MacroAssembler::fillSlotsWithConstantValue(Address base, Register temp,
                                                 uint32_t start, uint32_t end,
                                                 const Value& v) {
@@ -7867,10 +7889,9 @@ void MacroAssembler::wasmNewStructObject(Register instance, Register result,
   if (zeroFields) {
     static_assert(wasm::WasmStructObject_Size_ASSUMED % sizeof(void*) == 0);
     MOZ_ASSERT(sizeBytes % sizeof(void*) == 0);
-    for (size_t i = wasm::WasmStructObject_Size_ASSUMED; i < sizeBytes;
-         i += sizeof(void*)) {
-      storePtr(ImmWord(0), Address(result, i));
-    }
+    zeroWords(
+        Address(result, wasm::WasmStructObject_Size_ASSUMED),
+        (sizeBytes - wasm::WasmStructObject_Size_ASSUMED) / sizeof(void*));
   }
 }
 
@@ -8089,21 +8110,7 @@ void MacroAssembler::wasmNewArrayObjectFixed(
 
   if (zeroFields) {
     MOZ_ASSERT(arrayDataBytes % sizeof(void*) == 0);
-
-    // Advance temp1 to just past the end of the allocation
-    // (note that temp2 is already past the data header)
-    Label done;
-    computeEffectiveAddress(Address(temp2, arrayDataBytes), temp1);
-    branchPtr(Assembler::Equal, temp1, temp2, &done);
-
-    // Count temp2 down toward temp1, zeroing one word at a time
-    Label loop;
-    bind(&loop);
-    subPtr(Imm32(sizeof(void*)), temp1);
-    storePtr(ImmWord(0), Address(temp1, 0));
-    branchPtr(Assembler::NotEqual, temp1, temp2, &loop);
-
-    bind(&done);
+    zeroWords(Address(temp2, 0), arrayDataBytes / sizeof(void*));
   }
 }
 
