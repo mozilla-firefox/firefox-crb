@@ -7,6 +7,7 @@ package mozilla.components.compose.menu.ui.customize
 import mozilla.components.compose.base.text.Text
 import mozilla.components.compose.menu.data.CustomizableMenuItem
 import mozilla.components.compose.menu.data.ExpandableMenuItem
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import mozilla.components.compose.menu.data.MenuItemTitle
 import mozilla.components.compose.menu.data.StandardMenuItem
 import mozilla.components.compose.menu.store.MenuEvent
@@ -16,6 +17,7 @@ import mozilla.components.compose.menu.ui.customize.EditMenuItemsRow.Item
 import mozilla.components.compose.menu.ui.customize.EditMenuItemsRow.SubItemsEnd
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -24,6 +26,7 @@ class CustomizeMenuItemsTest {
     private val b = item("b")
     private val c = item("c")
     private val d = item("d")
+    private val groupItem = item("group").copy(affinity = MenuItemAffinity.GROUP)
 
     @Test
     fun `GIVEN shown and hidden items THEN the rows of the shown ones are followed by the ones of the hidden ones`() {
@@ -613,6 +616,121 @@ class CustomizeMenuItemsTest {
         assertEquals(listOf("more", "x"), intoSubItems.shown.map { it.id })
         assertEquals(listOf("more", "b", "x", "a"), toTop.shown.map { it.id })
         assertEquals(listOf(y), toTop.subItemsOf("more"))
+    }
+
+    @Test
+    fun `WHEN a group item is dropped among the sub-items of a shown expandable item THEN nothing changes`() {
+        val more = expandable("more", c)
+        val items =
+            CustomizeMenuItems(shown = listOf(a, groupItem, more), hidden = emptyList(), expandedIds = setOf("more"))
+
+        assertEquals(items, items.drop("group", NextTo("c", placeAfter = false)))
+        assertEquals(items, items.drop("group", NextTo("more", placeAfter = true)))
+        assertEquals(items, items.drop("group", NextTo(subItemsEndKey("more"), placeAfter = false)))
+    }
+
+    @Test
+    fun `WHEN a group item is dropped among the sub-items of a hidden expandable item THEN nothing changes`() {
+        val more = expandable("more", c)
+        val items = CustomizeMenuItems(shown = listOf(a, groupItem), hidden = listOf(more), expandedIds = setOf("more"))
+
+        assertEquals(items, items.drop("group", NextTo("c", placeAfter = false)))
+        assertEquals(items, items.drop("group", NextTo(subItemsEndKey("more"), placeAfter = false)))
+    }
+
+    @Test
+    fun `WHEN a group item is dropped at the top level or among the hidden items THEN it is placed there`() {
+        val more = expandable("more", c)
+        val items =
+            CustomizeMenuItems(shown = listOf(a, groupItem, more), hidden = listOf(b), expandedIds = setOf("more"))
+
+        val first = items.drop("group", NextTo("a", placeAfter = false))
+        val hidden = items.drop("group", NextTo("b", placeAfter = false))
+
+        assertEquals(listOf("group", "a", "more"), first.shown.map { it.id })
+        assertEquals(listOf("group", "b"), hidden.hidden.map { it.id })
+    }
+
+    @Test
+    fun `WHEN a group item is dropped inside an expandable item THEN it is rejected as a sub-item`() {
+        val more = expandable("more", c)
+        val hiddenMore = expandable("hidden more", d)
+        val items =
+            CustomizeMenuItems(
+                shown = listOf(a, groupItem, more),
+                hidden = listOf(hiddenMore),
+                expandedIds = setOf("more", "hidden more"),
+            )
+
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("c", placeAfter = false)))
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("more", placeAfter = true)))
+        assertEquals(
+            DropOutcome.RejectedAsSubItem,
+            items.dropOutcome("group", NextTo(subItemsEndKey("hidden more"), placeAfter = false)),
+        )
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("d", placeAfter = true)))
+    }
+
+    @Test
+    fun `WHEN an expandable group item is dropped inside another expandable item THEN it is rejected as a sub-item`() {
+        val more = expandable("more", c)
+        val extensions = expandable("extensions").copy(affinity = MenuItemAffinity.GROUP)
+        val items =
+            CustomizeMenuItems(shown = listOf(a, extensions, more), hidden = emptyList(), expandedIds = setOf("more"))
+
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("extensions", NextTo("c", placeAfter = false)))
+        assertEquals(items, items.drop("extensions", NextTo("c", placeAfter = false)))
+    }
+
+    @Test
+    fun `WHEN a group item is dropped at the top level, hidden or in place THEN it is not rejected as a sub-item`() {
+        val more = expandable("more", c)
+        val items =
+            CustomizeMenuItems(shown = listOf(a, groupItem, more), hidden = listOf(b), expandedIds = setOf("more"))
+
+        assertNotEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("a", placeAfter = false)))
+        assertNotEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("more", placeAfter = false)))
+        assertNotEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("b", placeAfter = true)))
+        assertNotEquals(
+            DropOutcome.RejectedAsSubItem,
+            items.dropOutcome("group", CustomizeMenuDropTarget.EmptyHiddenArea),
+        )
+        assertNotEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", CustomizeMenuDropTarget.InPlace))
+    }
+
+    @Test
+    fun `WHEN an item without affinity is dropped inside an expandable item THEN it is not rejected as a sub-item`() {
+        val more = expandable("more", c)
+        val items = CustomizeMenuItems(shown = listOf(a, more), hidden = emptyList(), expandedIds = setOf("more"))
+
+        assertNotEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("a", NextTo("c", placeAfter = false)))
+    }
+
+    @Test
+    fun `WHEN a hidden group item is dropped inside a shown or a hidden expandable item THEN nothing changes`() {
+        val more = expandable("more", c)
+        val hiddenMore = expandable("hidden more", d)
+        val items =
+            CustomizeMenuItems(
+                shown = listOf(a, more),
+                hidden = listOf(groupItem, hiddenMore),
+                expandedIds = setOf("more", "hidden more"),
+            )
+
+        assertEquals(items, items.drop("group", NextTo("c", placeAfter = false)))
+        assertEquals(items, items.drop("group", NextTo("d", placeAfter = false)))
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("c", placeAfter = false)))
+        assertEquals(DropOutcome.RejectedAsSubItem, items.dropOutcome("group", NextTo("d", placeAfter = false)))
+    }
+
+    @Test
+    fun `WHEN a hidden group item is dropped at the top level of the shown items THEN it is shown there`() {
+        val items = CustomizeMenuItems(shown = listOf(a, b), hidden = listOf(groupItem), expandedIds = emptySet())
+
+        val moved = items.drop("group", NextTo("b", placeAfter = false))
+
+        assertEquals(listOf("a", "group", "b"), moved.shown.map { it.id })
+        assertTrue(moved.hidden.isEmpty())
     }
 
     private fun CustomizeMenuItems.subItemsOf(id: String) = shown.first { it.id == id }.subItems
