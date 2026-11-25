@@ -116,6 +116,19 @@ add_setup(async function () {
     ],
   });
 
+  // Wait for the re-enabled feed to dispatch the top sites the first task
+  // reads. A refresh that a newer one supersedes, such as the one PlacesFeed
+  // starts a second after the history and bookmarks are cleared, doesn't
+  // dispatch, so wait until the latest refresh is no longer replaced.
+  let feed = AboutNewTab.activityStream.store.feeds.get(
+    "feeds.system.topsites"
+  );
+  let refreshPromise;
+  do {
+    refreshPromise = feed._latestRefreshPromise;
+    await refreshPromise;
+  } while (refreshPromise !== feed._latestRefreshPromise);
+
   let tab = await BrowserTestUtils.openNewForegroundTab(
     gBrowser,
     "about:newtab",
