@@ -123,6 +123,8 @@ bool GetInstallClonePath(char* aPath, size_t aLength);
 // Swaps the clone's Contents directory with the pinned directory's, if the
 // pinned directory is still at its path.
 bool SwapInstallCloneIntoPlace();
+// Reads the Version of the clone from its application.ini.
+bool ReadInstallCloneVersion(std::string& aOut);
 struct UpdateServerThreadArgs {
   int argc;
   const NS_tchar** argv;
@@ -4184,7 +4186,14 @@ int NS_main(int argc, NS_tchar** argv) {
       freeArguments(argc, argv);
       CleanupElevatedMacUpdate(true);
     }
+    // The update's version check compares against this helper's version, so
+    // the install has to be at that version too.
     int installDirResult = ValidateAndPinInstallDir(gInstallDirPath);
+    std::string installVersion;
+    if (installDirResult == OK && (!ReadInstallCloneVersion(installVersion) ||
+                                   installVersion != MOZ_APP_VERSION)) {
+      installDirResult = ELEVATED_UPDATE_VERSION_MISMATCH_ERROR;
+    }
     if (installDirResult != OK) {
       WriteStatusFile(installDirResult);
       LogToOS(NS_T("The install directory was refused. Not updating."));
