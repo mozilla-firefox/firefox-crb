@@ -37,7 +37,9 @@ async function loadGeneratedSource(sourceActor) {
       sourceActor.id
     );
   } catch (e) {
-    throw new Error(`targetFront.getSourceContentForResource failed: ${e}`);
+    throw new Error(
+      `Error loading generated source content with targetFront.getSourceContentForResource failed: ${e}`
+    );
   }
 
   return {
