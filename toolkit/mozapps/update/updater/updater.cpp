@@ -4103,6 +4103,31 @@ int NS_main(int argc, NS_tchar** argv) {
         ShouldRunSilently(argc - kCallbackIndex, argv + kCallbackIndex);
   }
 
+#ifdef XP_MACOSX
+  if (isElevationTypeElevated(sElevationType)) {
+    // The privileged helper only runs the second updater invocation, which is
+    // the only one a legitimate client sends to it.
+    if (gInvocation != UpdaterInvocation::Second) {
+      WriteStatusFile(ELEVATED_UPDATE_INVALID_REQUEST_ERROR);
+      LogToOS(
+          NS_T("The elevated updater only runs the second updater "
+               "invocation. Not updating."));
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
+    // Firefox doesn't stage updates that need elevation, and a staged or
+    // replace request removes the working directory when it fails.
+    if (sStagedUpdate || sReplaceRequest) {
+      WriteStatusFile(ELEVATED_UPDATE_INVALID_REQUEST_ERROR);
+      LogToOS(
+          NS_T("The elevated updater doesn't stage updates or process replace "
+               "requests. Not updating."));
+      freeArguments(argc, argv);
+      CleanupElevatedMacUpdate(true);
+    }
+  }
+#endif
+
   if (!sUpdateSilently
 #ifdef XP_MACOSX
       && !isElevationTypeElevated(sElevationType)
