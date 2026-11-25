@@ -6,6 +6,7 @@
 #include <CoreServices/CoreServices.h>
 #include <Security/Security.h>
 #include <crt_externs.h>
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <removefile.h>
 #include <signal.h>
@@ -289,7 +290,6 @@ static NSXPCConnection* gRequestConnection = nil;
 static dispatch_semaphore_t gClientDisconnectedSemaphore = nullptr;
 static NSObject* gConnectionLock = nil;
 static NSArray<NSString*>* gPendingUpdaterArguments = nil;
-static NSString* gPendingMARChannelID = nil;
 // The effective user ID of the client whose applyUpdate the helper took.
 static uid_t gClientUid = (uid_t)-1;
 static void (^gApplyUpdateReplyBlock)(NSInteger) = nil;
@@ -483,28 +483,78 @@ bool SwapInstallCloneIntoPlace() {
   return isSwapped;
 }
 
-// Checks the static code signature of the main executable of the bundle at
-// aPath against aRequirementStr, without checking its resources.
-static bool CheckMainExecutableSignature(NSString* aPath,
-                                         NSString* aRequirementStr) {
+// Checks everything in a bundle, matching `codesign --verify --deep --strict
+// --all-architectures -R <requirement>`.
+static const SecCSFlags kFullSignatureCheck =
+    kSecCSCheckNestedCode | kSecCSStrictValidate | kSecCSRestrictSymlinks |
+    kSecCSCheckAllArchitectures;
+// Checks the main executable, its code directory and its Info.plist.
+static const SecCSFlags kMainExecutableSignatureCheck =
+    kSecCSDoNotValidateResources;
+
+// Checks the static code signature of the bundle at aPath against
+// aRequirementStr with aFlags. Returns the result, and the error details in
+// aErrors when aErrors is not null.
+static OSStatus CheckStaticSignature(NSString* aPath, NSString* aRequirementStr,
+                                     SecCSFlags aFlags,
+                                     CFErrorRef* aErrors = nullptr) {
   SecStaticCodeRef code = nullptr;
-  if (SecStaticCodeCreateWithPath(
-          (__bridge CFURLRef)[NSURL fileURLWithPath:aPath isDirectory:YES],
-          kSecCSDefaultFlags, &code) != errSecSuccess) {
-    return false;
+  OSStatus status = SecStaticCodeCreateWithPath(
+      (__bridge CFURLRef)[NSURL fileURLWithPath:aPath isDirectory:YES],
+      kSecCSDefaultFlags, &code);
+  if (status != errSecSuccess) {
+    return status;
   }
   SecRequirementRef req = nullptr;
-  bool isValid = false;
-  if (SecRequirementCreateWithString((__bridge CFStringRef)aRequirementStr,
-                                     kSecCSDefaultFlags,
-                                     &req) == errSecSuccess) {
-    isValid =
-        SecStaticCodeCheckValidityWithErrors(code, kSecCSDoNotValidateResources,
-                                             req, nullptr) == errSecSuccess;
+  status = SecRequirementCreateWithString((__bridge CFStringRef)aRequirementStr,
+                                          kSecCSDefaultFlags, &req);
+  if (status == errSecSuccess) {
+    status = SecStaticCodeCheckValidityWithErrors(code, aFlags, req, aErrors);
     CFRelease(req);
   }
   CFRelease(code);
-  return isValid;
+  return status;
+}
+
+bool ReadInstallMARChannels(std::string& aOut) {
+  MacAutoreleasePool pool;
+
+  if (!gInstallClonePath[0]) {
+    return false;
+  }
+  // The clone is in a root-only directory, so the framework checked here is
+  // the one that gets loaded.
+  NSString* frameworkPath = [[NSString stringWithUTF8String:gInstallClonePath]
+      stringByAppendingPathComponent:
+          @"Contents/MacOS/updater.app/Contents/Frameworks/"
+          @"UpdateSettings.framework"];
+  if (CheckStaticSignature(frameworkPath,
+                           @MOZ_UPDATER_SMUPDATESETTINGS_REQUIREMENT_STR,
+                           kFullSignatureCheck) != errSecSuccess) {
+    LogToOS(NS_T("Updater helper: UpdateSettings.framework failed the "
+                 "code-signing check."));
+    return false;
+  }
+  NSString* binaryPath =
+      [frameworkPath stringByAppendingPathComponent:@"UpdateSettings"];
+  void* handle =
+      dlopen(binaryPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
+  if (!handle) {
+    LogToOS(NS_T("Updater helper: can't load UpdateSettings.framework."));
+    return false;
+  }
+  using ChannelsFn = NSString* (*)(void);
+  ChannelsFn getChannels =
+      (ChannelsFn)dlsym(handle, "UpdateSettingsGetAcceptedMARChannels");
+  NSString* channels = getChannels ? getChannels() : nil;
+  if (channels) {
+    aOut = channels.UTF8String;
+  } else {
+    LogToOS(NS_T("Updater helper: can't read the accepted MAR channels from "
+                 "UpdateSettings.framework."));
+  }
+  dlclose(handle);
+  return channels != nil;
 }
 
 bool GetPinnedInstallDirPath(char* aPath, size_t aLength) {
@@ -563,9 +613,9 @@ int ValidateAndPinInstallDir(const char* aInstallDir) {
     close(fd);
     return cloneResult;
   }
-  if (!CheckMainExecutableSignature(
-          [NSString stringWithUTF8String:gInstallClonePath],
-          @MOZ_SMAUTHORIZEDCLIENTS_REQUIREMENTS_STR)) {
+  if (CheckStaticSignature([NSString stringWithUTF8String:gInstallClonePath],
+                           @MOZ_SMAUTHORIZEDCLIENTS_REQUIREMENTS_STR,
+                           kMainExecutableSignatureCheck) != errSecSuccess) {
     LogToOS(NS_T("Updater helper: the install directory failed the "
                  "code-signing check."));
     close(fd);
@@ -653,7 +703,6 @@ int ValidateAndPinInstallDir(const char* aInstallDir) {
 }
 
 - (void)applyUpdate:(NSArray<NSString*>*)aArguments
-       marChannelID:(NSString*)aMARChannelID
               reply:(void (^)(NSInteger))aReply {
   bool isBusy;
   bool isSameUpdate = false;
@@ -676,7 +725,6 @@ int ValidateAndPinInstallDir(const char* aInstallDir) {
         gClientUid = gRequestConnection.effectiveUserIdentifier;
       }
       gPendingUpdaterArguments = [aArguments copy];
-      gPendingMARChannelID = [aMARChannelID copy];
       gApplyUpdateReplyBlock = [aReply copy];
     }
   }
@@ -746,14 +794,8 @@ bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
   }
   *aArgv = tempArgv;
 
-  NSString* channelID;
-  @synchronized(gConnectionLock) {
-    channelID = gPendingMARChannelID;
-  }
-  const char* channelIDStr = channelID ? channelID.UTF8String : "";
-  aMARStrings->MARChannelID =
-      std::make_unique<char[]>(strlen(channelIDStr) + 1);
-  strcpy(aMARStrings->MARChannelID.get(), channelIDStr);
+  // aMARStrings stays empty: the elevated updater reads the accepted MAR
+  // channels from the install directory that it updates.
 
   // The installation only changes when the updated clone is swapped in, so a
   // request that takes too long can be ended without leaving it half updated.
@@ -873,8 +915,7 @@ static NSXPCConnection* CreateHelperConnection() {
   return connection;
 }
 
-bool ServeElevatedUpdate(int aArgc, const char** aArgv,
-                         const char* aMARChannelID) {
+bool ServeElevatedUpdate(int aArgc, const char** aArgv) {
   MacAutoreleasePool pool;
 
   NSMutableArray<NSString*>* updaterArguments =
@@ -882,8 +923,6 @@ bool ServeElevatedUpdate(int aArgc, const char** aArgv,
   for (int i = 0; i < aArgc; i++) {
     [updaterArguments addObject:[NSString stringWithUTF8String:aArgv[i]]];
   }
-  NSString* channelID =
-      aMARChannelID ? [NSString stringWithUTF8String:aMARChannelID] : @"";
 
   NSXPCConnection* connection = CreateHelperConnection();
   if (!connection) {
@@ -902,7 +941,6 @@ bool ServeElevatedUpdate(int aArgc, const char** aArgv,
       }];
 
   [proxy applyUpdate:updaterArguments
-        marChannelID:channelID
                reply:^(NSInteger aResult) {
                  gDidHelperReply = true;
                  gApplyUpdateResult = aResult;
