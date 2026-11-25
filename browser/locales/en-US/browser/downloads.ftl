@@ -3,10 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 ## The title and aria-label attributes are used by screen readers to describe
-## the Downloads Panel.
+## the about:downloads page and Downloads Panel, respectively.
 
-downloads-window =
-  .title = Downloads
+about-downloads-title = Downloads
 downloads-panel =
   .aria-label = Downloads
 
