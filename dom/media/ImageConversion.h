@@ -7,6 +7,7 @@
 
 #include "mozilla/AlreadyAddRefed.h"
 #include "mozilla/gfx/Point.h"
+#include "mozilla/gfx/Rect.h"
 #include "mozilla/gfx/Types.h"
 #include "nsError.h"
 
@@ -71,10 +72,22 @@ nsresult ConvertToNV12(
     gfx::ColorRange aDestColorRange = gfx::ColorRange::LIMITED);
 
 /**
- * Converts aImage into an RGBA image in a specified format and writes it to the
- * given buffer.
+ * Converts the picture of a YUV aImage, or the whole surface of any other
+ * image, into an RGBA image in a specified format and writes it to the given
+ * buffer.
  */
 nsresult ConvertToRGBA(layers::Image* aImage,
+                       const gfx::SurfaceFormat& aDestFormat,
+                       uint8_t* aDestBuffer, int aDestStride);
+
+/**
+ * Converts the aSourceRect region of aImage into an RGBA image of
+ * aSourceRect.Size() in a specified format and writes it to the given buffer.
+ * aSourceRect is in the coordinates of the image's planes for a YUV image and
+ * of its surface otherwise, and must lie between (0, 0) and the size that
+ * aImage->GetAddressableSize() returns.
+ */
+nsresult ConvertToRGBA(layers::Image* aImage, const gfx::IntRect& aSourceRect,
                        const gfx::SurfaceFormat& aDestFormat,
                        uint8_t* aDestBuffer, int aDestStride);
 

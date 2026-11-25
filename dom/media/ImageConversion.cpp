@@ -29,6 +29,8 @@ using mozilla::Nothing;
 using mozilla::Some;
 using mozilla::gfx::ColorRange;
 using mozilla::gfx::DataSourceSurface;
+using mozilla::gfx::IntPoint;
+using mozilla::gfx::IntRect;
 using mozilla::gfx::IntSize;
 using mozilla::gfx::SourceSurface;
 using mozilla::gfx::SurfaceFormat;
@@ -816,13 +818,38 @@ static nsresult SwapRGBA(DataSourceSurface* aSurface,
 
 nsresult ConvertToRGBA(Image* aImage, const SurfaceFormat& aDestFormat,
                        uint8_t* aDestBuffer, int aDestStride) {
-  if (!aImage || !aImage->IsValid() || aImage->GetSize().IsEmpty() ||
-      !aDestBuffer || !IsRGBX(aDestFormat) || aDestStride <= 0) {
+  if (!aImage) {
+    return NS_ERROR_INVALID_ARG;
+  }
+  const PlanarYCbCrData* data = GetPlanarYCbCrData(aImage);
+  const IntRect picture =
+      data ? data->mPictureRect : IntRect(IntPoint(), aImage->GetSize());
+  return ConvertToRGBA(aImage, picture, aDestFormat, aDestBuffer, aDestStride);
+}
+
+nsresult ConvertToRGBA(Image* aImage, const IntRect& aSourceRect,
+                       const SurfaceFormat& aDestFormat, uint8_t* aDestBuffer,
+                       int aDestStride) {
+  if (!aImage || !aImage->IsValid() || aSourceRect.IsEmpty() ||
+      aSourceRect.Overflows() || !aDestBuffer || !IsRGBX(aDestFormat) ||
+      aDestStride <= 0) {
+    return NS_ERROR_INVALID_ARG;
+  }
+  const PlanarYCbCrData* data = GetPlanarYCbCrData(aImage);
+  // GetAddressableSize() bounds the planes of a YUV image and the surface of
+  // any other image.
+  const Maybe<IntSize> bounds = aImage->GetAddressableSize();
+  if (!bounds || !IntRect(IntPoint(), *bounds).Contains(aSourceRect)) {
+    return NS_ERROR_INVALID_ARG;
+  }
+  const CheckedInt<int32_t> rowBytes =
+      CheckedInt<int32_t>(aSourceRect.width) * gfx::BytesPerPixel(aDestFormat);
+  if (!rowBytes.isValid() || aDestStride < rowBytes.value()) {
     return NS_ERROR_INVALID_ARG;
   }
 
   // Read YUV image to the given buffer in required RGBA format.
-  if (const PlanarYCbCrData* data = GetPlanarYCbCrData(aImage)) {
+  if (data) {
     SurfaceFormat convertedFormat = aDestFormat;
     gfx::PremultFunc premultOp = nullptr;
     if (data->mAlpha && HasAlpha(aDestFormat)) {
@@ -839,8 +866,12 @@ nsresult ConvertToRGBA(Image* aImage, const SurfaceFormat& aDestFormat,
       }
     }
 
+    // ConvertYCbCrToRGB32 converts the picture rectangle, so give it a copy of
+    // the data whose picture is the region.
+    PlanarYCbCrData region = *data;
+    region.mPictureRect = aSourceRect;
     nsresult result =
-        ConvertYCbCrToRGB32(*data, convertedFormat, aDestBuffer,
+        ConvertYCbCrToRGB32(region, convertedFormat, aDestBuffer,
                             AssertedCast<int32_t>(aDestStride), premultOp);
     if (NS_FAILED(result)) {
       return result;
@@ -856,7 +887,7 @@ nsresult ConvertToRGBA(Image* aImage, const SurfaceFormat& aDestFormat,
 
     RefPtr<DataSourceSurface> surf =
         gfx::Factory::CreateWrappingDataSourceSurface(
-            aDestBuffer, aDestStride, aImage->GetSize(), convertedFormat);
+            aDestBuffer, aDestStride, aSourceRect.Size(), convertedFormat);
 
     if (!surf) {
       return NS_ERROR_FAILURE;
@@ -888,7 +919,7 @@ nsresult ConvertToRGBA(Image* aImage, const SurfaceFormat& aDestFormat,
 
   RefPtr<DataSourceSurface> dest =
       gfx::Factory::CreateWrappingDataSourceSurface(
-          aDestBuffer, aDestStride, aImage->GetSize(), aDestFormat);
+          aDestBuffer, aDestStride, aSourceRect.Size(), aDestFormat);
 
   if (!dest) {
     return NS_ERROR_FAILURE;
@@ -899,16 +930,20 @@ nsresult ConvertToRGBA(Image* aImage, const SurfaceFormat& aDestFormat,
     return NS_ERROR_FAILURE;
   }
 
-  // SwizzleData reads the source over the destination's extent, so the source
-  // surface must be at least as large as the destination.
-  if (src->GetSize().width < dest->GetSize().width ||
-      src->GetSize().height < dest->GetSize().height) {
+  // SwizzleData reads the source over the destination's extent from the rect's
+  // origin, so the source surface must contain the rect.
+  if (!IntRect(IntPoint(), src->GetSize()).Contains(aSourceRect)) {
     return NS_ERROR_FAILURE;
   }
 
-  gfx::SwizzleData(srcMap.GetData(), srcMap.GetStride(), src->GetFormat(),
-                   destMap.GetData(), destMap.GetStride(), dest->GetFormat(),
-                   dest->GetSize());
+  const uint8_t* srcData = srcMap.GetData() +
+                           aSourceRect.y * srcMap.GetStride() +
+                           aSourceRect.x * gfx::BytesPerPixel(src->GetFormat());
+  if (!gfx::SwizzleData(srcData, srcMap.GetStride(), src->GetFormat(),
+                        destMap.GetData(), destMap.GetStride(),
+                        dest->GetFormat(), dest->GetSize())) {
+    return NS_ERROR_FAILURE;
+  }
 
   return NS_OK;
 }
