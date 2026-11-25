@@ -1,0 +1,62 @@
+# Offset and subregion of an SVGFE graph under reflected transforms: the
+# offset and the (asymmetric) subregion must be mirrored with the content.
+---
+root:
+  items:
+    # x-flip
+    - type: reference-frame
+      bounds: [0, 0, 300, 300]
+      transform: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 300, 0, 0, 1]
+      items:
+        - type: stacking-context
+          bounds: [0, 0, 300, 300]
+          filters:
+            - svgfe: SourceGraphic
+            - svgfe: SourceAlpha
+            - svgfe: offset
+              linear: false
+              subregion: [20, 20, 60, 140]
+              offset: [-40, -20]
+              in: 0
+          items:
+            - type: rect
+              bounds: [60, 40, 80, 80]
+              color: blue
+    # y-flip
+    - type: reference-frame
+      bounds: [0, 0, 300, 300]
+      transform: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 300, 300, 0, 1]
+      items:
+        - type: stacking-context
+          bounds: [0, 0, 300, 300]
+          filters:
+            - svgfe: SourceGraphic
+            - svgfe: SourceAlpha
+            - svgfe: offset
+              linear: false
+              subregion: [20, 20, 60, 140]
+              offset: [-40, -20]
+              in: 0
+          items:
+            - type: rect
+              bounds: [60, 40, 80, 80]
+              color: blue
+    # xy-flip
+    - type: reference-frame
+      bounds: [0, 0, 300, 300]
+      transform: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 600, 300, 0, 1]
+      items:
+        - type: stacking-context
+          bounds: [0, 0, 300, 300]
+          filters:
+            - svgfe: SourceGraphic
+            - svgfe: SourceAlpha
+            - svgfe: offset
+              linear: false
+              subregion: [20, 20, 60, 140]
+              offset: [-40, -20]
+              in: 0
+          items:
+            - type: rect
+              bounds: [60, 40, 80, 80]
+              color: blue
