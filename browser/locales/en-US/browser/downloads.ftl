@@ -80,11 +80,10 @@ downloads-cmd-show-panel-2 =
       [macos] Show in Finder
      *[other] Show in Folder
   }
-downloads-cmd-show-description-2 =
-  .value = { PLATFORM() ->
-      [macos] Show in Finder
-     *[other] Show in Folder
-  }
+downloads-cmd-show-description-3 = { PLATFORM() ->
+   [macos] Show in Finder
+  *[other] Show in Folder
+}
 
 downloads-cmd-retry =
     .tooltiptext = Retry
@@ -141,13 +140,11 @@ downloads-cmd-choose-open-panel =
 
 # Displayed when hovering a blocked download, indicates that it's possible to
 # show more information for user to take the next action.
-downloads-show-more-information =
-    .value = Show more information
+downloads-show-more-information-2 = Show more information
 
 # Displayed when hovering a complete download, indicates that it's possible to
 # open the file using an app available in the system.
-downloads-open-file =
-    .value = Open File
+downloads-open-file-2 = Open File
 
 ## Displayed when the user clicked on a download in process. Indicates that the
 ## downloading file will be opened after certain amount of time using an app
@@ -157,30 +154,22 @@ downloads-open-file =
 ##   $seconds (number) - Amount of seconds left till the file opens.
 ##   $minutes (number) - Amount of minutes till the file opens.
 
-downloading-file-opens-in-hours-and-minutes-2 =
-  .value = Opening in { $hours }h { $minutes }m…
-downloading-file-opens-in-minutes-2 =
-  .value = Opening in { $minutes }m…
-downloading-file-opens-in-minutes-and-seconds-2 =
-  .value = Opening in { $minutes }m { $seconds }s…
-downloading-file-opens-in-seconds-2 =
-  .value = Opening in { $seconds }s…
-downloading-file-opens-in-some-time-2 =
-  .value = Opening when completed…
-downloading-file-click-to-open =
-  .value = Open when completed
+downloading-file-opens-in-hours-and-minutes-3 = Opening in { $hours }h { $minutes }m…
+downloading-file-opens-in-minutes-3 = Opening in { $minutes }m…
+downloading-file-opens-in-minutes-and-seconds-3 = Opening in { $minutes }m { $seconds }s…
+downloading-file-opens-in-seconds-3 = Opening in { $seconds }s…
+downloading-file-opens-in-some-time-3 = Opening when completed…
+downloading-file-click-to-open-2 = Open when completed
 
 ##
 
 # Displayed when hovering a download which is able to be retried by users,
 # indicates that it's possible to download this file again.
-downloads-retry-download =
-    .value = Retry Download
+downloads-retry-download-2 = Retry Download
 
 # Displayed when hovering a download which is able to be cancelled by users,
 # indicates that it's possible to cancel and stop the download.
-downloads-cancel-download =
-    .value = Cancel Download
+downloads-cancel-download-2 = Cancel Download
 
 # This string is shown at the bottom of the Downloads Panel when all the
 # downloads fit in the available space, or when there are no downloads in

@@ -73,6 +73,18 @@
   display: none;
 }
 
+.downloadContainer {
+  display: flex;
+  flex-direction: column;
+  text-align: start;
+}
+
+.downloadDetails {
+  overflow: hidden;
+  text-wrap: nowrap;
+  text-overflow: ellipsis;
+}
+
 /*** Downloads panel ***/
 
 #downloadsPanel[hasdownloads] #emptyDownloads,
@@ -103,4 +115,11 @@
 .downloadMainArea,
 .downloadContainer {
   min-width: 0;
+  flex: 1;
 }
+
+.downloadMainArea {
+  display: flex;
+  align-items: center;
+}
+
