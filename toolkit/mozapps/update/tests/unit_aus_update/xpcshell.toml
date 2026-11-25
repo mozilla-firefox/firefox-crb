@@ -63,6 +63,11 @@ skip-if = [
 
 ["downloadResumeForSameAppVersion.js"]
 
+["elevatedHelperInstallFailed.js"]
+run-if = [
+  "os == 'mac'",
+]
+
 ["ensureExperimentToRolloutTransitionPerformed.js"]
 run-if = [
   "os == 'win' && appname == 'firefox'",
