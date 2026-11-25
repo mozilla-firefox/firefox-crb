@@ -7,16 +7,19 @@
 #include <Security/Security.h>
 #include <crt_externs.h>
 #include <fcntl.h>
+#include <removefile.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <spawn.h>
 #include <string.h>
+#include <sys/clonefile.h>
 #include <SystemConfiguration/SystemConfiguration.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
+#include "mozilla/Sprintf.h"
 #include "readstrings.h"
 #include "updatecommon.h"
 #include "updatererrors.h"
@@ -292,6 +295,8 @@ static void (^gApplyUpdateReplyBlock)(NSInteger) = nil;
 
 // How long the helper waits for a request after it has started.
 static const int64_t kApplyUpdateWaitSeconds = 60;
+// How long the helper handles a request before it ends it.
+static const int64_t kMaxRequestSeconds = 10 * 60;
 
 // Set in the unelevated updater from the helper's applyUpdate reply.
 static NSInteger gApplyUpdateResult = UpdaterHelperApplyResultNotRecorded;
@@ -369,6 +374,108 @@ static bool ValidatePeerWithRequirement(audit_token_t aToken,
 static int gInstallDirFd = -1;
 static char gPinnedInstallDirPath[PATH_MAX];
 
+// A root-only directory holding a clone of the pinned install directory, and
+// the clone's path. The helper checks the clone and applies the update to it,
+// so that nobody else can change what it checks or updates, then swaps it into
+// the install's place.
+static char gInstallCloneDir[PATH_MAX];
+static char gInstallClonePath[PATH_MAX];
+
+// Clones the install directory open as aFd, named aName, into a new root-only
+// directory. Returns OK or the error to record.
+static int CloneInstallDir(int aFd, const char* aName) {
+  char tmpDir[PATH_MAX];
+  if (confstr(_CS_DARWIN_USER_TEMP_DIR, tmpDir, sizeof(tmpDir)) == 0 ||
+      SprintfLiteral(gInstallCloneDir, "%sorg.mozilla.updater.XXXXXX",
+                     tmpDir) >= (int)sizeof(gInstallCloneDir) ||
+      !mkdtemp(gInstallCloneDir)) {
+    gInstallCloneDir[0] = '\0';
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  int dirFd =
+      open(gInstallCloneDir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (dirFd < 0) {
+    return INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  int cloneResult = OK;
+  if (fclonefileat(aFd, dirFd, aName, CLONE_NOFOLLOW) != 0) {
+    cloneResult = errno == EXDEV ? ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR
+                                 : INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  close(dirFd);
+  if (cloneResult == OK &&
+      SprintfLiteral(gInstallClonePath, "%s/%s", gInstallCloneDir, aName) >=
+          (int)sizeof(gInstallClonePath)) {
+    cloneResult = INVALID_INSTALL_DIR_PATH_ERROR;
+  }
+  return cloneResult;
+}
+
+bool GetInstallClonePath(char* aPath, size_t aLength) {
+  if (!gInstallClonePath[0] || strlen(gInstallClonePath) >= aLength) {
+    return false;
+  }
+  strlcpy(aPath, gInstallClonePath, aLength);
+  return true;
+}
+
+bool IsPinnedInstallDirAtPath() {
+  struct stat fdStat;
+  struct stat pathStat;
+  return gInstallDirFd >= 0 && fstat(gInstallDirFd, &fdStat) == 0 &&
+         lstat(gPinnedInstallDirPath, &pathStat) == 0 &&
+         fdStat.st_dev == pathStat.st_dev && fdStat.st_ino == pathStat.st_ino;
+}
+
+bool SwapInstallCloneIntoPlace() {
+  if (!gInstallClonePath[0] || !IsPinnedInstallDirAtPath()) {
+    return false;
+  }
+  int cloneFd =
+      open(gInstallClonePath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (cloneFd < 0) {
+    return false;
+  }
+  // App Management on macOS 13 doesn't let the helper replace the app bundle
+  // itself, so swap the bundle's Contents directory.
+  bool isSwapped = renameatx_np(cloneFd, "Contents", gInstallDirFd, "Contents",
+                                RENAME_SWAP) == 0;
+  if (!isSwapped) {
+    char message[96];
+    SprintfLiteral(message,
+                   "Updater helper: couldn't swap the updated Contents into "
+                   "place (errno %d).",
+                   errno);
+    LogToOS(message);
+  }
+  close(cloneFd);
+  return isSwapped;
+}
+
+// Checks the static code signature of the main executable of the bundle at
+// aPath against aRequirementStr, without checking its resources.
+static bool CheckMainExecutableSignature(NSString* aPath,
+                                         NSString* aRequirementStr) {
+  SecStaticCodeRef code = nullptr;
+  if (SecStaticCodeCreateWithPath(
+          (__bridge CFURLRef)[NSURL fileURLWithPath:aPath isDirectory:YES],
+          kSecCSDefaultFlags, &code) != errSecSuccess) {
+    return false;
+  }
+  SecRequirementRef req = nullptr;
+  bool isValid = false;
+  if (SecRequirementCreateWithString((__bridge CFStringRef)aRequirementStr,
+                                     kSecCSDefaultFlags,
+                                     &req) == errSecSuccess) {
+    isValid =
+        SecStaticCodeCheckValidityWithErrors(code, kSecCSDoNotValidateResources,
+                                             req, nullptr) == errSecSuccess;
+    CFRelease(req);
+  }
+  CFRelease(code);
+  return isValid;
+}
+
 bool GetPinnedInstallDirPath(char* aPath, size_t aLength) {
   if (gInstallDirFd < 0 || strlen(gPinnedInstallDirPath) >= aLength) {
     return false;
@@ -415,6 +522,23 @@ int ValidateAndPinInstallDir(const char* aInstallDir) {
                  "directory."));
     close(fd);
     return ELEVATED_UPDATE_CHANGEABLE_INSTALL_ERROR;
+  }
+  // The clone has to be on the install's volume, so an install on another
+  // volume is refused.
+  int cloneResult = CloneInstallDir(
+      fd, resolvedPath.lastPathComponent.fileSystemRepresentation);
+  if (cloneResult != OK) {
+    LogToOS(NS_T("Updater helper: can't clone the install directory."));
+    close(fd);
+    return cloneResult;
+  }
+  if (!CheckMainExecutableSignature(
+          [NSString stringWithUTF8String:gInstallClonePath],
+          @MOZ_SMAUTHORIZEDCLIENTS_REQUIREMENTS_STR)) {
+    LogToOS(NS_T("Updater helper: the install directory failed the "
+                 "code-signing check."));
+    close(fd);
+    return ELEVATED_UPDATE_SIGNATURE_ERROR;
   }
   // Make sure the path still leads to the directory that was opened.
   struct stat fdStat;
@@ -600,6 +724,25 @@ bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
       std::make_unique<char[]>(strlen(channelIDStr) + 1);
   strcpy(aMARStrings->MARChannelID.get(), channelIDStr);
 
+  // The installation only changes when the updated clone is swapped in, so a
+  // request that takes too long can be ended without leaving it half updated.
+  // Ending it keeps a helper that hangs from turning every later request away
+  // as busy.
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, kMaxRequestSeconds * NSEC_PER_SEC),
+      dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        LogToOS(NS_T("Updater helper: ending a request that took too long."));
+        // Without a reply, the client records
+        // ELEVATED_UPDATE_HELPER_LOST_ERROR.
+        void (^reply)(NSInteger) = nil;
+        @synchronized(gConnectionLock) {
+          reply = gApplyUpdateReplyBlock;
+          gApplyUpdateReplyBlock = nil;
+        }
+        [reply release];
+        CleanupElevatedMacUpdate(true);
+      });
+
   // Installing the helper again sends this process SIGTERM, followed by SIGKILL
   // after the plist's ExitTimeOut. Ignore SIGTERM from here on, so that an
   // update in progress gets that long to finish instead of stopping halfway.
@@ -662,6 +805,10 @@ void CleanupElevatedMacUpdate(bool aFailureOccurred) {
   NSFileManager* manager = [NSFileManager defaultManager];
   [manager removeItemAtPath:helperPath error:nil];
   [manager removeItemAtPath:daemonPath error:nil];
+
+  if (gInstallCloneDir[0]) {
+    removefile(gInstallCloneDir, nullptr, REMOVEFILE_RECURSIVE);
+  }
 
   signal(SIGTERM, SIG_DFL);
   unlink(UPDATER_HELPER_PID_FILE_PATH);
