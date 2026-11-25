@@ -45,7 +45,7 @@ LANDING_IMAGES = (
 # The landing page sits at the root of the site and the Sphinx docs under it.
 DOCS_PREFIX = "docs"
 BASE_LINK = "http://gecko-docs.mozilla.org-l1.s3-website.us-west-2.amazonaws.com/"
-PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
+PUBLISHED_LINK = "https://source.firefox.com/"
 
 
 # Helps manage in-tree documentation.
