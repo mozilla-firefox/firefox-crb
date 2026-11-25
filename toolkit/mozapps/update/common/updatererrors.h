@@ -128,6 +128,10 @@
 // itself, so UpdateService.sys.mjs retries it without counting a cancellation.
 #define ELEVATED_UPDATE_IN_PROGRESS_ERROR 107
 
+// The privileged macOS updater helper refused a request that a legitimate
+// unelevated updater doesn't send.
+#define ELEVATED_UPDATE_INVALID_REQUEST_ERROR 108
+
 // Error codes 110 and 111 are reserved for UpdateService.sys.mjs
 
 // The macOS updater couldn't install its privileged helper, and the user
