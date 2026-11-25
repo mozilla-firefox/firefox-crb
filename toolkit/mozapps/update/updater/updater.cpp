@@ -119,8 +119,9 @@ bool GetPinnedInstallDirPath(char* aPath, size_t aLength);
 // Copies the path of the root-only clone of the pinned directory, which the
 // elevated updater applies the update to.
 bool GetInstallClonePath(char* aPath, size_t aLength);
-// Swaps the clone's Contents directory with the pinned directory's, if the
-// pinned directory is still at its path.
+// Gives the admin group write access to the clone's Contents directory, swaps
+// it with the pinned directory's, if the pinned directory is still at its path,
+// and then gives the admin group write access to the pinned directory.
 bool SwapInstallCloneIntoPlace();
 // Reads the Version of the clone from its application.ini.
 bool ReadInstallCloneVersion(std::string& aOut);
@@ -5268,7 +5269,6 @@ int NS_main(int argc, NS_tchar** argv) {
 
 #ifdef XP_MACOSX
   if (isElevationTypeElevated(sElevationType)) {
-    SetGroupOwnershipAndPermissions(gInstallDirPath);
     freeArguments(argc, argv);
     CleanupElevatedMacUpdate(!gSucceeded);
   } else if (IsOwnedByGroupAdmin(gInstallDirPath)) {
