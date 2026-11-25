@@ -1590,6 +1590,40 @@ export var PlacesUtils = {
   },
 
   /**
+   * Runs a task whose statements on the large cache connection must not be
+   * interrupted by interruptLargeCacheDBConnection, like writes to temp tables.
+   *
+   * @param {Function} taskFn
+   *   The task to run.
+   * @returns {Promise<any>}
+   *   Resolves to the task's return value.
+   */
+  async runInLargeCacheDBCriticalSection(taskFn) {
+    gLargeCacheDBCriticalLevel++;
+    try {
+      return await taskFn();
+    } finally {
+      gLargeCacheDBCriticalLevel--;
+    }
+  },
+
+  /**
+   * Interrupts any statement running on the large cache connection, unless a
+   * runInLargeCacheDBCriticalSection task is running. Interrupted statements
+   * don't reject, they resolve with the rows read so far.
+   */
+  interruptLargeCacheDBConnection() {
+    if (!gLargeCacheDBConn || gLargeCacheDBCriticalLevel) {
+      return;
+    }
+    try {
+      gLargeCacheDBConn.interrupt();
+    } catch {
+      // The connection may already be closed.
+    }
+  },
+
+  /**
    * Returns a Sqlite.sys.mjs wrapper for the main Places connection. Most callers
    * should prefer `withConnectionWrapper`, which ensures that all database
    * operations finish before the connection is closed.
@@ -3145,6 +3179,8 @@ ChromeUtils.defineLazyGetter(lazy, "gAsyncDBWrapperPromised", () =>
 );
 
 var gAsyncDBLargeCacheConnDeferred = Promise.withResolvers();
+var gLargeCacheDBConn = null;
+var gLargeCacheDBCriticalLevel = 0;
 ChromeUtils.defineLazyGetter(lazy, "gAsyncDBLargeCacheConnPromised", () =>
   lazy.Sqlite.cloneStorageConnection({
     connection: PlacesUtils.history.DBConnection,
@@ -3178,6 +3214,7 @@ ChromeUtils.defineLazyGetter(lazy, "gAsyncDBLargeCacheConnPromised", () =>
             AND userContextId = NEW.userContextId
             AND groupId = NEW.groupId;
         END`);
+      gLargeCacheDBConn = conn;
       gAsyncDBLargeCacheConnDeferred.resolve(conn);
       return conn;
     })

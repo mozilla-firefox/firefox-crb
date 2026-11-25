@@ -259,11 +259,13 @@ add_task(async function test_search_interrupt() {
       }
       return [];
     },
-    interrupt: () => reject("interrupt() was called."),
   };
   const stub = sinon
     .stub(PlacesUtils, "promiseLargeCacheDBConnection")
     .resolves(mockDatabase);
+  const interruptStub = sinon
+    .stub(PlacesUtils, "interruptLargeCacheDBConnection")
+    .callsFake(() => reject("interrupt() was called."));
 
   const promiseFirstQuery = placesQuery.searchHistory("First Query");
   const promiseSecondQuery = placesQuery.searchHistory("Second Query");
@@ -275,6 +277,7 @@ add_task(async function test_search_interrupt() {
   ok(await promiseSecondQuery, "The second query resolved normally.");
 
   stub.restore();
+  interruptStub.restore();
 });
 
 add_task(async function test_sort_by_date_and_site() {

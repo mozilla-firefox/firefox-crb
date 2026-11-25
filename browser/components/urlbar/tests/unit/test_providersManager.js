@@ -78,3 +78,59 @@ add_task(async function test_criticalSection() {
     await db.execute(`PRAGMA page_cache`);
   });
 });
+
+const LONG_QUERY = `
+  WITH RECURSIVE c(x) AS (
+    VALUES(1) UNION ALL SELECT x + 1 FROM c WHERE x < :limit
+  )
+  SELECT x FROM c`;
+
+async function cancelDuringLongQuery(limit, inCriticalSection) {
+  let providersManager = ProvidersManager.getInstanceForSap("urlbar");
+  let db = await PlacesUtils.promiseLargeCacheDBConnection();
+  let firstRow = Promise.withResolvers();
+  let rowCount = 0;
+  let execute = () =>
+    db.execute(LONG_QUERY, { limit }, () => {
+      rowCount++;
+      firstRow.resolve();
+    });
+  let sqlPromise;
+  let provider = registerBasicTestProvider();
+  provider.startQuery = async () => {
+    sqlPromise = inCriticalSection
+      ? ProvidersManager.runInCriticalSection(execute)
+      : execute();
+    await sqlPromise.catch(() => {});
+  };
+  let context = createContext(undefined, { providers: [provider.name] });
+  let controller = UrlbarTestUtils.mockChildController();
+  let queryPromise = providersManager.startQuery(
+    context,
+    controller.parentController
+  );
+  await firstRow.promise;
+  providersManager.cancelQuery(context);
+  await queryPromise;
+  await sqlPromise;
+  providersManager.unregisterProvider(provider);
+  return rowCount;
+}
+
+add_task(async function test_cancel_interrupts() {
+  let limit = Number.MAX_SAFE_INTEGER;
+  Assert.less(
+    await cancelDuringLongQuery(limit, false),
+    limit,
+    "Canceling the query interrupts the running statement"
+  );
+});
+
+add_task(async function test_cancel_criticalSection() {
+  let limit = 500000;
+  Assert.equal(
+    await cancelDuringLongQuery(limit, true),
+    limit,
+    "The statement in the critical section was not interrupted"
+  );
+});

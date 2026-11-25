@@ -238,13 +238,6 @@ const DEFAULT_CHUNK_RESULTS_DELAY_MS = 16;
  */
 export class ProvidersManager {
   /**
-   * Interrupt() allows to stop any running SQL query, some provider may be
-   * running a query that shouldn't be interrupted, and if so it should
-   * bump this through disableInterrupt and enableInterrupt.
-   */
-  static interruptLevel = 0;
-
-  /**
    * @param {UrlbarSapName} sapName
    *  The SAP name this manager is for.
    * @param {object} muxerModules
@@ -536,11 +529,8 @@ export class ProvidersManager {
       return;
     }
     query.cancel();
-    if (!ProvidersManager.interruptLevel) {
-      try {
-        let db = lazy.PlacesUtils.promiseLargeCacheDBConnection();
-        db.interrupt();
-      } catch (ex) {}
+    if (!query.finished) {
+      lazy.PlacesUtils.interruptLargeCacheDBConnection();
     }
     this.queries.delete(queryContext);
   }
@@ -553,12 +543,7 @@ export class ProvidersManager {
    * @param {Function} taskFn a Task to execute in the critical section.
    */
   static async runInCriticalSection(taskFn) {
-    this.interruptLevel++;
-    try {
-      await taskFn();
-    } finally {
-      this.interruptLevel--;
-    }
+    return lazy.PlacesUtils.runInLargeCacheDBCriticalSection(taskFn);
   }
 
   /**
@@ -741,6 +726,7 @@ export class Query {
     this.controller = controller;
     this.providers = providers;
     this.started = false;
+    this.finished = false;
     this.canceled = false;
 
     // This is used as a last safety filter in add(), thus we keep an unmodified
@@ -879,6 +865,7 @@ export class Query {
       await this._chunkTimer?.fire();
     }
 
+    this.finished = true;
     // Break cycles with the controller to avoid leaks.
     this.controller = null;
   }

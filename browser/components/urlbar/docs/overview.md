@@ -42,7 +42,7 @@ Queries can be canceled.
 
 :::{note}
 Canceling a query will issue an interrupt() on the database connection,
-terminating any running and future SQL query, unless a query is running inside
+terminating any running SQL query, unless it is running inside
 a *runInCriticalSection* task.
 :::
 
