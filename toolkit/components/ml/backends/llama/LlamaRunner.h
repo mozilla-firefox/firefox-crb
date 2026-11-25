@@ -101,7 +101,8 @@ class LlamaGenerateTask final : public mozilla::CancelableRunnable {
   };
 
   LlamaGenerateTask(RefPtr<LlamaBackend> aBackend,
-                    const LlamaChatOptions& aOptions);
+                    const LlamaChatOptions& aOptions,
+                    nsTArray<LlamaImageData>&& aImages);
 
   NS_IMETHOD Run() override;
 
@@ -140,6 +141,8 @@ class LlamaGenerateTask final : public mozilla::CancelableRunnable {
   RefPtr<LlamaBackend> mBackend;
 
   const LlamaChatOptions mChatOptions;
+
+  const nsTArray<LlamaImageData> mImages;
 
   // Index of the currently active promise holder (0 or 1).
   // The producer resolves the promise at this index, then toggles it.
@@ -207,7 +210,8 @@ class LlamaStreamSource final : public UnderlyingSourceAlgorithmsWrapper,
   NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(LlamaStreamSource,
                                            UnderlyingSourceAlgorithmsWrapper)
   LlamaStreamSource(nsIGlobalObject* aGlobal, RefPtr<LlamaBackend> aBackend,
-                    const LlamaChatOptions& aOptions);
+                    const LlamaChatOptions& aOptions,
+                    nsTArray<mozilla::llama::LlamaImageData>&& aImages);
 
   MOZ_CAN_RUN_SCRIPT
   already_AddRefed<Promise> CancelCallbackImpl(
@@ -233,6 +237,7 @@ class LlamaStreamSource final : public UnderlyingSourceAlgorithmsWrapper,
 
   RefPtr<LlamaBackend> mBackend;
   const LlamaChatOptions mChatOptions;
+  nsTArray<mozilla::llama::LlamaImageData> mImages;
 
   // Background generation task
   RefPtr<mozilla::llama::LlamaGenerateTask> mTask;
@@ -320,7 +325,8 @@ class LlamaRunner final : public nsISupports,
    * }
    */
   already_AddRefed<ReadableStream> CreateGenerationStream(
-      const LlamaChatOptions& aOptions, ErrorResult& aRv);
+      const LlamaChatOptions& aOptions,
+      const Sequence<LlamaImageInput>& aImages, ErrorResult& aRv);
 
   /**
    * Formats a sequence of chat messages into a prompt string for LLM inference.

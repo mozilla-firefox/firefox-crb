@@ -52,92 +52,115 @@ namespace mozilla::llama {
 #endif
 
 // Format: X(return_type, name, params)
-#define MOZINFERENCE_FUNCTION_LIST(X)                                       \
-  X(void, llama_log_set,                                                    \
-    (void (*callback)(enum ggml_log_level, const char*, void*),             \
-     void* user_data))                                                      \
-  X(struct llama_model_params, llama_model_default_params, (void))          \
-  X(struct llama_model*, llama_model_load_from_file_handle,                 \
-    (FILE * file, struct llama_model_params params))                        \
-  X(int32_t, llama_model_meta_val_str,                                      \
-    (const struct llama_model* model, const char* key, char* buf,           \
-     size_t buf_size))                                                      \
-  X(struct llama_context_params, llama_context_default_params, (void))      \
-  X(struct llama_context*, llama_init_from_model,                           \
-    (struct llama_model * model, struct llama_context_params params))       \
-  X(void, llama_attach_threadpool,                                          \
-    (struct llama_context * ctx, ggml_threadpool_t threadpool,              \
-     ggml_threadpool_t threadpool_batch))                                   \
-  X(const char*, llama_model_chat_template,                                 \
-    (const struct llama_model* model, const char* name))                    \
-  X(int32_t, llama_chat_apply_template,                                     \
-    (const char* tmpl, const struct llama_chat_message* chat, size_t n_msg, \
-     bool add_ass, char* buf, int32_t length))                              \
-  X(struct llama_sampler_chain_params, llama_sampler_chain_default_params,  \
-    (void))                                                                 \
-  X(struct llama_sampler*, llama_sampler_chain_init,                        \
-    (struct llama_sampler_chain_params params))                             \
-  X(void, llama_sampler_chain_add,                                          \
-    (struct llama_sampler * chain, struct llama_sampler * smpl))            \
-  X(struct llama_sampler*, llama_sampler_init_greedy, (void))               \
-  X(struct llama_sampler*, llama_sampler_init_temp, (float t))              \
-  X(struct llama_sampler*, llama_sampler_init_dist, (uint32_t seed))        \
-  X(struct llama_sampler*, llama_sampler_init_top_k, (int32_t k))           \
-  X(struct llama_sampler*, llama_sampler_init_top_p,                        \
-    (float p, size_t min_keep))                                             \
-  X(struct llama_sampler*, llama_sampler_init_logit_bias,                   \
-    (int32_t n_vocab, int32_t n_logit_bias,                                 \
-     const llama_logit_bias* logit_bias))                                   \
-  X(const struct llama_vocab*, llama_model_get_vocab,                       \
-    (const struct llama_model* model))                                      \
-  X(int32_t, llama_vocab_n_tokens, (const struct llama_vocab* vocab))       \
-  X(int32_t, llama_model_n_ctx_train, (const struct llama_model* model))    \
-  X(int32_t, llama_tokenize,                                                \
-    (const struct llama_vocab* vocab, const char* text, int32_t text_len,   \
-     llama_token* tokens, int32_t n_tokens_max, bool add_special,           \
-     bool parse_special))                                                   \
-  X(uint32_t, llama_n_batch, (const struct llama_context* ctx))             \
-  X(struct llama_batch, llama_batch_get_one,                                \
-    (llama_token * tokens, int32_t n_tokens))                               \
-  X(int32_t, llama_decode,                                                  \
-    (struct llama_context * ctx, struct llama_batch batch))                 \
-  X(llama_token, llama_sampler_sample,                                      \
-    (struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx)) \
-  X(bool, llama_vocab_is_eog,                                               \
-    (const struct llama_vocab* vocab, llama_token token))                   \
-  X(int32_t, llama_token_to_piece,                                          \
-    (const struct llama_vocab* vocab, llama_token token, char* buf,         \
-     int32_t length, int32_t lstrip, bool special))                         \
-  X(void, llama_model_free, (struct llama_model * model))                   \
-  X(void, llama_free, (struct llama_context * ctx))                         \
-  X(void, llama_sampler_free, (struct llama_sampler * smpl))                \
-  X(void, ggml_threadpool_params_init,                                      \
-    (struct ggml_threadpool_params * p, int n_threads))                     \
-  X(bool, ggml_threadpool_params_match,                                     \
-    (const struct ggml_threadpool_params* p0,                               \
-     const struct ggml_threadpool_params* p1))                              \
-  X(ggml_threadpool_t, ggml_threadpool_new,                                 \
-    (struct ggml_threadpool_params * params))                               \
-  X(void, ggml_threadpool_free, (ggml_threadpool_t threadpool))             \
-  X(enum ggml_backend_dev_type, ggml_backend_dev_type,                      \
-    (ggml_backend_dev_t device))                                            \
-  X(size_t, ggml_backend_dev_count, (void))                                 \
-  X(ggml_backend_dev_t, ggml_backend_dev_get, (size_t index))               \
-  X(void, ggml_backend_dev_get_props,                                       \
-    (ggml_backend_dev_t device, struct ggml_backend_dev_props * props))     \
-  X(ggml_backend_t, ggml_backend_dev_init,                                  \
-    (ggml_backend_dev_t device, const char* params))                        \
-  X(void, ggml_backend_free, (ggml_backend_t backend))                      \
-  /* libmtmd, llama.cpp's multimodal front-end */                           \
-  X(void, mtmd_helper_log_set,                                              \
-    (ggml_log_callback log_callback, void* user_data))                      \
-  X(struct mtmd_context_params, mtmd_context_params_default, (void))        \
-  X(mtmd_context*, mtmd_init_from_file_handle,                              \
-    (FILE * mmproj_file, const struct llama_model* text_model,              \
-     const struct mtmd_context_params ctx_params))                          \
-  X(void, mtmd_free, (mtmd_context * ctx))                                  \
-  X(bool, mtmd_support_vision, (const mtmd_context* ctx))                   \
-  MOZINFERENCE_PARKEET_FUNCTION_LIST(X)                                     \
+#define MOZINFERENCE_FUNCTION_LIST(X)                                        \
+  X(void, llama_log_set,                                                     \
+    (void (*callback)(enum ggml_log_level, const char*, void*),              \
+     void* user_data))                                                       \
+  X(struct llama_model_params, llama_model_default_params, (void))           \
+  X(struct llama_model*, llama_model_load_from_file_handle,                  \
+    (FILE * file, struct llama_model_params params))                         \
+  X(int32_t, llama_model_meta_val_str,                                       \
+    (const struct llama_model* model, const char* key, char* buf,            \
+     size_t buf_size))                                                       \
+  X(struct llama_context_params, llama_context_default_params, (void))       \
+  X(struct llama_context*, llama_init_from_model,                            \
+    (struct llama_model * model, struct llama_context_params params))        \
+  X(void, llama_attach_threadpool,                                           \
+    (struct llama_context * ctx, ggml_threadpool_t threadpool,               \
+     ggml_threadpool_t threadpool_batch))                                    \
+  X(const char*, llama_model_chat_template,                                  \
+    (const struct llama_model* model, const char* name))                     \
+  X(int32_t, llama_chat_apply_template,                                      \
+    (const char* tmpl, const struct llama_chat_message* chat, size_t n_msg,  \
+     bool add_ass, char* buf, int32_t length))                               \
+  X(struct llama_sampler_chain_params, llama_sampler_chain_default_params,   \
+    (void))                                                                  \
+  X(struct llama_sampler*, llama_sampler_chain_init,                         \
+    (struct llama_sampler_chain_params params))                              \
+  X(void, llama_sampler_chain_add,                                           \
+    (struct llama_sampler * chain, struct llama_sampler * smpl))             \
+  X(struct llama_sampler*, llama_sampler_init_greedy, (void))                \
+  X(struct llama_sampler*, llama_sampler_init_temp, (float t))               \
+  X(struct llama_sampler*, llama_sampler_init_dist, (uint32_t seed))         \
+  X(struct llama_sampler*, llama_sampler_init_top_k, (int32_t k))            \
+  X(struct llama_sampler*, llama_sampler_init_top_p,                         \
+    (float p, size_t min_keep))                                              \
+  X(struct llama_sampler*, llama_sampler_init_logit_bias,                    \
+    (int32_t n_vocab, int32_t n_logit_bias,                                  \
+     const llama_logit_bias* logit_bias))                                    \
+  X(const struct llama_vocab*, llama_model_get_vocab,                        \
+    (const struct llama_model* model))                                       \
+  X(int32_t, llama_vocab_n_tokens, (const struct llama_vocab* vocab))        \
+  X(int32_t, llama_model_n_ctx_train, (const struct llama_model* model))     \
+  X(int32_t, llama_tokenize,                                                 \
+    (const struct llama_vocab* vocab, const char* text, int32_t text_len,    \
+     llama_token* tokens, int32_t n_tokens_max, bool add_special,            \
+     bool parse_special))                                                    \
+  X(uint32_t, llama_n_batch, (const struct llama_context* ctx))              \
+  X(struct llama_batch, llama_batch_get_one,                                 \
+    (llama_token * tokens, int32_t n_tokens))                                \
+  X(int32_t, llama_decode,                                                   \
+    (struct llama_context * ctx, struct llama_batch batch))                  \
+  X(llama_token, llama_sampler_sample,                                       \
+    (struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx))  \
+  X(bool, llama_vocab_is_eog,                                                \
+    (const struct llama_vocab* vocab, llama_token token))                    \
+  X(int32_t, llama_token_to_piece,                                           \
+    (const struct llama_vocab* vocab, llama_token token, char* buf,          \
+     int32_t length, int32_t lstrip, bool special))                          \
+  X(void, llama_model_free, (struct llama_model * model))                    \
+  X(void, llama_free, (struct llama_context * ctx))                          \
+  X(void, llama_sampler_free, (struct llama_sampler * smpl))                 \
+  X(void, ggml_threadpool_params_init,                                       \
+    (struct ggml_threadpool_params * p, int n_threads))                      \
+  X(bool, ggml_threadpool_params_match,                                      \
+    (const struct ggml_threadpool_params* p0,                                \
+     const struct ggml_threadpool_params* p1))                               \
+  X(ggml_threadpool_t, ggml_threadpool_new,                                  \
+    (struct ggml_threadpool_params * params))                                \
+  X(void, ggml_threadpool_free, (ggml_threadpool_t threadpool))              \
+  X(enum ggml_backend_dev_type, ggml_backend_dev_type,                       \
+    (ggml_backend_dev_t device))                                             \
+  X(size_t, ggml_backend_dev_count, (void))                                  \
+  X(ggml_backend_dev_t, ggml_backend_dev_get, (size_t index))                \
+  X(void, ggml_backend_dev_get_props,                                        \
+    (ggml_backend_dev_t device, struct ggml_backend_dev_props * props))      \
+  X(ggml_backend_t, ggml_backend_dev_init,                                   \
+    (ggml_backend_dev_t device, const char* params))                         \
+  X(void, ggml_backend_free, (ggml_backend_t backend))                       \
+  /* libmtmd, llama.cpp's multimodal front-end */                            \
+  X(void, mtmd_helper_log_set,                                               \
+    (ggml_log_callback log_callback, void* user_data))                       \
+  X(struct mtmd_context_params, mtmd_context_params_default, (void))         \
+  X(mtmd_context*, mtmd_init_from_file_handle,                               \
+    (FILE * mmproj_file, const struct llama_model* text_model,               \
+     const struct mtmd_context_params ctx_params))                           \
+  X(void, mtmd_free, (mtmd_context * ctx))                                   \
+  X(bool, mtmd_support_vision, (const mtmd_context* ctx))                    \
+  X(const char*, mtmd_default_marker, (void))                                \
+  X(mtmd_bitmap*, mtmd_bitmap_init,                                          \
+    (uint32_t nx, uint32_t ny, const unsigned char* data))                   \
+  X(void, mtmd_bitmap_free, (mtmd_bitmap * bitmap))                          \
+  X(mtmd_input_chunks*, mtmd_input_chunks_init, (void))                      \
+  X(size_t, mtmd_input_chunks_size, (const mtmd_input_chunks* chunks))       \
+  X(const mtmd_input_chunk*, mtmd_input_chunks_get,                          \
+    (const mtmd_input_chunks* chunks, size_t idx))                           \
+  X(void, mtmd_input_chunks_free, (mtmd_input_chunks * chunks))              \
+  X(enum mtmd_input_chunk_type, mtmd_input_chunk_get_type,                   \
+    (const mtmd_input_chunk* chunk))                                         \
+  X(size_t, mtmd_input_chunk_get_n_tokens, (const mtmd_input_chunk* chunk))  \
+  X(const llama_token*, mtmd_input_chunk_get_tokens_text,                    \
+    (const mtmd_input_chunk* chunk, size_t* n_tokens_output))                \
+  X(int32_t, mtmd_tokenize,                                                  \
+    (mtmd_context * ctx, mtmd_input_chunks * output,                         \
+     const mtmd_input_text* text, const mtmd_bitmap** bitmaps,               \
+     size_t n_bitmaps))                                                      \
+  X(size_t, mtmd_helper_get_n_tokens, (const mtmd_input_chunks* chunks))     \
+  X(int32_t, mtmd_helper_eval_chunks,                                        \
+    (mtmd_context * ctx, struct llama_context * lctx,                        \
+     const mtmd_input_chunks* chunks, llama_pos n_past, llama_seq_id seq_id, \
+     int32_t n_batch, bool logits_last, llama_pos* new_n_past))              \
+  MOZINFERENCE_PARKEET_FUNCTION_LIST(X)                                      \
   MOZINFERENCE_METAL_FUNCTION_LIST(X)
 
 struct LlamaLibWrapper {
