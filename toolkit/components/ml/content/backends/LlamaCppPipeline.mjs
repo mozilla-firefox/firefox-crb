@@ -49,6 +49,7 @@ ChromeUtils.defineLazyGetter(lazy, "console", () => {
  * @param {string} [options.modelId] - Identifier of the model to be loaded.
  * @param {string} [options.modelRevision] - Specific revision of the model to be used.
  * @param {string} [options.modelFile] - Name of the model file to load.
+ * @param {string} [options.mmprojFile] - Name of the multimodal projector file, for a vision model.
  * @param {number} [options.numBatch=700] - Number of tokens to process in a batch.
  * @param {number} [options.numThreads=0] - Number of CPU threads to use (default: auto).
  * @param {boolean} [options.flashAttn=false] - Whether to enable Flash Attention for optimization.
@@ -98,6 +99,7 @@ export class LlamaCppPipeline {
       modelId,
       modelRevision,
       modelFile,
+      mmprojFile,
       numBatch = 700,
       numThreads = 0,
       flashAttn = false,
@@ -121,6 +123,20 @@ export class LlamaCppPipeline {
         }),
       })
     ).ok[2];
+
+    const mmprojBlob = mmprojFile
+      ? (
+          await mlEngineWorker.getModelFile({
+            url: createFileUrl({
+              model: modelId,
+              revision: modelRevision,
+              file: mmprojFile,
+              urlTemplate: modelHubUrlTemplate,
+              rootUrl: modelHubRootUrl,
+            }),
+          })
+        ).ok[2]
+      : null;
 
     let options = {};
 
@@ -171,7 +187,8 @@ export class LlamaCppPipeline {
           nThreadsBatch: options.n_threads_decoding,
         },
       },
-      modelBlob
+      modelBlob,
+      mmprojBlob
     );
 
     lazy.console.debug("Init time", ChromeUtils.now() - startInitTime);
@@ -202,6 +219,7 @@ export class LlamaCppPipeline {
    * @param {object} [options.context] - Generation context
    * @param {object[]} [options.samplers] - List of samplers.
    * @param {boolean} [options.stopOnEndOfGenerationTokens] - Wether to stop generations on model-specific eog tokens.
+   * @param {object[]} [options.images] - Decoded images as {data, width, height, channels}. Requires mmprojFile.
    * @param {number} [options.minOutputBufferSize] - Buffer size for the generated tokens to be sent.
    * @param {string|null} [requestId=null] - An optional identifier for tracking the request.
    * @param {?function(ProgressAndStatusCallbackParams):void|null} [inferenceProgressCallback=null] - A callback function to track inference progress.
@@ -226,6 +244,7 @@ export class LlamaCppPipeline {
       stopTokens,
       stopOnEndOfGenerationTokens,
       minOutputBufferSize = 20,
+      images = [],
     } = {},
     requestId = null,
     inferenceProgressCallback = null,
@@ -268,19 +287,22 @@ export class LlamaCppPipeline {
       const inferenceStartTime = ChromeUtils.now();
       snapshot("runStart", inferenceStartTime);
 
-      const stream = this.generator.createGenerationStream({
-        prompt: formattedPrompt,
-        maxGeneratedTokens: nPredict,
-        minOutputBufferSize,
-        context: {
-          nThreads: this.#options.n_threads,
-          nThreadsBatch: this.#options.n_threads_decoding,
-          ...(context || {}),
+      const stream = this.generator.createGenerationStream(
+        {
+          prompt: formattedPrompt,
+          maxGeneratedTokens: nPredict,
+          minOutputBufferSize,
+          context: {
+            nThreads: this.#options.n_threads,
+            nThreadsBatch: this.#options.n_threads_decoding,
+            ...(context || {}),
+          },
+          samplers,
+          stopTokens,
+          stopOnEndOfGenerationTokens,
         },
-        samplers,
-        stopTokens,
-        stopOnEndOfGenerationTokens,
-      });
+        images
+      );
 
       // An async iterator's return() rejects while a read is outstanding,
       // which is exactly when a cancellation arrives. Generation starts on
@@ -306,9 +328,9 @@ export class LlamaCppPipeline {
         }
 
         if (isPrompt) {
-          inputTokens += chunk.tokens.length;
+          inputTokens += chunk.tokenCount;
         } else {
-          outputTokens += chunk.tokens.length;
+          outputTokens += chunk.tokenCount;
         }
 
         if (skipPrompt && isPrompt) {
@@ -327,13 +349,14 @@ export class LlamaCppPipeline {
           metadata: {
             text: chunk.piece,
             tokens: chunk.tokens,
+            tokenCount: chunk.tokenCount,
             isPrompt,
             requestId,
           },
           type: Progress.ProgressType.INFERENCE,
           statusText: Progress.ProgressStatusText.IN_PROGRESS,
         });
-        tokenCount += chunk.tokens.length;
+        tokenCount += chunk.tokenCount;
         ChromeUtils.addProfilerMarker(
           "MLEngine:llama.cpp",
           chunkStartTime,

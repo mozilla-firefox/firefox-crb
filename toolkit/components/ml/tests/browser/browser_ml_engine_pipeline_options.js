@@ -811,3 +811,36 @@ add_task(async function test_ml_threading_support() {
   await EngineProcess.destroyMLEngine();
   await cleanup();
 });
+
+/**
+ * mmprojFile has to be in PipelineOptions' allow list, or it is dropped on the
+ * way to the engine and no projector is ever loaded.
+ */
+add_task(async function test_mmproj_file_survives_allow_list() {
+  const options = new PipelineOptions({
+    taskName: "text-generation",
+    modelId: "Mozilla/test-llama",
+    modelRevision: "main",
+    modelFile: "TinyStories-656K.Q8_0.gguf",
+    mmprojFile: "mmproj-test.gguf",
+    backend: "llama.cpp",
+  });
+
+  Assert.equal(
+    options.getOptions().mmprojFile,
+    "mmproj-test.gguf",
+    "mmprojFile reaches the engine instead of being dropped."
+  );
+
+  Assert.throws(
+    () =>
+      new PipelineOptions({
+        taskName: "text-generation",
+        modelId: "Mozilla/test-llama",
+        modelRevision: "main",
+        mmprojFile: "has space.gguf",
+      }),
+    /mmprojFile/,
+    "mmprojFile is validated like modelFile."
+  );
+});

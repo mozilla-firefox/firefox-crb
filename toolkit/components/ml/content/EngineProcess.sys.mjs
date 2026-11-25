@@ -651,6 +651,13 @@ export class PipelineOptions {
   modelFile = null;
 
   /**
+   * The name of the multimodal projector file, for a vision model.
+   *
+   * @type {?string}
+   */
+  mmprojFile = null;
+
+  /**
    * The backend to use.
    *
    * @type {?string}
@@ -909,6 +916,7 @@ export class PipelineOptions {
       "useMlock",
       "numThreadsDecoding",
       "modelFile",
+      "mmprojFile",
       "backend",
       "baseURL",
       "apiKey",
@@ -996,7 +1004,7 @@ export class PipelineOptions {
         ModelHub.apply(this, options[key]);
       }
 
-      if (key === "modelFile") {
+      if (["modelFile", "mmprojFile"].includes(key)) {
         this.#validateModelFile(key, options[key]);
       }
 
@@ -1056,6 +1064,7 @@ export class PipelineOptions {
       useMlock: this.useMlock,
       numThreadsDecoding: this.numThreadsDecoding,
       modelFile: this.modelFile,
+      mmprojFile: this.mmprojFile,
       backend: this.backend,
       baseURL: this.baseURL,
       apiKey: this.apiKey,
