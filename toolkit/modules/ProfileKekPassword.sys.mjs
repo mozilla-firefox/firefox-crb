@@ -81,12 +81,59 @@ export const ProfileKekPassword = {
     // does not outlive key4.db, so these DEKs are already unreadable for
     // good. Delete them, both because nothing can use them again and
     // because deleteKek refuses while a DEK is still wrapped under the KEK.
+    const dekNames = [];
     for (const dekName of await lockstore.listDeks()) {
       if ((await lockstore.listKeks(dekName)).includes(PW_KEK)) {
-        await lockstore.deleteDek(dekName);
+        dekNames.push(dekName);
       }
     }
+
+    // Before the DEKs: if this stops halfway, storage that lost its data but
+    // kept its DEK starts over, while storage that lost only its DEK is stuck.
+    await this.clearQuotaStorage(dekNames);
+
+    for (const dekName of dekNames) {
+      await lockstore.deleteDek(dekName);
+    }
     await this.deleteKekQuietly(lockstore, PW_KEK);
+  },
+
+  // Storage of an encrypted origin cannot be read once its DEKs are deleted,
+  // and the storage client it belongs to then fails rather than starting
+  // over. So drop what the DEKs protected, one storage client at a time: other
+  // clients of the same origin can hold data that needs no DEK.
+  async clearQuotaStorage(dekNames) {
+    const cleared = new Set();
+    for (const dekName of dekNames) {
+      const clientType = {};
+      const principal = Services.qms.decodeDekName(dekName, clientType);
+      const id = principal && `${clientType.value} ${principal.origin}`;
+      if (!principal || cleared.has(id)) {
+        continue;
+      }
+      cleared.add(id);
+
+      // Origins in the persistent repository are never encrypted.
+      const request = Services.qms.clearStoragesForClient(
+        principal,
+        clientType.value,
+        "default"
+      );
+      await new Promise((resolve, reject) => {
+        request.callback = () => {
+          if (Components.isSuccessCode(request.resultCode)) {
+            resolve();
+          } else {
+            reject(
+              new Components.Exception(
+                `Failed to clear the ${clientType.value} storage of ${principal.origin}`,
+                request.resultCode
+              )
+            );
+          }
+        };
+      });
+    }
   },
 
   // changeKekPassword drops the cached unlock, so restore it. Failing to do

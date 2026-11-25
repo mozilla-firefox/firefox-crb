@@ -267,6 +267,118 @@ add_task(async function test_discard_locked_drops_unrecoverable_deks() {
   );
 });
 
+// Named the way QuotaManager names the key of an origin's storage client.
+function quotaDekName(origin, clientType) {
+  return (
+    "dom-quota:" +
+    ["profile", origin, "bottle", clientType, "db"]
+      .map(part => `${part.length}:${part}`)
+      .join(":")
+  );
+}
+
+add_task(async function test_discard_locked_clears_quota_storage() {
+  await resetLockstore();
+  const ls = getLockstore();
+  await createPasswordKek(PW);
+
+  const dekName = quotaDekName("https://example.com", "ls");
+  await ls.createDek(dekName, PW_KEK, true, 32);
+  const otherDekName = quotaDekName(
+    "https://example.org^userContextId=1",
+    "idb"
+  );
+  await ls.createDek(otherDekName, PW_KEK, true, 32);
+  await ls.lockKek(PW_KEK);
+
+  Services.prefs.setBoolPref("dom.quotaManager.testing", true);
+  await new Promise(resolve => {
+    Services.qms.init().callback = resolve;
+  });
+  Services.prefs.clearUserPref("dom.quotaManager.testing");
+
+  const clientDir = (origin, name) => {
+    const dir = do_get_profile();
+    for (const leaf of ["storage", "default", origin, name]) {
+      dir.append(leaf);
+    }
+    dir.create(Ci.nsIFile.DIRECTORY_TYPE, 0o755);
+    return dir;
+  };
+  const lsDir = clientDir("https+++example.com", "ls");
+  const fsDir = clientDir("https+++example.com", "fs");
+  const otherIdbDir = clientDir("https+++example.org^userContextId=1", "idb");
+
+  const clearQuotaStorage = ProfileKekPassword.clearQuotaStorage;
+  let dekExistedAtClear;
+  ProfileKekPassword.clearQuotaStorage = async function (dekNames) {
+    dekExistedAtClear = await ls.dekExists(dekName);
+    return clearQuotaStorage.call(this, dekNames);
+  };
+  try {
+    await ProfileKekPassword.discard();
+  } finally {
+    ProfileKekPassword.clearQuotaStorage = clearQuotaStorage;
+  }
+
+  Assert.ok(dekExistedAtClear, "the storage is cleared before its DEK is gone");
+  Assert.ok(!(await ls.dekExists(dekName)), "the origin's DEK is deleted");
+  Assert.ok(!lsDir.exists(), "storage the deleted DEK protected is cleared");
+  Assert.ok(fsDir.exists(), "storage of another client is untouched");
+  Assert.ok(!(await ls.dekExists(otherDekName)), "every DEK is deleted");
+  Assert.ok(!otherIdbDir.exists(), "storage of every origin is cleared");
+});
+
+add_task(async function test_discard_locked_keeps_deks_when_clear_fails() {
+  await resetLockstore();
+  const ls = getLockstore();
+  await createPasswordKek(PW);
+  await ls.createDek("places.sqlite", PW_KEK, true, 32);
+  await ls.lockKek(PW_KEK);
+
+  const clearQuotaStorage = ProfileKekPassword.clearQuotaStorage;
+  ProfileKekPassword.clearQuotaStorage = () =>
+    Promise.reject(new Error("clear failed"));
+  try {
+    await assertRejects(
+      ProfileKekPassword.discard(),
+      "a failed clear is reported to the caller"
+    );
+  } finally {
+    ProfileKekPassword.clearQuotaStorage = clearQuotaStorage;
+  }
+
+  Assert.ok(await ls.dekExists("places.sqlite"), "the DEK is still there");
+  Assert.ok(await ls.kekExists(PW_KEK), "the password KEK is still there");
+});
+
+add_task(async function test_discard_locked_skips_malformed_quota_deks() {
+  await resetLockstore();
+  const ls = getLockstore();
+  await createPasswordKek(PW);
+
+  const dekNames = [
+    // A negative, an overlong and a non-numeric length, then too few parts.
+    "dom-quota:-4:",
+    "dom-quota:99:profile",
+    "dom-quota:x:profile",
+    "dom-quota:7:profile",
+    // Well-formed, for an origin QuotaManager does not accept.
+    quotaDekName("not an origin", "idb"),
+  ];
+  for (const dekName of dekNames) {
+    await ls.createDek(dekName, PW_KEK, true, 32);
+  }
+  await ls.lockKek(PW_KEK);
+
+  await ProfileKekPassword.discard();
+
+  for (const dekName of dekNames) {
+    Assert.ok(!(await ls.dekExists(dekName)), `${dekName} is deleted`);
+  }
+  Assert.ok(!(await ls.kekExists(PW_KEK)), "the password KEK is gone");
+});
+
 add_task(async function test_discard_ignores_the_pref() {
   await resetLockstore();
   const ls = getLockstore();

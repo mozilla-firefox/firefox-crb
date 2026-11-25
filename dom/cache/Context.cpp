@@ -698,14 +698,18 @@ Context::ActionRunnable::Run() {
       if (mCipherKeyManager) {
         auto keyResult = mCipherKeyManager->Ensure("db"_ns);
         if (keyResult.isErr()) {
+          // Resolved the way an Action that fails synchronously resolves, so
+          // the completion below still runs.
           Resolve(keyResult.inspectErr());
-          break;
+        } else {
+          maybeCipherKey = Some(keyResult.unwrap());
         }
-        maybeCipherKey = Some(keyResult.unwrap());
       }
 
-      mAction->RunOnTarget(SafeRefPtrFromThis(), mDirectoryMetadata, mData,
-                           maybeCipherKey);
+      if (mState == STATE_RUNNING) {
+        mAction->RunOnTarget(SafeRefPtrFromThis(), mDirectoryMetadata, mData,
+                             maybeCipherKey);
+      }
 
       mData = nullptr;
 

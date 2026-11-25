@@ -461,6 +461,20 @@ interface nsIQuotaManagerService : nsISupports
                          [optional] in ACString aPersistenceType);
 
   /**
+   * Tells which storage a lockstore DEK protects, for a caller that only has
+   * the DEK's name.
+   *
+   * @param aDekName
+   *        The name of a DEK in the lockstore.
+   * @param aClientType
+   *        The client type of the storage the DEK protects, as taken by
+   *        clearStoragesForClient.
+   * @return The principal of the origin the DEK belongs to, or null if the
+   *         DEK is not one that protects origin storage.
+   */
+  nsIPrincipal decodeDekName(in ACString aDekName, out AString aClientType);
+
+  /**
    * Check if given origin is persisted.
    *
    * @param aPrincipal
