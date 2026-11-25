@@ -385,7 +385,9 @@ dictionary LlamaChatOptions {
 interface LlamaRunner {
   [Throws] constructor();
 
-  [Throws] Promise<undefined> initialize(LlamaModelOptions options, Blob modelBlob);
+  [Throws] Promise<undefined> initialize(LlamaModelOptions options,
+                                         Blob modelBlob,
+                                         optional Blob? mmprojBlob = null);
 
   [Throws] Promise<UTF8String> formatChat(LlamaFormatChatOptions options);
 

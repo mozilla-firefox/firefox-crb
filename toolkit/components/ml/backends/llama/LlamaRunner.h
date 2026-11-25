@@ -287,7 +287,8 @@ class LlamaRunner final : public nsISupports,
                                                    ErrorResult& aRv);
 
   already_AddRefed<Promise> Initialize(const LlamaModelOptions& aOptions,
-                                       Blob& aModelBlob, ErrorResult& aRv);
+                                       Blob& aModelBlob, Blob* aMmprojBlob,
+                                       ErrorResult& aRv);
 
   virtual JSObject* WrapObject(JSContext* aCx,
                                JS::Handle<JSObject*> aGivenProto) override;
@@ -375,8 +376,12 @@ class LlamaRunner final : public nsISupports,
   LlamaModelOptions mModelOptions;
   nsCOMPtr<nsIGlobalObject> mGlobal;
   RefPtr<Promise> mInitPromise;
-  nsCOMPtr<nsIInputStream> mStream;
+  nsCOMPtr<nsIInputStream> mModelStream;
+  nsCOMPtr<nsIInputStream> mMmprojStream;
   RefPtr<MetadataCallback> mMetadataCallback;
+
+  // Metadata waits still outstanding; Reinitialize runs when it reaches zero.
+  uint32_t mPendingMetadata = 0;
 };
 
 }  // namespace mozilla::dom
