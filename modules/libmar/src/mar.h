@@ -94,6 +94,16 @@ MarReadResult mar_open(const char* path, MarFile** out_mar);
 
 #ifdef XP_WIN
 MarReadResult mar_wopen(const wchar_t* path, MarFile** out_mar);
+#else
+/**
+ * Open a MAR file for reading from an open file descriptor. The descriptor is
+ * duplicated, so the caller keeps ownership of fd.
+ *
+ * @param fd        An open file descriptor for the MAR file.
+ * @param out_mar   Out-parameter through which the created MarFile structure is
+ *                  returned, as for mar_open.
+ */
+MarReadResult mar_fdopen(int fd, MarFile** out_mar);
 #endif
 
 /**
