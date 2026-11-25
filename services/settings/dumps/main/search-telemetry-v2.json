@@ -288,7 +288,7 @@
         "lns_mode": "image_search"
       },
       "searchPageMatches": [
-        "https://{host}/search*"
+        "https://*/search*"
       ],
       "searchPageRegexp": "^https://www\\.google\\.(?:.+)/search",
       "shoppingTab": {
@@ -698,7 +698,7 @@
       "requireTopLevelImpressionOrigin": true,
       "schema": 1786612555420,
       "searchPageMatches": [
-        "https://(?:cn|www).bing.com/search*"
+        "https://*/search*"
       ],
       "searchPageRegexp": "^https://(?:cn|www)\\.bing\\.com/search",
       "shoppingTab": {
@@ -928,7 +928,7 @@
       ],
       "schema": 1786611457004,
       "searchPageMatches": [
-        "https://(?:cn|www).bing.com/search*"
+        "https://*/search*"
       ],
       "searchPageRegexp": "^https://(?:cn|www)\\.bing\\.com/search",
       "shoppingTab": {
