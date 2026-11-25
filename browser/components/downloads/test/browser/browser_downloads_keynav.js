@@ -176,7 +176,7 @@ add_task(async function test_downloads_keynav() {
 });
 
 async function checkTabbing(listbox, buttonIndex) {
-  let button = listbox.getItemAtIndex(buttonIndex).querySelector("button");
+  let button = listbox.getItemAtIndex(buttonIndex).querySelector("moz-button");
   let footer = document.getElementById("downloadsHistory");
 
   listbox.clientWidth; // flush layout first

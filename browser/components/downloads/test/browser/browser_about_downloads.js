@@ -34,7 +34,7 @@ add_task(async function test_about_downloads() {
         // This would just be an `is` check, but stray temp files
         // if this test (or another in this dir) ever fails could throw that off.
         ok(
-          /^dm-ui-test(-\d+)?.file$/.test(desc.value),
+          /^dm-ui-test(-\d+)?.file$/.test(desc.textContent),
           `Label '${desc.value}' should match 'dm-ui-test.file'`
         );
       }

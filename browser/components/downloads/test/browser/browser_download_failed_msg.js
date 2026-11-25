@@ -77,20 +77,20 @@ add_task(async function test() {
         ".downloadDetailsHover"
       );
       Assert.notEqual(
-        hoverTextElement.value,
-        normalTextElement.value,
+        hoverTextElement.textContent,
+        normalTextElement.textContent,
         "Messages should differ as hover contains a more detailed error message"
       );
       Assert.equal(
-        hoverTextElement.value,
-        hoverTextElement.tooltipText,
+        hoverTextElement.textContent,
+        hoverTextElement.getAttribute("title"),
         "Tooltip should be set the same as value, for long messages"
       );
 
       // Check content of the message in a fuzzy way, as it depends on l10n and
       // may change in the future.
       Assert.ok(
-        hoverTextElement.value.includes("interruptible"),
+        hoverTextElement.textContent.includes("interruptible"),
         "Should include the name of the file"
       );
     }

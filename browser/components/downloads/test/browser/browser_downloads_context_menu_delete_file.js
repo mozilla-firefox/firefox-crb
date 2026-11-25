@@ -223,8 +223,8 @@ add_task(async function test_about_downloads_deleteFile_for_history_download() {
   // This would just be an `is` check, but stray temp files
   // if this test (or another in this dir) ever fails could throw that off.
   ok(
-    desc.value.includes("test-download"),
-    `Label '${desc.value}' should include 'test-download'`
+    desc.textContent.includes("test-download"),
+    `Label '${desc.textContent}' should include 'test-download'`
   );
   ok(kid.selected, "First item should be selected.");
   ok(dl.placesNode, "Download should have history.");

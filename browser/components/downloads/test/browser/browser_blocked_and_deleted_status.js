@@ -36,15 +36,15 @@ add_task(async function test_blocked_and_deleted_status_in_panel() {
   let item = listbox.itemChildren[0];
   let statusEl = item.querySelector(".downloadDetailsNormal");
   Assert.equal(
-    statusEl.value,
+    statusEl.textContent,
     await document.l10n.formatValue("downloads-file-blocked-and-deleted"),
-    "Download with deleted+blocked error should show the blocked and deleted string"
+    "Download with deleted+blocked error should show the blocked and deleted string",
   );
 
   let button = item.querySelector(".downloadButton");
   Assert.ok(
     button.hidden,
-    "Action button should be hidden for deleted blocked downloads"
+    "Action button should be hidden for deleted blocked downloads",
   );
 
   await task_resetState();
