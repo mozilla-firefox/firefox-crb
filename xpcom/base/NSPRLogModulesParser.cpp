@@ -7,6 +7,8 @@
 #include "mozilla/Tokenizer.h"
 
 const char kDelimiters[] = ", ";
+// When changing the characters of a module name, update MODULE_NAME in
+// tools/lint/eslint/eslint-plugin-mozilla/lib/rules/valid-log-module.mjs.
 const char kAdditionalWordChars[] = "_-.*";
 
 namespace mozilla {

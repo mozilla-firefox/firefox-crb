@@ -434,6 +434,8 @@ class LogModuleManager {
       }
     }
 
+    // When adding or renaming an option, update OPTION_NAMES in
+    // tools/lint/eslint/eslint-plugin-mozilla/lib/rules/valid-log-module.mjs.
     // Need to capture `this` since `sLogModuleManager` is not set until after
     // initialization is complete.
     NSPRLogModulesParser(

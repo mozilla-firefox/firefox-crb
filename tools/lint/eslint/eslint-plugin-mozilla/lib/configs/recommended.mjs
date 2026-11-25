@@ -113,6 +113,7 @@ export default [
       "mozilla/use-returnValue": "error",
       "mozilla/use-services": "error",
       "mozilla/valid-lazy": "error",
+      "mozilla/valid-log-module": "error",
       "mozilla/valid-services": "error",
 
       // Use [] instead of Array()

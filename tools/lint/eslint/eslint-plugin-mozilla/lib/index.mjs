@@ -164,6 +164,7 @@ let plugin = {
       .default,
     "valid-ci-uses": (await import("./rules/valid-ci-uses.mjs")).default,
     "valid-lazy": (await import("./rules/valid-lazy.mjs")).default,
+    "valid-log-module": (await import("./rules/valid-log-module.mjs")).default,
     "valid-services": (await import("./rules/valid-services.mjs")).default,
     "valid-services-property": (
       await import("./rules/valid-services-property.mjs")

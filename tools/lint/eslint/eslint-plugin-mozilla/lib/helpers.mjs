@@ -819,4 +819,29 @@ export default {
     }
     return null;
   },
+
+  /**
+   * Returns whether a call is to `console.createInstance`.
+   *
+   * @param {import("estree").CallExpression} node
+   * @returns {boolean}
+   */
+  isConsoleCreateInstanceCall(node) {
+    let { callee } = node;
+    if (
+      callee.type != "MemberExpression" ||
+      callee.computed ||
+      callee.property.name != "createInstance"
+    ) {
+      return false;
+    }
+
+    let { object } = callee;
+    return (
+      (object.type == "Identifier" && object.name == "console") ||
+      (object.type == "MemberExpression" &&
+        !object.computed &&
+        object.property.name == "console")
+    );
+  },
 };
