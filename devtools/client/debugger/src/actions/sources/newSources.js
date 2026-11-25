@@ -327,7 +327,6 @@ export function newGeneratedSources(sourceResources) {
 
     dispatch({ type: "ADD_SOURCES", sources: newSources });
     dispatch(insertSourceActors(newSourceActors));
-
     await dispatch(checkNewSources(newSources));
 
     (async () => {
@@ -347,7 +346,8 @@ export function newGeneratedSources(sourceResources) {
         }
         if (
           selectedLocation?.source == sourceActor.sourceObject &&
-          sourceActor.sourceObject.isHTML &&
+          (sourceActor.sourceObject.isHTML ||
+            sourceActor.sourceObject.isNonFrameTargetInlineSource) &&
           !sourceActor.sourceObject.isStyleSheet
         ) {
           await dispatch(
@@ -423,7 +423,7 @@ export function newStyleSheetSources(styleSheetResources) {
  *    The blackboxing is per Source Actor and so we need to notify them individually
  *    if the source used to be ignored.
  */
-function checkNewSources(sources) {
+export function checkNewSources(sources) {
   return async ({ dispatch }) => {
     // Waiting for `checkSelectedSource` completion is important for pretty printed sources.
     // `checkPendingBreakpoints`, which is called after this method, is expected to be called

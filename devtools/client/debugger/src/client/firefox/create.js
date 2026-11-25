@@ -185,10 +185,22 @@ export function makeScriptSourceId(sourceResource) {
   // while you might have many Source Actor objects in source-actors.js reducer.
   //
   // There is two distinct usecases here:
-  // * HTML pages, which will have one source object which represents the whole HTML page
+  // * HTML pages, which will have one target source object which represents the whole HTML page
   //   and it will relate to many source actors. One for each inline <script> tag.
   //   Each script tag's source actor will actually return the whole content of the html page
-  //   and not only this one script tag content.
+  //   and not only this one script tag content. The source id for the inline scripts will be the same as
+  //   that of its parent HTML page. Note: These only relate to frame targets, inline scripts for non frame targets
+  //   will still create unique source objects.
+  if (
+    sourceResource.isInlineSource &&
+    sourceResource.targetFront.targetType === "frame" &&
+    sourceResource.targetFront.getTrait(
+      "supportsGetSourceContentForHTMLResource"
+    )
+  ) {
+    return makeTargetSourceId(sourceResource.targetFront);
+  }
+
   // * Scripts with the same URL injected many times.
   //   For example, two <script src=""> with the same location
   //   Or by using eval("...// # SourceURL=")
@@ -216,6 +228,10 @@ export function makeStyleSheetSourceId(sourceResource) {
   return `source-actor-${sourceResource.resourceId}`;
 }
 
+export function makeTargetSourceId(targetFront) {
+  return `source-html-${targetFront.targetForm.actor}`;
+}
+
 /**
  * Create the source object for a generated source that is stored in the sources.js reducer.
  * These generated sources relate to JS code which run in the
@@ -237,7 +253,18 @@ export function createGeneratedSource(sourceResource) {
     }),
     // Script specific properties
     isWasm: !!features.wasm && sourceResource.introductionType === "wasm",
-    isHTML: !!sourceResource.isInlineSource,
+    // Inline sources are typicaly related to one HTML source per document.
+    // HTML sources created for each target. Unfortunately some documents
+    // don't have a dedicated target.
+    // In the context of the browser toolbox, this is the case for privileged documents
+    // in the parent process (like history, browser console,... windows, or parent process sidebar documents)
+    // All these documents are bound to the ParentProcessTargetActor.
+    // Also, still in the context of the browser toolbox, the debugger ignores all window global targets
+    // and instead only consider the process targets actors (ParentProcessTargetActor and ContentProcessTargetActor).
+    // WindowGlobal targets are created, and used by the inspector and console, but ignored by the debugger.
+    isNonFrameTargetInlineSource:
+      sourceResource.targetFront.targetType !== "frame" &&
+      !!sourceResource.isInlineSource,
     type: ResourceCommand.TYPES.SOURCE,
   };
 }
@@ -436,6 +463,31 @@ export function createPrettyPrintOriginalStyleSheetSource(
     }),
     isStyleSheet: generatedSource.isStyleSheet,
     type: ResourceCommand.TYPES.STYLESHEET,
+  };
+}
+
+/**
+ * Create the source object for a target that is stored in sources.js reducer.
+ * These sources relate to the top level document of a target.
+ * This is typically an HTML page, but it can be any other type of document.
+ *
+ * @param {object} targetFront
+ *        Target front coming from the ResourceCommand API.
+ * @returns {object}
+ *        Source actor object for the target.
+ */
+export function createTargetSource(targetFront) {
+  return {
+    ...createSourceObject({
+      id: makeTargetSourceId(targetFront),
+      url: targetFront.url,
+      extensionName: targetFront.targetForm.extensionName,
+      isExtension:
+        (targetFront.url && isUrlExtension(targetFront.url)) || false,
+    }),
+    targetFront,
+    isHTML: true,
+    type: ResourceCommand.TYPES.HTML,
   };
 }
 

@@ -85,6 +85,27 @@ async function loadOriginalSource(
   return result;
 }
 
+async function loadHtmlSource(source, thunkArgs) {
+  const { panel } = thunkArgs;
+  const { resourceCommand } = panel.toolbox.commands;
+  let response;
+
+  try {
+    response = await source.targetFront.getSourceContentForResource(
+      resourceCommand.TYPES.HTML
+    );
+  } catch (e) {
+    throw new Error(
+      `Error loading html source content with targetFront.getSourceContentForResource: ${e}`
+    );
+  }
+
+  return {
+    text: response.source,
+    contentType: response.contentType || "text/html",
+  };
+}
+
 async function loadGeneratedSourceTextPromise(sourceActor, thunkArgs) {
   const { dispatch, getState } = thunkArgs;
   const epoch = getSourcesEpoch(getState());
@@ -111,6 +132,19 @@ async function loadOriginalSourceTextPromise(source, thunkArgs) {
     source,
     epoch,
     [PROMISE]: loadOriginalSource(source, thunkArgs),
+  });
+
+  await onSourceTextContentAvailable(source, null, thunkArgs);
+}
+
+async function loadHtmlSourceTextPromise(source, thunkArgs) {
+  const { dispatch, getState } = thunkArgs;
+  const epoch = getSourcesEpoch(getState());
+  await dispatch({
+    type: "LOAD_HTML_SOURCE_TEXT",
+    source,
+    epoch,
+    [PROMISE]: loadHtmlSource(source, thunkArgs),
   });
 
   await onSourceTextContentAvailable(source, null, thunkArgs);
@@ -241,10 +275,42 @@ export const loadOriginalSourceText = memoizeableAction(
   }
 );
 
+/**
+ * Loads the source text for a target's HTML resource.
+ *
+ * @param {object} source
+ *                 The target source to load the source text
+ */
+export const loadHtmlSourceText = memoizeableAction("loadHtmlSourceText", {
+  getValue: (source, { getState }) => {
+    if (!source) {
+      return null;
+    }
+
+    const sourceTextContent = getSourceTextContentForSource(getState(), source);
+    if (!sourceTextContent || sourceTextContent.state === "pending") {
+      return sourceTextContent;
+    }
+
+    // This currently swallows source-load-failure since we return fulfilled
+    // here when content.state === "rejected". In an ideal world we should
+    // propagate that error upward.
+    return fulfilled(sourceTextContent);
+  },
+  createKey: (source, { getState }) => {
+    const epoch = getSourcesEpoch(getState());
+    return `${epoch}:${source.id}`;
+  },
+  action: (source, thunkArgs) => loadHtmlSourceTextPromise(source, thunkArgs),
+});
+
 export function loadSourceText(source, sourceActor) {
   return async ({ dispatch, getState }) => {
     if (!source) {
       return null;
+    }
+    if (source.isHTML) {
+      return dispatch(loadHtmlSourceText(source));
     }
     if (source.isOriginal) {
       return dispatch(loadOriginalSourceText(source));
