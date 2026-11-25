@@ -142,6 +142,10 @@
 // asked for the update, or another user that it doesn't accept, can change.
 #define ELEVATED_UPDATE_CHANGEABLE_INSTALL_ERROR 112
 
+// The privileged macOS updater helper refused an install that failed its
+// code-signing check.
+#define ELEVATED_UPDATE_SIGNATURE_ERROR 113
+
 // The macOS updater couldn't install its privileged helper, and the user
 // didn't dismiss the authentication dialog.
 #define ELEVATED_UPDATE_HELPER_INSTALL_ERROR 115

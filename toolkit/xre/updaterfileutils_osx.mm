@@ -269,7 +269,13 @@ ElevatedUpdateRefusal GetElevatedUpdateRefusal(const char* aInstallDir) {
     return ElevatedUpdateRefusal::None;
   }
   ElevatedUpdateRefusal refusal = ElevatedUpdateRefusal::None;
-  if (!IsOnVolumeHonoringOwnership(fd)) {
+  // The helper clones the install into its temporary directory, which is in
+  // /private/var/folders, so the install has to be on that volume.
+  struct stat installStat;
+  struct stat tempStat;
+  if (!IsOnVolumeHonoringOwnership(fd) || fstat(fd, &installStat) != 0 ||
+      stat("/private/var/folders", &tempStat) != 0 ||
+      installStat.st_dev != tempStat.st_dev) {
     refusal = ElevatedUpdateRefusal::UnsupportedVolume;
   } else if (!IsInstallTreeProtected(fd, getuid(),
                                      /* aIsUncheckableRefused = */ false)) {
