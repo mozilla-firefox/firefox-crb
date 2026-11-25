@@ -242,12 +242,12 @@ function applyItemAttributesToNode(item, node) {
     node.ownerDocument.l10n.setAttributes(node, item.l10nID);
   } else {
     node.setAttribute("label", item.label);
-    if (item.accelerator) {
-      node.setAttribute("acceltext", item.accelerator);
-    }
     if (item.accesskey) {
       node.setAttribute("accesskey", item.accesskey);
     }
+  }
+  if (item.accelerator) {
+    node.setAttribute("acceltext", item.accelerator);
   }
   if (item.type === "checkbox") {
     node.setAttribute("type", "checkbox");
