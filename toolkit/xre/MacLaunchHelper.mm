@@ -107,7 +107,8 @@ void LaunchMacAppWithBundle(NSString* aBundlePath, NSArray* aArguments) {
 
 }  // namespace mozilla::MacLaunchHelper
 
-void LaunchChildMac(int aArgc, char** aArgv, pid_t* aPid) {
+static void LaunchChildMacWithEnvironment(int aArgc, char** aArgv, pid_t* aPid,
+                                          NSDictionary* aEnvironment) {
   MacAutoreleasePool pool;
 
   @try {
@@ -119,6 +120,9 @@ void LaunchChildMac(int aArgc, char** aArgv, pid_t* aPid) {
     NSTask* task = [[NSTask alloc] init];
     [task setExecutableURL:[NSURL fileURLWithPath:launchPath]];
     [task setArguments:arguments];
+    if (aEnvironment) {
+      [task setEnvironment:aEnvironment];
+    }
     NSError* error = nil;
     [task launchAndReturnError:&error];
     if (!error && aPid) {
@@ -129,6 +133,10 @@ void LaunchChildMac(int aArgc, char** aArgv, pid_t* aPid) {
   } @catch (NSException* e) {
     NSLog(@"%@: %@", e.name, e.reason);
   }
+}
+
+void LaunchChildMac(int aArgc, char** aArgv, pid_t* aPid) {
+  LaunchChildMacWithEnvironment(aArgc, aArgv, aPid, nil);
 }
 
 void LaunchMacApp(int aArgc, char** aArgv) {
@@ -146,7 +154,8 @@ void LaunchMacApp(int aArgc, char** aArgv) {
   LaunchMacAppWithBundle(launchPath, arguments);
 }
 
-bool InstallPrivilegedHelperWithId(const char* helperId, os_log_t logger) {
+bool InstallPrivilegedHelperWithId(const char* helperId, os_log_t logger,
+                                   bool* aIsCanceled) {
   AuthorizationRef authRef = nullptr;
   OSStatus status = AuthorizationCreate(
       nullptr, kAuthorizationEmptyEnvironment,
@@ -171,6 +180,9 @@ bool InstallPrivilegedHelperWithId(const char* helperId, os_log_t logger) {
   // Obtain the right to install our privileged helper tool.
   status = AuthorizationCopyRights(
       authRef, &authRights, kAuthorizationEmptyEnvironment, flags, nullptr);
+  if (status == errAuthorizationCanceled && aIsCanceled) {
+    *aIsCanceled = true;
+  }
   if (status != errAuthorizationSuccess) {
     os_log_error(
         logger,
@@ -198,45 +210,35 @@ bool InstallPrivilegedHelperWithId(const char* helperId, os_log_t logger) {
   return result;
 }
 
-bool InstallElevatedUpdater() {
-  return InstallPrivilegedHelperWithId("org.mozilla.updater");
-}
-
-void AbortElevatedUpdate() {
-  mozilla::MacAutoreleasePool pool;
-
-  id updateServer = nil;
-  int currTry = 0;
-  const int numRetries = 10;  // Number of IPC connection retries before
-                              // giving up.
-  while (currTry < numRetries) {
-    @try {
-      updateServer = (id)[NSConnection
-          rootProxyForConnectionWithRegisteredName:@"org.mozilla.updater.server"
-                                              host:nil
-                                   usingNameServer:[NSSocketPortNameServer
-                                                       sharedInstance]];
-      if (updateServer && [updateServer respondsToSelector:@selector(abort)]) {
-        [updateServer performSelector:@selector(abort)];
-        return;
-      }
-      NSLog(@"Server doesn't exist or doesn't provide correct selectors.");
-      sleep(1);  // Wait 1 second.
-      currTry++;
-    } @catch (NSException* e) {
-      NSLog(@"Encountered exception, retrying: %@: %@", e.name, e.reason);
-      sleep(1);  // Wait 1 second.
-      currTry++;
-    }
-  }
-  NSLog(@"Unable to clean up updater.");
+bool InstallElevatedUpdater(bool* aIsCanceled) {
+  return InstallPrivilegedHelperWithId("org.mozilla.updater", OS_LOG_DEFAULT,
+                                       aIsCanceled);
 }
 
 bool LaunchElevatedUpdate(int aArgc, char** aArgv, pid_t* aPid) {
-  LaunchChildMac(aArgc, aArgv, aPid);
-  bool didSucceed = InstallElevatedUpdater();
-  if (!didSucceed) {
-    AbortElevatedUpdate();
+  // Install the helper before launching the unelevated updater. The updater
+  // connects to the helper's mach service as soon as it starts, and a
+  // privileged connection to a name that launchd does not know fails at once
+  // instead of waiting for the service to appear, so the service has to be
+  // registered first.
+  MacAutoreleasePool pool;
+  bool isCanceled = false;
+  bool didSucceed = InstallElevatedUpdater(&isCanceled);
+  NSMutableDictionary* environment =
+      [[[NSProcessInfo processInfo] environment] mutableCopy];
+  if (didSucceed) {
+    [environment removeObjectForKey:@"MOZ_UPDATER_HELPER_NOT_INSTALLED"];
+  } else {
+    environment[@"MOZ_UPDATER_HELPER_NOT_INSTALLED"] =
+        isCanceled ? @"canceled" : @"failed";
   }
+  // Launch the updater even when installation fails, so that it records the
+  // failure and relaunches the callback application, which is what brings
+  // Firefox back after a dismissed authentication dialog.
+  // MOZ_UPDATER_HELPER_NOT_INSTALLED tells it that installation failed: a
+  // helper left installed by an earlier update would otherwise still accept
+  // the connection and apply the update.
+  LaunchChildMacWithEnvironment(aArgc, aArgv, aPid, environment);
+  [environment release];
   return didSucceed;
 }

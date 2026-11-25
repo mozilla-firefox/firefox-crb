@@ -140,6 +140,19 @@ set_config(
     "MOZ_SMPRIVILEGEDEXECUTABLES_REQUIREMENTS", generate_smprivilegedexec_requirements
 )
 
+
+# Bare code-signing requirement string for just the updater's privileged
+# helper, used for runtime peer validation of its XPC connection.
+@depends("--enable-mac-elevated-updates-with-generic-certs", when=target_is_osx)
+def updater_smprivilegedexecutable_requirement(relaxed):
+    return requirements_string("org.mozilla.updater", relaxed)
+
+
+set_config(
+    "MOZ_UPDATER_SMPRIVILEGEDEXECUTABLE_REQUIREMENT",
+    updater_smprivilegedexecutable_requirement,
+)
+
 # MAR channel ID configuration
 # ==============================================================
 
