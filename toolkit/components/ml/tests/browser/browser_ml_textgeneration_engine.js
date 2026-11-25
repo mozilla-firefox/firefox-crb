@@ -297,3 +297,32 @@ add_task(async function test_engine_chat_completion_request() {
     await cleanup();
   }
 });
+
+/**
+ * This engine carries no images, so routing a multimodal pipeline to it would
+ * drop them with no error. shouldRoute has to decline those regardless of the
+ * hwInference pref.
+ */
+add_task(async function test_multimodal_pipeline_is_not_routed_here() {
+  const { cleanup } = await setup({
+    prefs: [["browser.ml.llama.hwInference", true]],
+  });
+  const { TextGenerationEngine } = ChromeUtils.importESModule(
+    "moz-src:///toolkit/components/ml/textgeneration/TextGenerationEngine.sys.mjs"
+  );
+
+  Assert.ok(
+    TextGenerationEngine.shouldRoute({ backend: "llama.cpp" }),
+    "A text-only llama.cpp pipeline still routes here."
+  );
+
+  Assert.ok(
+    !TextGenerationEngine.shouldRoute({
+      backend: "llama.cpp",
+      mmprojFile: "mmproj-test.gguf",
+    }),
+    "A pipeline naming an mmproj does not."
+  );
+
+  await cleanup();
+});

@@ -1941,7 +1941,10 @@ export class MLEngine {
           lazy.console.debug(
             `Chunk received ${lazy.stringifyForLog(chunk.metadata)}`
           );
-          tokenCount += chunk.metadata.tokens?.length ?? 0;
+          // An image chunk carries a tokenCount but no token ids.
+          const chunkTokenCount =
+            chunk.metadata.tokenCount ?? chunk.metadata.tokens?.length ?? 0;
+          tokenCount += chunkTokenCount;
           characterCount += chunk.metadata.text?.length ?? 0;
 
           if (!chunk.metadata.isPrompt) {
@@ -1966,8 +1969,8 @@ export class MLEngine {
           // Be a bit defensive here in getting the metadata, as different engines may
           // report different things back.
           let markerText;
-          if (chunk.metadata.tokens?.length) {
-            markerText = `${chunk.metadata.tokens?.length} tokens`;
+          if (chunkTokenCount) {
+            markerText = `${chunkTokenCount} tokens`;
           } else if (chunk.metadata.text?.length) {
             markerText = `${chunk.metadata.text?.length} characters`;
           } else {
