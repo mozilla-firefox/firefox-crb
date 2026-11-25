@@ -977,25 +977,36 @@ html {
     &.light-text {
       // fallback values can be removed after Nova has reached release
       --text-color: var(--color-violet-desaturated-0, rgb(251, 251, 254));
-      --button-text-color-primary: #252428;
-      --button-text-color-primary-hover: #252428;
-      --button-background-color-primary: #D4C1FF;
-      --button-background-color-primary-hover: #B89CFF;
-      --button-background-color-primary-active: #9871FF;
-      --button-text-color: var(--text-color);
+
+      @media not (forced-colors) {
+        --button-text-color-primary: #252428;
+        --button-text-color-primary-hover: #252428;
+        --button-background-color-primary: #D4C1FF;
+        --button-background-color-primary-hover: #B89CFF;
+        --button-background-color-primary-active: #9871FF;
+        --button-text-color: var(--text-color);
+      }
     }
 
     &.dark-text {
       // fallback values can be removed after Nova has reached release
-      --text-color: var(--color-violet-desaturated-90, rgb(21,  20,  26));
-      --button-text-color-primary: #FFF;
-      --button-text-color-primary-hover: #FFF;
-      --button-background-color-primary: #764EDD;
-      --button-background-color-primary-hover: #5939A8;
-      --button-background-color-primary-active: #3E2976;
-      --button-border-color-primary: transparent;
-      --button-border-color-primary-hover: transparent;
-      --button-text-color: var(--text-color);
+      @media not (prefers-contrast) {
+        --text-color: var(--color-violet-desaturated-90, rgb(21,  20,  26));
+      }
+
+      @media not (forced-colors) {
+        --button-text-color-primary: #FFF;
+        --button-text-color-primary-hover: #FFF;
+        --button-background-color-primary: #764EDD;
+        --button-background-color-primary-hover: #5939A8;
+        --button-background-color-primary-active: #3E2976;
+        --button-border-color-primary: transparent;
+        --button-border-color-primary-hover: transparent;
+      }
+
+      @media not (forced-colors) {
+        --button-text-color: var(--text-color);
+      }
     }
 
     &:dir(rtl) {
@@ -1049,7 +1060,9 @@ html {
             background: var(--color-violet-desaturated-70);
 
             .additional-cta.cta-link {
-              --link-color: var(--color-violet-10);
+              @media not (forced-colors) {
+                --link-color: var(--color-violet-10);
+              }
             }
           }
 

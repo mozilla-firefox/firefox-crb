@@ -40,7 +40,9 @@
   --button-icon-fill: var(--panel-icon-fill);
 
   /* Panel design token theming */
-  --background-color-canvas: var(--panel-background-color);
+  @media not (prefers-contrast) {
+    --background-color-canvas: var(--panel-background-color);
+  }
 
   @media (-moz-platform: linux) and (not (-moz-gtk-csd-transparency-available)) {
     /* On some linux WMs we need to draw square and opaque menus because alpha

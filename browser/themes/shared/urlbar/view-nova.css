@@ -1913,8 +1913,10 @@
 /* search bar popup */
 
 #PopupSearchAutoComplete {
-  --panel-text-color: var(--toolbar-field-text-color-focus);
-  --panel-background-color: var(--toolbar-field-background-color-focus);
+  @media not (forced-colors) {
+    --panel-text-color: var(--toolbar-field-text-color-focus);
+    --panel-background-color: var(--toolbar-field-background-color-focus);
+  }
   --panel-border-color: inherit;
 
   > richlistbox > richlistitem {

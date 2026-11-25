@@ -125,11 +125,13 @@ panel-item:not(.panel-section-header)::part(button) {
 
   moz-badge {
     flex-shrink: 0;
-    --badge-background-color-filled: light-dark(
-      var(--color-violet-desaturated-0, var(--color-violet-0)),
-      var(--color-violet-desaturated-50, var(--color-violet-50))
-    );
-    --badge-text-color-filled: var(--text-color);
+    @media not (forced-colors) {
+      --badge-background-color-filled: light-dark(
+        var(--color-violet-desaturated-0, var(--color-violet-0)),
+        var(--color-violet-desaturated-50, var(--color-violet-50))
+      );
+      --badge-text-color-filled: var(--text-color);
+    }
     --badge-font-weight: var(--font-weight);
   }
 }

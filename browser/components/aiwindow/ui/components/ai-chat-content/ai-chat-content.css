@@ -184,10 +184,12 @@
     padding-block: var(--space-large);
 
     @media -moz-pref("browser.nova.enabled") and (not (forced-colors)) {
-      --text-color: light-dark(
-        color-mix(in srgb, var(--color-violet-desaturated-90) 70%, transparent),
-        color-mix(in srgb, var(--color-violet-desaturated-0) 70%, transparent)
-      );
+      @media not (prefers-contrast) {
+        --text-color: light-dark(
+          color-mix(in srgb, var(--color-violet-desaturated-90) 70%, transparent),
+          color-mix(in srgb, var(--color-violet-desaturated-0) 70%, transparent)
+        );
+      }
     }
   }
 }
@@ -240,7 +242,9 @@
 
 moz-button.jump-to-bottom-button {
   --button-border-radius: var(--border-radius-large);
-  --button-opacity-disabled: 1;
+  @media not (forced-colors) {
+    --button-opacity-disabled: 1;
+  }
   inset-block-end: var(--space-large);
   inset-inline: 0;
   margin-inline: auto;
@@ -267,7 +271,9 @@ moz-button.jump-to-bottom-button {
 
   @media not (forced-colors) {
     --button-background-color-ghost: light-dark(var(--color-white), var(--color-gray-80));
-    --button-text-color-ghost: light-dark(var(--color-gray-70), var(--color-white));
+    @media not (prefers-contrast) {
+      --button-text-color-ghost: light-dark(var(--color-gray-70), var(--color-white));
+    }
     --button-background-color-ghost-hover: light-dark(var(--color-violet-0), var(--color-gray-70));
   }
 }
@@ -278,11 +284,13 @@ ai-action-confirmation {
 
 /* TODO - move these styles into a component https://bugzilla.mozilla.org/show_bug.cgi?id=2046155 */
 moz-button.tool-retry-button {
-  --button-background-color: light-dark(var(--color-violet-0), var(--color-gray-80));
-  --button-background-color-active: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
-  --button-background-color-disabled: var(--color-gray-20);
-  --button-background-color-hover: light-dark(color-mix(in srgb, var(--color-violet-50) 15%, transparent), color-mix(in srgb, white 10%, transparent));
-  --button-background-color-selected: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+  @media not (forced-colors) {
+    --button-background-color: light-dark(var(--color-violet-0), var(--color-gray-80));
+    --button-background-color-active: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+    --button-background-color-disabled: var(--color-gray-20);
+    --button-background-color-hover: light-dark(color-mix(in srgb, var(--color-violet-50) 15%, transparent), color-mix(in srgb, white 10%, transparent));
+    --button-background-color-selected: light-dark(color-mix(in srgb, var(--color-violet-50) 25%, transparent), color-mix(in srgb, white 15%, transparent));
+  }
   --button-border-radius: var(--border-radius-circle);
   --button-font-size: var(--font-size-small);
   --button-font-weight: var(--font-weight);
