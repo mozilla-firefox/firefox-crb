@@ -2,8 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include <array>
 #include <iterator>
 #include <memory>
+#include <string>
 
 #include "ImageContainer.h"
 #include "ImageConversion.h"
@@ -12,8 +14,11 @@
 #include "YUVBufferGenerator.h"
 #include "gtest/gtest.h"
 #include "mozilla/CheckedInt.h"
+#include "mozilla/DefineEnum.h"
 #include "mozilla/MemoryChecking.h"
 #include "mozilla/RefPtr.h"
+#include "mozilla/Span.h"
+#include "mozilla/ToString.h"
 
 using mozilla::CheckedInt;
 using mozilla::ConvertToI420;
@@ -27,6 +32,7 @@ using mozilla::Nothing;
 using mozilla::Some;
 using mozilla::gfx::ChromaSize;
 using mozilla::gfx::ChromaSubsampling;
+using mozilla::gfx::ColorDepth;
 using mozilla::gfx::ColorRange;
 using mozilla::gfx::DataSourceSurface;
 using mozilla::gfx::IntPoint;
@@ -35,8 +41,12 @@ using mozilla::gfx::IntSize;
 using mozilla::gfx::SourceSurfaceAlignedRawData;
 using mozilla::gfx::SurfaceFormat;
 using mozilla::gfx::YUVColorSpace;
+using mozilla::layers::BufferRecycleBin;
 using mozilla::layers::Image;
+using mozilla::layers::NVImage;
+using mozilla::layers::PlanarYCbCrData;
 using mozilla::layers::PlanarYCbCrImage;
+using mozilla::layers::RecyclingPlanarYCbCrImage;
 using mozilla::layers::SourceSurfaceImage;
 
 namespace {
@@ -292,6 +302,441 @@ TEST(MediaImageConversion, ConvertToRGBASourceSurfaceExtent)
   ASSERT_TRUE(!!undersized);
   EXPECT_TRUE(NS_FAILED(
       ConvertToRGBA(undersized, SurfaceFormat::R8G8B8A8, dest, destStride)));
+}
+
+// A counting plane holds kCountingFirst + row * width + col at (col, row): it
+// counts up in raster order, so every sample in it differs. It starts in the
+// middle of the range, so that few converted YUV pixels clip.
+constexpr int32_t kCountingFirst = 64;
+
+constexpr int32_t CountingValue(int32_t aWidth, int32_t aCol, int32_t aRow) {
+  return kCountingFirst + aRow * aWidth + aCol;
+}
+
+// Whether a counting plane of aSize fits in 8-bit samples.
+static bool CountingFits(const IntSize& aSize) {
+  return kCountingFirst + aSize.width * aSize.height - 1 <= UINT8_MAX;
+}
+
+// The plane layout of a YUV ImagePixelFormat.
+struct YUVLayout {
+  ChromaSubsampling mSubsampling = ChromaSubsampling::HALF_WIDTH_AND_HEIGHT;
+  ColorDepth mDepth = ColorDepth::COLOR_8;
+  bool mAlpha = false;
+  // Cb and Cr share one plane, Cb first.
+  bool mInterleaved = false;
+};
+
+// The layout of each format that CreatePatternedYUVImage builds, or Nothing().
+static Maybe<YUVLayout> YUVLayoutOf(ImagePixelFormat aFormat) {
+  switch (aFormat) {
+    case ImagePixelFormat::I420:
+      return Some(YUVLayout{});
+    case ImagePixelFormat::I420P10:
+      return Some(YUVLayout{.mDepth = ColorDepth::COLOR_10});
+    case ImagePixelFormat::I420A:
+      return Some(YUVLayout{.mAlpha = true});
+    case ImagePixelFormat::I420AP10:
+      return Some(YUVLayout{.mDepth = ColorDepth::COLOR_10, .mAlpha = true});
+    case ImagePixelFormat::I422:
+      return Some(YUVLayout{.mSubsampling = ChromaSubsampling::HALF_WIDTH});
+    case ImagePixelFormat::I444:
+      return Some(YUVLayout{.mSubsampling = ChromaSubsampling::FULL});
+    case ImagePixelFormat::NV12:
+      return Some(YUVLayout{.mInterleaved = true});
+    default:
+      return Nothing();
+  }
+}
+
+// A YUV image of aFormat with counting planes of aSize, so every sample of a
+// plane differs. The picture is aPicture, which must lie within the
+// planes.
+static already_AddRefed<Image> CreatePatternedYUVImage(
+    const IntSize& aSize, ImagePixelFormat aFormat, const IntRect& aPicture) {
+  MOZ_ASSERT(!aPicture.IsEmpty());
+  MOZ_ASSERT(IntRect(IntPoint(), aSize).Contains(aPicture));
+  const Maybe<YUVLayout> layout = YUVLayoutOf(aFormat);
+  if (!layout) {
+    MOZ_ASSERT_UNREACHABLE("unsupported format");
+    return nullptr;
+  }
+  const int32_t sampleBytes = layout->mDepth == ColorDepth::COLOR_8
+                                  ? sizeof(uint8_t)
+                                  : sizeof(uint16_t);
+  // Fills a plane of aPlaneSize samples, aStride bytes apart, with a count
+  // scaled up to the image's depth.
+  const int32_t shift =
+      mozilla::gfx::BitDepthForColorDepth(layout->mDepth) -
+      mozilla::gfx::BitDepthForColorDepth(ColorDepth::COLOR_8);
+  const auto fillPlane = [&](uint8_t* aPlane, const IntSize& aPlaneSize,
+                             int32_t aStride) {
+    MOZ_RELEASE_ASSERT(CountingFits(aPlaneSize));
+    for (int32_t row = 0; row < aPlaneSize.height; ++row) {
+      uint8_t* line = aPlane + row * aStride;
+      for (int32_t col = 0; col < aPlaneSize.width; ++col) {
+        const int32_t value = CountingValue(aPlaneSize.width, col, row);
+        if (layout->mDepth == ColorDepth::COLOR_8) {
+          line[col] = static_cast<uint8_t>(value);
+        } else {
+          reinterpret_cast<uint16_t*>(line)[col] =
+              static_cast<uint16_t>(value << shift);
+        }
+      }
+    }
+  };
+  const IntSize chromaSize = ChromaSize(aSize, layout->mSubsampling);
+  const int32_t yStride = aSize.width * sampleBytes;
+  const int32_t chromaStride = chromaSize.width * sampleBytes;
+
+  nsTArray<uint8_t> y;
+  y.SetLength(size_t(yStride) * aSize.height);
+  fillPlane(y.Elements(), aSize, yStride);
+
+  PlanarYCbCrData data;
+  data.mPictureRect = aPicture;
+  data.mYChannel = y.Elements();
+  data.mYStride = yStride;
+  data.mChromaSubsampling = layout->mSubsampling;
+  data.mColorDepth = layout->mDepth;
+  data.mYUVColorSpace = YUVColorSpace::BT601;
+
+  if (layout->mInterleaved) {
+    // NVImage::SetData copies both planes from the luma pointer, so they share
+    // one buffer.
+    const size_t yLength = y.Length();
+    nsTArray<uint8_t> planes;
+    planes.SetLength(yLength + size_t(chromaStride) * 2 * chromaSize.height);
+    memcpy(planes.Elements(), y.Elements(), yLength);
+    uint8_t* uv = planes.Elements() + yLength;
+    fillPlane(uv, IntSize(chromaSize.width * 2, chromaSize.height),
+              chromaStride * 2);
+    data.mYChannel = planes.Elements();
+    data.mCbChannel = uv;
+    data.mCrChannel = uv + 1;
+    data.mCbSkip = 1;
+    data.mCrSkip = 1;
+    data.mCbCrStride = chromaStride * 2;
+    RefPtr<NVImage> image = new NVImage();
+    if (NS_FAILED(image->SetData(data))) {
+      return nullptr;
+    }
+    return image.forget();
+  }
+
+  nsTArray<uint8_t> cb;
+  nsTArray<uint8_t> cr;
+  cb.SetLength(size_t(chromaStride) * chromaSize.height);
+  cr.SetLength(size_t(chromaStride) * chromaSize.height);
+  fillPlane(cb.Elements(), chromaSize, chromaStride);
+  fillPlane(cr.Elements(), chromaSize, chromaStride);
+  data.mCbChannel = cb.Elements();
+  data.mCrChannel = cr.Elements();
+  data.mCbCrStride = chromaStride;
+
+  nsTArray<uint8_t> alpha;
+  if (layout->mAlpha) {
+    alpha.SetLength(size_t(yStride) * aSize.height);
+    fillPlane(alpha.Elements(), aSize, yStride);
+    data.mAlpha.emplace();
+    data.mAlpha->mChannel = alpha.Elements();
+    data.mAlpha->mSize = aSize;
+    data.mAlpha->mDepth = layout->mDepth;
+  }
+
+  RefPtr<PlanarYCbCrImage> image =
+      new RecyclingPlanarYCbCrImage(new BufferRecycleBin());
+  if (NS_FAILED(image->CopyData(data))) {
+    return nullptr;
+  }
+  return image.forget();
+}
+
+// As above, with a picture covering the whole planes.
+static already_AddRefed<Image> CreatePatternedYUVImage(
+    const IntSize& aSize, ImagePixelFormat aFormat) {
+  return CreatePatternedYUVImage(aSize, aFormat, IntRect(IntPoint(), aSize));
+}
+
+// A surface image of aFormat, a 32-bit RGB format, whose pixels each hold their
+// count in every byte, so every pixel differs.
+static already_AddRefed<SourceSurfaceImage> CreatePatternedSurfaceImage(
+    const IntSize& aSurfaceSize, const IntSize& aImageSize,
+    SurfaceFormat aFormat) {
+  MOZ_RELEASE_ASSERT(CountingFits(aSurfaceSize));
+  auto surface = MakeRefPtr<SourceSurfaceAlignedRawData>();
+  if (NS_WARN_IF(!surface->Init(aSurfaceSize, aFormat,
+                                /* aClearMem */ false, 0, 0))) {
+    return nullptr;
+  }
+  DataSourceSurface::ScopedMap map(surface, DataSourceSurface::WRITE);
+  if (NS_WARN_IF(!map.IsMapped())) {
+    return nullptr;
+  }
+  const int32_t bpp = BytesPerPixel(aFormat);
+  MOZ_ASSERT(bpp == 4);
+  for (int32_t row = 0; row < aSurfaceSize.height; ++row) {
+    uint8_t* line = map.GetData() + row * map.GetStride();
+    for (int32_t col = 0; col < aSurfaceSize.width; ++col) {
+      memset(line + col * bpp, CountingValue(aSurfaceSize.width, col, row),
+             bpp);
+    }
+  }
+  return MakeAndAddRef<SourceSurfaceImage>(aImageSize, surface);
+}
+
+// Converts each of aRects of aImage, whose picture covers its whole size, and
+// checks it against the same crop of a conversion of the whole picture.
+static void ExpectSubRegionsMatchFullConversion(
+    Image* aImage, mozilla::Span<const IntRect> aRects, const char* aName) {
+  ASSERT_TRUE(!!aImage)
+  << aName;
+  const IntSize size = aImage->GetSize();
+  const SurfaceFormat formats[] = {SurfaceFormat::R8G8B8A8,
+                                   SurfaceFormat::B8G8R8A8,
+                                   SurfaceFormat::A8R8G8B8};
+  for (const SurfaceFormat format : formats) {
+    const int32_t bpp = BytesPerPixel(format);
+    const int32_t fullStride = size.width * bpp;
+    nsTArray<uint8_t> full;
+    full.SetLength(size_t(fullStride) * size.height);
+    ASSERT_EQ(ConvertToRGBA(aImage, format, full.Elements(), fullStride), NS_OK)
+        << aName << ", size " << size;
+    for (const IntRect& rect : aRects) {
+      ASSERT_TRUE(IntRect(IntPoint(), size).Contains(rect))
+      << aName << ", size " << size << ", rect " << rect;
+      const int32_t stride = rect.width * bpp;
+      nsTArray<uint8_t> part;
+      part.SetLength(size_t(stride) * rect.height);
+      ASSERT_EQ(ConvertToRGBA(aImage, rect, format, part.Elements(), stride),
+                NS_OK)
+          << aName << ", size " << size << ", rect " << rect;
+      for (int32_t row = 0; row < rect.height; ++row) {
+        const uint8_t* got = part.Elements() + row * stride;
+        const uint8_t* want =
+            full.Elements() + (rect.y + row) * fullStride + rect.x * bpp;
+        ASSERT_EQ(memcmp(got, want, stride), 0)
+            << aName << ", size " << size << ", format " << int(format)
+            << ", rect " << rect << ", row " << row;
+      }
+    }
+  }
+}
+
+TEST(MediaImageConversion, ConvertToRGBASubRegionMatchesFullConversion)
+{
+  const IntSize even(12, 10);
+  const IntSize odd(11, 9);
+  // The whole image, regions at even and odd offsets with even and odd sizes,
+  // and the bottom-right corner. Only the first and last follow the image size,
+  // so that the others keep their offsets and sizes.
+  const auto regionsIn = [](const IntSize& aSize) {
+    return std::array{IntRect(IntPoint(), aSize),
+                      IntRect(2, 2, 6, 4),
+                      IntRect(3, 2, 6, 4),
+                      IntRect(2, 3, 6, 4),
+                      IntRect(3, 3, 5, 5),
+                      IntRect(aSize.width - 5, aSize.height - 3, 5, 3)};
+  };
+  const struct {
+    ImagePixelFormat mFormat;
+    IntSize mSize;
+  } yuvImages[] = {
+      {ImagePixelFormat::I420, even},     {ImagePixelFormat::I420, odd},
+      {ImagePixelFormat::I422, even},     {ImagePixelFormat::I444, even},
+      {ImagePixelFormat::I420P10, even},  {ImagePixelFormat::I420A, even},
+      {ImagePixelFormat::I420AP10, even}, {ImagePixelFormat::NV12, even}};
+  for (const auto& yuv : yuvImages) {
+    RefPtr<Image> image = CreatePatternedYUVImage(yuv.mSize, yuv.mFormat);
+    ExpectSubRegionsMatchFullConversion(image, regionsIn(yuv.mSize),
+                                        EnumValueToString(yuv.mFormat));
+  }
+  for (const SurfaceFormat format :
+       {SurfaceFormat::B8G8R8A8, SurfaceFormat::B8G8R8X8,
+        SurfaceFormat::R8G8B8A8, SurfaceFormat::R8G8B8X8,
+        SurfaceFormat::A8R8G8B8, SurfaceFormat::X8R8G8B8}) {
+    RefPtr<Image> surface = CreatePatternedSurfaceImage(even, even, format);
+    const std::string name = mozilla::ToString(format) + " surface";
+    ExpectSubRegionsMatchFullConversion(surface, regionsIn(even), name.c_str());
+  }
+}
+
+// Which ConvertToRGBA ExpectSameConversion calls on the image under test.
+MOZ_DEFINE_ENUM_CLASS_WITH_TOSTRING(Overload, (WithRect, WithoutRect));
+
+// Checks that converting aImage gives the same R8G8B8A8 pixels as converting
+// aRegion of aReference. The picture of aReference must cover its whole
+// buffer, and that buffer must contain the buffer of aImage. WithRect converts
+// aRegion of aImage; WithoutRect converts aImage with the ConvertToRGBA that
+// takes no rect, which should read aRegion.
+static void ExpectSameConversion(Image* aImage, Overload aOverload,
+                                 const IntRect& aRegion, Image* aReference) {
+  SCOPED_TRACE(testing::Message() << aOverload << ", region " << aRegion);
+  const Maybe<IntSize> referenceSize = aReference->GetAddressableSize();
+  ASSERT_TRUE(referenceSize.isSome());
+  const IntRect referenceExtent(IntPoint(), *referenceSize);
+  ASSERT_EQ(aReference->GetPictureRect(), referenceExtent);
+  ASSERT_TRUE(referenceExtent.Contains(aRegion));
+  const Maybe<IntSize> imageSize = aImage->GetAddressableSize();
+  ASSERT_TRUE(imageSize.isSome());
+  ASSERT_TRUE(referenceExtent.Contains(IntRect(IntPoint(), *imageSize)));
+
+  const int32_t stride = aRegion.width * BytesPerPixel(SurfaceFormat::R8G8B8A8);
+  nsTArray<uint8_t> got;
+  nsTArray<uint8_t> want;
+  got.SetLength(size_t(stride) * aRegion.height);
+  want.SetLength(size_t(stride) * aRegion.height);
+  ASSERT_EQ(aOverload == Overload::WithRect
+                ? ConvertToRGBA(aImage, aRegion, SurfaceFormat::R8G8B8A8,
+                                got.Elements(), stride)
+                : ConvertToRGBA(aImage, SurfaceFormat::R8G8B8A8, got.Elements(),
+                                stride),
+            NS_OK);
+  ASSERT_EQ(ConvertToRGBA(aReference, aRegion, SurfaceFormat::R8G8B8A8,
+                          want.Elements(), stride),
+            NS_OK);
+  EXPECT_EQ(got, want);
+}
+
+TEST(MediaImageConversion, ConvertToRGBASubRegionUsesPlaneCoordinates)
+{
+  const IntSize planes(12, 10);
+  const IntRect picture(2, 2, 8, 6);
+  RefPtr<Image> whole =
+      CreatePatternedYUVImage(planes, ImagePixelFormat::I420A);
+  RefPtr<Image> offset =
+      CreatePatternedYUVImage(planes, ImagePixelFormat::I420A, picture);
+  ASSERT_TRUE(whole && offset);
+
+  ExpectSameConversion(offset, Overload::WithoutRect, picture, whole);
+  // The planes up to the picture's bottom-right corner, a region across the
+  // picture's top-left corner, and one inside the picture from its top to its
+  // bottom.
+  for (const IntRect& rect :
+       {IntRect(0, 0, picture.XMost(), picture.YMost()),
+        IntRect(picture.x - 1, picture.y - 1, 6, 4),
+        IntRect(picture.x + 1, picture.y, 5, picture.height)}) {
+    ExpectSameConversion(offset, Overload::WithRect, rect, whole);
+  }
+}
+
+// A surface image whose picture rect starts away from the origin of its
+// surface, as for some GPU images, while the surface covers the whole buffer
+// and gives the image its size.
+class OffsetPictureSurfaceImage final : public Image {
+ public:
+  OffsetPictureSurfaceImage(const IntRect& aPicture,
+                            mozilla::gfx::SourceSurface* aSurface)
+      : Image(nullptr, mozilla::ImageFormat::MOZ2D_SURFACE),
+        mPicture(aPicture),
+        mSurface(aSurface) {}
+
+  IntSize GetSize() const override { return mSurface->GetSize(); }
+  IntRect GetPictureRect() const override { return mPicture; }
+  already_AddRefed<mozilla::gfx::SourceSurface> GetAsSourceSurface() override {
+    return do_AddRef(mSurface);
+  }
+
+ private:
+  const IntRect mPicture;
+  const RefPtr<mozilla::gfx::SourceSurface> mSurface;
+};
+
+TEST(MediaImageConversion, ConvertToRGBAReadsSurfaceImagesOverTheirSize)
+{
+  const IntSize size(8, 8);
+  const IntRect picture(2, 2, 4, 4);
+  RefPtr<SourceSurfaceImage> plain =
+      CreatePatternedSurfaceImage(size, size, SurfaceFormat::B8G8R8A8);
+  ASSERT_TRUE(!!plain);
+  RefPtr<mozilla::gfx::SourceSurface> surface = plain->GetAsSourceSurface();
+  RefPtr<Image> offset =
+      MakeAndAddRef<OffsetPictureSurfaceImage>(picture, surface);
+  ASSERT_EQ(offset->GetAddressableSize(), Some(size));
+
+  // The ConvertToRGBA that takes no rect reads the whole surface, and a given
+  // rect is in the coordinates of the surface rather than of the picture.
+  ExpectSameConversion(offset, Overload::WithoutRect, IntRect(IntPoint(), size),
+                       plain);
+  ExpectSameConversion(offset, Overload::WithRect, picture, plain);
+}
+
+TEST(MediaImageConversion, ConvertToRGBARejectsInvalidSubRegion)
+{
+  const IntSize yuvSize(12, 10);
+  RefPtr<Image> yuv = CreatePatternedYUVImage(yuvSize, ImagePixelFormat::I420);
+  ASSERT_TRUE(!!yuv);
+  const IntSize surfaceSize(8, 8);
+  RefPtr<Image> surface = CreatePatternedSurfaceImage(surfaceSize, surfaceSize,
+                                                      SurfaceFormat::B8G8R8A8);
+  ASSERT_TRUE(!!surface);
+  // The image claims surfaceSize but its surface holds only a quarter of it.
+  const IntSize undersizedSurfaceSize = surfaceSize / 2;
+  RefPtr<Image> undersized = CreatePatternedSurfaceImage(
+      undersizedSurfaceSize, surfaceSize, SurfaceFormat::B8G8R8A8);
+  ASSERT_TRUE(!!undersized);
+  // The picture rect extends past the image's size.
+  RefPtr<mozilla::gfx::SourceSurface> surfaceData =
+      surface->GetAsSourceSurface();
+  RefPtr<Image> overhanging = MakeAndAddRef<OffsetPictureSurfaceImage>(
+      IntRect(IntPoint(2, 2), surfaceSize), surfaceData);
+  ASSERT_TRUE(overhanging->GetAddressableSize().isNothing());
+
+  // Large enough for every rect below, so that a conversion that should be
+  // refused would still write within it.
+  const IntSize destSize(16, 16);
+  const int32_t bpp = BytesPerPixel(SurfaceFormat::R8G8B8A8);
+  const int32_t destStride = destSize.width * bpp;
+  nsTArray<uint8_t> dest;
+  dest.SetLength(size_t(destStride) * destSize.height);
+  memset(dest.Elements(), 0xA5, dest.Length());
+  const nsTArray<uint8_t> unchanged = dest.Clone();
+
+  const struct {
+    Image* mImage;
+    IntRect mRect;
+  } cases[] = {
+      {yuv, IntRect(0, 0, 0, 4)},
+      {yuv, IntRect(0, 0, 4, 0)},
+      {yuv, IntRect(1, 0, yuvSize.width, 4)},
+      {yuv, IntRect(0, 1, 4, yuvSize.height)},
+      {yuv, IntRect(-1, 0, 4, 4)},
+      {yuv, IntRect(0, -1, 4, 4)},
+      {undersized, IntRect(IntPoint(2, 2), undersizedSurfaceSize)},
+      {undersized, IntRect(IntPoint(), surfaceSize)},
+      {yuv, IntRect(INT32_MAX - 1, 0, 8, 4)},
+      {yuv, IntRect(0, INT32_MAX - 1, 4, 8)},
+      {surface, IntRect(INT32_MAX - 1, 0, 8, 4)},
+      {surface, IntRect(0, INT32_MAX - 1, 4, 8)},
+      {overhanging, IntRect(0, 0, 4, 4)},
+  };
+  for (const auto& c : cases) {
+    ASSERT_TRUE(c.mRect.width <= destSize.width &&
+                c.mRect.height <= destSize.height)
+    << "rect " << c.mRect;
+    EXPECT_TRUE(
+        NS_FAILED(ConvertToRGBA(c.mImage, c.mRect, SurfaceFormat::R8G8B8A8,
+                                dest.Elements(), destStride)))
+        << "rect " << c.mRect;
+    EXPECT_EQ(dest, unchanged) << "rect " << c.mRect;
+  }
+  EXPECT_TRUE(NS_FAILED(ConvertToRGBA(overhanging, SurfaceFormat::R8G8B8A8,
+                                      dest.Elements(), destStride)));
+  EXPECT_EQ(dest, unchanged);
+
+  // A destination stride one pixel short of a row of the output is refused.
+  const IntRect rect(0, 0, 8, 4);
+  for (Image* image : {yuv.get(), surface.get()}) {
+    EXPECT_TRUE(
+        NS_FAILED(ConvertToRGBA(image, rect, SurfaceFormat::R8G8B8A8,
+                                dest.Elements(), rect.width * bpp - bpp)));
+    EXPECT_EQ(dest, unchanged);
+  }
+
+  EXPECT_EQ(
+      ConvertToRGBA(undersized, IntRect(IntPoint(), undersizedSurfaceSize),
+                    SurfaceFormat::R8G8B8A8, dest.Elements(), destStride),
+      NS_OK);
 }
 
 // As CreateRedSurfaceImage2x2 above, parameterised by size. Restricted to BGR*
