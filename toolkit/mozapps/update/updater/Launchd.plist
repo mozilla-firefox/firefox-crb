@@ -6,6 +6,8 @@
   <string>org.mozilla.updater</string>
   <key>RunAtLoad</key>
   <true/>
+  <key>ExitTimeOut</key>
+  <integer>60</integer>
   <key>MachServices</key>
   <dict>
     <key>org.mozilla.updater</key>
