@@ -6,6 +6,7 @@
 #include <CoreServices/CoreServices.h>
 #include <Security/Security.h>
 #include <crt_externs.h>
+#include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <removefile.h>
@@ -375,6 +376,13 @@ static bool ValidatePeerWithRequirement(audit_token_t aToken,
 static int gInstallDirFd = -1;
 static char gPinnedInstallDirPath[PATH_MAX];
 
+// Limit on how deep the install directory's tree is walked.
+static const int kMaxInstallDirDepth = 128;
+
+// The admin group, which the helper gives write access to the install after an
+// update.
+static const gid_t kAdminGroup = 80;
+
 // A root-only directory holding a clone of the pinned install directory, and
 // the clone's path. The helper checks the clone and applies the update to it,
 // so that nobody else can change what it checks or updates, then swaps it into
@@ -458,20 +466,76 @@ bool IsPinnedInstallDirAtPath() {
          fdStat.st_dev == pathStat.st_dev && fdStat.st_ino == pathStat.st_ino;
 }
 
+// Gives the entries of aDirFd group ownership "admin" and group write
+// permission, recursively, and then aDirFd itself unless it is the top. Each
+// entry is changed through its own descriptor, and links aren't followed.
+static void SetGroupWritableRecursive(int aDirFd, int aDepth) {
+  if (aDepth > kMaxInstallDirDepth) {
+    return;
+  }
+  int iterFd =
+      openat(aDirFd, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (iterFd < 0) {
+    return;
+  }
+  DIR* dir = fdopendir(iterFd);
+  if (!dir) {
+    close(iterFd);
+    return;
+  }
+  struct dirent* entry;
+  while ((entry = readdir(dir)) != nullptr) {
+    const char* name = entry->d_name;
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+      continue;
+    }
+    int fd =
+        openat(aDirFd, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+      continue;
+    }
+    struct stat st;
+    if (fstat(fd, &st) == 0) {
+      if (S_ISDIR(st.st_mode)) {
+        SetGroupWritableRecursive(fd, aDepth + 1);
+      } else if (S_ISREG(st.st_mode)) {
+        fchown(fd, (uid_t)-1, kAdminGroup);
+        fchmod(fd, (st.st_mode & 0777) | S_IWGRP);
+      }
+    }
+    close(fd);
+  }
+  closedir(dir);
+  struct stat dirStat;
+  if (aDepth > 0 && fstat(aDirFd, &dirStat) == 0) {
+    fchown(aDirFd, (uid_t)-1, kAdminGroup);
+    fchmod(aDirFd, (dirStat.st_mode & 0777) | S_IWGRP);
+  }
+}
+
 bool SwapInstallCloneIntoPlace() {
   if (!gInstallClonePath[0] || !IsPinnedInstallDirAtPath()) {
     return false;
   }
+  // Give the admin group write access to the updated Contents while only root
+  // can reach it, so that admins don't need elevation for the next update.
   int cloneFd =
       open(gInstallClonePath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   if (cloneFd < 0) {
     return false;
   }
+  SetGroupWritableRecursive(cloneFd, 0);
   // App Management on macOS 13 doesn't let the helper replace the app bundle
   // itself, so swap the bundle's Contents directory.
   bool isSwapped = renameatx_np(cloneFd, "Contents", gInstallDirFd, "Contents",
                                 RENAME_SWAP) == 0;
-  if (!isSwapped) {
+  if (isSwapped) {
+    struct stat installStat;
+    if (fstat(gInstallDirFd, &installStat) == 0) {
+      fchown(gInstallDirFd, (uid_t)-1, kAdminGroup);
+      fchmod(gInstallDirFd, (installStat.st_mode & 0777) | S_IWGRP);
+    }
+  } else {
     char message[96];
     SprintfLiteral(message,
                    "Updater helper: couldn't swap the updated Contents into "
