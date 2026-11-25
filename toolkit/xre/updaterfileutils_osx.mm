@@ -5,6 +5,12 @@
 #include "updaterfileutils_osx.h"
 
 #include <Cocoa/Cocoa.h>
+#include <fcntl.h>
+#include <libproc.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 bool IsRecursivelyWritable(const char* aPath) {
   NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
@@ -45,4 +51,27 @@ bool IsRecursivelyWritable(const char* aPath) {
 
   [pool drain];
   return true;
+}
+
+bool IsUpdaterHelperBusy() {
+  int fd =
+      open(UPDATER_HELPER_PID_FILE_PATH, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) {
+    return false;
+  }
+  struct stat st;
+  char buffer[16] = {};
+  bool isValid = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_uid == 0 &&
+                 read(fd, buffer, sizeof(buffer) - 1) > 0;
+  close(fd);
+  if (!isValid) {
+    return false;
+  }
+  pid_t pid = (pid_t)strtol(buffer, nullptr, 10);
+  // The file stays behind if the helper crashed, so check that the process is
+  // still the helper.
+  char path[PROC_PIDPATHINFO_MAXSIZE];
+  return pid > 0 && proc_pidpath(pid, path, sizeof(path)) > 0 &&
+         strcmp(path, "/Library/PrivilegedHelperTools/org.mozilla.updater") ==
+             0;
 }

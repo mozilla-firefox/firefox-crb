@@ -10,6 +10,12 @@ update flow is:
 - Needed once to update from Admin users other than the installing user.
 - Needed every time for non-Admin users.
 
+## Concurrent elevated updates
+
+Installing the helper with `SMJobBless` stops a helper that is already running, even one with the same version. Once the helper has taken a request, it ignores the SIGTERM that this sends, and launchd only kills it after the `ExitTimeOut` of 60 seconds in its plist, so an update in progress usually gets to finish. Without that key, launchd killed the helper 5 seconds after SIGTERM on macOS 27. While the helper handles an update, it records its process ID in `/private/var/run/org.mozilla.updater.pid`, and Firefox doesn't install the helper again while that process runs. The updater then gets a busy result from the running helper and records `ELEVATED_UPDATE_IN_PROGRESS_ERROR`, so that Firefox tries again later. Firefox versions that don't check that file still install the helper over a running one, and then wait in `SMJobBless` until it has exited.
+
+Firefox never counts a busy result as a cancellation, however often it happens, so it doesn't give up an update because another one was in the way. When the busy request comes from the same user for the same update directory, it's for the update that the helper is handling, and the updater leaves the status file to the helper. When the helper goes away before it replies, for example because it crashed, the updater records `ELEVATED_UPDATE_HELPER_LOST_ERROR`, which Firefox handles like a dismissed authentication dialog.
+
 ## UI Flowchart
 
 This flow is what the user experiences in order to initiate an elevated update:
