@@ -907,6 +907,68 @@ class DefaultTabDataCoordinatorTest {
     }
 
     @Test
+    fun `WHEN multiple tab groups are closed THEN only those groups are closed and their tabs remain open`() = runTest {
+        val group1 = createStoredTabGroup(id = "group-1", tabIds = listOf("1"))
+        val group2 = createStoredTabGroup(id = "group-2", tabIds = listOf("2"))
+        val group3 = createStoredTabGroup(id = "group-3", tabIds = listOf("3"))
+        val coordinator =
+            createCoordinator(
+                tabRepository =
+                    createTabRepository(
+                        tabs =
+                            listOf(createTab(id = "1"), createTab(id = "2"), createTab(id = "3"), createTab(id = "4"))
+                    ),
+                tabGroupRepository =
+                    createTabGroupRepository(
+                        tabGroups = listOf(group1, group2, group3),
+                        tabGroupAssignments = mapOf("1" to group1.id, "2" to group2.id, "3" to group3.id),
+                    ),
+            )
+
+        coordinator.initialize()
+        runCurrent()
+
+        coordinator.closeTabGroups(tabGroupIds = listOf(group1.id, group2.id))
+        runCurrent()
+
+        val snapshot = coordinator.tabsSnapshot.value
+        assertEquals(
+            expected = listOf(group1.id, group2.id),
+            actual = snapshot?.tabGroups?.filter { it.closed }?.map { it.id },
+        )
+        assertEquals(expected = listOf(group3.id), actual = snapshot?.openTabGroups?.map { it.id })
+        assertEquals(expected = listOf("1", "2", "3", "4"), actual = snapshot?.normalTabs?.map { it.id })
+        assertEquals(expected = listOf("3", "4"), actual = snapshot?.browsableNormalTabs?.map { it.id })
+    }
+
+    @Test
+    fun `WHEN multiple tab groups are opened THEN only those groups are opened`() = runTest {
+        val group1 = createStoredTabGroup(id = "group-1", closed = true, tabIds = listOf("1"))
+        val group2 = createStoredTabGroup(id = "group-2", closed = true, tabIds = listOf("2"))
+        val group3 = createStoredTabGroup(id = "group-3", closed = true, tabIds = listOf("3"))
+        val coordinator =
+            createCoordinator(
+                tabRepository =
+                    createTabRepository(tabs = listOf(createTab(id = "1"), createTab(id = "2"), createTab(id = "3"))),
+                tabGroupRepository =
+                    createTabGroupRepository(
+                        tabGroups = listOf(group1, group2, group3),
+                        tabGroupAssignments = mapOf("1" to group1.id, "2" to group2.id, "3" to group3.id),
+                    ),
+            )
+
+        coordinator.initialize()
+        runCurrent()
+
+        coordinator.openTabGroups(tabGroupIds = listOf(group1.id, group3.id))
+        runCurrent()
+
+        val snapshot = coordinator.tabsSnapshot.value
+        assertEquals(expected = listOf(group1.id, group3.id), actual = snapshot?.openTabGroups?.map { it.id })
+        assertEquals(expected = listOf("1", "3"), actual = snapshot?.browsableNormalTabs?.map { it.id })
+    }
+
+    @Test
     fun `WHEN a grouped tab is closed and there are other tabs remaining in the group THEN the tab is closed`() =
         runTest {
             val group = createStoredTabGroup(id = "group-1", tabIds = listOf("1", "2"))
