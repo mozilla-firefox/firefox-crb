@@ -81,8 +81,20 @@ add_task(async function test_menu_create_id() {
   );
 
   // Re-enable the extension and check, that the menu entry is correctly restored.
+  // The persisted menus are restored asynchronously, independently from the
+  // background script sending "done".
+  const menusRestored = new Promise(resolve => {
+    const listener = (_event, extension) => {
+      if (extension.id === "menu@mochi.test") {
+        Management.off("startup", listener);
+        extension.once("webext-menus-created", resolve);
+      }
+    };
+    Management.on("startup", listener);
+  });
   await menuAddon.enable();
   await controlExtension.awaitMessage("done");
+  await menusRestored;
   Assert.ok(
     !!window.document.getElementById(buttonId),
     "Button should have been re-created"

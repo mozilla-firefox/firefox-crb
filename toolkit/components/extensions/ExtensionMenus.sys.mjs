@@ -43,6 +43,9 @@ const KVSTORE_DIRNAME = "extension-store-menus";
 class ExtensionMenusStore {
   #store = null;
   #initPromise = null;
+  // Map<ExtensionId, Promise> of the menus still being written to disk for
+  // extension instances that have already been shut down.
+  #pendingFlushes = new Map();
 
   /**
    * Determine if the menus created by the given extension should
@@ -81,6 +84,18 @@ class ExtensionMenusStore {
     return this.#initPromise;
   }
 
+  /**
+   * Record the flush of the menus of an extension instance being shut down, so
+   * that the store isn't read or cleared for that extension until it is done.
+   *
+   * @param {string} extensionId An extension ID
+   * @param {Promise<void>} promise Resolved once the flush is complete.
+   */
+  trackPendingFlush(extensionId, promise) {
+    this.#pendingFlushes.set(extensionId, promise);
+    promise.then(() => this.#pendingFlushes.delete(extensionId));
+  }
+
   #notifyPersistedMenusUpdatedForTesting(extensionId) {
     Services.obs.notifyObservers(
       null,
@@ -97,6 +112,7 @@ class ExtensionMenusStore {
    * extension, false otherwise.
    */
   async hasExtensionData(extensionId) {
+    await this.#pendingFlushes.get(extensionId);
     await this.#lazyInit();
     return this.#store.has(extensionId);
   }
@@ -110,6 +126,7 @@ class ExtensionMenusStore {
    * @returns {Promise<Map>} A map of persisted menu details.
    */
   async getPersistedMenus(extensionId, currentExtensionVersion) {
+    await this.#pendingFlushes.get(extensionId);
     await this.#lazyInit();
 
     let value;
@@ -186,6 +203,7 @@ class ExtensionMenusStore {
    * @param {string} extensionId An extension ID
    */
   async clearPersistedMenusOnUninstall(extensionId) {
+    await this.#pendingFlushes.get(extensionId);
     const { storePath } = this;
     const kvstoreDirExists = await IOUtils.exists(storePath);
     if (!kvstoreDirExists) {
@@ -243,9 +261,12 @@ class ExtensionMenusManager {
     }
 
     const shutdownBlockerFn = this.#shutdownBlockerFn;
-    shutdownBlockerFn().then(() => {
-      lazy.AsyncShutdown.profileBeforeChange.removeBlocker(shutdownBlockerFn);
-    });
+    store.trackPendingFlush(
+      this.extensionId,
+      shutdownBlockerFn().then(() => {
+        lazy.AsyncShutdown.profileBeforeChange.removeBlocker(shutdownBlockerFn);
+      })
+    );
   }
 
   async asyncInit() {
