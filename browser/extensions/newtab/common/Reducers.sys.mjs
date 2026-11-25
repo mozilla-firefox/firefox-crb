@@ -1063,7 +1063,9 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         ...prevState,
         report: {
           ...prevState.report,
+          block_key: action.data?.block_key,
           card_type: action.data?.card_type,
+          isSponsoredTopSite: action.data?.isSponsoredTopSite,
           position: action.data?.position,
           placement_id: action.data?.placement_id,
           reporting_url: action.data?.reporting_url,
@@ -1076,8 +1078,10 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         ...prevState,
         report: {
           ...prevState.report,
+          block_key: undefined,
           card_type: action.data?.card_type,
           corpus_item_id: action.data?.corpus_item_id,
+          isSponsoredTopSite: undefined,
           scheduled_corpus_item_id: action.data?.scheduled_corpus_item_id,
           section_position: action.data?.section_position,
           section: action.data?.section,

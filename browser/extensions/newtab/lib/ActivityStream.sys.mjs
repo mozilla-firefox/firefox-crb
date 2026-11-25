@@ -1422,6 +1422,14 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "discoverystream.reportAds.tiles.enabled",
+    {
+      title:
+        "Boolean flag to enable reporting sponsored tiles from the context menu",
+      value: false,
+    },
+  ],
+  [
     "discoverystream.sections.following",
     {
       title: "A comma-separated list of strings of followed section topics",
