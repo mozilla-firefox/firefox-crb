@@ -276,7 +276,9 @@ toolbar[inactive="true"] .urlbar,
      it. */
   --urlbar-background-color: var(--input-background-color);
   --urlbar-background-color-focus: var(--input-background-color);
-  --toolbar-field-text-color: var(--input-text-color);
+  @media not (prefers-contrast) {
+    --toolbar-field-text-color: var(--input-text-color);
+  }
   --toolbar-field-text-color-focus: var(--input-text-color);
   --toolbar-field-border-color: var(--border-color-deemphasized);
 

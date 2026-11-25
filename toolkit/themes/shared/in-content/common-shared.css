@@ -352,10 +352,14 @@ xul|menulist > xul|menupopup {
   border: none;
   background-color: transparent;
 
-  --panel-background-color: var(--background-color-box);
+  @media not (forced-colors) {
+    --panel-background-color: var(--background-color-box);
+  }
   --panel-border-color: var(--border-color);
   --panel-border-radius: 2px;
-  --panel-text-color: var(--text-color);
+  @media not (forced-colors) {
+    --panel-text-color: var(--text-color);
+  }
   --panel-padding: 0;
 }
 

@@ -1935,23 +1935,37 @@ html {
 }
 .onboardingContainer .screen.light-text {
   --text-color: var(--color-violet-desaturated-0, rgb(251, 251, 254));
-  --button-text-color-primary: #252428;
-  --button-text-color-primary-hover: #252428;
-  --button-background-color-primary: #D4C1FF;
-  --button-background-color-primary-hover: #B89CFF;
-  --button-background-color-primary-active: #9871FF;
-  --button-text-color: var(--text-color);
 }
-.onboardingContainer .screen.dark-text {
-  --text-color: var(--color-violet-desaturated-90, rgb(21, 20, 26));
-  --button-text-color-primary: #FFF;
-  --button-text-color-primary-hover: #FFF;
-  --button-background-color-primary: #764EDD;
-  --button-background-color-primary-hover: #5939A8;
-  --button-background-color-primary-active: #3E2976;
-  --button-border-color-primary: transparent;
-  --button-border-color-primary-hover: transparent;
-  --button-text-color: var(--text-color);
+@media not (forced-colors) {
+  .onboardingContainer .screen.light-text {
+    --button-text-color-primary: #252428;
+    --button-text-color-primary-hover: #252428;
+    --button-background-color-primary: #D4C1FF;
+    --button-background-color-primary-hover: #B89CFF;
+    --button-background-color-primary-active: #9871FF;
+    --button-text-color: var(--text-color);
+  }
+}
+@media not (prefers-contrast) {
+  .onboardingContainer .screen.dark-text {
+    --text-color: var(--color-violet-desaturated-90, rgb(21, 20, 26));
+  }
+}
+@media not (forced-colors) {
+  .onboardingContainer .screen.dark-text {
+    --button-text-color-primary: #FFF;
+    --button-text-color-primary-hover: #FFF;
+    --button-background-color-primary: #764EDD;
+    --button-background-color-primary-hover: #5939A8;
+    --button-background-color-primary-active: #3E2976;
+    --button-border-color-primary: transparent;
+    --button-border-color-primary-hover: transparent;
+  }
+}
+@media not (forced-colors) {
+  .onboardingContainer .screen.dark-text {
+    --button-text-color: var(--text-color);
+  }
 }
 .onboardingContainer .screen:dir(rtl) {
   transform: rotateY(180deg);
@@ -1989,9 +2003,13 @@ html {
   .onboardingContainer .screen[pos=center].PRIVATE_WINDOW_BASICS_SCREEN .main-content {
     background: var(--color-violet-desaturated-70);
   }
+}
+@media (not (prefers-contrast)) and (-moz-pref("browser.privateWindowRedesign.enabled")) and (not (forced-colors)) {
   .onboardingContainer .screen[pos=center].PRIVATE_WINDOW_BASICS_SCREEN .main-content .additional-cta.cta-link {
     --link-color: var(--color-violet-10);
   }
+}
+@media (not (prefers-contrast)) and (-moz-pref("browser.privateWindowRedesign.enabled")) {
   .onboardingContainer .screen[pos=center].PRIVATE_WINDOW_BASICS_SCREEN.zap-border .main-content {
     background: linear-gradient(95.54deg, #B89CFF 20.68%, #764EDD 79.34%) border-box border-area, image(var(--color-violet-desaturated-70)) padding-box;
     border: 1px solid transparent;
