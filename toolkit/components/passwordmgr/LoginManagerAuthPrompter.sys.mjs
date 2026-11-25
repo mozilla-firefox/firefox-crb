@@ -267,7 +267,10 @@ ChromeUtils.defineLazyGetter(
   LoginManagerAuthPromptFactory.prototype,
   "log",
   () => {
-    let logger = lazy.LoginHelper.createLogger("LoginManagerAuthPromptFactory");
+    let logger = console.createInstance({
+      logModule: "LoginManagerAuthPromptFactory",
+      maxLogLevelPref: "signon.loglevel",
+    });
     return logger.log.bind(logger);
   }
 );
@@ -1088,6 +1091,9 @@ LoginManagerAuthPrompter.prototype = {
 }; // end of LoginManagerAuthPrompter implementation
 
 ChromeUtils.defineLazyGetter(LoginManagerAuthPrompter.prototype, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("LoginManagerAuthPrompter");
+  let logger = console.createInstance({
+    logModule: "LoginManagerAuthPrompter",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });

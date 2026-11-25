@@ -13,7 +13,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  let logger = lazy.LoginHelper.createLogger("PasswordRulesManager");
+  let logger = console.createInstance({
+    logModule: "PasswordRulesManager",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });
 

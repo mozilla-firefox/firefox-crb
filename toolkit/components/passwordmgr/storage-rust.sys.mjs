@@ -443,9 +443,10 @@ class RustLoginStorageAuthenticator extends PrimaryPasswordAuthenticator {
 
   constructor() {
     super();
-    this.#logger = lazy.LoginHelper.createLogger(
-      "RustLoginStorageAuthenticator"
-    );
+    this.#logger = console.createInstance({
+      logModule: "RustLoginStorageAuthenticator",
+      maxLogLevelPref: "signon.loglevel",
+    });
   }
 
   // Called by Rust when the NSS key needs to be unlocked. Concurrent calls are not
@@ -1304,6 +1305,9 @@ export class LoginManagerRustStorage {
 }
 
 ChromeUtils.defineLazyGetter(LoginManagerRustStorage.prototype, "log", () => {
-  const logger = lazy.LoginHelper.createLogger("RustLogins");
+  const logger = console.createInstance({
+    logModule: "RustLogins",
+    maxLogLevelPref: "signon.loglevel",
+  });
   return logger.log.bind(logger);
 });

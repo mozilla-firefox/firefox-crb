@@ -540,13 +540,6 @@ export const LoginHelper = {
     );
   },
 
-  createLogger(aLogPrefix) {
-    return console.createInstance({
-      maxLogLevelPref: "signon.loglevel",
-      logModule: aLogPrefix,
-    });
-  },
-
   /**
    * Due to the way the signons2.txt file is formatted, we need to make
    * sure certain field values or characters do not cause the file to
@@ -1742,11 +1735,15 @@ export const LoginHelper = {
 };
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  let processName =
-    Services.appinfo.processType === Services.appinfo.PROCESS_TYPE_DEFAULT
-      ? "Main"
-      : "Content";
-  return LoginHelper.createLogger(`LoginHelper.${processName}`);
+  return Services.appinfo.processType === Services.appinfo.PROCESS_TYPE_DEFAULT
+    ? console.createInstance({
+        logModule: "LoginHelper.Main",
+        maxLogLevelPref: "signon.loglevel",
+      })
+    : console.createInstance({
+        logModule: "LoginHelper.Content",
+        maxLogLevelPref: "signon.loglevel",
+      });
 });
 
 LoginHelper.init();

@@ -18,14 +18,16 @@
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
   RemoteSettings: "resource://services-settings/remote-settings.sys.mjs",
   RemoteSettingsClient:
     "resource://services-settings/RemoteSettingsClient.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("ChangePasswordURLs");
+  return console.createInstance({
+    logModule: "ChangePasswordURLs",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });
 
 export const ChangePasswordURLs = {
