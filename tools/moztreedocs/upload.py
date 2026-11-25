@@ -136,7 +136,7 @@ def s3_set_redirects(redirects, docs_prefix):
 
     for rule in rules:
         if os.environ.get("MOZ_SCM_LEVEL") == "3":
-            rule["Redirect"]["HostName"] = "firefox-source-docs.mozilla.org"
+            rule["Redirect"]["HostName"] = "source.firefox.com"
 
         configuration["RoutingRules"].append(rule)
 
