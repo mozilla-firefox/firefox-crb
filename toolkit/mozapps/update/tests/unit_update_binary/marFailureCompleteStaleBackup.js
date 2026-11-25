@@ -32,7 +32,7 @@ async function run_test() {
   } finally {
     Services.env.set("MOZ_TEST_DRAFT_WRITE_FAIL", "");
   }
-  checkAppBundleModTime();
+  checkAppBundleModTime(false);
   await testPostUpdateProcessing();
   checkPostUpdateRunningFile(false);
 
