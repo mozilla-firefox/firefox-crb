@@ -121,6 +121,20 @@ struct UpdateServerThreadArgs {
   const NS_tchar** argv;
   const char* marChannelID = "";
 };
+
+// Returns the error that the privileged helper would record for aInstallDir,
+// or OK.
+static int GetElevatedUpdateRefusalError(const char* aInstallDir) {
+  switch (GetElevatedUpdateRefusal(aInstallDir)) {
+    case ElevatedUpdateRefusal::UnsupportedVolume:
+      return ELEVATED_UPDATE_UNSUPPORTED_VOLUME_ERROR;
+    case ElevatedUpdateRefusal::ChangeableInstall:
+      return ELEVATED_UPDATE_CHANGEABLE_INSTALL_ERROR;
+    case ElevatedUpdateRefusal::None:
+      break;
+  }
+  return OK;
+}
 #endif
 
 #ifndef _O_BINARY
@@ -4195,6 +4209,15 @@ int NS_main(int argc, NS_tchar** argv) {
       WriteStatusFile(SILENT_UPDATE_NEEDED_ELEVATION_ERROR);
       fprintf(stderr,
               "Skipping update to avoid elevation prompt from silent update.");
+    } else if (int refusalError =
+                   GetElevatedUpdateRefusalError(argv[kInstallDirIndex]);
+               refusalError != OK) {
+      // The privileged helper refuses this install, and Firefox doesn't
+      // install it for one.
+      WriteStatusFile(refusalError);
+      LogToOS(
+          NS_T("The privileged helper refuses the install directory. Not "
+               "updating."));
     } else {
       UpdateServerThreadArgs threadArgs;
       threadArgs.argc = suiArgc;

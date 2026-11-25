@@ -258,3 +258,23 @@ bool IsInstallTreeProtected(int aDirFd, uid_t aClientUid,
       IsUserInGroupByLookup(aClientUid, kInstallTreeAdminGroup, true));
   return IsInstallSubtreeProtected(aDirFd, 0, aIsUncheckableRefused, check);
 }
+
+ElevatedUpdateRefusal GetElevatedUpdateRefusal(const char* aInstallDir) {
+  char resolved[PATH_MAX];
+  if (!realpath(aInstallDir, resolved)) {
+    return ElevatedUpdateRefusal::None;
+  }
+  int fd = open(resolved, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) {
+    return ElevatedUpdateRefusal::None;
+  }
+  ElevatedUpdateRefusal refusal = ElevatedUpdateRefusal::None;
+  if (!IsOnVolumeHonoringOwnership(fd)) {
+    refusal = ElevatedUpdateRefusal::UnsupportedVolume;
+  } else if (!IsInstallTreeProtected(fd, getuid(),
+                                     /* aIsUncheckableRefused = */ false)) {
+    refusal = ElevatedUpdateRefusal::ChangeableInstall;
+  }
+  close(fd);
+  return refusal;
+}
