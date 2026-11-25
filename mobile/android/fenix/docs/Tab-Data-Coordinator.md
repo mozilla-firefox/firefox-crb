@@ -21,6 +21,8 @@ Anything requiring more complex tab data modeling should still read directly fro
 | Open tab group | A tab group that is not closed. |
 | Ungroup |  Delete the tab group and restore the tabs to an ungrouped state. Tabs remain open. |
 | Delete group and tabs | Delete the tab group *and* close all of its tabs. |
+| Bulk close | Close many tabs at once, such as "Close all tabs" or closing a multi-selection. Ungrouped tabs are removed, and the affected tab groups are closed, keeping their tabs open. |
+| Fallback tab | A tab opened and selected when the selected tab is hidden in a closed tab group and no other tab can be selected. |
 
 ## Data flow
 
@@ -33,7 +35,7 @@ flowchart LR
     TGR["TabGroupRepository"] -* "tabGroupDataFlow" --> C
     C -* "StateFlow of TabsSnapshot" --> UI["Consumers"]
     UI -* "suspend write APIs" --> C
-    C -* "moveTabs / removeTabs" --> TR
+    C -* "moveTabs / removeTabs / addFallbackTab / undoRemovedTabs" --> TR
     TR -* "TabsUseCases" --> BS
     C -* "group writes" --> TGR
 ```
@@ -94,17 +96,18 @@ The settings are currently only read when a snapshot is computed. Toggling one d
 
 ### Query helpers
 
-[TabsSnapshotQueries.kt](https://searchfox.org/firefox-main/source/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/data/TabsSnapshotQueries.kt) provides extension functions for common lookups, such as `findTab`, `findTabGroup`, `tabsInTabGroup` and `tabIdsInTabGroup`. Prefer these over filtering the snapshot by hand. Group membership helpers work from the open tabs, so they never return tabs that have already been closed.
+[TabsSnapshotQueries.kt](https://searchfox.org/firefox-main/source/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/data/TabsSnapshotQueries.kt) provides extension functions for common lookups, such as `findTab`, `findTabGroup`, `tabsInTabGroup`, `tabIdsInTabGroup` and `groupedTabIds`. Prefer these over filtering the snapshot by hand. Group membership helpers work from the open tabs, so they never return tabs that have already been closed.
 
 ## Writing tab data
 
-The coordinator exposes `suspend` write APIs for operations that touch more than one source.
+The coordinator exposes write APIs for operations that touch more than one source. Most are `suspend` functions; the bulk close APIs are not, so that callers get the result right away, for example to show an undo snackbar.
 
 | Category | APIs |
 | :--- | :--- |
 | Create / update | `createTabGroup`, `updateTabGroup` |
 | Membership | `addTabsToTabGroup`, `mergeTabGroupIntoTab`, `mergeTabGroups`, `removeTabFromTabGroup` |
-| Group lifecycle | `openTabGroup`, `closeTabGroup`, `ungroupTabGroup`, `ungroupTabGroups`, `deleteTabGroupAndTabs` |
+| Group lifecycle | `openTabGroup`, `openTabGroups`, `closeTabGroup`, `closeTabGroups`, `ungroupTabGroup`, `ungroupTabGroups`, `deleteTabGroupAndTabs` |
+| Bulk close | `closeAllNormalTabs`, `closeTabsAndTabGroups`, `undoBulkClose` |
 | Ordering | `reorderItem` |
 
 See the KDoc on [TabDataCoordinator](https://searchfox.org/firefox-main/source/mobile/android/android-components/components/feature/tabdata-coordinator/src/main/java/mozilla/components/feature/tabdata/coordinator/TabDataCoordinator.kt) for each operation's exact behavior.
@@ -115,6 +118,9 @@ See the KDoc on [TabDataCoordinator](https://searchfox.org/firefox-main/source/m
 * **A group's tabs are kept next to each other.** Every membership and ordering operation moves tabs in the tab source so the group's tabs stay together, provided the group ID is passed in. `reorderItem` moves a group as a unit.
 * **A group is always opened with at least one tab.** When spawning a tab group without any initial tabs from the user, a new tab is always created in tandem, which is automatically added to the new group.
 * **A group is never left without tabs.** `removeTabFromTabGroup` won't close a group's last tab. When deleting the last tab in a tab group, invoke `deleteTabGroupAndTabs` instead.
+* **Bulk closes keep grouped tabs open.** `closeAllNormalTabs` and `closeTabsAndTabGroups` only remove ungrouped tabs, and close the affected tab groups rather than their tabs. `closeAllNormalTabs` can also keep inactive tabs open.
+* **Grouped and inactive tabs are never selected as a fallback.** When removing tabs in bulk, grouped and inactive tabs are excluded from the next selected tab. If the selected tab ends up hidden in a closed group, the nearest tab that is neither grouped, inactive, nor removed is selected. If there is none, a fallback tab is opened, if the tab source provides one.
+* **Undo only restores what the bulk close changed.** `undoBulkClose` takes the `BulkCloseResult` returned by the bulk close. It restores the removed tabs only if any were removed, so an earlier, unrelated removal is not restored. It also reopens the closed groups, removes the fallback tab, and reselects the previously selected tab.
 
 :::{important}
 Do not bypass the coordinator when the operation involves tab groups. Moving or deleting grouped tabs through `TabsUseCases`, or writing to `TabGroupRepository` directly, can break the rules above. Operations that only touch a single source and cannot affect grouping, such as selecting a tab, can still use the existing use cases.
@@ -141,9 +147,11 @@ Consumers must not call `initialize()` more than once. It is not idempotent: eac
 The component deliberately does not depend on `browser-state` or `feature-tabs`. Instead, the embedding app supplies an implementation of `TabRepository` that:
 
 * maps its own tab representation onto the coordinator's `Tab` model, leaving `Tab.tabGroupId` null (group membership is assigned by the coordinator), and
-* applies the tab moves and removals the coordinator requests.
+* applies the tab moves and removals the coordinator requests,
+* opens a fallback tab when asked, or returns null to keep the current selection, and
+* restores the most recently removed tabs when a bulk close is undone.
 
-Fenix's implementation is `DefaultTabRepository`, which is backed by `BrowserStore` and `TabsUseCases`.
+Fenix's implementation is `DefaultTabRepository`, which is backed by `BrowserStore` and `TabsUseCases`. It only opens a fallback homepage tab when homepage as a new tab is enabled.
 
 Tab groups are read from, and written to, `TabGroupRepository` in `feature-tabgroups-storage` directly.
 
@@ -222,12 +230,18 @@ For data APIs, feel empowered to add any reasonable tab data operation that requ
 ### Testing
 
 * Coordinator tests live in `DefaultTabDataCoordinatorTest` and use `FakeTabRepository`.
-* For consumers, build a real `DefaultTabDataCoordinator` with test sources and call `initialize()`, as `TabStorageMiddlewareTest` does:
+* For consumers, build a real `DefaultTabDataCoordinator` with test sources and call `initialize()`, as `TabStorageMiddlewareTest` does. Assert on the outcome, such as the tabs left in the `BrowserStore`, rather than on which coordinator APIs were called:
 
 ```kotlin
 val tabDataCoordinator =
     DefaultTabDataCoordinator(
-        tabRepository = DefaultTabRepository(browserStore = browserStore, tabsUseCases = TabsUseCases(store = browserStore)),
+        tabRepository =
+            DefaultTabRepository(
+                browserStore = browserStore,
+                tabsUseCases = TabsUseCases(store = browserStore),
+                fenixBrowserUseCases = fenixBrowserUseCases,
+                isHomepageAsNewTabEnabled = { false },
+            ),
         tabGroupRepository = tabGroupRepository,
         isInactiveTabsEnabled = { inactiveTabsEnabled },
         isTabGroupsEnabled = { tabGroupsEnabled },
@@ -237,6 +251,8 @@ val tabDataCoordinator =
     )
 tabDataCoordinator.initialize()
 ```
+
+* A real coordinator maps every tab in the `BrowserStore`, so it fails in the background on mocked `TabSessionState`s that only stub a few fields. Use `createTab` for tabs in the store, or `FakeTabDataCoordinator` for tests that don't use the coordinator.
 
 * Run the component's unit tests with:
 
