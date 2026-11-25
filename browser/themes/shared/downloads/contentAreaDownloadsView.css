@@ -4,19 +4,26 @@
 
 @import url("chrome://global/skin/in-content/common.css");
 
+html,
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 #contentAreaDownloadsView {
+  box-sizing: border-box;
   padding: var(--space-xlarge);
+  height: 100vh;
+}
+
+#downloadsListBox {
+  flex: 1;
 }
 
 #downloadsListBox:empty {
   border-color: transparent;
   background-color: transparent;
-}
-
-.downloadButton:not([disabled]):hover,
-.downloadButton:not([disabled]):hover:active {
-  background: transparent;
-  border: none;
 }
 
 #downloadsListEmptyDescription {

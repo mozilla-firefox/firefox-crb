@@ -102,12 +102,13 @@ async function check_blob_origin(pageURL, expectedSource, expectedListOrigin) {
         listNode,
         { childList: true, subtree: true, attributeFilter: ["value"] },
         () =>
-          listNode.firstElementChild
-            ?.querySelector(".downloadDetailsNormal")
-            ?.getAttribute("value")
+          listNode.firstElementChild?.querySelector(".downloadDetailsNormal")
+            ?.textContent
       );
       let download = listNode.firstElementChild;
-      let detailString = download.querySelector(".downloadDetailsNormal").value;
+      let detailString = download.querySelector(
+        ".downloadDetailsNormal"
+      ).textContent;
       Assert.stringContains(
         detailString,
         expectedListOrigin,
