@@ -3748,50 +3748,6 @@ class FullPageTranslationsTestUtils {
   }
 
   /**
-   * Holds completion of the next panel language-list setup.
-   *
-   * @returns {HeldAsyncCall}
-   */
-  static holdNextLanguageListSetup() {
-    return holdNextAsyncResult(
-      window.TranslationsPanelShared,
-      "ensureLangListsBuilt"
-    );
-  }
-
-  /**
-   * Holds the next language-detection result for the tab's current document.
-   *
-   * @param {MozTabbrowserTab} tab
-   * @returns {HeldAsyncCall}
-   */
-  static holdNextLanguageDetectionResult(tab) {
-    const actor = TranslationsParent.getTranslationsActor(tab.linkedBrowser);
-
-    return holdNextAsyncResult(
-      TranslationsParent.prototype,
-      "getLangTags",
-      receiver => receiver === actor
-    );
-  }
-
-  /**
-   * Holds the result of the next preferred target-language lookup with the
-   * given exclusions.
-   *
-   * @param {string[]} excludeLangTags - The expected exclusions in call order.
-   * @returns {HeldAsyncCall}
-   */
-  static holdNextPreferredTargetResult(excludeLangTags) {
-    return holdNextAsyncResult(
-      TranslationsParent,
-      "getTopPreferredSupportedToLang",
-      (_, [options]) =>
-        options?.excludeLangTags?.join(",") === excludeLangTags.join(",")
-    );
-  }
-
-  /**
    * Waits for the next engine-ready notification for the tab's current
    * document.
    *
