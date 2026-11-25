@@ -144,7 +144,10 @@ export class LoginStorageMigrator {
   constructor(jsonStorage, rustStorage) {
     this.#jsonStorage = jsonStorage;
     this.#rustStorage = rustStorage;
-    this.#logger = lazy.LoginHelper.createLogger("LoginStorageMigrator");
+    this.#logger = console.createInstance({
+      logModule: "LoginStorageMigrator",
+      maxLogLevelPref: "signon.loglevel",
+    });
   }
 
   // Returns the state derived from prefs.

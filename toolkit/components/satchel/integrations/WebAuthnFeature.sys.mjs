@@ -2,10 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import {
-  LoginHelper,
-  ParentAutocompleteOption,
-} from "resource://gre/modules/LoginHelper.sys.mjs";
+import { ParentAutocompleteOption } from "resource://gre/modules/LoginHelper.sys.mjs";
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
@@ -24,7 +21,10 @@ ChromeUtils.defineLazyGetter(
   () => new Localization(["toolkit/webauthnDialog.ftl"])
 );
 ChromeUtils.defineLazyGetter(lazy, "log", () =>
-  LoginHelper.createLogger("WebAuthnFeature")
+  console.createInstance({
+    logModule: "WebAuthnFeature",
+    maxLogLevelPref: "signon.loglevel",
+  })
 );
 
 if (Services.appinfo.processType !== Services.appinfo.PROCESS_TYPE_DEFAULT) {

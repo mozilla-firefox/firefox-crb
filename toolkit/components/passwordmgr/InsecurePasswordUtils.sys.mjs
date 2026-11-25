@@ -11,12 +11,11 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = {};
 
-ChromeUtils.defineESModuleGetters(lazy, {
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
-});
-
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("InsecurePasswordUtils");
+  return console.createInstance({
+    logModule: "InsecurePasswordUtils",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });
 
 /*

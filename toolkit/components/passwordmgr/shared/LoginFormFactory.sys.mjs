@@ -11,12 +11,14 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   FormLikeFactory: "resource://gre/modules/FormLikeFactory.sys.mjs",
-  LoginHelper: "resource://gre/modules/LoginHelper.sys.mjs",
   Logic: "resource://gre/modules/LoginManager.shared.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
-  return lazy.LoginHelper.createLogger("LoginFormFactory");
+  return console.createInstance({
+    logModule: "LoginFormFactory",
+    maxLogLevelPref: "signon.loglevel",
+  });
 });
 
 export const LoginFormFactory = {
