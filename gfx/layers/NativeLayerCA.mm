@@ -1821,7 +1821,9 @@ bool NativeLayerCARepresentation::ApplyChanges(
         CMTimebaseCreateWithMasterClock(kCFAllocatorDefault,
                                         CMClockGetHostTimeClock(), &timebase);
 #endif
-        CMTimebaseSetRate(timebase, 1.0f);
+        bool shouldStopTimebase = StaticPrefs::
+            gfx_core_animation_specialize_video_low_power_presentation();
+        CMTimebaseSetRate(timebase, shouldStopTimebase ? 0.0f : 1.0f);
         [(AVSampleBufferDisplayLayer*)mContentCALayer
             setControlTimebase:timebase];
         CFRelease(timebase);
