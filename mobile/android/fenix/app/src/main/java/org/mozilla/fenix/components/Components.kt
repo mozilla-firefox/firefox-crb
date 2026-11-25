@@ -625,6 +625,7 @@ class Components(
                     browserStore = core.store,
                     tabsUseCases = useCases.tabsUseCases,
                     fenixBrowserUseCases = useCases.fenixBrowserUseCases,
+                    isHomepageAsNewTabEnabled = settings::enableHomepageAsNewTab,
                 ),
             tabGroupRepository = core.tabGroupRepository,
             isInactiveTabsEnabled = settings::inactiveTabsAreEnabled,
