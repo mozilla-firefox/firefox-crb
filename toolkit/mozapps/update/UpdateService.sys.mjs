@@ -162,6 +162,7 @@ const MAX_TOTAL_INSTALL_ATTEMPTS = 2;
 // The values below used by this code are from common/updatererrors.h
 const WRITE_ERROR = 7;
 const ELEVATION_CANCELED = 9;
+const ELEVATED_UPDATE_HELPER_INSTALL_ERROR = 115;
 const SERVICE_UPDATER_COULD_NOT_BE_STARTED = 24;
 const SERVICE_NOT_ENOUGH_COMMAND_LINE_ARGS = 25;
 const SERVICE_UPDATER_SIGN_ERROR = 26;
@@ -1654,7 +1655,12 @@ function handleUpdateFailure(update) {
     return true;
   }
 
-  if (update.errorCode == ELEVATION_CANCELED) {
+  // A failed helper install is handled like a dismissed authentication dialog,
+  // and only its status code differs.
+  if (
+    update.errorCode == ELEVATION_CANCELED ||
+    update.errorCode == ELEVATED_UPDATE_HELPER_INSTALL_ERROR
+  ) {
     let elevationAttempts = Services.prefs.getIntPref(
       PREF_APP_UPDATE_ELEVATE_ATTEMPTS,
       0

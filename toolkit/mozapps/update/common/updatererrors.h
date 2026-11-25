@@ -125,4 +125,8 @@
 
 // Error codes 110 and 111 are reserved for UpdateService.sys.mjs
 
+// The macOS updater couldn't install its privileged helper, and the user
+// didn't dismiss the authentication dialog.
+#define ELEVATED_UPDATE_HELPER_INSTALL_ERROR 115
+
 #endif  // UPDATEERRORS_H
