@@ -18112,7 +18112,7 @@
 
 - name: permissions.isolateBy.userContext
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 - name: permissions.isolateBy.privateBrowsing
