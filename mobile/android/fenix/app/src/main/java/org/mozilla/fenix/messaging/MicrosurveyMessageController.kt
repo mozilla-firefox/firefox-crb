@@ -30,11 +30,11 @@ class MicrosurveyMessageController(
 ) : MessageController {
 
     override fun onMessagePressed(message: Message) {
-        appStore.dispatch(MessageClicked(message))
+        appStore.dispatch(MessageClicked(message.id))
     }
 
     override fun onMessageDismissed(message: Message) {
-        appStore.dispatch(MessageDismissed(message))
+        appStore.dispatch(MessageDismissed(message.id))
     }
 
     /**

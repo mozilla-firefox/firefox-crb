@@ -1857,11 +1857,11 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
 
         researchSurfaceDialogFragment.onAccept = {
             processIntent(messaging.getIntentForMessage(nextMessage))
-            components.appStore.dispatch(AppAction.MessagingAction.MessageClicked(nextMessage))
+            components.appStore.dispatch(AppAction.MessagingAction.MessageClicked(nextMessage.id))
         }
 
         researchSurfaceDialogFragment.onDismiss = {
-            components.appStore.dispatch(AppAction.MessagingAction.MessageDismissed(nextMessage))
+            components.appStore.dispatch(AppAction.MessagingAction.MessageDismissed(nextMessage.id))
         }
 
         lifecycleScope.launch(Main) {

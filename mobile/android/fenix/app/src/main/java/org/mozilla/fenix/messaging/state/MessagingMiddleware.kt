@@ -51,35 +51,23 @@ class MessagingMiddleware(
                     )
                 if (message != null) {
                     store.dispatch(UpdateMessageToShow(message))
-                    onMessagedDisplayed(message, store)
+                    onMessageDisplayed(store, message.id)
                 } else {
                     store.dispatch(ConsumeMessageToShow(action.surface))
                 }
             }
 
-            is MessageClicked -> onMessageClicked(action.message, store)
+            is MessageClicked -> onMessageClicked(store, action.id)
 
-            is MessageDismissed -> onMessageDismissed(store, action.message)
+            is MessageDismissed -> onMessageDismissed(store, action.id)
 
             is MicrosurveyAction.Shown -> onMicrosurveyShown(action.id)
 
             is MicrosurveyAction.OnPrivacyNoticeTapped -> onPrivacyNoticeTapped(action.id)
 
-            is MicrosurveyAction.Dismissed -> {
-                store.state.messaging.messages
-                    .find { it.id == action.id }
-                    ?.let { message ->
-                        onMicrosurveyDismissed(store, message)
-                    }
-            }
+            is MicrosurveyAction.Dismissed -> onMicrosurveyDismissed(store, action.id)
 
-            is MicrosurveyAction.Completed -> {
-                store.state.messaging.messages
-                    .find { it.id == action.id }
-                    ?.let { message ->
-                        onMicrosurveyCompleted(store, message, action.answer)
-                    }
-            }
+            is MicrosurveyAction.Completed -> onMicrosurveyCompleted(store, action.id, action.answer)
 
             is MicrosurveyAction.SentConfirmationShown -> onMicrosurveyConfirmationShown(action.id)
 
@@ -94,12 +82,12 @@ class MessagingMiddleware(
 
     private fun onMicrosurveyCompleted(
         store: AppStoreMiddlewareContext,
-        message: Message,
+        id: String,
         answer: String,
     ) {
-        val newMessages = removeMessage(store, message)
-        store.dispatch(UpdateMessages(newMessages))
-        consumeMessageToShowIfNeeded(store, message)
+        val message = findMessage(store, id) ?: return
+        store.dispatch(UpdateMessages(removeMessage(store, id)))
+        consumeMessageToShowIfNeeded(store, id)
         coroutineScope.launch {
             controller.onMicrosurveyCompleted(message, answer)
         }
@@ -113,11 +101,11 @@ class MessagingMiddleware(
 
     private fun onMicrosurveyDismissed(
         store: AppStoreMiddlewareContext,
-        message: Message,
+        id: String,
     ) {
-        val newMessages = removeMessage(store, message)
-        store.dispatch(UpdateMessages(newMessages))
-        consumeMessageToShowIfNeeded(store, message)
+        val message = findMessage(store, id) ?: return
+        store.dispatch(UpdateMessages(removeMessage(store, id)))
+        consumeMessageToShowIfNeeded(store, id)
         coroutineScope.launch {
             controller.onMicrosurveyDismissed(message)
         }
@@ -135,17 +123,18 @@ class MessagingMiddleware(
         }
     }
 
-    private fun onMessagedDisplayed(
-        oldMessage: Message,
+    private fun onMessageDisplayed(
         store: AppStoreMiddlewareContext,
+        id: String,
     ) {
+        val oldMessage = findMessage(store, id) ?: return
         coroutineScope.launch {
             val newMessage = controller.onMessageDisplayed(oldMessage)
             val newMessages =
                 if (!newMessage.isExpired) {
                     updateMessage(store, oldMessage, newMessage)
                 } else {
-                    removeMessage(store, oldMessage)
+                    removeMessage(store, id)
                 }
             store.dispatch(UpdateMessages(newMessages))
         }
@@ -153,28 +142,28 @@ class MessagingMiddleware(
 
     private fun onMessageDismissed(
         store: AppStoreMiddlewareContext,
-        message: Message,
+        id: String,
     ) {
-        val newMessages = removeMessage(store, message)
-        store.dispatch(UpdateMessages(newMessages))
-        consumeMessageToShowIfNeeded(store, message)
+        val message = findMessage(store, id) ?: return
+        store.dispatch(UpdateMessages(removeMessage(store, id)))
+        consumeMessageToShowIfNeeded(store, id)
         coroutineScope.launch {
             controller.onMessageDismissed(message)
         }
     }
 
     private fun onMessageClicked(
-        message: Message,
         store: AppStoreMiddlewareContext,
+        id: String,
     ) {
+        val message = findMessage(store, id) ?: return
         // Update Nimbus storage.
         coroutineScope.launch {
             controller.onMessageClicked(message)
         }
         // Update app state.
-        val newMessages = removeMessage(store, message)
-        store.dispatch(UpdateMessages(newMessages))
-        consumeMessageToShowIfNeeded(store, message)
+        store.dispatch(UpdateMessages(removeMessage(store, id)))
+        consumeMessageToShowIfNeeded(store, id)
     }
 
     private fun onMicrosurveyStarted(id: String) {
@@ -183,21 +172,26 @@ class MessagingMiddleware(
         }
     }
 
+    private fun findMessage(
+        store: AppStoreMiddlewareContext,
+        id: String,
+    ): Message? = store.state.messaging.messages.find { it.id == id }
+
     private fun consumeMessageToShowIfNeeded(
         store: AppStoreMiddlewareContext,
-        message: Message,
+        id: String,
     ) {
-        val current = store.state.messaging.messageToShow[message.surface]
-        if (current?.id == message.id) {
-            store.dispatch(ConsumeMessageToShow(message.surface))
-        }
+        store.state.messaging.messageToShow
+            .filterValues { it.id == id }
+            .keys
+            .forEach { surface -> store.dispatch(ConsumeMessageToShow(surface)) }
     }
 
     private fun removeMessage(
         store: AppStoreMiddlewareContext,
-        message: Message,
+        id: String,
     ): List<Message> {
-        return store.state.messaging.messages.filter { it.id != message.id }
+        return store.state.messaging.messages.filter { it.id != id }
     }
 
     private fun updateMessage(

@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.messaging
 
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import mozilla.components.service.nimbus.messaging.Message
@@ -51,15 +52,20 @@ class MicrosurveyMessageControllerTest {
 
     @Test
     fun `WHEN calling onMessagePressed THEN update the app store with the MessageClicked action`() {
+        every { message.id } returns "message-id"
+
         microsurveyMessageController.onMessagePressed(message)
-        verify { appStore.dispatch(MessageClicked(message)) }
+
+        verify { appStore.dispatch(MessageClicked("message-id")) }
     }
 
     @Test
     fun `WHEN calling onMessageDismissed THEN update the app store with the MessageDismissed action`() {
+        every { message.id } returns "message-id"
+
         microsurveyMessageController.onMessageDismissed(message)
 
-        verify { appStore.dispatch(AppAction.MessagingAction.MessageDismissed(message)) }
+        verify { appStore.dispatch(AppAction.MessagingAction.MessageDismissed("message-id")) }
     }
 
     @Test

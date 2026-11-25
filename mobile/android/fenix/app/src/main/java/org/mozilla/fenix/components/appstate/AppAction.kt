@@ -206,11 +206,11 @@ sealed class AppAction : Action {
         /** Updates [MessagingState.messages] with the given [messages]. */
         data class UpdateMessages(val messages: List<Message>) : MessagingAction()
 
-        /** Indicates the given [message] was clicked. */
-        data class MessageClicked(val message: Message) : MessagingAction()
+        /** Indicates the message with the given [id] was clicked. */
+        data class MessageClicked(val id: String) : MessagingAction()
 
-        /** Indicates the given [message] was dismissed. */
-        data class MessageDismissed(val message: Message) : MessagingAction()
+        /** Indicates the message with the given [id] was dismissed. */
+        data class MessageDismissed(val id: String) : MessagingAction()
 
         /** Sealed class representing actions related to microsurveys within messaging functionality. */
         sealed class MicrosurveyAction : MessagingAction() {

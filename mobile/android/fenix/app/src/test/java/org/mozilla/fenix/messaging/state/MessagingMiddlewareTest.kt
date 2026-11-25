@@ -106,12 +106,30 @@ class MessagingMiddlewareTest {
 
         assertEquals(message, store.state.messaging.messages.first())
 
-        store.dispatch(MessageClicked(message))
+        store.dispatch(MessageClicked(message.id))
         testScheduler.advanceUntilIdle()
 
         assertTrue(store.state.messaging.messages.isEmpty())
         coVerify { controller.onMessageClicked(message = message) }
     }
+
+    @Test
+    fun `GIVEN a message not in the app state WHEN MessageClicked or MessageDismissed THEN do not update storage`() =
+        runTest {
+            val store =
+                AppStore(
+                    AppState(messaging = MessagingState(messages = emptyList())),
+                    listOf(MessagingMiddleware(controller, this)),
+                )
+
+            store.dispatch(MessageClicked("unknown-message-id"))
+            store.dispatch(MessageDismissed("unknown-message-id"))
+            testScheduler.advanceUntilIdle()
+
+            coVerify(exactly = 0) { controller.onMessageClicked(any()) }
+            coVerify(exactly = 0) { controller.onMessageDismissed(any()) }
+            coVerify(exactly = 0) { controller.getMessage(any()) }
+        }
 
     @Test
     fun `GVIEN a microsurvey WHEN Started THEN only notify the controller`() = runTest {
@@ -146,7 +164,7 @@ class MessagingMiddlewareTest {
                 AppState(messaging = MessagingState(messages = listOf(message))),
                 listOf(MessagingMiddleware(controller, this)),
             )
-        store.dispatch(MessageDismissed(message))
+        store.dispatch(MessageDismissed(message.id))
         testScheduler.advanceUntilIdle()
 
         assertTrue(store.state.messaging.messages.isEmpty())
@@ -256,7 +274,7 @@ class MessagingMiddlewareTest {
                 listOf(MessagingMiddleware(controller, this)),
             )
 
-        store.dispatch(MessageDismissed(message))
+        store.dispatch(MessageDismissed(message.id))
 
         // removeMessages causes messages size to be 0
         assertEquals(0, store.state.messaging.messages.size)
@@ -302,7 +320,7 @@ class MessagingMiddlewareTest {
                 listOf(MessagingMiddleware(controller, this)),
             )
 
-        store.dispatch(MessageClicked(message))
+        store.dispatch(MessageClicked(message.id))
 
         assertTrue(store.state.messaging.messages.isEmpty())
         assertTrue(store.state.messaging.messageToShow.isEmpty())

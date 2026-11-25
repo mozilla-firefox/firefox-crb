@@ -53,7 +53,7 @@ class DefaultMessageControllerTest {
 
         verify { messagingController.getIntentForMessage(message) }
         assertEquals(1, processIntentCalls.size)
-        verify { appStore.dispatch(MessageClicked(message)) }
+        verify { appStore.dispatch(MessageClicked("id")) }
     }
 
     @Test
@@ -62,7 +62,7 @@ class DefaultMessageControllerTest {
 
         defaultMessageController.onMessageDismissed(message)
 
-        verify { appStore.dispatch(AppAction.MessagingAction.MessageDismissed(message)) }
+        verify { appStore.dispatch(AppAction.MessagingAction.MessageDismissed("id")) }
     }
 
     private fun mockMessage(data: MessageData = MessageData()) =
