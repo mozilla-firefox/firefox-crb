@@ -14,5 +14,5 @@ add_task(async function () {
   is(getEditorFileMode(dbg), "javascript", "Mode is correct");
 
   await selectSource(dbg, "doc-scripts.html");
-  is(getEditorFileMode(dbg), "javascript", "Mode is correct");
+  is(getEditorFileMode(dbg), "html", "Mode is correct");
 });

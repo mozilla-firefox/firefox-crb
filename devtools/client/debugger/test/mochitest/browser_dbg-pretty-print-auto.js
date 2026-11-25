@@ -13,7 +13,7 @@ add_task(async function testAutoPrettyPrintedOff() {
   const dbg = await initDebugger("doc-sourcemaps3.html", "bundle.js");
 
   // Expand the tree to make the source visible
-  await waitForSourcesInSourceTree(dbg, ["bundle.js"], {
+  await waitForSourcesInSourceTree(dbg, ["doc-sourcemaps3.html", "bundle.js"], {
     noExpand: false,
   });
   // Do not use selectSource test helper as it ultimately pass keepContext=false to selectLocation action.
@@ -40,7 +40,7 @@ add_task(async function testAutoPrettyPrintedOn() {
   });
 
   // Expand the tree to make the source visible
-  await waitForSourcesInSourceTree(dbg, ["bundle.js"], {
+  await waitForSourcesInSourceTree(dbg, ["doc-sourcemaps3.html", "bundle.js"], {
     noExpand: false,
   });
   // Do not use selectSource test helper as it ultimately pass keepContext=false to selectLocation action.

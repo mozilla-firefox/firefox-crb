@@ -175,7 +175,7 @@ add_task(async function () {
 
   is(
     dbg.selectors.getSourceCount(),
-    1,
-    "Only one source object was created for all these duplicated instances"
+    3,
+    "One source object was created for all these duplicated instances, and the 2 HTML files, so 3 sources in total"
   );
 });

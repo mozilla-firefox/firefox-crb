@@ -24,6 +24,7 @@ const PAGE_CONTENT = `<!DOCTYPE html>
 const ALL_PAGE_SCRIPTS = [
   "root-script.js",
   "folder-script.js",
+  "index.html",
   "sub-folder-script.js",
 ];
 
@@ -91,6 +92,7 @@ const PAGE2_CONTENT = `<!DOCTYPE html>
     <body></body>
   </html>`;
 const ALL_PAGE2_SCRIPTS = [
+  "index2.html",
   "script.js",
   "webpack-script.js",
   "webpack-with-domain-script.js",
@@ -144,7 +146,6 @@ add_task(async function testProjectRoot() {
   await pushPref("devtools.debugger.show-content-scripts", true);
 
   const dbg = await initDebuggerWithAbsoluteURL(PAGE_URL, ...ALL_PAGE_SCRIPTS);
-
   await waitForSourcesInSourceTree(dbg, ALL_PAGE_SCRIPTS);
 
   await selectAndCheckProjectRoots(dbg, [

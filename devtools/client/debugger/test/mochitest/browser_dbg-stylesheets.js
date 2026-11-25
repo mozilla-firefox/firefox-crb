@@ -40,13 +40,18 @@ add_task(async function () {
     "bg.css"
   );
 
-  await waitForSourcesInSourceTree(dbg, ["bg.css", "bg.css"]);
+  await waitForSourcesInSourceTree(dbg, [
+    "bg.css",
+    "bg.css",
+    "duplicate-stylesheets.html",
+  ]);
 
   checkSourceTree(dbg, [
     ["Main Thread", 1],
     [`localhost:${httpServer.identity.primaryPort}`, 2],
     ["bg.css", 3],
     ["bg.css", 3],
+    ["duplicate-stylesheets.html", 3],
   ]);
 
   await selectSourceFromSourceTreeWithIndex(

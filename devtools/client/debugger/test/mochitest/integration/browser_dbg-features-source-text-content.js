@@ -570,7 +570,7 @@ add_task(async function testFailingHtmlSource() {
   });
 
   ok(
-    getEditorContent(dbg).includes("Could not load the source"),
+    getEditorContent(dbg).includes("Error loading html source content"),
     "Display failure error"
   );
 });

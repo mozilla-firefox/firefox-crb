@@ -108,7 +108,7 @@ add_task(async function testSimpleProjectSearch() {
 
   info("Select a result match to open the location in the source");
   await clickElement(dbg, "fileMatch");
-  await waitForSelectedSource(dbg, "script-switching-01.js");
+  await waitForSelectedSource(dbg, "doc-script-switching.html");
 
   info("Close start sidebar");
   const startPanelToggleButtonEl = findElementWithSelector(
