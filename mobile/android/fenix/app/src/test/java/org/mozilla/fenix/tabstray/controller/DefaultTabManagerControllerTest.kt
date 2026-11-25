@@ -43,6 +43,7 @@ import mozilla.components.feature.search.SearchUseCases
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.tabdata.coordinator.DefaultTabDataCoordinator
 import mozilla.components.feature.tabdata.coordinator.TabDataCoordinator
+import mozilla.components.feature.tabdata.coordinator.data.BulkCloseResult
 import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.feature.tabgroups.storage.data.TabGroup as StoredTabGroup
 import mozilla.components.feature.tabgroups.storage.data.TabGroupData
@@ -714,15 +715,11 @@ class DefaultTabManagerControllerTest {
                     }
             }
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -732,7 +729,6 @@ class DefaultTabManagerControllerTest {
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
@@ -782,8 +778,87 @@ class DefaultTabManagerControllerTest {
     }
 
     @Test
-    fun `WHEN deleteMultipleTabs is called to close some normal tabs THEN that it uses tabsUseCases#removeTabs and shows an undo snackbar`() {
-        var undoSnackbarIsPrivate: Boolean? = null
+    fun `GIVEN a tab and a tab group are selected WHEN the selected tabs are closed THEN the tab is removed and the group is closed without removing its tabs`() {
+        val tabToClose = createTab(id = "1", url = "https://mozilla.org")
+        val remainingTab = createTab(id = "2", url = "https://mozilla.org")
+        val groupedTab = createTab(id = "3", url = "https://mozilla.org")
+        val tabGroup =
+            TabsTrayItem.TabGroup(
+                id = "group1",
+                title = "Group",
+                theme = TabGroupTheme.default,
+                tabs = mutableListOf(TabsTrayItem.Tab(groupedTab)),
+            )
+
+        browserStore =
+            BrowserStore(BrowserState(tabs = listOf(tabToClose, remainingTab, groupedTab), selectedTabId = "2"))
+
+        every { trayStore.state } returns
+            TabsTrayState(
+                selectedTabId = "2",
+                mode =
+                    TabsTrayState.Mode.Select(
+                        selectedTabs = setOf(TabsTrayItem.Tab(tabToClose)),
+                        selectedTabGroups = setOf(tabGroup),
+                    ),
+                normalTabsState =
+                    TabsTrayState.NormalTabsState(
+                        items = listOf(TabsTrayItem.Tab(tabToClose), TabsTrayItem.Tab(remainingTab), tabGroup)
+                    ),
+                tabGroupState = TabsTrayState.TabGroupState(groups = listOf(tabGroup)),
+                privateBrowsing = TabsTrayState.PrivateBrowsingState(tabs = emptyList()),
+                inactiveTabs = TabsTrayState.InactiveTabsState(tabs = emptyList()),
+            )
+
+        var bulkCloseResult: BulkCloseResult? = null
+        val controller =
+            createController(
+                tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(tabGroup)),
+                showUndoSnackbarForBulkClose = { bulkCloseResult = it },
+            )
+
+        controller.handleDeleteSelectedTabsClicked()
+
+        assertEquals(listOf("2", "3"), browserStore.state.tabs.map { it.id })
+        assertEquals(1, bulkCloseResult?.removedTabCount)
+        assertEquals(listOf("group1"), bulkCloseResult?.closedTabGroupIds)
+    }
+
+    @Test
+    fun `GIVEN homepage as new tab is enabled and a tab group is open WHEN close all normal tabs is clicked THEN the ungrouped tabs are removed and the group is closed without removing its tabs`() {
+        every { settings.enableHomepageAsNewTab } returns true
+        val tab = createTab(id = "1", url = "https://mozilla.org")
+        val groupedTab = createTab(id = "2", url = "https://mozilla.org")
+        val inactiveTab = createTab(id = "3", url = "https://mozilla.org", lastAccess = 0L, createdAt = 0L)
+        val tabGroup =
+            TabsTrayItem.TabGroup(
+                id = "group1",
+                title = "Group",
+                theme = TabGroupTheme.default,
+                tabs = mutableListOf(TabsTrayItem.Tab(groupedTab)),
+            )
+
+        browserStore = BrowserStore(BrowserState(tabs = listOf(tab, groupedTab, inactiveTab)))
+
+        var bulkCloseResult: BulkCloseResult? = null
+        val controller =
+            spyk(
+                createController(
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(tabGroup)),
+                    showUndoSnackbarForBulkClose = { bulkCloseResult = it },
+                )
+            )
+
+        controller.onCloseAllTabsClicked(private = false)
+
+        verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
+        assertEquals(listOf("2"), browserStore.state.tabs.map { it.id })
+        assertEquals(2, bulkCloseResult?.removedTabCount)
+        assertEquals(listOf("group1"), bulkCloseResult?.closedTabGroupIds)
+    }
+
+    @Test
+    fun `WHEN deleteMultipleTabs is called to close some normal tabs THEN it removes the tabs and shows an undo snackbar`() {
         var undoSnackbarTabCount: Int? = null
 
         val normalTab1 = createTab(id = "24", url = "https://mozilla.org", private = false)
@@ -797,10 +872,7 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -822,15 +894,13 @@ class DefaultTabManagerControllerTest {
 
         controller.deleteMultipleTabs(listOf(TabsTrayItem.Tab(tab = normalTab1)))
 
-        verify { tabsUseCases.removeTabs(listOf("24"), emptySet()) }
+        assertEquals(listOf("25"), browserStore.state.tabs.map { it.id })
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
     @Test
-    fun `GIVEN homepage as new tab is enabled WHEN deleteMultipleTabs is called to close some normal tabs THEN that it uses tabsUseCases#removeTabs and shows an undo snackbar`() {
-        var undoSnackbarIsPrivate: Boolean? = null
+    fun `GIVEN homepage as new tab is enabled WHEN deleteMultipleTabs is called to close some normal tabs THEN it removes the tabs and shows an undo snackbar`() {
         var undoSnackbarTabCount: Int? = null
 
         val normalTab1 = createTab(id = "24", url = "https://mozilla.org", private = false)
@@ -844,10 +914,7 @@ class DefaultTabManagerControllerTest {
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -869,9 +936,8 @@ class DefaultTabManagerControllerTest {
 
         controller.deleteMultipleTabs(listOf(TabsTrayItem.Tab(tab = normalTab1)))
 
-        verify { tabsUseCases.removeTabs(listOf("24"), emptySet()) }
+        assertEquals(listOf("25"), browserStore.state.tabs.map { it.id })
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -1017,15 +1083,11 @@ class DefaultTabManagerControllerTest {
                     }
             }
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -1034,7 +1096,6 @@ class DefaultTabManagerControllerTest {
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
         assertEquals(listOf("inactiveId"), browserStore.state.tabs.map { it.id })
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
@@ -1168,17 +1229,13 @@ class DefaultTabManagerControllerTest {
                     }
             }
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
                     tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(tabGroup)),
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    },
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount },
                 )
             )
 
@@ -1187,7 +1244,6 @@ class DefaultTabManagerControllerTest {
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
         assertEquals(listOf("grouped1", "grouped2", "inactive1"), browserStore.state.tabs.map { it.id })
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(0, undoSnackbarTabCount)
     }
 
@@ -1463,16 +1519,12 @@ class DefaultTabManagerControllerTest {
                 tabGroupState = TabsTrayState.TabGroupState(groups = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -1481,7 +1533,6 @@ class DefaultTabManagerControllerTest {
         assertTrue(browserStore.state.tabs.isEmpty())
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
@@ -1545,17 +1596,13 @@ class DefaultTabManagerControllerTest {
                 normalTabsState = TabsTrayState.NormalTabsState(items = listOf(openTabGroup)),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
                     tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(openTabGroup)),
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    },
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount },
                 )
             )
 
@@ -1564,7 +1611,6 @@ class DefaultTabManagerControllerTest {
         assertEquals(listOf("grouped1", "grouped2"), browserStore.state.tabs.map { it.id })
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_NORMAL_TABS) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(0, undoSnackbarTabCount)
     }
 
@@ -1629,17 +1675,13 @@ class DefaultTabManagerControllerTest {
                 inactiveTabs = TabsTrayState.InactiveTabsState(tabs = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
                     tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(closedTabGroup)),
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    },
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount },
                 )
             )
 
@@ -1647,7 +1689,6 @@ class DefaultTabManagerControllerTest {
 
         assertEquals(listOf("closedTabForTabGroup"), browserStore.state.tabs.map { it.id })
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_NORMAL_TABS) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -1677,24 +1718,20 @@ class DefaultTabManagerControllerTest {
                 inactiveTabs = TabsTrayState.InactiveTabsState(tabs = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
         controller.deleteMultipleTabs(itemsToDelete)
 
-        verify { tabsUseCases.removeTabs(ids = itemsToDelete.map { it.id }, excludedFallbackTabIds = emptySet()) }
+        assertEquals(listOf("focused"), browserStore.state.tabs.map { it.id })
+        assertEquals("focused", browserStore.state.selectedTabId)
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
@@ -1733,31 +1770,25 @@ class DefaultTabManagerControllerTest {
                 tabGroupState = TabsTrayState.TabGroupState(groups = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
         controller.deleteMultipleTabs(tabs = itemsToDelete)
 
-        verify {
-            tabsUseCases.removeTabs(ids = itemsToDelete.map { it.id }, excludedFallbackTabIds = setOf("inactive_safe"))
-        }
+        assertEquals(listOf("normal_safe", "inactive_safe"), browserStore.state.tabs.map { it.id })
+        assertEquals("normal_safe", browserStore.state.selectedTabId)
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
     @Test
-    fun `GIVEN an unselected visible tab and a closed group WHEN deleteMultipleTabs includes the focused tab THEN it removes the tab and omits the closed group from excludedFallbackTabIds`() {
+    fun `GIVEN an unselected visible tab and a closed group WHEN deleteMultipleTabs includes the focused tab THEN it removes the tab and selects the visible tab`() {
         val focusedTabToDelete = createTab(id = "focused_tab_to_delete", url = "https://mozilla.org", private = false)
         val unselectedVisibleTab =
             createTab(id = "unselected_visible_tab", url = "https://mozilla.com", private = false)
@@ -1793,24 +1824,21 @@ class DefaultTabManagerControllerTest {
                 inactiveTabs = TabsTrayState.InactiveTabsState(tabs = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(closedTabGroup)),
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount },
                 )
             )
 
         controller.deleteMultipleTabs(tabs = itemsToDelete)
 
-        verify { tabsUseCases.removeTabs(ids = listOf("focused_tab_to_delete"), excludedFallbackTabIds = emptySet()) }
+        assertEquals(listOf("unselected_visible_tab", "tab_in_closed_group"), browserStore.state.tabs.map { it.id })
+        assertEquals("unselected_visible_tab", browserStore.state.selectedTabId)
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -1859,16 +1887,12 @@ class DefaultTabManagerControllerTest {
                 tabGroupState = TabsTrayState.TabGroupState(groups = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
 
@@ -1878,7 +1902,6 @@ class DefaultTabManagerControllerTest {
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_ACTIVE_NORMAL_TABS) }
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(2, undoSnackbarTabCount)
     }
 
@@ -1971,17 +1994,13 @@ class DefaultTabManagerControllerTest {
                 privateBrowsing = TabsTrayState.PrivateBrowsingState(tabs = emptyList()),
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
 
         val controller =
             spyk(
                 createController(
                     tabDataCoordinator = createTabDataCoordinator(tabGroups = listOf(closedTabGroup)),
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    },
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount },
                 )
             )
 
@@ -1991,7 +2010,6 @@ class DefaultTabManagerControllerTest {
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(ALL_ACTIVE_NORMAL_TABS) }
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -3033,23 +3051,18 @@ class DefaultTabManagerControllerTest {
                 )
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
         controller.onCloseAllTabsClicked(private = false)
 
-        verify { tabsUseCases.removeNormalTabs() }
+        assertEquals(listOf("2"), browserStore.state.tabs.map { it.id })
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -3100,24 +3113,19 @@ class DefaultTabManagerControllerTest {
                 )
             )
 
-        var undoSnackbarIsPrivate: Boolean? = null
         var undoSnackbarTabCount: Int? = null
         val controller =
             spyk(
                 createController(
-                    showUndoSnackbarForMultipleTabs = { isPrivate, count ->
-                        undoSnackbarIsPrivate = isPrivate
-                        undoSnackbarTabCount = count
-                    }
+                    showUndoSnackbarForBulkClose = { result -> undoSnackbarTabCount = result.removedTabCount }
                 )
             )
         controller.onCloseAllTabsClicked(private = false)
 
-        verify { tabsUseCases.removeNormalTabs() }
+        assertEquals(listOf("1"), browserStore.state.tabs.map { it.id })
 
         verify(exactly = 0) { controller.dismissTabManagerAndNavigateHome(any()) }
 
-        assertEquals(false, undoSnackbarIsPrivate)
         assertEquals(1, undoSnackbarTabCount)
     }
 
@@ -3334,6 +3342,7 @@ class DefaultTabManagerControllerTest {
         showUndoSnackbarForInactiveTab: (Int) -> Unit = { _ -> },
         showUndoSnackbarForSyncedTab: (CloseTabsUseCases.UndoableOperation) -> Unit = { _ -> },
         showUndoSnackbarForMultipleTabs: (Boolean, Int) -> Unit = { _, _ -> },
+        showUndoSnackbarForBulkClose: (BulkCloseResult) -> Unit = { _ -> },
         showCancelledDownloadWarning: (Int, String?, String?) -> Unit = { _, _, _ -> },
         showBookmarkSnackbar: (Int, String?) -> Unit = { _, _ -> },
     ): DefaultTabManagerController {
@@ -3359,6 +3368,7 @@ class DefaultTabManagerControllerTest {
             showUndoSnackbarForInactiveTab = showUndoSnackbarForInactiveTab,
             showUndoSnackbarForSyncedTab = showUndoSnackbarForSyncedTab,
             showUndoSnackbarForMultipleTabs = showUndoSnackbarForMultipleTabs,
+            showUndoSnackbarForBulkClose = showUndoSnackbarForBulkClose,
             showCancelledDownloadWarning = showCancelledDownloadWarning,
             showBookmarkSnackbar = showBookmarkSnackbar,
         )

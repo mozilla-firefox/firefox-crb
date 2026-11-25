@@ -212,6 +212,28 @@ class TelemetryMiddlewareTest {
     }
 
     @Test
+    fun `WHEN multiple tabs are removed THEN the open tab count is updated`() = runTest {
+        store.dispatch(
+            TabListAction.AddMultipleTabsAction(
+                listOf(
+                    createTab("https://mozilla.org", id = "1"),
+                    createTab("https://firefox.com", id = "2"),
+                    createTab("https://getpocket.com", id = "3"),
+                )
+            )
+        )
+        assertEquals(3, settings.openTabsCount)
+
+        store.dispatch(TabListAction.RemoveTabsAction(listOf("1", "2")))
+        assertEquals(1, settings.openTabsCount)
+        assertTrue(Metrics.hasOpenTabs.testGetValue()!!)
+
+        store.dispatch(TabListAction.RemoveTabsAction(listOf("3")))
+        assertEquals(0, settings.openTabsCount)
+        assertFalse(Metrics.hasOpenTabs.testGetValue()!!)
+    }
+
+    @Test
     fun `WHEN tabs are restored THEN the open tab count is updated`() = runTest {
         assertEquals(0, settings.openTabsCount)
         assertNull(Metrics.hasOpenTabs.testGetValue())

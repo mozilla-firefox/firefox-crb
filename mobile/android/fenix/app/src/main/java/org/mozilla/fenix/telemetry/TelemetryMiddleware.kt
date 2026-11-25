@@ -138,6 +138,7 @@ class TelemetryMiddleware(
             is TabListAction.AddTabAction,
             is TabListAction.AddMultipleTabsAction,
             is TabListAction.RemoveTabAction,
+            is TabListAction.RemoveTabsAction,
             is TabListAction.RemoveAllNormalTabsAction,
             is TabListAction.RemoveAllTabsAction,
             is TabListAction.RestoreAction -> {
