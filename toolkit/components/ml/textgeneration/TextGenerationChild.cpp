@@ -294,7 +294,8 @@ class TextGenerationChild::Generation {
 
   llama::ResultStatus HandleChunk(const LlamaChatResponse& aChunk) {
     if (aChunk.mPhase == LlamaChatPhase::Prompt) {
-      mPromptTokens += aChunk.mTokens.Length();
+      // Not mTokens.Length(): an image chunk reports a token count without ids.
+      mPromptTokens += aChunk.mTokenCount;
       if (aChunk.mIsPhaseCompleted) {
         mPrefillEnd = Some(TimeStamp::Now());
       }

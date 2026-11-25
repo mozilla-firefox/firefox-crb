@@ -13,6 +13,7 @@
 #include "mozilla/dom/HWInferenceBinding.h"
 #include "mozilla/dom/LlamaRunnerBinding.h"
 #include "mozilla/Result.h"
+#include "mozilla/Span.h"
 #include "mozilla/ResultVariant.h"
 #include "mozilla/UniquePtr.h"
 
@@ -47,6 +48,13 @@ struct Device {
 
 // The devices of this process, enumerated and probed once.
 const nsTArray<Device>& Devices(const LlamaLibWrapper* aLib);
+
+struct LlamaImageData {
+  // Exactly mWidth * mHeight * 3 bytes, as mtmd_bitmap_init requires.
+  nsTArray<uint8_t> mRgb;
+  uint32_t mWidth = 0;
+  uint32_t mHeight = 0;
+};
 
 // LlamaBackend is a low-level, internal interface to the llama.cpp engine.
 // It encapsulates model loading, prompt formatting, context setup, and
@@ -91,11 +99,12 @@ class LlamaBackend {
   //  will have an identifier for each phase along with a boolean
   // indicating if the phase is completed. Note that the callbacks are called
   // synchronously. `Reinitialize` must be call at least once before calling
-  // this function.
+  // this function. Passing images requires an mmproj.
   ResultStatus Generate(
       const LlamaChatOptions& aOptions,
       std::function<ResultStatus(const LlamaChatResponse&)> aTokenCallback,
-      std::function<bool()> aCancelCallback);
+      std::function<bool()> aCancelCallback,
+      Span<const LlamaImageData> aImages = {});
 
   // Id of the device that loaded the model.
   const nsCString& DeviceId() const { return mDevice; }
@@ -125,6 +134,14 @@ class LlamaBackend {
     void operator()(mtmd_context* aCtx) const;
   };
 
+  struct MtmdInputChunksDeleter {
+    void operator()(mtmd_input_chunks* aChunks) const;
+  };
+
+  struct MtmdBitmapDeleter {
+    void operator()(mtmd_bitmap* aBitmap) const;
+  };
+
   // Smart pointer types for safe resource cleanup
   using GgmlThreadpoolUPtr =
       mozilla::UniquePtr<struct ggml_threadpool, GgmlThreadpoolDeleter>;
@@ -134,6 +151,9 @@ class LlamaBackend {
   using LlamaSamplerUPtr =
       mozilla::UniquePtr<llama_sampler, LlamaSamplerDeleter>;
   using MtmdContextUPtr = mozilla::UniquePtr<mtmd_context, MtmdContextDeleter>;
+  using MtmdInputChunksUPtr =
+      mozilla::UniquePtr<mtmd_input_chunks, MtmdInputChunksDeleter>;
+  using MtmdBitmapUPtr = mozilla::UniquePtr<mtmd_bitmap, MtmdBitmapDeleter>;
 
   // sampler result alias
   using SamplerResult = mozilla::Result<LlamaSamplerUPtr, Error>;
@@ -155,6 +175,10 @@ class LlamaBackend {
 
   ResultStatus CreateThreadpools();
   ContextResult CreateContext(int aNumContext);
+
+  using BitmapsResult = mozilla::Result<nsTArray<MtmdBitmapUPtr>, Error>;
+
+  BitmapsResult BuildBitmaps(Span<const LlamaImageData> aImages);
 
   // Pointer to the dynamically loaded llama library
   LlamaLibWrapper* mLib = nullptr;

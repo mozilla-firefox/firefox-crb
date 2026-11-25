@@ -42,11 +42,24 @@ llama_batch_get_one
 llama_decode
 llama_vocab_is_eog
 llama_token_to_piece
+mtmd_bitmap_free
+mtmd_bitmap_init
 mtmd_context_params_default
+mtmd_default_marker
 mtmd_free
+mtmd_helper_eval_chunks
+mtmd_helper_get_n_tokens
 mtmd_helper_log_set
 mtmd_init_from_file_handle
+mtmd_input_chunk_get_n_tokens
+mtmd_input_chunk_get_tokens_text
+mtmd_input_chunk_get_type
+mtmd_input_chunks_free
+mtmd_input_chunks_get
+mtmd_input_chunks_init
+mtmd_input_chunks_size
 mtmd_support_vision
+mtmd_tokenize
 #ifdef MOZ_WEBSPEECH
 parakeet_capi_abi_version
 parakeet_capi_free
