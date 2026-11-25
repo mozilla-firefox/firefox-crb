@@ -19,7 +19,7 @@ const stubTargetsByMethodName = new Map();
  * Selects a call by its receiver and a shallow copy of its arguments.
  *
  * @template {unknown[]} MethodArgs
- * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean} CallPredicate
+ * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean | PromiseLike<boolean>} CallPredicate
  */
 
 /**
@@ -136,6 +136,13 @@ class AsyncCallController {
    * @type {"run" | "reject" | null}
    */
   #branch = null;
+
+  /**
+   * Lets calls waiting on async predicates proceed when the stub is removed.
+   *
+   * @type {Set<() => void>}
+   */
+  #predicateWaitCancelCallbacks = new Set();
 
   /**
    * The call captured by this controller, if any.
@@ -404,6 +411,12 @@ class AsyncCallController {
     ) {
       stubTargetsByMethodName.delete(this.#methodName);
     }
+
+    for (const cancelPredicateWait of this.#predicateWaitCancelCallbacks) {
+      cancelPredicateWait();
+    }
+
+    this.#predicateWaitCancelCallbacks.clear();
   }
 
   /**
@@ -432,40 +445,151 @@ class AsyncCallController {
       return this.#handlePredicateFailure(reason, callOriginalMethod);
     }
 
+    if (
+      predicateResult !== null &&
+      (typeof predicateResult === "object" ||
+        typeof predicateResult === "function")
+    ) {
+      return this.#handlePendingPredicate(predicateResult, callOriginalMethod);
+    }
+
+    // We need to handle primitive results immediately so that the next call
+    // sees whether the controller is still waiting for a match.
     return this.#applyMatchDecision(predicateResult, callOriginalMethod);
+  }
+
+  /**
+   * Returns the caller's promise while the predicate is pending.
+   *
+   * @param {PromiseLike<boolean>} pendingDecision - The predicate's pending decision.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {Promise<MethodResult>}
+   */
+  #handlePendingPredicate(pendingDecision, callOriginalMethod) {
+    // We need to keep this promise if the predicate matches so that releaseResult()
+    // can return the same promise the caller received.
+    const callerResultResolvers = Promise.withResolvers();
+
+    this.#applyPendingPredicate(
+      pendingDecision,
+      callOriginalMethod,
+      callerResultResolvers
+    ).catch(callerResultResolvers.reject);
+
+    return callerResultResolvers.promise;
+  }
+
+  /**
+   * Waits for the predicate or for stub removal, then handles the call.
+   *
+   * @param {PromiseLike<boolean>} pendingDecision - The predicate's pending decision.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @param {PromiseWithResolvers<MethodResult>} callerResultResolvers
+   *   The caller's promise and the functions that settle it.
+   * @returns {Promise<void>}
+   */
+  async #applyPendingPredicate(
+    pendingDecision,
+    callOriginalMethod,
+    callerResultResolvers
+  ) {
+    const stubRemovedSignal = Promise.withResolvers();
+    const cancelPredicateWait = () => stubRemovedSignal.resolve(false);
+
+    if (this.#stub) {
+      this.#predicateWaitCancelCallbacks.add(cancelPredicateWait);
+    } else {
+      cancelPredicateWait();
+    }
+
+    let matchDecision;
+
+    try {
+      // If another call matches, or if the test restores the control, then we
+      // need to let this call proceed even though its predicate may still be pending.
+      // Even if it were to be a matching predicate, it is no longer relevant.
+      matchDecision = await Promise.race([
+        pendingDecision,
+        stubRemovedSignal.promise,
+      ]);
+    } catch (reason) {
+      callerResultResolvers.resolve(
+        this.#handlePredicateFailure(reason, callOriginalMethod)
+      );
+      return;
+    } finally {
+      this.#predicateWaitCancelCallbacks.delete(cancelPredicateWait);
+    }
+
+    this.#applyMatchDecision(
+      matchDecision,
+      callOriginalMethod,
+      callerResultResolvers
+    );
   }
 
   /**
    * Intercepts a matching call or lets it proceed.
    *
-   * @param {unknown} matchDecision - The value returned by the predicate.
+   * @param {unknown} matchDecision - The value returned or resolved by the predicate.
    * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @param {PromiseWithResolvers<MethodResult>} [callerResultResolvers]
+   *   The caller's promise if the predicate needed time to settle.
    * @returns {PromiseLike<MethodResult>}
    */
-  #applyMatchDecision(matchDecision, callOriginalMethod) {
+  #applyMatchDecision(
+    matchDecision,
+    callOriginalMethod,
+    callerResultResolvers
+  ) {
     // Another call may have matched while we were evaluating this predicate,
     // so we need to check that the stub is still installed.
     if (!this.#stub || matchDecision === false) {
-      return callOriginalMethod();
+      const originalResult = callOriginalMethod();
+
+      return this.#completeUninterceptedCall(
+        originalResult,
+        callerResultResolvers
+      );
     }
 
     if (matchDecision !== true) {
       const failure = new TypeError(
         `The call predicate for ${this.#methodName} must return a boolean`
       );
+      const result = this.#handlePredicateFailure(failure, callOriginalMethod);
 
-      return this.#handlePredicateFailure(failure, callOriginalMethod);
+      return this.#completeUninterceptedCall(result, callerResultResolvers);
     }
 
     this.#removeStub();
     this.#interceptedCall = {
-      callerResultResolvers: Promise.withResolvers(),
+      callerResultResolvers: callerResultResolvers ?? Promise.withResolvers(),
       runOriginalMethod: () => this.#invokeOriginalMethod(callOriginalMethod),
       methodResultPromise: null,
     };
     this.#interceptionSignal.resolve();
 
     return this.#interceptedCall.callerResultResolvers.promise;
+  }
+
+  /**
+   * Returns the result of a call that was not intercepted, using the promise
+   * the caller received if it had to wait for a predicate.
+   *
+   * @param {PromiseLike<MethodResult>} result - The outcome of the call.
+   * @param {PromiseWithResolvers<MethodResult> | undefined} callerResultResolvers
+   *   The caller's promise and the functions that settle it, if already created.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #completeUninterceptedCall(result, callerResultResolvers) {
+    if (!callerResultResolvers) {
+      return result;
+    }
+
+    callerResultResolvers.resolve(result);
+
+    return callerResultResolvers.promise;
   }
 
   /**
