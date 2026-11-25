@@ -170,7 +170,7 @@ int ArchiveReader::VerifyProductInformation(const char* MARChannelID,
   return rv;
 }
 
-int ArchiveReader::Open(const NS_tchar* path) {
+int ArchiveReader::PrepareToOpen() {
   if (mArchive) {
     Close();
   }
@@ -198,13 +198,34 @@ int ArchiveReader::Open(const NS_tchar* path) {
       }
     }
   }
+  return OK;
+}
 
-  MarReadResult result =
+int ArchiveReader::Open(const NS_tchar* path) {
+  int rv = PrepareToOpen();
+  if (rv != OK) {
+    return rv;
+  }
+  return FinishOpen(
 #ifdef XP_WIN
-      mar_wopen(path, &mArchive);
+      mar_wopen(path, &mArchive)
 #else
-      mar_open(path, &mArchive);
+      mar_open(path, &mArchive)
 #endif
+  );
+}
+
+#ifndef XP_WIN
+int ArchiveReader::Open(int fd) {
+  int rv = PrepareToOpen();
+  if (rv != OK) {
+    return rv;
+  }
+  return FinishOpen(mar_fdopen(fd, &mArchive));
+}
+#endif
+
+int ArchiveReader::FinishOpen(MarReadResult result) {
   if (result == MAR_MEM_ERROR) {
     return ARCHIVE_READER_MEM_ERROR;
   }
