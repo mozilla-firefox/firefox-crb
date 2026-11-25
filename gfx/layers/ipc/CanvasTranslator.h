@@ -524,7 +524,13 @@ class CanvasTranslator final : public gfx::InlineTranslator,
     Maybe<layers::SurfaceDescriptor> mDescriptor;
     RefPtr<gfx::SourceSurface> mData;
   };
-  // Surface decriptors, if available, associated with a given sync-id.
+  ExternalSnapshot CaptureExternalWebGLSnapshot(uint32_t aManagerId,
+                                                ActorId aCanvasId);
+  already_AddRefed<gfx::SourceSurface> ImportSharedSnapshot(
+      const ExternalSnapshot& aSnapshot, const gfx::IntSize& aSize,
+      gfx::SurfaceFormat aFormat, gfx::DrawTarget* aDT);
+
+  // Captured snapshots awaiting replay, keyed by sync ID.
   std::unordered_map<uint64_t, ExternalSnapshot> mExternalSnapshots;
 
   // Signal that translation should pause because it is still awaiting a sync-id
