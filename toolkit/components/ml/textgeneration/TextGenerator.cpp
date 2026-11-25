@@ -101,9 +101,63 @@ static Result<mozilla::ipc::FileDescriptor, const char*> BlobToModelFd(
   return modelFd;
 }
 
-static GenerateRequest ToGenerateRequest(
-    const dom::TextGenerationRequest& aRequest) {
-  GenerateRequest request;
+// Mirrors PackImages in LlamaRunner.cpp: same validation, same RGBA alpha
+// drop. Kept separate because the two paths take different dictionaries, and
+// both go away with the content-process path.
+static bool PackImage(const dom::TextGenerationImage& aImage, size_t aIndex,
+                      GenerateImage& aOut, ErrorResult& aRv) {
+  if (aImage.mChannels != 3 && aImage.mChannels != 4) {
+    aRv.ThrowTypeError(
+        nsFmtCString("image {} has {} channels, expected 3 (RGB) or 4 (RGBA)",
+                     aIndex, aImage.mChannels));
+    return false;
+  }
+  if (aImage.mWidth == 0 || aImage.mHeight == 0) {
+    aRv.ThrowTypeError(nsFmtCString("image {} is empty ({}x{})", aIndex,
+                                    aImage.mWidth, aImage.mHeight));
+    return false;
+  }
+  CheckedInt<size_t> expected(aImage.mWidth);
+  expected *= aImage.mHeight;
+  expected *= aImage.mChannels;
+  if (!expected.isValid()) {
+    aRv.ThrowTypeError(nsFmtCString("image {} dimensions overflow ({}x{}x{})",
+                                    aIndex, aImage.mWidth, aImage.mHeight,
+                                    aImage.mChannels));
+    return false;
+  }
+
+  aOut.width() = aImage.mWidth;
+  aOut.height() = aImage.mHeight;
+
+  return aImage.mData.ProcessFixedData([&](const Span<const uint8_t>& aData) {
+    if (aData.Length() != expected.value()) {
+      aRv.ThrowTypeError(
+          nsFmtCString("image {} has {} bytes, expected {} ({}x{}x{})", aIndex,
+                       aData.Length(), expected.value(), aImage.mWidth,
+                       aImage.mHeight, aImage.mChannels));
+      return false;
+    }
+    const size_t numPixels = size_t(aImage.mWidth) * aImage.mHeight;
+    if (!aOut.rgb().SetLength(numPixels * 3, fallible)) {
+      aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
+      return false;
+    }
+    if (aImage.mChannels == 3) {
+      memcpy(aOut.rgb().Elements(), aData.Elements(), numPixels * 3);
+    } else {
+      for (size_t p = 0; p < numPixels; ++p) {
+        aOut.rgb()[p * 3 + 0] = aData[p * 4 + 0];
+        aOut.rgb()[p * 3 + 1] = aData[p * 4 + 1];
+        aOut.rgb()[p * 3 + 2] = aData[p * 4 + 2];
+      }
+    }
+    return true;
+  });
+}
+
+static bool ToGenerateRequest(const dom::TextGenerationRequest& aRequest,
+                              GenerateRequest& request, ErrorResult& aRv) {
   for (const auto& message : aRequest.mMessages) {
     request.messages().AppendElement(
         ChatMessage(message.mRole, nsCString(message.mContent)));
@@ -124,7 +178,14 @@ static GenerateRequest ToGenerateRequest(
         sampler.mSeed.WasPassed() ? sampler.mSeed.Value() : kDefaultSeed,
         std::move(logitBias)));
   }
-  return request;
+  for (size_t i = 0; i < aRequest.mImages.Length(); ++i) {
+    GenerateImage image;
+    if (!PackImage(aRequest.mImages[i], i, image, aRv)) {
+      return false;
+    }
+    request.images().AppendElement(std::move(image));
+  }
+  return true;
 }
 
 static dom::TextGenerationResult ToJSResult(const GenerateResult& aResult) {
@@ -325,7 +386,10 @@ already_AddRefed<Promise> TextGenerator::Generate(
     return promise.forget();
   }
 
-  GenerateRequest request = ToGenerateRequest(aRequest);
+  GenerateRequest request;
+  if (!ToGenerateRequest(aRequest, request, aRv)) {
+    return nullptr;
+  }
 
   TimeStamp generateStart = TimeStamp::Now();
   auto stats = std::make_shared<DeltaStats>();

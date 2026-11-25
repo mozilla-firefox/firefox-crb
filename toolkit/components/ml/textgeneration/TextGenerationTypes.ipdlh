@@ -33,6 +33,13 @@ struct Sampler {
   LogitBias[] logitBias;
 };
 
+// rgb is tightly packed, exactly width * height * 3 bytes.
+struct GenerateImage {
+  uint8_t[] rgb;
+  uint32_t width;
+  uint32_t height;
+};
+
 // Appended to the generator's context; Clear() first for a fresh start.
 struct GenerateRequest {
   ChatMessage[] messages;
@@ -42,6 +49,7 @@ struct GenerateRequest {
   Sampler[] samplers;
   int32_t[] stopTokens;
   bool stopOnEndOfGenerationTokens;
+  GenerateImage[] images;
 };
 
 struct Timings {
