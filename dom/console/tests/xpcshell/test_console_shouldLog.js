@@ -86,36 +86,60 @@ add_task(async function test_shouldLog_env() {
 
   const tests = [
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_0",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 0,
       maxLogLevel: "Off",
       shouldLog: [],
       shouldNotLog: ["Error", "Warn", "Info", "Debug", "Trace"],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_1",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 1,
       maxLogLevel: "Off",
       shouldLog: ["Error"],
       shouldNotLog: ["Warn", "Info", "Debug", "Trace"],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_2",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 2,
       maxLogLevel: "Off",
       shouldLog: ["Error", "Warn"],
       shouldNotLog: ["Info", "Debug", "Trace"],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_3",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 3,
       maxLogLevel: "Off",
       shouldLog: ["Error", "Warn", "Info"],
       shouldNotLog: ["Debug", "Trace"],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_4",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 4,
       maxLogLevel: "Off",
       shouldLog: ["Error", "Warn", "Info", "Debug"],
       shouldNotLog: ["Trace"],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_5",
+        maxLogLevel: "Off",
+      }),
       mozLogLevel: 5,
       maxLogLevel: "Off",
       shouldLog: ["Error", "Warn", "Info", "Debug", "Trace"],
@@ -123,12 +147,20 @@ add_task(async function test_shouldLog_env() {
     },
     // Also check that MOZ_LOG doesn't prevent regular logging
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_0",
+        maxLogLevel: "All",
+      }),
       mozLogLevel: 0,
       maxLogLevel: "All",
       shouldLog: ["Error", "Warn", "Info", "Debug", "Trace"],
       shouldNotLog: [],
     },
     {
+      ci: console.createInstance({
+        logModule: "shouldlogtest_0",
+        maxLogLevel: "Warn",
+      }),
       mozLogLevel: 0,
       maxLogLevel: "Warn",
       shouldLog: ["Error", "Warn"],
@@ -137,21 +169,16 @@ add_task(async function test_shouldLog_env() {
   ];
 
   for (const test of tests) {
-    let mozLogCi = console.createInstance({
-      logModule: "shouldlogtest_" + test.mozLogLevel,
-      maxLogLevel: test.maxLogLevel,
-    });
-
     for (const level of test.shouldNotLog) {
       Assert.ok(
-        !mozLogCi.shouldLog(level),
+        !test.ci.shouldLog(level),
         `Should return false for "${level}" with MOZ_LOG=${test.mozLogLevel} and maxLogLevel=${test.maxLogLevel}`
       );
     }
 
     for (const level of test.shouldLog) {
       Assert.ok(
-        mozLogCi.shouldLog(level),
+        test.ci.shouldLog(level),
         `Should return true for "${level}" with MOZ_LOG=${test.mozLogLevel} and maxLogLevel=${test.maxLogLevel}`
       );
     }
