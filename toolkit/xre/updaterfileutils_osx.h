@@ -69,4 +69,17 @@ class InstallTreeCheck {
 bool IsInstallTreeProtected(int aDirFd, uid_t aClientUid,
                             bool aIsUncheckableRefused);
 
+// Why the privileged updater helper would refuse an install.
+enum class ElevatedUpdateRefusal {
+  None,
+  UnsupportedVolume,
+  ChangeableInstall,
+};
+
+// Runs the privileged updater helper's volume and ownership checks on
+// aInstallDir for the current user, so that Firefox doesn't ask for a password
+// to update an install that the helper refuses. Entries that the user can't
+// check are skipped.
+ElevatedUpdateRefusal GetElevatedUpdateRefusal(const char* aInstallDir);
+
 #endif
