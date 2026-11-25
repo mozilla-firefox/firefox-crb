@@ -2098,6 +2098,7 @@ Completion Completion::fromJSFramePop(JSContext* cx, AbstractFramePtr frame,
         return Completion(InitialYield(generatorObj));
 
       case JSOp::Yield:
+      case JSOp::AwaitThenYield:
         return Completion(Yield(generatorObj, frame.returnValue()));
 
       case JSOp::Await:
