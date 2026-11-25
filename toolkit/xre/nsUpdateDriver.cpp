@@ -488,7 +488,11 @@ static void ApplyUpdate(nsIFile* greDir, nsIFile* updateDir, nsIFile* appDir,
   // about it, and we don't want to ask for elevation for seemingly no reason.
   bool needElevation = false;
   if (restart) {
-    needElevation = !IsRecursivelyWritable(installDirPath.get());
+    // Don't prompt for an install that the privileged updater helper refuses.
+    // The updater records the error.
+    needElevation = !IsRecursivelyWritable(installDirPath.get()) &&
+                    GetElevatedUpdateRefusal(installDirPath.get()) ==
+                        ElevatedUpdateRefusal::None;
     if (needElevation) {
       // Normally we would check this via nsIAppStartup::wasSilentlyStarted,
       // but nsIAppStartup isn't available yet.
