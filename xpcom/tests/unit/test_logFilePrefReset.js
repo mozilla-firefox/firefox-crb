@@ -2,15 +2,14 @@
    http://creativecommons.org/publicdomain/zero/1.0/ */
 
 const kLogFilePref = "logging.config.LOG_FILE";
-const kModule = "logFilePrefReset";
 
 add_task(async function test_clearing_log_file_pref_stops_logging_to_files() {
   const cwdLog = Services.dirsvc.get("CurWorkD", Ci.nsIFile);
   cwdLog.append(".moz_log");
   Assert.ok(!cwdLog.exists(), "No .moz_log in the working directory yet");
 
-  const logger = console.createInstance({ logModule: kModule });
-  Services.prefs.setStringPref(`logging.${kModule}`, "debug");
+  const logger = console.createInstance({ logModule: "logFilePrefReset" });
+  Services.prefs.setStringPref("logging.logFilePrefReset", "debug");
   // Flush each line, so the log file size can be checked right after logging.
   Services.prefs.setBoolPref("logging.config.sync", true);
 
