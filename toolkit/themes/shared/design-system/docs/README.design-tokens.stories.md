@@ -120,6 +120,24 @@ The CI task only runs when a file under `toolkit/themes/shared/design-system/`
 changes, so a patch that edits only component token files elsewhere has to run
 the tests locally.
 
+A second check resolves every token in `tokens-shared.css`,
+`tokens-platform.css` and `tokens-brand.css` in every environment those sheets
+query. It fails on a CSS-wide keyword inside a function such as `light-dark()`,
+a `var()` without a fallback to a token no sheet declares, a reference cycle or
+a reference chain past the depth limit. These values parse, so a stylesheet
+loads without an error and the token is unset wherever it is read. A reference
+to a token that only another sheet declares needs a fallback. Run it with:
+
+```sh
+$ ./mach python-test --subsuite desktop-theme
+```
+
+It runs in CI as `theme` when a file under `toolkit/themes/shared/design-system/`
+or `toolkit/themes/tools/` changes. To see each broken token with the
+environments it wins in, run
+`./mach theme resolve-token toolkit/themes/shared/design-system/dist --check`.
+It does not read the component `*.tokens.css` files.
+
 ## JSON format deep dive
 
 Style Dictionary works by ingesting JSON files with tokens data and performing various platform-specific transformations to output token files formatted for different languages. The library has certain quirks and limitations that we had to take into consideration when coming up with a JSON format for representing our tokens. The following is a bit of a "how to" guide for reading and adding to [`src/tokens`](https://searchfox.org/firefox-main/source/toolkit/themes/shared/design-system/src/tokens) for anyone who needs to consume our tokens or add new tokens.
