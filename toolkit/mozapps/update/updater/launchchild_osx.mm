@@ -4,6 +4,7 @@
 
 #include <Cocoa/Cocoa.h>
 #include <CoreServices/CoreServices.h>
+#include <Security/Security.h>
 #include <crt_externs.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,6 +14,16 @@
 #include <sys/sysctl.h>
 #include <unistd.h>
 #include "readstrings.h"
+#include "updatecommon.h"
+#include "UpdaterCodeSigningRequirements.h"
+#import "UpdaterHelperProtocol.h"
+
+// NSXPCConnection exposes the peer's audit token through this property, which
+// is not declared in the public SDK headers. The listener delegate checks at
+// runtime that the connection responds to it before using it.
+@interface NSXPCConnection (PrivateAuditToken)
+@property(nonatomic, readonly) audit_token_t auditToken;
+@end
 
 #define ARCH_PATH "/usr/bin/arch"
 #if defined(__x86_64__)
@@ -249,218 +260,390 @@ void LaunchMacPostProcess(const char* aAppBundle) {
   [task release];
 }
 
-id ConnectToUpdateServer() {
-  MacAutoreleasePool pool;
+// State shared between the listener delegate (running on the listener's
+// dispatch queue) and the helper's main thread (which blocks in
+// ObtainUpdaterArguments until applyUpdate arrives).
+static dispatch_semaphore_t gApplyUpdateSemaphore = nullptr;
+static NSXPCListener* gUpdaterHelperListener = nil;
+// The state below is guarded by gConnectionLock. The helper handles a single
+// request and then removes itself. It takes the first applyUpdate it receives,
+// or the disconnect of a client that didn't send applyUpdate, whichever comes
+// first, and answers every later applyUpdate with
+// UpdaterHelperApplyResultBusy.
+static bool gHasTakenRequest = false;
+// The connection whose applyUpdate the helper took, until it invalidates. The
+// main thread uses it to tell whether it has to wait for the client to
+// disconnect before exiting.
+static NSXPCConnection* gRequestConnection = nil;
+// Signaled when gRequestConnection invalidates.
+static dispatch_semaphore_t gClientDisconnectedSemaphore = nullptr;
+static NSObject* gConnectionLock = nil;
+static NSArray<NSString*>* gPendingUpdaterArguments = nil;
+static NSString* gPendingMARChannelID = nil;
+static void (^gApplyUpdateReplyBlock)(NSInteger) = nil;
 
-  id updateServer = nil;
-  BOOL isConnected = NO;
-  int currTry = 0;
-  const int numRetries = 10;  // Number of IPC connection retries before
-                              // giving up.
-  while (!isConnected && currTry < numRetries) {
-    @try {
-      updateServer = (id)[NSConnection
-          rootProxyForConnectionWithRegisteredName:@"org.mozilla.updater.server"
-                                              host:nil
-                                   usingNameServer:[NSSocketPortNameServer
-                                                       sharedInstance]];
-      if (!updateServer ||
-          ![updateServer respondsToSelector:@selector(abort)] ||
-          ![updateServer respondsToSelector:@selector(getArguments)] ||
-          ![updateServer respondsToSelector:@selector(shutdown)]) {
-        NSLog(@"Server doesn't exist or doesn't provide correct selectors.");
-        sleep(1);  // Wait 1 second.
-        currTry++;
-      } else {
-        isConnected = YES;
-      }
-    } @catch (NSException* e) {
-      NSLog(@"Encountered exception, retrying: %@: %@", e.name, e.reason);
-      sleep(1);  // Wait 1 second.
-      currTry++;
-    }
-  }
-  if (!isConnected) {
-    NSLog(@"Failed to connect to update server after several retries.");
-    return nil;
-  }
-  return updateServer;
+// How long the helper waits for a request after it has started.
+static const int64_t kApplyUpdateWaitSeconds = 60;
+
+// Set in the unelevated updater from the helper's applyUpdate reply.
+static NSInteger gApplyUpdateResult = UpdaterHelperApplyResultNotRecorded;
+
+bool DidHelperRecordStatus() {
+  return gApplyUpdateResult == UpdaterHelperApplyResultSucceeded ||
+         gApplyUpdateResult == UpdaterHelperApplyResultFailed;
 }
 
-void CleanupElevatedMacUpdate(bool aFailureOccurred) {
-  MacAutoreleasePool pool;
+// Defined in updater.cpp.
+bool DidWriteStatusFile();
 
-  id updateServer = ConnectToUpdateServer();
-  if (updateServer) {
-    @try {
-      if (aFailureOccurred) {
-        [updateServer performSelector:@selector(abort)];
-      } else {
-        [updateServer performSelector:@selector(shutdown)];
-      }
-    } @catch (NSException* e) {
+// Validates that the audit token represents a process that matches the given
+// code-signing requirement string and that has the hard and kill code-signing
+// status flags.
+static bool ValidatePeerWithRequirement(audit_token_t aToken,
+                                        NSString* aRequirementStr) {
+  if (!aRequirementStr.length) {
+    return false;
+  }
+  NSData* tokenData = [NSData dataWithBytes:&aToken length:sizeof(aToken)];
+  NSDictionary* attrs =
+      @{(__bridge NSString*)kSecGuestAttributeAudit : tokenData};
+  SecCodeRef code = nullptr;
+  if (SecCodeCopyGuestWithAttributes(nullptr, (__bridge CFDictionaryRef)attrs,
+                                     kSecCSDefaultFlags,
+                                     &code) != errSecSuccess ||
+      !code) {
+    return false;
+  }
+  SecRequirementRef req = nullptr;
+  bool ok = false;
+  if (SecRequirementCreateWithString((__bridge CFStringRef)aRequirementStr,
+                                     kSecCSDefaultFlags,
+                                     &req) == errSecSuccess &&
+      req) {
+    ok = (SecCodeCheckValidityWithErrors(code, kSecCSDefaultFlags, req,
+                                         nullptr) == errSecSuccess);
+    CFRelease(req);
+  }
+  if (ok) {
+    // Refuse a client whose code could be changed while it runs.
+    ok = false;
+    CFDictionaryRef info = nullptr;
+    if (SecCodeCopySigningInformation(code, kSecCSDynamicInformation, &info) ==
+            errSecSuccess &&
+        info) {
+      NSNumber* status = ((
+          __bridge NSDictionary*)info)[(__bridge NSString*)kSecCodeInfoStatus];
+      ok = (status.unsignedIntValue &
+            (kSecCodeStatusHard | kSecCodeStatusKill)) ==
+           (kSecCodeStatusHard | kSecCodeStatusKill);
+      CFRelease(info);
     }
   }
-
-  NSFileManager* manager = [NSFileManager defaultManager];
-  [manager
-      removeItemAtPath:@"/Library/PrivilegedHelperTools/org.mozilla.updater"
-                 error:nil];
-  [manager removeItemAtPath:@"/Library/LaunchDaemons/org.mozilla.updater.plist"
-                      error:nil];
-
-  // The following call will terminate the current process due to the "remove"
-  // argument.
-  LaunchTask(@"/bin/launchctl", @[ @"remove", @"org.mozilla.updater" ]);
+  CFRelease(code);
+  return ok;
 }
+
+@interface UpdaterHelperListenerDelegate
+    : NSObject <NSXPCListenerDelegate, UpdaterHelperProtocol>
+@end
+
+@implementation UpdaterHelperListenerDelegate
+
+- (BOOL)listener:(NSXPCListener*)listener
+    shouldAcceptNewConnection:(NSXPCConnection*)conn {
+  // The unelevated updater that connects is the same signed binary as this
+  // privileged helper, so authenticate the peer against the updater's own
+  // (SMPrivilegedExecutables) code-signing identity. SMAuthorizedClients
+  // identifies the browser for SMJobBless installation, not this XPC peer.
+  // On macOS 13 and later, setCodeSigningRequirement: below makes the
+  // framework enforce the same requirement on every message. Before that
+  // the audit token check is the only peer validation, so refuse the
+  // connection if the private property is unavailable.
+  bool hasAuditToken = [conn respondsToSelector:@selector(auditToken)];
+  if (hasAuditToken &&
+      !ValidatePeerWithRequirement(
+          conn.auditToken,
+          @MOZ_UPDATER_SMPRIVILEGEDEXECUTABLE_REQUIREMENT_STR)) {
+    LogToOS(NS_T("Updater helper rejecting connection from unauthorized "
+                 "client."));
+    return NO;
+  }
+  if (@available(macOS 13.0, *)) {
+    [conn setCodeSigningRequirement:
+              @MOZ_UPDATER_SMPRIVILEGEDEXECUTABLE_REQUIREMENT_STR];
+  } else if (!hasAuditToken) {
+    LogToOS(NS_T("Updater helper rejecting connection: unable to identify "
+                 "the connecting process."));
+    return NO;
+  }
+  // Every validated client is accepted, so that a client arriving while the
+  // helper handles another request gets UpdaterHelperApplyResultBusy from
+  // applyUpdate instead of a failed connection. Connections arrive on parallel
+  // queues, so the helper decides which request it takes under
+  // gConnectionLock.
+  conn.invalidationHandler = ^{
+    bool isRequestConnection = false;
+    bool shouldRemoveHelper = false;
+    @synchronized(gConnectionLock) {
+      if (gRequestConnection == conn) {
+        gRequestConnection = nil;
+        isRequestConnection = true;
+      } else if (!gHasTakenRequest) {
+        // A client that disconnects without having sent applyUpdate asks an
+        // idle helper to remove itself.
+        gHasTakenRequest = true;
+        shouldRemoveHelper = true;
+      }
+    }
+    if (isRequestConnection) {
+      dispatch_semaphore_signal(gClientDisconnectedSemaphore);
+    }
+    if (shouldRemoveHelper) {
+      dispatch_semaphore_signal(gApplyUpdateSemaphore);
+    }
+  };
+  conn.exportedInterface =
+      [NSXPCInterface interfaceWithProtocol:@protocol(UpdaterHelperProtocol)];
+  conn.exportedObject = self;
+  [conn resume];
+  return YES;
+}
+
+- (void)applyUpdate:(NSArray<NSString*>*)aArguments
+       marChannelID:(NSString*)aMARChannelID
+              reply:(void (^)(NSInteger))aReply {
+  bool isBusy;
+  @synchronized(gConnectionLock) {
+    isBusy = gHasTakenRequest;
+    if (!isBusy) {
+      gHasTakenRequest = true;
+      gRequestConnection = [NSXPCConnection currentConnection];
+      gPendingUpdaterArguments = [aArguments copy];
+      gPendingMARChannelID = [aMARChannelID copy];
+      gApplyUpdateReplyBlock = [aReply copy];
+    }
+  }
+  if (isBusy) {
+    aReply(UpdaterHelperApplyResultBusy);
+    return;
+  }
+  dispatch_semaphore_signal(gApplyUpdateSemaphore);
+}
+
+- (void)removeHelperWithReply:(void (^)(void))aReply {
+  // Nothing to do here: when this client disconnects without having sent
+  // applyUpdate, the connection's invalidation handler wakes the main thread,
+  // which then removes the helper.
+  aReply();
+}
+
+@end
+
+// Forward declarations.
+[[noreturn]] void CleanupElevatedMacUpdate(bool aFailureOccurred);
 
 // Note: Caller is responsible for freeing aArgv.
 bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
                             MARChannelStringTable* aMARStrings) {
   MacAutoreleasePool pool;
 
-  id updateServer = ConnectToUpdateServer();
-  if (!updateServer) {
-    // Let's try our best and clean up.
-    CleanupElevatedMacUpdate(true);
-    return false;  // Won't actually get here due to CleanupElevatedMacUpdate.
-  }
+  gApplyUpdateSemaphore = dispatch_semaphore_create(0);
+  gClientDisconnectedSemaphore = dispatch_semaphore_create(0);
+  gConnectionLock = [[NSObject alloc] init];
+  UpdaterHelperListenerDelegate* delegate =
+      [[UpdaterHelperListenerDelegate alloc] init];
+  gUpdaterHelperListener = [[NSXPCListener alloc]
+      initWithMachServiceName:kUpdaterHelperMachServiceName];
+  gUpdaterHelperListener.delegate = delegate;
+  [gUpdaterHelperListener resume];
 
-  @try {
-    NSArray* updaterArguments =
-        [updateServer performSelector:@selector(getArguments)];
-    *aArgc = [updaterArguments count];
-    char** tempArgv = (char**)malloc(sizeof(char*) * (*aArgc));
-    for (int i = 0; i < *aArgc; i++) {
-      int argLen = [[updaterArguments objectAtIndex:i] length] + 1;
-      tempArgv[i] = (char*)malloc(argLen);
-      strncpy(tempArgv[i], [[updaterArguments objectAtIndex:i] UTF8String],
-              argLen);
+  // Wait for the unelevated updater to send applyUpdate. launchd also starts
+  // the helper when it is installed and at startup while it is still
+  // installed, so remove the helper if no request arrives in time.
+  if (dispatch_semaphore_wait(
+          gApplyUpdateSemaphore,
+          dispatch_time(DISPATCH_TIME_NOW,
+                        kApplyUpdateWaitSeconds * NSEC_PER_SEC)) != 0) {
+    @synchronized(gConnectionLock) {
+      // From here on, applyUpdate replies UpdaterHelperApplyResultBusy.
+      gHasTakenRequest = true;
     }
-    *aArgv = tempArgv;
-
-    NSString* channelID =
-        [updateServer performSelector:@selector(getMARChannelID)];
-    const char* channelIDStr = [channelID UTF8String];
-    aMARStrings->MARChannelID =
-        std::make_unique<char[]>(strlen(channelIDStr) + 1);
-    strcpy(aMARStrings->MARChannelID.get(), channelIDStr);
-  } @catch (NSException* e) {
-    // Let's try our best and clean up.
-    CleanupElevatedMacUpdate(true);
-    return false;  // Won't actually get here due to CleanupElevatedMacUpdate.
   }
+
+  NSArray<NSString*>* arguments;
+  @synchronized(gConnectionLock) {
+    arguments = gPendingUpdaterArguments;
+  }
+  if (!arguments) {
+    CleanupElevatedMacUpdate(true);
+  }
+
+  *aArgc = (int)arguments.count;
+  char** tempArgv = (char**)malloc(sizeof(char*) * (*aArgc));
+  for (int i = 0; i < *aArgc; i++) {
+    const char* utf8Arg = arguments[i].UTF8String;
+    size_t argLen = strlen(utf8Arg) + 1;
+    tempArgv[i] = (char*)malloc(argLen);
+    memcpy(tempArgv[i], utf8Arg, argLen);
+  }
+  *aArgv = tempArgv;
+
+  NSString* channelID;
+  @synchronized(gConnectionLock) {
+    channelID = gPendingMARChannelID;
+  }
+  const char* channelIDStr = channelID ? channelID.UTF8String : "";
+  aMARStrings->MARChannelID =
+      std::make_unique<char[]>(strlen(channelIDStr) + 1);
+  strcpy(aMARStrings->MARChannelID.get(), channelIDStr);
   return true;
 }
 
-/**
- * The ElevatedUpdateServer is launched from a non-elevated updater process.
- * It allows an elevated updater process (usually a privileged helper tool) to
- * connect to it and receive all the necessary arguments to complete a
- * successful update.
- */
-@interface ElevatedUpdateServer : NSObject {
-  NSArray* mUpdaterArguments;
-  BOOL mShouldKeepRunning;
-  BOOL mAborted;
-  NSString* mMARChannelID;
+void CleanupElevatedMacUpdate(bool aFailureOccurred) {
+  MacAutoreleasePool pool;
+
+  void (^reply)(NSInteger) = nil;
+  @synchronized(gConnectionLock) {
+    reply = gApplyUpdateReplyBlock;
+    gApplyUpdateReplyBlock = nil;
+  }
+  if (reply) {
+    // A request that stops before this process wrote a status leaves the
+    // client to record ELEVATION_CANCELED.
+    if (!DidWriteStatusFile()) {
+      reply(UpdaterHelperApplyResultNotRecorded);
+    } else if (aFailureOccurred) {
+      reply(UpdaterHelperApplyResultFailed);
+    } else {
+      reply(UpdaterHelperApplyResultSucceeded);
+    }
+    [reply release];
+  }
+
+  // Wait for the client to disconnect before removing the helper. On macOS 13
+  // and later the client checks the code signature of the process that sent
+  // the reply, and that check fails once this process has exited. The client
+  // invalidates the connection after its synchronous applyUpdate call has
+  // returned. The wait is bounded so a client that dies without invalidating
+  // cannot keep the helper around.
+  bool clientConnected;
+  @synchronized(gConnectionLock) {
+    clientConnected = (gRequestConnection != nil);
+  }
+  if (clientConnected &&
+      dispatch_semaphore_wait(
+          gClientDisconnectedSemaphore,
+          dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
+    LogToOS(NS_T("Updater helper: timed out waiting for the client to "
+                 "disconnect after the applyUpdate reply."));
+  }
+
+  NSString* helperPath = [@"/Library/PrivilegedHelperTools/"
+      stringByAppendingString:kUpdaterHelperMachServiceName];
+  NSString* daemonPath =
+      [NSString stringWithFormat:@"/Library/LaunchDaemons/%@.plist",
+                                 kUpdaterHelperMachServiceName];
+  NSFileManager* manager = [NSFileManager defaultManager];
+  [manager removeItemAtPath:helperPath error:nil];
+  [manager removeItemAtPath:daemonPath error:nil];
+
+  // The following call will terminate the current process.
+  LaunchTask(@"/bin/launchctl", @[ @"remove", kUpdaterHelperMachServiceName ]);
+  exit(aFailureOccurred ? 1 : 0);
 }
-- (id)initWithArgs:(NSArray*)aArgs marChannelID:(NSString*)aMARChannelID;
-- (BOOL)runServer;
-- (NSArray*)getArguments;
-- (NSString*)getMARChannelID;
-- (void)abort;
-- (BOOL)wasAborted;
-- (void)shutdown;
-- (BOOL)shouldKeepRunning;
-@end
 
-@implementation ElevatedUpdateServer
-
-- (id)initWithArgs:(NSArray*)aArgs marChannelID:(NSString*)aMARChannelID {
-  self = [super init];
-  if (!self) {
+// Returns a resumed connection to the privileged helper, or nil. The caller
+// owns the returned connection.
+static NSXPCConnection* CreateHelperConnection() {
+  NSXPCConnection* connection = [[NSXPCConnection alloc]
+      initWithMachServiceName:kUpdaterHelperMachServiceName
+                      options:NSXPCConnectionPrivileged];
+  if (!connection) {
     return nil;
   }
-  mUpdaterArguments = aArgs;
-  mMARChannelID = aMARChannelID;
-  mShouldKeepRunning = YES;
-  mAborted = NO;
-  return self;
-}
-
-- (BOOL)runServer {
-  NSPort* serverPort = [NSSocketPort port];
-  NSConnection* server = [NSConnection connectionWithReceivePort:serverPort
-                                                        sendPort:serverPort];
-  [server setRootObject:self];
-  if ([server registerName:@"org.mozilla.updater.server"
-            withNameServer:[NSSocketPortNameServer sharedInstance]] == NO) {
-    NSLog(@"Unable to register as DirectoryServer.");
-    NSLog(@"Is another copy running?");
-    return NO;
+  // On macOS 13 and later the framework itself rejects messages whose peer
+  // doesn't satisfy this requirement, every message included. Before macOS 13
+  // we rely on launchd's system-domain mach service exclusivity: only a daemon
+  // loaded by `launchctl bootstrap system` (which SMJobBless does, after
+  // kernel-validated code-signing) can claim this mach service name, so a
+  // non-admin attacker cannot impersonate the helper.
+  if (@available(macOS 13.0, *)) {
+    [connection setCodeSigningRequirement:
+                    @MOZ_UPDATER_SMPRIVILEGEDEXECUTABLE_REQUIREMENT_STR];
   }
-
-  while ([self shouldKeepRunning] &&
-         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                                  beforeDate:[NSDate distantFuture]]);
-  return ![self wasAborted];
+  connection.remoteObjectInterface =
+      [NSXPCInterface interfaceWithProtocol:@protocol(UpdaterHelperProtocol)];
+  [connection resume];
+  return connection;
 }
-
-- (NSArray*)getArguments {
-  return mUpdaterArguments;
-}
-
-/**
- * The MAR channel ID(s) are stored in the UpdateSettings.framework that ships
- * with the updater.app bundle. When an elevated update is occurring, the
- * org.mozilla.updater binary is extracted and installed individually as a
- * Privileged Helper Tool. This Privileged Helper Tool does not have access to
- * the UpdateSettings.framework and we therefore rely on the unelevated updater
- * process to pass this information to the elevated updater process in the same
- * fashion that the command line arguments are passed to the elevated updater
- * process by `getArguments`.
- */
-- (NSString*)getMARChannelID {
-  return mMARChannelID;
-}
-
-- (void)abort {
-  mAborted = YES;
-  [self shutdown];
-}
-
-- (BOOL)wasAborted {
-  return mAborted;
-}
-
-- (void)shutdown {
-  mShouldKeepRunning = NO;
-}
-
-- (BOOL)shouldKeepRunning {
-  return mShouldKeepRunning;
-}
-
-@end
 
 bool ServeElevatedUpdate(int aArgc, const char** aArgv,
                          const char* aMARChannelID) {
   MacAutoreleasePool pool;
 
-  NSMutableArray* updaterArguments = [NSMutableArray arrayWithCapacity:aArgc];
+  NSMutableArray<NSString*>* updaterArguments =
+      [NSMutableArray arrayWithCapacity:aArgc];
   for (int i = 0; i < aArgc; i++) {
     [updaterArguments addObject:[NSString stringWithUTF8String:aArgv[i]]];
   }
+  NSString* channelID =
+      aMARChannelID ? [NSString stringWithUTF8String:aMARChannelID] : @"";
 
-  NSString* channelID = [NSString stringWithUTF8String:aMARChannelID];
-  ElevatedUpdateServer* updater =
-      [[ElevatedUpdateServer alloc] initWithArgs:updaterArguments
-                                    marChannelID:channelID];
-  bool didSucceed = [updater runServer];
+  NSXPCConnection* connection = CreateHelperConnection();
+  if (!connection) {
+    return false;
+  }
 
-  [updater release];
+  __block bool didSucceed = false;
+  // A synchronous proxy blocks this thread until either the reply block or the
+  // error handler has run, and exactly one of the two always runs, so the
+  // applyUpdate result is readable as soon as the send returns.
+  id<UpdaterHelperProtocol> proxy = [connection
+      synchronousRemoteObjectProxyWithErrorHandler:^(NSError* error) {
+        LogToOS([NSString stringWithFormat:@"Updater client XPC error: %@ %ld",
+                                           error.domain, (long)error.code]
+                    .UTF8String);
+      }];
+
+  [proxy applyUpdate:updaterArguments
+        marChannelID:channelID
+               reply:^(NSInteger aResult) {
+                 gApplyUpdateResult = aResult;
+                 didSucceed = (aResult == UpdaterHelperApplyResultSucceeded);
+               }];
+
+  [connection invalidate];
+  [connection release];
   return didSucceed;
+}
+
+void RemoveLeftoverHelper() {
+  MacAutoreleasePool pool;
+
+  NSXPCConnection* connection = CreateHelperConnection();
+  if (!connection) {
+    return;
+  }
+  // Usually no helper is registered, and the connection fails right away. The
+  // wait is bounded so that a helper that never replies can't keep Firefox
+  // from being relaunched.
+  // The blocks can still run after this function returns.
+  dispatch_semaphore_t done = dispatch_semaphore_create(0);
+  id<UpdaterHelperProtocol> proxy =
+      [connection remoteObjectProxyWithErrorHandler:^(NSError*) {
+        dispatch_semaphore_signal(done);
+      }];
+  [proxy removeHelperWithReply:^{
+    LogToOS(NS_T("A leftover helper acknowledged the removal request"));
+    dispatch_semaphore_signal(done);
+  }];
+  if (dispatch_semaphore_wait(
+          done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+    LogToOS(NS_T("Timed out waiting for a leftover helper"));
+  }
+  [connection invalidate];
+  [connection release];
+  dispatch_release(done);
 }
 
 bool IsOwnedByGroupAdmin(const char* aAppBundle) {

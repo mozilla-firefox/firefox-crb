@@ -28,4 +28,6 @@ By default, the elevated updater will only work if it is signed by the Mozilla r
 
 Once you have a developer certificate add `ac_add_options --enable-mac-elevated-updates-with-generic-certs` and `ac_add_options --enable-unverified-updates` to `mozconfig` which will allow the elevated updater to run with the developer certificates instead of the Mozilla production one, and will allow it to install unsigned updates from a local update server, as explained in [Setting Up An Update Server](SettingUpAnUpdateServer.md).
 
+With `--enable-mac-elevated-updates-with-generic-certs`, the privileged helper accepts a client and an install directory signed by any Apple developer certificate rather than Mozilla's. Don't leave such a helper installed on a shared machine, and remove it (from `/Library/PrivilegedHelperTools` and `/Library/LaunchDaemons`) when you are done testing.
+
 The OS will need to ask for permission to install the elevated updater when you try to update, and authorization step may fail if you don't run the updater from the UI/terminal - something like tmux over SSH may cause it to fail.
