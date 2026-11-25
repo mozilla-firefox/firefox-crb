@@ -128,7 +128,7 @@ export function showSourceTreeItemContextMenu(
       addBlackboxAllOption(dispatch, state, menuOptions, item, depth);
     }
 
-    showMenu(event, menuOptions, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, menuOptions);
   };
 }
 

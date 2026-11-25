@@ -69,8 +69,7 @@ export function showEditorContextMenu(event, editor, lineObject, location) {
         isSourceOnIgnoreList,
         dispatch,
         endColumn,
-      }),
-      { accesskeyConflictsBug: 2073896 }
+      })
     );
   };
 }
@@ -85,25 +84,21 @@ export function showEditorGutterContextMenu(event, line, location, lineText) {
       isSourceMapIgnoreListEnabled(state) &&
       isSourceOnSourceMapIgnoreList(state, source);
 
-    showMenu(
-      event,
-      [
-        ...createBreakpointItems(location, lineText, dispatch),
-        { type: "separator" },
-        continueToHereItem(location, isPaused, dispatch),
-        { type: "separator" },
-        blackBoxLineMenuItem(
-          source,
-          line,
-          blackboxedRanges,
-          isSourceOnIgnoreList,
-          location.line,
-          dispatch,
-          lineText.length
-        ),
-      ],
-      { accesskeyConflictsBug: 2073896 }
-    );
+    showMenu(event, [
+      ...createBreakpointItems(location, lineText, dispatch),
+      { type: "separator" },
+      continueToHereItem(location, isPaused, dispatch),
+      { type: "separator" },
+      blackBoxLineMenuItem(
+        source,
+        line,
+        blackboxedRanges,
+        isSourceOnIgnoreList,
+        location.line,
+        dispatch,
+        lineText.length
+      ),
+    ]);
   };
 }
 

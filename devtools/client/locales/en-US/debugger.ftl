@@ -59,7 +59,7 @@ debugger-breakpoint-remove-condition =
 # Add a condition to the breakpoint.
 debugger-breakpoint-add-condition =
     .label = Add condition
-    .accesskey = A
+    .accesskey = c
 
 # Edit the condition of the breakpoint.
 debugger-breakpoint-edit-condition =
@@ -71,10 +71,12 @@ debugger-breakpoint-edit-condition =
 # Make a breakpoint that never pauses pause again.
 debugger-pause-here =
     .label = Pause here
+    .accesskey = P
 
 # Make the breakpoint, or a debugger statement on the line, never pause.
 debugger-never-pause-here =
     .label = Never pause here
+    .accesskey = p
 
 # Add a log point to the line.
 debugger-add-log-point =
@@ -84,7 +86,7 @@ debugger-add-log-point =
 # Edit the log point set on the line.
 debugger-edit-log-point =
     .label = Edit log
-    .accesskey = E
+    .accesskey = t
 
 # Remove the log point set on the line.
 debugger-remove-log-point =
@@ -131,7 +133,7 @@ debugger-editor-remove-breakpoints-on-line =
 # Enable every breakpoint on the line.
 debugger-editor-enable-breakpoints-on-line =
     .label = Enable breakpoints on line
-    .accesskey = L
+    .accesskey = o
 
 # Disable every breakpoint on the line.
 debugger-editor-disable-breakpoints-on-line =
@@ -146,7 +148,7 @@ debugger-editor-continue-to-here =
 # Make the debugger skip the line.
 debugger-editor-ignore-line =
     .label = Ignore line
-    .accesskey = l
+    .accesskey = g
 
 # Stop skipping the line.
 debugger-editor-unignore-line =
@@ -163,12 +165,12 @@ debugger-editor-copy-to-clipboard =
 # Make the debugger skip the selected lines.
 debugger-editor-ignore-lines =
     .label = Ignore lines
-    .accesskey = i
+    .accesskey = g
 
 # Stop skipping the selected lines.
 debugger-editor-unignore-lines =
     .label = Unignore lines
-    .accesskey = u
+    .accesskey = n
 
 # Go to the generated location the selected line maps to.
 debugger-editor-jump-to-generated-location =
@@ -188,18 +190,23 @@ debugger-editor-add-watch-expression =
 # Evaluate the selected text in the console.
 debugger-editor-evaluate-in-console =
     .label = Evaluate in console
+    .accesskey = v
 
 debugger-editor-show-inline-preview =
     .label = Show inline preview
+    .accesskey = p
 
 debugger-editor-hide-inline-preview =
     .label = Hide inline preview
+    .accesskey = p
 
 debugger-editor-wrap-lines =
     .label = Wrap lines
+    .accesskey = W
 
 debugger-editor-unwrap-lines =
     .label = Unwrap lines
+    .accesskey = w
 
 ## Source context menus of the editor, the source tabs and the Sources pane
 
@@ -211,7 +218,7 @@ debugger-copy-source =
 # Copy the URI of the source.
 debugger-copy-source-uri =
     .label = Copy source URI
-    .accesskey = u
+    .accesskey = s
 
 # Select the source in the Sources pane.
 debugger-reveal-in-tree =
@@ -276,10 +283,12 @@ debugger-source-tree-remove-override =
 # Collapse a directory and all of its subdirectories.
 debugger-source-tree-collapse-all =
     .label = Collapse all
+    .accesskey = c
 
 # Expand a directory and all of its subdirectories.
 debugger-source-tree-expand-all =
     .label = Expand all
+    .accesskey = e
 
 # Show only the directory and its contents in the Sources pane.
 debugger-source-tree-set-directory-root =
@@ -289,31 +298,41 @@ debugger-source-tree-set-directory-root =
 # Show all sources in the Sources pane again.
 debugger-source-tree-remove-directory-root =
     .label = Remove directory root
+    .accesskey = R
 
 # Submenu with items that make the debugger skip groups of files.
 debugger-source-tree-ignore =
     .label = Ignore
+    .accesskey = I
 
 debugger-source-tree-ignore-in-group =
     .label = Ignore files in this group
+    .accesskey = i
 
 debugger-source-tree-unignore-in-group =
     .label = Unignore files in this group
+    .accesskey = u
 
 debugger-source-tree-ignore-outside-group =
     .label = Ignore files outside this group
+    .accesskey = o
 
 debugger-source-tree-unignore-outside-group =
     .label = Unignore files outside this group
+    .accesskey = o
 
 debugger-source-tree-ignore-in-directory =
     .label = Ignore files in this directory
+    .accesskey = i
 
 debugger-source-tree-unignore-in-directory =
     .label = Unignore files in this directory
+    .accesskey = u
 
 debugger-source-tree-ignore-outside-directory =
     .label = Ignore files outside this directory
+    .accesskey = o
 
 debugger-source-tree-unignore-outside-directory =
     .label = Unignore files outside this directory
+    .accesskey = o
