@@ -54,30 +54,48 @@ add_task(async function test_prefix_alone_names_the_module() {
 add_task(async function test_printed_prefix() {
   const tests = [
     {
-      options: { logModule: "testWarn" },
+      create: dump =>
+        console.createInstance({
+          logModule: "testWarn",
+          maxLogLevel: "All",
+          dump,
+        }),
       label: "testWarn",
     },
     {
-      options: { logModule: "testWarn", prefix: "Some prefix" },
+      create: dump =>
+        console.createInstance({
+          logModule: "testWarn",
+          prefix: "Some prefix",
+          maxLogLevel: "All",
+          dump,
+        }),
       label: "testWarn: Some prefix",
     },
     {
-      options: { logModule: "testWarn", prefix: "testWarn" },
+      create: dump =>
+        console.createInstance({
+          logModule: "testWarn",
+          prefix: "testWarn",
+          maxLogLevel: "All",
+          dump,
+        }),
       label: "testWarn",
     },
     {
-      options: { prefix: "Some prefix" },
+      create: dump =>
+        console.createInstance({
+          prefix: "Some prefix",
+          maxLogLevel: "All",
+          dump,
+        }),
       label: "Some prefix",
     },
   ];
 
-  for (const { options, label } of tests) {
+  for (const { create, label } of tests) {
     let dumped = [];
-    let ci = console.createInstance({
-      ...options,
-      maxLogLevel: "All",
-      dump: message => dumped.push(message),
-    });
+    let ci = create(message => dumped.push(message));
     let endConsoleListening = TestUtils.listenForConsoleMessages();
     ci.log(42);
     let events = await endConsoleListening();
