@@ -85,8 +85,10 @@ protocol PHWInference
 
     // The model file is resolved and opened by the parent, the utility never
     // learns its path.
+    // mmproj is an invalid descriptor for a text-only generator.
     async NewTextGeneration(Endpoint<PTextGenerationChild> endpoint,
                             FileDescriptor model,
+                            FileDescriptor mmproj,
                             TextGenerationOptions options);
 
     async ListDevices() returns (DeviceDescriptor[] devices);

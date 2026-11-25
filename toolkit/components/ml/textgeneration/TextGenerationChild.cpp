@@ -16,13 +16,14 @@
 #include "mozilla/Encoding.h"
 #include "mozilla/Logging.h"
 #include "mozilla/ProcInfo.h"
-#include "mozilla/ScopeExit.h"
+#include "mozilla/Result.h"
 #include "mozilla/Span.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/UniquePtrExtensions.h"
 #include "mozilla/Utf8.h"
 #include "mozilla/dom/BindingUtils.h"
 #include "mozilla/ml/MLProfilerMarkers.h"
+#include "nsPrintfCString.h"
 #include "nsThreadUtils.h"
 
 #ifdef XP_WIN
@@ -389,9 +390,46 @@ static already_AddRefed<nsIThread> NewGeneratorThread() {
   return thread.forget();
 }
 
+namespace {
+
+struct FileCloser {
+  void operator()(FILE* aFp) const { fclose(aFp); }
+};
+using FileUPtr = UniquePtr<FILE, FileCloser>;
+
+// fdopen()/_open_osfhandle() take ownership of the handle: pass a duplicate.
+Result<FileUPtr, const char*> DescriptorToFile(
+    const ipc::FileDescriptor& aDescriptor) {
+  UniqueFileHandle dupHandle =
+      DuplicateFileHandle(aDescriptor.ClonePlatformHandle().get());
+  if (!dupHandle) {
+    return Err("DuplicateFileHandle failed");
+  }
+#ifdef XP_WIN
+  int fd = _open_osfhandle(dupHandle.release(), _O_RDONLY);
+  if (fd == -1) {
+    return Err("_open_osfhandle failed");
+  }
+  FileUPtr fp(fdopen(fd, "rb"));
+  if (!fp) {
+    _close(fd);
+  }
+#else
+  FileUPtr fp(fdopen(dupHandle.release(), "r"));
+#endif
+  if (!fp) {
+    return Err("fdopen failed");
+  }
+  return fp;
+}
+
+}  // namespace
+
 TextGenerationChild::TextGenerationChild(const ipc::FileDescriptor& aModel,
+                                         const ipc::FileDescriptor& aMmproj,
                                          const TextGenerationOptions& aOptions)
     : mModel(aModel),
+      mMmproj(aMmproj),
       mOptions(aOptions),
       mGenerationThread(NewGeneratorThread()),
       mActorThread(GetCurrentSerialEventTarget()) {}
@@ -439,32 +477,28 @@ LoadResult TextGenerationChild::LoadOnThread() {
     return fail("TextGenerator: invalid model file descriptor");
   }
 
-  // fdopen()/_open_osfhandle() take ownership of the handle: pass a duplicate.
-  UniqueFileHandle dupHandle =
-      DuplicateFileHandle(mModel.ClonePlatformHandle().get());
-  if (!dupHandle) {
-    return fail("TextGenerator: DuplicateFileHandle failed");
+  auto modelFile = DescriptorToFile(mModel);
+  if (modelFile.isErr()) {
+    return fail(
+        nsPrintfCString("TextGenerator: model %s", modelFile.unwrapErr())
+            .get());
   }
+  FileUPtr modelFp = modelFile.unwrap();
 
-#ifdef XP_WIN
-  int fd = _open_osfhandle(dupHandle.release(), _O_RDONLY);
-  if (fd == -1) {
-    return fail("TextGenerator: _open_osfhandle failed");
+  FileUPtr mmprojFp;
+  if (mMmproj.IsValid()) {
+    auto mmprojFile = DescriptorToFile(mMmproj);
+    if (mmprojFile.isErr()) {
+      return fail(
+          nsPrintfCString("TextGenerator: mmproj %s", mmprojFile.unwrapErr())
+              .get());
+    }
+    mmprojFp = mmprojFile.unwrap();
   }
-  FILE* fp = fdopen(fd, "rb");
-  if (!fp) {
-    _close(fd);
-  }
-#else
-  FILE* fp = fdopen(dupHandle.release(), "r");
-#endif
-  if (!fp) {
-    return fail("TextGenerator: fdopen failed");
-  }
-  auto closeFp = MakeScopeExit([fp] { fclose(fp); });
 
   RefPtr<llama::LlamaBackend> backend = new llama::LlamaBackend();
-  auto result = backend->Reinitialize(ToLlamaModelOptions(mOptions), fp);
+  auto result = backend->Reinitialize(ToLlamaModelOptions(mOptions),
+                                      modelFp.get(), mmprojFp.get());
   if (result.isErr()) {
     nsCString message = result.unwrapErr().mMessage;
     if (!message.IsEmpty()) {

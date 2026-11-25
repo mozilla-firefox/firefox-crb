@@ -128,10 +128,14 @@ interface TextGenerator {
   readonly attribute UTF8String device;
   readonly attribute HWInferenceDeviceKind deviceKind;
 
-  /** The model Blob must be file-backed. Rejects with the load error. */
+  /**
+   * Both Blobs must be file-backed. Rejects with the load error. Passing an
+   * mmproj gives the generator a vision encoder.
+   */
   [Throws]
   static Promise<TextGenerator> create(Blob model,
-                                       optional TextGeneratorCreateOptions options = {});
+                                       optional TextGeneratorCreateOptions options = {},
+                                       optional Blob? mmproj = null);
 
   /**
    * A second generate() before the promise settles, or one after terminate(),

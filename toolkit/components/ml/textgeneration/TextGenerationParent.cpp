@@ -28,7 +28,8 @@ TextGenerationParent::~TextGenerationParent() = default;
 
 /* static */
 already_AddRefed<TextGenerationParent> TextGenerationParent::Create(
-    const ipc::FileDescriptor& aModel, const TextGenerationOptions& aOptions) {
+    const ipc::FileDescriptor& aModel, const ipc::FileDescriptor& aMmproj,
+    const TextGenerationOptions& aOptions) {
   AssertIsOnMainThread();
   const bool processReused = HWInferenceProcess::Browser().IsUp();
   const TimeStamp spawnStart = TimeStamp::Now();
@@ -65,7 +66,7 @@ already_AddRefed<TextGenerationParent> TextGenerationParent::Create(
   RefPtr<TextGenerationParent> generator =
       new TextGenerationParent(std::move(keepAlive), processReused);
   MOZ_ALWAYS_TRUE(parentEnd.Bind(generator));
-  process->StartTextGeneration(std::move(childEnd), aModel, aOptions);
+  process->StartTextGeneration(std::move(childEnd), aMmproj, aModel, aOptions);
   return generator.forget();
 }
 

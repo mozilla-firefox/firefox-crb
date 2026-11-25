@@ -44,10 +44,12 @@ ipc::IPCResult HWInferenceChild::RecvNewContentSpeechRecognition(
 
 ipc::IPCResult HWInferenceChild::RecvNewTextGeneration(
     Endpoint<hwinference::PTextGenerationChild>&& aEndpoint,
-    const ipc::FileDescriptor& aModel, const TextGenerationOptions& aOptions) {
+    const ipc::FileDescriptor& aModel, const ipc::FileDescriptor& aMmproj,
+    const TextGenerationOptions& aOptions) {
   LOGD("[{} - {}]", fmt::ptr(this), __func__);
 
-  RefPtr<TextGenerationChild> actor = new TextGenerationChild(aModel, aOptions);
+  RefPtr<TextGenerationChild> actor =
+      new TextGenerationChild(aModel, aMmproj, aOptions);
   if (!aEndpoint.Bind(actor)) {
     LOGE("[{} - {}] Failed to bind TextGenerationChild", fmt::ptr(this),
          __func__);
