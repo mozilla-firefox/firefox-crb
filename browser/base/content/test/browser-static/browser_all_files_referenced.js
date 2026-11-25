@@ -338,11 +338,6 @@ var allowlist = [
     file: "moz-src:///browser/components/backup/resources/CookiesBackupResource.sys.mjs",
   },
 
-  // Bug 2078933: The widget dashboard will generate widgets with this module.
-  {
-    file: "moz-src:///browser/components/widgets/WidgetGenerator.sys.mjs",
-  },
-
   // Bug 2088187: Smart Window Digests will use this form for setup.
   {
     file: "chrome://browser/content/aiwindow/components/smartwindow-digest-form.mjs",
@@ -353,7 +348,7 @@ if (AppConstants.NIGHTLY_BUILD) {
   allowlist.push(
     // A debug tool that is only available in Nightly builds, and is accessed
     // directly by developers via the chrome URI (bug 1888491)
-    { file: "chrome://browser/content/backup/debug.html" }
+    { file: "chrome://browser/content/backup/debug.html" },
   );
 }
 
@@ -362,7 +357,7 @@ if (!AppConstants.RELEASE_OR_BETA) {
     // browser/extensions/newtab/actors/AboutNewTabChild.sys.mjs constructs the
     // URL dynamically: `chrome://global/content/vendor/react${debugString}.js`
     { file: "chrome://global/content/vendor/react-dev.js" },
-    { file: "chrome://global/content/vendor/react-dom-dev.js" }
+    { file: "chrome://global/content/vendor/react-dom-dev.js" },
   );
 }
 
@@ -394,12 +389,12 @@ if (AppConstants.MOZ_UPDATE_AGENT && !AppConstants.MOZ_BACKGROUNDTASKS) {
 allowlist = new Set(
   allowlist
     .filter(
-      item =>
+      (item) =>
         "isFromDevTools" in item == isDevtools &&
         (!item.skipUnofficial || !AppConstants.MOZILLA_OFFICIAL) &&
-        (!item.platforms || item.platforms.includes(AppConstants.platform))
+        (!item.platforms || item.platforms.includes(AppConstants.platform)),
     )
-    .map(item => item.file)
+    .map((item) => item.file),
 );
 
 const ignorableAllowlist = new Set([
@@ -445,7 +440,7 @@ const gInterestingCategories = new Set([
 ]);
 
 var gChromeReg = Cc["@mozilla.org/chrome/chrome-registry;1"].getService(
-  Ci.nsIChromeRegistry
+  Ci.nsIChromeRegistry,
 );
 var gChromeMap = new Map();
 var gOverrideMap = new Map();
@@ -488,7 +483,7 @@ trackResourcePrefix("autofill");
 trackChromeUri("chrome://formautofill/content/");
 
 function parseManifest(manifestUri) {
-  return fetchFile(manifestUri.spec).then(data => {
+  return fetchFile(manifestUri.spec).then((data) => {
     for (let line of data.split("\n")) {
       let [type, ...argv] = line.split(/\s+/);
       if (type == "content" || type == "skin" || type == "locale") {
@@ -499,10 +494,10 @@ function parseManifest(manifestUri) {
         // that the overlay is only referenced if the original xul
         // file is referenced somewhere.
         let os = "os=" + Services.appinfo.OS;
-        if (!argv.some(s => s.startsWith("os=") && s != os)) {
+        if (!argv.some((s) => s.startsWith("os=") && s != os)) {
           gOverrideMap.set(
             Services.io.newURI(argv[1]).specIgnoringRef,
-            Services.io.newURI(argv[0]).specIgnoringRef
+            Services.io.newURI(argv[0]).specIgnoringRef,
           );
         }
       } else if (type == "category") {
@@ -617,7 +612,7 @@ function listCodeReferences(refs) {
 }
 
 function parseCSSFile(fileUri) {
-  return fetchFile(fileUri.spec).then(data => {
+  return fetchFile(fileUri.spec).then((data) => {
     for (let line of data.split("\n")) {
       let urls = line.match(/url\([^()]+\)/g);
       if (!urls) {
@@ -652,11 +647,11 @@ function parseCSSFile(fileUri) {
 }
 
 function parseCodeFile(fileUri) {
-  return fetchFile(fileUri.spec).then(data => {
+  return fetchFile(fileUri.spec).then((data) => {
     let baseUri;
     for (let line of data.split("\n")) {
       let urls = line.match(
-        /["'`]chrome:\/\/[a-zA-Z0-9-]+\/(content|skin|locale)\/[^"'` ]*["'`]/g
+        /["'`]chrome:\/\/[a-zA-Z0-9-]+\/(content|skin|locale)\/[^"'` ]*["'`]/g,
       );
 
       if (!urls) {
@@ -680,10 +675,10 @@ function parseCodeFile(fileUri) {
         if (urls) {
           urls = urls[0];
           let grePrefix = Services.io.newURI(
-            "resource://gre/localization/en-US/"
+            "resource://gre/localization/en-US/",
           );
           let appPrefix = Services.io.newURI(
-            "resource://app/localization/en-US/"
+            "resource://app/localization/en-US/",
           );
 
           let grePrefixUrl = Services.io.newURI(urls, null, grePrefix).spec;
@@ -811,12 +806,12 @@ function convertToCodeURI(fileUri) {
         if (fileUri.startsWith(res[1])) {
           let resourceUriString = fileUri.replace(
             res[1],
-            `resource://${res[0]}/`
+            `resource://${res[0]}/`,
           );
           // If inside moz-src, treat as moz-src url.
           resourceUriString = resourceUriString.replace(
             /^resource:\/\/gre\/moz-src\//,
-            "moz-src:///"
+            "moz-src:///",
           );
           return resourceUriString;
         }
@@ -868,7 +863,7 @@ function findChromeUrlsFromArray(array, prefix) {
       array.indexOf(0, index),
       array.indexOf('"'.charCodeAt(0), index),
       array.indexOf(")".charCodeAt(0), index),
-      array.indexOf("#".charCodeAt(0), index)
+      array.indexOf("#".charCodeAt(0), index),
     );
     let string = "";
     for (; index < end; ++index) {
@@ -925,7 +920,7 @@ add_task(async function checkAllTheFiles() {
       ".ftl",
       ".dtd",
       ".properties",
-    ].concat(kCodeExtensions)
+    ].concat(kCodeExtensions),
   );
 
   // Parse and remove all manifests from the list.
@@ -933,7 +928,7 @@ add_task(async function checkAllTheFiles() {
   // so that all chrome paths can be recorded.
   let manifestURIs = [];
   let jsonManifests = [];
-  uris = uris.filter(uri => {
+  uris = uris.filter((uri) => {
     let path = uri.pathQueryRef;
     if (path.endsWith(".manifest")) {
       manifestURIs.push(uri);
@@ -960,7 +955,7 @@ add_task(async function checkAllTheFiles() {
   // webextensions.
   let nonWebextManifests = (
     await Promise.all(jsonManifests.map(parseJsonManifest))
-  ).filter(uri => !!uri);
+  ).filter((uri) => !!uri);
   uris.push(...nonWebextManifests);
 
   // We build a list of promises that get resolved when their respective
@@ -971,14 +966,14 @@ add_task(async function checkAllTheFiles() {
     let path = uri.pathQueryRef;
     if (path.endsWith(".css")) {
       allPromises.push([parseCSSFile, uri]);
-    } else if (kCodeExtensions.some(ext => path.endsWith(ext))) {
+    } else if (kCodeExtensions.some((ext) => path.endsWith(ext))) {
       allPromises.push([parseCodeFile, uri]);
     }
   }
 
   // Wait for all the files to have actually loaded:
   await PerfTestHelpers.throttledMapPromises(allPromises, ([task, uri]) =>
-    task(uri)
+    task(uri),
   );
 
   // Keep only chrome:// files, and filter out either the devtools paths or
@@ -995,8 +990,8 @@ add_task(async function checkAllTheFiles() {
     "resource://app/localization/en-US/startup/aboutDevTools.ftl",
     "resource://app/localization/en-US/devtools/",
   ];
-  let hasDevtoolsPrefix = uri =>
-    devtoolsPrefixes.some(prefix => uri.startsWith(prefix));
+  let hasDevtoolsPrefix = (uri) =>
+    devtoolsPrefixes.some((prefix) => uri.startsWith(prefix));
   let chromeFiles = [];
   for (let uri of uris) {
     uri = convertToCodeURI(uri.spec);
@@ -1017,8 +1012,8 @@ add_task(async function checkAllTheFiles() {
     gReferencesFromCode.set("chrome://browser/skin/browser.css", null);
   }
 
-  let isUnreferenced = file => {
-    if (gExceptionPaths.some(e => file.startsWith(e))) {
+  let isUnreferenced = (file) => {
+    if (gExceptionPaths.some((e) => file.startsWith(e))) {
       return false;
     }
     if (gReferencesFromCode.has(file)) {
@@ -1054,9 +1049,9 @@ add_task(async function checkAllTheFiles() {
 
   let unreferencedFiles = chromeFiles;
 
-  let removeReferenced = useAllowlist => {
+  let removeReferenced = (useAllowlist) => {
     let foundReference = false;
-    unreferencedFiles = unreferencedFiles.filter(f => {
+    unreferencedFiles = unreferencedFiles.filter((f) => {
       let rv = isUnreferenced(f);
       if (rv && f.startsWith("resource://app/")) {
         rv = isUnreferenced(f.replace("resource://app/", "resource:///"));
@@ -1068,7 +1063,7 @@ add_task(async function checkAllTheFiles() {
             "indirectly allowlisted file: " +
               f +
               " used from " +
-              listCodeReferences(gReferencesFromCode.get(f))
+              listCodeReferences(gReferencesFromCode.get(f)),
           );
         }
         gReferencesFromCode.set(f, useAllowlist ? "allowlist" : null);
@@ -1083,7 +1078,7 @@ add_task(async function checkAllTheFiles() {
     // as referenced, so we need to run it again.
   }
   // Marked as referenced the files that have been explicitly allowed.
-  unreferencedFiles = unreferencedFiles.filter(file => {
+  unreferencedFiles = unreferencedFiles.filter((file) => {
     if (allowlist.has(file)) {
       allowlist.delete(file);
       gReferencesFromCode.set(file, "allowlist-direct");
@@ -1101,7 +1096,7 @@ add_task(async function checkAllTheFiles() {
 
   if (isDevtools) {
     // Bug 1351878 - handle devtools resource files
-    unreferencedFiles = unreferencedFiles.filter(file => {
+    unreferencedFiles = unreferencedFiles.filter((file) => {
       if (file.startsWith("resource://")) {
         info("unreferenced devtools resource file: " + file);
         return false;
@@ -1135,7 +1130,7 @@ add_task(async function checkAllTheFiles() {
 
   for (let [file, refs] of gReferencesFromCode) {
     if (
-      isDevtools != devtoolsPrefixes.some(prefix => file.startsWith(prefix))
+      isDevtools != devtoolsPrefixes.some((prefix) => file.startsWith(prefix))
     ) {
       continue;
     }
