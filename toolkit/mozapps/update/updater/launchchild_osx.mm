@@ -280,6 +280,8 @@ static dispatch_semaphore_t gClientDisconnectedSemaphore = nullptr;
 static NSObject* gConnectionLock = nil;
 static NSArray<NSString*>* gPendingUpdaterArguments = nil;
 static NSString* gPendingMARChannelID = nil;
+// The effective user ID of the client whose applyUpdate the helper took.
+static uid_t gClientUid = (uid_t)-1;
 static void (^gApplyUpdateReplyBlock)(NSInteger) = nil;
 
 // How long the helper waits for a request after it has started.
@@ -287,6 +289,18 @@ static const int64_t kApplyUpdateWaitSeconds = 60;
 
 // Set in the unelevated updater from the helper's applyUpdate reply.
 static NSInteger gApplyUpdateResult = UpdaterHelperApplyResultNotRecorded;
+static bool gDidHelperReply = false;
+
+bool WasHelperBusy() {
+  return gApplyUpdateResult == UpdaterHelperApplyResultBusy ||
+         gApplyUpdateResult == UpdaterHelperApplyResultBusyWithSameUpdate;
+}
+
+bool WasHelperBusyWithSameUpdate() {
+  return gApplyUpdateResult == UpdaterHelperApplyResultBusyWithSameUpdate;
+}
+
+bool DidHelperReply() { return gDidHelperReply; }
 
 bool DidHelperRecordStatus() {
   return gApplyUpdateResult == UpdaterHelperApplyResultSucceeded ||
@@ -295,6 +309,7 @@ bool DidHelperRecordStatus() {
 
 // Defined in updater.cpp.
 bool DidWriteStatusFile();
+int GetPatchDirArgIndex();
 
 // Validates that the audit token represents a process that matches the given
 // code-signing requirement string and that has the hard and kill code-signing
@@ -413,18 +428,33 @@ static bool ValidatePeerWithRequirement(audit_token_t aToken,
        marChannelID:(NSString*)aMARChannelID
               reply:(void (^)(NSInteger))aReply {
   bool isBusy;
+  bool isSameUpdate = false;
   @synchronized(gConnectionLock) {
     isBusy = gHasTakenRequest;
-    if (!isBusy) {
+    if (isBusy) {
+      // The patch directory is per user and per installation, so a request
+      // for the same one is for the update that the helper is handling.
+      NSXPCConnection* conn = [NSXPCConnection currentConnection];
+      NSUInteger patchDirIndex = (NSUInteger)GetPatchDirArgIndex();
+      isSameUpdate = conn && conn.effectiveUserIdentifier == gClientUid &&
+                     gPendingUpdaterArguments.count > patchDirIndex &&
+                     aArguments.count > patchDirIndex &&
+                     [gPendingUpdaterArguments[patchDirIndex]
+                         isEqualToString:aArguments[patchDirIndex]];
+    } else {
       gHasTakenRequest = true;
       gRequestConnection = [NSXPCConnection currentConnection];
+      if (gRequestConnection) {
+        gClientUid = gRequestConnection.effectiveUserIdentifier;
+      }
       gPendingUpdaterArguments = [aArguments copy];
       gPendingMARChannelID = [aMARChannelID copy];
       gApplyUpdateReplyBlock = [aReply copy];
     }
   }
   if (isBusy) {
-    aReply(UpdaterHelperApplyResultBusy);
+    aReply(isSameUpdate ? UpdaterHelperApplyResultBusyWithSameUpdate
+                        : UpdaterHelperApplyResultBusy);
     return;
   }
   dispatch_semaphore_signal(gApplyUpdateSemaphore);
@@ -608,6 +638,7 @@ bool ServeElevatedUpdate(int aArgc, const char** aArgv,
   [proxy applyUpdate:updaterArguments
         marChannelID:channelID
                reply:^(NSInteger aResult) {
+                 gDidHelperReply = true;
                  gApplyUpdateResult = aResult;
                  didSucceed = (aResult == UpdaterHelperApplyResultSucceeded);
                }];
