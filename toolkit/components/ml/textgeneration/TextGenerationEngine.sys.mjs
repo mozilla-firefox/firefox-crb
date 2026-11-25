@@ -26,6 +26,7 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
  *   modelId: string,
  *   modelRevision: string,
  *   modelFile: string,
+ *   mmprojFile: string,
  *   modelHubRootUrl: string,
  *   modelHubUrlTemplate: string,
  * }} ResolvedPipelineOptions
@@ -445,6 +446,7 @@ export class TextGenerationEngine {
     });
     const sessionId = lazy.generateUUID();
     let modelBlob;
+    let mmprojBlob = null;
     try {
       [modelBlob] = await hub.getModelFileAsBlob({
         engineId: options.engineId,
@@ -459,6 +461,21 @@ export class TextGenerationEngine {
         featureId: options.featureId ?? options.engineId,
         sessionId,
       });
+      if (options.mmprojFile) {
+        [mmprojBlob] = await hub.getModelFileAsBlob({
+          engineId: options.engineId,
+          taskName: options.taskName,
+          model: options.modelId,
+          revision: options.modelRevision,
+          file: options.mmprojFile,
+          modelHubRootUrl: options.modelHubRootUrl,
+          modelHubUrlTemplate: options.modelHubUrlTemplate,
+          progressCallback: this.notificationsCallback,
+          abortSignal,
+          featureId: options.featureId ?? options.engineId,
+          sessionId,
+        });
+      }
     } finally {
       await hub.notifyModelDownloadComplete({
         engineId: options.engineId,
@@ -470,7 +487,11 @@ export class TextGenerationEngine {
     }
 
     const createOptions = toCreateOptions(options);
-    this.#generator = await TextGenerator.create(modelBlob, createOptions);
+    this.#generator = await TextGenerator.create(
+      modelBlob,
+      createOptions,
+      mmprojBlob
+    );
     this.#deviceKind = this.#generator.deviceKind;
     this.pipelineOptions.backend = "llama.cpp";
     this.#initTimestamps.push({

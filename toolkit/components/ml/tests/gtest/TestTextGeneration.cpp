@@ -150,7 +150,7 @@ struct Session {
 Session CreateGenerator(const ipc::FileDescriptor& aModel) {
   Session session;
   session.mGenerator = TextGenerationParent::Create(
-      aModel,
+      aModel, ipc::FileDescriptor(),
       TextGenerationOptions(2, 2, 512, dom::TextGenerationKVCacheDtype::F16,
                             false, DevicePlacement()));
   if (!session.mGenerator) {

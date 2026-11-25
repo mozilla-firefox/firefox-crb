@@ -32,7 +32,8 @@ class TextGenerator final : public nsISupports, public nsWrapperCache {
 
   static already_AddRefed<dom::Promise> Create(
       const dom::GlobalObject& aGlobal, dom::Blob& aModel,
-      const dom::TextGeneratorCreateOptions& aOptions, ErrorResult& aRv);
+      const dom::TextGeneratorCreateOptions& aOptions, dom::Blob* aMmproj,
+      ErrorResult& aRv);
 
   already_AddRefed<dom::Promise> Generate(
       const dom::TextGenerationRequest& aRequest,
