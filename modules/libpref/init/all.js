@@ -1796,7 +1796,7 @@ pref("middlemouse.scrollbarPosition", false);
 //      "delta_multiplier_y" pref affects the scroll speed.
 // 5: Zoom in or out (pinch zoom).
 pref("mousewheel.default.action", 1);
-pref("mousewheel.with_alt.action", 2);
+pref("mousewheel.with_alt.action", 1);
 pref("mousewheel.with_control.action", 3);
 // Command key on Mac, Windows log key on Windows and Linux
 pref("mousewheel.with_meta.action", 1);

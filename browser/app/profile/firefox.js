@@ -1466,7 +1466,7 @@ pref("browser.history_swipe_animation.disabled", false);
   // horizontal scroll event. Thus, we can't assign anything other than normal
   // scrolling to shift+wheel.
   pref("mousewheel.with_shift.action", 1);
-  pref("mousewheel.with_alt.action", 2);
+  pref("mousewheel.with_alt.action", 1);
   pref("mousewheel.with_control.action", 1);
 #else
   // On the other platforms (non-macOS), user may use legacy mouse which
@@ -1476,7 +1476,7 @@ pref("browser.history_swipe_animation.disabled", false);
   // who want to keep using this feature, let's enable it with alt+wheel.  This
   // is better for consistency with macOS users.
   pref("mousewheel.with_shift.action", 4);
-  pref("mousewheel.with_alt.action", 2);
+  pref("mousewheel.with_alt.action", 1);
 #endif
 
 pref("mousewheel.with_meta.action", 1);
