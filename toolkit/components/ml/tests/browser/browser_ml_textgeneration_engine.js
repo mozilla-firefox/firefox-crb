@@ -299,11 +299,11 @@ add_task(async function test_engine_chat_completion_request() {
 });
 
 /**
- * This engine carries no images, so routing a multimodal pipeline to it would
- * drop them with no error. shouldRoute has to decline those regardless of the
- * hwInference pref.
+ * This engine carries images now, and it is the only path into the HWInference
+ * process, so a multimodal pipeline has to route here rather than to
+ * LlamaCppPipeline.
  */
-add_task(async function test_multimodal_pipeline_is_not_routed_here() {
+add_task(async function test_multimodal_pipeline_routes_here() {
   const { cleanup } = await setup({
     prefs: [["browser.ml.llama.hwInference", true]],
   });
@@ -313,15 +313,15 @@ add_task(async function test_multimodal_pipeline_is_not_routed_here() {
 
   Assert.ok(
     TextGenerationEngine.shouldRoute({ backend: "llama.cpp" }),
-    "A text-only llama.cpp pipeline still routes here."
+    "A text-only llama.cpp pipeline routes here."
   );
 
   Assert.ok(
-    !TextGenerationEngine.shouldRoute({
+    TextGenerationEngine.shouldRoute({
       backend: "llama.cpp",
       mmprojFile: "mmproj-test.gguf",
     }),
-    "A pipeline naming an mmproj does not."
+    "So does one naming an mmproj."
   );
 
   await cleanup();

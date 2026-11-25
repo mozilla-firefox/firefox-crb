@@ -374,11 +374,6 @@ export class TextGenerationEngine {
     if (!Services.prefs.getBoolPref("browser.ml.llama.hwInference", false)) {
       return false;
     }
-    // This engine has no way to carry images, so a multimodal pipeline has to
-    // go to LlamaCppPipeline instead of being routed here and losing them.
-    if (pipelineOptions.mmprojFile) {
-      return false;
-    }
     return pipelineOptions.backend === "llama.cpp";
   }
 
