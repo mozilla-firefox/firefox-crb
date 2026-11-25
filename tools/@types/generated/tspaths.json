@@ -13,6 +13,9 @@
       "chrome://browser/content/aiwindow/components/agent-monitor-panel.mjs": [
         "../../../browser/components/aiwindow/ui/components/agent-monitor-panel/agent-monitor-panel.mjs"
       ],
+      "chrome://browser/content/aiwindow/components/ai-action-confirmation-tab-row.mjs": [
+        "../../../browser/components/aiwindow/ui/components/ai-action-confirmation-tab-row/ai-action-confirmation-tab-row.mjs"
+      ],
       "chrome://browser/content/aiwindow/components/ai-action-confirmation.mjs": [
         "../../../browser/components/aiwindow/ui/components/ai-action-confirmation/ai-action-confirmation.mjs"
       ],
@@ -135,6 +138,12 @@
       ],
       "chrome://browser/content/aiwindow/components/smartwindow-chip.mjs": [
         "../../../browser/components/aiwindow/ui/components/smartwindow-chip/smartwindow-chip.mjs"
+      ],
+      "chrome://browser/content/aiwindow/components/smartwindow-digest-form.mjs": [
+        "../../../browser/components/aiwindow/ui/components/smartwindow-digest-form/smartwindow-digest-form.mjs"
+      ],
+      "chrome://browser/content/aiwindow/components/smartwindow-digest-prompt.mjs": [
+        "../../../browser/components/aiwindow/ui/components/smartwindow-digest-prompt/smartwindow-digest-prompt.mjs"
       ],
       "chrome://browser/content/aiwindow/components/smartwindow-footer.mjs": [
         "../../../browser/components/aiwindow/ui/components/smartwindow-footer/smartwindow-footer.mjs"
@@ -1359,6 +1368,9 @@
       ],
       "chrome://remote/content/shared/webdriver/Assert.sys.mjs": [
         "../../../remote/shared/webdriver/Assert.sys.mjs"
+      ],
+      "chrome://remote/content/shared/webdriver/BrowserVersion.sys.mjs": [
+        "../../../remote/shared/webdriver/BrowserVersion.sys.mjs"
       ],
       "chrome://remote/content/shared/webdriver/Capabilities.sys.mjs": [
         "../../../remote/shared/webdriver/Capabilities.sys.mjs"
@@ -2751,6 +2763,9 @@
       ],
       "resource://devtools/client/inspector/boxmodel/types.js": [
         "../../../devtools/client/inspector/boxmodel/types.js"
+      ],
+      "resource://devtools/client/inspector/boxmodel/utils/l10n.js": [
+        "../../../devtools/client/inspector/boxmodel/utils/l10n.js"
       ],
       "resource://devtools/client/inspector/changes/actions/changes.js": [
         "../../../devtools/client/inspector/changes/actions/changes.js"
@@ -4503,6 +4518,9 @@
       ],
       "resource://devtools/client/shared/vendor/reselect.js": [
         "../../../devtools/client/shared/vendor/reselect.js"
+      ],
+      "resource://devtools/client/shared/vendor/source-map/lib/mappings-glue-browser.mjs": [
+        "../../../devtools/client/shared/vendor/source-map/lib/mappings-glue-browser.mjs"
       ],
       "resource://devtools/client/shared/vendor/source-map/lib/util.js": [
         "../../../devtools/client/shared/vendor/source-map/lib/util.js"
@@ -7075,15 +7093,6 @@
       "resource://nimbus/lib/Telemetry.sys.mjs": [
         "../../../toolkit/components/nimbus/lib/Telemetry.sys.mjs"
       ],
-      "resource://normandy/Normandy.sys.mjs": [
-        "../../../toolkit/components/normandy/Normandy.sys.mjs"
-      ],
-      "resource://normandy/lib/CleanupManager.sys.mjs": [
-        "../../../toolkit/components/normandy/lib/CleanupManager.sys.mjs"
-      ],
-      "resource://normandy/lib/LogManager.sys.mjs": [
-        "../../../toolkit/components/normandy/lib/LogManager.sys.mjs"
-      ],
       "resource://pdf.js/PdfEmbedFallbackStreamConverter.sys.mjs": [
         "../../../toolkit/components/pdfjs/content/PdfEmbedFallbackStreamConverter.sys.mjs"
       ],
@@ -7581,9 +7590,6 @@
       ],
       "resource://testing-common/NodeServer.sys.mjs": [
         "../../../netwerk/test/httpserver/NodeServer.sys.mjs"
-      ],
-      "resource://testing-common/NormandyTestUtils.sys.mjs": [
-        "../../../toolkit/components/normandy/test/NormandyTestUtils.sys.mjs"
       ],
       "resource://testing-common/OSKeyStoreTestUtils.sys.mjs": [
         "../../../toolkit/modules/tests/modules/OSKeyStoreTestUtils.sys.mjs"

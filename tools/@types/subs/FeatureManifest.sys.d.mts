@@ -683,11 +683,6 @@ export const FeatureManifest: {
                 type: string;
                 description: string;
             };
-            weatherUiTreatment: {
-                type: string;
-                fallbackPref: string;
-                description: string;
-            };
             wikipediaFeatureGate: {
                 type: string;
                 fallbackPref: string;
@@ -2357,6 +2352,29 @@ export const FeatureManifest: {
         hasExposure: boolean;
         variables: {
             enabled: {
+                description: string;
+                type: string;
+                setPref: {
+                    branch: string;
+                    pref: string;
+                };
+            };
+        };
+    };
+    "autofill-credit-cards-drop-undecryptable": {
+        description: string;
+        owner: string;
+        hasExposure: boolean;
+        variables: {
+            enabled: {
+                description: string;
+                type: string;
+                setPref: {
+                    branch: string;
+                    pref: string;
+                };
+            };
+            afterAttempts: {
                 description: string;
                 type: string;
                 setPref: {
@@ -6428,6 +6446,21 @@ export const FeatureManifest: {
                 type: string;
                 enum: string[];
                 fallbackPref: string;
+                description: string;
+            };
+        };
+    };
+    windowLock: {
+        description: string;
+        owner: string;
+        hasExposure: boolean;
+        variables: {
+            enabled: {
+                type: string;
+                setPref: {
+                    branch: string;
+                    pref: string;
+                };
                 description: string;
             };
         };
