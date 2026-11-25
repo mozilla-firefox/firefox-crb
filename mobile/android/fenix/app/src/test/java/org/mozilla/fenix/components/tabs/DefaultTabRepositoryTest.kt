@@ -6,9 +6,11 @@ package org.mozilla.fenix.components.tabs
 
 import android.graphics.Bitmap
 import io.mockk.mockk
+import io.mockk.verify
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -30,6 +32,7 @@ import mozilla.components.browser.state.state.createCustomTab
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.mediasession.MediaSession
+import mozilla.components.concept.engine.utils.ABOUT_HOME_URL
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.tabdata.coordinator.data.Tab
 import mozilla.components.feature.tabdata.coordinator.repository.TabRepository
@@ -359,6 +362,66 @@ class DefaultTabRepositoryTest {
         assertNull(browserStore.state.selectedTabId)
     }
 
+    @Test
+    fun `GIVEN homepage as a new tab is enabled WHEN a fallback tab is added THEN an unselected homepage tab is opened`() =
+        runTest {
+            val browserStore = createBrowserStore(tabIds = listOf("1"), selectedTabId = "1")
+            val tabsUseCases: TabsUseCases = mockk(relaxed = true)
+            val repository =
+                DefaultTabRepository(
+                    browserStore = browserStore,
+                    tabsUseCases = tabsUseCases,
+                    fenixBrowserUseCases =
+                        FenixBrowserUseCases(
+                            appStore = AppStore(AppState()),
+                            tabsUseCases = tabsUseCases,
+                            loadUrlUseCase = mockk(relaxed = true),
+                            searchUseCases = mockk(relaxed = true),
+                            homepageTitle = "",
+                            profiler = null,
+                        ),
+                    isHomepageAsNewTabEnabled = { true },
+                )
+
+            assertNotNull(repository.addFallbackTab())
+            verify {
+                tabsUseCases.addTab.invoke(
+                    url = ABOUT_HOME_URL,
+                    title = "",
+                    selectTab = false,
+                    startLoading = true,
+                    private = false,
+                )
+            }
+        }
+
+    @Test
+    fun `GIVEN homepage as a new tab is disabled WHEN a fallback tab is added THEN no tab is opened`() = runTest {
+        val browserStore = createBrowserStore(tabIds = listOf("1"))
+
+        val tabId = createRepository(browserStore, isHomepageAsNewTabEnabled = false).addFallbackTab()
+
+        assertNull(tabId)
+        assertEquals(expected = listOf("1"), actual = browserStore.state.tabs.map { it.id })
+    }
+
+    @Test
+    fun `WHEN removed tabs are undone THEN the removed tabs are restored`() = runTest {
+        val browserStore = createBrowserStore(tabIds = listOf("1", "2"))
+        val tabsUseCases: TabsUseCases = mockk(relaxed = true)
+        val repository =
+            DefaultTabRepository(
+                browserStore = browserStore,
+                tabsUseCases = tabsUseCases,
+                fenixBrowserUseCases = mockk(relaxed = true),
+                isHomepageAsNewTabEnabled = { false },
+            )
+
+        repository.undoRemovedTabs()
+
+        verify { tabsUseCases.undo.invoke() }
+    }
+
     private fun expiredTime(): Long = System.currentTimeMillis() - maxActiveTime - TimeUnit.DAYS.toMillis(1)
 
     private fun mediaSessionState(playbackState: MediaSession.PlaybackState): MediaSessionState =
@@ -373,7 +436,10 @@ class DefaultTabRepositoryTest {
                 )
         )
 
-    private fun createRepository(browserStore: BrowserStore): DefaultTabRepository {
+    private fun createRepository(
+        browserStore: BrowserStore,
+        isHomepageAsNewTabEnabled: Boolean = false,
+    ): DefaultTabRepository {
         val tabsUseCases = TabsUseCases(store = browserStore)
         return DefaultTabRepository(
             browserStore = browserStore,
@@ -387,6 +453,7 @@ class DefaultTabRepositoryTest {
                     homepageTitle = "",
                     profiler = null,
                 ),
+            isHomepageAsNewTabEnabled = { isHomepageAsNewTabEnabled },
         )
     }
 

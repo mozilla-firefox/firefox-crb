@@ -50,6 +50,15 @@ interface TabRepository {
     fun addNewTab(): String
 
     /**
+     * Opens a new tab to select when no other tab can be selected, such as when the selected tab is hidden in a closed
+     * tab group, and returns its ID. Returns null if no tab should be opened, in which case the selection is kept.
+     */
+    fun addFallbackTab(): String?
+
+    /** Restores the tabs removed by the most recent removal. */
+    fun undoRemovedTabs()
+
+    /**
      * Value class representing the data observed from the browser tab data source.
      *
      * @property selectedTabId The ID of the currently selected tab.

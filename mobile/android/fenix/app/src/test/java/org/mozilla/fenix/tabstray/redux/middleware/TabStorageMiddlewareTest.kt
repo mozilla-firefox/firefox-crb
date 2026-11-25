@@ -2750,6 +2750,7 @@ class TabStorageMiddlewareTest {
                         browserStore = browserStore,
                         tabsUseCases = TabsUseCases(store = browserStore),
                         fenixBrowserUseCases = fenixBrowserUseCases,
+                        isHomepageAsNewTabEnabled = { false },
                     ),
                 tabGroupRepository = tabGroupRepository,
                 isInactiveTabsEnabled = { inactiveTabsEnabled },
