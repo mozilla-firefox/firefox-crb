@@ -7,6 +7,7 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,19 @@ from mozlint.result import Issue, IssueEncoder, ResultSummary
 here = os.path.abspath(os.path.dirname(__file__))
 topsrcdir = os.path.abspath(os.path.dirname(os.path.dirname(here)))
 DOC_ROOT = os.path.join(topsrcdir, "docs")
+LANDING_ROOT = os.path.join(here, "landing")
+# Kit illustrations used by the landing page, copied to its images/ directory.
+LANDING_IMAGES = (
+    "browser/components/aboutwelcome/assets/br-kit-with-heart.svg",
+    "browser/components/aboutwelcome/assets/kit-sit-look-up.svg",
+    "browser/components/aboutwelcome/assets/mr-kit-smart-window.svg",
+    "browser/extensions/newtab/data/content/assets/kit-stocks-watchlist.svg",
+    "browser/themes/shared/sidebar/kit-page-history.svg",
+    "toolkit/themes/shared/extensions/kit-addons.svg",
+    "toolkit/themes/shared/illustrations/kit-concerned.svg",
+    "toolkit/themes/shared/illustrations/kit-sympathetic.svg",
+)
+# The landing page sits at the root of the site and the Sphinx docs under it.
 DOCS_PREFIX = "docs"
 BASE_LINK = "http://gecko-docs.mozilla.org-l1.s3-website.us-west-2.amazonaws.com/"
 PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
@@ -204,6 +218,8 @@ def build_docs(
         return die(
             f"failed to generate documentation:\n{path}: sphinx return code {status}"
         )
+    if fmt == "html":
+        _install_landing_page(savedir)
     print(f"\nGenerated documentation:\n{docs_savedir}")
 
     if not disable_warnings_check:
@@ -269,6 +285,14 @@ def build_docs(
         docs_url = f"http://{host}:{port}/{DOCS_PREFIX}/index.html"
         threading.Timer(0.1, webbrowser.open, (docs_url,)).start()
     server.serve(host=host, port=port, root=savedir)
+
+
+def _install_landing_page(savedir):
+    shutil.copytree(LANDING_ROOT, savedir, dirs_exist_ok=True)
+    images_dir = os.path.join(savedir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    for image in LANDING_IMAGES:
+        shutil.copy(os.path.join(topsrcdir, image), images_dir)
 
 
 def _dump_sphinx_backtrace():

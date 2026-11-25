@@ -1,0 +1,126 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this file,
+   - You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Entry point to the Firefox source code: documentation, code search, repository, bug tracker and Nightly builds."
+    />
+    <title>Firefox Source</title>
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+    <header class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Firefox Source</p>
+        <h1>
+          Build the browser
+          <span class="gradient">that puts people first.</span>
+        </h1>
+        <p class="lede">
+          Everything you need to read, build and contribute to Firefox, in one
+          place.
+        </p>
+        <form
+          class="search"
+          action="https://searchfox.org/firefox-main/search"
+          method="get"
+          role="search"
+        >
+          <label for="q" class="visually-hidden">Search the Firefox code</label>
+          <input
+            id="q"
+            name="q"
+            type="search"
+            placeholder="Search the code with Searchfox…"
+            autocomplete="off"
+          />
+          <button type="submit">Search</button>
+        </form>
+      </div>
+      <img
+        class="hero-kit"
+        src="images/kit-sit-look-up.svg"
+        alt=""
+        width="420"
+        height="420"
+      />
+    </header>
+    <main>
+      <ul class="cards">
+        <li class="card featured">
+          <a href="docs/index.html">
+            <img src="images/kit-page-history.svg" alt="" loading="lazy" />
+            <div>
+              <h2>Source Docs</h2>
+              <p>
+                Build instructions, architecture overviews and contributor
+                guides, generated from the tree.
+              </p>
+            </div>
+          </a>
+        </li>
+        <li class="card">
+          <a href="https://searchfox.org/firefox-main/">
+            <img src="images/kit-stocks-watchlist.svg" alt="" loading="lazy" />
+            <div>
+              <h2>Searchfox</h2>
+              <p>Search and cross-reference the Firefox source code.</p>
+            </div>
+          </a>
+        </li>
+        <li class="card">
+          <a href="https://github.com/mozilla-firefox/firefox">
+            <img src="images/kit-addons.svg" alt="" loading="lazy" />
+            <div>
+              <h2>Repository</h2>
+              <p>Browse the history and clone the Firefox source code.</p>
+            </div>
+          </a>
+        </li>
+        <li class="card">
+          <a href="https://bugzilla.mozilla.org/">
+            <img src="images/kit-concerned.svg" alt="" loading="lazy" />
+            <div>
+              <h2>Bugzilla</h2>
+              <p>Find, file and follow bugs and feature work.</p>
+            </div>
+          </a>
+        </li>
+        <li class="card">
+          <a href="https://www.mozilla.org/firefox/channel/desktop/#nightly">
+            <img src="images/mr-kit-smart-window.svg" alt="" loading="lazy" />
+            <div>
+              <h2>Nightly</h2>
+              <p>Try tomorrow's Firefox today, updated twice a day.</p>
+            </div>
+          </a>
+        </li>
+      </ul>
+      <section class="contribute">
+        <img src="images/br-kit-with-heart.svg" alt="" loading="lazy" />
+        <div>
+          <h2>New to the project?</h2>
+          <p>
+            Thousands of people help build Firefox. Set up your environment and
+            land your first patch.
+          </p>
+          <a class="button" href="docs/contributing/index.html"
+            >Start contributing</a
+          >
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>
+        Firefox is developed in the open by
+        <a href="https://www.mozilla.org/">Mozilla</a> and its community.
+      </p>
+    </footer>
+  </body>
+</html>
