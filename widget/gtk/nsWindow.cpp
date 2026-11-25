@@ -42,6 +42,7 @@
 #include "mozilla/Preferences.h"
 #include "mozilla/PresShell.h"
 #include "mozilla/ProfilerLabels.h"
+#include "mozilla/ProfilerMarkers.h"
 #include "mozilla/ScopeExit.h"
 #include "mozilla/StaticPrefs_apz.h"
 #include "mozilla/StaticPrefs_dom.h"
@@ -1091,6 +1092,10 @@ void nsWindow::Move(const DesktopPoint& aTopLeft) {
 
   // XXX Should we do some AreBoundsSane check here?
   mLastMoveRequest = request;
+  PROFILER_MARKER_FMT("Window move request", GRAPHICS, {}, "{} to [{}, {}]{}",
+                      static_cast<const void*>(this), request.x.value,
+                      request.y.value,
+                      mCreated ? "" : " (applied on creation)");
 
   if (!mCreated) {
     LOG("  is not created, return.\n");
@@ -1543,6 +1548,10 @@ auto nsWindow::Bounds::ComputeX11(const nsWindow* aWindow) -> Bounds {
   if (aWindow->GetSizeMode() == nsSizeMode_Fullscreen) {
     // In order to avoid spurious extra resizes during fullscreen transitions,
     // we assume we're not decorated.
+    PROFILER_MARKER_FMT("Window bounds from X11", GRAPHICS, {},
+                        "{} fullscreen, toplevel with titlebar {}",
+                        static_cast<const void*>(aWindow),
+                        ToString(toplevelBoundsWithTitlebar));
     return {.mClientArea = toplevelBoundsWithTitlebar, .mClientMargin = {}};
   }
 
@@ -1574,6 +1583,7 @@ auto nsWindow::Bounds::ComputeX11(const nsWindow* aWindow) -> Bounds {
   result.mClientArea.MoveBy(systemDecorationOffset);
   LOG_WIN(aWindow, "  mClientArea %s", ToString(result.mClientArea).c_str());
 
+  const auto rawClientArea = result.mClientArea;
   if (result.mClientArea.X() < 0 || result.mClientArea.Y() < 0 ||
       (!aWindow->mHasReceivedSizeAllocate &&
        (result.mClientArea.Width() <= 1 || result.mClientArea.Height() <= 1))) {
@@ -1594,6 +1604,13 @@ auto nsWindow::Bounds::ComputeX11(const nsWindow* aWindow) -> Bounds {
   // We want mClientArea in global coordinates. We derive everything from here,
   // so move it to global coords.
   result.mClientArea.MoveBy(toplevelBoundsWithTitlebar.TopLeft());
+  PROFILER_MARKER_FMT("Window bounds from X11", GRAPHICS, {},
+                      "{} toplevel with titlebar {}, toplevel {}, raw client "
+                      "{}, client {}",
+                      static_cast<const void*>(aWindow),
+                      ToString(toplevelBoundsWithTitlebar),
+                      ToString(toplevelBounds), ToString(rawClientArea),
+                      ToString(result.mClientArea));
   return result;
 }
 #endif
@@ -1720,6 +1737,11 @@ void nsWindow::RecomputeBounds(bool aScaleChange) {
       ToString(mClientArea).c_str());
   LOG("margin old: %s new -> %s", ToString(oldMargin).c_str(),
       ToString(mClientMargin).c_str());
+  PROFILER_MARKER_FMT("Window bounds update", GRAPHICS, {},
+                      "{} client area {} -> {}, margin {} -> {}",
+                      static_cast<const void*>(this), ToString(oldClientArea),
+                      ToString(mClientArea), ToString(oldMargin),
+                      ToString(mClientMargin));
 
   const bool clientMarginsChanged = oldMargin != mClientMargin;
   if (clientMarginsChanged) {
@@ -2389,6 +2411,11 @@ gboolean nsWindow::OnShellConfigureEvent(GdkEventConfigure* aEvent) {
         scaledWidgetArea.height);
   }
 #endif
+
+  PROFILER_MARKER_FMT(
+      "Window configure event", GRAPHICS, {}, "{} [{}, {}] -> [{} x {}]{}",
+      static_cast<const void*>(this), aEvent->x, aEvent->y, aEvent->width,
+      aEvent->height, aEvent->send_event ? " (synthetic)" : "");
 
   if (mPendingConfigures > 0) {
     mPendingConfigures--;
