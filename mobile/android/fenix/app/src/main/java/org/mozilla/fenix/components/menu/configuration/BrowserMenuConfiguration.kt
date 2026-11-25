@@ -5,6 +5,7 @@
 package org.mozilla.fenix.components.menu.configuration
 
 import androidx.annotation.VisibleForTesting
+import mozilla.components.compose.menu.data.MenuItemAffinity
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.appstate.SupportedMenuNotifications
 import org.mozilla.fenix.components.menu.CustomizedItemInfo
@@ -156,6 +157,10 @@ object BrowserMenuConfiguration {
                         hiddenItems = emptyList(),
                     )
             }
+
+    /** Ids of the items of the browser menu which can only be directly in their section, never inside another item. */
+    fun topLevelOnlyItemIds(): Set<String> =
+        allSections().flatMap { it.items }.filter { it.affinity == MenuItemAffinity.GROUP }.map { it.id }.toSet()
 
     /** All the sections of the browser menu, including the ones hidden by default. */
     fun allSections(): List<MenuSectionConfiguration> = allSections(shouldShowNavigationItemsAtTheTop = true)
