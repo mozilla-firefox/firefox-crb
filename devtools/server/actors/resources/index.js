@@ -22,6 +22,7 @@ const TYPES = {
   SERVER_SENT_EVENT: "server-sent-event",
   SESSION_HISTORY: "session-history",
   SOURCE: "source",
+  HTML: "html",
   STYLESHEET: "stylesheet",
   THREAD_STATE: "thread-state",
   JSTRACER_TRACE: "jstracer-trace",
