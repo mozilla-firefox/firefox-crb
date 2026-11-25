@@ -30,6 +30,7 @@ struct nsZipQueueItem {
   PRTime mModTime;
   int32_t mCompression;
   uint32_t mPermissions;
+  bool mGzip = false;
 };
 
 class nsZipWriter final : public nsIZipWriter, public nsIRequestObserver {
@@ -66,7 +67,8 @@ class nsZipWriter final : public nsIZipWriter, public nsIRequestObserver {
   nsresult BeginProcessingRemoval(int32_t aPos);
   nsresult AddEntryStream(const nsACString& aZipEntry, PRTime aModTime,
                           int32_t aCompression, nsIInputStream* aStream,
-                          bool aQueue, uint32_t aPermissions);
+                          bool aQueue, uint32_t aPermissions,
+                          bool aGzip = false);
   void BeginProcessingNextItem();
   void FinishQueue(nsresult aStatus);
 };

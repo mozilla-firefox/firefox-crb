@@ -49,6 +49,8 @@ support-files = [
 
 ["test_editexisting.js"]
 
+["test_gzipstream.js"]
+
 ["test_storedata.js"]
 
 ["test_sync.js"]

@@ -10,6 +10,13 @@
 #include "nsDeflateConverter.h"
 #include "nsNetUtil.h"
 #include "nsComponentManagerUtils.h"
+#include "mozilla/EndianUtils.h"
+#include "mozilla/Maybe.h"
+#include "mozilla/Result.h"
+#include "mozilla/ResultExtensions.h"
+#include "mozilla/Try.h"
+
+#include <algorithm>
 
 #define ZIP_METHOD_STORE 0
 #define ZIP_METHOD_DEFLATE 8
@@ -26,7 +33,8 @@ using namespace mozilla;
 NS_IMPL_ISUPPORTS(nsZipDataStream, nsIStreamListener, nsIRequestObserver)
 
 nsresult nsZipDataStream::Init(nsZipWriter* aWriter, nsIOutputStream* aStream,
-                               nsZipHeader* aHeader, int32_t aCompression) {
+                               nsZipHeader* aHeader, int32_t aCompression,
+                               bool aGzip) {
   mWriter = aWriter;
   mHeader = aHeader;
   mStream = aStream;
@@ -36,7 +44,10 @@ nsresult nsZipDataStream::Init(nsZipWriter* aWriter, nsIOutputStream* aStream,
       NS_NewSimpleStreamListener(getter_AddRefs(mOutput), aStream, nullptr);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  if (aCompression > 0) {
+  if (aGzip) {
+    mGzip = true;
+    mHeader->mMethod = ZIP_METHOD_DEFLATE;
+  } else if (aCompression > 0) {
     mHeader->mMethod = ZIP_METHOD_DEFLATE;
     nsCOMPtr<nsIStreamConverter> converter =
         new nsDeflateConverter(aCompression);
@@ -83,6 +94,12 @@ NS_IMETHODIMP nsZipDataStream::OnStopRequest(nsIRequest* aRequest,
   nsCOMPtr<nsIStreamListener> output = mOutput;
   nsresult rv = output->OnStopRequest(aRequest, aStatusCode);
   mOutput = nullptr;
+  if (NS_SUCCEEDED(rv)) {
+    rv = aStatusCode;
+  }
+  if (NS_SUCCEEDED(rv) && mGzip) {
+    rv = FinishGzipData();
+  }
   if (NS_FAILED(rv)) {
     mWriter->EntryCompleteCallback(mHeader, rv);
   } else {
@@ -110,20 +127,126 @@ inline nsresult nsZipDataStream::CompleteEntry() {
   return NS_OK;
 }
 
-nsresult nsZipDataStream::ProcessData(nsIRequest* aRequest,
-                                      nsISupports* aContext, char* aBuffer,
-                                      uint64_t aOffset, uint32_t aCount) {
-  mHeader->mCRC = crc32(
-      mHeader->mCRC, reinterpret_cast<const unsigned char*>(aBuffer), aCount);
+nsresult nsZipDataStream::WriteData(nsIRequest* aRequest,
+                                    Span<const char> aData) {
+  if (aData.IsEmpty()) {
+    return NS_OK;
+  }
 
-  MOZ_ASSERT(aCount <= INT32_MAX);
+  MOZ_ASSERT(aData.Length() <= INT32_MAX);
   nsCOMPtr<nsIInputStream> stream;
-  nsresult rv = NS_NewByteInputStream(
-      getter_AddRefs(stream), Span(aBuffer, aCount), NS_ASSIGNMENT_DEPEND);
+  nsresult rv = NS_NewByteInputStream(getter_AddRefs(stream), aData,
+                                      NS_ASSIGNMENT_DEPEND);
   NS_ENSURE_SUCCESS(rv, rv);
 
   nsCOMPtr<nsIStreamListener> output = mOutput;
-  rv = output->OnDataAvailable(aRequest, stream, aOffset, aCount);
+  return output->OnDataAvailable(aRequest, stream, 0, aData.Length());
+}
+
+// The gzip member format, see
+// https://datatracker.ietf.org/doc/html/rfc1952#section-2.3
+static constexpr size_t kGzipHeaderSize = 10;
+static constexpr size_t kGzipTrailerSize = 8;
+static constexpr uint8_t kGzipFlagHeaderCRC = 0x02;
+static constexpr uint8_t kGzipFlagExtra = 0x04;
+static constexpr uint8_t kGzipFlagName = 0x08;
+static constexpr uint8_t kGzipFlagComment = 0x10;
+static constexpr uint8_t kGzipFlagsReserved = 0xe0;
+
+/**
+ * Returns the length of the gzip header at the start of aData, or Nothing()
+ * if aData doesn't hold the whole header yet. See section 2.3 of
+ * https://datatracker.ietf.org/doc/html/rfc1952
+ */
+static Result<Maybe<size_t>, nsresult> ParseGzipHeader(
+    Span<const uint8_t> aData) {
+  if (aData.Length() < kGzipHeaderSize) {
+    return Maybe<size_t>();
+  }
+
+  // Check the fixed fields of the header. The flags are checked separately.
+  if (aData[0] != 0x1f || aData[1] != 0x8b || aData[2] != Z_DEFLATED ||
+      (aData[3] & kGzipFlagsReserved)) {
+    return Err(NS_ERROR_FILE_CORRUPTED);
+  }
+
+  const uint8_t flags = aData[3];
+  size_t length = kGzipHeaderSize;
+  if (flags & kGzipFlagExtra) {
+    if (aData.Length() < length + 2) {
+      return Maybe<size_t>();
+    }
+    length += 2 + LittleEndian::readUint16(&aData[length]);
+  }
+  for (uint8_t flag : {kGzipFlagName, kGzipFlagComment}) {
+    if (!(flags & flag)) {
+      continue;
+    }
+    // A zero terminated string.
+    if (length >= aData.Length()) {
+      return Maybe<size_t>();
+    }
+    auto rest = aData.From(length);
+    auto end = std::find(rest.begin(), rest.end(), 0);
+    if (end == rest.end()) {
+      return Maybe<size_t>();
+    }
+    length += end - rest.begin() + 1;
+  }
+  if (flags & kGzipFlagHeaderCRC) {
+    length += 2;
+  }
+  if (length > aData.Length()) {
+    return Maybe<size_t>();
+  }
+  return Some(length);
+}
+
+nsresult nsZipDataStream::ProcessGzipData(nsIRequest* aRequest,
+                                          Span<const char> aData) {
+  mGzipPending.AppendElements(AsBytes(aData));
+
+  if (!mGzipHeaderParsed) {
+    Maybe<size_t> headerLength = MOZ_TRY(ParseGzipHeader(mGzipPending));
+    if (!headerLength) {
+      return NS_OK;
+    }
+    mGzipPending.RemoveElementsAt(0, *headerLength);
+    mGzipHeaderParsed = true;
+  }
+
+  // Everything but the last kGzipTrailerSize bytes is deflate data.
+  if (mGzipPending.Length() > kGzipTrailerSize) {
+    size_t length = mGzipPending.Length() - kGzipTrailerSize;
+    nsresult rv = WriteData(aRequest, AsChars(Span(mGzipPending).To(length)));
+    NS_ENSURE_SUCCESS(rv, rv);
+    mGzipPending.RemoveElementsAt(0, length);
+  }
+  return NS_OK;
+}
+
+nsresult nsZipDataStream::FinishGzipData() {
+  if (!mGzipHeaderParsed || mGzipPending.Length() != kGzipTrailerSize) {
+    return NS_ERROR_FILE_CORRUPTED;
+  }
+  // The trailer holds the CRC32 and size modulo 2^32 of the uncompressed data.
+  mHeader->mCRC = LittleEndian::readUint32(&mGzipPending[0]);
+  mHeader->mUSize = LittleEndian::readUint32(&mGzipPending[4]);
+  mGzipPending.Clear();
+  return NS_OK;
+}
+
+nsresult nsZipDataStream::ProcessData(nsIRequest* aRequest,
+                                      nsISupports* aContext, char* aBuffer,
+                                      uint64_t aOffset, uint32_t aCount) {
+  if (mGzip) {
+    return ProcessGzipData(aRequest, Span(aBuffer, aCount));
+  }
+
+  mHeader->mCRC = crc32(
+      mHeader->mCRC, reinterpret_cast<const unsigned char*>(aBuffer), aCount);
+
+  nsresult rv = WriteData(aRequest, Span(aBuffer, aCount));
   mHeader->mUSize += aCount;
 
   return rv;

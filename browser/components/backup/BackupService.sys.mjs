@@ -1226,15 +1226,6 @@ export class BackupService extends EventTarget {
   }
 
   /**
-   * The level of Zip compression to use on the zipped staging folder.
-   *
-   * @type {number}
-   */
-  static get COMPRESSION_LEVEL() {
-    return Ci.nsIZipWriter.COMPRESSION_BEST;
-  }
-
-  /**
    * Returns the chrome:// URI string for the template that should be used to
    * construct the single-file archive.
    *
@@ -2221,30 +2212,36 @@ export class BackupService extends EventTarget {
       PR_RDWR | PR_CREATE_FILE | PR_TRUNCATE
     );
 
+    // The files are compressed in a worker, so that the writer only has to
+    // copy the compressed data on the main thread.
+    let worker = new lazy.BasePromiseWorker(
+      "moz-src:///browser/components/backup/Archive.worker.mjs",
+      { type: "module" }
+    );
+    worker.ExceptionHandlers[BackupError.name] = BackupError.fromMsg;
+
     lazy.logConsole.log("Compressing staging folder to ", archivePath);
-    let rootPathNSIFile = await IOUtils.getDirectory(stagingPath);
-    await this.#compressChildren(rootPathNSIFile, stagingPath, writer);
-    await new Promise(resolve => {
-      let observer = {
-        onStartRequest(_request) {
-          lazy.logConsole.debug("Starting to write out archive file");
-        },
-        onStopRequest(_request, status) {
-          lazy.logConsole.log("Done writing archive file");
-          resolve(status);
-        },
-      };
-      writer.processQueue(observer, null);
-    });
-    writer.close();
+    try {
+      let rootPathNSIFile = await IOUtils.getDirectory(stagingPath);
+      await this.#compressChildren(
+        rootPathNSIFile,
+        stagingPath,
+        writer,
+        worker
+      );
+    } finally {
+      worker.terminate();
+      writer.close();
+    }
+    lazy.logConsole.log("Done writing archive file");
 
     return archivePath;
   }
 
   /**
    * A helper function for #compressStagingFolder that iterates through a
-   * directory, and adds each file to a nsIZipWriter. For each directory it
-   * finds, it recurses.
+   * directory, compresses each file in the worker and adds it to a
+   * nsIZipWriter. For each directory it finds, it recurses.
    *
    * @param {nsIFile} rootPathNSIFile
    *   An nsIFile pointing at the root of the folder being compressed.
@@ -2252,25 +2249,42 @@ export class BackupService extends EventTarget {
    *   The path to the folder whose children should be iterated.
    * @param {nsIZipWriter} writer
    *   The writer to add all of the children to.
+   * @param {BasePromiseWorker} worker
+   *   The Archive.worker.mjs worker to compress the files with.
    * @returns {Promise<undefined>}
    */
-  async #compressChildren(rootPathNSIFile, parentPath, writer) {
+  async #compressChildren(rootPathNSIFile, parentPath, writer, worker) {
     let children = await IOUtils.getChildren(parentPath);
     for (let childPath of children) {
       let childState = await IOUtils.stat(childPath);
       if (childState.type == "directory") {
-        await this.#compressChildren(rootPathNSIFile, childPath, writer);
+        await this.#compressChildren(
+          rootPathNSIFile,
+          childPath,
+          writer,
+          worker
+        );
       } else {
         let childFile = await IOUtils.getFile(childPath);
         // nsIFile.getRelativePath returns paths using the "/" separator,
         // regardless of which platform we're on. That's handy, because this
         // is the same separator that nsIZipWriter expects for entries.
         let pathRelativeToRoot = childFile.getRelativePath(rootPathNSIFile);
-        writer.addEntryFile(
+        let gzipped = await worker.post("gzipFile", [childPath]);
+        let stream = Cc[
+          "@mozilla.org/io/arraybuffer-input-stream;1"
+        ].createInstance(Ci.nsIArrayBufferInputStream);
+        stream.setData(gzipped, 0, gzipped.byteLength);
+        // Since we wait for each file to be written before
+        // compressing the next one, only one compressed file is held in memory
+        // at a time.
+        writer.addEntryGzipStream(
           pathRelativeToRoot,
-          BackupService.COMPRESSION_LEVEL,
-          childFile,
-          true
+          // IOUtils.stat returns milliseconds, nsIZipWriter wants microseconds.
+          childState.lastModified * 1000,
+          childState.permissions,
+          stream,
+          false
         );
       }
     }

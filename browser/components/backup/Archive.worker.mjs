@@ -423,6 +423,41 @@ ${ArchiveUtils.INLINE_MIME_END_MARKER}
   }
 
   /**
+   * Gzips a file
+   *
+   * @param {string} sourcePath
+   *   The path of the file to compress.
+   * @returns {Promise<ArrayBuffer>}
+   *   The gzipped file, transferred to the caller.
+   */
+  async gzipFile(sourcePath) {
+    const CHUNK_SIZE = 1024 * 1024;
+    let file = IOUtils.openFileForSyncReading(sourcePath);
+    try {
+      let offset = 0;
+      let source = new ReadableStream({
+        pull(controller) {
+          let length = Math.min(CHUNK_SIZE, file.size - offset);
+          if (length <= 0) {
+            controller.close();
+            return;
+          }
+          let chunk = new Uint8Array(length);
+          file.readBytesInto(chunk, offset);
+          offset += length;
+          controller.enqueue(chunk);
+        },
+      });
+      let gzipped = await new Response(
+        source.pipeThrough(new CompressionStream("gzip"))
+      ).arrayBuffer();
+      return new PromiseWorker.Meta(gzipped, { transfers: [gzipped] });
+    } finally {
+      file.close();
+    }
+  }
+
+  /**
    * Implements the standard boilerplate to make this class work as a
    * PromiseWorker.
    */

@@ -397,10 +397,19 @@ NS_IMETHODIMP nsZipWriter::AddEntryStream(const nsACString& aZipEntry,
                         PERMISSIONS_FILE);
 }
 
+NS_IMETHODIMP nsZipWriter::AddEntryGzipStream(const nsACString& aZipEntry,
+                                              PRTime aModTime,
+                                              uint32_t aPermissions,
+                                              nsIInputStream* aStream,
+                                              bool aQueue) {
+  return AddEntryStream(aZipEntry, aModTime, 0, aStream, aQueue, aPermissions,
+                        true);
+}
+
 nsresult nsZipWriter::AddEntryStream(const nsACString& aZipEntry,
                                      PRTime aModTime, int32_t aCompression,
                                      nsIInputStream* aStream, bool aQueue,
-                                     uint32_t aPermissions) {
+                                     uint32_t aPermissions, bool aGzip) {
   NS_ENSURE_ARG_POINTER(aStream);
   if (!mStream) return NS_ERROR_NOT_INITIALIZED;
 
@@ -412,6 +421,7 @@ nsresult nsZipWriter::AddEntryStream(const nsACString& aZipEntry,
     item.mCompression = aCompression;
     item.mPermissions = aPermissions;
     item.mStream = aStream;
+    item.mGzip = aGzip;
     // XXX(Bug 1631371) Check if this should use a fallible operation as it
     // pretended earlier.
     mQueue.AppendElement(item);
@@ -441,7 +451,7 @@ nsresult nsZipWriter::AddEntryStream(const nsACString& aZipEntry,
     SeekCDS();
     return NS_ERROR_OUT_OF_MEMORY;
   }
-  rv = stream->Init(this, mStream, header, aCompression);
+  rv = stream->Init(this, mStream, header, aCompression, aGzip);
   if (NS_FAILED(rv)) {
     SeekCDS();
     return rv;
@@ -922,7 +932,7 @@ inline nsresult nsZipWriter::BeginProcessingAddition(nsZipQueueItem* aItem,
 
     RefPtr<nsZipDataStream> stream = new nsZipDataStream();
     NS_ENSURE_TRUE(stream, NS_ERROR_OUT_OF_MEMORY);
-    rv = stream->Init(this, mStream, header, aItem->mCompression);
+    rv = stream->Init(this, mStream, header, aItem->mCompression, aItem->mGzip);
     NS_ENSURE_SUCCESS(rv, rv);
 
     if (aItem->mStream) {

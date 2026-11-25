@@ -174,6 +174,27 @@ interface nsIZipWriter : nsISupports
                       in boolean aQueue);
 
   /**
+   * Adds gzip compressed data from an input stream to the zip file. This
+   * lets callers do the compression themselves.
+   *
+   * @param aZipEntry the path of the file entry
+   * @param aModTime the modification time of the entry in microseconds
+   * @param aPermissions the UNIX style file permissions of the entry
+   * @param aStream the input stream to get a single RFC 1952 gzip member from
+   * @param aQueue adds the operation to the background queue. Will be
+   *        performed when processQueue is called.
+   *
+   * @throws NS_ERROR_NOT_INITIALIZED if no zip file has been opened
+   * @throws NS_ERROR_FILE_ALREADY_EXISTS if the path already exists in the zip
+   * @throws NS_ERROR_IN_PROGRESS if another operation is currently in progress
+   * @throws NS_ERROR_INVALID_ARG if aModTime is older than 1980-1-1
+   * @throws NS_ERROR_FILE_CORRUPTED if aStream isn't valid gzip data
+   */
+  void addEntryGzipStream(in AUTF8String aZipEntry, in PRTime aModTime,
+                          in unsigned long aPermissions,
+                          in nsIInputStream aStream, in boolean aQueue);
+
+  /**
    * Removes an existing entry from the zip file.
    *
    * @param aZipEntry the path of the entry to be removed
