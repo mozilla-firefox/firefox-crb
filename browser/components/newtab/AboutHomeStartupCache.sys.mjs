@@ -38,8 +38,6 @@ export var AboutHomeStartupCache = {
   // is invalidated after every upgrade (like the main startup cache).
   CACHE_VERSION_META_KEY: "version",
 
-  LOG_NAME: "AboutHomeStartupCache",
-
   // These messages are used to request the "privileged about content process"
   // to create the cached document, and then to receive that document.
   CACHE_REQUEST_MESSAGE: "AboutHomeStartupCache:CacheRequest",
@@ -130,7 +128,7 @@ export var AboutHomeStartupCache = {
     }
 
     this.log = console.createInstance({
-      logModule: this.LOG_NAME,
+      logModule: "AboutHomeStartupCache",
       maxLogLevelPref: this.LOG_LEVEL_PREF,
     });
 
