@@ -131,6 +131,12 @@ namespace mozilla::llama {
   /* libmtmd, llama.cpp's multimodal front-end */                           \
   X(void, mtmd_helper_log_set,                                              \
     (ggml_log_callback log_callback, void* user_data))                      \
+  X(struct mtmd_context_params, mtmd_context_params_default, (void))        \
+  X(mtmd_context*, mtmd_init_from_file_handle,                              \
+    (FILE * mmproj_file, const struct llama_model* text_model,              \
+     const struct mtmd_context_params ctx_params))                          \
+  X(void, mtmd_free, (mtmd_context * ctx))                                  \
+  X(bool, mtmd_support_vision, (const mtmd_context* ctx))                   \
   MOZINFERENCE_PARKEET_FUNCTION_LIST(X)                                     \
   MOZINFERENCE_METAL_FUNCTION_LIST(X)
 
