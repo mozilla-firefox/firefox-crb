@@ -24,6 +24,7 @@
 
 .sidebar-panel[lwt-sidebar] .sidebar-placesTreechildren {
   &::-moz-tree-row(selected) {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- no list-item selected background-color token */
     background-color: light-dark(hsla(0, 0%, 80%, 0.3), rgba(249, 249, 250, 0.1));
   }
 
@@ -36,6 +37,7 @@
 
 .sidebar-panel[lwt-sidebar-highlight] .sidebar-placesTreechildren {
   &::-moz-tree-row(selected, focus) {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- color set by the add-on theme's sidebar_highlight */
     background-color: var(--lwt-sidebar-highlight-background-color);
   }
 
@@ -61,6 +63,7 @@
 #viewButton {
   appearance: none;
   border-radius: var(--border-radius-small);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding: 2px 4px;
   color: inherit;
 }
@@ -95,11 +98,12 @@
 
 @media (-moz-platform: windows) {
   :root[uidensity="touch"] .sidebar-placesTreechildren::-moz-tree-row {
-    min-height: 32px;
+    min-height: var(--size-item-large);
   }
 
   .sidebar-placesTreechildren::-moz-tree-cell,
   .sidebar-placesTreechildren::-moz-tree-twisty {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     padding: 0 4px;
   }
 
@@ -126,6 +130,7 @@
   /* Default button vert. margins are 1px/2px, and this can cause misalignment */
   #viewButton {
     margin: 0;
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin-inline-start: 4px;
     border-radius: var(--border-radius-xsmall);
   }
@@ -133,16 +138,18 @@
 
 @media (-moz-platform: linux) {
   #sidebar-search-container {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     padding: 8px;
   }
 
   #viewButton {
     margin: 1px 0;
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin-inline-start: 4px;
   }
 
   :root[uidensity="touch"] .sidebar-placesTreechildren::-moz-tree-row {
-    min-height: 32px;
+    min-height: var(--size-item-large);
   }
 
   .sidebar-placesTreechildren::-moz-tree-cell(leaf),
@@ -164,26 +171,32 @@
   .sidebar-placesTree {
     margin: 0;
     /* Default font size is 11px on mac, so this is 12px */
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
     font-size: 1.0909rem;
   }
 
   :root[uidensity="touch"] .sidebar-placesTreechildren::-moz-tree-row {
-    min-height: 32px;
+    min-height: var(--size-item-large);
   }
 
   .sidebar-placesTreechildren::-moz-tree-separator {
-    border-top: 1px solid #505d6d;
+    border-top: var(--border-width) solid var(--border-color-deemphasized);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin: 0 10px;
   }
 
   .sidebar-placesTreechildren::-moz-tree-cell-text {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin-inline-end: 6px;
   }
 
   #viewButton {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin: 4px 0;
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin-inline-end: 4px;
     /* Default font size is 11px on mac, so this is 12px */
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
     font-size: 1.0909rem;
   }
 }

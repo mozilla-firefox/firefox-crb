@@ -17,10 +17,12 @@
   color: var(--button-text-color);
   font-weight: var(--font-weight-semibold);
   min-width: 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding: 8px 16px;
 
   /* This button is deeper in the visual hierarchy than others (notably the
      buttons at the bottom of the panel), so it should be slightly smaller. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
   font-size: 90%;
 
   &:hover {
@@ -38,7 +40,7 @@
 
 #editBookmarkPanel > #editBookmarkHeaderSeparator {
   margin-bottom: 0;
-  margin-inline: 16px;
+  margin-inline: var(--panel-padding);
 }
 
 #editBookmarkPanel {
@@ -52,11 +54,13 @@
 #editBookmarkPanelContent > #editBMPanel_folderTreeRow,
 #editBookmarkPanelContent > #editBMPanel_folderTreeRow > #editBMPanel_newFolderBox,
 #editBookmarkPanelContent > #editBMPanel_tagsSelectorRow {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding-top: 4px;
 }
 
 #editBookmarkPanelContent label[control] {
   margin: 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-bottom: 4px;
 }
 
@@ -76,12 +80,12 @@
   padding: 0 var(--panel-padding) calc(var(--panel-padding) / 2);
 }
 
-#editBookmarkPanelBottomContent > checkbox {
+#editBookmarkPanelBottomtent > checkbox {
   margin-inline-start: 0;
 }
 
 #editBookmarkPanel_showForNewBookmarks > .checkbox-label-box > .checkbox-label {
-  opacity: 0.7;
+  color: var(--text-color-deemphasized);
 }
 
 #editBookmarkPanel .expander-up > .button-box > .button-text,
@@ -95,9 +99,10 @@
   -moz-context-properties: fill;
   fill: currentColor;
   margin: 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-inline-start: 4px;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--button-size-icon);
+  min-height: var(--button-size-icon);
   color: var(--button-text-color);
   background-color: var(--button-background-color);
   border: var(--button-border);

@@ -9,10 +9,12 @@ treechildren::-moz-tree-image {
 
 treechildren::-moz-tree-image(title) {
   list-style-image: url("chrome://global/skin/icons/defaultFavicon.svg");
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding-inline-end: 2px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 0 2px;
-  width: 16px;
-  height: 16px;
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 treechildren::-moz-tree-image(title, container),
@@ -73,7 +75,8 @@ treechildren::-moz-tree-image(title, query, folder) {
 }
 
 treechildren::-moz-tree-cell-text(title, separator) {
-  color: ThreeDShadow;
+  color: var(--text-color-deemphasized);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 0 5px;
 }
 
@@ -87,9 +90,9 @@ treechildren::-moz-tree-twisty(title, separator) {
 }
 
 treechildren::-moz-tree-image(cutting) {
-  opacity: 0.5;
+  opacity: var(--opacity-deemphasized-strong);
 }
 
 treechildren::-moz-tree-cell-text(cutting) {
-  opacity: 0.7;
+  opacity: var(--opacity-deemphasized);
 }

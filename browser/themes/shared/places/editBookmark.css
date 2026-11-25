@@ -12,7 +12,7 @@
   margin: 0;
   height: 12.5em;
   flex: 1 auto;
-  border: 1px solid ThreeDShadow;
+  border: var(--border-width) solid ThreeDShadow;
   border-radius: var(--border-radius-small);
 }
 
@@ -22,8 +22,8 @@
 }
 
 #editBMPanel_folderMenuList::part(icon) {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 menulist.folder-icon {
@@ -40,20 +40,26 @@ menulist.folder-icon {
   appearance: auto;
   -moz-default-appearance: checkbox;
   align-items: center;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 0 2px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- 13px is native checkbox size */
   min-width: 13px;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- 13px is native checkbox size */
   min-height: 13px;
 }
 
 @media (-moz-platform: windows) {
   #editBMPanel_tagsSelector > richlistitem > image {
-    border: 1px solid -moz-DialogText;
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- color matches native Windows checkbox */
+    border: var(--border-width) solid -moz-DialogText;
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- color matches native Windows checkbox */
     background: Field no-repeat 50% 50%;
   }
 }
 
 #bookmarkpropertiesdialog #editBMPanel_tagsSelector {
   border-color: var(--border-color);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding: 12px;
 }
 
@@ -65,10 +71,12 @@ menulist.folder-icon {
 
 /* Set spacing between tags */
 #bookmarkpropertiesdialog #editBMPanel_tagsSelector > richlistitem:not(:last-child) {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-bottom: 8px;
 }
 
 #bookmarkpropertiesdialog #editBMPanel_tagsSelector > richlistitem > image {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-inline-end: 8px;
 }
 
@@ -93,16 +101,17 @@ menulist.folder-icon {
 #bookmarkpropertiesdialog #editBookmarkPanelContent > label:not(.editBMPanel_nameRow),
 #bookmarkpropertiesdialog #editBookmarkPanelContent > #editBMPanel_folderTreeRow,
 #bookmarkpropertiesdialog #editBookmarkPanelContent > #editBMPanel_tagsSelectorRow {
-  padding-block: var(--editbookmarkdialog-padding) 0;
+  padding-block: var(--panel-padding) 0;
 }
 
 #bookmarkpropertiesdialog #editBookmarkPanelContent label[control] {
   margin-inline-start: 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-block: 0 4px;
 }
 
 #bookmarkpropertiesdialog #editBookmarkPanelContent {
-  padding: calc(var(--editbookmarkdialog-padding) / 2) var(--editbookmarkdialog-padding) var(--editbookmarkdialog-padding);
+  padding: calc(var(--panel-padding) / 2) var(--panel-padding) var(--panel-padding);
 }
 
 #bookmarkpropertiesdialog .expander-up,
@@ -111,8 +120,8 @@ menulist.folder-icon {
   -moz-context-properties: fill;
   fill: currentColor;
   margin: 0;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--button-size-icon);
+  min-height: var(--button-size-icon);
   padding: 0;
   aspect-ratio: 1;
 }
@@ -135,6 +144,7 @@ menulist.folder-icon {
 
 #bookmarkpropertiesdialog #editBookmarkPanelContent {
   padding-inline: 0;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-inline: 4px;
 }
 
@@ -145,15 +155,19 @@ menulist.folder-icon {
 
 #bookmarkpropertiesdialog #editBookmarkPanelContent #editBMPanel_tagsField,
 #bookmarkpropertiesdialog #editBookmarkPanelContent #editBMPanel_folderMenuList {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-inline-end: 16px;
 }
 
 #bookmarkpropertiesdialog .caption-label {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 4px;
   color: var(--text-color-deemphasized);
 }
 
 .caption-label {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- caption should be smaller than label */
   font-size: 0.9em;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 2px 4px;
 }

@@ -8,8 +8,8 @@
 
 #contentView,
 #placesList {
-  min-width: 100px;
-  min-height: 100px;
+  min-width: var(--size-layout-xsmall);
+  min-height: var(--size-layout-xsmall);
 }
 
 #placesView,
@@ -43,6 +43,7 @@
   input[type="text"],
   .expander-up,
   .expander-down {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
     margin: 4px;
   }
 
@@ -62,11 +63,13 @@
 }
 
 #editBMPanel_tagsSelector {
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin: 4px;
 }
 
 #detailsPane {
   min-height: 16em;
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   padding: 5px;
 }
 
@@ -86,8 +89,9 @@
 
 #placesMenu > menu::after {
   display: flex;
-  width: 12px;
-  height: 12px;
+  width: var(--icon-size-xsmall);
+  height: var(--icon-size-xsmall);
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens -- px values allowed for spacing in Bug 2088614 */
   margin-inline-start: 2px;
   content: url("chrome://global/skin/icons/arrow-down-12.svg");
   -moz-context-properties: fill;
