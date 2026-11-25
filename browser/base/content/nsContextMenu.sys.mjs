@@ -263,6 +263,8 @@ export class nsContextMenu {
     this.linkURL = context.linkURL;
     this.linkURI = this.getLinkURI(); // can't send; regenerate
 
+    this.userSelectionIncludesLink = context.userSelectionIncludesLink;
+
     this.onAudio = context.onAudio;
     this.onCanvas = context.onCanvas;
     this.onCompletedImage = context.onCompletedImage;
@@ -427,16 +429,6 @@ export class nsContextMenu {
     }
   }
 
-  /**
-   * Returns whether the menu was opened on a link while anything in the
-   * document is selected, including a selection made by right click.
-   *
-   * @returns {boolean}
-   */
-  #isLinkWithSelection() {
-    return this.onLink && this.isContentSelected;
-  }
-
   initTextFragmentItems() {
     const shouldShow =
       !(
@@ -446,8 +438,7 @@ export class nsContextMenu {
         this.browser.currentURI.schemeIs("view-source")
       ) &&
       (this.hasTextFragments || this.isContentSelected) &&
-      !this.onLink &&
-      !this.#isLinkWithSelection();
+      !this.onLink;
     this.showItem("context-copy-link-to-highlight", shouldShow);
     this.showItem(
       "context-copy-clean-link-to-highlight",
@@ -885,7 +876,7 @@ export class nsContextMenu {
         this.isContentSelected &&
         this.selectionInfo.isDocumentLevelSelection &&
         lazy.gPrintEnabled &&
-        !this.#isLinkWithSelection()
+        !this.onLink
     );
 
     var showViewSource = !(
@@ -1089,16 +1080,22 @@ export class nsContextMenu {
     this.showItem("context-redo", this.onTextInput);
     this.showItem("context-cut", this.onTextInput);
 
-    // For selected links, do not show the Copy item.
+    // On a link, only show Copy if the user made a selection,
+    // and the selection includes the link.
     const canShowCopy =
-      (this.isContentSelected || this.onTextInput) &&
-      !this.#isLinkWithSelection();
+      this.onTextInput ||
+      (this.isContentSelected &&
+        (!this.onLink || this.userSelectionIncludesLink));
     if (canShowCopy) {
       let copyItem = this.document.getElementById("context-copy");
-      // For selected plain text links outside of inputs, move Copy next to
-      // "Copy Link" and "Copy Clean Link".
+      // For selected links and plain text links outside of inputs, move Copy
+      // next to "Copy Link" and "Copy Clean Link".
       // Otherwise, keep it with other items.
-      if (this.isContentSelected && this.onPlainTextLink && !this.onTextInput) {
+      if (
+        this.isContentSelected &&
+        (this.onLink || this.onPlainTextLink) &&
+        !this.onTextInput
+      ) {
         this.document.getElementById("context-copylink").before(copyItem);
       } else {
         this.document.getElementById("context-paste").before(copyItem);

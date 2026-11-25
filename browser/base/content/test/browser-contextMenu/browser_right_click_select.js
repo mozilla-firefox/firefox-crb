@@ -36,18 +36,56 @@ async function closeContextMenu(contextMenuEl) {
   await menuHidden;
 }
 
-function assertSelectionItemsHiddenOnLink(contextMenuEl) {
-  for (let id of [
-    "context-copy",
-    "context-print-selection",
-    "context-copy-link-to-highlight",
-    "context-copy-clean-link-to-highlight",
-  ]) {
+const HIGHLIGHT_AND_PRINT_ITEMS = [
+  "context-print-selection",
+  "context-copy-link-to-highlight",
+  "context-copy-clean-link-to-highlight",
+];
+
+function assertSelectionItemsHiddenOnLink(
+  contextMenuEl,
+  ids = ["context-copy", ...HIGHLIGHT_AND_PRINT_ITEMS]
+) {
+  for (let id of ids) {
     ok(
       !BrowserTestUtils.isVisible(contextMenuEl.querySelector(`#${id}`)),
       `${id} is hidden on a link`
     );
   }
+}
+
+function assertCopyVisibleBeforeCopyLink(contextMenuEl) {
+  const copy = contextMenuEl.querySelector("#context-copy");
+  ok(BrowserTestUtils.isVisible(copy), "Copy is visible");
+  is(
+    copy.nextElementSibling?.id,
+    "context-copylink",
+    "Copy is placed right before Copy Link"
+  );
+}
+
+// Select from an offset in the first text node of startSelector to an offset
+// in the last text node of endSelector.
+async function selectText(
+  tabBrowser,
+  startSelector,
+  startOffset,
+  endSelector,
+  endOffset
+) {
+  await SpecialPowers.spawn(
+    tabBrowser,
+    [startSelector, startOffset, endSelector, endOffset],
+    (startSel, start, endSel, end) => {
+      const doc = content.document;
+      const range = doc.createRange();
+      range.setStart(doc.querySelector(startSel).firstChild, start);
+      range.setEnd(doc.querySelector(endSel).lastChild, end);
+      const selection = content.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  );
 }
 
 // Right-click the center of a word
@@ -302,6 +340,81 @@ add_task(async function user_select_all_ancestor_selects_ancestor_contents() {
       sel,
       "link text here",
       "Select the nearest user-select:all ancestor's contents"
+    );
+    assertSelectionItemsHiddenOnLink(menu);
+    ok(
+      BrowserTestUtils.isVisible(menu.querySelector("#context-copylink")),
+      "Copy Link visible on link"
+    );
+    await closeContextMenu(menu);
+  });
+});
+
+add_task(async function user_selection_over_link_shows_copy() {
+  for (let prefValue of [false, true]) {
+    await SpecialPowers.pushPrefEnv({
+      set: [[PREF_RIGHT_CLICK_SELECTS, prefValue]],
+    });
+    await BrowserTestUtils.withNewTab(TEST_PAGE, async tabBrowser => {
+      await selectText(tabBrowser, "#p1", 0, "#p1", " additional".length);
+      const menu = await openContextMenuOnWord(tabBrowser, "#link1", "link");
+      is(
+        await getSelectionText(tabBrowser),
+        "Test Page link text here additional",
+        `pref=${prefValue}: right-click keeps the user's selection`
+      );
+      assertCopyVisibleBeforeCopyLink(menu);
+      assertSelectionItemsHiddenOnLink(menu, HIGHLIGHT_AND_PRINT_ITEMS);
+      await closeContextMenu(menu);
+    });
+    await SpecialPowers.popPrefEnv();
+  }
+});
+
+add_task(async function partial_user_selection_of_link_shows_copy() {
+  for (let prefValue of [false, true]) {
+    await SpecialPowers.pushPrefEnv({
+      set: [[PREF_RIGHT_CLICK_SELECTS, prefValue]],
+    });
+    await BrowserTestUtils.withNewTab(TEST_PAGE, async tabBrowser => {
+      // Select through entire "Test Page" and halfway through "link text here"
+      await selectText(tabBrowser, "#p1", 0, "#link1", "link".length);
+      const menu = await openContextMenuOnWord(tabBrowser, "#link1", "link");
+      is(
+        await getSelectionText(tabBrowser),
+        "Test Page link",
+        `pref=${prefValue}: right-click keeps the partial selection`
+      );
+      assertCopyVisibleBeforeCopyLink(menu);
+      assertSelectionItemsHiddenOnLink(menu, HIGHLIGHT_AND_PRINT_ITEMS);
+      await closeContextMenu(menu);
+    });
+    await SpecialPowers.popPrefEnv();
+  }
+});
+
+add_task(async function user_selection_inside_link_shows_copy() {
+  await SpecialPowers.pushPrefEnv({ set: [[PREF_RIGHT_CLICK_SELECTS, false]] });
+  await BrowserTestUtils.withNewTab(TEST_PAGE, async tabBrowser => {
+    // Like an Alt+drag selection of "text" inside "link text here".
+    await selectText(tabBrowser, "#link1", 5, "#link1", 9);
+    const menu = await openContextMenuOnWord(tabBrowser, "#link1", "text");
+    is(await getSelectionText(tabBrowser), "text", "Selection is kept");
+    assertCopyVisibleBeforeCopyLink(menu);
+    assertSelectionItemsHiddenOnLink(menu, HIGHLIGHT_AND_PRINT_ITEMS);
+    await closeContextMenu(menu);
+  });
+});
+
+add_task(async function selection_elsewhere_hides_copy_on_link() {
+  await SpecialPowers.pushPrefEnv({ set: [[PREF_RIGHT_CLICK_SELECTS, false]] });
+  await BrowserTestUtils.withNewTab(TEST_PAGE, async tabBrowser => {
+    await selectText(tabBrowser, "#plain", 0, "#plain", "some".length);
+    const menu = await openContextMenuOnWord(tabBrowser, "#link1", "link");
+    is(
+      await getSelectionText(tabBrowser),
+      "some",
+      "Selection elsewhere is kept"
     );
     assertSelectionItemsHiddenOnLink(menu);
     ok(

@@ -664,6 +664,8 @@ export class ContextMenuChild extends JSWindowActorChild {
 
     let target = context.target;
     if (target) {
+      context.userSelectionIncludesLink =
+        context.onLink && this.#userSelectionIncludesLink(context.link);
       this._cleanContext();
     }
 
@@ -739,6 +741,47 @@ export class ContextMenuChild extends JSWindowActorChild {
       data.spellInfo = await spellInfo;
     } catch (ex) {}
     this.sendAsyncMessage("contextmenu", data);
+  }
+
+  /**
+   * Whether the user made a selection that includes the link. With
+   * ui.mouse.right_click.select_under_cursor enabled, a selection of exactly the
+   * link's text is assumed to come from the right click, even if the user
+   * made it.
+   *
+   * @param {Element} link
+   * @returns {boolean}
+   */
+  #userSelectionIncludesLink(link) {
+    const selection = this.contentWindow.getSelection();
+    if (!selection || selection.isCollapsed) {
+      return false;
+    }
+
+    // Selection doesn't touch this link at all.
+    if (!selection.containsNode(link, true /* allowPartial */)) {
+      return false;
+    }
+
+    // Without the pref, or with several ranges, the selection cannot
+    // be the right-click auto-selection.
+    if (
+      !Services.prefs.getBoolPref(
+        "ui.mouse.right_click.select_under_cursor",
+        false
+      ) ||
+      selection.rangeCount != 1
+    ) {
+      return true;
+    }
+
+    // Compare text, not boundaries: in some cases, the same selection
+    // can start at the end of a text node just before the link.
+    // (e.g. the text node and link are in a user-select: all container)
+    // Therefore, a selection's boundary range might not be what we expect.
+    const isExactlyLink =
+      selection.getRangeAt(0).toString() == link.textContent;
+    return !isExactlyLink;
   }
 
   /**
