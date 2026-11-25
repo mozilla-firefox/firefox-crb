@@ -5,6 +5,7 @@
 #include "MacLaunchHelper.h"
 
 #include "MacAutoreleasePool.h"
+#include "updaterfileutils_osx.h"
 
 #include <Cocoa/Cocoa.h>
 #include <crt_externs.h>
@@ -220,10 +221,13 @@ bool LaunchElevatedUpdate(int aArgc, char** aArgv, pid_t* aPid) {
   // connects to the helper's mach service as soon as it starts, and a
   // privileged connection to a name that launchd does not know fails at once
   // instead of waiting for the service to appear, so the service has to be
-  // registered first.
+  // registered first. Installing the helper stops a running one, so don't
+  // install it while it handles another update. The updater then gets a busy
+  // result from the running helper.
   MacAutoreleasePool pool;
   bool isCanceled = false;
-  bool didSucceed = InstallElevatedUpdater(&isCanceled);
+  bool didSucceed =
+      IsUpdaterHelperBusy() || InstallElevatedUpdater(&isCanceled);
   NSMutableDictionary* environment =
       [[[NSProcessInfo processInfo] environment] mutableCopy];
   if (didSucceed) {
