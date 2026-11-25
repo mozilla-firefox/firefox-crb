@@ -22,6 +22,11 @@ USE_LIBS += [
     "updatecommon",
 ]
 
+if CONFIG["OS_ARCH"] == "Darwin":
+    SOURCES += [
+        "CreateAndOpenFileTests.cpp",
+    ]
+
 if CONFIG["OS_ARCH"] == "WINNT":
     SOURCES += [
         "EnterprisePoliciesFlagFileTests.cpp",

@@ -13,6 +13,12 @@ support-files = [
   "../data/xpcshellUtilsAUS.js",
 ]
 
+["createAndOpenFile_unix.js"]
+run-if = [
+  "os != 'win'", # not a Windows test
+]
+reason = "Unix only test"
+
 ["invalidArgCallbackFileNotInInstallDirFailure.js"]
 
 ["invalidArgCallbackFilePathTooLongFailure.js"]
