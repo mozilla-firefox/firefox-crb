@@ -214,6 +214,99 @@ const prefToArray = (pref = "") => {
     .filter(item => item);
 };
 
+/**
+ * Keeps the active column layout ("col-1" to "col-5") current for one
+ * CardSections.
+ *
+ * Nova sets the column count in CSS, from container queries, as
+ * --sections-col-count on each section grid. The hook reads it from one grid
+ * when that grid mounts, and again whenever the grid's width changes, since
+ * every section grid spans its whole container and so changes width exactly
+ * when the column count can change. CSS stays the only place that defines the
+ * breakpoints.
+ *
+ * Every section grid registers through `registerGrid` (a callback ref), and the
+ * hook observes the first one in document order. Grids come and go during a
+ * page's life (the placeholder section is replaced by the feed's, sections are
+ * blocked or reordered, an empty section renders no grid), so the observer
+ * moves to whichever grid comes first now.
+ *
+ * Classic has no --sections-col-count and no observer: it starts from
+ * window.innerWidth, and the caller refreshes it on focus.
+ *
+ * @param {boolean} novaEnabled
+ * @returns {{
+ *   activeColumnLayout: string,
+ *   setActiveColumnLayout: Function,
+ *   registerGrid: Function,
+ * }}
+ */
+function useColumnLayout(novaEnabled) {
+  const [activeColumnLayout, setActiveColumnLayout] = useState(() =>
+    getActiveColumnLayout(window.innerWidth)
+  );
+  const [observedGrid, setObservedGrid] = useState(null);
+  const gridsRef = useRef(new Set());
+
+  const registerGrid = useCallback(grid => {
+    if (!grid) {
+      return undefined;
+    }
+    const grids = gridsRef.current;
+    const updateObservedGrid = () => {
+      let first = null;
+      for (const candidate of grids) {
+        if (
+          !first ||
+          first.compareDocumentPosition(candidate) &
+            Node.DOCUMENT_POSITION_PRECEDING
+        ) {
+          first = candidate;
+        }
+      }
+      setObservedGrid(first);
+    };
+    grids.add(grid);
+    updateObservedGrid();
+    return () => {
+      grids.delete(grid);
+      updateObservedGrid();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!novaEnabled || !observedGrid) {
+      return undefined;
+    }
+    const syncLayout = () => {
+      // Null only for a grid that has left the document; keep the last value.
+      // An unchanged value doesn't re-render: React skips same-value updates.
+      const nextLayout = getNovaColumnLayout(observedGrid);
+      if (nextLayout) {
+        setActiveColumnLayout(nextLayout);
+      }
+    };
+    // Before paint, so the first painted layout is the real one.
+    syncLayout();
+
+    // Height changes (images loading, placeholders filling in) can't change the
+    // column count, so only a change of width reads the style again.
+    let lastInlineSize = null;
+    const observer = new ResizeObserver(entries => {
+      const [{ inlineSize }] = entries.at(-1).contentBoxSize;
+      if (inlineSize === lastInlineSize) {
+        return;
+      }
+      lastInlineSize = inlineSize;
+      syncLayout();
+    });
+    observer.observe(observedGrid);
+    return () => observer.disconnect();
+  }, [novaEnabled, observedGrid]);
+
+  return { activeColumnLayout, setActiveColumnLayout, registerGrid };
+}
+
 function CardSection({
   sectionPosition,
   section,
@@ -502,6 +595,8 @@ function CardSection({
         onFocus={onFocus}
         attribution={rec.attribution}
         isActive={isActive}
+        // @nova-cleanup(remove-conditional): Always pass activeColumnLayout
+        columnLayout={novaEnabled ? activeColumnLayout : undefined}
       />
     );
   }
@@ -832,53 +927,17 @@ function CardSections({
     (prefs.trainhopConfig?.topicNavigation?.enabled ||
       prefs[PREF_TOPIC_NAVIGATION_ENABLED]) &&
     novaEnabled;
-  const gridRef = useRef(null);
-  const layoutObserverRef = useRef(null);
-  const [activeColumnLayout, setActiveColumnLayout] = useState(() =>
-    getActiveColumnLayout(window.innerWidth)
-  );
+  const { activeColumnLayout, setActiveColumnLayout, registerGrid } =
+    useColumnLayout(novaEnabled);
 
-  useLayoutEffect(() => {
-    if (!novaEnabled || !gridRef.current) {
-      return undefined;
-    }
-    const columnLayout = getNovaColumnLayout(gridRef.current);
-    if (columnLayout) {
-      setActiveColumnLayout(columnLayout);
-    }
-    return () => layoutObserverRef.current?.disconnect();
-  }, [novaEnabled]);
-
-  const syncLayoutOnFocus = useCallback(
-    e => {
-      const grid = gridRef.current ?? e.currentTarget;
-      const syncLayout = () => {
-        let nextLayout = getActiveColumnLayout(window.innerWidth);
-        if (novaEnabled) {
-          nextLayout = getNovaColumnLayout(grid);
-        }
-        if (!nextLayout) {
-          return;
-        }
-        setActiveColumnLayout(currLayout =>
-          currLayout === nextLayout ? currLayout : nextLayout
-        );
-      };
-
-      syncLayout();
-
-      // A stale activeColumnLayout can leave the roving tabindex on a card the
-      // breakpoint hides. Observing the grid keeps it current. Observation
-      // starts on first focus and continues once focus leaves, because a
-      // resize then would otherwise go unnoticed.
-      if (novaEnabled && !layoutObserverRef.current) {
-        const observer = new ResizeObserver(syncLayout);
-        observer.observe(grid);
-        layoutObserverRef.current = observer;
-      }
-    },
-    [novaEnabled]
-  );
+  // @nova-cleanup(remove-conditional): Remove along with the classic path; Nova
+  // keeps the layout current from useColumnLayout's observer.
+  const syncLayoutOnFocus = useCallback(() => {
+    const nextLayout = getActiveColumnLayout(window.innerWidth);
+    setActiveColumnLayout(currLayout =>
+      currLayout === nextLayout ? currLayout : nextLayout
+    );
+  }, [setActiveColumnLayout]);
 
   // Handle a render before feed has been fetched by displaying nothing
   if (!data) {
@@ -939,8 +998,10 @@ function CardSections({
       anySectionsFollowed={anySectionsFollowed}
       spocsLoading={spocsLoading}
       activeColumnLayout={activeColumnLayout}
-      syncLayoutOnFocus={syncLayoutOnFocus}
-      gridRef={sectionPosition === 0 ? gridRef : undefined}
+      // @nova-cleanup(remove-conditional): Always pass registerGrid, drop
+      // syncLayoutOnFocus
+      syncLayoutOnFocus={novaEnabled ? undefined : syncLayoutOnFocus}
+      gridRef={novaEnabled ? registerGrid : undefined}
     />
   ));
 
