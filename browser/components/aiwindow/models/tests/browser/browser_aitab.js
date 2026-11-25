@@ -261,6 +261,11 @@ add_task(async function test_blocks_url_the_model_chose() {
       `The tool refuses: ${toolResult}`
     );
     Assert.ok(
+      toolResult.includes(`access to ${ATTACKER_URL} was blocked`) &&
+        toolResult.includes("blocked to protect their private data"),
+      `The refusal is reported as a security block: ${toolResult}`
+    );
+    Assert.ok(
       !mockEngine.engines.has(lazy.MODEL_FEATURES.AITAB),
       "No generation engine was ever created, so the page the model asked " +
         "for was never composed from anything."
@@ -270,6 +275,36 @@ add_task(async function test_blocks_url_the_model_chose() {
       [],
       "Nothing is stored, so no page is built out of the refusal text."
     );
+  });
+});
+
+/** A page built without some of its URLs names the ones that were refused. */
+add_task(async function test_partial_read_reports_denied_urls() {
+  await withAITab(async ({ conversation, run }) => {
+    markPrivateAndUntrusted(conversation);
+    conversation.addSerpUrlsForAnonymousFetch([SOURCE_URL]);
+
+    const { sourceText, toolResult } = await run([ATTACKER_URL, SOURCE_URL]);
+
+    Assert.ok(
+      sourceText.includes(SOURCE_MARKER),
+      "The readable page reaches the generation model."
+    );
+    Assert.ok(
+      toolResult.message.startsWith("The page was created."),
+      `The tool reported success: ${toolResult.message}`
+    );
+    Assert.ok(
+      toolResult.message.includes(`Access to ${ATTACKER_URL} was blocked`),
+      `The denied URL is reported: ${toolResult.message}`
+    );
+    Assert.ok(
+      !toolResult.message.includes(SOURCE_URL),
+      "The URL that was read is not reported as blocked."
+    );
+
+    const [page] = await lazy.AITabStore.getAITabPagesByConvId(conversation.id);
+    await lazy.ConversationStore.deleteConversationById(page.toolConvId);
   });
 });
 
@@ -1091,6 +1126,10 @@ add_task(async function test_raw_content_builds_a_page_when_no_url_is_read() {
     Assert.ok(
       toolResult.message.startsWith("The page was created."),
       `The tool reported success: ${toolResult.message}`
+    );
+    Assert.ok(
+      toolResult.message.includes(`Access to ${ATTACKER_URL} was blocked`),
+      `The denied URL is reported: ${toolResult.message}`
     );
 
     const [page] = await lazy.AITabStore.getAITabPagesByConvId(conversation.id);
