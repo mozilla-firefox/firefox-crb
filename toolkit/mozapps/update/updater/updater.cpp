@@ -105,8 +105,7 @@ void LaunchMacApp(int argc, const char** argv, pid_t aWaitForPid);
 void LaunchMacPostProcess(const char* aAppBundle);
 bool ObtainUpdaterArguments(int* aArgc, char*** aArgv,
                             MARChannelStringTable* aMARStrings);
-bool ServeElevatedUpdate(int aArgc, const char** aArgv,
-                         const char* aMARChannelID);
+bool ServeElevatedUpdate(int aArgc, const char** aArgv);
 void RemoveLeftoverHelper();
 void SetGroupOwnershipAndPermissions(const char* aAppBundle);
 // Resolves aInstallDir, checks that it is an app bundle on a volume that root
@@ -125,10 +124,12 @@ bool GetInstallClonePath(char* aPath, size_t aLength);
 bool SwapInstallCloneIntoPlace();
 // Reads the Version of the clone from its application.ini.
 bool ReadInstallCloneVersion(std::string& aOut);
+// Reads the accepted MAR channels from the clone's signed
+// UpdateSettings.framework into aOut.
+bool ReadInstallMARChannels(std::string& aOut);
 struct UpdateServerThreadArgs {
   int argc;
   const NS_tchar** argv;
-  const char* marChannelID = "";
 };
 
 // Returns the error that the privileged helper would record for aInstallDir,
@@ -3437,11 +3438,18 @@ static int PopulategMARStrings() {
 
   int rv = UPDATE_SETTINGS_FILE_CHANNEL;
 #  ifdef XP_MACOSX
-  if (gInvocation != UpdaterInvocation::Second) {
-    if (std::optional<std::string> marChannels =
-            UpdateSettingsUtil::GetAcceptedMARChannelsValue()) {
-      rv = ReadMARChannelIDsFromBuffer(marChannels->data(), &gMARStrings);
+  if (isElevationTypeElevated(sElevationType)) {
+    // The elevated updater runs outside of the application bundle. It reads the
+    // channels from the install's own signed UpdateSettings.framework rather
+    // than trusting the ones the unelevated updater sent, which that updater
+    // chooses and which couldn't tell one channel from another.
+    std::string marChannels;
+    if (ReadInstallMARChannels(marChannels)) {
+      rv = ReadMARChannelIDsFromBuffer(marChannels.data(), &gMARStrings);
     }
+  } else if (std::optional<std::string> marChannels =
+                 UpdateSettingsUtil::GetAcceptedMARChannelsValue()) {
+    rv = ReadMARChannelIDsFromBuffer(marChannels->data(), &gMARStrings);
   }
 #  else
   NS_tchar updateSettingsPath[MAXPATHLEN];
@@ -3648,8 +3656,7 @@ int GetPatchDirArgIndex() { return kPatchDirIndex; }
 
 static void ServeElevatedUpdateThreadFunc(void* param) {
   UpdateServerThreadArgs* threadArgs = (UpdateServerThreadArgs*)param;
-  gSucceeded = ServeElevatedUpdate(threadArgs->argc, threadArgs->argv,
-                                   threadArgs->marChannelID);
+  gSucceeded = ServeElevatedUpdate(threadArgs->argc, threadArgs->argv);
   if (WasHelperBusyWithSameUpdate()) {
     // The helper records the result of that update in the same status file,
     // so leave it alone.
@@ -4292,27 +4299,6 @@ int NS_main(int argc, NS_tchar** argv) {
       UpdateServerThreadArgs threadArgs;
       threadArgs.argc = suiArgc;
       threadArgs.argv = suiArgv.get();
-      threadArgs.marChannelID = "";
-
-#  ifdef MOZ_VERIFY_MAR_SIGNATURE
-      // Try to populate gMARStrings so that we can pass the resulting MAR
-      // channel ID to the elevated updater via IPC. If this fails (observed on
-      // some macOS standard-profile elevated updates where the unelevated
-      // updater cannot resolve the weak UpdateSettingsGetAcceptedMARChannels
-      // symbol from UpdateSettings.framework), proceed with an empty channel
-      // ID rather than aborting the elevated update.
-      // ArchiveReader::VerifyProductInformation skips the channel-match check
-      // when the channel ID is empty; the MAR's cryptographic signature is
-      // still verified, preserving the security posture that existed prior to
-      // bug 2028575.
-      if (PopulategMARStrings() == OK) {
-        threadArgs.marChannelID = gMARStrings.MARChannelID.get();
-      } else {
-        fprintf(stderr,
-                "Unable to retrieve MAR channels in unelevated updater; "
-                "proceeding with elevation using an empty channel ID.\n");
-      }
-#  endif  // MOZ_VERIFY_MAR_SIGNATURE
 
       Thread t1;
       if (t1.Run(ServeElevatedUpdateThreadFunc, &threadArgs) == 0) {
