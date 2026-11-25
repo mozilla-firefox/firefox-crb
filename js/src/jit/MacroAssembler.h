@@ -5947,6 +5947,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
                                   uint32_t end, const Value& v);
   void fillSlotsWithUndefined(Address addr, Register temp, uint32_t start,
                               uint32_t end);
+
+  // Zeroes |numWords| consecutive pointer-sized words starting at |base|.
+  void zeroWords(Address base, uint32_t numWords);
   void fillSlotsWithUninitialized(Address addr, Register temp, uint32_t start,
                                   uint32_t end);
   // Store all four fields of the ObjectElements header that starts at
