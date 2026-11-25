@@ -2,6 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/**
+ * @import {MerinoClientResultCallback} from "moz-src:///browser/components/urlbar/MerinoClient.sys.mjs"
+ */
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -36,6 +40,11 @@ class _GeolocationUtils {
    * request, because `MerinoClient` aborts a pending fetch when a new one
    * starts.
    *
+   * @param {object} [options]
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   Called with the result of the Merino request if this call sends one. It
+   *   isn't called when the response comes from the cache or when this call
+   *   shares a request that an earlier call sent.
    * @returns {Promise<object>}
    *   An object with the following properties (see Merino source for latest):
    *
@@ -58,11 +67,13 @@ class _GeolocationUtils {
    *     {number} radius
    *       Accuracy radius in km.
    */
-  geolocation() {
+  geolocation({ onResult } = {}) {
     if (!this.#pendingGeolocation) {
-      this.#pendingGeolocation = this.#fetchGeolocation().finally(() => {
-        this.#pendingGeolocation = null;
-      });
+      this.#pendingGeolocation = this.#fetchGeolocation(onResult).finally(
+        () => {
+          this.#pendingGeolocation = null;
+        }
+      );
     }
     return this.#pendingGeolocation;
   }
@@ -71,9 +82,10 @@ class _GeolocationUtils {
    * Fetches the geolocation from Merino. See `geolocation()` for the shape of
    * the returned object.
    *
+   * @param {MerinoClientResultCallback} [onResult]
    * @returns {Promise<object>}
    */
-  async #fetchGeolocation() {
+  async #fetchGeolocation(onResult) {
     if (!this.#merino) {
       this.#merino = new lazy.MerinoClient("GeolocationUtils", {
         cachePeriodMs: GEOLOCATION_CACHE_PERIOD_MS,
@@ -85,6 +97,7 @@ class _GeolocationUtils {
       providers: ["geolocation"],
       query: "",
       timeoutMs: MERINO_TIMEOUT_MS,
+      onResult,
     });
 
     lazy.logger.debug("Got geolocation from Merino", results);
