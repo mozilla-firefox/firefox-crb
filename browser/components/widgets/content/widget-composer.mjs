@@ -12,7 +12,7 @@ import "chrome://global/content/elements/moz-promo.mjs";
 const TIP_PREF = "browser.widgets.generated.promptTip.seen";
 
 const { XPCOMUtils } = ChromeUtils.importESModule(
-  "resource://gre/modules/XPCOMUtils.sys.mjs"
+  "resource://gre/modules/XPCOMUtils.sys.mjs",
 );
 const lazy = {};
 XPCOMUtils.defineLazyPreferenceGetter(lazy, "promptTipSeen", TIP_PREF, false);
@@ -38,6 +38,7 @@ export const SUBMIT_ICON =
 export class WidgetComposer extends MozLitElement {
   static properties = {
     value: { type: String },
+    submitDisabled: { type: Boolean },
     focused: { type: Boolean, state: true },
     showTip: { type: Boolean, state: true },
   };
@@ -51,7 +52,7 @@ export class WidgetComposer extends MozLitElement {
     delegatesFocus: true,
   };
 
-  #examples = EXAMPLE_IDS.map(id => ({ id, key: Math.random() }))
+  #examples = EXAMPLE_IDS.map((id) => ({ id, key: Math.random() }))
     .sort((a, b) => a.key - b.key)
     .slice(0, 3)
     .map(({ id }) => id);
@@ -59,9 +60,10 @@ export class WidgetComposer extends MozLitElement {
   constructor() {
     super();
     this.value = "";
+    this.submitDisabled = false;
     this.focused = false;
     this.showTip = false;
-    this.addEventListener("keydown", event => this.#onHostKeyDown(event));
+    this.addEventListener("keydown", (event) => this.#onHostKeyDown(event));
   }
 
   #onFocus() {
@@ -104,7 +106,7 @@ export class WidgetComposer extends MozLitElement {
     if (event.key === "Escape" && !event.isComposing) {
       event.preventDefault();
       this.dispatchEvent(
-        new CustomEvent("WidgetComposer:Dismiss", { bubbles: true })
+        new CustomEvent("WidgetComposer:Dismiss", { bubbles: true }),
       );
     }
   }
@@ -118,19 +120,20 @@ export class WidgetComposer extends MozLitElement {
 
   #submit() {
     let text = this.value.trim();
-    if (!text) {
+    if (!text || this.submitDisabled) {
       return;
     }
     this.dispatchEvent(
       new CustomEvent("WidgetComposer:Submit", {
         bubbles: true,
         detail: { prompt: text },
-      })
+      }),
     );
   }
 
   render() {
     let hasText = !!this.value.trim();
+    let canSubmit = hasText && !this.submitDisabled;
     let concealed = this.value !== "" || this.showTip;
     return html`
       <link
@@ -166,13 +169,13 @@ export class WidgetComposer extends MozLitElement {
             data-l10n-id="widget-composer-examples-intro"
           ></p>
           ${this.#examples.map(
-            id =>
+            (id) =>
               html`<moz-button
                 class="example"
                 data-l10n-id=${id}
                 data-l10n-attrs="prompt"
                 @click=${this.#onExampleClick}
-              ></moz-button>`
+              ></moz-button>`,
           )}
         </div>
       </div>
@@ -191,10 +194,10 @@ export class WidgetComposer extends MozLitElement {
         <div class="actions">
           <moz-button
             class="submit"
-            type=${hasText ? "primary" : "ghost icon"}
+            type=${canSubmit ? "primary" : "ghost icon"}
             iconsrc=${SUBMIT_ICON}
             data-l10n-id="widget-composer-submit-button"
-            ?disabled=${!hasText}
+            ?disabled=${!canSubmit}
             @click=${this.#submit}
           ></moz-button>
         </div>
