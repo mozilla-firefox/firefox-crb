@@ -75,10 +75,13 @@ conditions, and nested guards that together exclude every condition.
 A consumer's own named layer is not exempt, since it usually loads after the
 token sheets and outranks their layers.
 
+The rule is off where the design token rules are off.
+
 ## Options
 
 `ignoreForcedColors: true` checks only the prefers-contrast values, so a token
-with only a forced-colors value is not checked.
+with only a forced-colors value is not checked. The macOS and Linux theme
+directories set it, since their chrome never reaches forced colors.
 
 ## Autofix
 

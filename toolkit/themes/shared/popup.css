@@ -19,6 +19,8 @@
   --panel-border-radius: 6px;
 
   @media (-moz-platform: macos) {
+    /* macOS paints the popup's native background, so the panel paints none of its own. */
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides */
     --panel-background-color: none;
     --panel-border-color: transparent;
 
