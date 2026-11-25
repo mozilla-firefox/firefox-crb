@@ -287,6 +287,28 @@ MarReadResult mar_open(const char* path, MarFile** out_mar) {
   return result;
 }
 
+#ifndef XP_WIN
+MarReadResult mar_fdopen(int fd, MarFile** out_mar) {
+  *out_mar = NULL;
+
+  int dup_fd = dup(fd);
+  if (dup_fd < 0) {
+    fprintf(stderr, "ERROR: could not duplicate descriptor in mar_fdopen()\n");
+    return MAR_IO_ERROR;
+  }
+  FILE* fp = fdopen(dup_fd, "rb");
+  if (!fp) {
+    fprintf(stderr, "ERROR: could not open descriptor in mar_fdopen()\n");
+    close(dup_fd);
+    return MAR_IO_ERROR;
+  }
+
+  MarReadResult result = mar_fpopen(fp, out_mar);
+  fclose(fp);
+  return result;
+}
+#endif
+
 #ifdef XP_WIN
 MarReadResult mar_wopen(const wchar_t* path, MarFile** out_mar) {
   *out_mar = NULL;
