@@ -1317,6 +1317,12 @@ export class UrlbarView {
   /** @type {SelectableElement} */
   #rawSelectedElement;
   #tail150 = null;
+  /**
+   * The latest localized title set on each title element, until it's cached.
+   *
+   * @type {WeakMap<Element, object>}
+   */
+  #titleL10nRequests = new WeakMap();
   /** @type {WeakMap<HTMLElement, string>} */
   #tooltips = new WeakMap();
 
@@ -2655,7 +2661,9 @@ export class UrlbarView {
 
     this.#updateOverflowTooltip(
       title,
-      result.getDisplayableValueAndHighlights("title").value
+      result.payload.titleL10n
+        ? null
+        : result.getDisplayableValueAndHighlights("title").value
     );
 
     let tagsContainer = item._elements.get("tagsContainer");
@@ -3720,6 +3728,58 @@ export class UrlbarView {
   }
 
   /**
+   * Sets a localized title in `titleNode`'s DOM.
+   *
+   * The string is set on a child element, so that Fluent doesn't remove the
+   * title's overflow tooltip when it translates it. If the title already shows
+   * the same string, the child element is reused, and it keeps the previous
+   * text until the new one is translated. Otherwise the title is cleared, and
+   * the new child element is added only once it has text, so that the title
+   * stays `:empty` meanwhile. Once the string is cached, the overflow tooltip
+   * is updated.
+   *
+   * @param {Element} titleNode
+   *   The DOM node for the result's title.
+   * @param {object} titleL10n
+   *   The l10n object, as in `result.payload.titleL10n`.
+   */
+  #setResultTitleL10n(titleNode, titleL10n) {
+    this.#titleL10nRequests.set(titleNode, titleL10n);
+    let l10nNode = /** @type {HTMLElement} */ (
+      titleNode.querySelector(":scope > .urlbarView-title-l10n")
+    );
+    let reused = l10nNode?.dataset.l10nId == titleL10n.id;
+    if (!reused) {
+      this.#l10nCache.removeElementL10n(titleNode);
+      l10nNode = titleNode.ownerDocument.createElement("span");
+      l10nNode.className = "urlbarView-title-l10n";
+    }
+    let cached = this.#l10nCache.setElementL10n(l10nNode, titleL10n);
+    if (!reused && l10nNode.textContent) {
+      titleNode.append(l10nNode);
+    }
+
+    cached.then(() => {
+      // Skip it if the title was set to something else meanwhile.
+      if (this.#titleL10nRequests.get(titleNode) != titleL10n) {
+        return;
+      }
+      this.#titleL10nRequests.delete(titleNode);
+      let added = l10nNode.parentNode == titleNode;
+      if (!added && titleNode.hasChildNodes()) {
+        return;
+      }
+      // Apply the string, now that it's cached, and update the tooltip, which
+      // may have been computed from the previous text.
+      this.#l10nCache.setElementL10n(l10nNode, titleL10n);
+      if (!added) {
+        titleNode.append(l10nNode);
+      }
+      this.#updateOverflowTooltip(/** @type {HTMLElement} */ (titleNode));
+    });
+  }
+
+  /**
    * Sets `result`'s title in `titleNode`'s DOM.
    *
    * @param {UrlbarResult} result
@@ -3728,8 +3788,9 @@ export class UrlbarView {
    *   The DOM node for the result's tile.
    */
   #setResultTitle(result, titleNode) {
+    this.#titleL10nRequests.delete(titleNode);
     if (result.payload.titleL10n) {
-      this.#l10nCache.setElementL10n(titleNode, result.payload.titleL10n);
+      this.#setResultTitleL10n(titleNode, result.payload.titleL10n);
       return;
     }
 
@@ -4148,15 +4209,19 @@ export class UrlbarView {
    *
    * @param {HTMLElement} element
    *   The element
-   * @param {string} [tooltip]
+   * @param {string|null} [tooltip]
    *   The string that should be used in the tooltip. This will be stored and
-   *   re-used next time the element overflows.
+   *   re-used next time the element overflows. Pass null to use the element's
+   *   text content at that time, e.g. for localized content.
    */
   #updateOverflowTooltip(element, tooltip) {
-    if (typeof tooltip == "string") {
+    if (typeof tooltip == "string" || tooltip === null) {
       this.#tooltips.set(element, tooltip);
     } else {
       tooltip = this.#tooltips.get(element);
+    }
+    if (tooltip === null) {
+      tooltip = element.textContent;
     }
 
     if (element.hasAttribute("overflow") && tooltip) {
@@ -4684,10 +4749,17 @@ export class UrlbarView {
       // result; otherwise, remove such styling. For restyled results, we
       // override the usual result-picking behaviour in UrlbarInput.pickResult.
       if (result.heuristic) {
-        title.textContent =
-          localSearchMode || engine
-            ? this.#queryContext.searchString
-            : result.getDisplayableValueAndHighlights("title").value;
+        if (localSearchMode || engine) {
+          this.#titleL10nRequests.delete(title);
+          this.#l10nCache.removeElementL10n(title);
+          title.textContent = this.#queryContext.searchString;
+        } else if (result.payload.titleL10n) {
+          this.#setResultTitle(result, title);
+        } else {
+          title.textContent =
+            result.getDisplayableValueAndHighlights("title").value;
+        }
+        this.#updateOverflowTooltip(title, null);
 
         // Set the restyled-search attribute so the action text and title
         // separator are shown or hidden via CSS as appropriate.
