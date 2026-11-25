@@ -1219,8 +1219,11 @@ class ChatStore extends SQLiteStoreBase {
     return "ChatStore";
   }
 
-  get logLevelPref() {
-    return "browser.smartwindow.chatStore.logLevel";
+  createLog() {
+    return console.createInstance({
+      logModule: "ChatStore",
+      maxLogLevelPref: "browser.smartwindow.chatStore.logLevel",
+    });
   }
 
   get shutdownBlockerName() {

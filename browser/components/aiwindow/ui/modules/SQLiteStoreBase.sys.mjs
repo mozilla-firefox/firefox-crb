@@ -21,7 +21,12 @@ const DEFAULT_MAX_DB_SIZE_BYTES = 75 * 1024 * 1024;
  * @example
  * class MyStore extends SQLiteStoreBase {
  *   get logPrefix() { return "MyStore"; }
- *   get logLevelPref() { return "browser.mystore.logLevel"; }
+ *   createLog() {
+ *     return console.createInstance({
+ *       logModule: "MyStore",
+ *       maxLogLevelPref: "browser.mystore.logLevel",
+ *     });
+ *   }
  *   get shutdownBlockerName() { return "MyStore: Shutdown"; }
  *   get CURRENT_SCHEMA_VERSION() { return 1; }
  *   get databaseFileName() { return "my-store.sqlite"; }
@@ -49,8 +54,13 @@ export class SQLiteStoreBase {
     throw new Error("Subclass must implement logPrefix");
   }
 
-  get logLevelPref() {
-    throw new Error("Subclass must implement logLevelPref");
+  /**
+   * @abstract
+   * @returns {ConsoleInstance} A new console for the store, whose logModule
+   *   is the name of its MOZ_LOG module.
+   */
+  createLog() {
+    throw new Error("Subclass must implement createLog");
   }
 
   get shutdownBlockerName() {
@@ -128,10 +138,7 @@ export class SQLiteStoreBase {
    */
   get log() {
     if (!this.#log) {
-      this.#log = console.createInstance({
-        logModule: this.logPrefix,
-        maxLogLevelPref: this.logLevelPref,
-      });
+      this.#log = this.createLog();
     }
     return this.#log;
   }
