@@ -18,9 +18,6 @@ const { TranslationsFeature } = ChromeUtils.importESModule(
 const { TranslationsUtils } = ChromeUtils.importESModule(
   "chrome://global/content/translations/TranslationsUtils.mjs"
 );
-const { sinon: translationsSinon } = ChromeUtils.importESModule(
-  "resource://testing-common/Sinon.sys.mjs"
-);
 
 // This is a bit silly, but ml/tests/browser/head.js relies on this function:
 // https://searchfox.org/mozilla-central/rev/14f68f084d6a3bc438a3f973ed81d3a4dbab9629/toolkit/components/ml/tests/browser/head.js#23-25
@@ -2640,66 +2637,6 @@ function waitForTranslationChildActorInBrowsingContext(
     async () => hasTranslationChildActorInBrowsingContext(browsingContext),
     message
   );
-}
-
-/**
- * @typedef {object} HeldAsyncCall
- * @property {Promise<void>} entered
- *   Resolves when the matching call starts.
- * @property {function(): (Promise<unknown> | undefined)} release
- *   Allows the caller to receive the result and returns the caller's promise once
- *   the matching call has started.
- * @property {function(): void} restore
- *   Disarms an unused intercept or releases a held result. Safe to call more
- *   than once.
- */
-
-/**
- * Holds the result of the next matching async method call until released.
- * Subsequent calls proceed normally, including while that result is held.
- *
- * @param {object} owner - The object that defines the method.
- * @param {string} method - The method to intercept.
- * @param {function(object, unknown[]): boolean} [matches]
- *   Selects a call by its receiver and arguments.
- *   Omit to hold the next call unconditionally.
- * @returns {HeldAsyncCall}
- */
-function holdNextAsyncResult(owner, method, matches = () => true) {
-  const original = owner[method];
-  const entered = Promise.withResolvers();
-  const resume = Promise.withResolvers();
-  let completion;
-
-  const stub = translationsSinon.stub(owner, method).callsFake(function (
-    ...args
-  ) {
-    if (!matches(this, args)) {
-      return original.apply(this, args);
-    }
-
-    stub.restore();
-    const result = original.apply(this, args);
-    completion = result.finally(() => resume.promise);
-    entered.resolve();
-
-    return completion;
-  });
-
-  return {
-    entered: entered.promise,
-    release() {
-      resume.resolve();
-
-      return completion;
-    },
-    restore() {
-      if (owner[method] === stub) {
-        stub.restore();
-      }
-      resume.resolve();
-    },
-  };
 }
 
 /**
