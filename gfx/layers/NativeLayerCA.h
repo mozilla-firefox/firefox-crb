@@ -340,6 +340,10 @@ struct NativeLayerCARepresentation {
 
   bool mWrappingCALayerHasExtent : 1;
 
+  // Whether mContentCALayer still shows the first video frame as static
+  // contents, which the next full update clears.
+  bool mVideoContentsNeedClearing : 1;
+
   // These are all initialized to true by the constructor.
   bool mMutatedPosition : 1;
   bool mMutatedTransform : 1;

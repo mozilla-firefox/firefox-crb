@@ -1371,6 +1371,7 @@ void NativeLayerCA::SetSurfaceToPresent(CFTypeRefPtr<IOSurfaceRef> aSurfaceRef,
 
 NativeLayerCARepresentation::NativeLayerCARepresentation()
     : mWrappingCALayerHasExtent(false),
+      mVideoContentsNeedClearing(false),
       mMutatedPosition(true),
       mMutatedTransform(true),
       mMutatedDisplayRect(true),
@@ -2062,6 +2063,14 @@ bool NativeLayerCARepresentation::ApplyChanges(
       // the layer contents was observed not to be blocked by preventsCapture.
       if (layerNeedsInitialization && !aIsDRM) {
         mContentCALayer.contents = (id)surface;
+        mVideoContentsNeedClearing = StaticPrefs::
+            gfx_core_animation_specialize_video_low_power_presentation();
+      } else if (mVideoContentsNeedClearing) {
+        // The first frame has been enqueued, so the layer no longer needs it
+        // as static contents. Static contents keep WindowServer from
+        // presenting the layer directly to the display.
+        mContentCALayer.contents = nil;
+        mVideoContentsNeedClearing = false;
       }
 
       // Attempt to enqueue this as a video frame. If we fail, we'll rebuild
@@ -2087,6 +2096,7 @@ bool NativeLayerCARepresentation::ApplyChanges(
       }
 #endif
       mContentCALayer.contents = (id)surface;
+      mVideoContentsNeedClearing = false;
     }
   }
 
@@ -2127,6 +2137,10 @@ NativeLayerCA::UpdateType NativeLayerCARepresentation::HasUpdate(
   // receive, though), so we just have to check that we have a surface to
   // display.
   if (mMutatedFrontSurface) {
+    // Static contents can only be cleared in a full update.
+    if (mVideoContentsNeedClearing) {
+      return UpdateType::All;
+    }
     return (aIsVideo ? UpdateType::OnlyVideo : UpdateType::All);
   }
 
