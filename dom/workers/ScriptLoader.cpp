@@ -915,8 +915,6 @@ nsresult WorkerScriptLoader::LoadScript(
     return loadContext->mLoadResult;
   }
 
-  WorkerPrivate* parentWorker = mWorkerRef->Private()->GetParent();
-
   // For JavaScript debugging, the devtools server must run on the same
   // thread as the debuggee, indicating the worker uses content principal.
   // However, in Bug 863246, web content will no longer be able to load
@@ -997,10 +995,10 @@ nsresult WorkerScriptLoader::LoadScript(
                              secFlags);
     } else {
       referrerInfo = ReferrerInfo::CreateForFetch(principal, nullptr);
-      if (parentWorker && !loadContext->IsTopLevel()) {
-        referrerInfo =
-            static_cast<ReferrerInfo*>(referrerInfo.get())
-                ->CloneWithNewPolicy(parentWorker->GetReferrerPolicy());
+      if (!loadContext->IsTopLevel()) {
+        referrerInfo = static_cast<ReferrerInfo*>(referrerInfo.get())
+                           ->CloneWithNewPolicy(
+                               mWorkerRef->Private()->GetReferrerPolicy());
       }
       rv = GetClassicSecFlags(loadContext->IsTopLevel(), request->URI(),
                               principal, mWorkerScriptType, secFlags);

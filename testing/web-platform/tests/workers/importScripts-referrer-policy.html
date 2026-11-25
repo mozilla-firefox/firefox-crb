@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<title>importScripts() uses the worker's own referrer policy</title>
+<link rel="help" href="https://html.spec.whatwg.org/multipage/workers.html#run-a-worker">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<body>
+<script>
+function workerURL(file, policy) {
+  const url = new URL(`support/${file}`, location.href);
+  url.search = `?pipe=header(Referrer-Policy,${policy})`;
+  return url.href;
+}
+
+function nextMessage(worker) {
+  return new Promise((resolve, reject) => {
+    worker.onmessage = e => resolve(e.data);
+    worker.onerror = () => reject(new Error("worker error"));
+  });
+}
+
+const cases = [
+  {policy: "no-referrer", parentPolicy: "unsafe-url",
+   expected: url => ""},
+  {policy: "origin", parentPolicy: "no-referrer",
+   expected: url => new URL(url).origin + "/"},
+  {policy: "unsafe-url", parentPolicy: "no-referrer",
+   expected: url => url},
+];
+
+for (const {policy, parentPolicy, expected} of cases) {
+  promise_test(async () => {
+    const url = workerURL("importScripts-referrer-worker.js", policy);
+    const referrer = await nextMessage(new Worker(url));
+    assert_equals(referrer, expected(url));
+  }, `Dedicated worker served with Referrer-Policy: ${policy}`);
+
+  promise_test(async () => {
+    const parent = new Worker(
+        workerURL("importScripts-referrer-nested-worker.js", parentPolicy));
+    const url = workerURL("importScripts-referrer-worker.js", policy);
+    parent.postMessage(url);
+    const referrer = await nextMessage(parent);
+    assert_equals(referrer, expected(url));
+  }, `Nested dedicated worker served with Referrer-Policy: ${policy} ` +
+     `inside a worker with Referrer-Policy: ${parentPolicy}`);
+}
+</script>
