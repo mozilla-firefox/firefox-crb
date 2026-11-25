@@ -2024,6 +2024,10 @@ export var BrowserTestUtils = {
     }
 
     browsingContext = this.getBrowsingContextFrom(browsingContext);
+    // Make sure a remote <browser> that hasn't been laid out yet has sent its
+    // size to the content before the event is computed. Chrome browsing
+    // contexts have no embedder.
+    browsingContext.top.embedderElement?.documentGlobal.windowUtils.flushLayoutWithoutThrottledAnimations();
     return this.sendQuery(browsingContext, "Test:SynthesizeMouse", {
       target,
       targetFn,
