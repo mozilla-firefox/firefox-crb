@@ -98,16 +98,43 @@ def get_s3_keys(s3, bucket, include_prefix=None, exclude_prefix=None):
     return all_keys
 
 
-def s3_set_redirects(redirects):
+def s3_set_redirects(redirects, docs_prefix):
+    """Configure the bucket website redirects.
+
+    ``redirects`` maps old key prefixes to new ones. ``docs_prefix`` is the
+    directory holding the docs, which used to be at the root of the bucket:
+    a missing key outside of it is redirected to the same key inside it.
+    """
     s3, bucket = create_aws_session()
 
-    configuration = {"IndexDocument": {"Suffix": "index.html"}, "RoutingRules": []}
+    configuration = {
+        "IndexDocument": {"Suffix": "index.html"},
+        "ErrorDocument": {"Key": "404.html"},
+        "RoutingRules": [],
+    }
 
-    for path, redirect in redirects.items():
-        rule = {
+    rules = [
+        {
             "Condition": {"KeyPrefixEquals": path},
             "Redirect": {"ReplaceKeyPrefixWith": redirect},
         }
+        for path, redirect in redirects.items()
+    ]
+    # S3 applies the first matching rule, so the docs 404 rule has to come
+    # before the catch-all one to avoid redirecting to docs/docs/...
+    rules.append({
+        "Condition": {
+            "KeyPrefixEquals": f"{docs_prefix}/",
+            "HttpErrorCodeReturnedEquals": "404",
+        },
+        "Redirect": {"ReplaceKeyWith": "404.html"},
+    })
+    rules.append({
+        "Condition": {"HttpErrorCodeReturnedEquals": "404"},
+        "Redirect": {"ReplaceKeyPrefixWith": f"{docs_prefix}/"},
+    })
+
+    for rule in rules:
         if os.environ.get("MOZ_SCM_LEVEL") == "3":
             rule["Redirect"]["HostName"] = "firefox-source-docs.mozilla.org"
 
