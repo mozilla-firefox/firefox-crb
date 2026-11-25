@@ -40,7 +40,7 @@ const lazy = XPCOMUtils.declareLazy({
  * @property {PromiseWithResolvers<MethodResult>} callerResultResolvers
  *   The caller's promise and the functions that settle it.
  * @property {() => PromiseLike<MethodResult>} runOriginalMethod
- *   Invokes the original method.
+ *   Invokes the original method and validates its return value.
  * @property {Promise<MethodResult> | null} methodResultPromise
  *   The original method's outcome once started.
  */
@@ -89,6 +89,13 @@ class AsyncCallController {
   #interceptionSignal = Promise.withResolvers();
 
   /**
+   * The choice to run or reject the matching call, if one has been made.
+   *
+   * @type {"run" | "reject" | null}
+   */
+  #branch = null;
+
+  /**
    * The call captured by this controller, if any.
    *
    * @type {InterceptedCall<MethodResult> | null}
@@ -132,7 +139,7 @@ class AsyncCallController {
   }
 
   /**
-   * Waits for the next call before the original method starts.
+   * Waits for an intercepted call before the original method starts.
    *
    * @returns {Promise<void>} Rejects with `AbortError` if the control
    *   is restored before a call is intercepted.
@@ -146,20 +153,24 @@ class AsyncCallController {
    * before releasing the result.
    * Safe to call more than once.
    *
-   * @throws {unknown} If no call was intercepted.
+   * @throws {unknown} If no call was intercepted or the test rejected the call.
    */
   start() {
     this.#startOriginalMethod(this.#requireInterceptedCall());
   }
 
   /**
-   * Waits for a matching call and starts the method if needed. The caller's
+   * Waits for a matching call and starts the method if needed. Calling this
+   * before interception commits the matching call to running. The caller's
    * promise stays pending until the controller releases the result.
    *
    * @returns {Promise<MethodResult>} Rejects if the method throws or rejects, or the controller is restored before interception.
+   * @throws {Error} If the test already rejected the intercepted call.
    */
   waitForResult() {
     if (!this.#interceptedCall) {
+      this.#selectRunBranch();
+
       return this.waitForInterception().then(() =>
         this.#startOriginalMethod(this.#requireInterceptedCall())
       );
@@ -174,7 +185,7 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} The same promise the caller received.
    *   Rejects if the original method throws or rejects.
-   * @throws {unknown} If no call was intercepted.
+   * @throws {unknown} If no call was intercepted or the test rejected the call.
    */
   releaseResult() {
     const interceptedCall = this.#requireInterceptedCall();
@@ -184,6 +195,33 @@ class AsyncCallController {
     resolveCallerPromise(this.#startOriginalMethod(interceptedCall));
 
     return callerPromise;
+  }
+
+  /**
+   * Rejects the intercepted call so the original method never runs.
+   *
+   * @param {unknown} [reason=new Error("Controlled call rejected")]
+   *   The rejection reason to deliver to the caller.
+   * @throws {unknown} If no call was intercepted, or the test
+   *   already chose to run or reject the call.
+   */
+  rejectResult(reason = new Error("Controlled call rejected")) {
+    const interceptedCall = this.#requireInterceptedCall();
+
+    if (this.#branch === "run") {
+      throw new Error(
+        `Cannot reject the call to ${this.#methodName} after choosing to run it`
+      );
+    }
+
+    if (this.#branch === "reject") {
+      throw new Error(
+        `The intercepted call to ${this.#methodName} was rejected`
+      );
+    }
+
+    this.#branch = "reject";
+    interceptedCall.callerResultResolvers.reject(reason);
   }
 
   /**
@@ -201,7 +239,7 @@ class AsyncCallController {
       return;
     }
 
-    if (this.#interceptedCall) {
+    if (this.#interceptedCall && this.#branch !== "reject") {
       this.releaseResult();
     }
   }
@@ -290,12 +328,38 @@ class AsyncCallController {
     this.#removeStub();
     this.#interceptedCall = {
       callerResultResolvers: Promise.withResolvers(),
-      runOriginalMethod: callOriginalMethod,
+      runOriginalMethod: () => this.#invokeOriginalMethod(callOriginalMethod),
       methodResultPromise: null,
     };
     this.#interceptionSignal.resolve();
 
     return this.#interceptedCall.callerResultResolvers.promise;
+  }
+
+  /**
+   * Runs the original method and checks that it returns a promise-like value.
+   *
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   * @throws {TypeError} If the original method returns a non-awaitable value.
+   */
+  #invokeOriginalMethod(callOriginalMethod) {
+    const originalResult = callOriginalMethod();
+    const originalThen = originalResult?.then;
+
+    if (typeof originalThen !== "function") {
+      throw new TypeError(`${this.#methodName} must return a promise`);
+    }
+
+    // The method can return a thenable with a `then` getter instead of a
+    // native promise. Returning `originalResult` directly would make JavaScript
+    // read `then` again when settling the promise, so we need to reuse the
+    // function we already read to ensure the getter runs only once.
+    return {
+      then(resolve, reject) {
+        return Reflect.apply(originalThen, originalResult, [resolve, reject]);
+      },
+    };
   }
 
   /**
@@ -324,12 +388,30 @@ class AsyncCallController {
   }
 
   /**
+   * Commits the controller to running the matching call.
+   *
+   * @throws {Error} If the test already rejected the call.
+   */
+  #selectRunBranch() {
+    if (this.#branch === "reject") {
+      throw new Error(
+        `The intercepted call to ${this.#methodName} was rejected`
+      );
+    }
+
+    this.#branch = "run";
+  }
+
+  /**
    * Starts the original method once and returns its outcome.
    *
    * @param {InterceptedCall<MethodResult>} interceptedCall - The intercepted call to start.
    * @returns {Promise<MethodResult>}
+   * @throws {Error} If the test rejected the call.
    */
   #startOriginalMethod(interceptedCall) {
+    this.#selectRunBranch();
+
     if (!interceptedCall.methodResultPromise) {
       interceptedCall.methodResultPromise = Promise.resolve().then(
         interceptedCall.runOriginalMethod
