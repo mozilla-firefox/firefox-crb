@@ -70,8 +70,11 @@ class AITabStore extends SQLiteStoreBase {
     return "AITabStore";
   }
 
-  get logLevelPref() {
-    return "browser.smartwindow.aiTabStore.logLevel";
+  createLog() {
+    return console.createInstance({
+      logModule: "AITabStore",
+      maxLogLevelPref: "browser.smartwindow.aiTabStore.logLevel",
+    });
   }
 
   get shutdownBlockerName() {
