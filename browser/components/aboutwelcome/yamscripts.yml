@@ -18,11 +18,6 @@ scripts:
   testmc:
     lint: =>lint
     build: =>bundle:welcomeBundle
-    unit: karma start karma.mc.config.js
-
-  tddmc: karma start karma.mc.config.js --tdd
-
-  debugcoverage: open logs/coverage/lcov-report/index.html
 
   # lint: Run various linters with mach or local dev dependencies
   lint:
@@ -34,9 +29,6 @@ scripts:
 
   # test: Run all tests once
   test: =>testmc
-
-  # tdd: Run content tests continuously
-  tdd: =>tddmc
 
   fix:
     # Note that since we're currently running eslint-plugin-prettier,
