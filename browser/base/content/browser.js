@@ -256,11 +256,6 @@ XPCOMUtils.defineLazyScriptGetter(
 );
 XPCOMUtils.defineLazyScriptGetter(
   this,
-  "gBrowserThumbnails",
-  "chrome://browser/content/browser-thumbnails.js"
-);
-XPCOMUtils.defineLazyScriptGetter(
-  this,
   [
     "DownloadsPanel",
     "DownloadsOverlayLoader",

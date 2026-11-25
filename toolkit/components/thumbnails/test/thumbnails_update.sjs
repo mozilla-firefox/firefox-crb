@@ -19,7 +19,7 @@
 
 function handleRequest(aRequest, aResponse) {
   aResponse.setHeader("Content-Type", "text/html;charset=utf-8", false);
-  // we want to disable gBrowserThumbnails on-load capture for these responses,
+  // we want to disable BrowserThumbnails on-load capture for these responses,
   // so set as a "no-store" response.
   aResponse.setHeader("Cache-Control", "no-store");
 

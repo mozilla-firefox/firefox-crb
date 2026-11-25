@@ -184,7 +184,6 @@
   "gHistorySwipeAnimation",
   "gSafeBrowsing",
   "gSync",
-  "gBrowserThumbnails",
   "nsContextMenu",
   "DownloadsPanel",
   "DownloadsOverlayLoader",

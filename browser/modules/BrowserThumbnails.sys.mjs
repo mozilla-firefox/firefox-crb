@@ -2,10 +2,53 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+const lazy = XPCOMUtils.declareLazy({
+  NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
+  PageThumbs: "resource://gre/modules/PageThumbs.sys.mjs",
+});
+
 /**
- * Keeps thumbnails of open web pages up-to-date.
+ * Keeps thumbnails of open web pages up-to-date. Each browser window has its
+ * own instance, created by `init` and destroyed by `uninit`.
  */
-class BrowserThumbnails {
+export class BrowserThumbnails {
+  static #instances = new WeakMap();
+
+  /**
+   * @param {Window} window
+   */
+  static init(window) {
+    let instance = new BrowserThumbnails(window);
+    BrowserThumbnails.#instances.set(window, instance);
+    instance.init();
+  }
+
+  /**
+   * @param {Window} window
+   */
+  static uninit(window) {
+    BrowserThumbnails.#instances.get(window)?.uninit();
+    BrowserThumbnails.#instances.delete(window);
+  }
+
+  /**
+   * @param {Window} window
+   */
+  static clearTopSiteURLCache(window) {
+    BrowserThumbnails.#instances.get(window)?.clearTopSiteURLCache();
+  }
+
+  /**
+   * @param {Window} window
+   * @returns {Promise<string[]>|undefined} The top site URLs whose pages the
+   *   window captures, or undefined if the window has no instance.
+   */
+  static getTopSiteURLs(window) {
+    return BrowserThumbnails.#instances.get(window)?._topSiteURLs;
+  }
+
   /**
    * Pref that controls whether we can store SSL content on disk
    */
@@ -140,7 +183,7 @@ class BrowserThumbnails {
       return;
     }
     if (await this._shouldCapture(aBrowser)) {
-      await PageThumbs.captureAndStoreIfStale(aBrowser);
+      await lazy.PageThumbs.captureAndStoreIfStale(aBrowser);
     }
   }
 
@@ -177,7 +220,7 @@ class BrowserThumbnails {
     ) {
       return false;
     }
-    return PageThumbs.shouldStoreThumbnail(aBrowser);
+    return lazy.PageThumbs.shouldStoreThumbnail(aBrowser);
   }
 
   _cancelDelayedCapture(aBrowser) {
@@ -215,9 +258,9 @@ class BrowserThumbnails {
     // Get both the top sites returned by the query, and also any pinned sites
     // that the user might have added manually that also need a screenshot.
     // Also include top sites that don't have rich icons
-    let topSites = await NewTabUtils.activityStreamLinks.getTopSites();
+    let topSites = await lazy.NewTabUtils.activityStreamLinks.getTopSites();
     sites.push(...topSites.filter(link => !(link.faviconSize >= 96)));
-    sites.push(...NewTabUtils.pinnedLinks.links);
+    sites.push(...lazy.NewTabUtils.pinnedLinks.links);
     return sites.reduce((urls, link) => {
       if (link) {
         urls.push(link.url);
@@ -226,5 +269,3 @@ class BrowserThumbnails {
     }, []);
   }
 }
-
-var gBrowserThumbnails = new BrowserThumbnails(window);

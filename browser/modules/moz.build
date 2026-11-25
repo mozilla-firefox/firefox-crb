@@ -151,6 +151,7 @@ EXTRA_JS_MODULES += [
 ]
 
 MOZ_SRC_FILES += [
+    "BrowserThumbnails.sys.mjs",
     "CanvasPermissionPromptHelper.sys.mjs",
     "ContextId.sys.mjs",
     "ObserverForwarder.sys.mjs",

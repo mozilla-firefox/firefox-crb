@@ -51,8 +51,8 @@ add_task(async function thumbnails_bg_topsites() {
   NewTabUtils.pinnedLinks.pin(pinnedSite, 0);
 
   // Check that the correct sites will capture screenshots
-  gBrowserThumbnails.clearTopSiteURLCache();
-  let topSites = await gBrowserThumbnails._topSiteURLs;
+  BrowserThumbnails.clearTopSiteURLCache(window);
+  let topSites = await BrowserThumbnails.getTopSiteURLs(window);
   ok(
     topSites.includes("http://mozilla1.com/"),
     "Top site did not have a rich icon - get a screenshot"
