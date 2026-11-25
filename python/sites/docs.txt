@@ -3,8 +3,8 @@ requires-python:>=3.12
 pth:python/mozpack/test
 pth:tools/lint/eslint/
 pypi:Sphinx==9.1.0
-pypi:boto3==1.43.62
 pypi:fluent.pygments==1.0
+pypi:google-cloud-storage==3.17.1
 pypi:livereload==2.7.1
 pypi:mots==0.14.0
 pypi:myst-parser==5.2.0

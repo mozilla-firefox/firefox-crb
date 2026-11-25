@@ -8,7 +8,7 @@ Documentation has two try jobs associated:
   mach try fuzzy -q "'doc-generate"
   ```
 
-- `doc-upload` - This uploads documentation to [gecko-l1 bucket](http://gecko-docs.mozilla.org-l1.s3.us-west-2.amazonaws.com/index.html) with the committed changes.
+- `doc-upload` - This uploads documentation to the [staging bucket](https://firefox-source-docs-stage.data-static-websites.nonprod.webservices.mozgcp.net/) with the committed changes.
 
   ```shell
   mach try fuzzy -q "'doc-upload"
