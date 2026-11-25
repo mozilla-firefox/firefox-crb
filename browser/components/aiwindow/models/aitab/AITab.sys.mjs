@@ -4,52 +4,45 @@
 
 /** @import { ChatConversation } from "moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs" */
 /** @import { Conversation } from "moz-src:///browser/components/aiwindow/models/Conversation.sys.mjs" */
+/** @import { A2UISurface, ValidationEnv } from "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs" */
+/** @import { AITabSource } from "moz-src:///browser/components/aiwindow/models/aitab/AITabSources.sys.mjs" */
 
+import { isSmartPageURL } from "chrome://browser/content/aiwindow/modules/TrustedInternalURLs.mjs";
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
-import {
-  expandUrlTokens,
-  stripUnresolvedUrlTokens,
-  URL_REGEX,
-  UrlTokenizer,
-} from "moz-src:///browser/components/aiwindow/ui/modules/UrlTokenizer.sys.mjs";
-import { componentTypeName } from "chrome://browser/content/aiwindow/modules/AITabUtils.mjs";
+import { UrlTokenizer } from "moz-src:///browser/components/aiwindow/ui/modules/UrlTokenizer.sys.mjs";
 import { sanitizeUntrustedContent } from "moz-src:///browser/components/aiwindow/models/ChatUtils.sys.mjs";
+import {
+  AITabSources,
+  CANCELED_RESULT,
+  MAX_AITAB_CONTEXT_TABS,
+  PAGE_BREAK,
+} from "moz-src:///browser/components/aiwindow/models/aitab/AITabSources.sys.mjs";
+import {
+  AITabSurface,
+  linkKey,
+} from "moz-src:///browser/components/aiwindow/models/aitab/AITabSurface.sys.mjs";
+import { AITabValidation } from "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs";
 import {
   DEFAULT_AITAB_PAGE_TYPE,
   getAITabPageType,
-  isAITabPageEditable,
 } from "moz-src:///browser/components/aiwindow/ui/modules/AITabPageTypes.sys.mjs";
-
-import {
-  getSmartPageName,
-  isSmartPageURL,
-} from "chrome://browser/content/aiwindow/modules/TrustedInternalURLs.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
   A2UI: "moz-src:///browser/components/aiwindow/ui/modules/A2UI.sys.mjs",
   AIWindow:
     "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
-  AITabStore:
-    "moz-src:///browser/components/aiwindow/ui/modules/AITabStore.sys.mjs",
   AuthProvider:
     "moz-src:///browser/components/aiwindow/models/AuthProvider.sys.mjs",
-  ConversationStore:
-    "moz-src:///browser/components/aiwindow/ui/modules/ConversationStore.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
-  JsonSchema: "resource://gre/modules/JsonSchema.sys.mjs",
-  GetPageContent: "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs",
-  isAllowedURLProtocol:
-    "moz-src:///browser/components/aiwindow/models/SecurityProperties.sys.mjs",
   buildConversation:
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
   buildEngineForFeature:
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
+  isAllowedURLProtocol:
+    "moz-src:///browser/components/aiwindow/models/SecurityProperties.sys.mjs",
   loadPrompt:
     "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs",
   MODEL_FEATURES: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
-  FEATURE_MAJOR_VERSIONS:
-    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
-  parseVersion: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   renderPrompt: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   console: () =>
@@ -58,72 +51,8 @@ const lazy = XPCOMUtils.declareLazy({
       maxLogLevelPref: "browser.smartwindow.conversation.logLevel",
     }),
   l10n: () => new Localization(["preview/aiWindow.ftl"], true),
-  // Dev override: when the pref holds a non-empty string, it is parsed as an
-  // A2UICatalog instead of the packaged component_schema.json, so the catalog
-  // can be iterated on without rebuilding.
-  overrideCatalog: {
-    pref: "browser.smartwindow.aitab.components",
-    transform: prefValue => {
-      const pref = prefValue.trim();
-      if (!pref) {
-        return null;
-      }
-      try {
-        return JSON.parse(pref);
-      } catch (e) {
-        throw new Error(
-          `failed to parse browser.smartwindow.aitab.components: ${e.message}`
-        );
-      }
-    },
-  },
 });
 
-// Packaged A2UI component catalog (see models/aitab/jar.mn). The service
-// produces a validated surface only.
-//
-// component_schema.json is an A2UI-compatible *catalog*: a single JSON-Schema
-// object with a `components` map (name -> property schema), shared `$defs`,
-// and a `version` ("{major}.{minor}") paired with the aitab Remote Settings
-// major (FEATURE_MAJOR_VERSIONS.aitab): the prompts published at that major
-// describe this catalog. A catalog change that older prompts cannot describe
-// (a new component, a new property on a component that forbids unknown ones)
-// bumps the catalog major, FEATURE_MAJOR_VERSIONS.aitab, and the packaged
-// dump's aitab records together, so two releases can be served side by side.
-const COMPONENT_SCHEMA_URL =
-  "chrome://browser/content/aiwindow/aitab/component_schema.json";
-// The `component` type every surface's root must use.
-const ROOT_COMPONENT = "Page";
-// The id the single root component must carry.
-const ROOT_ID = "root";
-// JSON Schema dialect the per-component validators declare.
-const JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema";
-
-// Separator inserted between each page's text in the model prompt.
-const PAGE_BREAK = "\n\n<----- PAGE BREAK ---->\n\n";
-
-export const MAX_AITAB_CONTEXT_TABS = 10;
-
-// Surface properties the browser navigates to or loads. The model may only
-// fill them with URL tokens it was given (see expandSurfaceUrlTokens).
-const LINK_FIELDS = new Set(["href", "src"]);
-
-/**
- * @param {string} url
- * @returns {string|null} The form URLs are compared in when checking a link
- *   against the ones a conversation has seen, or null when `url` is invalid.
- */
-function linkKey(url) {
-  return URL.parse(String(url ?? ""))?.href ?? null;
-}
-
-// Nesting limit for walking model output in expandSurfaceUrlTokens. Surfaces
-// are flat adjacency lists, so real ones stay far below this.
-const MAX_EXPAND_RECURSION_DEPTH = 32;
-
-// Heading for the `rawContent` section, so the model can tell content handed to
-// it directly apart from text extracted from a fetched page.
-const RAW_CONTENT_HEADING = "## Provided content (not fetched from a URL)";
 // Heading for the `modifyInstructions` section. A modification continues the
 // conversation that produced the page, so this marks which turn's surface the
 // instructions apply to: the one the model wrote last.
@@ -141,168 +70,11 @@ const MAX_INSTRUCTION_CHARS = 1500;
 // request is refused rather than answered badly.
 const MAX_HISTORY_CHARS = 100000;
 
-const CANCELED_RESULT = Object.freeze({
-  error: "page generation was canceled",
-  code: "canceled",
-});
-
 // The viewer page for AITab pages. The `page` query string parameter names the
 // slug the page data is loaded from.
 const AITAB_VIEWER_BASE = "about:smartpage?page=";
 
 const HISTORY_LIMIT_ERROR = "No more modifications are supported";
-
-const PAGE_NOT_EDITABLE_ERROR = "This page cannot be modified";
-
-/**
- * A JSON Schema object from the catalog: a component's property schema, one of
- * the shared `$defs`, or any subschema of those. Only the keywords the
- * validation walk itself inspects are listed here; every other JSON Schema
- * keyword may be present and is handled by the compiled validators.
- *
- * @typedef {object} A2UISchema
- * @property {string} [$ref] - Reference into the catalog's `$defs`, e.g. "#/$defs/DynamicString".
- * @property {string} [type] - JSON Schema type of the described value.
- * @property {A2UISchema[]} [oneOf] - Alternative shapes the value may take,
- *   e.g. a literal array or an `A2UIDataBinding` to one.
- * @property {Record<string, A2UISchema>} [properties] - Property name to its schema.
- * @property {A2UISchema} [items] - Schema each element of an array must satisfy.
- * @property {string[]} [required] - Names of the properties that must be present.
- */
-
-/**
- * An A2UI component catalog: the packaged component_schema.json, or the object
- * held by the browser.smartwindow.aitab.components pref. A single JSON-Schema
- * document whose `components` map holds one property schema per component
- * type, all sharing the document's `$defs`.
- *
- * @typedef {object} A2UICatalog
- * @property {string} [version] - "{major}.{minor}"; the major is paired with
- *   FEATURE_MAJOR_VERSIONS.aitab. Required on the packaged catalog.
- * @property {Record<string, A2UISchema>} components - Component type name to its property schema.
- * @property {Record<string, A2UISchema>} [$defs] - Definitions the component schemas `$ref`.
- * @property {string} [catalogId] - Identifier of the catalog.
- * @property {string} [title] - Human-readable catalog name.
- * @property {string} [description] - What the catalog covers.
- */
-
-/**
- * A surface: the generated page, as a flat list of component instances plus
- * the data model their bindings resolve against.
- *
- * @typedef {object} A2UISurface
- * @property {A2UIComponent[]} components - Every component instance, as a flat
- *   adjacency list: parent/child structure comes from the id references, not
- *   from this array's order.
- * @property {A2UIDataModel} [dataModel] - The data the components bind to.
- */
-
-/**
- * One component instance in a surface. Alongside the two discriminators, a
- * component carries the catalog properties declared for its type (see
- * `#propsOf`), each either a literal or an `A2UIDataBinding`; `header` and
- * `children` are the two such properties this module reads directly.
- *
- * @typedef {object} A2UIComponent
- * @property {string} id - Unique within the surface; the root component's id is ROOT_ID.
- * @property {string} component - A component type name from the catalog.
- * @property {A2UIIdReference} [header] - Id of this component's header component.
- * @property {A2UIIdReference} [children] - Ids of this component's child components.
- */
-
-/**
- * A component's catalog properties: a component instance minus its `id` and
- * `component` discriminators, which the per-component schemas don't declare.
- *
- * @typedef {Record<string, *>} A2UIComponentProps
- */
-
-/**
- * A surface's data model: an arbitrary JSON tree that binding paths resolve
- * into. Keeps real content out of the component instances.
- *
- * @typedef {Record<string, *>} A2UIDataModel
- */
-
-/**
- * A binding to a value in the data model. `path` is a JSON-Pointer (RFC 6901),
- * absolute from the data-model root when it starts with "/", otherwise
- * relative to the enclosing template scope.
- *
- * @typedef {object} A2UIDataBinding
- * @property {string} path - Pointer to the bound value.
- */
-
-/**
- * A template repeater: instantiates the `componentId` component once per
- * element of the array bound at `path`.
- *
- * @typedef {object} A2UITemplateRef
- * @property {string} componentId - Id of the template component.
- * @property {string} path - Absolute JSON-Pointer to the array to repeat over.
- */
-
-/**
- * Related components, always referenced by id and never inlined: a single id,
- * a fixed ordered list of ids, or a template repeater.
- *
- * @typedef {string|string[]|A2UITemplateRef} A2UIIdReference
- */
-
-/**
- * A compiled JSON Schema validator: the part of a `JsonSchema.Validator`
- * instance this module uses.
- *
- * @typedef {object} SchemaValidator
- * @property {(instance: *) => {valid: boolean, errors: ValidationError[]}} validate -
- *   Validates one instance against the compiled schema, collecting every
- *   failure (the validators are built with shortCircuit off).
- */
-
-/**
- * Everything needed to validate a surface against one catalog: the catalog
- * itself, its component type names in catalog order, and one compiled
- * validator per component type.
- *
- * @typedef {object} ValidationEnv
- * @property {A2UICatalog} catalog - The catalog the validators were built from.
- * @property {string[]} names - Component type names, in catalog order.
- * @property {Record<string, SchemaValidator>} validators - Component type name to its props validator.
- */
-
-/**
- * A single validation failure. Errors raised by this module carry `message`
- * (plus `component` or `dataPath` when the failure is attributable to one);
- * errors coming out of a JsonSchema validator carry the JSON Schema
- * output-unit fields instead.
- *
- * @typedef {object} ValidationError
- * @property {string} [message] - Description, for errors raised by this module.
- * @property {string} [component] - Id of the offending component instance.
- * @property {string} [dataPath] - JSON-Pointer of the offending data-model value.
- * @property {string} [error] - Description, for errors from a JsonSchema validator.
- * @property {string} [keyword] - The JSON Schema keyword that failed.
- * @property {string} [keywordLocation] - Pointer to the failed keyword within the schema.
- * @property {string} [instanceLocation] - Pointer to the failing value within the validated instance.
- */
-
-/**
- * The outcome of validating a surface: the surface itself when it is valid,
- * every collected failure otherwise.
- *
- * @typedef {{ok: true, surface: A2UISurface} | {ok: false, errors: ValidationError[]}} SurfaceResult
- */
-
-/**
- * One source page a surface was generated from, in the order requested.
- *
- * @typedef {object} AITabSource
- * @property {string} url - The page the content was pulled from.
- * @property {string} title - The open tab's label, falling back to the URL.
- * @property {string} favIconUrl - A `page-icon:` URL for `url`.
- * @property {string|null} imageUrl - Cached og:image, or null when there is none.
- * @property {string} extractedText - Untruncated readable page text.
- */
 
 /**
  * How a surface came to be: what was asked for, and what it was built from.
@@ -362,516 +134,6 @@ const PAGE_NOT_EDITABLE_ERROR = "This page cannot be modified";
  * the public methods keep working when callers destructure them off the class.
  */
 export class AITab {
-  /** @type {Promise<A2UICatalog>|undefined} */
-  static #packagedCatalogPromise;
-
-  /**
-   * Load the component catalog: from the browser.smartwindow.aitab.components
-   * pref when it is set (see lazy.overrideCatalog), otherwise from the packaged
-   * catalog. Returns a validation `env` built from it.
-   *
-   * @returns {Promise<{env: ValidationEnv}>}
-   */
-  static async loadAssets() {
-    const override = lazy.overrideCatalog;
-    const catalog = override ?? (await AITab.#loadPackagedCatalog());
-    // The packaged catalog must declare its version; a dev override may omit
-    // it, but when it declares one it is held to the same pairing rule.
-    AITab.#checkCatalogVersion(catalog, { versionRequired: !override });
-    return { env: AITab.#makeEnv(catalog) };
-  }
-
-  /**
-   * Enforce the catalog/prompt pairing: the catalog's major must equal the
-   * aitab major this build reads prompts for, or the prompt and the validator
-   * would disagree on which components exist.
-   *
-   * @param {A2UICatalog} catalog
-   * @param {object} options
-   * @param {boolean} options.versionRequired - Reject a catalog with no `version`.
-   * @throws {Error} with `clientReason` "catalogVersionMismatch".
-   */
-  static #checkCatalogVersion(catalog, { versionRequired }) {
-    const expected = lazy.FEATURE_MAJOR_VERSIONS[lazy.MODEL_FEATURES.AITAB];
-    if (catalog?.version == null && !versionRequired) {
-      lazy.console.warn(
-        `aitab catalog override has no version; assuming major ${expected}`
-      );
-      return;
-    }
-    const parsed = lazy.parseVersion(catalog?.version);
-    if (!parsed || parsed.major !== expected) {
-      const err = new Error(
-        `aitab catalog version ${JSON.stringify(catalog?.version)} does not match this build's aitab major ${expected}`
-      );
-      err.clientReason = "catalogVersionMismatch";
-      throw err;
-    }
-  }
-
-  /**
-   * Validate a surface against the catalog. A surface is a flat list of
-   * component instances plus a data model; validation covers, in one pass:
-   * the shape of the surface, that exactly one component is the `root` Page,
-   * that every component's props match its catalog schema, that all id
-   * references resolve, and that every absolute data binding resolves in the
-   * data model.
-   *
-   * @param {A2UISurface} surface
-   * @param {ValidationEnv} env
-   * @returns {SurfaceResult}
-   */
-  static buildSurface(surface, env) {
-    if (!env.validators) {
-      return { ok: false, errors: [{ message: "no component catalog" }] };
-    }
-    const components = surface?.components;
-    if (!Array.isArray(components)) {
-      return {
-        ok: false,
-        errors: [{ message: "surface.components must be an array" }],
-      };
-    }
-    const dataModel = surface.dataModel ?? {};
-    const errors = [];
-
-    // Structural: unique ids, exactly one root, root is a Page.
-    const ids = components.map(c => c?.id);
-    const idSet = new Set();
-    for (const id of ids) {
-      if (typeof id != "string" || !id) {
-        errors.push({ message: "every component needs a string id" });
-      } else if (idSet.has(id)) {
-        errors.push({ message: `duplicate component id "${id}"` });
-      } else {
-        idSet.add(id);
-      }
-    }
-    const roots = components.filter(c => c?.id === ROOT_ID);
-    if (roots.length !== 1) {
-      errors.push({
-        message: `expected exactly one component with id "${ROOT_ID}", found ${roots.length}`,
-      });
-    } else if (roots[0].component !== ROOT_COMPONENT) {
-      errors.push({
-        message: `the "${ROOT_ID}" component must be a ${ROOT_COMPONENT}, got "${roots[0].component}"`,
-      });
-    }
-
-    // Per-component: known type + props validate against catalog schema.
-    for (const comp of components) {
-      const validator = env.validators[comp?.component];
-      if (!validator) {
-        errors.push({
-          message: `unknown component "${comp?.component}" (id "${comp?.id}")`,
-        });
-        continue;
-      }
-      const { valid, errors: propErrors } = validator.validate(
-        AITab.#propsOf(comp)
-      );
-      if (!valid) {
-        for (const e of propErrors) {
-          errors.push({ ...e, component: comp.id });
-        }
-      }
-    }
-
-    // Id-reference integrity: header/children (and template targets).
-    for (const comp of components) {
-      AITab.#checkRefs(comp?.header, idSet, `${comp?.id}.header`, errors);
-      AITab.#checkRefs(comp?.children, idSet, `${comp?.id}.children`, errors);
-    }
-
-    // Binding integrity: absolute { path } bindings must resolve in dataModel.
-    for (const comp of components) {
-      if (!comp) {
-        continue;
-      }
-      AITab.#checkBindings(AITab.#propsOf(comp), dataModel, comp.id, errors);
-    }
-
-    // Bound values live in the data model, which the per-component schema
-    // can't reach. Validate bound objects and array items against the catalog.
-    const itemCache = new Map();
-    for (const comp of components) {
-      const compSchema = comp && env.catalog.components[comp.component];
-      if (!compSchema) {
-        continue;
-      }
-      AITab.#checkBoundArrays(
-        compSchema,
-        AITab.#propsOf(comp),
-        env.catalog,
-        dataModel,
-        comp.id,
-        errors,
-        itemCache
-      );
-    }
-
-    const repeater = roots[0]?.children;
-    if (
-      repeater &&
-      !Array.isArray(repeater) &&
-      typeof repeater.path == "string" &&
-      repeater.path.startsWith("/")
-    ) {
-      const template = components.find(
-        comp => comp?.id === repeater.componentId
-      );
-      const schema = template && env.catalog.components[template.component];
-      const scopes = AITab.#resolvePath(dataModel, repeater.path);
-      if (schema && Array.isArray(scopes)) {
-        for (const [index, scope] of scopes.entries()) {
-          AITab.#checkBoundArrays(
-            schema,
-            AITab.#propsOf(template),
-            env.catalog,
-            dataModel,
-            `${template.id}[${index}]`,
-            errors,
-            itemCache,
-            scope
-          );
-        }
-      }
-    }
-
-    if (errors.length) {
-      return { ok: false, errors };
-    }
-    return { ok: true, surface };
-  }
-
-  /**
-   * Fetch and cache the packaged catalog object from chrome://.
-   *
-   * @returns {Promise<A2UICatalog>}
-   */
-  static #loadPackagedCatalog() {
-    if (!AITab.#packagedCatalogPromise) {
-      AITab.#packagedCatalogPromise = fetch(COMPONENT_SCHEMA_URL)
-        .then(r => r.json())
-        .catch(error => {
-          AITab.#packagedCatalogPromise = undefined;
-          throw error;
-        });
-    }
-    return AITab.#packagedCatalogPromise;
-  }
-
-  /**
-   * Build a validation `env` from an A2UI catalog. Compiles one JsonSchema
-   * validator per component type (each rooted at that component's property
-   * schema, with the catalog's shared `$defs` inlined so `#/$defs/...` refs
-   * resolve), and records the ordered component-name list.
-   *
-   * @param {A2UICatalog} catalog
-   * @returns {ValidationEnv}
-   */
-  static #makeEnv(catalog) {
-    if (!catalog || typeof catalog != "object" || !catalog.components) {
-      throw new Error("aitab catalog must be an object with a components map");
-    }
-    const $defs = catalog.$defs ?? {};
-    const names = Object.keys(catalog.components);
-    const validators = {};
-    for (const name of names) {
-      // Each per-type doc carries the shared $defs so the component's internal
-      // `#/$defs/...` references resolve. No $id: each validator is standalone
-      // and there are no cross-document refs to resolve.
-      const doc = {
-        $schema: JSON_SCHEMA_DIALECT,
-        $defs,
-        ...catalog.components[name],
-      };
-      validators[name] = new lazy.JsonSchema.Validator(doc, {
-        shortCircuit: false,
-      });
-    }
-    return { catalog, names, validators };
-  }
-
-  /**
-   * Push an error for every id reference in `value` that is not a known
-   * component id. `value` may be a single id string, an array of id strings, or
-   * a template `{ componentId, path }` object (children).
-   *
-   * @param {A2UIIdReference} value
-   * @param {Set<string>} idSet
-   * @param {string} where
-   * @param {ValidationError[]} errors
-   */
-  static #checkRefs(value, idSet, where, errors) {
-    if (value == null) {
-      return;
-    }
-    if (typeof value == "string") {
-      if (!idSet.has(value)) {
-        errors.push({ message: `${where} references missing id "${value}"` });
-      }
-    } else if (Array.isArray(value)) {
-      for (const v of value) {
-        AITab.#checkRefs(v, idSet, where, errors);
-      }
-    } else if (
-      typeof value == "object" &&
-      typeof value.componentId == "string"
-    ) {
-      if (!idSet.has(value.componentId)) {
-        errors.push({
-          message: `${where} template references missing id "${value.componentId}"`,
-        });
-      }
-    }
-  }
-
-  /**
-   * Walk a props object for binding objects `{ path }` and push an error for
-   * every absolute path (starting with "/") that does not resolve in the data
-   * model. Relative paths (template scope) are not checked here.
-   *
-   * @param {A2UIComponentProps|*} value - Props object, or any nested value
-   *   reached while walking one.
-   * @param {A2UIDataModel} dataModel
-   * @param {string} where
-   * @param {ValidationError[]} errors
-   */
-  static #checkBindings(value, dataModel, where, errors) {
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        AITab.#checkBindings(v, dataModel, where, errors);
-      }
-      return;
-    }
-    if (!value || typeof value != "object") {
-      return;
-    }
-    const keys = Object.keys(value);
-    if (keys.length === 1 && typeof value.path == "string") {
-      if (
-        value.path.startsWith("/") &&
-        AITab.#resolvePath(dataModel, value.path) === undefined
-      ) {
-        errors.push({
-          message: `${where}: binding path "${value.path}" not found in dataModel`,
-        });
-      }
-      return;
-    }
-    for (const v of Object.values(value)) {
-      AITab.#checkBindings(v, dataModel, where, errors);
-    }
-  }
-
-  /**
-   * A component instance's catalog properties: everything but the `id` and
-   * `component` discriminators, which the per-component schemas don't declare.
-   *
-   * @param {A2UIComponent} comp
-   * @returns {A2UIComponentProps}
-   */
-  static #propsOf(comp) {
-    const props = { ...comp };
-    delete props.id;
-    delete props.component;
-    return props;
-  }
-
-  /**
-   * Resolve a JSON-Pointer (RFC 6901) into `root`. Returns the pointed-at value
-   * (truthy check at the callsite treats `undefined` as "not found"; a present
-   * value — including empty string/array — is considered resolved).
-   *
-   * @param {A2UIDataModel} root
-   * @param {string} pointer - Absolute pointer starting with "/".
-   * @returns {*}
-   */
-  static #resolvePath(root, pointer) {
-    let node = root;
-    for (let seg of pointer.slice(1).split("/")) {
-      if (node == null || typeof node != "object") {
-        return undefined;
-      }
-      seg = seg.replace(/~1/g, "/").replace(/~0/g, "~");
-      node = node[seg];
-    }
-    return node;
-  }
-
-  /**
-   * True when `v` is an `A2UIDataBinding`: an object with just a string
-   * `path`.
-   *
-   * @param {*} v
-   * @returns {boolean}
-   */
-  static #isBinding(v) {
-    return (
-      !!v &&
-      typeof v == "object" &&
-      !Array.isArray(v) &&
-      typeof v.path == "string" &&
-      Object.keys(v).length === 1
-    );
-  }
-
-  /**
-   * Resolve a schema that may be `{ $ref: "#/$defs/X", ...siblings }` to its target `$def`.
-   *
-   * @param {A2UISchema} schema - Schema that may be a `$ref` into the catalog.
-   * @param {A2UICatalog} catalog - The catalog holding `$defs`.
-   * @returns {A2UISchema} The resolved `$def`, or `schema` when it is not a `$ref`.
-   */
-  static #resolveDef(schema, catalog) {
-    if (schema && typeof schema.$ref == "string") {
-      const name = schema.$ref.replace(/^#\/\$defs\//, "");
-      return catalog.$defs?.[name] ?? schema;
-    }
-    return schema;
-  }
-
-  /**
-   * Compile + cache a validator for a bound object or array item schema
-   * (with catalog `$defs` in scope).
-   *
-   * @param {A2UISchema} itemSchema - Schema each array element must satisfy.
-   * @param {A2UICatalog} catalog - The catalog whose `$defs` the item schema may $ref.
-   * @param {Map<string, SchemaValidator>} cache - Per-validation compiled-validator cache.
-   * @returns {SchemaValidator} A JsonSchema validator for `itemSchema`.
-   */
-  static #itemValidator(itemSchema, catalog, cache) {
-    return cache.getOrInsertComputed(
-      JSON.stringify(itemSchema),
-      () =>
-        new lazy.JsonSchema.Validator(
-          {
-            $schema: JSON_SCHEMA_DIALECT,
-            $defs: catalog.$defs ?? {},
-            ...itemSchema,
-          },
-          { shortCircuit: false }
-        )
-    );
-  }
-
-  /**
-   * Walk `value` against its catalog `schema`; wherever the schema is a
-   * `oneOf` of [ array-of-items, DataBinding ] and the value is a `{ path }`
-   * binding, resolve the array from the data model and validate each element
-   * against the array's item schema. Recurses into object properties so nested
-   * arrays (e.g. Header.references.items) are covered. Literal arrays are
-   * already validated by the per-component validator, so they are skipped here.
-   * Bound objects are validated against the literal object branch.
-   * Relative bindings are validated when a repeater scope is provided.
-   *
-   * @param {A2UISchema} schema
-   * @param {*} value
-   * @param {A2UICatalog} catalog
-   * @param {A2UIDataModel} dataModel
-   * @param {string} where
-   * @param {ValidationError[]} errors
-   * @param {Map<string, SchemaValidator>} cache
-   * @param {*} [scope] - Data for the current repeater item.
-   */
-  static #checkBoundArrays(
-    schema,
-    value,
-    catalog,
-    dataModel,
-    where,
-    errors,
-    cache,
-    scope = undefined
-  ) {
-    schema = AITab.#resolveDef(schema, catalog);
-    if (!schema || value == null) {
-      return;
-    }
-    if (Array.isArray(schema.oneOf)) {
-      const isBinding = AITab.#isBinding(value);
-      const isAbsolute = isBinding && value.path.startsWith("/");
-      if (scope !== undefined && isAbsolute) {
-        return;
-      }
-      const canResolveBinding =
-        isBinding && (isAbsolute || scope !== undefined);
-      const boundValue = canResolveBinding
-        ? AITab.#resolvePath(
-            isAbsolute ? dataModel : scope,
-            isAbsolute ? value.path : `/${value.path}`
-          )
-        : undefined;
-      if (canResolveBinding && !isAbsolute && boundValue === undefined) {
-        errors.push({
-          message: `${where}: binding path "${value.path}" not found in repeater item`,
-        });
-        return;
-      }
-      const objectBranch = schema.oneOf.find(
-        s =>
-          s?.$ref !== "#/$defs/DataBinding" &&
-          AITab.#resolveDef(s, catalog)?.type === "object"
-      );
-      if (objectBranch && canResolveBinding) {
-        if (boundValue !== undefined) {
-          const validator = AITab.#itemValidator(objectBranch, catalog, cache);
-          const { valid, errors: objectErrors } =
-            validator.validate(boundValue);
-          if (!valid) {
-            for (const error of objectErrors) {
-              errors.push({ ...error, dataPath: value.path });
-            }
-          }
-        }
-        return;
-      }
-      const arrayBranch = schema.oneOf.find(
-        s => s && s.type === "array" && s.items
-      );
-      if (arrayBranch && canResolveBinding) {
-        const arr = boundValue;
-        if (arr === undefined) {
-          return; // missing path already reported by #checkBindings
-        }
-        if (!Array.isArray(arr)) {
-          errors.push({
-            message: `${where}: data at "${value.path}" must be an array`,
-          });
-          return;
-        }
-        const iv = AITab.#itemValidator(arrayBranch.items, catalog, cache);
-        arr.forEach((item, i) => {
-          const { valid, errors: itemErrors } = iv.validate(item);
-          if (!valid) {
-            for (const e of itemErrors) {
-              errors.push({ ...e, dataPath: `${value.path}/${i}` });
-            }
-          }
-        });
-      }
-      return;
-    }
-    const props = schema.properties;
-    if (props && typeof value == "object" && !Array.isArray(value)) {
-      for (const [k, sub] of Object.entries(props)) {
-        if (k in value) {
-          AITab.#checkBoundArrays(
-            sub,
-            value[k],
-            catalog,
-            dataModel,
-            `${where}/${k}`,
-            errors,
-            cache,
-            scope
-          );
-        }
-      }
-    }
-  }
-
   /**
    * Build the viewer URL for a stored page. The page data stays in the
    * database and is loaded from the slug, so nothing about the page travels
@@ -1013,7 +275,7 @@ export class AITab {
     const completeExtra = {
       is_success: !result.error,
       components_used: result.surface
-        ? AITab.#componentsUsed(result.surface)
+        ? AITabSurface.componentsUsed(result.surface)
         : "[]",
       components_converted: JSON.stringify(
         result.surface ? new lazy.A2UI(result.surface).conversions() : []
@@ -1074,7 +336,7 @@ export class AITab {
     // for.
     let prior = null;
     if (slug) {
-      prior = await AITab.#loadPageToModify(slug, conversation);
+      prior = await AITabSources.loadPageToModify(slug, conversation);
       if (prior.error) {
         return prior;
       }
@@ -1085,7 +347,7 @@ export class AITab {
     }
 
     const effectivePageType = prior ? prior.page.pageType : pageType;
-    const sources = await AITab.#collectSources({
+    const sources = await AITabSources.collectSources({
       urls,
       rawText,
       sourceTextBudget: getAITabPageType(effectivePageType).sourceTextBudget,
@@ -1169,7 +431,7 @@ export class AITab {
     }
 
     const title =
-      AITab.#titleFromSurface(structured.surface) ||
+      AITabSurface.titleFromSurface(structured.surface) ||
       // A revision that comes back untitled keeps the title it had, which is
       // more specific than anything this turn could fall back to.
       prior?.page.title ||
@@ -1189,7 +451,10 @@ export class AITab {
         creationPrompt: prior?.page.context?.creationPrompt || focusText,
         // A revision keeps the sources the page was already built from: the
         // turn that asked for it may have brought no URLs of its own.
-        urlsUsed: AITab.#mergeSources(prior?.page.context?.urlsUsed, urlsUsed),
+        urlsUsed: AITabSources.mergeSources(
+          prior?.page.context?.urlsUsed,
+          urlsUsed
+        ),
         relevantMemories: [],
       },
     };
@@ -1207,7 +472,7 @@ export class AITab {
    *   page.
    * @param {string[]} options.readUrls - Pages read for this turn.
    * @param {{page: object, conversation: Conversation}|null} options.prior -
-   *   The page being revised, from #loadPageToModify.
+   *   The page being revised, from AITabSources.loadPageToModify.
    * @returns {Set<string>} Normalized URLs (see linkKey).
    */
   static #allowedLinks({ conversation, readUrls, prior }) {
@@ -1216,32 +481,9 @@ export class AITab {
       ...(conversation?.serpUrlsForAnonymousFetch ?? []),
       ...(conversation?.getAllMentionURLs() ?? []),
       ...readUrls,
-      ...AITab.#linkedUrls(prior?.page.components?.surface),
+      ...AITabSurface.linkedUrls(prior?.page.components?.surface),
     ];
     return new Set(urls.map(linkKey).filter(Boolean));
-  }
-
-  /**
-   * The `href` values in a surface, including those in its data model.
-   *
-   * @param {any} value - A surface, or a value nested in one.
-   * @param {number} [recursionDepth] - Nesting level of `value`; callers
-   *   leave it unset.
-   * @returns {string[]}
-   */
-  static #linkedUrls(value, recursionDepth = 0) {
-    if (
-      !value ||
-      typeof value != "object" ||
-      recursionDepth > MAX_EXPAND_RECURSION_DEPTH
-    ) {
-      return [];
-    }
-    return Object.entries(value).flatMap(([key, sub]) =>
-      key == "href" && typeof sub == "string"
-        ? [sub]
-        : AITab.#linkedUrls(sub, recursionDepth + 1)
-    );
   }
 
   /**
@@ -1256,350 +498,6 @@ export class AITab {
     return typeof text == "string"
       ? text.trim().slice(0, MAX_INSTRUCTION_CHARS)
       : "";
-  }
-
-  /**
-   * The longest prefix of `text` that fits in `budget` once its URLs are
-   * tokenized. Never ends inside a URL, which would hand the model a token
-   * for a URL that doesn't exist.
-   *
-   * @param {string} text
-   * @param {number} budget
-   * @returns {string}
-   */
-  static #truncateToBudget(text, budget) {
-    // Measures token lengths only. The prompt is tokenized separately, so
-    // nothing registered here can resolve a link in the model's output.
-    const urlTokenizer = new UrlTokenizer();
-    let length = 0;
-    let end = 0;
-    for (const match of text.matchAll(URL_REGEX)) {
-      const gap = match.index - end;
-      if (length + gap >= budget) {
-        break;
-      }
-      length += gap + urlTokenizer.tokenizeText(match[0]).length;
-      if (length > budget) {
-        return text.slice(0, match.index);
-      }
-      end = match.index + match[0].length;
-    }
-    return text.slice(0, end + Math.max(0, budget - length));
-  }
-
-  /**
-   * The length of `text` once its URLs are tokenized, which is the length the
-   * source-text budget is measured in.
-   *
-   * @param {string} text
-   * @returns {number}
-   */
-  static #tokenizedLength(text) {
-    // Measures token lengths only, as in #truncateToBudget.
-    return new UrlTokenizer().tokenizeText(text).length;
-  }
-
-  /**
-   * Share `budget` among sections of the given lengths. A section shorter
-   * than an even share keeps all of its text, and what it leaves over is
-   * shared among the longer ones, so a short or unreadable page doesn't hold
-   * budget that a long page is cut for.
-   *
-   * @param {number[]} lengths - Each section's length, in the order the
-   *   sections are sent.
-   * @param {number} budget
-   * @returns {number[]} Each section's share, in the same order.
-   */
-  static shareBudget(lengths, budget) {
-    const shares = new Array(lengths.length).fill(0);
-    const shortestFirst = lengths
-      .map((_, index) => index)
-      .sort((a, b) => lengths[a] - lengths[b]);
-    let remaining = budget;
-    for (const [position, index] of shortestFirst.entries()) {
-      const evenShare = Math.floor(
-        remaining / (shortestFirst.length - position)
-      );
-      shares[index] = Math.min(lengths[index], evenShare);
-      remaining -= shares[index];
-    }
-    return shares;
-  }
-
-  /**
-   * Read the material a surface is composed from: the readable text of each
-   * requested URL, plus any content handed over inline, laid out as the
-   * prompt's source sections and separated by PAGE_BREAK.
-   *
-   * @param {object} options
-   * @param {string[]} options.urls - URLs to read, in the requested order.
-   * @param {string} options.rawText - Content supplied inline, or "".
-   * @param {number} options.sourceTextBudget - Total characters of source
-   *   text, measured after URL tokenization since URLs only reach the model as
-   *   tokens.
-   * @param {ChatConversation} options.conversation - Gates each URL's access
-   *   check, so a page the chat may not read contributes nothing.
-   * @param {AbortSignal} [options.signal] - Cancels the extractions.
-   * @returns {Promise<{urlsUsed: AITabSource[], readUrls: string[],
-   *   sourceText: string}|{error: string}>} The sources in the order
-   *   requested, the URLs among them that could be read, and the text for the
-   *   prompt, or a description of why there is nothing to build from.
-   */
-  static async #collectSources({
-    urls,
-    rawText,
-    sourceTextBudget,
-    conversation,
-    signal,
-  }) {
-    // Pull the readable content for each requested URL (order-aligned with
-    // urls). Structured results, so a refusal is distinguishable from page
-    // text rather than being composed into the page as if it were content.
-    let contents = [];
-    if (urls.length) {
-      contents = await lazy.GetPageContent.getPageContent(
-        { url_list: urls, signal },
-        conversation
-      );
-
-      if (signal?.aborted) {
-        return CANCELED_RESULT;
-      }
-
-      // Nothing readable and no inline content: report it instead of
-      // generating a page whose only source material is the refusal. A
-      // partial read, or inline content alongside unreadable pages, still
-      // generates from what is there.
-      if (!rawText && !contents.some(result => result.ok)) {
-        return {
-          error: "none of the requested pages could be read",
-          code: "pages_unreadable",
-        };
-      }
-    }
-
-    // Share the source-text budget among the sections the prompt will carry —
-    // one per requested tab, plus one for inline content — so the model prompt
-    // stays bounded no matter how many tabs are included. A modification can
-    // bring neither, in which case there is nothing to budget.
-    const texts = urls.map((url, index) => contents[index]?.content ?? "");
-    const budgets = AITab.shareBudget(
-      [...texts, ...(rawText ? [rawText] : [])].map(text =>
-        AITab.#tokenizedLength(text)
-      ),
-      sourceTextBudget
-    );
-
-    /** @type {AITabSource[]} */
-    const urlsUsed = [];
-    const sourceParts = [];
-    for (const [index, url] of urls.entries()) {
-      // Prefer the open tab's title for the heading; fall back to the URL.
-      const tab = lazy.GetPageContent.getTabWithURL(url);
-      const heading = tab?.label || url;
-      const text = texts[index];
-      // Best-effort og:image lookup ("" when none cached), gated on the same
-      // access-control decision as the page text so a refused URL leaks no
-      // image either.
-      const imageUrl = lazy.GetPageContent.isContentAllowed(url, conversation)
-        ? await AITab.#getPageImage(url)
-        : "";
-      urlsUsed.push({
-        url,
-        title: heading,
-        favIconUrl: `page-icon:${url}`,
-        imageUrl: imageUrl || null,
-        extractedText: text,
-      });
-
-      // Trim each page's text to its share of the budget before sending to the
-      // model.
-      const budgetedText = AITab.#truncateToBudget(text, budgets[index]);
-      const headLines = [`## ${heading}`, `URL: ${url}`];
-      // Omit the Image: line when absent so the model never echoes an empty
-      // value.
-      if (imageUrl) {
-        headLines.push(`Image: ${imageUrl}`);
-      }
-      sourceParts.push(`${headLines.join("\n")}\n\n${budgetedText}`);
-    }
-
-    if (signal?.aborted) {
-      return CANCELED_RESULT;
-    }
-
-    if (rawText) {
-      sourceParts.push(
-        `${RAW_CONTENT_HEADING}\n\n${AITab.#truncateToBudget(rawText, budgets.at(-1))}`
-      );
-    }
-
-    return {
-      urlsUsed,
-      readUrls: urls.filter((url, index) => contents[index]?.ok),
-      sourceText: sourceParts.join(PAGE_BREAK),
-    };
-  }
-
-  /**
-   * Load the stored page a modification names, along with the conversation that
-   * composed it. The stored conversation carries its messages, URL ledgers and
-   * security flags but no engine; #resolvePromptSet attaches one.
-   *
-   * Only a page belonging to `conversation`, or one the user referenced in it
-   * (the current tab or an @mention), can be loaded: slugs are visible in page
-   * URLs, so without that check a model could be talked into rewriting a page
-   * from an unrelated chat. URLs the conversation merely came across, such as
-   * open tabs or links in fetched pages, do not count. Keying the lookup on
-   * the chat conversation would also file the new version under the wrong
-   * slug.
-   *
-   * @param {string} slug
-   * @param {ChatConversation} conversation - The chat asking for the revision.
-   * @returns {Promise<{page: object, conversation: Conversation}
-   *   |{error: string}>}
-   */
-  static async #loadPageToModify(slug, conversation) {
-    let page;
-    let priorConversation;
-    try {
-      page = await lazy.AITabStore.getBySlug(slug);
-      if (page?.toolConvId) {
-        priorConversation = await lazy.ConversationStore.findConversationById(
-          page.toolConvId
-        );
-      }
-    } catch (error) {
-      lazy.console.error("could not load the page to modify", slug, error);
-      return {
-        error: `the page "${slug}" could not be loaded`,
-        code: "page_load_failed",
-      };
-    }
-
-    const referencedByUser = [
-      ...(conversation?.getAllMentionURLs() ?? []),
-    ].some(url => getSmartPageName(URL.parse(url)) === slug);
-    if (!page || (page.convId !== conversation?.id && !referencedByUser)) {
-      return {
-        error: `this conversation has no page with the slug "${slug}"`,
-        code: "page_not_found",
-      };
-    }
-
-    if (!isAITabPageEditable(page.pageType)) {
-      return {
-        error: PAGE_NOT_EDITABLE_ERROR,
-        code: "page_not_editable",
-      };
-    }
-
-    // The surface to revise lives in that conversation's assistant message, so
-    // without the exchange there is nothing to modify — regenerating is the
-    // only way forward.
-    if (!priorConversation?.messageCount) {
-      return {
-        error:
-          `the conversation that generated "${slug}" is no longer available, ` +
-          `so it can only be generated again from scratch`,
-        code: "conversation_unavailable",
-      };
-    }
-
-    return { page, conversation: priorConversation };
-  }
-
-  /**
-   * The source list for a revised page: everything it was already built from,
-   * then whatever this turn added, deduplicated by URL so a page re-read on a
-   * later turn is listed once, with its newest extraction.
-   *
-   * @param {AITabSource[]} [previous] - Sources from the stored page.
-   * @param {AITabSource[]} added - Sources read on this turn.
-   * @returns {AITabSource[]}
-   */
-  static #mergeSources(previous, added) {
-    if (!Array.isArray(previous) || !previous.length) {
-      return added;
-    }
-    const byUrl = new Map(previous.map(source => [source?.url, source]));
-    for (const source of added) {
-      byUrl.set(source.url, source);
-    }
-    return Array.from(byUrl.values());
-  }
-
-  /**
-   * The page title for metadata: the Header component's `title`, resolving a
-   * `{ path }` binding against the surface's data model when needed.
-   *
-   * @param {A2UISurface} surface
-   * @returns {string}
-   */
-  static #titleFromSurface(surface) {
-    const header = (surface?.components || []).find(
-      c => c?.component === "Header"
-    );
-    const title = header?.title;
-    if (typeof title == "string") {
-      return title;
-    }
-    if (title && typeof title == "object" && typeof title.path == "string") {
-      const value = title.path.startsWith("/")
-        ? AITab.#resolvePath(surface.dataModel ?? {}, title.path)
-        : undefined;
-      return typeof value == "string" ? value : "";
-    }
-    return "";
-  }
-
-  /**
-   * The component types a validated surface uses, for telemetry: a
-   * JSON-encoded array in render order, walking from the root through each
-   * component's header then children. A component carrying a `layout` is
-   * listed as `component_layout`. These are the types that the model sent;
-   * components_converted lists the ones that render as a different type.
-   *
-   * @param {A2UISurface} surface
-   * @returns {string}
-   */
-  static #componentsUsed(surface) {
-    const byId = new Map(surface.components.map(c => [c.id, c]));
-    const visited = new Set();
-    const used = [];
-    const visit = id => {
-      const comp = byId.get(id);
-      if (!comp || visited.has(id)) {
-        return;
-      }
-      visited.add(id);
-      used.push(componentTypeName(comp));
-      for (const ref of [comp.header, comp.children].flat()) {
-        visit(typeof ref == "string" ? ref : ref?.componentId);
-      }
-    };
-    visit(ROOT_ID);
-    return JSON.stringify(used);
-  }
-
-  /**
-   * Look up a page's preview-image (og:image) URL from Places. Never rejects;
-   * returns "" on failure or when none is cached.
-   *
-   * @param {string} url
-   * @returns {Promise<string>}
-   */
-  static async #getPageImage(url) {
-    try {
-      const pageInfo = await lazy.PlacesUtils.history
-        .fetch(url, { includeMeta: true })
-        .catch(() => null);
-      // previewImageURL is a URL object when the page cached an og:image.
-      return pageInfo?.previewImageURL ? pageInfo.previewImageURL.href : "";
-    } catch (e) {
-      lazy.console.debug("getPageImage failed", url, e);
-      return "";
-    }
   }
 
   /**
@@ -1623,13 +521,13 @@ export class AITab {
     const dataModel = surface?.dataModel ?? {};
     const itemsOf = value => {
       let items = value;
-      if (AITab.#isBinding(value)) {
-        // #resolvePath needs an absolute pointer, and validation skips
+      if (AITabValidation.isBinding(value)) {
+        // resolvePath needs an absolute pointer, and validation skips
         // relative (template-scope) paths, so those must not resolve here
         // either. The resolved array is the same object the serialized
         // surface carries, so mutating its items reaches the output.
         items = value.path.startsWith("/")
-          ? AITab.#resolvePath(dataModel, value.path)
+          ? AITabValidation.resolvePath(dataModel, value.path)
           : undefined;
       }
       return Array.isArray(items) ? items : [];
@@ -1695,422 +593,6 @@ export class AITab {
   }
 
   /**
-   * Extract a JSON object from the model's text output, tolerating markdown
-   * code fences or surrounding prose.
-   *
-   * @param {string} text
-   * @returns {A2UISurface|null} The candidate surface, not yet validated
-   *   against the catalog.
-   */
-  static parsePageConfig(text) {
-    // The outermost {...} span covers the common cases in two indexOf scans: a
-    // bare object, an object inside a ```json fence, and an object wrapped in
-    // unfenced prose (e.g. "Here is the page: {...} — let me know if...").
-    const surface = AITab.#parseJsonSpan(text);
-    if (surface) {
-      return surface;
-    }
-    // The span only misses when prose on either side of a fenced block has
-    // braces of its own, so fall back to the region between the first pair of
-    // fences. Any language tag is left in it, which is harmless:
-    // #parseJsonSpan starts at "{".
-    const open = text.indexOf("```");
-    const close = open < 0 ? -1 : text.indexOf("```", open + 3);
-    const fenced =
-      close > open ? AITab.#parseJsonSpan(text.slice(open + 3, close)) : null;
-    if (fenced) {
-      return fenced;
-    }
-    lazy.console.error("failed to parse surface JSON", text);
-    return null;
-  }
-
-  /**
-   * Expand the URL tokens in a parsed model surface back into full URLs.
-   * Tokens inside free text are expanded, or removed when hallucinated. Link
-   * fields (see LINK_FIELDS) must hold exactly one known token; an object whose
-   * `href` or `src` does not is dropped,
-   * so a URL the model was never given can't become a link or image.
-   *
-   * When `allowedLinks` is given, an `href` must also be one of them.
-   *
-   * @param {any} value - A parsed surface, or a value nested in one.
-   * @param {UrlTokenizer} urlTokenizer - The tokenizer used for the prompt.
-   * @param {Set<string>|null} [allowedLinks] - Normalized URLs (see
-   *   linkKey) an `href` may point to; an item linking anywhere else is
-   *   dropped. Null allows any URL the prompt contained.
-   * @param {number} [recursionDepth] - Nesting level of `value`; callers
-   *   leave it unset.
-   * @param {WeakMap<object, object>} [expandedObjects] - Original objects
-   *   mapped to their filtered copies; callers leave it unset.
-   * @returns {any} A detokenized copy, or undefined when `value` is dropped or
-   *   nested deeper than MAX_EXPAND_RECURSION_DEPTH.
-   */
-  static expandSurfaceUrlTokens(
-    value,
-    urlTokenizer,
-    allowedLinks = null,
-    recursionDepth = 0,
-    expandedObjects = new WeakMap()
-  ) {
-    if (typeof value == "string") {
-      return stripUnresolvedUrlTokens(
-        expandUrlTokens(value, urlTokenizer.tokenToUrl)
-      );
-    }
-    if (recursionDepth > MAX_EXPAND_RECURSION_DEPTH) {
-      return undefined;
-    }
-    if (Array.isArray(value)) {
-      const result = value
-        .map(item =>
-          AITab.expandSurfaceUrlTokens(
-            item,
-            urlTokenizer,
-            allowedLinks,
-            recursionDepth + 1,
-            expandedObjects
-          )
-        )
-        .filter(item => item !== undefined);
-      expandedObjects.set(value, result);
-      return result;
-    }
-    if (!value || typeof value != "object") {
-      return value;
-    }
-    const result = {};
-    for (const [key, sub] of Object.entries(value)) {
-      if (LINK_FIELDS.has(key)) {
-        const url = urlTokenizer.resolveExactToken(sub);
-        if (
-          key == "href" &&
-          url &&
-          allowedLinks &&
-          !allowedLinks.has(linkKey(url))
-        ) {
-          lazy.console.warn("dropping item with unseen link", url);
-          return undefined;
-        }
-        if (url) {
-          result[key] = url;
-        } else {
-          lazy.console.warn("dropping item with unknown link", sub);
-          return undefined;
-        }
-        continue;
-      }
-      const expanded = AITab.expandSurfaceUrlTokens(
-        sub,
-        urlTokenizer,
-        allowedLinks,
-        recursionDepth + 1,
-        expandedObjects
-      );
-      if (expanded !== undefined) {
-        result[key] = expanded;
-      }
-    }
-
-    expandedObjects.set(value, result);
-
-    if (recursionDepth === 0 && Array.isArray(result.components)) {
-      AITab.#removeFilteredBindings(value, result, expandedObjects);
-    }
-
-    return result;
-  }
-
-  /**
-   * Rewrite shapes models commonly emit that the catalog rejects but whose
-   * meaning is unambiguous, so buildSurface can accept the page.
-   *
-   * @param {A2UISurface} surface - Modified in place.
-   * @returns {A2UISurface} `surface`.
-   */
-  static repairValidations(surface) {
-    return AITab.inlineListGroupItems(surface);
-  }
-
-  /**
-   * Replace each List group's `items` binding with a copy of the array it
-   * points to, whether the groups are literal or bound into the data model.
-   * Models carry the catalog's preference for bindings into ListGroup.items,
-   * the one content array the catalog requires to be literal. A binding that
-   * does not resolve to an array is left for validation to reject.
-   *
-   * @param {A2UISurface} surface - Modified in place.
-   * @returns {A2UISurface} `surface`.
-   */
-  static inlineListGroupItems(surface) {
-    const components = surface?.components;
-    if (!Array.isArray(components)) {
-      return surface;
-    }
-    const dataModel = surface.dataModel ?? {};
-    for (const comp of components) {
-      if (comp?.component != "List") {
-        continue;
-      }
-      let groups = comp.groups;
-      if (AITab.#isBinding(groups) && groups.path.startsWith("/")) {
-        groups = AITab.#resolvePath(dataModel, groups.path);
-      }
-      if (!Array.isArray(groups)) {
-        continue;
-      }
-      for (const group of groups) {
-        const items = group?.items;
-        if (!AITab.#isBinding(items) || !items.path.startsWith("/")) {
-          continue;
-        }
-        const resolved = AITab.#resolvePath(dataModel, items.path);
-        if (Array.isArray(resolved)) {
-          lazy.console.warn(
-            `inlining List "${comp.id}" group items bound to "${items.path}"`
-          );
-          group.items = structuredClone(resolved);
-        }
-      }
-    }
-    return surface;
-  }
-
-  /**
-   * Remove bindings whose targets existed before filtering and disappeared
-   * because they, or an ancestor object, contained an unresolved URL token
-   * or a link outside the allowed set.
-   *
-   * @param {A2UISurface} original
-   * @param {A2UISurface} surface - Filtered surface, updated in place.
-   * @param {WeakMap<object, object>} expandedObjects
-   */
-  static #removeFilteredBindings(original, surface, expandedObjects) {
-    surface.components = surface.components.map(
-      component =>
-        AITab.#cleanFilteredBindings(
-          component,
-          original.dataModel,
-          surface.dataModel
-        ).value
-    );
-
-    const root = surface.components.find(
-      component => component?.id === ROOT_ID
-    );
-    const repeater = root?.children;
-    const hasAbsoluteRepeaterPath =
-      repeater &&
-      !Array.isArray(repeater) &&
-      typeof repeater.path == "string" &&
-      repeater.path.startsWith("/");
-
-    if (!hasAbsoluteRepeaterPath) {
-      return;
-    }
-
-    const template = surface.components.find(
-      component => component?.id === repeater.componentId
-    );
-    const originalScopes = AITab.#resolvePath(
-      original.dataModel,
-      repeater.path
-    );
-    const filteredScopes = AITab.#resolvePath(surface.dataModel, repeater.path);
-    const canCompareRepeaterScopes =
-      template !== undefined &&
-      Array.isArray(originalScopes) &&
-      Array.isArray(filteredScopes);
-
-    if (!canCompareRepeaterScopes) {
-      return;
-    }
-
-    // Filtering can remove whole repeater items, so pair scopes by identity.
-    const originalByFiltered = new Map(
-      originalScopes.map(scope => [expandedObjects.get(scope) ?? scope, scope])
-    );
-
-    const cleanedInstances = filteredScopes.map((scope, index) =>
-      AITab.#cleanFilteredBindings(
-        template,
-        original.dataModel,
-        surface.dataModel,
-        {
-          original: originalByFiltered.get(scope),
-          filtered: scope,
-          path: `${repeater.path}/${index}`,
-        }
-      )
-    );
-    const hasFilteredRelativeBindings = cleanedInstances.some(
-      instance => instance.removedBinding
-    );
-
-    if (!hasFilteredRelativeBindings) {
-      return;
-    }
-
-    AITab.#replaceRepeaterWithInstances(
-      surface,
-      root,
-      template,
-      cleanedInstances.map(instance => instance.value)
-    );
-  }
-
-  /**
-   * Copy component properties, removing bindings whose targets were filtered.
-   * Scoped relative bindings become absolute so each copy can stand alone.
-   *
-   * @param {*} value
-   * @param {A2UIDataModel} originalDataModel
-   * @param {A2UIDataModel} filteredDataModel
-   * @param {{ original: *, filtered: *, path: string } | null} [scope]
-   * @returns {{ value: *, removedBinding: boolean }}
-   */
-  static #cleanFilteredBindings(
-    value,
-    originalDataModel,
-    filteredDataModel,
-    scope = null
-  ) {
-    if (AITab.#isBinding(value)) {
-      const absolute = value.path.startsWith("/");
-      const canResolveBinding = absolute || scope !== null;
-
-      if (!canResolveBinding) {
-        return { value, removedBinding: false };
-      }
-
-      const path = absolute ? value.path : `/${value.path}`;
-      const before = AITab.#resolvePath(
-        absolute ? originalDataModel : scope.original,
-        path
-      );
-      const after = AITab.#resolvePath(
-        absolute ? filteredDataModel : scope.filtered,
-        path
-      );
-      const targetWasFiltered = before !== undefined && after === undefined;
-
-      if (targetWasFiltered) {
-        return { value: undefined, removedBinding: true };
-      }
-
-      return {
-        value: absolute ? value : { path: `${scope.path}/${value.path}` },
-        removedBinding: false,
-      };
-    }
-
-    const hasNestedProperties = value !== null && typeof value == "object";
-
-    if (!hasNestedProperties) {
-      return { value, removedBinding: false };
-    }
-
-    const entries = [];
-    let removedBinding = false;
-
-    for (const [key, sub] of Object.entries(value)) {
-      const cleaned = AITab.#cleanFilteredBindings(
-        sub,
-        originalDataModel,
-        filteredDataModel,
-        scope
-      );
-
-      removedBinding ||= cleaned.removedBinding;
-
-      if (cleaned.value !== undefined) {
-        entries.push([key, cleaned.value]);
-      }
-    }
-
-    return {
-      value: Array.isArray(value)
-        ? entries.map(([, item]) => item)
-        : Object.fromEntries(entries),
-      removedBinding,
-    };
-  }
-
-  /**
-   * Replace a shared repeater template with independently bound components.
-   *
-   * @param {A2UISurface} surface
-   * @param {A2UIComponent} root
-   * @param {A2UIComponent} template
-   * @param {A2UIComponent[]} instances
-   */
-  static #replaceRepeaterWithInstances(surface, root, template, instances) {
-    const ids = new Set(surface.components.map(component => component?.id));
-
-    for (const [index, instance] of instances.entries()) {
-      if (index === 0) {
-        continue;
-      }
-
-      let id = `${template.id}-${index}`;
-
-      while (ids.has(id)) {
-        id += "-";
-      }
-
-      ids.add(id);
-      instance.id = id;
-    }
-
-    root.children = instances.map(instance => instance.id);
-    surface.components = surface.components.flatMap(component =>
-      component === template ? instances : [component]
-    );
-  }
-
-  /**
-   * The inverse of expandSurfaceUrlTokens: replace the URLs in a stored surface
-   * with tokens, so a surface the model wrote on an earlier turn can be handed
-   * back to it under this turn's tokenizer.
-   *
-   * @param {any} value - A surface, or a value nested in one.
-   * @param {UrlTokenizer} urlTokenizer - The tokenizer for this request.
-   * @param {number} [recursionDepth] - Nesting level of `value`; callers
-   *   leave it unset.
-   * @returns {any} A tokenized copy, or undefined when `value` is nested deeper
-   *   than MAX_EXPAND_RECURSION_DEPTH.
-   */
-  static tokenizeSurfaceUrls(value, urlTokenizer, recursionDepth = 0) {
-    if (typeof value == "string") {
-      return urlTokenizer.tokenizeText(value);
-    }
-    if (recursionDepth > MAX_EXPAND_RECURSION_DEPTH) {
-      return undefined;
-    }
-    if (Array.isArray(value)) {
-      return value
-        .map(item =>
-          AITab.tokenizeSurfaceUrls(item, urlTokenizer, recursionDepth + 1)
-        )
-        .filter(item => item !== undefined);
-    }
-    if (!value || typeof value != "object") {
-      return value;
-    }
-    const result = {};
-    for (const [key, sub] of Object.entries(value)) {
-      const tokenized =
-        LINK_FIELDS.has(key) && typeof sub == "string"
-          ? urlTokenizer.formatToken(sub)
-          : AITab.tokenizeSurfaceUrls(sub, urlTokenizer, recursionDepth + 1);
-      if (tokenized !== undefined) {
-        result[key] = tokenized;
-      }
-    }
-    return result;
-  }
-
-  /**
    * The conversation's messages as they are sent to the model. They are stored
    * with full URLs, as chat messages are, and tokenized here under one
    * tokenizer, so a continued conversation's earlier turns share the token map
@@ -2127,10 +609,12 @@ export class AITab {
       }
       const surface =
         message.role == "assistant"
-          ? AITab.parsePageConfig(message.content)
+          ? AITabSurface.parsePageConfig(message.content)
           : null;
       const content = surface
-        ? JSON.stringify(AITab.tokenizeSurfaceUrls(surface, urlTokenizer))
+        ? JSON.stringify(
+            AITabSurface.tokenizeSurfaceUrls(surface, urlTokenizer)
+          )
         : urlTokenizer.tokenizeText(message.content);
       return { ...message, content };
     });
@@ -2168,7 +652,7 @@ export class AITab {
     stats,
   }) {
     try {
-      const { env } = await AITab.loadAssets();
+      const { env } = await AITabValidation.loadAssets();
 
       const { conversation, system, user } =
         await AITab.#resolvePromptSet(priorConversation);
@@ -2255,7 +739,7 @@ export class AITab {
         };
       }
 
-      const parsed = AITab.parsePageConfig(text);
+      const parsed = AITabSurface.parsePageConfig(text);
       if (!parsed) {
         lazy.console.error("model did not return valid JSON:", text);
         return {
@@ -2272,11 +756,11 @@ export class AITab {
         };
       }
 
-      const surface = AITab.repairValidations(
-        AITab.expandSurfaceUrlTokens(parsed, urlTokenizer, allowedLinks)
+      const surface = AITabSurface.repairValidations(
+        AITabSurface.expandSurfaceUrlTokens(parsed, urlTokenizer, allowedLinks)
       );
 
-      const result = AITab.buildSurface(surface, env);
+      const result = AITabValidation.buildSurface(surface, env);
       if (!result.ok) {
         lazy.console.error("surface failed validation", result.errors, surface);
         return {
@@ -2360,26 +844,6 @@ export class AITab {
       );
     }
     return parts.join("\n\n");
-  }
-
-  /**
-   * Parse the span from the first "{" to the last "}" of `text` as JSON, or
-   * null when there is no such span or it does not parse.
-   *
-   * @param {string} text
-   * @returns {A2UISurface|null}
-   */
-  static #parseJsonSpan(text) {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start < 0 || end <= start) {
-      return null;
-    }
-    try {
-      return JSON.parse(text.slice(start, end + 1));
-    } catch {
-      return null;
-    }
   }
 
   /**

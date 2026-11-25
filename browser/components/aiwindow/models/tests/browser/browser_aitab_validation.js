@@ -7,10 +7,13 @@
 // chrome://): buildSurface() validates a surface (a flat list of component
 // instances + a data model) against the catalog and returns it unchanged.
 
-const { AITab } = ChromeUtils.importESModule(
-  "moz-src:///browser/components/aiwindow/models/aitab/AITab.sys.mjs"
+const { AITabSurface } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabSurface.sys.mjs"
 );
-const { loadAssets, buildSurface } = AITab;
+const { AITabValidation } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/aitab/AITabValidation.sys.mjs"
+);
+const { loadAssets, buildSurface } = AITabValidation;
 const { UrlTokenizer } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/UrlTokenizer.sys.mjs"
 );
@@ -21,7 +24,7 @@ const { A2UI } = ChromeUtils.importESModule(
 let gEnv;
 
 add_setup(async function () {
-  // Raise AITab's log verbosity for the duration of this file so a failing run
+  // Raise AITabValidation's log verbosity for the duration of this file so a failing run
   // surfaces the module's debug/error output. Reverted automatically at teardown.
   await SpecialPowers.pushPrefEnv({
     set: [["browser.smartwindow.conversation.logLevel", "Debug"]],
@@ -270,7 +273,10 @@ add_task(function test_unregistered_bound_image_is_removed() {
     alt_text: "Example image",
   };
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, new UrlTokenizer());
+  const expanded = AITabSurface.expandSurfaceUrlTokens(
+    surface,
+    new UrlTokenizer()
+  );
   Assert.ok(
     !Object.hasOwn(expanded.dataModel, "hero"),
     "an unregistered image source removes the bound image object"
@@ -293,7 +299,10 @@ add_task(function test_unknown_bound_image_token_is_removed() {
     alt_text: "Example image",
   };
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, new UrlTokenizer());
+  const expanded = AITabSurface.expandSurfaceUrlTokens(
+    surface,
+    new UrlTokenizer()
+  );
   Assert.ok(
     !Object.hasOwn(expanded.dataModel, "hero"),
     "the image with an unknown token is removed"
@@ -316,7 +325,11 @@ add_task(function test_filtered_parent_removes_header_subhead_binding() {
     description: "Additional context",
   };
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, tokenizer, new Set());
+  const expanded = AITabSurface.expandSurfaceUrlTokens(
+    surface,
+    tokenizer,
+    new Set()
+  );
 
   Assert.ok(
     !Object.hasOwn(expanded.dataModel, "source"),
@@ -340,7 +353,7 @@ add_task(function test_filtered_textblock_images_hydrate_independently() {
   ]);
   const original = structuredClone(surface);
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, tokenizer);
+  const expanded = AITabSurface.expandSurfaceUrlTokens(surface, tokenizer);
   const [firstId, secondId] = expanded.components[0].children;
   const first = expanded.components.find(component => component.id === firstId);
   const second = expanded.components.find(
@@ -389,7 +402,7 @@ add_task(function test_table_hydration_hides_images_after_one_is_filtered() {
     },
   ];
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, tokenizer);
+  const expanded = AITabSurface.expandSurfaceUrlTokens(surface, tokenizer);
   const result = buildSurface(expanded, gEnv);
   Assert.ok(result.ok, JSON.stringify(result.errors));
 
@@ -421,7 +434,10 @@ add_task(
       { lead: "Rome", hero: { src: "§url_token: UNKNOWN_IMAGE_1§" } },
     ]);
 
-    const expanded = AITab.expandSurfaceUrlTokens(surface, new UrlTokenizer());
+    const expanded = AITabSurface.expandSurfaceUrlTokens(
+      surface,
+      new UrlTokenizer()
+    );
     const first = expanded.components.find(
       component => component.id === "intro"
     );
@@ -455,7 +471,7 @@ add_task(function test_textblock_bindings_follow_surviving_repeater_items() {
     { lead: "Rome", hero: { src: "§url_token: UNKNOWN_IMAGE_1§" } },
   ]);
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, tokenizer);
+  const expanded = AITabSurface.expandSurfaceUrlTokens(surface, tokenizer);
   const first = expanded.components.find(component => component.id === "intro");
 
   Assert.equal(
@@ -481,7 +497,10 @@ add_task(function test_repeated_textblock_ids_avoid_existing_component_ids() {
     lead: "Reserved id",
   });
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, new UrlTokenizer());
+  const expanded = AITabSurface.expandSurfaceUrlTokens(
+    surface,
+    new UrlTokenizer()
+  );
 
   Assert.deepEqual(
     expanded.components[0].children,
@@ -497,7 +516,10 @@ add_task(function test_originally_missing_bound_image_is_rejected() {
   const surface = structuredClone(VALID_SURFACE);
   surface.components[2].image = { path: "/hero" };
 
-  const expanded = AITab.expandSurfaceUrlTokens(surface, new UrlTokenizer());
+  const expanded = AITabSurface.expandSurfaceUrlTokens(
+    surface,
+    new UrlTokenizer()
+  );
   Assert.deepEqual(
     expanded.components[2].image,
     { path: "/hero" },
@@ -818,7 +840,7 @@ add_task(function test_list_group_items_binding_is_inlined() {
     "a binding inside a List group is rejected as written"
   );
 
-  const result = buildSurface(AITab.inlineListGroupItems(surface), gEnv);
+  const result = buildSurface(AITabSurface.inlineListGroupItems(surface), gEnv);
   Assert.ok(
     result.ok,
     `the inlined surface validates; errors: ${JSON.stringify(result.errors)}`
@@ -843,7 +865,7 @@ add_task(function test_items_binding_inside_bound_groups_is_inlined() {
     "a binding inside a bound List group is rejected as written"
   );
 
-  const result = buildSurface(AITab.inlineListGroupItems(surface), gEnv);
+  const result = buildSurface(AITabSurface.inlineListGroupItems(surface), gEnv);
   Assert.ok(
     result.ok,
     `the inlined surface validates; errors: ${JSON.stringify(result.errors)}`
@@ -868,7 +890,7 @@ add_task(function test_unresolved_list_group_binding_is_left_unchanged() {
   surface.components[2].groups[0].items = { path: "/missing" };
   const before = structuredClone(surface);
 
-  AITab.inlineListGroupItems(surface);
+  AITabSurface.inlineListGroupItems(surface);
   Assert.deepEqual(surface, before, "an unresolved binding is not touched");
   Assert.ok(
     !buildSurface(surface, gEnv).ok,
@@ -880,6 +902,6 @@ add_task(function test_inlined_list_group_items_are_still_validated() {
   const surface = listGroupBindingSurface([
     { name: "CN Tower", desc: "Panoramic views." },
   ]);
-  const result = buildSurface(AITab.inlineListGroupItems(surface), gEnv);
+  const result = buildSurface(AITabSurface.inlineListGroupItems(surface), gEnv);
   Assert.ok(!result.ok, "inlined items that are not ListItems are rejected");
 });
