@@ -163,6 +163,7 @@ const MAX_TOTAL_INSTALL_ATTEMPTS = 2;
 const WRITE_ERROR = 7;
 const ELEVATION_CANCELED = 9;
 const ELEVATED_UPDATE_HELPER_INSTALL_ERROR = 115;
+const ELEVATED_UPDATE_HELPER_LOST_ERROR = 116;
 const SERVICE_UPDATER_COULD_NOT_BE_STARTED = 24;
 const SERVICE_NOT_ENOUGH_COMMAND_LINE_ARGS = 25;
 const SERVICE_UPDATER_SIGN_ERROR = 26;
@@ -203,6 +204,7 @@ const INVALID_UPDATER_STATUS_CODE = 99;
 
 const SILENT_UPDATE_NEEDED_ELEVATION_ERROR = 105;
 const BACKGROUND_TASK_SHARING_VIOLATION = 106;
+const ELEVATED_UPDATE_IN_PROGRESS_ERROR = 107;
 
 // Array of write errors to simplify checks for write errors
 const WRITE_ERRORS = [
@@ -1655,12 +1657,38 @@ function handleUpdateFailure(update) {
     return true;
   }
 
-  // A failed helper install is handled like a dismissed authentication dialog,
-  // and only its status code differs.
-  if (
+  // A failed helper install, and a helper that went away before it replied,
+  // are handled like a dismissed authentication dialog, and only their status
+  // codes differ.
+  let isCancellation =
     update.errorCode == ELEVATION_CANCELED ||
-    update.errorCode == ELEVATED_UPDATE_HELPER_INSTALL_ERROR
-  ) {
+    update.errorCode == ELEVATED_UPDATE_HELPER_INSTALL_ERROR ||
+    update.errorCode == ELEVATED_UPDATE_HELPER_LOST_ERROR;
+  if (update.errorCode == ELEVATED_UPDATE_IN_PROGRESS_ERROR) {
+    // The privileged helper was already handling another elevated update, so
+    // this one never ran. Prompt the user to try again, as after a dismissed
+    // authentication dialog, but don't count it as an elevation attempt or a
+    // cancellation.
+    LOG(
+      "handleUpdateFailure - another elevated update was in progress. " +
+        `Setting status to "${STATE_PENDING_ELEVATE}".`
+    );
+    Services.obs.notifyObservers(
+      update,
+      "update-error",
+      "elevation-attempt-failed"
+    );
+    writeStatusFile(
+      getReadyUpdateDir(),
+      (update.state = STATE_PENDING_ELEVATE)
+    );
+    update.statusText =
+      lazy.gUpdateBundle.GetStringFromName("elevationFailure");
+    transitionState(Ci.nsIApplicationUpdateService.STATE_PENDING);
+    return true;
+  }
+
+  if (isCancellation) {
     let elevationAttempts = Services.prefs.getIntPref(
       PREF_APP_UPDATE_ELEVATE_ATTEMPTS,
       0
