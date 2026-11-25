@@ -26,6 +26,7 @@ from mozbuild.vendor.rewrite_mozbuild import (
     MozBuildFileNotListedException,
     MozBuildRewriteException,
     add_file_to_moz_build_file,
+    moz_build_mentions_file,
     remove_file_from_moz_build_file,
 )
 
@@ -905,6 +906,21 @@ class VendorManifest(MozbuildObject):
             "Found {added} files added and {removed} files removed.",
         )
 
+        # Find the removed files that no moz.build mentions before adding any:
+        # an added file with the same name would make them look listed. The
+        # removals still come last, as a renamed file's old entry helps place it.
+        not_listed_message = (
+            "{f} is not listed in any moz.build file, nothing to remove"
+        )
+        files_to_remove = []
+        unlisted_files_by_name = {}
+        for f in files_removed:
+            if moz_build_mentions_file(f, moz_yaml_dir, vendoring_dir):
+                files_to_remove.append(f)
+            else:
+                unlisted_files_by_name.setdefault(os.path.basename(f), f)
+                self.logInfo({"f": f}, not_listed_message)
+
         should_abort = False
         for f in files_added:
             try:
@@ -917,15 +933,27 @@ class VendorManifest(MozbuildObject):
                     "Could not add {f} to the appropriate moz.build file",
                 )
                 should_abort = True
+                continue
 
-        for f in files_removed:
+            # An added file with the same name as an unlisted removed file may be
+            # that file moved, which nothing built before, so report it for review.
+            removed = unlisted_files_by_name.get(os.path.basename(f))
+            if removed:
+                self.log(
+                    logging.ERROR,
+                    "vendor",
+                    {"f": f, "removed": removed},
+                    "Added {f} to a moz.build file, but it has the same name as "
+                    + "{removed}, which no moz.build file listed. Check whether it "
+                    + "should be built.",
+                )
+                should_abort = True
+
+        for f in files_to_remove:
             try:
                 remove_file_from_moz_build_file(f, moz_yaml_dir, vendoring_dir)
             except MozBuildFileNotListedException:
-                self.logInfo(
-                    {"f": f},
-                    "{f} is not listed in any moz.build file, nothing to remove",
-                )
+                self.logInfo({"f": f}, not_listed_message)
             except MozBuildRewriteException:
                 self.log(
                     logging.ERROR,
