@@ -7,21 +7,24 @@
 
   var dropdownClassName = "sd-dropdown";
 
+  function normalizeAnchor(anchor) {
+    return anchor.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  }
+
   function getDropdownElement() {
-    var dropdownId = window.location.hash;
-    if (!dropdownId) {
+    var anchor = window.location.hash.substring(1);
+    if (!anchor) {
       return false;
     }
 
-    var dropdownElement = document.getElementById(dropdownId.substring(1));
-    if (
-      !dropdownElement ||
-      !dropdownElement.classList.contains(dropdownClassName)
-    ) {
-      return false;
+    var candidates = [anchor, normalizeAnchor(anchor)];
+    for (var i = 0; i < candidates.length; i++) {
+      var element = document.getElementById(candidates[i]);
+      if (element && element.classList.contains(dropdownClassName)) {
+        return element;
+      }
     }
-
-    return dropdownElement;
+    return false;
   }
 
   function setupDropdownLink() {
