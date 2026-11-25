@@ -6,7 +6,7 @@ let lazy = {};
 
 ChromeUtils.defineLazyGetter(lazy, "logConsole", () => {
   return console.createInstance({
-    prefix: "TaskbarTabs",
+    logModule: "TaskbarTabs",
     maxLogLevel: "Warn",
   });
 });
