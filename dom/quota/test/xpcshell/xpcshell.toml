@@ -67,6 +67,8 @@ run-if = [
 
 ["test_clearStoragesForClient.js"]
 
+["test_clearStoragesForClient_originNotInMemory.js"]
+
 ["test_clearStoragesForOriginAttributesPattern.js"]
 
 ["test_clearStoragesForOriginPrefix.js"]
