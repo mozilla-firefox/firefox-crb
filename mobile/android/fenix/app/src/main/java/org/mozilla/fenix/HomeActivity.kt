@@ -108,6 +108,7 @@ import org.mozilla.fenix.addons.ExtensionsProcessDisabledForegroundController
 import org.mozilla.fenix.automation.AutomatedLaunch
 import org.mozilla.fenix.bindings.ExternalAppLinkStatusBinding
 import org.mozilla.fenix.bindings.HomepageTabBinding
+import org.mozilla.fenix.bindings.MenuBannerMessageNotificationBinding
 import org.mozilla.fenix.bindings.NormalTabToolbarMenuHighlightBinding
 import org.mozilla.fenix.bindings.PendingExtensionUpdateBinding
 import org.mozilla.fenix.bookmarks.DesktopFolders
@@ -352,6 +353,10 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
             appStore = components.appStore,
             browserStore = components.core.store,
         )
+    }
+
+    private val menuBannerMessageNotificationBinding by lazy {
+        MenuBannerMessageNotificationBinding(appStore = components.appStore)
     }
 
     private val summarizeToolbarHighlightBinding by lazy {
@@ -682,6 +687,7 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
             privateBrowsingLockFeature,
             externalAppLinkStatusBinding,
             pendingExtensionUpdateBinding,
+            menuBannerMessageNotificationBinding,
             summarizeToolbarHighlightBinding,
             tabGroupsToolbarHighlightBinding,
             components.core.summarizationSettingsBinding,

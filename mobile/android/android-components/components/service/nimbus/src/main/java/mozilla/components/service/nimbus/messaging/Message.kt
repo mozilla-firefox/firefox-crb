@@ -56,6 +56,9 @@ data class Message(
     val microsurvey: MicrosurveyConfig?
         get() = data.microsurveyConfig
 
+    val menuBannerConfig: MenuBannerMessageConfig?
+        get() = data.menuBannerConfig
+
     /**
      * Returns true if the passed boot id, taken from [BootUtils] matches the one associated with this message when it
      * was last displayed.
