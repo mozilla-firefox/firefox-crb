@@ -1502,6 +1502,7 @@ export interface Modules {
   "resource://testing-common/AppInfo.sys.mjs": typeof import("resource://testing-common/AppInfo.sys.mjs"),
   "resource://testing-common/AppUiTestDelegate.sys.mjs": typeof import("resource://testing-common/AppUiTestDelegate.sys.mjs"),
   "resource://testing-common/Assert.sys.mjs": typeof import("resource://testing-common/Assert.sys.mjs"),
+  "resource://testing-common/AsyncControlProxy.sys.mjs": typeof import("resource://testing-common/AsyncControlProxy.sys.mjs"),
   "resource://testing-common/AsyncSpellCheckTestHelper.sys.mjs": typeof import("resource://testing-common/AsyncSpellCheckTestHelper.sys.mjs"),
   "resource://testing-common/BackgroundTasksTestUtils.sys.mjs": typeof import("resource://testing-common/BackgroundTasksTestUtils.sys.mjs"),
   "resource://testing-common/BookmarksSidebarTestUtils.sys.mjs": typeof import("resource://testing-common/BookmarksSidebarTestUtils.sys.mjs"),

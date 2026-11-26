@@ -17,6 +17,13 @@
  */
 
 import { clearTimeout, setTimeout } from "resource://gre/modules/Timer.sys.mjs";
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+/** @import { AsyncControlProxy } from "resource://testing-common/AsyncControlProxy.sys.mjs" */
+
+const lazy = XPCOMUtils.declareLazy({
+  asyncControlProxy: "resource://testing-common/AsyncControlProxy.sys.mjs",
+});
 
 const ConsoleAPIStorage = Cc["@mozilla.org/consoleAPI-storage;1"].getService(
   Ci.nsIConsoleAPIStorage
@@ -376,5 +383,19 @@ export var TestUtils = {
         `This test requires a packaged build, run 'mach package' and then use ${arg}`
       );
     }
+  },
+
+  /**
+   * Creates a reusable proxy for controlling promise-returning method calls.
+   *
+   * Calling a method on the proxy returns a controller for its next call.
+   *
+   * @template {object} Owner
+   * @param {Owner} owner - The object for which to create a proxy.
+   *
+   * @returns {AsyncControlProxy<Owner>} The reusable proxy.
+   */
+  asyncControlProxy(owner) {
+    return lazy.asyncControlProxy(owner);
   },
 };
