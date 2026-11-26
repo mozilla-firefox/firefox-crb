@@ -1186,6 +1186,22 @@ const HistoryCleaner = {
     });
   },
 
+  deleteByOriginAttributes(aOriginAttributesString) {
+    if (!AppConstants.MOZ_PLACES) {
+      return Promise.resolve();
+    }
+    let { userContextId, privateBrowsingId, ...rest } = JSON.parse(
+      aOriginAttributesString
+    );
+    if (privateBrowsingId || Object.keys(rest).length) {
+      return Promise.resolve();
+    }
+    if (userContextId === undefined) {
+      return lazy.PlacesUtils.history.clear();
+    }
+    return lazy.PlacesUtils.history.removeVisitsByFilter({ userContextId });
+  },
+
   deleteAll() {
     if (!AppConstants.MOZ_PLACES) {
       return Promise.resolve();

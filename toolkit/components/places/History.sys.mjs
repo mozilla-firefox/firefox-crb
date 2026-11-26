@@ -417,6 +417,8 @@ export var History = Object.freeze({
    *   Only remove visits to this URL.
    * @param {nsINavHistoryService.TransitionType} filter.transition
    *   The type of the transition (see TRANSITIONS below).
+   * @param {number} filter.userContextId
+   *   Only remove visits made in this container, 0 for the default one.
    * @param {(visit: VisitInfo) => void} [onResult]
    *   A callback invoked for each visit found and removed. Note that the
    *   referrer property of `VisitInfo` is NOT populated.
@@ -436,6 +438,7 @@ export var History = Object.freeze({
     let hasURL = "url" in filter;
     let hasLimit = "limit" in filter;
     let hasTransition = "transition" in filter;
+    let hasUserContextId = "userContextId" in filter;
     if (hasBeginDate) {
       this.ensureDate(filter.beginDate);
     }
@@ -453,9 +456,17 @@ export var History = Object.freeze({
       !hasEndDate &&
       !hasURL &&
       !hasLimit &&
-      !hasTransition
+      !hasTransition &&
+      !hasUserContextId
     ) {
       throw new TypeError("Expected a non-empty filter");
+    }
+
+    if (
+      hasUserContextId &&
+      (!Number.isInteger(filter.userContextId) || filter.userContextId < 0)
+    ) {
+      throw new TypeError("Expected a non-negative integer as a userContextId");
     }
 
     if (
@@ -1273,6 +1284,10 @@ var removeVisitsByFilter = async function (db, filter, onResult = null) {
     conditions.push("v.visit_type = :transition");
     args.transition = filter.transition;
     transition = filter.transition;
+  }
+  if ("userContextId" in filter) {
+    conditions.push("v.userContextId = :userContextId");
+    args.userContextId = filter.userContextId;
   }
 
   let optionalJoin = "";
