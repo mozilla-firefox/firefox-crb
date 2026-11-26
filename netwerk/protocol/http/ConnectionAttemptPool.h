@@ -27,6 +27,12 @@ class ConnectionAttemptPool final {
       ConnectionEntry* entry, nsAHttpTransaction* trans, uint32_t caps,
       bool speculative, bool urgentStart, bool allow1918,
       PendingTransactionInfo* pendingTransInfo, bool retryWithoutTRR = false);
+  // Establishes the inner connection through an already established outer
+  // proxy connection, registered like any other attempt so the entry's
+  // accounting sees it.
+  nsresult StartInnerConnectionEstablishment(
+      ConnectionEntry* entry, nsAHttpTransaction* trans, uint32_t caps,
+      HttpConnectionBase* outerConn, PendingTransactionInfo* pendingTransInfo);
   size_t Length() const { return mAttempts.Length(); }
   void RemoveConnectionAttempt(ConnectionAttempt* attempt, bool abandon);
   void CloseAllConnectionAttempts(HttpConnectionBase* aExcept = nullptr);
