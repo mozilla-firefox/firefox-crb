@@ -3,6 +3,36 @@
 
 "use strict";
 
+/**
+ * Waits until the overlay is not mid-measurement (`[resizing]` makes its
+ * container viewport-sized, which moves the buttons off-screen), then clicks
+ * cancel in the same task.
+ *
+ * @param {MozBrowser} browser
+ */
+function clickCancelButtonWhenNotResizing(browser) {
+  return SpecialPowers.spawn(browser, [], async () => {
+    let EventUtils = ContentTaskUtils.getEventUtils(content);
+    let { overlay } = content.windowGlobalChild.getActor(
+      "ScreenshotsComponent"
+    );
+    let container = overlay.screenshotsContainer;
+    await ContentTaskUtils.waitForMutationCondition(
+      container,
+      { attributeFilter: ["resizing"], chromeOnlyNodes: true },
+      () => !container.hasAttribute("resizing")
+    );
+    let { left, top, width, height } =
+      overlay.cancelButton.getBoundingClientRect();
+    EventUtils.synthesizeMouseAtPoint(
+      left + width / 2,
+      top + height / 2,
+      {},
+      content
+    );
+  });
+}
+
 add_task(async function test_movingTabToNewWindow() {
   let tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, TEST_PAGE);
   let originalHelper = new ScreenshotsHelper(tab.linkedBrowser);
@@ -32,7 +62,7 @@ add_task(async function test_movingTabToNewWindow() {
     "The new browser is in the ScreenshotsUtils weakmap"
   );
 
-  await newHelper.clickCancelButton();
+  await clickCancelButtonWhenNotResizing(newtab.linkedBrowser);
   await newHelper.assertStateChange("crosshairs");
   await newHelper.waitForOverlay();
 
@@ -96,7 +126,7 @@ add_task(async function test_movingParentProcessTabToNewWindow() {
     "The new browser is in the ScreenshotsUtils weakmap"
   );
 
-  await newHelper.clickCancelButton();
+  await clickCancelButtonWhenNotResizing(newtab.linkedBrowser);
   await newHelper.assertStateChange("crosshairs");
   await newHelper.waitForOverlay();
 
