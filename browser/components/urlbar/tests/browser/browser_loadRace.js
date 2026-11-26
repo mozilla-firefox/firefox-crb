@@ -11,68 +11,55 @@ const { UrlbarParentController } = ChromeUtils.importESModule(
   "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs"
 );
 
-add_setup(async function () {
-  sandbox = sinon.createSandbox();
-
-  registerCleanupFunction(async () => {
-    sandbox.restore();
-  });
-});
-
 async function checkShortcutLoading(modifierKeys) {
-  let deferred = Promise.withResolvers();
   let tab = await BrowserTestUtils.openNewForegroundTab({
     gBrowser,
     opening: "about:robots",
   });
 
-  // We stub getHeuristicResult to guarantee it doesn't resolve until after
-  // we've loaded a new page, so the fallback's staleness guard is exercised.
-  // Stubbing the prototype covers the parent controller on both the direct and
-  // message paths.
-  let entered = Promise.withResolvers();
-  let original = UrlbarParentController.prototype.getHeuristicResult;
-  sandbox
-    .stub(UrlbarParentController.prototype, "getHeuristicResult")
-    .callsFake(async function (queryContext) {
-      entered.resolve();
-      await deferred.promise;
-      return original.call(this, queryContext);
-    });
+  // The class covers both the direct and message paths.
+  const urlbarParentControllerProxy = TestUtils.asyncControlProxy(
+    UrlbarParentController
+  );
+  using resolveFallbackNavigationController =
+    urlbarParentControllerProxy.resolveFallbackNavigation();
+  using getHeuristicResultController =
+    urlbarParentControllerProxy.getHeuristicResult();
 
-  // This load will be blocked until the deferred is resolved.
-  // Use a string that will be interepreted as a local URL to avoid hitting the
+  // Use a string that will be interpreted as a local URL to avoid hitting the
   // network.
   gURLBar.focus();
   gURLBar.value = "example.com";
   gURLBar.overrideValue = true;
   EventUtils.synthesizeKey("KEY_Enter", modifierKeys);
 
-  // The message path round-trips the fallback, so wait for the query to start.
-  await entered.promise;
-  Assert.ok(
-    UrlbarParentController.prototype.getHeuristicResult.calledOnce,
-    "should have called getHeuristicResult"
-  );
+  const fallbackResultPromise =
+    resolveFallbackNavigationController.runCapturedCall();
+
+  // Hold the heuristic lookup until a different page loads in the same tab.
+  await getHeuristicResultController.waitForCapture();
 
   // Now load a different page.
   BrowserTestUtils.startLoadingURIString(tab.linkedBrowser, "about:license");
   await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
   Assert.equal(gBrowser.visibleTabs.length, 2, "Should have 2 tabs");
 
-  // Now that the new page has loaded, unblock the previous urlbar load.
-  deferred.resolve();
+  let tabOpened =
+    modifierKeys && BrowserTestUtils.waitForNewTab(gBrowser, null, true);
+  getHeuristicResultController.releaseResultToCaller();
+
+  const fallbackResult = await fallbackResultPromise;
+  if (!modifierKeys) {
+    Assert.deepEqual(
+      fallbackResult,
+      {},
+      "The parent discards the stale navigation"
+    );
+  }
+  await resolveFallbackNavigationController.releaseResultToCaller();
+
   if (modifierKeys) {
-    let openedTab = await new Promise(resolve => {
-      window.addEventListener(
-        "TabOpen",
-        event => {
-          resolve(event.target);
-        },
-        { once: true }
-      );
-    });
-    await BrowserTestUtils.browserLoaded(openedTab.linkedBrowser);
+    let openedTab = await tabOpened;
     Assert.ok(
       openedTab.linkedBrowser.currentURI.spec.includes("example.com"),
       "Should have attempted to open the shortcut page"
@@ -88,7 +75,6 @@ async function checkShortcutLoading(modifierKeys) {
   Assert.equal(gBrowser.visibleTabs.length, 2, "Should still have 2 tabs");
 
   BrowserTestUtils.removeTab(tab);
-  sandbox.restore();
 }
 
 add_task(async function test_location_change_stops_load() {
