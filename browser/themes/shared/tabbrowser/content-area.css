@@ -582,10 +582,6 @@
     /* Display the address footer within inactive split view panels. */
     .split-view-panel:not(.deck-selected) > .browserContainer > .browserStack > address-footer {
       display: flex;
-
-      &[hidden] {
-        display: none;
-      }
     }
   }
 }
@@ -629,7 +625,7 @@
 
   /* Make sure the address-footer aligns with the true outer edge after
    * factoring in the browserContainer's border width. */
-  #tabbrowser-tabpanels[splitview] .split-view-panel:not(.deck-selected) > .browserContainer address-footer {
+  #tabbrowser-tabpanels[splitview] .split-view-panel > .browserContainer address-footer {
     inset-block-end: calc(-1 * var(--border-width));
     inset-inline-end: calc(-1 * var(--border-width));
   }
@@ -647,9 +643,6 @@ address-footer {
   border-block-start: 1px solid var(--border-color);
   border-inline-start: 1px solid var(--border-color);
   border-start-start-radius: var(--border-radius-medium);
-  border-start-end-radius: 0;
-  border-end-end-radius: var(--border-radius-medium);
-  border-end-start-radius: 0;
 
   padding-block: var(--space-xxsmall);
   padding-inline: var(--space-small) var(--space-xsmall);
@@ -657,17 +650,29 @@ address-footer {
   -moz-context-properties: fill;
   fill: var(--button-icon-fill);
 
-  /* Remove end|end radius when the content page does not have a border radius because
+  /* Skip the end|end radius when the content page does not have a border radius because
      of the DevTools toolbox placement: */
-  :is(
+  .split-view-panel:not(
     /* when the toolbox is docked at the bottom */
-    .browserSidebarContainer[devtools-host-type="bottom"],
+    [devtools-host-type="bottom"],
     /* when the toolbox is docked on the right in LTR */
-    :dir(ltr) .browserSidebarContainer[devtools-host-type="right"],
+    [devtools-host-type="right"]:dir(ltr),
     /* when the toolbox is docked on the left in RTL */
-    :dir(rtl) .browserSidebarContainer[devtools-host-type="left"]
-  ) & {
-    border-end-end-radius: 0;
+    [devtools-host-type="left"]:dir(rtl)
+  ) > .browserContainer > .browserStack > & {
+    border-end-end-radius: var(--border-radius-medium);
+  }
+}
+
+[addressfooter] > .browserContainer > .browserStack > address-footer {
+  display: flex;
+
+  :not(.split-view-panel) > .browserContainer > .browserStack > & {
+    padding-inline-end: var(--space-small);
+
+    > .split-view-options-button {
+      display: none;
+    }
   }
 }
 
@@ -696,6 +701,9 @@ address-footer,
 /* Status panel */
 
 #statuspanel {
+  /* Ensure that this appears on top of the address footer. */
+  z-index: 1;
+
   &:not([hidden]) {
     max-width: calc(100% - 5px);
     pointer-events: none;
@@ -748,11 +756,6 @@ address-footer,
 
   @media -moz-pref("browser.tabs.hideStatusPanel") {
     visibility: hidden;
-  }
-
-  /* Ensure that this appears on top of the split view footer. */
-  .split-view-panel & {
-    z-index: 1;
   }
 }
 

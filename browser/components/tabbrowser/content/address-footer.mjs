@@ -12,7 +12,9 @@ const lazy = XPCOMUtils.declareLazy({
 });
 
 /**
- * A footer which appears in the corner of the inactive panel in split view.
+ * A footer which appears in the corner of the inactive panel in split view,
+ * and of the selected tab's panel while the address bar doesn't show the page
+ * address.
  *
  * The footer displays the favicon and domain name of the site.
  */
@@ -61,7 +63,8 @@ export class MozAddressFooter extends MozXULElement {
     </hbox>
     <html:img class="address-footer-icon address-footer-tab-image" hidden="" role="presentation"/>
     <html:span class="address-footer-uri"></html:span>
-    <toolbarbutton image="chrome://global/skin/icons/more.svg"
+    <toolbarbutton class="split-view-options-button"
+                   image="chrome://global/skin/icons/more.svg"
                    data-l10n-id="urlbar-split-view-button" />
   `;
 
@@ -78,7 +81,7 @@ export class MozAddressFooter extends MozXULElement {
     );
     this.tabImageIconElement = this.querySelector(".address-footer-tab-image");
     this.uriElement = this.querySelector(".address-footer-uri");
-    this.menuButtonElement = this.querySelector("toolbarbutton");
+    this.menuButtonElement = this.querySelector(".split-view-options-button");
 
     // Ensure these elements are up-to-date, as this info may have been set
     // prior to inserting this element into the DOM.
