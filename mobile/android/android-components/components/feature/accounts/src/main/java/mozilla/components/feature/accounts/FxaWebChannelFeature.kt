@@ -526,7 +526,7 @@ class FxaWebChannelFeature(
 
             try {
                 val data = payload.getJSONObject("data")
-                authType = data.getString("action").toAuthType()
+                authType = data.getString("action").toAuthType(data.getService())
                 code = data.getString("code")
                 state = data.getString("state")
                 declinedEngines = data.optJSONArray("declinedSyncEngines")?.toStringList()
@@ -548,6 +548,21 @@ class FxaWebChannelFeature(
             }
 
             return null
+        }
+
+        /**
+         * Support for identifying which service is being authenticated into added in
+         * [bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000#c1)
+         *
+         * Note that the service is nested under the "services" JSON object and the service is specified as an empty
+         * object, so the key is sufficient to map into an [FxaService]
+         */
+        private fun JSONObject.getService(): FxaService? {
+            return try {
+                getJSONObject("services").keys().asSequence().firstNotNullOfOrNull { FxaService.fromString(it) }
+            } catch (_: JSONException) {
+                null
+            }
         }
 
         /**

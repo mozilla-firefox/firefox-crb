@@ -26,6 +26,8 @@ permalink: /changelog/
   * 🆕 Added `EditMenuItemsContent`, the screen showing the items of a menu section as `CustomizableMenuItem`s, shown and hidden, with `CustomizableMenuItemsStore`, `CustomizableMenuItemsState` and `CustomizableMenuItemsAction` for its state. [Bug 2090975](https://bugzilla.mozilla.org/show_bug.cgi?id=2090975)
   * 🆕 Added `CustomizableMenuState.editableGroupIds` and `CustomizableMenuAction.Update.editableGroupIds`, the groups the customize menu screen shows a button for editing the items of, which dispatches the new `CustomizableMenuAction.EditGroupItemsClicked`. [Bug 2090975](https://bugzilla.mozilla.org/show_bug.cgi?id=2090975)
   * 🆕 Added `CustomizableMenuItemsAction.ItemsChanged`, which `EditMenuItemsContent` dispatches when the user drags an item to another place inside its section or inside the item it is in. [Bug 2090976](https://bugzilla.mozilla.org/show_bug.cgi?id=2090976)
+* **concept-sync**
+  * ⚠️ **Breaking change**: `AuthType.Signin`, `AuthType.Signup`, and `AuthType.Pairing` are now data classes carrying an optional `service: FxaService?`. `AuthType.OtherExternal` also carries the service. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 162.0
 * **concept-engine**

@@ -164,7 +164,7 @@ class MainActivity : AppCompatActivity(), LoginFragment.OnLoginCompleteListener,
         fragment: LoginFragment,
     ) {
         launch {
-            val authType = action?.toAuthType() ?: AuthType.Signin
+            val authType = action?.toAuthType() ?: AuthType.Signin()
             accountManager.finishAuthentication(FxaAuthData(authType, code = code, state = state))
             supportFragmentManager.popBackStack()
         }
