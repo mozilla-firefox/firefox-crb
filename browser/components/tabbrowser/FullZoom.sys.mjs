@@ -2,27 +2,42 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+const lazy = XPCOMUtils.declareLazy({
+  ZoomUI: "resource:///modules/ZoomUI.sys.mjs",
+});
+
 /**
  * Controls the "full zoom" setting and its site-specific preferences.
  */
-var FullZoom = {
+export class FullZoom {
   // Identifies the setting in the content prefs database.
-  name: "browser.content.full-zoom",
+  name = "browser.content.full-zoom";
 
   // browser.zoom.siteSpecific preference cache
-  _siteSpecificPref: undefined,
+  _siteSpecificPref = undefined;
 
   // browser.zoom.updateBackgroundTabs preference cache
-  updateBackgroundTabs: undefined,
+  updateBackgroundTabs = undefined;
 
   // This maps the browser to monotonically increasing integer
   // tokens. _browserTokenMap[browser] is increased each time the zoom is
   // changed in the browser. See _getBrowserToken and _ignorePendingZoomAccesses.
-  _browserTokenMap: new WeakMap(),
+  _browserTokenMap = new WeakMap();
 
   // Stores initial locations if we receive onLocationChange
   // events before we're initialized.
-  _initialLocations: new WeakMap(),
+  /** @type {WeakMap<MozBrowser, [nsIURI, boolean]>} */
+  _initialLocations = new WeakMap();
+
+  /**
+   * @param {BrowserWindow} window
+   */
+  constructor(window) {
+    this.documentGlobal = window;
+    this.document = window.document;
+  }
 
   get siteSpecific() {
     if (this._siteSpecificPref === undefined) {
@@ -31,22 +46,22 @@ var FullZoom = {
       );
     }
     return this._siteSpecificPref;
-  },
+  }
 
   // nsISupports
 
-  QueryInterface: ChromeUtils.generateQI([
+  QueryInterface = ChromeUtils.generateQI([
     "nsIObserver",
     "nsIContentPrefObserver",
     "nsISupportsWeakReference",
-  ]),
+  ]);
 
   // Initialization & Destruction
 
-  init: function FullZoom_init() {
-    gBrowser.addEventListener("DoZoomEnlarge", this);
-    gBrowser.addEventListener("DoZoomReduce", this);
-    window.addEventListener("MozScaleGestureComplete", this);
+  init() {
+    this.documentGlobal.gBrowser.addEventListener("DoZoomEnlarge", this);
+    this.documentGlobal.gBrowser.addEventListener("DoZoomReduce", this);
+    this.documentGlobal.addEventListener("MozScaleGestureComplete", this);
 
     // Register ourselves with the service so we know when our pref changes.
     this._cps2 = Cc["@mozilla.org/content-pref/service;1"].getService(
@@ -64,7 +79,7 @@ var FullZoom = {
 
     // If we received onLocationChange events for any of the current browsers
     // before we were initialized we want to replay those upon initialization.
-    for (let browser of gBrowser.browsers) {
+    for (let browser of this.documentGlobal.gBrowser.browsers) {
       if (this._initialLocations.has(browser)) {
         this.onLocationChange(...this._initialLocations.get(browser), browser);
       }
@@ -72,21 +87,21 @@ var FullZoom = {
 
     // This should be nulled after initialization.
     this._initialLocations = null;
-  },
+  }
 
-  destroy: function FullZoom_destroy() {
+  destroy() {
     Services.prefs.removeObserver("browser.zoom.", this);
     this._cps2.removeObserverForName(this.name, this);
-    gBrowser.removeEventListener("DoZoomEnlarge", this);
-    gBrowser.removeEventListener("DoZoomReduce", this);
-    window.removeEventListener("MozScaleGestureComplete", this);
-  },
+    this.documentGlobal.gBrowser.removeEventListener("DoZoomEnlarge", this);
+    this.documentGlobal.gBrowser.removeEventListener("DoZoomReduce", this);
+    this.documentGlobal.removeEventListener("MozScaleGestureComplete", this);
+  }
 
   // Event Handlers
 
   // EventListener
 
-  handleEvent: function FullZoom_handleEvent(event) {
+  handleEvent(event) {
     switch (event.type) {
       case "DoZoomEnlarge":
         this.enlarge(this._getTargetedBrowser(event));
@@ -100,7 +115,7 @@ var FullZoom = {
         break;
       }
     }
-  },
+  }
 
   // nsIObserver
 
@@ -124,26 +139,17 @@ var FullZoom = {
         }
         break;
     }
-  },
+  }
 
   // nsIContentPrefObserver
 
-  onContentPrefSet: function FullZoom_onContentPrefSet(
-    aGroup,
-    aName,
-    aValue,
-    aIsPrivate
-  ) {
+  onContentPrefSet(aGroup, aName, aValue, aIsPrivate) {
     this._onContentPrefChanged(aGroup, aValue, aIsPrivate);
-  },
+  }
 
-  onContentPrefRemoved: function FullZoom_onContentPrefRemoved(
-    aGroup,
-    aName,
-    aIsPrivate
-  ) {
+  onContentPrefRemoved(aGroup, aName, aIsPrivate) {
     this._onContentPrefChanged(aGroup, undefined, aIsPrivate);
-  },
+  }
 
   /**
    * Appropriately updates the zoom level after a content preference has
@@ -153,11 +159,7 @@ var FullZoom = {
    * @param aValue  The new value of the changed preference.  Pass undefined to
    *                indicate the preference's removal.
    */
-  _onContentPrefChanged: function FullZoom__onContentPrefChanged(
-    aGroup,
-    aValue,
-    aIsPrivate
-  ) {
+  _onContentPrefChanged(aGroup, aValue, aIsPrivate) {
     if (this._isNextContentPrefChangeInternal) {
       // Ignore changes that FullZoom itself makes.  This works because the
       // content pref service calls callbacks before notifying observers, and it
@@ -166,7 +168,7 @@ var FullZoom = {
       return;
     }
 
-    let browser = gBrowser.selectedBrowser;
+    let browser = this.documentGlobal.gBrowser.selectedBrowser;
     if (!browser.currentURI) {
       return;
     }
@@ -193,13 +195,14 @@ var FullZoom = {
       handleResult() {
         hasPref = true;
       },
+      handleError() {},
       handleCompletion: () => {
         if (!hasPref && token.isCurrent) {
           this._applyPrefToZoom(undefined, browser);
         }
       },
     });
-  },
+  }
 
   // location change observer
 
@@ -214,12 +217,8 @@ var FullZoom = {
    * @param aBrowser
    *        (optional) browser object displaying the document
    */
-  onLocationChange: function FullZoom_onLocationChange(
-    aURI,
-    aIsTabSwitch,
-    aBrowser
-  ) {
-    let browser = aBrowser || gBrowser.selectedBrowser;
+  onLocationChange(aURI, aIsTabSwitch, aBrowser) {
+    let browser = aBrowser || this.documentGlobal.gBrowser.selectedBrowser;
 
     // If we haven't been initialized yet but receive an onLocationChange
     // notification then let's store and replay it upon initialization.
@@ -267,7 +266,7 @@ var FullZoom = {
 
     // Media documents should always start at 1, and are not affected by prefs.
     if (!aIsTabSwitch && browser.isSyntheticDocument) {
-      ZoomManager.setZoomForBrowser(browser, 1);
+      this.documentGlobal.ZoomManager.setZoomForBrowser(browser, 1);
       // _ignorePendingZoomAccesses already called above, so no need here.
       this._notifyOnLocationChange(browser);
       return;
@@ -304,6 +303,7 @@ var FullZoom = {
       handleResult(resultPref) {
         value = resultPref.value;
       },
+      handleError() {},
       handleCompletion: () => {
         if (!token.isCurrent) {
           this._notifyOnLocationChange(browser);
@@ -316,7 +316,7 @@ var FullZoom = {
         );
       },
     });
-  },
+  }
 
   // update state of zoom menu items
 
@@ -331,35 +331,36 @@ var FullZoom = {
    *   the ZoomManager.zoom level to change.
    * @returns {Promise<void>}
    */
-  updateCommands: async function FullZoom_updateCommands(
-    forceResetEnabled = false
-  ) {
-    let zoomLevel = ZoomManager.zoom;
-    let defaultZoomLevel = await ZoomUI.getGlobalValue();
-    let reduceCmd = document.getElementById("cmd_fullZoomReduce");
-    if (zoomLevel == ZoomManager.MIN) {
+  async updateCommands(forceResetEnabled = false) {
+    let zoomLevel = this.documentGlobal.ZoomManager.zoom;
+    let defaultZoomLevel = await lazy.ZoomUI.getGlobalValue();
+    let reduceCmd = this.document.getElementById("cmd_fullZoomReduce");
+    if (zoomLevel == this.documentGlobal.ZoomManager.MIN) {
       reduceCmd.setAttribute("disabled", "true");
     } else {
       reduceCmd.removeAttribute("disabled");
     }
 
-    let enlargeCmd = document.getElementById("cmd_fullZoomEnlarge");
-    if (zoomLevel == ZoomManager.MAX) {
+    let enlargeCmd = this.document.getElementById("cmd_fullZoomEnlarge");
+    if (zoomLevel == this.documentGlobal.ZoomManager.MAX) {
       enlargeCmd.setAttribute("disabled", "true");
     } else {
       enlargeCmd.removeAttribute("disabled");
     }
 
-    let resetCmd = document.getElementById("cmd_fullZoomReset");
+    let resetCmd = this.document.getElementById("cmd_fullZoomReset");
     if (zoomLevel == defaultZoomLevel && !forceResetEnabled) {
       resetCmd.setAttribute("disabled", "true");
     } else {
       resetCmd.removeAttribute("disabled");
     }
 
-    let fullZoomCmd = document.getElementById("cmd_fullZoomToggle");
-    fullZoomCmd.toggleAttribute("checked", !ZoomManager.useFullZoom);
-  },
+    let fullZoomCmd = this.document.getElementById("cmd_fullZoomToggle");
+    fullZoomCmd.toggleAttribute(
+      "checked",
+      !this.documentGlobal.ZoomManager.useFullZoom
+    );
+  }
 
   // Setting & Pref Manipulation
 
@@ -369,60 +370,60 @@ var FullZoom = {
     } catch (ex) {
       console.error(ex);
     }
-  },
+  }
 
   /**
    * If browser in reader mode sends message to reader in order to decrease font size,
    * Otherwise reduces the zoom level of the page in the passed browser.
    *
-   * @param {Browser} [aBrowser=gBrowser.selectedBrowser]
+   * @param {MozBrowser} [aBrowser=gBrowser.selectedBrowser]
    *   The browser to reduce the zoom level on.
    * @returns {Promise<void>}
    */
-  async reduce(aBrowser = gBrowser.selectedBrowser) {
+  async reduce(aBrowser = this.documentGlobal.gBrowser.selectedBrowser) {
     if (aBrowser.currentURI.spec.startsWith("about:reader")) {
       aBrowser.sendMessageToActor("Reader:ZoomOut", {}, "AboutReader");
     } else if (this._isPDFViewer(aBrowser)) {
       this.sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomOut");
     } else {
-      ZoomManager.reduceForBrowser(aBrowser);
+      this.documentGlobal.ZoomManager.reduceForBrowser(aBrowser);
       this._ignorePendingZoomAccesses(aBrowser);
       await this._applyZoomToPref(aBrowser);
     }
-  },
+  }
 
   /**
    * If browser in reader mode sends message to reader in order to increase font size,
    * Otherwise enlarges the zoom level of the page in the passed browser.
    *
-   * @param {Browser} [aBrowser=gBrowser.selectedBrowser]
+   * @param {MozBrowser} [aBrowser=gBrowser.selectedBrowser]
    *   The browser to enlarge the zoom level on.
    * @returns {Promise<void>}
    */
-  async enlarge(aBrowser = gBrowser.selectedBrowser) {
+  async enlarge(aBrowser = this.documentGlobal.gBrowser.selectedBrowser) {
     if (aBrowser.currentURI.spec.startsWith("about:reader")) {
       aBrowser.sendMessageToActor("Reader:ZoomIn", {}, "AboutReader");
     } else if (this._isPDFViewer(aBrowser)) {
       this.sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomIn");
     } else {
-      ZoomManager.enlargeForBrowser(aBrowser);
+      this.documentGlobal.ZoomManager.enlargeForBrowser(aBrowser);
       this._ignorePendingZoomAccesses(aBrowser);
       await this._applyZoomToPref(aBrowser);
     }
-  },
+  }
 
   /**
    * Sets the zoom level for the given browser to the given floating
    * point value, where 1 is the default zoom level.
    */
-  setZoom(value, browser = gBrowser.selectedBrowser) {
+  setZoom(value, browser = this.documentGlobal.gBrowser.selectedBrowser) {
     if (this._isPDFViewer(browser)) {
       return;
     }
-    ZoomManager.setZoomForBrowser(browser, value);
+    this.documentGlobal.ZoomManager.setZoomForBrowser(browser, value);
     this._ignorePendingZoomAccesses(browser);
     this._applyZoomToPref(browser);
-  },
+  }
 
   /**
    * Sets the zoom level of the page in the given browser to the global zoom
@@ -430,7 +431,7 @@ var FullZoom = {
    *
    * @return A promise which resolves when the zoom reset has been applied.
    */
-  reset: function FullZoom_reset(browser = gBrowser.selectedBrowser) {
+  reset(browser = this.documentGlobal.gBrowser.selectedBrowser) {
     let forceValue;
     if (browser.currentURI.spec.startsWith("about:reader")) {
       browser.sendMessageToActor("Reader:ResetZoom", {}, "AboutReader");
@@ -441,15 +442,18 @@ var FullZoom = {
       forceValue = 1;
     }
     let token = this._getBrowserToken(browser);
-    let result = ZoomUI.getGlobalValue().then(value => {
+    let result = lazy.ZoomUI.getGlobalValue().then(value => {
       if (token.isCurrent) {
-        ZoomManager.setZoomForBrowser(browser, forceValue || value);
+        this.documentGlobal.ZoomManager.setZoomForBrowser(
+          browser,
+          forceValue || value
+        );
         this._ignorePendingZoomAccesses(browser);
       }
     });
     this._removePref(browser);
     return result;
-  },
+  }
 
   /**
    * Called from the URL bar's inline zoom reset indicator button.
@@ -457,13 +461,11 @@ var FullZoom = {
   resetFromURLBar() {
     this.reset();
     this.resetScalingZoom();
-  },
+  }
 
-  resetScalingZoom: function FullZoom_resetScaling(
-    browser = gBrowser.selectedBrowser
-  ) {
+  resetScalingZoom(browser = this.documentGlobal.gBrowser.selectedBrowser) {
     browser.browsingContext?.resetScalingZoom();
-  },
+  }
 
   /**
    * Set the zoom level for a given browser.
@@ -488,11 +490,7 @@ var FullZoom = {
    * @param aBrowser   The zoom is set in this browser.  Required.
    * @param aCallback  If given, it's asynchronously called when complete.
    */
-  _applyPrefToZoom: function FullZoom__applyPrefToZoom(
-    aValue,
-    aBrowser,
-    aCallback
-  ) {
+  _applyPrefToZoom(aValue, aBrowser, aCallback) {
     // The browser is sometimes half-destroyed because this method is called
     // by content pref service callbacks, which themselves can be called at any
     // time, even after browsers are closed.
@@ -506,7 +504,10 @@ var FullZoom = {
     }
 
     if (aValue !== undefined && this.siteSpecific) {
-      ZoomManager.setZoomForBrowser(aBrowser, this._ensureValid(aValue));
+      this.documentGlobal.ZoomManager.setZoomForBrowser(
+        aBrowser,
+        this._ensureValid(aValue)
+      );
       this._ignorePendingZoomAccesses(aBrowser);
       this._executeSoon(aCallback);
       return;
@@ -516,14 +517,14 @@ var FullZoom = {
     // the tab browser zoom, however global zoom should work independent
     // of the site-specific pref, so we do no checks here.
     let token = this._getBrowserToken(aBrowser);
-    ZoomUI.getGlobalValue().then(value => {
+    lazy.ZoomUI.getGlobalValue().then(value => {
       if (token.isCurrent) {
-        ZoomManager.setZoomForBrowser(aBrowser, value);
+        this.documentGlobal.ZoomManager.setZoomForBrowser(aBrowser, value);
         this._ignorePendingZoomAccesses(aBrowser);
       }
       this._executeSoon(aCallback);
     });
-  },
+  }
 
   /**
    * Saves the zoom level of the page in the given browser to the content
@@ -531,7 +532,7 @@ var FullZoom = {
    *
    * @param browser  The zoom of this browser will be saved.  Required.
    */
-  _applyZoomToPref: function FullZoom__applyZoomToPref(browser) {
+  _applyZoomToPref(browser) {
     if (!this.siteSpecific || browser.isSyntheticDocument) {
       // If site-specific zoom is disabled, we have called this function
       // to adjust our tab's zoom level. It is now considered "custom"
@@ -544,9 +545,13 @@ var FullZoom = {
       this._cps2.set(
         browser.currentURI.spec,
         this.name,
-        ZoomManager.getZoomForBrowser(browser),
+        /** @type {nsIVariant} */ (
+          this.documentGlobal.ZoomManager.getZoomForBrowser(browser)
+        ),
         this._loadContextFromBrowser(browser),
         {
+          handleResult() {},
+          handleError() {},
           handleCompletion: () => {
             this._isNextContentPrefChangeInternal = true;
             resolve();
@@ -554,24 +559,26 @@ var FullZoom = {
         }
       );
     });
-  },
+  }
 
   /**
    * Removes from the content prefs store the zoom level of the given browser.
    *
    * @param browser  The zoom of this browser will be removed.  Required.
    */
-  _removePref: function FullZoom__removePref(browser) {
+  _removePref(browser) {
     if (browser.isSyntheticDocument) {
       return;
     }
     let ctxt = this._loadContextFromBrowser(browser);
     this._cps2.removeByDomainAndName(browser.currentURI.spec, this.name, ctxt, {
+      handleResult() {},
+      handleError() {},
       handleCompletion: () => {
         this._isNextContentPrefChangeInternal = true;
       },
     });
-  },
+  }
 
   // Utilities
 
@@ -587,7 +594,7 @@ var FullZoom = {
    * @param browser  The token of this browser will be returned.
    * @return  An object with an "isCurrent" getter.
    */
-  _getBrowserToken: function FullZoom__getBrowserToken(browser) {
+  _getBrowserToken(browser) {
     let map = this._browserTokenMap;
     if (!map.has(browser)) {
       map.set(browser, 0);
@@ -603,7 +610,7 @@ var FullZoom = {
         return map.get(browser) === this.token && browser.mInitialized;
       },
     };
-  },
+  }
 
   /**
    * Returns the browser that the supplied zoom event is associated with.
@@ -611,7 +618,7 @@ var FullZoom = {
    * @param event  The zoom event.
    * @return  The associated browser element, if one exists, otherwise null.
    */
-  _getTargetedBrowser: function FullZoom__getTargetedBrowser(event) {
+  _getTargetedBrowser(event) {
     let target = event.originalTarget;
 
     // With remote content browsers, the event's target is the browser
@@ -619,7 +626,7 @@ var FullZoom = {
     const XUL_NS =
       "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
     if (
-      window.XULElement.isInstance(target) &&
+      this.documentGlobal.XULElement.isInstance(target) &&
       target.localName == "browser" &&
       target.namespaceURI == XUL_NS
     ) {
@@ -633,7 +640,7 @@ var FullZoom = {
     }
 
     throw new Error("Unexpected zoom event source");
-  },
+  }
 
   /**
    * Increments the zoom change token for the given browser so that pending
@@ -642,30 +649,28 @@ var FullZoom = {
    *
    * @param browser  Pending accesses in this browser will be ignored.
    */
-  _ignorePendingZoomAccesses: function FullZoom__ignorePendingZoomAccesses(
-    browser
-  ) {
+  _ignorePendingZoomAccesses(browser) {
     let map = this._browserTokenMap;
     map.set(browser, (map.get(browser) || 0) + 1);
-  },
+  }
 
-  _ensureValid: function FullZoom__ensureValid(aValue) {
+  _ensureValid(aValue) {
     // Note that undefined is a valid value for aValue that indicates a known-
     // not-to-exist value.
     if (isNaN(aValue)) {
       return 1;
     }
 
-    if (aValue < ZoomManager.MIN) {
-      return ZoomManager.MIN;
+    if (aValue < this.documentGlobal.ZoomManager.MIN) {
+      return this.documentGlobal.ZoomManager.MIN;
     }
 
-    if (aValue > ZoomManager.MAX) {
-      return ZoomManager.MAX;
+    if (aValue > this.documentGlobal.ZoomManager.MAX) {
+      return this.documentGlobal.ZoomManager.MAX;
     }
 
     return aValue;
-  },
+  }
 
   /**
    * Gets the load context from the given Browser.
@@ -673,9 +678,9 @@ var FullZoom = {
    * @param Browser  The Browser whose load context will be returned.
    * @return        The nsILoadContext of the given Browser.
    */
-  _loadContextFromBrowser: function FullZoom__loadContextFromBrowser(browser) {
+  _loadContextFromBrowser(browser) {
     return browser.loadContext;
-  },
+  }
 
   /**
    * Asynchronously broadcasts "browser-fullZoom:location-change" so that
@@ -683,22 +688,22 @@ var FullZoom = {
    * The notification is always asynchronous so that observers are guaranteed a
    * consistent behavior.
    */
-  _notifyOnLocationChange: function FullZoom__notifyOnLocationChange(browser) {
+  _notifyOnLocationChange(browser) {
     this._executeSoon(function () {
       Services.obs.notifyObservers(browser, "browser-fullZoom:location-change");
     });
-  },
+  }
 
-  _executeSoon: function FullZoom__executeSoon(callback) {
+  _executeSoon(callback) {
     if (!callback) {
       return;
     }
     Services.tm.dispatchToMainThread(callback);
-  },
+  }
 
   _isPDFViewer(browser) {
     return !!(
       browser.contentPrincipal.spec == "resource://pdf.js/web/viewer.html"
     );
-  },
-};
+  }
+}
