@@ -43,12 +43,18 @@ VALID_FORMATTERS = {"ruff-format", "clang-format", "eslint", "rustfmt", "styleli
 VALID_ANDROID_FORMATTERS = {"android-format"}
 
 # Code-review bot must index issues from the whole codebase when pushing
-# to autoland or try repositories. In such cases, output warnings in the
-# task's JSON artifact but do not fail if only warnings are found.
-REPORT_WARNINGS = os.environ.get("GECKO_HEAD_REPOSITORY", "").rstrip("/") in (
+# to autoland, mozilla-central, try or firefox-crb. In such cases, output
+# warnings in the task's JSON artifact but do not fail if only warnings are
+# found.
+_head_repository = os.environ.get("GECKO_HEAD_REPOSITORY", "").rstrip("/")
+REPORT_WARNINGS = _head_repository in (
     "https://hg.mozilla.org/mozilla-central",
     "https://hg.mozilla.org/integration/autoland",
     "https://hg.mozilla.org/try",
+    "https://github.com/mozilla-firefox/firefox-crb",
+) or (
+    _head_repository == "https://github.com/mozilla-firefox/firefox"
+    and os.environ.get("GECKO_HEAD_REF") in ("refs/heads/main", "refs/heads/autoland")
 )
 
 
