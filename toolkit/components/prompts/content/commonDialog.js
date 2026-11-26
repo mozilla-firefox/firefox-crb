@@ -40,6 +40,10 @@ function commonDialogOnLoad() {
     ["promptUserAndPass", "promptPassword"].includes(args.promptType) ||
     args.headerIconCSSValue;
   let root = document.documentElement;
+  root.toggleAttribute(
+    "inextensionpopup",
+    !!window.frameElement?.closest(".webextension-popup-stack")
+  );
   if (needIconifiedHeader) {
     root.setAttribute("neediconheader", "true");
   }
