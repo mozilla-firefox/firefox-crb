@@ -216,7 +216,6 @@ def _langpack(*, paths: PackagePaths, ab_cd: str) -> int:
         "chrome",
         "localization",
         *substs.get("MOZ_PKG_LANGPACK_SUBDIRS", []),
-        "manifest.json",
     ]
     return package_langpack.main([
         f"--locale={ab_cd}",
