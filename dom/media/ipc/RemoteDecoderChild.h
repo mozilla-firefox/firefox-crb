@@ -62,6 +62,10 @@ class RemoteDecoderChild : public ShmemRecycleAllocator<RemoteDecoderChild>,
 
   virtual MediaResult ProcessOutput(DecodedOutputIPDL&& aDecodedData) = 0;
   virtual void RecordShutdownTelemetry(bool aForAbnormalShutdown) {}
+  // Called with the samples about to be sent to the remote decoder.
+  virtual void OnDecode(const nsTArray<RefPtr<MediaRawData>>& aSamples) {}
+  // Called when pending decoded output is discarded.
+  virtual void OnFlush() {}
 
   MediaDataDecoder::DecodedData mDecodedData;
   const RemoteMediaIn mLocation;

@@ -68,6 +68,19 @@ MediaResult RemoteVideoDecoderChild::ProcessOutput(
       aDecodedData.get_ArrayOfRemoteVideoData()->Array();
 
   for (auto&& data : arrayData) {
+    gfx::IntSize display = data.display();
+    if (!mDisplaySizes.empty()) {
+      const int64_t time = data.base().time().ToMicroseconds();
+      auto it = mDisplaySizes.find(time);
+      if (it != mDisplaySizes.end()) {
+        display = it->second;
+      }
+      // Frames are output in presentation order, so any earlier entries are
+      // for samples which were dropped by the decoder.
+      mDisplaySizes.erase(mDisplaySizes.begin(),
+                          mDisplaySizes.upper_bound(time));
+    }
+
     if (data.image().IsEmpty()) {
       // This is a NullData object.
       mDecodedData.AppendElement(MakeRefPtr<NullData>(
@@ -80,7 +93,7 @@ MediaResult RemoteVideoDecoderChild::ProcessOutput(
     RefPtr<Image> image = data.image().TransferToImage(mBufferRecycleBin);
 
     RefPtr<VideoData> video = VideoData::CreateFromImage(
-        data.display(), data.base().offset(), data.base().time(),
+        display, data.base().offset(), data.base().time(),
         data.base().duration(), image, data.base().keyframe(),
         data.base().timecode());
 
@@ -91,6 +104,28 @@ MediaResult RemoteVideoDecoderChild::ProcessOutput(
     mDecodedData.AppendElement(std::move(video));
   }
   return NS_OK;
+}
+
+void RemoteVideoDecoderChild::OnDecode(
+    const nsTArray<RefPtr<MediaRawData>>& aSamples) {
+  AssertOnManagerThread();
+  if (!SupportDecoderRecycling()) {
+    return;
+  }
+  for (const auto& sample : aSamples) {
+    if (!sample->mTrackInfo) {
+      continue;
+    }
+    if (const VideoInfo* info = sample->mTrackInfo->GetAsVideoInfo()) {
+      mDisplaySizes.insert_or_assign(sample->mTime.ToMicroseconds(),
+                                     info->mDisplay);
+    }
+  }
+}
+
+void RemoteVideoDecoderChild::OnFlush() {
+  AssertOnManagerThread();
+  mDisplaySizes.clear();
 }
 
 MediaResult RemoteVideoDecoderChild::InitIPDL(

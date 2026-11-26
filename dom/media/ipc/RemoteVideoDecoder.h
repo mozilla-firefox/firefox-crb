@@ -3,6 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #ifndef include_dom_media_ipc_RemoteVideoDecoderChild_h
 #define include_dom_media_ipc_RemoteVideoDecoderChild_h
+#include <map>
+
 #include "RemoteDecoderChild.h"
 #include "RemoteDecoderParent.h"
 #include "RemoteMediaManagerChild.h"
@@ -43,8 +45,17 @@ class RemoteVideoDecoderChild : public RemoteDecoderChild {
 
   MediaResult ProcessOutput(DecodedOutputIPDL&& aDecodedData) override;
 
+ protected:
+  void OnDecode(const nsTArray<RefPtr<MediaRawData>>& aSamples) override;
+  void OnFlush() override;
+
  private:
   RefPtr<mozilla::layers::BufferRecycleBin> mBufferRecycleBin;
+  // When the remote decoder is recycled across a resolution change, it keeps
+  // the configuration it was created with, so we track the display size of
+  // each sample by its time in microseconds, as the remote decoder rounds it,
+  // to apply to the decoded frames.
+  std::map<int64_t, gfx::IntSize> mDisplaySizes;
 };
 
 class RemoteVideoDecoderParent final : public RemoteDecoderParent {
