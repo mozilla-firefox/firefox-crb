@@ -94,7 +94,7 @@ export function escapeHtmlEntities(text) {
 export function navigateToLink(
   e,
   url = e.originalTarget.url,
-  { forceNewTab = true } = {}
+  { forceNewTab = true, userContextId } = {}
 ) {
   let currentWindow =
     e.target.documentGlobal.browsingContext.embedderWindowGlobal.browsingContext
@@ -117,6 +117,7 @@ export function navigateToLink(
     }
     currentWindow.openTrustedLinkIn(url, where, {
       inBackground: isModifierClick,
+      userContextId,
     });
   }
 }

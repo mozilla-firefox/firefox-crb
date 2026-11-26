@@ -413,8 +413,8 @@ export var History = Object.freeze({
    *   Remove visits that have been added before this date (inclusive).
    * @param {number} filter.limit
    *   Limit the number of visits we remove to this number.
-   * @param {string|nsIURI|URL} filter.url
-   *   Only remove visits to this URL.
+   * @param {string|nsIURI|URL|Array<string|nsIURI|URL>} filter.url
+   *   Only remove visits to this URL, or to any of these URLs.
    * @param {nsINavHistoryService.TransitionType} filter.transition
    *   The type of the transition (see TRANSITIONS below).
    * @param {number} filter.userContextId
@@ -469,13 +469,19 @@ export var History = Object.freeze({
       throw new TypeError("Expected a non-negative integer as a userContextId");
     }
 
-    if (
-      hasURL &&
-      !URL.isInstance(filter.url) &&
-      typeof filter.url != "string" &&
-      !(filter.url instanceof Ci.nsIURI)
-    ) {
-      throw new TypeError("Expected a valid URL for `url`");
+    if (hasURL) {
+      let urls = Array.isArray(filter.url) ? filter.url : [filter.url];
+      if (
+        !urls.length ||
+        urls.some(
+          url =>
+            !URL.isInstance(url) &&
+            typeof url != "string" &&
+            !(url instanceof Ci.nsIURI)
+        )
+      ) {
+        throw new TypeError("Expected a valid URL for `url`");
+      }
     }
 
     if (
@@ -1292,15 +1298,15 @@ var removeVisitsByFilter = async function (db, filter, onResult = null) {
 
   let optionalJoin = "";
   if ("url" in filter) {
-    let url = filter.url;
-    if (url instanceof Ci.nsIURI) {
-      url = filter.url.spec;
-    } else {
-      url = new URL(url).href;
-    }
+    let urls = Array.isArray(filter.url) ? filter.url : [filter.url];
     optionalJoin = `JOIN moz_places h ON h.id = v.place_id`;
-    conditions.push("h.url_hash = hash(:url)", "h.url = :url");
-    args.url = url;
+    conditions.push(
+      "h.url_hash IN (SELECT hash(value) FROM carray(:urls))",
+      "h.url IN carray(:urls)"
+    );
+    args.urls = urls.map(url =>
+      url instanceof Ci.nsIURI ? url.spec : new URL(url).href
+    );
   }
 
   let visitsToRemove = [];

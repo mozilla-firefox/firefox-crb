@@ -774,7 +774,7 @@ export var PlacesUIUtils = {
   /**
    * @param {Array<object>} aItemsToOpen
    *   needs to be an array of objects of the form:
-   *   {uri: string, isBookmark: boolean}
+   *   {uri: string, isBookmark: boolean, userContextId?: number}
    * @param {object} aEvent
    *   The associated event triggering the open.
    * @param {Window} aWindow
@@ -841,6 +841,9 @@ export var PlacesUIUtils = {
       inBackground: loadInBackground,
       replace: false,
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+      userContextIds: isPrivate
+        ? undefined
+        : aItemsToOpen.map(item => item.userContextId),
     });
 
     for (const [i, tab] of tabs.entries()) {

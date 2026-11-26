@@ -128,3 +128,12 @@
 .fxview-tab-row-button.undo-button {
   justify-self: end;
 }
+
+.fxview-tab-row-container-indicator {
+  height: 16px;
+  width: 16px;
+  background-image: var(--identity-icon);
+  background-size: cover;
+  -moz-context-properties: fill;
+  fill: var(--identity-color);
+}

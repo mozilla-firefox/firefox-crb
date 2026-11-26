@@ -13,6 +13,8 @@
  *   The page's URL.
  * @property {string} guid
  *   The page's GUID.
+ * @property {number} [userContextId]
+ *   The container of the visit, 0 for the default one.
  */
 
 /**
