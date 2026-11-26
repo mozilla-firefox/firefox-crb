@@ -6,6 +6,8 @@
 #define ConnectionAttempt_h_
 
 #include "mozilla/TimeStamp.h"
+#include "nsCOMPtr.h"
+#include "nsITimer.h"
 #include "nsWeakReference.h"
 
 namespace mozilla {
@@ -66,6 +68,15 @@ class ConnectionAttempt : public nsSupportsWeakReference {
 
  protected:
   virtual ~ConnectionAttempt() = default;
+
+  // The one-shot timer the Happy Eyeballs attempts pace themselves with;
+  // aCallback is the derived class. Cancel it on every terminal path: an armed
+  // timer holds a reference, and letting the timer thread drop the last one
+  // runs the destructor off the socket thread.
+  void SetupAttemptTimer(uint64_t aTimeoutUs, nsITimerCallback* aCallback);
+  void CancelAttemptTimer();
+
+  nsCOMPtr<nsITimer> mTimer;
 
   RefPtr<nsHttpConnectionInfo> mConnInfo;
   RefPtr<nsAHttpTransaction> mTransaction;
