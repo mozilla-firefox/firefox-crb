@@ -180,15 +180,20 @@ function testAlert(when, { serverEnabled, profD, isBackgroundTaskMode } = {}) {
   let parsedArgumentString = action =>
     parseOneEncoded(unescape(argumentString(action)));
 
+  let brandShortName = Services.strings
+    .createBundle("chrome://branding/locale/brand.properties")
+    .GetStringFromName("brandShortName");
+  let settingsTitle = `${brandShortName} notification settings`;
+
   let settingsAction = isBackgroundTaskMode
     ? ""
-    : `<action content="Notification settings"/>`;
+    : `<action content="${settingsTitle}"/>`;
 
   let parsedSettingsAction = origin => {
     if (isBackgroundTaskMode) {
       return [];
     }
-    let content = "Notification settings";
+    let content = settingsTitle;
     return [
       content,
       {
@@ -358,9 +363,9 @@ function testAlert(when, { serverEnabled, profD, isBackgroundTaskMode } = {}) {
   let parsedSettingsActionWithPrivilegedName = isBackgroundTaskMode
     ? []
     : [
-        "Notification settings",
+        settingsTitle,
         {
-          content: "Notification settings",
+          content: settingsTitle,
           arguments: parsedArgumentString({
             action: "settings",
             privilegedName: name,
