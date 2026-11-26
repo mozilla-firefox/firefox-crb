@@ -22,7 +22,6 @@ import org.mozilla.fenix.addons.ExtensionsMenuItemProvider
 import org.mozilla.fenix.bookmarks.BookmarkMenuItemProvider
 import org.mozilla.fenix.bookmarks.BookmarksScreenMenuItemProvider
 import org.mozilla.fenix.browser.BackMenuItemProvider
-import org.mozilla.fenix.browser.DefaultBrowserMenuItemProvider
 import org.mozilla.fenix.browser.DesktopSiteMenuItemProvider
 import org.mozilla.fenix.browser.ForwardMenuItemProvider
 import org.mozilla.fenix.browser.RefreshMenuItemProvider
@@ -47,6 +46,7 @@ import org.mozilla.fenix.home.CustomizeHomepageMenuItemProvider
 import org.mozilla.fenix.home.topsites.ShortcutMenuItemProvider
 import org.mozilla.fenix.ipprotection.VpnMenuItemProvider
 import org.mozilla.fenix.library.history.HistoryMenuItemProvider
+import org.mozilla.fenix.messaging.BannerMenuItemProvider
 import org.mozilla.fenix.pdf.SaveAsPdfMenuItemProvider
 import org.mozilla.fenix.print.PrintMenuItemProvider
 import org.mozilla.fenix.settings.SettingsMenuItemProvider
@@ -123,10 +123,12 @@ class MenuItemProvidersFactory(
                 )
 
             FenixMenuItem.DefaultBrowserBanner ->
-                DefaultBrowserMenuItemProvider(
+                BannerMenuItemProvider(
+                    appStore = appStore,
                     settings = settings,
                     appName = context.getString(R.string.app_name),
                     setAsDefaultBrowser = setAsDefaultBrowserDelegate,
+                    scope = menuViewScope,
                 )
 
             FenixMenuItem.CustomizeReaderView ->

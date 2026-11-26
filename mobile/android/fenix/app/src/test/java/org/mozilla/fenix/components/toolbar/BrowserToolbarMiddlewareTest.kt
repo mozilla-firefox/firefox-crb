@@ -3514,7 +3514,7 @@ class BrowserToolbarMiddlewareTest {
             val appStore =
                 AppStore(
                     initialState =
-                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.NotDefaultBrowser))
+                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.BannerMenuItem))
                 )
             val middleware = buildMiddleware(appStore = appStore)
 
@@ -3536,9 +3536,7 @@ class BrowserToolbarMiddlewareTest {
             val initialMenuButton = toolbarStore.state.displayState.browserActionsEnd[2] as ActionButtonRes
             assertEquals(expectedMenuButton(true), initialMenuButton)
 
-            appStore.dispatch(
-                AppAction.MenuNotification.AddMenuNotification(SupportedMenuNotifications.NotDefaultBrowser)
-            )
+            appStore.dispatch(AppAction.MenuNotification.AddMenuNotification(SupportedMenuNotifications.BannerMenuItem))
             testDispatcher.scheduler.advanceUntilIdle()
             val updatedMenuButton = toolbarStore.state.displayState.browserActionsEnd[2] as ActionButtonRes
             assertEquals(expectedMenuButton(true), updatedMenuButton)
@@ -3578,7 +3576,7 @@ class BrowserToolbarMiddlewareTest {
             val appStore =
                 AppStore(
                     initialState =
-                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.NotDefaultBrowser))
+                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.BannerMenuItem))
                 )
             val middleware = buildMiddleware(appStore = appStore)
             val toolbarStore = buildStore(middleware)
@@ -3601,7 +3599,7 @@ class BrowserToolbarMiddlewareTest {
                         AppState(
                             supportedMenuNotifications =
                                 setOf(
-                                    SupportedMenuNotifications.NotDefaultBrowser,
+                                    SupportedMenuNotifications.BannerMenuItem,
                                     SupportedMenuNotifications.Downloads,
                                 )
                         )

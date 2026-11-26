@@ -1045,11 +1045,10 @@ class BrowserToolbarMiddlewareTest {
     }
 
     @Test
-    fun `GIVEN SupportedMenuNotifications contains NotDefaultBrowser THEN menu button is highlighted`() = runTest {
+    fun `GIVEN SupportedMenuNotifications contains BannerMenuItem THEN menu button is highlighted`() = runTest {
         val appStore =
             AppStore(
-                initialState =
-                    AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.NotDefaultBrowser))
+                initialState = AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.BannerMenuItem))
             )
         val (_, toolbarStore) = buildMiddlewareAndAddToStore(appStore = appStore)
 
@@ -1059,7 +1058,7 @@ class BrowserToolbarMiddlewareTest {
     }
 
     @Test
-    fun `GIVEN SupportedMenuNotifications doesn't contains NotDefaultBrowser but other notification THEN menu button is not highlighted`() =
+    fun `GIVEN SupportedMenuNotifications doesn't contains BannerMenuItem but other notification THEN menu button is not highlighted`() =
         runTest {
             val appStore = AppStore(initialState = AppState(supportedMenuNotifications = emptySet()))
             val (_, toolbarStore) = buildMiddlewareAndAddToStore(appStore = appStore)
@@ -1075,7 +1074,7 @@ class BrowserToolbarMiddlewareTest {
             val appStore =
                 AppStore(
                     initialState =
-                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.NotDefaultBrowser))
+                        AppState(supportedMenuNotifications = setOf(SupportedMenuNotifications.BannerMenuItem))
                 )
             val (_, toolbarStore) = buildMiddlewareAndAddToStore(appStore = appStore)
 
@@ -1084,7 +1083,7 @@ class BrowserToolbarMiddlewareTest {
             assertEquals(expectedMenuButton(true), initialMenuButton)
 
             appStore.dispatch(
-                AppAction.MenuNotification.RemoveMenuNotification(SupportedMenuNotifications.NotDefaultBrowser)
+                AppAction.MenuNotification.RemoveMenuNotification(SupportedMenuNotifications.BannerMenuItem)
             )
 
             testDispatcher.scheduler.advanceUntilIdle()

@@ -17,8 +17,8 @@ import org.mozilla.fenix.components.appstate.SupportedMenuNotifications
 import org.mozilla.fenix.messaging.FenixMessageSurfaceId
 
 /**
- * Shows the menu button dot ([SupportedMenuNotifications.NotDefaultBrowser]) while the message to show in the menu
- * banner asks for it with `menu-notification`.
+ * Shows the menu button dot ([SupportedMenuNotifications.BannerMenuItem]) while the message to show in the menu banner
+ * asks for it with `menu-notification`.
  *
  * The notification is added again only when a different message asks for it, so that a notification removed when the
  * user opens the menu does not come back each time the same message is evaluated.
@@ -42,9 +42,9 @@ class MenuBannerMessageNotificationBinding(
             .collect { notifyingMessageId ->
                 val action =
                     if (notifyingMessageId != null) {
-                        AppAction.MenuNotification.AddMenuNotification(SupportedMenuNotifications.NotDefaultBrowser)
+                        AppAction.MenuNotification.AddMenuNotification(SupportedMenuNotifications.BannerMenuItem)
                     } else {
-                        AppAction.MenuNotification.RemoveMenuNotification(SupportedMenuNotifications.NotDefaultBrowser)
+                        AppAction.MenuNotification.RemoveMenuNotification(SupportedMenuNotifications.BannerMenuItem)
                     }
                 appStore.dispatch(action)
             }
