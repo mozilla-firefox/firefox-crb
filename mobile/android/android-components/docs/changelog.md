@@ -33,6 +33,8 @@ permalink: /changelog/
   * 🆕 Added `EditMenuItemsContent`, the screen showing the items of a menu section as `CustomizableMenuItem`s, shown and hidden, with `CustomizableMenuItemsStore`, `CustomizableMenuItemsState` and `CustomizableMenuItemsAction` for its state. [Bug 2090975](https://bugzilla.mozilla.org/show_bug.cgi?id=2090975)
   * 🆕 Added `CustomizableMenuState.editableGroupIds` and `CustomizableMenuAction.Update.editableGroupIds`, the groups the customize menu screen shows a button for editing the items of, which dispatches the new `CustomizableMenuAction.EditGroupItemsClicked`. [Bug 2090975](https://bugzilla.mozilla.org/show_bug.cgi?id=2090975)
   * 🆕 Added `CustomizableMenuItemsAction.ItemsChanged`, which `EditMenuItemsContent` dispatches when the user drags an item to another place inside its section or inside the item it is in. [Bug 2090976](https://bugzilla.mozilla.org/show_bug.cgi?id=2090976)
+* **service-firefox-accounts**
+  * ⚠️ **Breaking change**: Moved `FxaService` and `FxaScope` to `concept-sync`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 162.0
 * **concept-engine**
@@ -100,6 +102,7 @@ permalink: /changelog/
 * **concept-sync**
     * ⚠️ **Breaking change**: Replaced `DeviceConstellation.finalizeDevice(authType, config)` with `DeviceConstellation.ensureCapabilities(capabilities)`, which updates the capabilities advertised for the current device. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
     * ⚠️ **Breaking change**: `DeviceConfig.capabilities` is now private. Use `DeviceConfig.getCapabilities(hasSyncScope)`, which returns an empty set when the account does not have the Sync scope. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
+    * Added `FxaService` and `FxaScope`, moved from `service-firefox-accounts`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 * **service-firefox-accounts**
     * `FxaAccountManager` only advertises the `SEND_TAB` and `CLOSE_TABS` device capabilities when the account has the Sync scope. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
 * **feature-customtabs**
