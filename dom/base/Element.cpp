@@ -3294,15 +3294,6 @@ void Element::UnbindFromTree(UnbindContext& aContext) {
                 IsInNativeAnonymousSubtree());
 
   if (!aContext.IsMove()) {
-    if (mState.HasState(ElementState::FULLSCREEN)) {
-      // The element being removed is an ancestor of the fullscreen element,
-      // exit fullscreen state.
-      nsContentUtils::ReportToConsole(
-          nsIScriptError::warningFlag, "DOM"_ns, OwnerDoc(),
-          PropertiesFile::DOM_PROPERTIES, "RemovedFullscreenElement");
-      // Fully exit fullscreen.
-      Document::ExitFullscreenInDocTree(OwnerDoc());
-    }
     if (document) {
       ClearServoData(document);
     }
@@ -3378,6 +3369,16 @@ void Element::UnbindFromTree(UnbindContext& aContext) {
         // when a custom element is disconnected.
         nsContentUtils::UnregisterUnresolvedElement(this);
       }
+    }
+
+    if (mState.HasState(ElementState::FULLSCREEN) && !aContext.IsMove()) {
+      // The element being removed is an ancestor of the fullscreen element,
+      // exit fullscreen state.
+      nsContentUtils::ReportToConsole(
+          nsIScriptError::warningFlag, "DOM"_ns, OwnerDoc(),
+          PropertiesFile::DOM_PROPERTIES, "RemovedFullscreenElement");
+      // Fully exit fullscreen.
+      Document::ExitFullscreenInDocTree(OwnerDoc());
     }
 
     if (IsPendingMappedAttributeEvaluation()) {
