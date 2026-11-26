@@ -2256,7 +2256,10 @@ class Document : public nsINode,
    *
    * aDocument must not be null.
    */
-  static void ExitFullscreenInDocTree(Document* aDocument);
+  MOZ_CAN_RUN_SCRIPT static void ExitFullscreenInDocTree(Document* aDocument);
+
+  // Called when a fullscreen element got unbound from us.
+  MOZ_CAN_RUN_SCRIPT void FullscreenElementRemoved();
 
   /**
    * Ask the document to exit fullscreen state asynchronously.
