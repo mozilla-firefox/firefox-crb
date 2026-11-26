@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
+import tempfile
 import unittest
 
 from mozpack import path as mozpath
@@ -442,9 +443,10 @@ class TestPaths(unittest.TestCase):
         ctxt = Context(config=config)
         ctxt.push_source(mozpath.join(config.topsrcdir, "foo", "moz.build"))
 
-        path = AbsolutePath(ctxt, "%/qux")
-        self.assertEqual(path, "%/qux")
-        self.assertEqual(path.full_path, "/qux")
+        abspath = mozpath.join(mozpath.normsep(tempfile.gettempdir()), "qux")
+        path = AbsolutePath(ctxt, f"%{abspath}")
+        self.assertEqual(path, f"%{abspath}")
+        self.assertEqual(path.full_path, abspath)
 
         with self.assertRaises(ValueError):
             path = AbsolutePath(ctxt, "%qux")
