@@ -557,7 +557,6 @@ class ArenaCollection {
   }
 
   arena_t* mDefaultArena = nullptr;
-  arena_id_t mLastPublicArenaId MOZ_GUARDED_BY(mLock) = 0;
 
   // Accessing mArenas and mPrivateArenas can only be done while holding mLock.
   Tree mArenas MOZ_GUARDED_BY(mLock);
@@ -3205,22 +3204,26 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
     ret->mIsDeferredPurgeEnabled = mIsDeferredPurgeEnabled;
   }
 
-  // For public arenas, it's fine to just use incrementing arena id
-  if (!aIsPrivate) {
-    ret->mId = mLastPublicArenaId++;
-    mArenas.Insert(ret);
-    return ret;
+  // Slightly obfuscate the id by XORing a key generated once, and rotate
+  // the bits by an amount also generated once.
+  if (mArenaIdKey) {
+    arena_id_t id = reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey;
+    ret->mId = (id >> mArenaIdRotation) |
+               (id << (sizeof(void*) * 8 - mArenaIdRotation));
+    // It's impossible to generate an ID of 0, see InitCrypt().
+    MOZ_ASSERT(ret->mId != 0);
+  } else {
+    // This must be the first arena, it has an ID of 0.
+    MOZ_ASSERT(!mDefaultArena);
+    ret->mId = 0;
   }
 
-  // For private arenas, slightly obfuscate the id by XORing a key generated
-  // once, and rotate the bits by an amount also generated once.
-  MOZ_ASSERT(mArenaIdKey);
-  arena_id_t id = reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey;
-  ret->mId =
-      (id >> mArenaIdRotation) | (id << (sizeof(void*) * 8 - mArenaIdRotation));
-  // It's impossible to generate an ID of 0, see InitCrypt().
-  MOZ_ASSERT(ret->mId != 0);
-  mPrivateArenas.Insert(ret);
+  if (aIsPrivate) {
+    mPrivateArenas.Insert(ret);
+  } else {
+    mArenas.Insert(ret);
+  }
+
   return ret;
 }
 
@@ -4072,20 +4075,27 @@ inline arena_t* ArenaCollection::GetById(arena_id_t aArenaId, bool aIsPrivate) {
     return nullptr;
   }
 
-  // This function is never called with aIsPrivate = false, let's make sure it
-  // doesn't silently change while we're making that assumption below because
-  // we can't resolve non-private arenas this way.
+  // The default arena cannot be returned this way.
+  MOZ_ASSERT(aArenaId != 0);
+
+  // This function should only ever be needed/used to lookup private arenas,
+  // public arena pointers are retrived from mDefaultArena or TLS.
   MOZ_RELEASE_ASSERT(aIsPrivate);
+
   // This function is not expected to be called before at least one private
   // arena was created.
   // coverity[missing_lock]
   MOZ_RELEASE_ASSERT(mArenaIdKey);
+
   arena_id_t id = (aArenaId << mArenaIdRotation) |
                   (aArenaId >> (sizeof(void*) * 8 - mArenaIdRotation));
   arena_t* result = reinterpret_cast<arena_t*>(id ^ mArenaIdKey);
   MOZ_RELEASE_ASSERT(result);
   MOZ_DIAGNOSTIC_ASSERT(result->mMagic == ARENA_MAGIC);
   MOZ_RELEASE_ASSERT(result->mId == aArenaId);
+  // The arena must be a private arena.
+  MOZ_RELEASE_ASSERT(result->mIsPrivate);
+
   return result;
 }
 
