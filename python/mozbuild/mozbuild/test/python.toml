@@ -44,6 +44,8 @@ subsuite = "mozbuild"
 ["action/test_package_install.py"]
 skip-if = ["os == 'win'"] # The action and its tests create symlinks, which Windows does not allow by default
 
+["action/test_package_langpack.py"]
+
 ["action/test_package_prepare.py"]
 
 ["action/test_package_stage.py"]
