@@ -14,8 +14,6 @@ add_task(async function test_companion_languages_after_tab_switches() {
     languagePairs: LANGUAGE_PAIRS,
     prefs: [["browser.tabs.splitView.enabled", true]],
   });
-  let panelSetup;
-  let sourceLookup;
   let otherTab;
   let companionTab;
 
@@ -26,22 +24,27 @@ add_task(async function test_companion_languages_after_tab_switches() {
     );
     await BrowserTestUtils.switchTab(gBrowser, sourceTab);
 
-    panelSetup = FullPageTranslationsTestUtils.holdNextLanguageListSetup();
+    using ensureLangListsBuiltController = TestUtils.asyncControlProxy(
+      window.TranslationsPanelShared
+    ).ensureLangListsBuilt();
     const panelOpened = FullPageTranslationsTestUtils.openPanel({
       expectedToLanguage: "en",
     });
-    await panelSetup.entered;
+    await ensureLangListsBuiltController.waitForInterception();
 
     info("Switch away while panel setup is pending");
     await BrowserTestUtils.switchTab(gBrowser, otherTab);
-    sourceLookup =
-      FullPageTranslationsTestUtils.holdNextLanguageDetectionResult(sourceTab);
-    panelSetup.release();
-    await sourceLookup.entered;
+    const sourceActor = TranslationsParent.getTranslationsActor(
+      sourceTab.linkedBrowser
+    );
+    using getLangTagsController =
+      TestUtils.asyncControlProxy(sourceActor).getLangTags();
+    ensureLangListsBuiltController.releaseResult();
+    await getLangTagsController.waitForInterception();
 
     info("Switch back while language detection is pending");
     await BrowserTestUtils.switchTab(gBrowser, sourceTab);
-    sourceLookup.release();
+    getLangTagsController.releaseResult();
     await panelOpened;
     Assert.equal(gBrowser.selectedTab, sourceTab, "The source tab is active");
 
@@ -65,8 +68,6 @@ add_task(async function test_companion_languages_after_tab_switches() {
       { sourceLanguage: "es", targetLanguage: "en" }
     );
   } finally {
-    panelSetup?.restore();
-    sourceLookup?.restore();
     await cleanup();
     if (companionTab?.isConnected) {
       await BrowserTestUtils.removeTab(companionTab);
@@ -90,7 +91,6 @@ add_task(async function test_companion_ignores_stale_change_source_language() {
   });
   const panel = FullPageTranslationsPanel;
   const { onChangeSourceLanguageButton } = panel;
-  let sourceLookup;
   let changeSourceLanguage;
   let otherTab;
   let companionTab;
@@ -108,8 +108,11 @@ add_task(async function test_companion_ignores_stale_change_source_language() {
     });
 
     info("Hold the language lookup triggered by Change Source Language");
-    sourceLookup =
-      FullPageTranslationsTestUtils.holdNextLanguageDetectionResult(sourceTab);
+    const sourceActor = TranslationsParent.getTranslationsActor(
+      sourceTab.linkedBrowser
+    );
+    using getLangTagsController =
+      TestUtils.asyncControlProxy(sourceActor).getLangTags();
     panel.onChangeSourceLanguageButton = event => {
       changeSourceLanguage = onChangeSourceLanguageButton.call(panel, event);
     };
@@ -117,7 +120,7 @@ add_task(async function test_companion_ignores_stale_change_source_language() {
       "popuphidden",
       () => panel.elements.changeSourceLanguageButton.click()
     );
-    await sourceLookup.entered;
+    await getLangTagsController.waitForInterception();
 
     info("Open the French page's panel while the previous lookup is pending");
     await BrowserTestUtils.switchTab(gBrowser, otherTab);
@@ -126,7 +129,7 @@ add_task(async function test_companion_ignores_stale_change_source_language() {
       expectedToLanguage: "en",
     });
 
-    sourceLookup.release();
+    getLangTagsController.releaseResult();
     await changeSourceLanguage;
 
     info("Open the companion after the stale lookup finishes");
@@ -149,7 +152,6 @@ add_task(async function test_companion_ignores_stale_change_source_language() {
     );
   } finally {
     delete panel.onChangeSourceLanguageButton;
-    sourceLookup?.restore();
     await changeSourceLanguage?.catch(() => {});
     otherTab?.splitview?.unsplitTabs();
     if (companionTab?.isConnected) {
@@ -174,8 +176,6 @@ add_task(async function test_companion_ignores_stale_revisit_lookup() {
     prefs: [["browser.tabs.splitView.enabled", true]],
   });
   const panel = FullPageTranslationsPanel;
-  let sourceLookup;
-  let revisitLookup;
   let otherTab;
   let companionTab;
 
@@ -204,23 +204,29 @@ add_task(async function test_companion_ignores_stale_revisit_lookup() {
     info(
       "Start Change Source Language for the Spanish page and hold its language lookup"
     );
-    sourceLookup =
-      FullPageTranslationsTestUtils.holdNextLanguageDetectionResult(otherTab);
+    const sourceActor = TranslationsParent.getTranslationsActor(
+      otherTab.linkedBrowser
+    );
+    using getLangTagsController =
+      TestUtils.asyncControlProxy(sourceActor).getLangTags();
     await FullPageTranslationsTestUtils.waitForPanelPopupEvent(
       "popuphidden",
       () => click(panel.elements.changeSourceLanguageButton)
     );
-    await sourceLookup.entered;
+    await getLangTagsController.waitForInterception();
 
     info(
       "Switch to the translated French page and hold its revisit target lookup"
     );
     await BrowserTestUtils.switchTab(gBrowser, tab);
-    revisitLookup = FullPageTranslationsTestUtils.holdNextPreferredTargetResult(
-      ["fr", "en"]
-    );
+    using getTopPreferredSupportedToLangController =
+      TestUtils.asyncControlProxy(
+        TranslationsParent
+      ).getTopPreferredSupportedToLang(
+        (_, [options]) => options?.excludeLangTags?.join(",") === "fr,en"
+      );
     await click(panel.buttonElements.button);
-    await revisitLookup.entered;
+    await getTopPreferredSupportedToLangController.waitForInterception();
 
     info(
       "Return to the Spanish page and let Change Source Language reopen its panel"
@@ -228,7 +234,7 @@ add_task(async function test_companion_ignores_stale_revisit_lookup() {
     await BrowserTestUtils.switchTab(gBrowser, otherTab);
     await FullPageTranslationsTestUtils.waitForPanelPopupEvent(
       "popupshown",
-      () => sourceLookup.release()
+      () => getLangTagsController.releaseResult()
     );
     FullPageTranslationsTestUtils.assertSelectedToLanguage({ langTag: "en" });
 
@@ -236,10 +242,12 @@ add_task(async function test_companion_ignores_stale_revisit_lookup() {
       "Release the French page's lookup before opening the Spanish companion"
     );
     Assert.equal(
-      await revisitLookup.release(),
+      await getTopPreferredSupportedToLangController.waitForResult(),
       "uk",
       "The French page chose Ukrainian"
     );
+    await getTopPreferredSupportedToLangController.releaseResult();
+    FullPageTranslationsTestUtils.assertSelectedToLanguage({ langTag: "en" });
 
     info("Open the companion for the Spanish page");
     const companionOpened = BrowserTestUtils.waitForNewTab(
@@ -263,8 +271,6 @@ add_task(async function test_companion_ignores_stale_revisit_lookup() {
       "The companion keeps the Spanish panel's English target"
     );
   } finally {
-    sourceLookup?.restore();
-    revisitLookup?.restore();
     await closeAllOpenPanelsAndMenus(window);
     otherTab?.splitview?.unsplitTabs();
     if (companionTab?.isConnected) {
