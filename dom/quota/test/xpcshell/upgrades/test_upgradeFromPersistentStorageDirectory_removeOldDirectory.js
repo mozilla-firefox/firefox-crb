@@ -11,7 +11,6 @@
 async function testUpgradeFromPersistentStorageDirectory_removeOldDirectory() {
   const url = "http://www.mozilla.org";
   const persistence = "default";
-  const lastAccessed = 0x0005330925e07841;
 
   const packages = [
     // Storage used by FF 36-48 (storage/default/ directory and re-created
@@ -98,7 +97,15 @@ async function testUpgradeFromPersistentStorageDirectory_removeOldDirectory() {
 
   const usageResult = result[0];
   Assert.equal(usageResult.origin, url, "Origin equals");
-  Assert.equal(usageResult.lastAccessed, lastAccessed, "LastAccessed equals");
+  // The last access time is no longer read from .metadata-v2, so it can't be
+  // compared against a value baked into the packaged profile. The upgrade
+  // scan derives it from disk, so verify it is a real timestamp.
+  Assert.greater(usageResult.lastAccessed, 0, "LastAccessed is set");
+  Assert.lessOrEqual(
+    usageResult.lastAccessed,
+    Date.now() * 1000,
+    "LastAccessed is not in the future"
+  );
 }
 
 async function testSteps() {
