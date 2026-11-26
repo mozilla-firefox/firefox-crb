@@ -4547,7 +4547,7 @@ void _malloc_postfork(void) {
 
 #  include "replace_malloc.h"
 
-#  define MALLOC_DECL(name, return_type, ...) CanonicalMalloc::name,
+#  define MALLOC_DECL(name, return_type, ...) MozJemalloc::name,
 
 // The default malloc table, i.e. plain allocations. It never changes. It's
 // used by init(), and not used after that.
@@ -4738,30 +4738,30 @@ MOZ_JEMALLOC_API struct ReplaceMallocBridge* get_bridge(void) {
 // replace_valloc, and default implementations will be automatically derived
 // from replace_memalign.
 static void replace_malloc_init_funcs(malloc_table_t* table) {
-  if (table->posix_memalign == CanonicalMalloc::posix_memalign &&
-      table->memalign != CanonicalMalloc::memalign) {
+  if (table->posix_memalign == MozJemalloc::posix_memalign &&
+      table->memalign != MozJemalloc::memalign) {
     table->posix_memalign =
         AlignedAllocator<ReplaceMalloc::memalign>::posix_memalign;
   }
-  if (table->aligned_alloc == CanonicalMalloc::aligned_alloc &&
-      table->memalign != CanonicalMalloc::memalign) {
+  if (table->aligned_alloc == MozJemalloc::aligned_alloc &&
+      table->memalign != MozJemalloc::memalign) {
     table->aligned_alloc =
         AlignedAllocator<ReplaceMalloc::memalign>::aligned_alloc;
   }
-  if (table->valloc == CanonicalMalloc::valloc &&
-      table->memalign != CanonicalMalloc::memalign) {
+  if (table->valloc == MozJemalloc::valloc &&
+      table->memalign != MozJemalloc::memalign) {
     table->valloc = AlignedAllocator<ReplaceMalloc::memalign>::valloc;
   }
   if (table->moz_create_arena_with_params ==
-          CanonicalMalloc::moz_create_arena_with_params &&
-      table->malloc != CanonicalMalloc::malloc) {
+          MozJemalloc::moz_create_arena_with_params &&
+      table->malloc != MozJemalloc::malloc) {
 #  define MALLOC_DECL(name, ...) \
     table->name = DummyArenaAllocator<ReplaceMalloc>::name;
 #  define MALLOC_FUNCS MALLOC_FUNCS_ARENA_BASE
 #  include "malloc_decls.h"
   }
-  if (table->moz_arena_malloc == CanonicalMalloc::moz_arena_malloc &&
-      table->malloc != CanonicalMalloc::malloc) {
+  if (table->moz_arena_malloc == MozJemalloc::moz_arena_malloc &&
+      table->malloc != MozJemalloc::malloc) {
 #  define MALLOC_DECL(name, ...) \
     table->name = DummyArenaAllocator<ReplaceMalloc>::name;
 #  define MALLOC_FUNCS MALLOC_FUNCS_ARENA_ALLOC
