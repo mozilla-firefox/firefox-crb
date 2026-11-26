@@ -235,6 +235,20 @@ mozbase:
             - 'testing/web-platform/python.toml'
             - 'tools/rb/**'
 
+mozbase-semver:
+    description: Check the version bumps of unreleased mozbase packages against PyPI
+    platform:
+        - linux2404-64/opt
+    treeherder:
+        symbol: mb-semver
+        tier: 2
+    run:
+        mach: python --virtualenv python-test testing/mozbase/semver_check.py
+    when:
+        files-changed:
+            - 'testing/mozbase/**'
+            - 'python/sites/python-test.txt'
+
 mozharness:
     description: mozharness integration tests
     treeherder:

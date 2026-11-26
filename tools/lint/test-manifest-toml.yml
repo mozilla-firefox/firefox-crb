@@ -15,6 +15,7 @@ test-manifest-toml:
         - 'testing/marionette/harness/marionette_harness/tests/'
         - 'testing/mochitest/manifests/'
         - 'testing/mozbase/manifestparser/tests/'
+        - 'testing/mozbase/semver-exceptions.toml'
         - 'testing/raptor/raptor/'
         - 'testing/update/'
         - 'tools/lint/test/files/'

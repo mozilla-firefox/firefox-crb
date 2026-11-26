@@ -1,0 +1,13 @@
+# Exceptions for false positives of semver_check.py.
+#
+# Each exception only applies to the given version of a package, and gets
+# reported as outdated once that version is released. The "kind" and "path"
+# (supports wildcards) keys are optional and restrict the exception to
+# matching changes. A reason is required.
+#
+# [[exception]]
+# package = "mozlog"
+# version = "9.0.2"
+# kind = "OBJECT_REMOVED"
+# path = "mozlog.formatters.*"
+# reason = "Only used internally by mozharness, see bug NNNNNN."
