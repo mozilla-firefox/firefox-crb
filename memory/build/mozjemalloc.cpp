@@ -3704,8 +3704,6 @@ inline void* BaseAllocator::calloc(size_t aNum, size_t aSize) {
 }
 
 inline void* BaseAllocator::realloc(void* aPtr, size_t aSize) {
-  void* ret;
-
   if (aSize == 0) {
     aSize = 1;
   }
@@ -3716,20 +3714,15 @@ inline void* BaseAllocator::realloc(void* aPtr, size_t aSize) {
     auto info = AllocInfo::Get(aPtr);
     auto arena = info.Arena();
     MOZ_RELEASE_ASSERT(!mArena || arena == mArena);
-    ret = arena->Ralloc(aPtr, aSize, info.Size());
-  } else {
-    if (!malloc_init()) {
-      ret = nullptr;
-    } else {
-      arena_t* arena = mArena ? mArena : choose_arena(aSize);
-      ret = arena->Malloc(aSize, /* aZero = */ false);
+    void* ret = arena->Ralloc(aPtr, aSize, info.Size());
+    if (MOZ_LIKELY(ret)) {
+      return ret;
     }
+    errno = ENOMEM;
+    return nullptr;
   }
 
-  if (!ret) {
-    errno = ENOMEM;
-  }
-  return ret;
+  return malloc(aSize);
 }
 
 inline void BaseAllocator::free(void* aPtr) {
