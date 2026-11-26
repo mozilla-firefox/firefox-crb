@@ -82,6 +82,7 @@ internal fun ListMenuItemsGroup(
                         title = it.title.text,
                         summary = it.summary,
                         icon = it.icon,
+                        actionButtonText = it.actionButtonText,
                         onDismiss = { onClick(it.onDismissEvent) },
                         onClick = { onClick(it.onClickEvent) },
                         modifier = itemModifier,

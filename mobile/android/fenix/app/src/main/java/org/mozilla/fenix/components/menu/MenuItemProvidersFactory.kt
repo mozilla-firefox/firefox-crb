@@ -125,8 +125,10 @@ class MenuItemProvidersFactory(
             FenixMenuItem.DefaultBrowserBanner ->
                 DefaultBrowserMenuItemProvider(
                     settings = settings,
+                    appStore = appStore,
                     appName = context.getString(R.string.app_name),
                     target = target,
+                    scope = menuViewScope,
                     setAsDefaultBrowser = setAsDefaultBrowserDelegate,
                 )
 
