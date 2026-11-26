@@ -82,6 +82,7 @@ RefPtr<MediaDataDecoder::InitPromise> RemoteDecoderChild::Init() {
             mConversion = initResponse.conversion();
             mShouldDecoderAlwaysBeRecycled =
                 initResponse.shouldDecoderAlwaysBeRecycled();
+            mSupportDecoderRecycling = initResponse.supportDecoderRecycling();
             for (auto p : initResponse.decodeProperties()) {
               mDecodeProperties[p.name()] = Some(p.value());
             }
@@ -274,6 +275,11 @@ MediaDataDecoder::ConversionRequired RemoteDecoderChild::NeedsConversion()
 bool RemoteDecoderChild::ShouldDecoderAlwaysBeRecycled() const {
   AssertOnManagerThread();
   return mShouldDecoderAlwaysBeRecycled;
+}
+
+bool RemoteDecoderChild::SupportDecoderRecycling() const {
+  AssertOnManagerThread();
+  return mSupportDecoderRecycling;
 }
 
 void RemoteDecoderChild::AssertOnManagerThread() const {
