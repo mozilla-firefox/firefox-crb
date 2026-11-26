@@ -528,6 +528,118 @@ static void AssertValidArrayIndex(NativeObject* obj, jsid id) {
 #endif
 }
 
+// Returns whether we can change or remove the property stored in |propMap| by
+// rebuilding the shared map |map|. Rebuilding the new SharedPropMap is linear
+// in the number of properties. To avoid going quadratic when changing or
+// removing every property in a large object, we cap the number of properties
+// we will re-add. As a fallback, we can transition to dictionary mode, which
+// lets us change or remove properties in constant time.
+static bool CanRebuildSharedPropMap(PropMap* map, PropMap* propMap) {
+  if (!map->isShared()) {
+    return false;
+  }
+  constexpr uint32_t MaxCopiedMaps = 4;
+  uint32_t numMaps = map->asShared()->numPreviousMaps();
+  uint32_t numPropMaps = propMap->asShared()->numPreviousMaps();
+  MOZ_ASSERT(numMaps >= numPropMaps);
+  return numMaps - numPropMaps <= MaxCopiedMaps;
+}
+
+// Try to remove property |prop| at |propMap|/|propIndex| from |obj| without
+// going to dictionary mode: rebuild the map without the property and, if
+// needed, move the properties following it down by one slot. Sets |*removed| to
+// false if this isn't possible.
+static bool TryRemoveSharedProperty(JSContext* cx, Handle<NativeObject*> obj,
+                                    SharedPropMap* propMap, uint32_t propIndex,
+                                    PropertyInfo prop, bool* removed) {
+  *removed = false;
+
+  const JSClass* clasp = obj->getClass();
+  SharedPropMap* map = obj->sharedShape()->propMap();
+  uint32_t mapLength = obj->sharedShape()->propMapLength();
+  bool isLast = propMap == map && propIndex == mapLength - 1;
+
+  // Get the map without the removed property and the properties following it.
+  Rooted<SharedPropMap*> resultMap(cx, propMap);
+  uint32_t resultMapLength = propIndex + 1;
+  SharedPropMap::getPrevious(&resultMap, &resultMapLength);
+
+  // Re-add the properties following the removed property. If the removed
+  // property is stored in a non-reserved slot, these properties are shifted
+  // down by one slot.
+  ObjectFlags objectFlags = obj->sharedShape()->objectFlags();
+  uint32_t numReserved = JSCLASS_RESERVED_SLOTS(clasp);
+  bool removeSlot = prop.hasSlot() && prop.slot() >= numReserved;
+  if (!isLast) {
+    // Changing slot numbers isn't compatible with ObjectFuses.
+    if (removeSlot && obj->hasObjectFuse()) {
+      return true;
+    }
+    Rooted<PropertyKey> key(cx);
+    SharedPropMapAndIndex startAfter(propMap, propIndex);
+    SharedPropMapAndIndex end(map, mapLength - 1);
+    for (SharedPropMapIter iter(cx, startAfter, end); !iter.done();
+         iter.next()) {
+      key = iter.key();
+      PropertyInfo following = iter.prop();
+      if (following.isCustomDataProperty()) {
+        if (!SharedPropMap::addCustomDataProperty(
+                cx, clasp, &resultMap, &resultMapLength, key, following.flags(),
+                &objectFlags)) {
+          return false;
+        }
+        continue;
+      }
+      uint32_t slot = following.slot();
+      if (removeSlot) {
+        MOZ_RELEASE_ASSERT(slot > prop.slot());
+        slot--;
+      }
+      if (!SharedPropMap::addPropertyWithKnownSlot(
+              cx, clasp, &resultMap, &resultMapLength, key, following.flags(),
+              slot, &objectFlags)) {
+        return false;
+      }
+    }
+  }
+
+  // Look up the new shape.
+  SharedShape* shape = obj->sharedShape();
+  SharedShape* newShape;
+  if (resultMap) {
+    newShape =
+        SharedShape::getPropMapShape(cx, shape->base(), shape->numFixedSlots(),
+                                     resultMap, resultMapLength, objectFlags);
+  } else {
+    newShape = SharedShape::getInitialShape(cx, clasp, shape->realm(),
+        shape->proto(), shape->numFixedSlots(), objectFlags);
+  }
+  if (!newShape) {
+    return false;
+  }
+
+  // Change the object's shape and slot values.
+  if (MOZ_LIKELY(removeSlot)) {
+    uint32_t newSlotSpan = newShape->slotSpan();
+    MOZ_ASSERT(obj->sharedShape()->slotSpan() == newSlotSpan + 1);
+    for (uint32_t slot = prop.slot(); slot < newSlotSpan; slot++) {
+      obj->setSlot(slot, obj->getSlot(slot + 1));
+    }
+    obj->setShapeAndRemoveLastSlot(cx, newShape, newSlotSpan);
+  } else {
+    if (prop.hasSlot()) {
+      // Uncommon case: the property was stored in a reserved slot.
+      // See NativeObject::addPropertyInReservedSlot.
+      MOZ_ASSERT(prop.slot() < numReserved);
+      obj->setSlot(prop.slot(), UndefinedValue());
+    }
+    obj->setShape(newShape);
+  }
+
+  *removed = true;
+  return true;
+}
+
 /* static */
 bool NativeObject::changeProperty(JSContext* cx, Handle<NativeObject*> obj,
                                   HandleId id, PropertyFlags flags,
@@ -574,20 +686,9 @@ bool NativeObject::changeProperty(JSContext* cx, Handle<NativeObject*> obj,
 
   const JSClass* clasp = obj->shape()->getObjectClass();
 
-  // Rebuilding the new SharedPropMap is linear in the number of properties.
-  // To avoid going quadratic when changing every property in a large object,
-  // we cap the number of properties we will re-add. As a fallback, we can
-  // transition to dictionary mode, which lets us change properties in constant
-  // time.
-  const uint32_t MaxCopiedMaps = 4;
-  bool hasReasonableGap =
-      map->isShared() && map->asShared()->numPreviousMaps() -
-                                 propMap->asShared()->numPreviousMaps() <=
-                             MaxCopiedMaps;
-
   bool isLast = propMap == map && propIndex == mapLength - 1;
   bool nonLastCustomProperty = oldProp.isCustomDataProperty() && !isLast;
-  if (map->isShared() && !nonLastCustomProperty && hasReasonableGap) {
+  if (!nonLastCustomProperty && CanRebuildSharedPropMap(map, propMap)) {
     // To change a property, we get the previous propmap and then call
     // addProperty to re-add the changed property with the new flags. If it
     // is not the last property, we have to re-add all the following
@@ -891,9 +992,8 @@ bool NativeObject::removeProperty(JSContext* cx, Handle<NativeObject*> obj,
   }
 
   if (map->isShared()) {
-    // Fast path for removing the last property from a SharedPropMap. In this
-    // case we can just call getPrevious and then look up a shape for the
-    // resulting map/mapLength.
+    // If only a few properties follow the removed property, we can avoid going
+    // to dictionary mode by rebuilding the shared prop map.
     //
     // Don't reuse a previously-used Shape if the object has an ObjectFuse and
     // we are removing a tracked property, to avoid the following bug:
@@ -905,44 +1005,19 @@ bool NativeObject::removeProperty(JSContext* cx, Handle<NativeObject*> obj,
     // 4) We add a new property P, reuse Shape S1, and mark P Constant.
     // 5) We use the SetSlot IC stub again but this is invalid because P is
     //    still marked Constant.
-    if (propMap == map && propIndex == mapLength - 1 &&
-        !wasTrackedObjectFuseProp) {
-      MOZ_ASSERT(obj->getLastProperty().key() == id);
-
-      Rooted<SharedPropMap*> sharedMap(cx, map->asShared());
-      SharedPropMap::getPrevious(&sharedMap, &mapLength);
-
-      SharedShape* shape = obj->sharedShape();
-      SharedShape* newShape;
-      if (sharedMap) {
-        newShape = SharedShape::getPropMapShape(
-            cx, shape->base(), shape->numFixedSlots(), sharedMap, mapLength,
-            shape->objectFlags());
-      } else {
-        newShape = SharedShape::getInitialShape(
-            cx, shape->getObjectClass(), shape->realm(), shape->proto(),
-            shape->numFixedSlots(), shape->objectFlags());
-      }
-      if (!newShape) {
+    if (!wasTrackedObjectFuseProp && CanRebuildSharedPropMap(map, propMap)) {
+      bool removed;
+      if (!TryRemoveSharedProperty(cx, obj, propMap->asShared(), propIndex,
+                                   prop, &removed)) {
         return false;
       }
-
-      if (MOZ_LIKELY(prop.hasSlot())) {
-        if (MOZ_LIKELY(prop.slot() == newShape->slotSpan())) {
-          obj->setShapeAndRemoveLastSlot(cx, newShape, prop.slot());
-          return true;
-        }
-        // Uncommon case: the property is stored in a reserved slot.
-        // See NativeObject::addPropertyInReservedSlot.
-        MOZ_ASSERT(prop.slot() < JSCLASS_RESERVED_SLOTS(obj->getClass()));
-        obj->setSlot(prop.slot(), UndefinedValue());
+      if (removed) {
+        return true;
       }
-      obj->setShape(newShape);
-      return true;
     }
 
-    // Removing a non-last property. Switch to dictionary mode and relookup
-    // pointers for the new dictionary map.
+    // Switch to dictionary mode and relookup pointers for the new dictionary
+    // map.
     if (!NativeObject::toDictionaryMode(cx, obj)) {
       return false;
     }
