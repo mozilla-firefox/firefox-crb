@@ -6,10 +6,12 @@
 #define mozilla_dom_cache_Context_h
 
 #include "CacheCipherKeyManager.h"
+#include "mozilla/Result.h"
 #include "mozilla/dom/SafeRefPtr.h"
 #include "mozilla/dom/cache/Types.h"
 #include "mozilla/dom/quota/ClientDirectoryLockHandle.h"
 #include "mozilla/dom/quota/StringifyUtils.h"
+#include "mozilla/dom/quota/WriteLease.h"
 #include "nsCOMPtr.h"
 #include "nsISupportsImpl.h"
 #include "nsProxyRelease.h"
@@ -164,6 +166,7 @@ class Context final : public SafeRefCounted<Context>, public Stringifyable {
   void NoteOrphanedData();
 
  private:
+  friend class ContextTestPeer;
   class Data;
   class QuotaInitRunnable;
   class ActionRunnable;
@@ -182,7 +185,14 @@ class Context final : public SafeRefCounted<Context>, public Stringifyable {
 
   void Init(Maybe<Context&> aOldContext);
   void Start();
-  void DispatchAction(SafeRefPtr<Action> aAction, bool aDoomData = false);
+  // Takes a quota write lease first if the action is a write; while a lease
+  // is pending, later actions are queued to keep their order.
+  void MaybeDispatchWithWriteLease(SafeRefPtr<Action> aAction);
+  void OnWriteLeaseAcquired(SafeRefPtr<Action> aAction,
+                            Result<quota::WriteLease, nsresult> aWriteLease);
+  void DispatchPendingActions();
+  void DispatchAction(SafeRefPtr<Action> aAction, bool aDoomData = false,
+                      quota::WriteLease aWriteLease = quota::WriteLease());
   void OnQuotaInit(nsresult aRv,
                    const Maybe<CacheDirectoryMetadata>& aDirectoryMetadata,
                    ClientDirectoryLockHandle aDirectoryLockHandle,
@@ -193,6 +203,7 @@ class Context final : public SafeRefCounted<Context>, public Stringifyable {
   void SetNextContext(SafeRefPtr<Context> aNextContext);
 
   void DoomTargetData();
+  void MaybeDoomTargetData();
 
   void DoStringify(nsACString& aData) override;
 
@@ -205,6 +216,12 @@ class Context final : public SafeRefCounted<Context>, public Stringifyable {
   RefPtr<QuotaInitRunnable> mInitRunnable;
   SafeRefPtr<Action> mInitAction;
   nsTArray<PendingAction> mPendingActions;
+  // The write action whose lease is being acquired, kept so that it can still
+  // be canceled; the promise continuation owns it.
+  Action* mWriteLeaseAction = nullptr;
+  bool mWaitingForWriteLease = false;
+  bool mDispatchingPendingActions = false;
+  bool mDoomTargetDataPending = false;
 
   // Weak refs since activites must remove themselves from this list before
   // being destroyed by calling RemoveActivity().

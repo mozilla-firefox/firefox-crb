@@ -205,6 +205,7 @@ class Manager final : public SafeRefCounted<Manager>, public Stringifyable {
 #endif
 
  private:
+  friend class ContextTestPeer;
   class Factory;
   class BaseAction;
   class DeleteOrphanedCacheAction;
