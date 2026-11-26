@@ -93,36 +93,40 @@ function openSiteContainerDialog() {
 }
 
 async function removeContainer(userContextId) {
-  let count = lazy.ContextualIdentityService.countContainerTabs(userContextId);
-  if (count > 0) {
-    let [title, message, okButton, cancelButton] =
-      await document.l10n.formatValues([
-        { id: "containers-remove-alert-title" },
-        { id: "containers-remove-alert-msg", args: { count } },
-        { id: "containers-remove-ok-button" },
-        { id: "containers-remove-cancel-button" },
-      ]);
+  let containerName =
+    lazy.ContextualIdentityService.getUserContextLabel(userContextId);
+  let tabCount =
+    lazy.ContextualIdentityService.countContainerTabs(userContextId);
+  let [title, message, deleteButton] = await document.l10n.formatValues([
+    { id: "containers-delete-alert-title", args: { name: containerName } },
+    tabCount > 0
+      ? { id: "containers-delete-alert-msg-with-tabs", args: { tabCount } }
+      : { id: "containers-delete-alert-msg" },
+    { id: "containers-delete-alert-ok-button" },
+  ]);
 
-    let buttonFlags =
-      Ci.nsIPrompt.BUTTON_TITLE_IS_STRING * Ci.nsIPrompt.BUTTON_POS_0 +
-      Ci.nsIPrompt.BUTTON_TITLE_IS_STRING * Ci.nsIPrompt.BUTTON_POS_1;
-
-    let rv = Services.prompt.confirmEx(
-      window,
-      title,
-      message,
-      buttonFlags,
-      okButton,
-      cancelButton,
-      null,
-      null,
-      {}
-    );
-    if (rv != 0) {
-      return;
-    }
-    await lazy.ContextualIdentityService.closeContainerTabs(userContextId);
+  let flags =
+    Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_0 +
+    Services.prompt.BUTTON_TITLE_CANCEL * Services.prompt.BUTTON_POS_1 +
+    Services.prompt.BUTTON_POS_1_DEFAULT;
+  let result = await Services.prompt.asyncConfirmEx(
+    window.browsingContext,
+    Services.prompt.MODAL_TYPE_CONTENT,
+    title,
+    message,
+    flags,
+    deleteButton,
+    null,
+    null,
+    null,
+    false,
+    { useTitle: true }
+  );
+  let propertyBag = result.QueryInterface(Ci.nsIPropertyBag2);
+  if (propertyBag.get("buttonNumClicked") !== 0) {
+    return;
   }
+  await lazy.ContextualIdentityService.closeContainerTabs(userContextId);
   lazy.ContextualIdentityService.remove(userContextId);
 }
 

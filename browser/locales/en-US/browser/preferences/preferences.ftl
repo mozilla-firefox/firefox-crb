@@ -326,18 +326,21 @@ containers-disable-alert-ok-button =
 
 containers-disable-alert-cancel-button = Keep enabled
 
-containers-remove-alert-title = Remove This Container?
+# Title of the confirmation dialog shown before deleting a container.
+# Variables:
+#   $name (string) - Name of the container being deleted.
+containers-delete-alert-title = Delete { $name } container?
 
 # Variables:
-#   $count (number) - Number of tabs that will be closed.
-containers-remove-alert-msg =
-    { $count ->
-        [one] If you remove this Container now, { $count } container tab will be closed. Are you sure you want to remove this Container?
-       *[other] If you remove this Container now, { $count } container tabs will be closed. Are you sure you want to remove this Container?
+#   $tabCount (number) - Number of tabs open in the container that will be closed.
+containers-delete-alert-msg-with-tabs =
+    { $tabCount ->
+        [one] { -brand-short-name } will close the tab open in this container and clear its cookies and site data. You’ll be signed out of sites you were using there.
+       *[other] { -brand-short-name } will close the { $tabCount } tabs open in this container and clear its cookies and site data. You’ll be signed out of sites you were using there.
     }
+containers-delete-alert-msg = { -brand-short-name } will clear the cookies and site data of this container. You’ll be signed out of sites you were using there.
 
-containers-remove-ok-button = Remove this Container
-containers-remove-cancel-button = Don’t remove this Container
+containers-delete-alert-ok-button = Delete
 
 settings-tabs-show-image-in-preview =
     .label = Show an image preview when you hover on a tab

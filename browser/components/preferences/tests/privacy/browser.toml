@@ -15,6 +15,8 @@ tags = "os_integration"
 
 ["browser_container_select.js"]
 
+["browser_containers_delete.js"]
+
 ["browser_containers_dialog_size.js"]
 
 ["browser_containers_name_input.js"]
