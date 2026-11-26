@@ -3333,6 +3333,10 @@ RefPtr<GenericPromise> TrackBuffersManager::RequestDebugInfo(
   return GenericPromise::CreateAndResolve(true, __func__);
 }
 
+static int32_t DebugIndex(const Maybe<uint32_t>& aIndex) {
+  return aIndex ? AssertedCast<int32_t>(*aIndex) : -1;
+}
+
 void TrackBuffersManager::GetDebugInfo(
     dom::TrackBuffersManagerDebugInfo& aInfo) const {
   MOZ_ASSERT(OnTaskQueue(),
@@ -3346,10 +3350,8 @@ void TrackBuffersManager::GetDebugInfo(
         AssertedCast<int32_t>(mAudioTracks.mBuffers[0].Length());
     aInfo.mBufferSize = AssertedCast<int32_t>(mAudioTracks.mSizeBuffer);
     aInfo.mEvictable = AssertedCast<int32_t>(Evictable(TrackInfo::kAudioTrack));
-    aInfo.mNextGetSampleIndex =
-        AssertedCast<int32_t>(mAudioTracks.mNextGetSampleIndex.valueOr(-1));
-    aInfo.mNextInsertionIndex =
-        AssertedCast<int32_t>(mAudioTracks.mNextInsertionIndex.valueOr(-1));
+    aInfo.mNextGetSampleIndex = DebugIndex(mAudioTracks.mNextGetSampleIndex);
+    aInfo.mNextInsertionIndex = DebugIndex(mAudioTracks.mNextInsertionIndex);
     media::TimeIntervals ranges = SafeBuffered(TrackInfo::kAudioTrack);
     dom::Sequence<dom::BufferRange> items;
     for (uint32_t i = 0; i < ranges.Length(); ++i) {
@@ -3368,10 +3370,8 @@ void TrackBuffersManager::GetDebugInfo(
         AssertedCast<int32_t>(mVideoTracks.mBuffers[0].Length());
     aInfo.mBufferSize = AssertedCast<int32_t>(mVideoTracks.mSizeBuffer);
     aInfo.mEvictable = AssertedCast<int32_t>(Evictable(TrackInfo::kVideoTrack));
-    aInfo.mNextGetSampleIndex =
-        AssertedCast<int32_t>(mVideoTracks.mNextGetSampleIndex.valueOr(-1));
-    aInfo.mNextInsertionIndex =
-        AssertedCast<int32_t>(mVideoTracks.mNextInsertionIndex.valueOr(-1));
+    aInfo.mNextGetSampleIndex = DebugIndex(mVideoTracks.mNextGetSampleIndex);
+    aInfo.mNextInsertionIndex = DebugIndex(mVideoTracks.mNextInsertionIndex);
     media::TimeIntervals ranges = SafeBuffered(TrackInfo::kVideoTrack);
     dom::Sequence<dom::BufferRange> items;
     for (uint32_t i = 0; i < ranges.Length(); ++i) {
