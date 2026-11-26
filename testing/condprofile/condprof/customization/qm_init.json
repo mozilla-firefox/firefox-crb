@@ -1,0 +1,39 @@
+{
+  "name": "qm_init",
+  "addons": {},
+  "keep_cache": true,
+  "delete_after_build": ["user.js"],
+  "prefs": {
+    "browser.aboutConfig.showWarning": false,
+    "browser.cache.check_doc_frequency": 2,
+    "browser.newtab.preload": false,
+    "browser.pagethumbnails.capturing_disabled": false,
+    "browser.sessionstore.resume_from_crash": true,
+    "browser.sessionstore.resume_session_once": false,
+    "browser.startup.page": 3,
+    "browser.tabs.hoverPreview.enabled": false,
+    "browser.tabs.hoverPreview.showThumbnails": false,
+    "devtools.debugger.remote-enabled": false,
+    "doh-rollout.doneFirstRun": false,
+    "dom.prefetch_dns_for_anchor_http_document": false,
+    "http.response.timeout": 5,
+    "network.captive-portal-service.enabled": false,
+    "network.dns.prefetch_via_proxy": false,
+    "network.http.rcwn.enabled": false,
+    "dom.quotaManager.caching.checkBuildId": false,
+    "dom.quotaManager.originWriteQuiescentThresholdMs": 100,
+    "dom.quotaManager.originMetadataFlushCheckIntervalMs": 100,
+    "dom.quotaManager.maxOriginsToSaveInOneBatch": 25
+  },
+  "scenario": [
+    {
+      "qm_init": {
+        "max_urls": 100,
+        "max_tabs": 100,
+        "dirty_shutdown": false,
+        "storage_api": "ls",
+        "idle_time_ms": 1000
+      }
+    }
+  ]
+}

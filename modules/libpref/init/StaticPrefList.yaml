@@ -4707,6 +4707,12 @@
   value: 0
   mirror: always
 
+# A pref that is used to slow down shutdown for testing purposes.
+- name: dom.quotaManager.shutdown.pauseOnIOThreadMs
+  type: RelaxedAtomicUint32
+  value: 0
+  mirror: always
+
 # A pref that is used to enable testing features.
 - name: dom.quotaManager.testing
   type: SequentiallyConsistentAtomicBool

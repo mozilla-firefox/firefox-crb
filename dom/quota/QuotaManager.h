@@ -13,6 +13,7 @@
 #include "PLDHashTable.h"
 #include "mozilla/AlreadyAddRefed.h"
 #include "mozilla/Assertions.h"
+#include "mozilla/Atomics.h"
 #include "mozilla/InitializedOnce.h"
 #include "mozilla/MozPromise.h"
 #include "mozilla/Mutex.h"
@@ -169,6 +170,8 @@ class QuotaManager final : public BackgroundThreadObject {
 
   // Returns a non-owning reference.
   static QuotaManager* Get();
+
+  double LoadQuotaDurationMs() const { return mLoadQuotaDurationMs; }
 
   // Use only in gtests!
   static nsIObserver* GetObserver();
@@ -1214,6 +1217,8 @@ class QuotaManager final : public BackgroundThreadObject {
   EnumeratedArray<Client::Type, nsCString, size_t(Client::TYPE_MAX)>
       mShutdownSteps;
   LazyInitializedOnce<const TimeStamp> mShutdownStartedAt;
+
+  Atomic<double, Relaxed> mLoadQuotaDurationMs{0.0};
 
   // Accesses to mQuotaManagerShutdownSteps must be protected by mQuotaMutex.
   nsCString mQuotaManagerShutdownSteps;

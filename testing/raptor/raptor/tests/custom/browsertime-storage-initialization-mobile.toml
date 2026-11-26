@@ -1,0 +1,9 @@
+[DEFAULT]
+apps = "fenix"
+playback_version = "8.1.1"
+# Cold only. geckodriver replaces the on-device profile with the host template
+# before every session, so a second iteration would measure another cold start.
+browser_cycles = 1
+measure = "loadQuotaMs-cold"
+
+["include:browsertime-storage-initialization-common.toml"]

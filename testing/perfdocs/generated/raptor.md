@@ -22754,6 +22754,1373 @@ Browsertime tests that use a custom pageload test script. These use the pageload
 * **use live sites**: true
 ::::
 
+(si-clean-c)=
+
+::::{dropdown} si-clean
+:class-container: anchor-id-si-clean-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-clean
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time with a clean shutdown profile (valid cache)
+
+* **alert threshold**: 2.0
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: qm_init
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#73`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-clean**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-clean**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-crInit-c)=
+
+::::{dropdown} si-crInit
+:class-container: anchor-id-si-crInit-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-crInit
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time after a crash during initialization
+
+* **alert threshold**: 2.0
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {     "scenario": [         {"qm_init": {}},         {"prefs": {"dom.quotaManager.storageInitialization.pauseOnIOThreadMs": 30000}},         {"qm_init": {"dirty_shutdown": true}}     ] }
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#107`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-crInit**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crInit**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-crShut-c)=
+
+::::{dropdown} si-crShut
+:class-container: anchor-id-si-crShut-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-crShut
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time after a crash during shutdown
+
+* **alert threshold**: 2.0
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {     "scenario": [         {"qm_init": {}},         {"prefs": {"dom.quotaManager.shutdown.pauseOnIOThreadMs": 30000}},         {"qm_init": {"dirty_shutdown": true}}     ] }
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#117`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-crShut**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crShut**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-crash-c)=
+
+::::{dropdown} si-crash
+:class-container: anchor-id-si-crash-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-crash
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time after a crash (no valid cache)
+
+* **alert threshold**: 2.0
+* **browsertime args**: --firefox.preference=dom.quotaManager.caching.checkBuildId:true
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {"dirty_shutdown": true}
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#81`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-crash**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-crash**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-dirty-c)=
+
+::::{dropdown} si-dirty
+:class-container: anchor-id-si-dirty-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-dirty
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time with dirty shutdown recovery (partially valid cache)
+
+* **alert threshold**: 2.0
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {     "scenario": [         {"qm_init": {}},         {             "qm_init": {"dirty_shutdown": true},             "prefs": {"dom.quotaManager.originWriteQuiescentThresholdMs": 60000}         }     ] }
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#91`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-dirty**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirty**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-dirtyIdb-c)=
+
+::::{dropdown} si-dirtyIdb
+:class-container: anchor-id-si-dirtyIdb-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-dirtyIdb
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time with dirty shutdown recovery using IndexedDB storage
+
+* **alert threshold**: 2.0
+* **browsertime args**: --browsertime.storageApi=idb
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {     "scenario": [         {"qm_init": {"storage_api": "idb"}},         {             "qm_init": {"storage_api": "idb", "dirty_shutdown": true},             "prefs": {"dom.quotaManager.originWriteQuiescentThresholdMs": 60000}         }     ] }
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#127`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/idb/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-dirtyIdb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-dirtyIdb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(si-nocache-c)=
+
+::::{dropdown} si-nocache
+:class-container: anchor-id-si-nocache-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t si-nocache
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Measures QuotaManager storage initialization time with deleted storage.sqlite (forces full scan)
+
+* **alert threshold**: 2.0
+* **cold**: true
+* **conditioned profile**: qm_init
+* **custom data**: true
+* **customization**: {"delete_after_build": ["storage.sqlite", "user.js"]}
+* **expected**: pass
+* **gecko profile entries**: 131072000
+* **gecko profile features**: js,stackwalk,screenshots,memory
+* **gecko profile threads**: GeckoMain,DOM Worker,IndexedDB,IO
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-storage-initialization-common.toml#103`
+* **lower is better**: true
+* **output timeout**: 2000000
+* **page cycles**: 1
+* **page timeout**: 1800000
+* **persistent profile**: true
+* **preferences**: browser.aboutConfig.showWarning=false browser.cache.check_doc_frequency=2 browser.newtab.preload=false browser.pagethumbnails.capturing_disabled=false browser.sessionstore.resume_from_crash=true browser.sessionstore.resume_session_once=false browser.startup.page=3 browser.tabs.hoverPreview.enabled=false browser.tabs.hoverPreview.showThumbnails=false devtools.debugger.remote-enabled=false doh-rollout.doneFirstRun=false dom.prefetch_dns_for_anchor_http_document=false http.response.timeout=5 network.captive-portal-service.enabled=false network.dns.prefetch_via_proxy=false network.http.rcwn.enabled=false dom.quotaManager.originWriteQuiescentThresholdMs=500 dom.quotaManager.maxOriginsToSaveInOneBatch=100 dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: ms
+* **support class**: storage_initialization.py
+* **test script**: storage_initialization.js
+* **test url**: <https://test-tk6f7oxfroi3tmto.org/ls/>
+* **type**: pageload
+* **unit**: ms
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-mobile-fenix-si-nocache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-storage-initialization-firefox-si-nocache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
 (throttled-c)=
 
 ::::{dropdown} throttled

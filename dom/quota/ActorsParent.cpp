@@ -3120,6 +3120,10 @@ nsresult QuotaManager::LoadQuota() {
 
   const auto startTime = recordTimeDeltaHelper->Start();
 
+  auto scopeExitTimer = MakeScopeExit([&] {
+    mLoadQuotaDurationMs = (TimeStamp::Now() - startTime).ToMilliseconds();
+  });
+
   auto LoadQuotaFromCache =
       [&](nsTArray<FullOriginMetadata>& aDirtyOrigins) -> nsresult {
     QM_TRY_INSPECT(
@@ -8577,6 +8581,8 @@ RefPtr<BoolPromise> QuotaManager::ShutdownStorage(
 
 void QuotaManager::ShutdownStorageInternal() {
   AssertIsOnIOThread();
+
+  SleepIfEnabled(StaticPrefs::dom_quotaManager_shutdown_pauseOnIOThreadMs());
 
   if (mStorageConnection) {
     mInitializationInfo.ResetOriginInitializationInfos();

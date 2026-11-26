@@ -722,3 +722,29 @@ browsertime-quota-usage-mobile:
             .*shippable.*: [autoland, mozilla-central]
             default: []
     tier: 2
+
+browsertime-storage-initialization-mobile:
+    description: Raptor (browsertime) storage initialization tests
+    max-run-time: 2700
+    treeherder-symbol: Btime(si)
+    limit-platforms:
+        - android-hw-a55.*shippable.*
+    raptor:
+        apps: [fenix]
+        run-visual-metrics: false
+        subtests:
+            - si-clean
+            - si-crash
+            - si-dirty
+            - si-nocache
+            - si-crInit
+            - si-crShut
+            - [si-dirtyIdb, si-dIdb]
+    run-on-projects:
+        by-test-platform:
+            .*shippable.*: [autoland, mozilla-central]
+            default: []
+    tier: 2
+    mozharness:
+        extra-options:
+            - --extra-profiler-run

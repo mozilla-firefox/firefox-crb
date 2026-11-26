@@ -30,4 +30,15 @@ interface nsIQuotaManagerServiceInternal : nsISupports
    */
   void setThumbnailPrivateIdentityId(
       in unsigned long aThumbnailPrivateIdentityId);
+
+  /**
+   * The wall-clock duration, in milliseconds, of the most recent LoadQuota()
+   * call on the QuotaManager IO thread.
+   *
+   * Exposed for performance tests, which need the cost of loading quota
+   * separately from the rest of storage initialization. The value is stored
+   * atomically, so it can be read here on the main thread while LoadQuota()
+   * runs on the IO thread. It is 0 until the first LoadQuota() completes.
+   */
+  readonly attribute double loadQuotaDurationMs;
 };

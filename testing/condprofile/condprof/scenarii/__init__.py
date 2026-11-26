@@ -9,9 +9,11 @@ from condprof.scenarii.quota_usage import quota_usage
 from condprof.scenarii.settled import settled
 from condprof.scenarii.settled2 import settled2
 from condprof.scenarii.settled_youtube import settled_youtube
+from condprof.scenarii.storage_initialization import storage_initialization
 
 scenarii = {
     "full": full,
+    "qm_init": storage_initialization,
     "qm_use": quota_usage,
     "settled": settled,
     "settled-youtube": settled_youtube,

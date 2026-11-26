@@ -262,7 +262,10 @@ class ProfileCreator:
                         logger.info(f"Running the {scenario_name} scenario")
                         metadata.update(await scenario_func(session, options))
                         logger.info(f"{scenario_name} scenario done.")
-                        await close_extra_windows(session)
+                        # A scenario that killed the browser (dirty shutdown)
+                        # has detached the session; there is nothing to close.
+                        if not getattr(session, "detached", False):
+                            await close_extra_windows(session)
         except Exception:
             logger.error(f"{scenario} scenario broke!")
             if step == START:

@@ -1474,6 +1474,30 @@ browsertime-indexeddb:
                 default:
                     - --extra-profiler-run
 
+browsertime-storage-initialization:
+    description: Raptor (browsertime) storage initialization tests
+    max-run-time: 2700
+    treeherder-symbol: Btime(si)
+    raptor:
+        apps: [firefox]
+        run-visual-metrics: false
+        subtests:
+            - si-clean
+            - si-crash
+            - si-dirty
+            - si-nocache
+            - si-crInit
+            - si-crShut
+            - [si-dirtyIdb, si-dIdb]
+    run-on-projects:
+        by-test-platform:
+            .*64.*shippable.*: [autoland, mozilla-central]
+            default: []
+    tier: 2
+    mozharness:
+        extra-options:
+            - --extra-profiler-run
+
 browsertime-quota-usage:
     description: Raptor (browsertime) quota usage assertion tests
     max-run-time: 2700

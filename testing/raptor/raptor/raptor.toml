@@ -88,6 +88,12 @@
 ["include:tests/custom/browsertime-regression-test.toml"]
 # Tests that are used for testing our regression system
 
+["include:tests/custom/browsertime-storage-initialization.toml"]
+# QuotaManager storage initialization timing test
+
+["include:tests/custom/browsertime-storage-initialization-mobile.toml"]
+# QuotaManager storage initialization timing test (Android)
+
 ["include:tests/custom/browsertime-sample-python-support.toml"]
 # Sample test for the Raptor python support file
 

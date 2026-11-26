@@ -1,0 +1,10 @@
+[DEFAULT]
+apps = "firefox"
+playback_version = "8.1.1"
+# One cold iteration and one warm iteration. Both run in the same profile, so
+# only the first measures the state the scenario built; the support class
+# reports the two separately and perfherder averages each across pushes.
+browser_cycles = 2
+measure = "loadQuotaMs-cold, loadQuotaMs-warm"
+
+["include:browsertime-storage-initialization-common.toml"]

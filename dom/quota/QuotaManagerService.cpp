@@ -1665,6 +1665,15 @@ QuotaManagerService::SetThumbnailPrivateIdentityId(
 }
 
 NS_IMETHODIMP
+QuotaManagerService::GetLoadQuotaDurationMs(double* aResult) {
+  MOZ_ASSERT(NS_IsMainThread());
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  *aResult = quotaManager ? quotaManager->LoadQuotaDurationMs() : 0.0;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 QuotaManagerService::Observe(nsISupports* aSubject, const char* aTopic,
                              const char16_t* aData) {
   MOZ_ASSERT(XRE_IsParentProcess());

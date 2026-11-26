@@ -108,3 +108,19 @@ async def close_extra_windows(session):
     for handle in handles[:-1]:
         await session.switch_to_window(handle)
         await session._request(url="/window", method="DELETE")
+
+
+def detach_session(session):
+    """Stub out the session's request channel before killing the browser.
+
+    arsenic issues a WebDriver request when the session is torn down. Once the
+    browser has been killed that request has nowhere to go and raises, which
+    would mask the crash we are deliberately simulating, so the channel is
+    replaced with a no-op first.
+    """
+
+    async def _discard_request(*args, **kwargs):
+        return None
+
+    session._request = _discard_request
+    session.detached = True

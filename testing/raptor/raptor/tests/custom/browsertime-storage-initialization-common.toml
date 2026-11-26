@@ -1,0 +1,138 @@
+# Shared settings and subtests for the QuotaManager storage initialization
+# tests. Included by the desktop and mobile manifests, which supply the keys
+# that differ between them (apps, playback_version). Keys set here take
+# precedence over the including manifest's [DEFAULT], so anything
+# platform-specific must live in the includer, not here.
+#
+# The conditioned profile and the intercept proxy are set up by the support
+# class (see condprof_support.py), which reads conditioned_profile,
+# customization, playback_version and persistent_profile. The command line
+# overrides them with e.g. --browsertime-arg condprof.customization=JSON.
+[DEFAULT]
+cold = true
+alert_threshold = 2.0
+# browser_cycles and measure live in the including manifests: desktop runs a
+# cold and a warm iteration in one profile, mobile only the cold one.
+custom_data = true
+gecko_profile_entries = 131072000
+gecko_profile_features = "js,stackwalk,screenshots,memory"
+gecko_profile_threads = "GeckoMain,DOM Worker,IndexedDB,IO"
+lower_is_better = true
+output_timeout = 2000000
+owner = "DOM Lifecycle, Workers and Storage Team"
+page_cycles = 1
+page_timeout = 1800000
+subtest_unit = "ms"
+type = "pageload"
+unit = "ms"
+conditioned_profile = "qm_init"
+customization = "qm_init"
+# Origin number 1 of the hostnames the scenario derives from its default
+# nonce (see get_reproducible_string16); a new nonce means a new host here.
+test_url = "https://test-tk6f7oxfroi3tmto.org/ls/"
+use_live_sites = false
+persistent_profile = true
+test_script = "storage_initialization.js"
+support_class = "storage_initialization.py"
+# The conditioned profile uses shortened flush intervals to speed up profile
+# building; delete_after_build strips user.js so only these test-time prefs
+# apply. Values here must match the intended measurement conditions.
+preferences = [
+    "browser.aboutConfig.showWarning=false",
+    "browser.cache.check_doc_frequency=2",
+    "browser.newtab.preload=false",
+    "browser.pagethumbnails.capturing_disabled=false",
+    "browser.sessionstore.resume_from_crash=true",
+    "browser.sessionstore.resume_session_once=false",
+    "browser.startup.page=3",
+    "browser.tabs.hoverPreview.enabled=false",
+    "browser.tabs.hoverPreview.showThumbnails=false",
+    "devtools.debugger.remote-enabled=false",
+    "doh-rollout.doneFirstRun=false",
+    "dom.prefetch_dns_for_anchor_http_document=false",
+    "http.response.timeout=5",
+    "network.captive-portal-service.enabled=false",
+    "network.dns.prefetch_via_proxy=false",
+    "network.http.rcwn.enabled=false",
+    "dom.quotaManager.originWriteQuiescentThresholdMs=500",
+    "dom.quotaManager.maxOriginsToSaveInOneBatch=100",
+    # A killed session leaves .startup-incomplete behind, and the next startup
+    # then asks the quota manager to drop its cache rows unless this is off.
+    # The crash variants would otherwise measure an emptied cache instead of
+    # recovery.
+    "dom.quotaManager.caching.checkBuildId=false",
+]
+
+# Each `customization` below is a flat JSON object of overrides applied to
+# qm_init.json. A key without "/" is glob-matched and replaces
+# every matching leaf at once; a key containing "/" is an exact dpath. Glob
+# keys only match what the base customization already declares, which is why
+# the scenario step there spells out its defaults rather than being empty.
+
+# Baseline: clean shutdown, valid cache (base customization as-is)
+["si-clean"]
+
+# P1: Fresh crash, no valid cache at all.
+# The profile's only session is killed, so UnloadQuota never ran and the
+# cache carries no build id. Rows are written whenever an origin directory is
+# created, so they do exist; the build-id check, re-enabled for this subtest
+# only, is what makes LoadQuota reject the cache and scan every origin
+# directory instead, as it does in production after a first-session crash.
+["si-crash"]
+customization = '{"dirty_shutdown": true}'
+browsertime_args = "--firefox.preference=dom.quotaManager.caching.checkBuildId:true"
+
+# P2: Cached + dirty shutdown recovery.
+# The first step writes every origin's row with a clean shutdown. The second
+# step touches them all again and is killed before any of them becomes
+# write-quiescent, so the rows exist but carry stale usage and the dirty
+# flag, which is what recovery has to repair. The crash tests above and
+# below cover the case where rows were never written at all.
+["si-dirty"]
+customization = '''{
+    "scenario": [
+        {"qm_init": {}},
+        {
+            "qm_init": {"dirty_shutdown": true},
+            "prefs": {"dom.quotaManager.originWriteQuiescentThresholdMs": 60000}
+        }
+    ]
+}'''
+
+# P4: Missing storage.sqlite
+["si-nocache"]
+customization = '{"delete_after_build": ["storage.sqlite", "user.js"]}'
+
+# P5: Crash during storage initialization
+["si-crInit"]
+customization = '''{
+    "scenario": [
+        {"qm_init": {}},
+        {"prefs": {"dom.quotaManager.storageInitialization.pauseOnIOThreadMs": 30000}},
+        {"qm_init": {"dirty_shutdown": true}}
+    ]
+}'''
+
+# P6: Crash during shutdown
+["si-crShut"]
+customization = '''{
+    "scenario": [
+        {"qm_init": {}},
+        {"prefs": {"dom.quotaManager.shutdown.pauseOnIOThreadMs": 30000}},
+        {"qm_init": {"dirty_shutdown": true}}
+    ]
+}'''
+
+# IDB variant of the dirty test
+["si-dirtyIdb"]
+test_url = "https://test-tk6f7oxfroi3tmto.org/idb/"
+browsertime_args = "--browsertime.storageApi=idb"
+customization = '''{
+    "scenario": [
+        {"qm_init": {"storage_api": "idb"}},
+        {
+            "qm_init": {"storage_api": "idb", "dirty_shutdown": true},
+            "prefs": {"dom.quotaManager.originWriteQuiescentThresholdMs": 60000}
+        }
+    ]
+}'''
