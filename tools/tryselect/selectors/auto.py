@@ -42,6 +42,15 @@ class AutoParser(BaseTryParser):
             },
         ],
         [
+            ["--confidence-threshold"],
+            {
+                "default": None,
+                "choices": ["very_low", "low", "medium", "high"],
+                "help": "Override the confidence threshold at which the bugbug "
+                "strategies select manifests (default: medium).",
+            },
+        ],
+        [
             ["--tasks-regex"],
             {
                 "default": [],
@@ -85,6 +94,7 @@ def run(
     write_task_config=False,
     closed_tree=False,
     strategy=None,
+    confidence_threshold=None,
     tasks_regex=None,
     tasks_regex_exclude=None,
     try_config_params=None,
@@ -100,6 +110,9 @@ def run(
 
     if strategy:
         params["optimize_strategies"] = strategy
+
+    if confidence_threshold:
+        params["bugbug_confidence_threshold"] = confidence_threshold
 
     if tasks_regex or tasks_regex_exclude:
         params.setdefault("try_task_config", {})["tasks-regex"] = {}
