@@ -5,6 +5,8 @@
 #ifndef HttpConnectionUDP_h_
 #define HttpConnectionUDP_h_
 
+#include <functional>
+
 #include "ARefBase.h"
 #include "Http3Session.h"
 #include "HttpConnectionBase.h"
@@ -32,6 +34,7 @@ namespace net {
 
 class nsHttpHandler;
 class ASpdySession;
+class TunnelSetupTransaction;
 
 // 1dcc863e-db90-4652-a1fe-13fea0b54e46
 #define HTTPCONNECTIONUDP_IID \
@@ -108,8 +111,19 @@ class HttpConnectionUDP final : public HttpConnectionBase,
   nsresult CreateTunnelStream(nsAHttpTransaction* httpTransaction,
                               HttpConnectionBase** aHttpConnection,
                               bool aIsExtendedCONNECT = false) override;
+  nsresult CreateInnerConnection(
+      TunnelSetupTransaction* aDriver,
+      HttpConnectionBase** aInnerConnection) override;
 
   void OnConnected();
+  // Fires once the QUIC handshake completes. The creator of an inner
+  // connection has no transaction of its own on it to learn that from: the
+  // setup driver is a NullHttpTransaction, so Http3Session's
+  // NS_NET_STATUS_CONNECTED_TO never reaches it (mFirstHttpTransaction is
+  // null).
+  void SetHandshakeDoneCallback(std::function<void()>&& aCallback) {
+    mHandshakeDoneCallback = std::move(aCallback);
+  }
 
   void RekeyAfterHttp3OnlyHandOff(nsHttpConnectionInfo* aConnInfo);
 
@@ -141,6 +155,7 @@ class HttpConnectionUDP final : public HttpConnectionBase,
   bool mIsReused = false;
   bool mLastTransactionExpectedNoContent = false;
   bool mConnected = false;
+  std::function<void()> mHandshakeDoneCallback;
 
   int32_t mPriority = nsISupportsPriority::PRIORITY_NORMAL;
 
