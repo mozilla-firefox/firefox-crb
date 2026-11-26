@@ -21,7 +21,8 @@ class FileSystemWritableFileStreamParent
     : public PFileSystemWritableFileStreamParent {
  public:
   // aWriteLease keeps the origin marked dirty on disk while the child writes
-  // to the file; it is released when the stream is closed.
+  // to the file; it is released after close accounting, abort cleanup, or actor
+  // destruction.
   FileSystemWritableFileStreamParent(RefPtr<FileSystemManagerParent> aManager,
                                      const fs::EntryId& aEntryId,
                                      const fs::FileId& aTemporaryFileId,
