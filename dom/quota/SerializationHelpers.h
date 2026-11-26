@@ -55,7 +55,7 @@ DEFINE_IPC_SERIALIZER_WITH_FIELDS(mozilla::dom::quota::FullOriginMetadata,
                                   mSuffix, mGroup, mOrigin, mStorageOrigin,
                                   mIsPrivate, mIsEncrypted, mPersistenceType,
                                   mLastAccessTime, mLastMaintenanceDate,
-                                  mAccessed, mPersisted, mClientUsages,
+                                  mAccessed, mPersisted, mDirty, mClientUsages,
                                   mOriginUsage, mQuotaVersion);
 
 DEFINE_IPC_SERIALIZER_WITH_SUPER_CLASS_AND_FIELDS(

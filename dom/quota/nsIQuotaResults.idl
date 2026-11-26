@@ -36,6 +36,10 @@ interface nsIQuotaFullOriginMetadataResult : nsISupports
 
   readonly attribute boolean persisted;
 
+  // True while the origin metadata has changes that have not been written
+  // back yet (see QuotaManager::FlushDirtyOriginInfos).
+  readonly attribute boolean dirty;
+
   readonly attribute ACString clientUsages;
 
   readonly attribute unsigned long long originUsage;
