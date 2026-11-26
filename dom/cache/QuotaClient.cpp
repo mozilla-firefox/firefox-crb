@@ -17,6 +17,7 @@
 #include "mozilla/ipc/BackgroundParent.h"
 #include "nsIFile.h"
 #include "nsThreadUtils.h"
+#include "prtime.h"
 
 namespace mozilla::dom::cache {
 
@@ -300,7 +301,14 @@ Result<UsageInfo, nsresult> CacheQuotaClient::InitOrigin(
                       MOZ_TO_RESULT_INVOKE_MEMBER(file, GetFileSize));
                   MOZ_DIAGNOSTIC_ASSERT(fileSize >= 0);
 
-                  return UsageInfo{DatabaseUsageType(Some(fileSize))};
+                  QM_TRY_INSPECT(
+                      const int64_t& lastModifiedTime,
+                      MOZ_TO_RESULT_INVOKE_MEMBER(file, GetLastModifiedTime));
+
+                  UsageInfo result{DatabaseUsageType(Some(fileSize))};
+                  result.UpdateLastModifiedTime(lastModifiedTime *
+                                                int64_t(PR_USEC_PER_MSEC));
+                  return result;
                 }
 
                 // Ignore directory padding file
