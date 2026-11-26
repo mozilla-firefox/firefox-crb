@@ -4,8 +4,10 @@
 
 import {
   WIDGET_REGISTRY,
+  getWidgetAddableSources,
   getWidgetOrder,
   getWidgets,
+  getWidgetsContainerSources,
   isWeatherAvailable,
   isWidgetAddable,
   isWidgetEnabled,
@@ -1541,5 +1543,51 @@ describe("framed widget telemetry allowlists", () => {
     expect(isRecordedFrameUserEvent(lists, { user_action: "route_swap" })).toBe(
       false
     );
+  });
+});
+
+describe("getWidgetAddableSources", () => {
+  it("names every source that makes the widget addable", () => {
+    expect(getWidgetAddableSources(listsWidget, {})).toEqual([]);
+    const prefs = {
+      "widgets.system.lists.enabled": true,
+      trainhopConfig: { widgets: { listsEnabled: true } },
+    };
+    expect(
+      getWidgetAddableSources(listsWidget, { ...prefs, region: "US" })
+    ).toEqual([
+      "trainhopConfig.widgets.listsEnabled",
+      "widgets.system.lists.enabled",
+    ]);
+  });
+
+  it("ignores trainhopConfig until the region is known", () => {
+    expect(
+      getWidgetAddableSources(listsWidget, {
+        "widgets.system.lists.enabled": true,
+        trainhopConfig: { widgets: { listsEnabled: true } },
+      })
+    ).toEqual(["widgets.system.lists.enabled"]);
+  });
+});
+
+describe("getWidgetsContainerSources", () => {
+  it("names every source that makes the container visible", () => {
+    expect(getWidgetsContainerSources({})).toEqual([]);
+    expect(
+      getWidgetsContainerSources({
+        "widgets.system.enabled": true,
+        trainhopConfig: { widgetsSettings: { enabled: true } },
+        region: "US",
+      })
+    ).toEqual([
+      "widgets.system.enabled",
+      "trainhopConfig.widgetsSettings.enabled",
+    ]);
+    expect(
+      getWidgetsContainerSources({
+        trainhopConfig: { widgetsSettings: { enabled: true } },
+      })
+    ).toEqual([]);
   });
 });

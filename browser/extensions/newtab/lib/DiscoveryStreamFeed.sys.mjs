@@ -39,6 +39,7 @@ const { setTimeout, clearTimeout } = ChromeUtils.importESModule(
 const { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
 );
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 import {
   actionTypes as at,
   actionCreators as ac,
@@ -199,7 +200,6 @@ export class DiscoveryStreamFeed {
 
     // Persistent cache for remote endpoint data.
     this.cache = new lazy.PersistentCache(CACHE_KEY, true);
-    this.locale = Services.locale.appLocaleAsBCP47;
     // Internal in-memory cache for parsing json prefs.
     this._prefCache = {};
     this.adsClient = null;
@@ -280,6 +280,10 @@ export class DiscoveryStreamFeed {
 
   get region() {
     return lazy.Region.home;
+  }
+
+  get locale() {
+    return newtabLocale();
   }
 
   get isContextualAds() {
@@ -2605,6 +2609,24 @@ export class DiscoveryStreamFeed {
     this.loaded = false;
   }
 
+  /**
+   * Fetches the content again, as after the newtab devtools changed the region
+   * or locale. Unlike onPrefChange, keeps what belongs to the user: blocked
+   * stories, impressions and frequency caps.
+   */
+  async refetchContent() {
+    await this.cache.set("feeds", {});
+    await this.cache.set("spocs", {});
+    this._isContextualAds = undefined;
+    this._doLocalInferredRerank = undefined;
+    this._spocsCacheUpdateTime = undefined;
+    this._spocsOnDemand = undefined;
+    this.resetState();
+    if (this.config.enabled) {
+      await this.enable({ updateOpenTabs: true });
+    }
+  }
+
   async onPrefChange() {
     // We always want to clear the cache/state if the pref has changed
     await this.reset();
@@ -3039,6 +3061,12 @@ export class DiscoveryStreamFeed {
       case at.DISCOVERY_STREAM_DEV_REFRESH_CACHE:
         // When the config pref changes, load or unload data as needed.
         await this.onPrefChange();
+        break;
+      case at.LOCALE_UPDATED:
+        // Cached layout and feeds were fetched for the previous locale.
+        if (this.loaded) {
+          await this.refetchContent();
+        }
         break;
       case at.DISCOVERY_STREAM_IMPRESSION_STATS:
         if (
