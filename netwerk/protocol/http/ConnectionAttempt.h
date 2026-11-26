@@ -15,6 +15,7 @@ namespace net {
 
 class ConnectionEntry;
 class DnsAndConnectSocket;
+class HttpConnectionBase;
 class nsAHttpTransaction;
 class nsHttpConnectionInfo;
 class nsHttpTransaction;
@@ -54,6 +55,9 @@ class ConnectionAttempt : public nsSupportsWeakReference {
   virtual void Unclaim();
   virtual void OnTimeout() = 0;
   virtual void PrintDiagnostics(nsCString& log) = 0;
+  // True when this attempt produced aConn, so a sweep of the entry's attempts
+  // can spare it (MakeAllDontReuseExcept).
+  virtual bool OwnsConnection(HttpConnectionBase* aConn) const { return false; }
   virtual DnsAndConnectSocket* ToDnsAndConnectSocket() { return nullptr; }
   virtual uint32_t UnconnectedUDPConnsLength() const;
 
