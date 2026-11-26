@@ -3745,7 +3745,8 @@ void nsHttpTransaction::InjectProxyConnectResponse(
   mHaveAllHeaders = true;
   mHttpVersion = aHead.Version();
   mHttpResponseCode = aHead.Status();
-  mProxyConnectFailed = true;
+  // A 200 is a tunnel the consumer is about to take over, not a failure.
+  mProxyConnectFailed = aHead.Status() != 200;
   // The proxy did answer, even if this transaction never read it. Without this
   // Close() sees !mReceivedData and restarts, re-running the whole CONNECT up
   // to MaxRequestAttempts().
