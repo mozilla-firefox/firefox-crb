@@ -8,7 +8,7 @@ use super::{AbsoluteColor, ColorFlags, ColorSpace};
 use crate::color::ColorMixItemList;
 use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
-use crate::values::generics::color::ColorMixFlags;
+use crate::values::generics::color::ColorMixKind;
 use cssparser::Parser;
 use std::fmt::{self, Write};
 use style_traits::{CssWriter, ParseError, ToCss};
@@ -166,15 +166,15 @@ impl ColorMixItem {
 pub fn mix_many(
     interpolation: ColorInterpolationMethod,
     items: impl IntoIterator<Item = ColorMixItem>,
-    flags: ColorMixFlags,
+    kind: ColorMixKind,
 ) -> AbsoluteColor {
     let items = items.into_iter().collect::<ColorMixItemList<_>>();
 
-    // Convert a mix result into the syntax required by the flags:
+    // Convert a mix result into the syntax required by the mix kind:
     // - modern syntax when requested (converting legacy spaces like hsl/hwb to srgb), otherwise;
     // - legacy srgb when every mixed color used legacy syntax.
     let finalize = |result: AbsoluteColor| -> AbsoluteColor {
-        if flags.contains(ColorMixFlags::RESULT_IN_MODERN_SYNTAX) {
+        if kind.result_is_in_modern_syntax() {
             if result.is_legacy_syntax() {
                 // If the result *MUST* be in modern syntax, then make sure it is in a color space
                 // that allows the modern syntax. So hsl and hwb will be converted to srgb.
@@ -196,7 +196,7 @@ pub fn mix_many(
         return finalize(AbsoluteColor::TRANSPARENT_BLACK.to_color_space(interpolation.space));
     }
 
-    let normalize = flags.contains(ColorMixFlags::NORMALIZE_WEIGHTS);
+    let normalize = kind.normalizes_weights();
     let mut weight_scale = 1.0;
     let mut alpha_multiplier = 1.0;
     if normalize {

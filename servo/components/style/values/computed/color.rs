@@ -100,7 +100,7 @@ impl Color {
                             item.percentage.as_ref().map_or(fill, |p| p.0),
                         )
                     }),
-                    mix.flags,
+                    mix.kind,
                 )
             },
             Self::ContrastColor(ref c) => {

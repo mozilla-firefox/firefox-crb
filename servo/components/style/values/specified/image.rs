@@ -14,7 +14,7 @@ use crate::parser::{Parse, ParserContext};
 use crate::stylesheets::CorsMode;
 use crate::typed_om::{ImageValue, KeywordValue, ToTyped, TypedValue};
 use crate::values::generics::NonNegative;
-use crate::values::generics::color::{ColorMixFlags, GenericLightDark};
+use crate::values::generics::color::GenericLightDark;
 use crate::values::generics::image::{
     self as generic, Circle, Ellipse, GradientCompatMode, ShapeExtent,
 };
@@ -93,7 +93,7 @@ impl Color {
         match self {
             Self::Absolute(absolute) => !absolute.color.is_legacy_syntax(),
             Self::ColorMix(mix) => {
-                if mix.flags.contains(ColorMixFlags::RESULT_IN_MODERN_SYNTAX) {
+                if mix.kind.result_is_in_modern_syntax() {
                     true
                 } else {
                     mix.items.iter().any(|item| item.color.has_modern_syntax())

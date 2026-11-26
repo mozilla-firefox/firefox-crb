@@ -16,7 +16,7 @@ use crate::values::computed::{
 };
 use crate::values::generics::Optional;
 use crate::values::generics::color::{
-    ColorMixFlags, GenericCaretColor, GenericColorMix, GenericColorMixItem, GenericColorOrAuto,
+    ColorMixKind, GenericCaretColor, GenericColorMix, GenericColorMixItem, GenericColorOrAuto,
     GenericLightDark,
 };
 use crate::values::specified::Percentage;
@@ -143,13 +143,12 @@ impl ColorMix {
                 })
                 .collect::<ColorMixItemList<_>>();
 
-            // Pass RESULT_IN_MODERN_SYNTAX here, because the result of the color-mix() function
-            // should always be in the modern color syntax to allow for out of gamut results and
-            // to preserve floating point precision.
+            // CSS color-mix() always produces modern syntax to preserve out-of-gamut
+            // results and floating-point precision.
             Ok(ColorMix {
                 interpolation,
                 items: OwnedSlice::from_slice(&finalized),
-                flags: ColorMixFlags::NORMALIZE_WEIGHTS | ColorMixFlags::RESULT_IN_MODERN_SYNTAX,
+                kind: ColorMixKind::Css,
             })
         })
     }
@@ -880,7 +879,7 @@ impl Color {
                 ComputedColor::from_color_mix(GenericColorMix {
                     interpolation: mix.interpolation,
                     items: OwnedSlice::from_slice(items.as_slice()),
-                    flags: mix.flags,
+                    kind: mix.kind,
                 })
             },
             Color::ContrastColor(ref c) => {

@@ -13,7 +13,7 @@ use crate::values::computed::Percentage;
 use crate::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use crate::values::generics::Optional;
 use crate::values::generics::color::{
-    ColorMixFlags, GenericColor, GenericColorMix, GenericColorMixItem,
+    ColorMixKind, GenericColor, GenericColorMix, GenericColorMixItem,
 };
 
 impl Animate for AbsoluteColor {
@@ -29,7 +29,7 @@ impl Animate for AbsoluteColor {
                 mix::ColorMixItem::new(*self, left_weight as f32),
                 mix::ColorMixItem::new(*other, right_weight as f32),
             ],
-            ColorMixFlags::empty(),
+            ColorMixKind::Weighted,
         ))
     }
 }
@@ -81,7 +81,7 @@ impl Animate for Color {
                 },
             ]),
             // See https://github.com/w3c/csswg-drafts/issues/7324
-            flags: ColorMixFlags::empty(),
+            kind: ColorMixKind::Weighted,
         }))
     }
 }

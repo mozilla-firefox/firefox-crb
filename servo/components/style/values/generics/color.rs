@@ -31,16 +31,41 @@ pub enum GenericColor<Percentage> {
     ContrastColor(Box<Self>),
 }
 
-/// Flags used to modify the calculation of a color mix result.
-#[derive(Clone, Copy, Debug, Default, MallocSizeOf, PartialEq, ToShmem)]
-#[repr(C)]
-pub struct ColorMixFlags(u8);
-bitflags! {
-    impl ColorMixFlags : u8 {
-        /// Normalize the weights of the mix.
-        const NORMALIZE_WEIGHTS = 1 << 0;
-        /// The result should always be converted to the modern color syntax.
-        const RESULT_IN_MODERN_SYNTAX = 1 << 1;
+/// Determines how color-mix items are interpreted and how the result is finalized.
+///
+/// CSS color mixing and weighted animation composition have different
+/// semantics, even though they share the mixing machinery.
+#[derive(Clone, Copy, Debug, MallocSizeOf, PartialEq, ToShmem)]
+#[repr(u8)]
+pub enum ColorMixKind {
+    /// An authored CSS `color-mix()`.
+    ///
+    /// Item percentages are contributions to the whole mix. Normalize them by
+    /// their total, reducing the result's alpha when the total is below 100%.
+    /// Always produce modern color syntax, including when all inputs are legacy
+    /// colors, to preserve floating-point precision and out-of-gamut values.
+    Css,
+
+    /// A mix that uses caller-supplied weights directly. This includes animation
+    /// interpolation, addition, and accumulation, as well as gradient color
+    /// interpolation through `Servo_InterpolateColor`.
+    ///
+    /// Normalizing the weights would turn addition into averaging.
+    /// Finalize the result as legacy sRGB when all inputs use legacy syntax.
+    Weighted,
+}
+
+impl ColorMixKind {
+    /// Whether this kind produces modern color syntax.
+    #[inline]
+    pub fn result_is_in_modern_syntax(&self) -> bool {
+        matches!(self, Self::Css)
+    }
+
+    /// Whether item weights are normalized by their total.
+    #[inline]
+    pub fn normalizes_weights(&self) -> bool {
+        matches!(self, Self::Css)
     }
 }
 
@@ -82,7 +107,7 @@ pub struct GenericColorMixItem<Color, Percentage> {
 pub struct GenericColorMix<Color, Percentage> {
     pub interpolation: ColorInterpolationMethod,
     pub items: OwnedSlice<GenericColorMixItem<Color, Percentage>>,
-    pub flags: ColorMixFlags,
+    pub kind: ColorMixKind,
 }
 
 pub use self::GenericColorMix as ColorMix;
@@ -159,8 +184,8 @@ impl<Color, Percentage> ColorMix<Color, Percentage> {
 }
 
 impl<Percentage> ColorMix<GenericColor<Percentage>, Percentage> {
-    /// Mix the colors so that we get a single color. If any of the 2 colors are
-    /// not mixable (perhaps not absolute?), then return None.
+    /// Mix the colors into a single absolute color. Return `None` if any input
+    /// color is non-absolute or any percentage cannot be resolved.
     pub fn mix_to_absolute(&self) -> Option<AbsoluteColor>
     where
         Percentage: ToPercentage,
@@ -178,7 +203,7 @@ impl<Percentage> ColorMix<GenericColor<Percentage>, Percentage> {
             items.push(mix::ColorMixItem::new(*item.color.as_absolute()?, weight))
         }
 
-        Some(mix::mix_many(self.interpolation, items, self.flags))
+        Some(mix::mix_many(self.interpolation, items, self.kind))
     }
 }
 

@@ -869,7 +869,7 @@ trivial_to_computed_value!(String);
 trivial_to_computed_value!(Box<str>);
 trivial_to_computed_value!(crate::OwnedStr);
 trivial_to_computed_value!(style_traits::values::specified::AllowedNumericType);
-trivial_to_computed_value!(crate::values::generics::color::ColorMixFlags);
+trivial_to_computed_value!(crate::values::generics::color::ColorMixKind);
 
 #[allow(missing_docs)]
 #[derive(
