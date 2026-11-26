@@ -6964,6 +6964,9 @@
       "resource://newtab/lib/NewTabMessaging.sys.mjs": [
         "../../../browser/extensions/newtab/lib/NewTabMessaging.sys.mjs"
       ],
+      "resource://newtab/lib/NewtabAudience.sys.mjs": [
+        "../../../browser/extensions/newtab/lib/NewtabAudience.sys.mjs"
+      ],
       "resource://newtab/lib/PersistentCache.sys.mjs": [
         "../../../browser/extensions/newtab/lib/PersistentCache.sys.mjs"
       ],
