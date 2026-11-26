@@ -106,6 +106,9 @@ elseif("${AOM_TARGET_CPU}" MATCHES "ppc")
     set(AOM_RTCD_FLAGS ${AOM_RTCD_FLAGS} --disable-vsx)
   endif()
 elseif("${AOM_TARGET_CPU}" MATCHES "^x86")
+  if(ENABLE_X86_ASM)
+    set(HAVE_X86_ASM 1)
+  endif()
   if("${AOM_TARGET_CPU}" STREQUAL "x86")
     set(AOM_ARCH_X86 1)
     # Disable avx512
@@ -122,6 +125,43 @@ elseif("${AOM_TARGET_CPU}" MATCHES "^x86")
       continue()
     endif()
     if(ENABLE_${flavor} AND NOT disable_remaining_flavors)
+      set(HAVE_${flavor} 1)
+    else()
+      set(disable_remaining_flavors 1)
+      set(HAVE_${flavor} 0)
+      string(TOLOWER ${flavor} flavor)
+      set(AOM_RTCD_FLAGS ${AOM_RTCD_FLAGS} --disable-${flavor})
+    endif()
+  endforeach()
+elseif("${AOM_TARGET_CPU}" STREQUAL "wasm32")
+  set(AOM_ARCH_WASM 1)
+
+  # WebAssembly has no run-time CPU detection: SIMD128 is a compile-time
+  # property of the module, so dispatch is resolved statically.
+  if(ENABLE_SIMD128)
+    set(HAVE_SIMD128 1)
+    set(AOM_SIMD128_FLAG "-msimd128")
+  else()
+    set(HAVE_SIMD128 0)
+    set(AOM_RTCD_FLAGS ${AOM_RTCD_FLAGS} --disable-simd128)
+  endif()
+
+  # Emscripten translates x86 SSE intrinsics to SIMD128, so the x86 intrinsics
+  # kernels can be built for wasm32; x86 assembly cannot. SSE4.2 is excluded:
+  # libaom only uses it for CRC32, which has no SIMD128 equivalent.
+  if(ENABLE_WASM_X86_INTRINSICS AND HAVE_SIMD128)
+    # Emscripten only accepts the -msse* flags along with -msimd128, so it is
+    # added to the base flags of all targets (this also lets the compiler flag
+    # checks see it).
+    string(APPEND CMAKE_C_FLAGS " ${AOM_SIMD128_FLAG}")
+    string(APPEND CMAKE_CXX_FLAGS " ${AOM_SIMD128_FLAG}")
+  endif()
+  set(WASM_X86_FLAVORS "SSE;SSE2;SSE3;SSSE3;SSE4_1")
+  foreach(flavor ${WASM_X86_FLAVORS})
+    if(ENABLE_WASM_X86_INTRINSICS
+       AND HAVE_SIMD128
+       AND ENABLE_${flavor}
+       AND NOT disable_remaining_flavors)
       set(HAVE_${flavor} 1)
     else()
       set(disable_remaining_flavors 1)

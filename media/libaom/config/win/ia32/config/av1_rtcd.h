@@ -153,6 +153,10 @@ int64_t av1_block_error_lp_sse2(const int16_t *coeff, const int16_t *dqcoeff, in
 int64_t av1_block_error_lp_avx2(const int16_t *coeff, const int16_t *dqcoeff, intptr_t block_size);
 RTCD_EXTERN int64_t (*av1_block_error_lp)(const int16_t *coeff, const int16_t *dqcoeff, intptr_t block_size);
 
+int64_t av1_block_error_qm_c(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, const qm_val_t *qmatrix, const int16_t *scan, int64_t *ssz, int bd);
+int64_t av1_block_error_qm_avx2(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, const qm_val_t *qmatrix, const int16_t *scan, int64_t *ssz, int bd);
+RTCD_EXTERN int64_t (*av1_block_error_qm)(const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, const qm_val_t *qmatrix, const int16_t *scan, int64_t *ssz, int bd);
+
 void av1_build_compound_diffwtd_mask_c(uint8_t *mask, DIFFWTD_MASK_TYPE mask_type, const uint8_t *src0, int src0_stride, const uint8_t *src1, int src1_stride, int h, int w);
 void av1_build_compound_diffwtd_mask_sse4_1(uint8_t *mask, DIFFWTD_MASK_TYPE mask_type, const uint8_t *src0, int src0_stride, const uint8_t *src1, int src1_stride, int h, int w);
 void av1_build_compound_diffwtd_mask_avx2(uint8_t *mask, DIFFWTD_MASK_TYPE mask_type, const uint8_t *src0, int src0_stride, const uint8_t *src1, int src1_stride, int h, int w);
@@ -214,6 +218,10 @@ void av1_cnn_deconvolve_c(const float **input, int in_width, int in_height, int 
 
 bool av1_cnn_predict_c(const float **input, int in_width, int in_height, int in_stride, const CNN_CONFIG *cnn_config, const CNN_THREAD_DATA *thread_data, CNN_MULTI_OUT *output_struct);
 #define av1_cnn_predict av1_cnn_predict_c
+
+void av1_combine_block_hashes_c(void *crc_calculator, const uint32_t *top, const uint32_t *bottom, uint32_t *dst, int width, int sub_size);
+void av1_combine_block_hashes_sse4_2(void *crc_calculator, const uint32_t *top, const uint32_t *bottom, uint32_t *dst, int width, int sub_size);
+RTCD_EXTERN void (*av1_combine_block_hashes)(void *crc_calculator, const uint32_t *top, const uint32_t *bottom, uint32_t *dst, int width, int sub_size);
 
 void av1_compute_stats_c(int wiener_win, const uint8_t *dgd8, const uint8_t *src8, int16_t *dgd_avg, int16_t *src_avg, int h_start, int h_end, int v_start, int v_end, int dgd_stride, int src_stride, int64_t *M, int64_t *H, int use_downsampled_wiener_stats);
 void av1_compute_stats_sse4_1(int wiener_win, const uint8_t *dgd8, const uint8_t *src8, int16_t *dgd_avg, int16_t *src_avg, int h_start, int h_end, int v_start, int v_end, int dgd_stride, int src_stride, int64_t *M, int64_t *H, int use_downsampled_wiener_stats);
@@ -397,6 +405,10 @@ uint32_t av1_get_crc32c_value_c(void *crc_calculator, const uint8_t *p, size_t l
 uint32_t av1_get_crc32c_value_sse4_2(void *crc_calculator, const uint8_t *p, size_t length);
 RTCD_EXTERN uint32_t (*av1_get_crc32c_value)(void *crc_calculator, const uint8_t *p, size_t length);
 
+void av1_get_energy_distribution_finer_c(const int16_t *diff, int stride, int bw, int bh, float *hordist, float *verdist);
+void av1_get_energy_distribution_finer_avx2(const int16_t *diff, int stride, int bw, int bh, float *hordist, float *verdist);
+RTCD_EXTERN void (*av1_get_energy_distribution_finer)(const int16_t *diff, int stride, int bw, int bh, float *hordist, float *verdist);
+
 void av1_get_horver_correlation_full_c(const int16_t *diff, int stride, int w, int h, float *hcorr, float *vcorr);
 void av1_get_horver_correlation_full_sse4_1(const int16_t *diff, int stride, int w, int h, float *hcorr, float *vcorr);
 void av1_get_horver_correlation_full_avx2(const int16_t *diff, int stride, int w, int h, float *hcorr, float *vcorr);
@@ -519,10 +531,18 @@ int64_t av1_highbd_pixel_proj_error_sse4_1(const uint8_t *src8, int width, int h
 int64_t av1_highbd_pixel_proj_error_avx2(const uint8_t *src8, int width, int height, int src_stride, const uint8_t *dat8, int dat_stride, int32_t *flt0, int flt0_stride, int32_t *flt1, int flt1_stride, int xq[2], const sgr_params_type *params);
 RTCD_EXTERN int64_t (*av1_highbd_pixel_proj_error)(const uint8_t *src8, int width, int height, int src_stride, const uint8_t *dat8, int dat_stride, int32_t *flt0, int flt0_stride, int32_t *flt1, int flt1_stride, int xq[2], const sgr_params_type *params);
 
+void av1_highbd_quantize_b_qm_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+void av1_highbd_quantize_b_qm_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+RTCD_EXTERN void (*av1_highbd_quantize_b_qm)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+
 void av1_highbd_quantize_fp_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, int log_scale);
 void av1_highbd_quantize_fp_sse4_1(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, int log_scale);
 void av1_highbd_quantize_fp_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, int log_scale);
 RTCD_EXTERN void (*av1_highbd_quantize_fp)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, int log_scale);
+
+void av1_highbd_quantize_fp_qm_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+void av1_highbd_quantize_fp_qm_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+RTCD_EXTERN void (*av1_highbd_quantize_fp_qm)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
 
 void av1_highbd_upsample_intra_edge_c(uint16_t *p, int sz, int bd);
 void av1_highbd_upsample_intra_edge_sse4_1(uint16_t *p, int sz, int bd);
@@ -629,6 +649,10 @@ RTCD_EXTERN void (*av1_nn_predict)(const float *input_nodes, const NN_CONFIG *co
 void av1_quantize_b_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t * qm_ptr, const qm_val_t * iqm_ptr, int log_scale);
 #define av1_quantize_b av1_quantize_b_c
 
+void av1_quantize_b_qm_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+void av1_quantize_b_qm_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+RTCD_EXTERN void (*av1_quantize_b_qm)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+
 void av1_quantize_fp_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
 void av1_quantize_fp_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
 void av1_quantize_fp_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
@@ -641,6 +665,10 @@ RTCD_EXTERN void (*av1_quantize_fp_32x32)(const tran_low_t *coeff_ptr, intptr_t 
 void av1_quantize_fp_64x64_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
 void av1_quantize_fp_64x64_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
 RTCD_EXTERN void (*av1_quantize_fp_64x64)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
+
+void av1_quantize_fp_qm_c(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+void av1_quantize_fp_qm_avx2(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
+RTCD_EXTERN void (*av1_quantize_fp_qm)(const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale);
 
 void av1_quantize_lp_c(const int16_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, int16_t *qcoeff_ptr, int16_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
 void av1_quantize_lp_sse2(const int16_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, int16_t *qcoeff_ptr, int16_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan);
@@ -859,6 +887,8 @@ static void setup_rtcd_internal(void)
     av1_block_error_lp = av1_block_error_lp_c;
     if (flags & HAS_SSE2) av1_block_error_lp = av1_block_error_lp_sse2;
     if (flags & HAS_AVX2) av1_block_error_lp = av1_block_error_lp_avx2;
+    av1_block_error_qm = av1_block_error_qm_c;
+    if (flags & HAS_AVX2) av1_block_error_qm = av1_block_error_qm_avx2;
     av1_build_compound_diffwtd_mask = av1_build_compound_diffwtd_mask_c;
     if (flags & HAS_SSE4_1) av1_build_compound_diffwtd_mask = av1_build_compound_diffwtd_mask_sse4_1;
     if (flags & HAS_AVX2) av1_build_compound_diffwtd_mask = av1_build_compound_diffwtd_mask_avx2;
@@ -885,6 +915,8 @@ static void setup_rtcd_internal(void)
     if (flags & HAS_AVX2) av1_calc_proj_params_high_bd = av1_calc_proj_params_high_bd_avx2;
     av1_cnn_convolve_no_maxpool_padding_valid = av1_cnn_convolve_no_maxpool_padding_valid_c;
     if (flags & HAS_AVX2) av1_cnn_convolve_no_maxpool_padding_valid = av1_cnn_convolve_no_maxpool_padding_valid_avx2;
+    av1_combine_block_hashes = av1_combine_block_hashes_c;
+    if (flags & HAS_SSE4_2) av1_combine_block_hashes = av1_combine_block_hashes_sse4_2;
     av1_compute_stats = av1_compute_stats_c;
     if (flags & HAS_SSE4_1) av1_compute_stats = av1_compute_stats_sse4_1;
     if (flags & HAS_AVX2) av1_compute_stats = av1_compute_stats_avx2;
@@ -979,6 +1011,8 @@ static void setup_rtcd_internal(void)
     if (flags & HAS_SSE4_1) av1_fwht4x4 = av1_fwht4x4_sse4_1;
     av1_get_crc32c_value = av1_get_crc32c_value_c;
     if (flags & HAS_SSE4_2) av1_get_crc32c_value = av1_get_crc32c_value_sse4_2;
+    av1_get_energy_distribution_finer = av1_get_energy_distribution_finer_c;
+    if (flags & HAS_AVX2) av1_get_energy_distribution_finer = av1_get_energy_distribution_finer_avx2;
     av1_get_horver_correlation_full = av1_get_horver_correlation_full_c;
     if (flags & HAS_SSE4_1) av1_get_horver_correlation_full = av1_get_horver_correlation_full_sse4_1;
     if (flags & HAS_AVX2) av1_get_horver_correlation_full = av1_get_horver_correlation_full_avx2;
@@ -1031,9 +1065,13 @@ static void setup_rtcd_internal(void)
     av1_highbd_pixel_proj_error = av1_highbd_pixel_proj_error_c;
     if (flags & HAS_SSE4_1) av1_highbd_pixel_proj_error = av1_highbd_pixel_proj_error_sse4_1;
     if (flags & HAS_AVX2) av1_highbd_pixel_proj_error = av1_highbd_pixel_proj_error_avx2;
+    av1_highbd_quantize_b_qm = av1_highbd_quantize_b_qm_c;
+    if (flags & HAS_AVX2) av1_highbd_quantize_b_qm = av1_highbd_quantize_b_qm_avx2;
     av1_highbd_quantize_fp = av1_highbd_quantize_fp_c;
     if (flags & HAS_SSE4_1) av1_highbd_quantize_fp = av1_highbd_quantize_fp_sse4_1;
     if (flags & HAS_AVX2) av1_highbd_quantize_fp = av1_highbd_quantize_fp_avx2;
+    av1_highbd_quantize_fp_qm = av1_highbd_quantize_fp_qm_c;
+    if (flags & HAS_AVX2) av1_highbd_quantize_fp_qm = av1_highbd_quantize_fp_qm_avx2;
     av1_highbd_upsample_intra_edge = av1_highbd_upsample_intra_edge_c;
     if (flags & HAS_SSE4_1) av1_highbd_upsample_intra_edge = av1_highbd_upsample_intra_edge_sse4_1;
     av1_highbd_warp_affine = av1_highbd_warp_affine_c;
@@ -1063,6 +1101,8 @@ static void setup_rtcd_internal(void)
     av1_nn_predict = av1_nn_predict_c;
     if (flags & HAS_SSE3) av1_nn_predict = av1_nn_predict_sse3;
     if (flags & HAS_AVX2) av1_nn_predict = av1_nn_predict_avx2;
+    av1_quantize_b_qm = av1_quantize_b_qm_c;
+    if (flags & HAS_AVX2) av1_quantize_b_qm = av1_quantize_b_qm_avx2;
     av1_quantize_fp = av1_quantize_fp_c;
     if (flags & HAS_SSE2) av1_quantize_fp = av1_quantize_fp_sse2;
     if (flags & HAS_AVX2) av1_quantize_fp = av1_quantize_fp_avx2;
@@ -1070,6 +1110,8 @@ static void setup_rtcd_internal(void)
     if (flags & HAS_AVX2) av1_quantize_fp_32x32 = av1_quantize_fp_32x32_avx2;
     av1_quantize_fp_64x64 = av1_quantize_fp_64x64_c;
     if (flags & HAS_AVX2) av1_quantize_fp_64x64 = av1_quantize_fp_64x64_avx2;
+    av1_quantize_fp_qm = av1_quantize_fp_qm_c;
+    if (flags & HAS_AVX2) av1_quantize_fp_qm = av1_quantize_fp_qm_avx2;
     av1_quantize_lp = av1_quantize_lp_c;
     if (flags & HAS_SSE2) av1_quantize_lp = av1_quantize_lp_sse2;
     if (flags & HAS_AVX2) av1_quantize_lp = av1_quantize_lp_avx2;

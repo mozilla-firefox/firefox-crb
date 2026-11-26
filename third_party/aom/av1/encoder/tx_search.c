@@ -11,6 +11,8 @@
 
 #include <inttypes.h>
 
+#include "config/av1_rtcd.h"
+
 #include "av1/common/cfl.h"
 #include "av1/common/reconintra.h"
 #include "av1/encoder/block.h"
@@ -1089,9 +1091,9 @@ static inline void sort_rd(int64_t rds[], int txk[], int len) {
   }
 }
 
-static inline int64_t av1_block_error_qm(
-    const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size,
-    const qm_val_t *qmatrix, const int16_t *scan, int64_t *ssz, int bd) {
+int64_t av1_block_error_qm_c(const tran_low_t *coeff, const tran_low_t *dqcoeff,
+                             intptr_t block_size, const qm_val_t *qmatrix,
+                             const int16_t *scan, int64_t *ssz, int bd) {
   int i;
   int64_t error = 0, sqcoeff = 0;
   int shift = 2 * (bd - 8);
@@ -1454,68 +1456,53 @@ static inline float get_adaptive_thresholds(
   return prune_2D_adaptive_thresholds[tx_size][pruning_aggressiveness];
 }
 
-static inline void get_energy_distribution_finer(const int16_t *diff,
-                                                 int stride, int bw, int bh,
-                                                 float *hordist,
-                                                 float *verdist) {
-  // First compute downscaled block energy values (esq); downscale factors
-  // are defined by w_shift and h_shift.
-  unsigned int esq[256];
+void av1_get_energy_distribution_finer_c(const int16_t *diff, int stride,
+                                         int bw, int bh, float *hordist,
+                                         float *verdist) {
   const int w_shift = bw <= 8 ? 0 : 1;
   const int h_shift = bh <= 8 ? 0 : 1;
   const int esq_w = bw >> w_shift;
   const int esq_h = bh >> h_shift;
-  const int esq_sz = esq_w * esq_h;
-  int i, j;
-  memset(esq, 0, esq_sz * sizeof(esq[0]));
-  if (w_shift) {
-    for (i = 0; i < bh; i++) {
-      unsigned int *cur_esq_row = esq + (i >> h_shift) * esq_w;
-      const int16_t *cur_diff_row = diff + i * stride;
-      for (j = 0; j < bw; j += 2) {
-        cur_esq_row[j >> 1] += (cur_diff_row[j] * cur_diff_row[j] +
-                                cur_diff_row[j + 1] * cur_diff_row[j + 1]);
-      }
-    }
-  } else {
-    for (i = 0; i < bh; i++) {
-      unsigned int *cur_esq_row = esq + (i >> h_shift) * esq_w;
-      const int16_t *cur_diff_row = diff + i * stride;
-      for (j = 0; j < bw; j++) {
-        cur_esq_row[j] += cur_diff_row[j] * cur_diff_row[j];
-      }
-    }
-  }
-
+  assert(esq_w <= 16);
+  assert(esq_h <= 16);
+  uint32_t col_sum[16] = { 0 };
+  uint32_t row_sum[16] = { 0 };
   uint64_t total = 0;
-  for (i = 0; i < esq_sz; i++) total += esq[i];
+
+  for (int i = 0; i < bh; i++) {
+    const int16_t *cur_diff_row = diff + i * stride;
+    uint32_t r_sum = 0;
+    if (w_shift) {
+      for (int j = 0; j < bw; j += 2) {
+        const uint32_t sq =
+            (uint32_t)(cur_diff_row[j] * cur_diff_row[j] +
+                       cur_diff_row[j + 1] * cur_diff_row[j + 1]);
+        col_sum[j >> 1] += sq;
+        r_sum += sq;
+      }
+    } else {
+      for (int j = 0; j < bw; j++) {
+        const uint32_t sq = (uint32_t)(cur_diff_row[j] * cur_diff_row[j]);
+        col_sum[j] += sq;
+        r_sum += sq;
+      }
+    }
+    row_sum[i >> h_shift] += r_sum;
+    total += r_sum;
+  }
 
   // Output hordist and verdist arrays are normalized 1D projections of esq
   if (total == 0) {
-    float hor_val = 1.0f / esq_w;
-    for (j = 0; j < esq_w - 1; j++) hordist[j] = hor_val;
-    float ver_val = 1.0f / esq_h;
-    for (i = 0; i < esq_h - 1; i++) verdist[i] = ver_val;
+    const float hor_val = 1.0f / esq_w;
+    for (int j = 0; j < esq_w - 1; j++) hordist[j] = hor_val;
+    const float ver_val = 1.0f / esq_h;
+    for (int i = 0; i < esq_h - 1; i++) verdist[i] = ver_val;
     return;
   }
 
   const float e_recip = 1.0f / (float)total;
-  memset(hordist, 0, (esq_w - 1) * sizeof(hordist[0]));
-  memset(verdist, 0, (esq_h - 1) * sizeof(verdist[0]));
-  const unsigned int *cur_esq_row;
-  for (i = 0; i < esq_h - 1; i++) {
-    cur_esq_row = esq + i * esq_w;
-    for (j = 0; j < esq_w - 1; j++) {
-      hordist[j] += (float)cur_esq_row[j];
-      verdist[i] += (float)cur_esq_row[j];
-    }
-    verdist[i] += (float)cur_esq_row[j];
-  }
-  cur_esq_row = esq + i * esq_w;
-  for (j = 0; j < esq_w - 1; j++) hordist[j] += (float)cur_esq_row[j];
-
-  for (j = 0; j < esq_w - 1; j++) hordist[j] *= e_recip;
-  for (i = 0; i < esq_h - 1; i++) verdist[i] *= e_recip;
+  for (int j = 0; j < esq_w - 1; j++) hordist[j] = (float)col_sum[j] * e_recip;
+  for (int i = 0; i < esq_h - 1; i++) verdist[i] = (float)row_sum[i] * e_recip;
 }
 
 static inline bool check_bit_mask(uint16_t mask, int val) {
@@ -1567,8 +1554,8 @@ static void prune_tx_2D(MACROBLOCK *x, BLOCK_SIZE bsize, TX_SIZE tx_size,
   const struct macroblock_plane *const p = &x->plane[0];
   const int diff_stride = block_size_wide[bsize];
   const int16_t *diff = p->src_diff + 4 * blk_row * diff_stride + 4 * blk_col;
-  get_energy_distribution_finer(diff, diff_stride, bw, bh, hfeatures,
-                                vfeatures);
+  av1_get_energy_distribution_finer(diff, diff_stride, bw, bh, hfeatures,
+                                    vfeatures);
 
   av1_get_horver_correlation_full(diff, diff_stride, bw, bh,
                                   &hfeatures[hfeatures_num - 1],
@@ -1895,9 +1882,13 @@ static inline uint16_t get_tx_mask(
       if ((prune >> max_idx) & 0x01) prune &= ~(1 << max_idx);
       allowed_tx_mask &= (~prune);
     }
-    for (i = 0; i < TX_TYPES; i++) {
-      if (allowed_tx_mask & (1 << i)) num_allowed++;
+#if defined(__GNUC__) || defined(__clang__)
+    num_allowed = __builtin_popcount(allowed_tx_mask);
+#else
+    for (uint16_t mask = allowed_tx_mask; mask != 0; mask &= mask - 1) {
+      num_allowed++;
     }
+#endif
     assert(num_allowed > 0);
 
     if (num_allowed > 2 && cpi->sf.tx_sf.tx_type_search.prune_tx_type_est_rd) {
@@ -1974,7 +1965,8 @@ static int skip_trellis_opt_based_on_satd(MACROBLOCK *x,
                                           int block, TX_SIZE tx_size,
                                           int quant_b_adapt, int qstep,
                                           unsigned int coeff_opt_satd_threshold,
-                                          int skip_trellis, int dc_only_blk) {
+                                          int skip_trellis, int dc_only_blk,
+                                          int *precalc_satd) {
   if (skip_trellis || (coeff_opt_satd_threshold == UINT_MAX))
     return skip_trellis;
 
@@ -1983,7 +1975,13 @@ static int skip_trellis_opt_based_on_satd(MACROBLOCK *x,
   tran_low_t *const coeff_ptr = p->coeff + block_offset;
   const int n_coeffs = av1_get_max_eob(tx_size);
   const int shift = (MAX_TX_SCALE - av1_get_tx_scale(tx_size));
-  int satd = (dc_only_blk) ? abs(coeff_ptr[0]) : aom_satd(coeff_ptr, n_coeffs);
+  int satd;
+  if (precalc_satd != NULL && *precalc_satd >= 0) {
+    satd = *precalc_satd;
+  } else {
+    satd = (dc_only_blk) ? abs(coeff_ptr[0]) : aom_satd(coeff_ptr, n_coeffs);
+    if (precalc_satd != NULL) *precalc_satd = satd;
+  }
   satd = RIGHT_SIGNED_SHIFT(satd, shift);
   satd >>= (x->e_mbd.bd - 8);
 
@@ -2187,6 +2185,16 @@ static void search_tx_type(const AV1_COMP *cpi, MACROBLOCK *x, int plane,
     calc_pixel_domain_distortion_final = use_transform_domain_distortion = 0;
 
   const uint16_t *eobs_ptr = x->plane[plane].eobs;
+  const int block_offset = BLOCK_OFFSET(block);
+  const tran_low_t *const coeff_ptr = p->coeff + block_offset;
+  const int n_coeffs = av1_get_max_eob(tx_size);
+  const int is_inter = is_inter_block(mbmi);
+  // Skip transform candidates whose transform-domain SATD exceeds the best
+  // candidate by more than 10% (inter) or 15% (intra) for speed > 0.
+  const int satd_early_exit_th = is_inter ? 10 : 15;
+  const int has_multi_tx =
+      (cpi->oxcf.speed > 0) && ((allowed_tx_mask & (allowed_tx_mask - 1)) != 0);
+  int best_satd = INT_MAX;
 
   TxfmParam txfm_param;
   QUANT_PARAM quant_param;
@@ -2198,13 +2206,17 @@ static void search_tx_type(const AV1_COMP *cpi, MACROBLOCK *x, int plane,
                                : AV1_XFORM_QUANT_FP,
                   cpi->oxcf.q_cfg.quant_b_adapt, &quant_param);
 
+  const int use_qmatrix =
+      av1_use_qmatrix(&cm->quant_params, xd, mbmi->segment_id);
+  uint16_t rem_tx_mask = allowed_tx_mask;
   // Iterate through all transform type candidates.
-  for (int idx = 0; idx < TX_TYPES; ++idx) {
+  for (int idx = 0; idx < TX_TYPES && rem_tx_mask != 0; ++idx) {
     const TX_TYPE tx_type = (TX_TYPE)txk_map[idx];
-    if (tx_type == TX_TYPE_INVALID || !check_bit_mask(allowed_tx_mask, tx_type))
+    if (tx_type == TX_TYPE_INVALID || !check_bit_mask(rem_tx_mask, tx_type))
       continue;
+    rem_tx_mask &= ~(uint16_t)(1 << tx_type);
     txfm_param.tx_type = tx_type;
-    if (av1_use_qmatrix(&cm->quant_params, xd, mbmi->segment_id)) {
+    if (use_qmatrix) {
       av1_setup_qmatrix(&cm->quant_params, xd, plane, tx_size, tx_type,
                         &quant_param);
     }
@@ -2221,9 +2233,23 @@ static void search_tx_type(const AV1_COMP *cpi, MACROBLOCK *x, int plane,
     else
       av1_xform_dc_only(x, plane, block, &txfm_param, per_px_mean);
 
+    int cur_satd = -1;
+    if (has_multi_tx) {
+      cur_satd =
+          dc_only_blk ? abs(coeff_ptr[0]) : aom_satd(coeff_ptr, n_coeffs);
+      if (best_satd == INT_MAX || cur_satd < best_satd) {
+        best_satd = cur_satd;
+      } else if (best_satd > 0 && ((int64_t)(cur_satd - best_satd) * 100 >
+                                   (int64_t)best_satd * satd_early_exit_th)) {
+        // skip unpromising transform candidate
+        continue;
+      }
+    }
+
     skip_trellis_based_on_satd[tx_type] = skip_trellis_opt_based_on_satd(
         x, &quant_param, plane, block, tx_size, cpi->oxcf.q_cfg.quant_b_adapt,
-        qstep, txfm_params->coeff_opt_thresholds[1], skip_trellis, dc_only_blk);
+        qstep, txfm_params->coeff_opt_thresholds[1], skip_trellis, dc_only_blk,
+        &cur_satd);
 
     av1_quant(x, plane, block, &txfm_param, &quant_param);
 

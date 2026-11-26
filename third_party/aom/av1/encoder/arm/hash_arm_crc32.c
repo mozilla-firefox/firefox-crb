@@ -60,3 +60,18 @@ uint32_t av1_get_crc32c_value_arm_crc32(void *crc_calculator, const uint8_t *p,
 
   return ~crc;
 }
+
+void av1_combine_block_hashes_arm_crc32(void *crc_calculator,
+                                        const uint32_t *top,
+                                        const uint32_t *bottom, uint32_t *dst,
+                                        int width, int sub_size) {
+  (void)crc_calculator;
+  for (int x = 0; x < width; x++) {
+    // Hash the 4 values from registers, in the same byte order as the C
+    // version reads them from memory.
+    uint32_t crc = 0xFFFFFFFF;
+    crc = __crc32cd(crc, top[x] | (uint64_t)top[x + sub_size] << 32);
+    crc = __crc32cd(crc, bottom[x] | (uint64_t)bottom[x + sub_size] << 32);
+    dst[x] = ~crc;
+  }
+}
