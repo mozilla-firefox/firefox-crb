@@ -356,21 +356,24 @@ static inline int mv_err_cost_(const MV *mv,
 static inline int mvsad_err_cost(const FULLPEL_MV *mv, const FULLPEL_MV *ref_mv,
                                  const int *mvjcost, const int *const mvcost[2],
                                  int sad_per_bit, MV_COST_TYPE mv_cost_type) {
-  const MV diff = { GET_MV_SUBPEL(mv->row - ref_mv->row),
-                    GET_MV_SUBPEL(mv->col - ref_mv->col) };
-
   switch (mv_cost_type) {
-    case MV_COST_ENTROPY:
+    case MV_COST_ENTROPY: {
+      const MV diff = { GET_MV_SUBPEL(mv->row - ref_mv->row),
+                        GET_MV_SUBPEL(mv->col - ref_mv->col) };
       return ROUND_POWER_OF_TWO(
           (unsigned)mv_cost(&diff, mvjcost, CONVERT_TO_CONST_MVCOST(mvcost)) *
               sad_per_bit,
           AV1_PROB_COST_SHIFT);
+    }
     case MV_COST_L1_LOWRES:
-      return (SAD_LAMBDA_LOWRES * (abs(diff.row) + abs(diff.col))) >> 3;
+      return SAD_LAMBDA_LOWRES *
+             (abs(mv->row - ref_mv->row) + abs(mv->col - ref_mv->col));
     case MV_COST_L1_MIDRES:
-      return (SAD_LAMBDA_MIDRES * (abs(diff.row) + abs(diff.col))) >> 3;
+      return SAD_LAMBDA_MIDRES *
+             (abs(mv->row - ref_mv->row) + abs(mv->col - ref_mv->col));
     case MV_COST_L1_HDRES:
-      return (SAD_LAMBDA_HDRES * (abs(diff.row) + abs(diff.col))) >> 3;
+      return SAD_LAMBDA_HDRES *
+             (abs(mv->row - ref_mv->row) + abs(mv->col - ref_mv->col));
     case MV_COST_NONE: return 0;
     default: assert(0 && "Invalid rd_cost_type"); return 0;
   }
@@ -1308,6 +1311,9 @@ static inline void update_best_site(unsigned int sad, const FULLPEL_MV *best_mv,
   }
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("no-tree-slp-vectorize")))
+#endif
 static int diamond_search_sad(FULLPEL_MV start_mv, unsigned int start_mv_sad,
                               const FULLPEL_MOTION_SEARCH_PARAMS *ms_params,
                               const int search_step, int *num00,
@@ -1729,6 +1735,11 @@ int av1_refining_search_8p_c(const FULLPEL_MOTION_SEARCH_PARAMS *ms_params,
 
   for (int i = 0; i < SEARCH_RANGE_8P; ++i) {
     int best_site = -1;
+    const uint8_t *const best_buf = get_buf_from_fullmv(ref, best_mv);
+    const int in_range = (best_mv->row > mv_limits->row_min) &
+                         (best_mv->row < mv_limits->row_max) &
+                         (best_mv->col > mv_limits->col_min) &
+                         (best_mv->col < mv_limits->col_max);
 
     for (int j = 0; j < 8; ++j) {
       grid_coord = grid_center + neighbors[j].coord_offset;
@@ -1739,10 +1750,12 @@ int av1_refining_search_8p_c(const FULLPEL_MOTION_SEARCH_PARAMS *ms_params,
                               best_mv->col + neighbors[j].coord.col };
 
       do_refine_search_grid[grid_coord] = 1;
-      if (av1_is_fullmv_in_range(mv_limits, mv)) {
-        unsigned int sad;
-        sad = get_mvpred_compound_sad(
-            ms_params, src, get_buf_from_fullmv(ref, &mv), ref_stride);
+      if (in_range || av1_is_fullmv_in_range(mv_limits, mv)) {
+        unsigned int sad = get_mvpred_compound_sad(
+            ms_params, src,
+            best_buf + neighbors[j].coord.row * ref_stride +
+                neighbors[j].coord.col,
+            ref_stride);
         if (sad < best_sad) {
           sad += mvsad_err_cost_(&mv, mv_cost_params);
 
@@ -1931,8 +1944,12 @@ int av1_intrabc_hash_search(const AV1_COMP *cpi, const MACROBLOCKD *xd,
   uint32_t hash_value1, hash_value2;
   int best_hash_cost = INT_MAX;
 
-  // for the hashMap
-  hash_table *ref_frame_hash = &intrabc_hash_info->intrabc_hash_table;
+  // A shared table also holds the blocks of other tiles. av1_is_dv_valid()
+  // skips them, as a block can only copy from its own tile.
+  const int table_idx = av1_intrabc_hash_table_idx(
+      intrabc_hash_info, xd->tile.tile_row, xd->tile.tile_col);
+  assert(table_idx < intrabc_hash_info->num_tile_tables);
+  const hash_table *ref_frame_hash = &intrabc_hash_info->tile_tables[table_idx];
 
   av1_get_block_hash_value(intrabc_hash_info, src, src_stride, block_width,
                            &hash_value1, &hash_value2, is_cur_buf_hbd(xd));
@@ -1945,9 +1962,10 @@ int av1_intrabc_hash_search(const AV1_COMP *cpi, const MACROBLOCKD *xd,
     count = AOMMIN(64, count);
   }
 
-  Iterator iterator = av1_hash_get_first_iterator(ref_frame_hash, hash_value1);
-  for (int i = 0; i < count; i++, aom_iterator_increment(&iterator)) {
-    block_hash ref_block_hash = *(block_hash *)(aom_iterator_get(&iterator));
+  const block_hash *block_hashes =
+      av1_hash_get_first_block_hash(ref_frame_hash, hash_value1);
+  for (int i = 0; i < count; i++) {
+    const block_hash ref_block_hash = block_hashes[i];
     if (hash_value2 == ref_block_hash.hash_value2) {
       // Make sure the prediction is from valid area.
       const MV dv = { GET_MV_SUBPEL(ref_block_hash.y - y_pos),
@@ -3534,6 +3552,7 @@ unsigned int av1_refine_warped_mv(MACROBLOCKD *xd, const AV1_COMMON *const cm,
                                   const int *pts_inref0, int total_samples,
                                   WARP_SEARCH_METHOD search_method,
                                   int num_iterations) {
+  if (num_iterations <= 0) return 0;
   MB_MODE_INFO *mbmi = xd->mi[0];
 
   const MV *neighbors = warp_search_info[search_method].neighbors;
@@ -3552,6 +3571,7 @@ unsigned int av1_refine_warped_mv(MACROBLOCKD *xd, const AV1_COMMON *const cm,
   // Calculate the center position's error
   assert(av1_is_subpelmv_in_range(mv_limits, *best_mv));
   bestmse = compute_motion_cost(xd, cm, ms_params, bsize, best_mv);
+  unsigned int dst_y_valid = 1;
 
   // MV search
   int pts[SAMPLES_ARRAY_SIZE], pts_inref[SAMPLES_ARRAY_SIZE];
@@ -3591,6 +3611,9 @@ unsigned int av1_refine_warped_mv(MACROBLOCKD *xd, const AV1_COMMON *const cm,
             best_wm_params = mbmi->wm_params;
             best_num_proj_ref = mbmi->num_proj_ref;
             bestmse = thismse;
+            dst_y_valid = 1;
+          } else {
+            dst_y_valid = 0;
           }
         }
       }
@@ -3607,7 +3630,7 @@ unsigned int av1_refine_warped_mv(MACROBLOCKD *xd, const AV1_COMMON *const cm,
 
   mbmi->wm_params = best_wm_params;
   mbmi->num_proj_ref = best_num_proj_ref;
-  return bestmse;
+  return dst_y_valid;
 }
 
 #endif  // !CONFIG_REALTIME_ONLY

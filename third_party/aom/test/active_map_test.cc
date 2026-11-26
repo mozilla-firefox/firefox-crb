@@ -161,7 +161,7 @@ class ActiveMapSvcTest
       layer_id.temporal_layer_id = temporal_layer_id_;
       encoder->Control(AV1E_SET_SVC_LAYER_ID, &layer_id);
     }
-    if (frame > 0) {
+    if (frame == 1 || (frame > 1 && !map_once_)) {
       uint8_t active_map[kRows * kCols] = {};
       aom_active_map_t map = aom_active_map_t();
       map.rows = kRows;
@@ -172,6 +172,7 @@ class ActiveMapSvcTest
   }
 
   void FramePktHook(const aom_codec_cx_pkt_t *pkt) override {
+    frame_sizes_.push_back(pkt->data.frame.sz);
     if (num_frames_++ == 0) return;
     EXPECT_LT(pkt->data.frame.sz, kMaxSkipFrameSize)
         << "frame " << num_frames_ - 1;
@@ -188,7 +189,10 @@ class ActiveMapSvcTest
     EncoderTest::MismatchHook(img_enc, img_dec);
   }
 
-  void DoTest() {
+  void DoTest(bool map_once = false) {
+    map_once_ = map_once;
+    num_frames_ = 0;
+    frame_sizes_.clear();
     cfg_.g_lag_in_frames = 0;
     cfg_.rc_target_bitrate = 400;
     cfg_.rc_resize_mode = 0;
@@ -206,6 +210,8 @@ class ActiveMapSvcTest
   int number_temporal_layers_;
   int temporal_layer_id_ = 0;
   int num_frames_ = 0;
+  bool map_once_ = false;
+  std::vector<size_t> frame_sizes_;
 };
 
 TEST_P(ActiveMapSvcTest, AllInactive) { DoTest(); }
@@ -213,6 +219,29 @@ TEST_P(ActiveMapSvcTest, AllInactive) { DoTest(); }
 AV1_INSTANTIATE_TEST_SUITE(ActiveMapSvcTest,
                            ::testing::Values(::libaom_test::kRealTime),
                            ::testing::Range(7, 12), ::testing::Values(1, 2));
+
+// Setting the same map again on every frame should cost about as much as
+// setting it once, since the inactive segment's features don't change and
+// need not be sent again (92 bits). One layer only, as a map set once isn't
+// kept on temporal layer frames.
+using ActiveMapSetEveryFrameTest = ActiveMapSvcTest;
+
+TEST_P(ActiveMapSetEveryFrameTest, SameCostAsSetOnce) {
+  constexpr size_t kMaxMapUpdateBytes = 4;
+  DoTest(/*map_once=*/true);
+  const std::vector<size_t> once_sizes = frame_sizes_;
+  DoTest(/*map_once=*/false);
+  ASSERT_EQ(frame_sizes_.size(), once_sizes.size());
+  // Both encodes set the map on frame 1.
+  for (size_t i = 2; i < frame_sizes_.size(); ++i) {
+    EXPECT_LE(frame_sizes_[i], once_sizes[i] + kMaxMapUpdateBytes)
+        << "frame " << i;
+  }
+}
+
+AV1_INSTANTIATE_TEST_SUITE(ActiveMapSetEveryFrameTest,
+                           ::testing::Values(::libaom_test::kRealTime),
+                           ::testing::Range(7, 12), ::testing::Values(1));
 
 class MovingGradientSource : public ::libaom_test::DummyVideoSource {
  protected:
@@ -336,6 +365,7 @@ constexpr int kWinSize = 128;
 constexpr int kDocHeight = 1024;
 constexpr int kNumFrames = 60;
 constexpr int kEdgeMargin = 8;
+constexpr int kResizeFrame = 20;
 
 void WindowPos(int frame, int *x, int *y) {
   static const int kPos[4][2] = {
@@ -485,6 +515,10 @@ class InactiveAreaTest
       encoder->Control(AV1E_SET_ROW_MT, cfg_.g_threads > 1);
       return;
     }
+    if (resize_ && frame == kResizeFrame) {
+      aom_scaling_mode_t mode = { AOME_ONETWO, AOME_ONETWO };
+      encoder->Control(AOME_SET_SCALEMODE, &mode);
+    }
     if (map_once_ && frame > 1) return;
 
     uint8_t map[kMapRows * kMapCols];
@@ -518,6 +552,8 @@ class InactiveAreaTest
 
   void DecompressedFrameHook(const aom_image_t &img,
                              aom_codec_pts_t pts) override {
+    // Only check that the encoder and decoder match.
+    if (resize_) return;
     const int frame = static_cast<int>(pts);
     if (frame > 0 && !skip_ref_golden_) {
       uint8_t map[kMapRows * kMapCols];
@@ -573,11 +609,12 @@ class InactiveAreaTest
     }
   }
 
-  void DoTest(bool use_roi, bool skip_ref_golden = false,
-              bool map_once = false) {
+  void DoTest(bool use_roi, bool skip_ref_golden = false, bool map_once = false,
+              bool resize = false) {
     use_roi_ = use_roi;
     skip_ref_golden_ = skip_ref_golden;
     map_once_ = map_once;
+    resize_ = resize;
     // More bits let q drop low enough while the map stays set.
     if (map_once) cfg_.rc_target_bitrate = 1000;
     ScrollingWindowSource video(map_once);
@@ -590,6 +627,7 @@ class InactiveAreaTest
   bool use_roi_ = false;
   bool skip_ref_golden_ = false;
   bool map_once_ = false;
+  bool resize_ = false;
   std::vector<uint8_t> prev_[3];
 };
 
@@ -601,6 +639,12 @@ TEST_P(InactiveAreaTest, RoiSkipGoldenRef) { DoTest(true, true); }
 
 // The map stays set while cyclic refresh turns off and q drops.
 TEST_P(InactiveAreaTest, ActiveMapSetOnce) { DoTest(false, false, true); }
+
+// One frame has another size, so the frames around it can't use the segment
+// map of the frame before them.
+TEST_P(InactiveAreaTest, ActiveMapSetOnceResize) {
+  DoTest(false, false, true, true);
+}
 
 AV1_INSTANTIATE_TEST_SUITE(
     InactiveAreaTest, ::testing::Values(::libaom_test::kRealTime),

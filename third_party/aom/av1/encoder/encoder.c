@@ -1047,8 +1047,18 @@ void av1_change_config(struct AV1_COMP *cpi, const AV1EncoderConfig *oxcf,
   cm->superres_upscaled_width = frm_dim_cfg->width;
   cm->superres_upscaled_height = frm_dim_cfg->height;
 
-  if (cm->width > cpi->data_alloc_width ||
-      cm->height > cpi->data_alloc_height || is_sb_size_changed) {
+  // Before the first frame, size the buffers for the forced maximum like
+  // init_config() does, so a later upscale keeps the reference frames.
+  int alloc_width = cm->width;
+  int alloc_height = cm->height;
+  if (!cpi->ppi->seq_params_locked) {
+    if (frm_dim_cfg->forced_max_frame_width)
+      alloc_width = frm_dim_cfg->forced_max_frame_width;
+    if (frm_dim_cfg->forced_max_frame_height)
+      alloc_height = frm_dim_cfg->forced_max_frame_height;
+  }
+  if (alloc_width > cpi->data_alloc_width ||
+      alloc_height > cpi->data_alloc_height || is_sb_size_changed) {
     av1_free_context_buffers(cm);
     av1_free_shared_coeff_buffer(&cpi->td.shared_coeff_buf);
     av1_free_sms_tree(&cpi->td);
@@ -1056,6 +1066,7 @@ void av1_change_config(struct AV1_COMP *cpi, const AV1EncoderConfig *oxcf,
     cpi->td.firstpass_ctx = NULL;
     alloc_compressor_data(cpi);
     realloc_segmentation_maps(cpi);
+    alloc_rdmult_scaling_factors(cpi);
     cpi->data_alloc_width = oxcf->frm_dim_cfg.forced_max_frame_width
                                 ? oxcf->frm_dim_cfg.forced_max_frame_width
                                 : cm->width;
@@ -1644,30 +1655,10 @@ AV1_COMP *av1_create_compressor(AV1_PRIMARY *ppi, const AV1EncoderConfig *oxcf,
   cpi->palette_pixel_num = 0;
   cpi->scaled_last_source_available = 0;
 
-  {
-    const BLOCK_SIZE bsize = BLOCK_16X16;
-    const int w = mi_size_wide[bsize];
-    const int h = mi_size_high[bsize];
-    const int num_cols = (max_mi_cols + w - 1) / w;
-    const int num_rows = (max_mi_rows + h - 1) / h;
-    CHECK_MEM_ERROR(cm, cpi->ssim_rdmult_scaling_factors,
-                    aom_calloc(num_rows * num_cols,
-                               sizeof(*cpi->ssim_rdmult_scaling_factors)));
-    CHECK_MEM_ERROR(cm, cpi->tpl_rdmult_scaling_factors,
-                    aom_calloc(num_rows * num_cols,
-                               sizeof(*cpi->tpl_rdmult_scaling_factors)));
-  }
+  alloc_rdmult_scaling_factors(cpi);
 
 #if CONFIG_TUNE_VMAF
   {
-    const BLOCK_SIZE bsize = BLOCK_64X64;
-    const int w = mi_size_wide[bsize];
-    const int h = mi_size_high[bsize];
-    const int num_cols = (mi_params->mi_cols + w - 1) / w;
-    const int num_rows = (mi_params->mi_rows + h - 1) / h;
-    CHECK_MEM_ERROR(cm, cpi->vmaf_info.rdmult_scaling_factors,
-                    aom_calloc(num_rows * num_cols,
-                               sizeof(*cpi->vmaf_info.rdmult_scaling_factors)));
     for (int i = 0; i < MAX_ARF_LAYERS; i++) {
       cpi->vmaf_info.last_frame_unsharp_amount[i] = -1.0;
       cpi->vmaf_info.last_frame_ysse[i] = -1.0;
@@ -1679,41 +1670,11 @@ AV1_COMP *av1_create_compressor(AV1_PRIMARY *ppi, const AV1EncoderConfig *oxcf,
 #endif
 
 #if CONFIG_TUNE_BUTTERAUGLI
-  {
-    const int w = mi_size_wide[butteraugli_rdo_bsize];
-    const int h = mi_size_high[butteraugli_rdo_bsize];
-    const int num_cols = (mi_params->mi_cols + w - 1) / w;
-    const int num_rows = (mi_params->mi_rows + h - 1) / h;
-    CHECK_MEM_ERROR(
-        cm, cpi->butteraugli_info.rdmult_scaling_factors,
-        aom_malloc(num_rows * num_cols *
-                   sizeof(*cpi->butteraugli_info.rdmult_scaling_factors)));
-    memset(&cpi->butteraugli_info.source, 0,
-           sizeof(cpi->butteraugli_info.source));
-    memset(&cpi->butteraugli_info.resized_source, 0,
-           sizeof(cpi->butteraugli_info.resized_source));
-    cpi->butteraugli_info.recon_set = false;
-  }
-#endif
-
-#if CONFIG_SALIENCY_MAP
-  {
-    CHECK_MEM_ERROR(cm, cpi->saliency_map,
-                    (uint8_t *)aom_calloc(cm->height * cm->width,
-                                          sizeof(*cpi->saliency_map)));
-    // Buffer initialization based on MIN_MIB_SIZE_LOG2 to ensure that
-    // cpi->sm_scaling_factor buffer is allocated big enough, since we have no
-    // idea of the actual superblock size we are going to use yet.
-    const int min_mi_w_sb = (1 << MIN_MIB_SIZE_LOG2);
-    const int min_mi_h_sb = (1 << MIN_MIB_SIZE_LOG2);
-    const int max_sb_cols =
-        (cm->mi_params.mi_cols + min_mi_w_sb - 1) / min_mi_w_sb;
-    const int max_sb_rows =
-        (cm->mi_params.mi_rows + min_mi_h_sb - 1) / min_mi_h_sb;
-    CHECK_MEM_ERROR(cm, cpi->sm_scaling_factor,
-                    (double *)aom_calloc(max_sb_rows * max_sb_cols,
-                                         sizeof(*cpi->sm_scaling_factor)));
-  }
+  memset(&cpi->butteraugli_info.source, 0,
+         sizeof(cpi->butteraugli_info.source));
+  memset(&cpi->butteraugli_info.resized_source, 0,
+         sizeof(cpi->butteraugli_info.resized_source));
+  cpi->butteraugli_info.recon_set = false;
 #endif
 
 #if CONFIG_COLLECT_PARTITION_STATS
@@ -2122,6 +2083,9 @@ static void estimate_screen_content(AV1_COMP *cpi, FeatureFlags *features) {
   cpi->is_screen_content_type =
       features->allow_intrabc || (counts_1 * kBlockArea * 10 > area * 4 &&
                                   counts_2 * kBlockArea * 30 > area);
+  cpi->sc_high_var_blocks = !features->allow_screen_content_tools &&
+                            counts_1 * kBlockArea * 15 > area &&
+                            counts_2 * kBlockArea * 15 > area;
 }
 
 // Macro that helps debug the screen content mode 2 mechanism
@@ -2463,6 +2427,7 @@ static void estimate_screen_content_antialiasing_aware(AV1_COMP *cpi,
 
 void av1_set_screen_content_options(AV1_COMP *cpi, FeatureFlags *features) {
   const AV1_COMMON *const cm = &cpi->common;
+  cpi->sc_high_var_blocks = 0;
 
   if (cm->seq_params->force_screen_content_tools != 2) {
     features->allow_screen_content_tools = features->allow_intrabc =
@@ -2660,6 +2625,7 @@ static int set_size_literal(AV1_COMP *cpi, int width, int height) {
     cpi->td.firstpass_ctx = NULL;
     alloc_compressor_data(cpi);
     realloc_segmentation_maps(cpi);
+    alloc_rdmult_scaling_factors(cpi);
     cpi->data_alloc_width = cpi->oxcf.frm_dim_cfg.forced_max_frame_width
                                 ? cpi->oxcf.frm_dim_cfg.forced_max_frame_width
                                 : cm->width;
@@ -3190,6 +3156,7 @@ static int encode_without_recode(AV1_COMP *cpi) {
     av1_cyclic_refresh_setup(cpi);
   }
   if (cm->seg.enabled) {
+    av1_reuse_ref_segment_features(cm);
     if (!cm->seg.update_data && cm->prev_frame) {
       segfeatures_copy(&cm->seg, &cm->prev_frame->seg);
       cm->seg.enabled = cm->prev_frame->seg.enabled;
@@ -3354,8 +3321,18 @@ static int encode_with_recode_loop(AV1_COMP *cpi, size_t *size, uint8_t *dest,
 
 #if !CONFIG_RD_COMMAND
   // Determine whether to use screen content tools using two fast encoding.
-  if (!cpi->sf.hl_sf.disable_extra_sc_testing && !cpi->use_ducky_encode)
+  if (!cpi->sf.hl_sf.disable_extra_sc_testing && !cpi->use_ducky_encode) {
     av1_determine_sc_tools_with_encoding(cpi, q);
+  } else if (cpi->sf.hl_sf.disable_extra_sc_testing == 1 &&
+             !cpi->use_ducky_encode &&
+             cm->current_frame.frame_type == KEY_FRAME &&
+             !cpi->use_screen_content_tools && cpi->sc_high_var_blocks) {
+    // Fallback for keyframes when two-pass encoding test is skipped: enable
+    // screen content tools if block histogram detected high-variance blocks.
+    cm->features.allow_screen_content_tools = 1;
+    cpi->use_screen_content_tools = 1;
+    cpi->is_screen_content_type = 1;
+  }
 #endif  // !CONFIG_RD_COMMAND
 
 #if CONFIG_TUNE_VMAF
@@ -3543,6 +3520,7 @@ static int encode_with_recode_loop(AV1_COMP *cpi, size_t *size, uint8_t *dest,
     }
 
     if (cm->seg.enabled) {
+      av1_reuse_ref_segment_features(cm);
       if (!cm->seg.update_data && cm->prev_frame) {
         segfeatures_copy(&cm->seg, &cm->prev_frame->seg);
         cm->seg.enabled = cm->prev_frame->seg.enabled;
@@ -4498,11 +4476,15 @@ static int encode_frame_to_data_rate(AV1_COMP *cpi, size_t *size, uint8_t *dest,
   av1_dump_filtered_recon_frames(cpi);
 #endif  // DUMP_RECON_FRAMES
 
-  if (cm->seg.enabled) {
-    if (cm->seg.update_map == 0 && cm->last_frame_seg_map) {
-      memcpy(cm->cur_frame->seg_map, cm->last_frame_seg_map,
-             cm->cur_frame->mi_cols * cm->cur_frame->mi_rows *
-                 sizeof(*cm->cur_frame->seg_map));
+  if (cm->seg.enabled && cm->seg.update_map == 0) {
+    const size_t seg_map_size = cm->cur_frame->mi_cols *
+                                cm->cur_frame->mi_rows *
+                                sizeof(*cm->cur_frame->seg_map);
+    // Without a previous map the decoder uses segment 0 everywhere.
+    if (cm->last_frame_seg_map) {
+      memcpy(cm->cur_frame->seg_map, cm->last_frame_seg_map, seg_map_size);
+    } else {
+      memset(cm->cur_frame->seg_map, 0, seg_map_size);
     }
   }
 
