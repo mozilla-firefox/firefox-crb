@@ -54,7 +54,7 @@ extern "C" {
 
 typedef MALLOC_USABLE_SIZE_CONST_PTR void* usable_ptr_t;
 
-typedef size_t arena_id_t;
+typedef uintptr_t arena_id_t;
 
 // A chunk allocator provides an abstraction for mapping, unmapping, committing
 // and decommitting chunks of pages. This allows for greater control over the
