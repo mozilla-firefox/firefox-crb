@@ -41,6 +41,7 @@ struct InitCompletionIPDL
   nsCString hardwareReason;
   ConversionRequired conversion;
   bool shouldDecoderAlwaysBeRecycled;
+  bool supportDecoderRecycling;
   DecodePropertyIPDL[] decodeProperties;
 };
 

@@ -41,6 +41,7 @@ class RemoteDecoderChild : public ShmemRecycleAllocator<RemoteDecoderChild>,
   void SetSeekThreshold(const media::TimeUnit& aTime);
   MediaDataDecoder::ConversionRequired NeedsConversion() const;
   bool ShouldDecoderAlwaysBeRecycled() const;
+  bool SupportDecoderRecycling() const;
   using DecodeProperties =
       EnumeratedArray<MediaDataDecoder::PropertyName,
                       Maybe<MediaDataDecoder::PropertyValue>,
@@ -84,6 +85,7 @@ class RemoteDecoderChild : public ShmemRecycleAllocator<RemoteDecoderChild>,
   MediaDataDecoder::ConversionRequired mConversion =
       MediaDataDecoder::ConversionRequired::kNeedNone;
   bool mShouldDecoderAlwaysBeRecycled = false;
+  bool mSupportDecoderRecycling = false;
   DecodeProperties mDecodeProperties;
 };
 

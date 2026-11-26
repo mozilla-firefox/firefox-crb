@@ -45,6 +45,7 @@ class RemoteMediaDataDecoder final
   ConversionRequired NeedsConversion() const override;
   Maybe<PropertyValue> GetDecodeProperty(PropertyName aName) const override;
   bool ShouldDecoderAlwaysBeRecycled() const override;
+  bool SupportDecoderRecycling() const override;
 
  private:
   ~RemoteMediaDataDecoder();
@@ -64,6 +65,7 @@ class RemoteMediaDataDecoder final
   nsCString mHardwareAcceleratedReason MOZ_GUARDED_BY(mMutex);
   ConversionRequired mConversion MOZ_GUARDED_BY(mMutex);
   bool mShouldDecoderAlwaysBeRecycled MOZ_GUARDED_BY(mMutex);
+  bool mSupportDecoderRecycling MOZ_GUARDED_BY(mMutex);
   EnumeratedArray<PropertyName, Maybe<PropertyValue>, sPropertyNameCount>
       mDecodeProperties MOZ_GUARDED_BY(mMutex);
 };
