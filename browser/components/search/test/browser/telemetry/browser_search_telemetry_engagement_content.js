@@ -590,3 +590,42 @@ add_task(async function test_click_refinement_button() {
 
   BrowserTestUtils.removeTab(tab);
 });
+
+add_task(async function test_impression_notification_subject() {
+  resetTelemetry();
+  let url = getSERPUrl("searchTelemetryAd_searchbox_with_content.html");
+  let impressionPromise = waitForPageWithImpression();
+  let tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, url);
+  let [subject] = await impressionPromise;
+  let { browser, impressionInfo } = subject.wrappedJSObject;
+  Assert.equal(browser, tab.linkedBrowser, "Subject has the SERP's browser");
+  Assert.equal(impressionInfo.provider, "example", "Subject has the provider");
+  Assert.notEqual(
+    impressionInfo.source,
+    SearchSERPTelemetryUtils.INCONTENT_SOURCES.SEARCHBOX,
+    "First load does not report the search box source"
+  );
+  await waitForPageWithAdImpressions();
+
+  impressionPromise = waitForPageWithImpression();
+  await BrowserTestUtils.synthesizeMouseAtCenter(
+    "form input",
+    {},
+    tab.linkedBrowser
+  );
+  EventUtils.synthesizeKey("KEY_Enter");
+  [subject] = await impressionPromise;
+  ({ browser, impressionInfo } = subject.wrappedJSObject);
+  Assert.equal(browser, tab.linkedBrowser, "Subject has the SERP's browser");
+  Assert.equal(
+    impressionInfo.source,
+    SearchSERPTelemetryUtils.INCONTENT_SOURCES.SEARCHBOX,
+    "Search box submission reports the search box source"
+  );
+  Assert.equal(typeof impressionInfo.tagged, "boolean", "Subject has tagged");
+  Assert.ok("searchMode" in impressionInfo, "Subject has searchMode");
+  Assert.equal(impressionInfo.isPrivate, false, "Subject has isPrivate");
+  await waitForPageWithAdImpressions();
+
+  BrowserTestUtils.removeTab(tab);
+});

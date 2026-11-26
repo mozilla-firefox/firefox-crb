@@ -56,6 +56,7 @@ targeting, use separate messages instead.
 - [`newtabFeatureCalloutCheck`](#newtabfeaturecalloutcheck)
 - [`nthTabClosed`](#nthtabclosed)
 - [`nthTabOpened`](#nthtabopened)
+- [`searchRefinement`](#searchrefinement)
 - [`tabGroupCreated`](#tabgroupcreated)
 - [`tabGroupSaved`](#tabgroupsaved)
 - [`tabGroupCollapsed`](#tabgroupcollapsed)
@@ -454,6 +455,18 @@ Happens when the user opens n or more tabs in a session
 {
   trigger: { id: "nthTabOpened" },
   targeting: "currentTabsOpen >= 4"
+}
+```
+
+### `searchRefinement`
+
+Happens after the user refines an organic search from the search box on a search results page, once the new results have loaded and the search terms are shown in the address bar. Searches started from Firefox, such as from the address bar, aren't organic: their refinements keep Firefox's partner code, so the trigger doesn't fire for them. It also doesn't fire for link clicks, reloads, Back or Forward, other result tabs such as Images, private windows, or when the tab isn't selected in the focused window, the window is full screen, the address bar is focused or a doorhanger notification is open.
+
+```js
+// The context provides the search provider.
+{
+  trigger: { id: "searchRefinement" },
+  targeting: "provider == 'google'"
 }
 ```
 

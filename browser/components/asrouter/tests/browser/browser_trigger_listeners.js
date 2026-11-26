@@ -1716,3 +1716,256 @@ add_task(async function test_splitViewUsed_uninit_cancels_pending_timer() {
     );
   });
 });
+
+async function withSearchRefinementTrigger(callback) {
+  const handlerStub = sinon.stub();
+  const trigger = ASRouterTriggerListeners.get("searchRefinement");
+  trigger.uninit();
+  trigger.init(handlerStub);
+
+  let tab = await BrowserTestUtils.openNewForegroundTab(
+    gBrowser,
+    "https://example.com/?q=first"
+  );
+  let browser = tab.linkedBrowser;
+  gURLBar.getBrowserState(browser).persist = {
+    shouldPersist: true,
+    searchTerms: "first",
+  };
+
+  const notify = (impressionInfo = {}) =>
+    Services.obs.notifyObservers(
+      {
+        wrappedJSObject: {
+          browser,
+          impressionInfo: {
+            provider: "google",
+            source: "follow_on_from_refine_on_incontent_search",
+            tagged: false,
+            isPrivate: false,
+            ...impressionInfo,
+          },
+        },
+      },
+      "reported-page-with-impression"
+    );
+
+  try {
+    await callback({ handlerStub, browser, notify });
+  } finally {
+    trigger.uninit();
+    BrowserTestUtils.removeTab(tab);
+  }
+}
+
+add_task(async function test_searchRefinement_fires() {
+  await withSearchRefinementTrigger(
+    async ({ handlerStub, browser, notify }) => {
+      notify();
+      Assert.ok(handlerStub.calledOnce, "Fires on a refined search");
+      Assert.equal(handlerStub.firstCall.args[0], browser);
+      Assert.deepEqual(handlerStub.firstCall.args[1].context, {
+        provider: "google",
+      });
+    }
+  );
+});
+
+add_task(async function test_searchRefinement_custom_param_name() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.urlbar.showSearchTerms.featureGate", true]],
+  });
+  await SearchTestUtils.updateRemoteSettingsConfig([
+    {
+      identifier: "yahoo",
+      base: {
+        urls: {
+          search: { base: "https://example.com/", searchTermParamName: "p" },
+        },
+      },
+    },
+  ]);
+
+  await withSearchRefinementTrigger(
+    async ({ handlerStub, browser, notify }) => {
+      BrowserTestUtils.startLoadingURIString(
+        browser,
+        "https://example.com/?p=yahoo+terms"
+      );
+      await BrowserTestUtils.browserLoaded(browser);
+      Assert.equal(
+        gURLBar.getBrowserState(browser).persist?.searchTerms,
+        "yahoo terms",
+        "The address bar shows the terms from the p parameter"
+      );
+      notify({ provider: "yahoo" });
+      Assert.ok(handlerStub.calledOnce, "Fires for a non-q search parameter");
+      Assert.deepEqual(handlerStub.firstCall.args[1].context, {
+        provider: "yahoo",
+      });
+    }
+  );
+});
+
+add_task(async function test_searchRefinement_does_not_fire() {
+  await withSearchRefinementTrigger(
+    async ({ handlerStub, browser, notify }) => {
+      let count = 0;
+      const load = async () => {
+        BrowserTestUtils.startLoadingURIString(
+          browser,
+          `https://example.com/?q=terms${++count}`
+        );
+        await BrowserTestUtils.browserLoaded(browser);
+        gURLBar.getBrowserState(browser).persist = {
+          shouldPersist: true,
+          searchTerms: `terms${count}`,
+        };
+      };
+      const expectIgnored = async (
+        message,
+        { impressionInfo, setup, cleanup } = {}
+      ) => {
+        await load();
+        await setup?.();
+        notify(impressionInfo);
+        await cleanup?.();
+        Assert.ok(handlerStub.notCalled, message);
+        handlerStub.resetHistory();
+      };
+
+      Services.obs.notifyObservers(null, "reported-page-with-impression");
+      Assert.ok(handlerStub.notCalled, "Ignores a notification without data");
+
+      await expectIgnored("Ignores the refine buttons on the results page", {
+        impressionInfo: { source: "follow_on_from_refine_on_SERP" },
+      });
+      await expectIgnored("Ignores searches not from the search box", {
+        impressionInfo: { source: undefined },
+      });
+      await expectIgnored("Ignores tagged searches", {
+        impressionInfo: { tagged: true },
+      });
+      await expectIgnored("Ignores image search mode", {
+        impressionInfo: { searchMode: "image_search" },
+      });
+      await expectIgnored("Ignores private impressions", {
+        impressionInfo: { isPrivate: true },
+      });
+      await expectIgnored("Ignores a reload", {
+        setup: async () => {
+          let loaded = BrowserTestUtils.browserLoaded(browser);
+          browser.reload();
+          await loaded;
+        },
+      });
+      await expectIgnored("Ignores a history navigation", {
+        setup: async () => {
+          let location = browser.currentURI.spec;
+          let loaded = BrowserTestUtils.browserLoaded(browser);
+          BrowserTestUtils.startLoadingURIString(
+            browser,
+            "https://example.com/?q=other"
+          );
+          await loaded;
+          let back = BrowserTestUtils.waitForLocationChange(gBrowser, location);
+          gBrowser.goBack();
+          await back;
+        },
+      });
+      await expectIgnored("Ignores terms not shown in the address bar", {
+        setup: () => {
+          gURLBar.getBrowserState(browser).persist.shouldPersist = false;
+        },
+      });
+      await expectIgnored("Ignores a focused address bar", {
+        setup: () => gURLBar.focus(),
+        cleanup: () => gURLBar.blur(),
+      });
+
+      let fullScreenStub;
+      await expectIgnored("Ignores a full screen window", {
+        setup: () => {
+          fullScreenStub = sinon.stub(window, "fullScreen").get(() => true);
+        },
+        cleanup: () => fullScreenStub.restore(),
+      });
+
+      let panelStub;
+      await expectIgnored("Ignores an open notification panel", {
+        setup: () => {
+          panelStub = sinon
+            .stub(PopupNotifications, "isPanelOpen")
+            .get(() => true);
+        },
+        cleanup: () => panelStub.restore(),
+      });
+
+      let otherTab;
+      await expectIgnored("Ignores a background tab", {
+        setup: async () => {
+          otherTab = await BrowserTestUtils.openNewForegroundTab(gBrowser);
+        },
+        cleanup: async () => {
+          await BrowserTestUtils.switchTab(
+            gBrowser,
+            gBrowser.getTabForBrowser(browser)
+          );
+          BrowserTestUtils.removeTab(otherTab);
+        },
+      });
+
+      let otherWin;
+      await expectIgnored("Ignores an inactive window", {
+        setup: async () => {
+          otherWin = await BrowserTestUtils.openNewBrowserWindow();
+        },
+        cleanup: async () => {
+          await BrowserTestUtils.closeWindow(otherWin);
+          await SimpleTest.promiseFocus(window);
+        },
+      });
+
+      await load();
+      notify();
+      Assert.ok(handlerStub.calledOnce, "Fires once the conditions are met");
+      notify();
+      Assert.ok(handlerStub.calledOnce, "Ignores unchanged search terms");
+    }
+  );
+});
+
+add_task(async function test_searchRefinement_private_window() {
+  const handlerStub = sinon.stub();
+  const trigger = ASRouterTriggerListeners.get("searchRefinement");
+  trigger.uninit();
+  trigger.init(handlerStub);
+
+  let win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  let browser = win.gBrowser.selectedBrowser;
+  BrowserTestUtils.startLoadingURIString(browser, "https://example.com/?q=a");
+  await BrowserTestUtils.browserLoaded(browser);
+  win.gURLBar.getBrowserState(browser).persist = {
+    shouldPersist: true,
+    searchTerms: "a",
+  };
+
+  Services.obs.notifyObservers(
+    {
+      wrappedJSObject: {
+        browser,
+        impressionInfo: {
+          provider: "google",
+          source: "follow_on_from_refine_on_incontent_search",
+          tagged: false,
+          isPrivate: false,
+        },
+      },
+    },
+    "reported-page-with-impression"
+  );
+  Assert.ok(handlerStub.notCalled, "Ignores a private window");
+
+  trigger.uninit();
+  await BrowserTestUtils.closeWindow(win);
+});
