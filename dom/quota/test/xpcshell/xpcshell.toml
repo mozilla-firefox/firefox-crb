@@ -159,6 +159,8 @@ skip-if = [
 
 ["test_persist_groupLimit.js"]
 
+["test_persist_originNotInMemory.js"]
+
 ["test_quotaClientInteractions.js"]
 
 ["test_quotaUtilsService.js"]
