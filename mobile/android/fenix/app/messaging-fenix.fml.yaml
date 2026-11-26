@@ -116,6 +116,10 @@ import:
               MICROSURVEY:
                 priority: 50
                 max-display-count: 5
+              # The menu banner is evaluated each time the homescreen is shown, so it needs a high display count.
+              MENU_BANNER:
+                priority: 50
+                max-display-count: 1000
             $$surfaces:
               - homescreen
               - notification

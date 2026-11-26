@@ -57,6 +57,22 @@ import:
                   - I_AM_DEFAULT_BROWSER
                 action: MAKE_DEFAULT_BROWSER
 
+        # This message displays as a banner in the menu on the homescreen, asking the user to set Firefox as the default.
+        # The menu button is highlighted while the message is to be shown.
+        - value:
+            messages:
+              default-browser-menu-banner:
+                title: browser_menu_default_banner_title
+                text: browser_menu_default_banner_subtitle_2
+                surface: menu-banner
+                style: MENU_BANNER
+                exclude-if-any:
+                  - I_AM_DEFAULT_BROWSER
+                action: MAKE_DEFAULT_BROWSER
+                menu-banner-config:
+                  icon: firefox_as_default_banner_illustration
+                  menu-notification: true
+
         # This message displays as a microsurvey prompt after the user taps on the `Print` menu.
         - channel: developer
           value:

@@ -85,6 +85,7 @@ class NimbusMessagingMessageTest {
             listOf(
                 "default-browser",
                 "default-browser-notification",
+                "default-browser-menu-banner",
             )
         val rawMessages = feature.messages
         for (id in expectedMessages) {
