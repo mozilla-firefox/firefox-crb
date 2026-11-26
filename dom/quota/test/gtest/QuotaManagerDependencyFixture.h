@@ -5,6 +5,8 @@
 #ifndef DOM_QUOTA_TEST_GTEST_QUOTAMANAGERDEPENDENCYFIXTURE_H_
 #define DOM_QUOTA_TEST_GTEST_QUOTAMANAGERDEPENDENCYFIXTURE_H_
 
+#include <functional>
+
 #include "gtest/gtest.h"
 #include "mozilla/MozPromise.h"
 #include "mozilla/SpinEventLoopUntil.h"
@@ -29,6 +31,10 @@ namespace mozilla::dom::quota::test {
 
 class QuotaManagerDependencyFixture : public testing::Test {
  public:
+  // Polls while servicing events, with a deadline shorter than the test
+  // timeout.
+  static void WaitForCondition(const std::function<bool()>& aCondition);
+
   static void InitializeFixture();
   static void ShutdownFixture();
 
