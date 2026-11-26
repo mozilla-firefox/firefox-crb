@@ -324,9 +324,12 @@ class QuotaManager final : public BackgroundThreadObject {
   nsresult CreateDirectoryMetadata2(nsIFile& aDirectory,
                                     FullOriginMetadata& aFullOriginMetadata);
 
-  // Clears the dirty flag before writing metadata, restoring it on failure.
-  nsresult SettleDirectoryMetadata2(nsIFile& aDirectory,
-                                    FullOriginMetadata& aFullOriginMetadata);
+  // DB-only metadata update (no .metadata-v2 file I/O).
+  nsresult UpdateOriginMetadata(FullOriginMetadata& aFullOriginMetadata);
+
+  // DB-only settle: clears dirty flag, upserts to DB, restores dirty on
+  // failure.
+  nsresult SettleOriginMetadata(FullOriginMetadata& aFullOriginMetadata);
 
   nsresult RestoreDirectoryMetadata2(nsIFile* aDirectory);
 
@@ -340,6 +343,12 @@ class QuotaManager final : public BackgroundThreadObject {
 
   Result<std::pair<FullOriginMetadata, bool /* restore status */>, nsresult>
   LoadFullOriginMetadataWithRestoreAndStatus(nsIFile* aDirectory);
+
+  using OriginAccessTimeMap = nsTHashMap<nsCStringHashKey, int64_t>;
+
+  // Loads the last access time of every origin row in the storage database,
+  // keyed by OriginMetadata::GetCompositeKey().
+  Result<OriginAccessTimeMap, nsresult> LoadOriginAccessTimes();
 
   Result<OriginMetadata, nsresult> GetOriginMetadata(nsIFile* aDirectory);
 
@@ -960,11 +969,13 @@ class QuotaManager final : public BackgroundThreadObject {
 
   nsresult InitializeOrigin(nsIFile* aDirectory,
                             const FullOriginMetadata& aFullOriginMetadata,
-                            bool aForGroup = false);
+                            bool aForGroup, bool aDeriveAccessTimeFromDisk);
 
   nsresult InitializeOrigin(nsIFile* aDirectory,
                             const FullOriginMetadata& aFullOriginMetadata,
-                            bool aForGroup, OriginCacheMap& aCacheMap);
+                            bool aForGroup, OriginCacheMap& aCacheMap,
+                            bool aDeriveAccessTimeFromDisk,
+                            int64_t& aComputedAccessTime);
 
   using OriginInfosFlatTraversable =
       nsTArray<NotNull<RefPtr<const OriginInfo>>>;

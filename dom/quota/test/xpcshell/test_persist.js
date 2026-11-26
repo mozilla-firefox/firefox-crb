@@ -112,6 +112,8 @@ function* testSteps() {
 
   Assert.strictEqual(request.resultCode, NS_OK, "Persist() succeeded");
 
+  // The persisted flag is one of the two things still written to
+  // .metadata-v2, so it must survive there as well as in the database.
   info("Reading out contents of metadata file");
 
   fileReader = new FileReader();
@@ -133,6 +135,31 @@ function* testSteps() {
     originPersisted,
     "Persisted() concurs with metadata"
   );
+
+  info("Resetting to flush DB writes");
+
+  request = reset(continueToNextStepSync);
+  yield undefined;
+
+  info("Verifying persisted flag in DB");
+
+  {
+    // Mirrors DirectoryMetadataFlags::Persisted in
+    // dom/quota/DirectoryMetadata.h
+    const persistedFlag = 1 << 3;
+
+    let dbFile = getRelativeFile("storage.sqlite");
+    let conn = Services.storage.openUnsharedDatabase(dbFile);
+    let stmt = conn.createStatement(
+      "SELECT metadata_flags FROM origin WHERE origin = :origin"
+    );
+    stmt.params.origin = origin.url;
+    ok(stmt.executeStep(), "Origin row exists in DB");
+    let flags = stmt.getInt32(0);
+    ok(flags & persistedFlag, "The origin is persisted in the DB");
+    stmt.finalize();
+    conn.close();
+  }
 
   info("Clearing the origin");
 

@@ -252,6 +252,7 @@ class GetUsageOp final
       public OriginUsageHelper {
   OriginUsageMetadataArray mOriginUsages;
   nsTHashMap<nsCStringHashKey, uint32_t> mOriginUsagesIndex;
+  QuotaManager::OriginAccessTimeMap mOriginAccessTimes;
 
   bool mGetAll;
 
@@ -1433,8 +1434,8 @@ nsresult SaveOriginAccessTimeOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
   QM_TRY_INSPECT(const bool& exists, MOZ_TO_RESULT_INVOKE_MEMBER(file, Exists));
 
   if (exists) {
-    QM_TRY(MOZ_TO_RESULT(
-        aQuotaManager.CreateDirectoryMetadata2(*file, fullOriginMetadata)));
+    QM_TRY(
+        MOZ_TO_RESULT(aQuotaManager.UpdateOriginMetadata(fullOriginMetadata)));
     mSaved = true;
 
     aQuotaManager.IncreaseSaveOriginAccessTimeCountInternal();
@@ -1726,7 +1727,7 @@ void GetUsageOp::ProcessOriginInternal(QuotaManager* aQuotaManager,
         metadata.mOrigin = aOrigin;
         metadata.mIsPrivate = false;
         metadata.mPersistenceType = PERSISTENCE_TYPE_DEFAULT;
-        metadata.mLastAccessTime = 0;
+        metadata.mLastAccessTime = kDefaultLastAccessTime;
         metadata.mLastMaintenanceDate = 0;
         metadata.mAccessed = false;
         metadata.mPersisted = false;
@@ -1789,6 +1790,27 @@ nsresult GetUsageOp::ProcessOrigin(QuotaManager& aQuotaManager,
   QM_TRY_INSPECT(const auto& usageInfo,
                  GetUsageForOrigin(aQuotaManager, aPersistenceType, metadata));
 
+  // The origin row or in-memory metadata can be missing for private origins
+  // (never stored) and when the storage database was recreated and the
+  // recomputed metadata has not been flushed yet. In that case the value
+  // is derived from the newest client file.
+  metadata.mLastAccessTime =
+      [&]() -> Maybe<int64_t> {
+    if (!IsBestEffortPersistenceType(aPersistenceType) ||
+        !aQuotaManager.IsTemporaryStorageInitializedInternal()) {
+      return Nothing();
+    }
+    return aQuotaManager.GetFullOriginMetadata(metadata).map(
+        [](const FullOriginMetadata& aFullOriginMetadata) {
+          return aFullOriginMetadata.mLastAccessTime;
+        });
+  }()
+                   .orElse([&]() {
+                     return mOriginAccessTimes.MaybeGet(
+                         metadata.GetCompositeKey());
+                   })
+                   .valueOr(usageInfo.LastModifiedTime());
+
   ProcessOriginInternal(&aQuotaManager, aPersistenceType, metadata.mOrigin,
                         metadata.mLastAccessTime, metadata.mPersisted,
                         usageInfo.TotalUsage().valueOr(0));
@@ -1810,6 +1832,8 @@ nsresult GetUsageOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
   aQuotaManager.AssertStorageIsInitializedInternal();
 
   AUTO_PROFILER_LABEL("GetUsageOp::DoDirectoryWork", OTHER);
+
+  QM_TRY_UNWRAP(mOriginAccessTimes, aQuotaManager.LoadOriginAccessTimes());
 
   nsresult rv;
 
@@ -3779,6 +3803,8 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
 
       fullOriginMetadata.mPersisted = true;
 
+      // Rewrite .metadata-v2 so the persisted flag survives DB loss,
+      // and upsert the DB row.
       QM_TRY(MOZ_TO_RESULT(aQuotaManager.CreateDirectoryMetadata2(
           *directory, fullOriginMetadata)));
 
