@@ -23,29 +23,21 @@ from gecko_taskgraph.util.bugbug import (
 FALLBACK = "skip-unless-has-relevant-tests"
 
 
-@register_strategy("bugbug-low", args=(CT_LOW,))
-@register_strategy("bugbug-medium", args=(CT_MEDIUM,))
-@register_strategy("bugbug-high", args=(CT_HIGH,))
+# The strategies selecting manifests use the confidence threshold and number of
+# pushes in the parameters, like the manifest loader, so that the manifests they
+# select are in the tasks.
+@register_strategy("bugbug", args=(None,))
 @register_strategy("bugbug-tasks-medium", args=(CT_MEDIUM, True))
 @register_strategy("bugbug-tasks-high", args=(CT_HIGH, True))
 @register_strategy("bugbug-reduced", args=(CT_MEDIUM, True, True))
 @register_strategy("bugbug-reduced-fallback", args=(CT_MEDIUM, True, True, FALLBACK))
 @register_strategy("bugbug-reduced-high", args=(CT_HIGH, True, True))
-@register_strategy("bugbug-reduced-manifests", args=(CT_MEDIUM, False, True))
-@register_strategy(
-    "bugbug-reduced-manifests-config-selection-low",
-    args=(CT_LOW, False, True, None, 1, True),
-)
+@register_strategy("bugbug-reduced-manifests", args=(None, False, True))
 @register_strategy(
     "bugbug-reduced-manifests-config-selection",
-    args=(CT_MEDIUM, False, True, None, 1, True),
+    args=(None, False, True),
+    kwargs={"select_configs": True},
 )
-@register_strategy(
-    "bugbug-reduced-manifests-config-selection-high",
-    args=(CT_HIGH, False, True, None, 1, True),
-)
-# Uses the confidence threshold and number of pushes in the parameters, like the
-# manifest loader, so that the manifests it selects are in the tasks.
 @register_strategy(
     "bugbug-reduced-manifests-fallback", args=(None, False, True, FALLBACK)
 )
@@ -143,7 +135,7 @@ class BugBugPushSchedules(OptimizationStrategy):
             selected_groups = [
                 g
                 for g, c in groups.items()
-                if g in test_manifests and c > groups_threshold
+                if g in test_manifests and c >= groups_threshold
             ]
 
             config_groups = data.get("config_groups", defaultdict(list))
@@ -161,7 +153,7 @@ class BugBugPushSchedules(OptimizationStrategy):
             if not any(
                 fnmatch(label_without_chunk_number, config)
                 for group in selected_groups
-                for config in config_groups[group]
+                for config in config_groups.get(group, ())
             ):
                 return True
 

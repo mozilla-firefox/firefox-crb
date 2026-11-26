@@ -22,6 +22,10 @@ task-defaults:
             DECISION_TASK_ID: {task-reference: <decision>}
             MOZ_PERFHERDER_UPLOAD: /builds/worker/artifacts/perf/perfherder-data-bugbug.json
             SHADOW_SCHEDULER_STATE_PATH: /builds/worker/shadow-scheduler-state/state.json
+            # The confidence threshold and number of pushes of the bugbug strategies
+            # selecting manifests, and of the manifest loader.
+            BUGBUG_CONFIDENCE_THRESHOLD: low
+            BUGBUG_NUM_PUSHES: "1"
     treeherder:
         kind: other
         tier: 3
@@ -29,7 +33,13 @@ task-defaults:
     run:
         using: run-task
         cwd: '{checkout}'
-        command: ./mach taskgraph optimized -v --json -p task-id=$DECISION_TASK_ID --output-file /builds/worker/optimized-tasks.json
+        command: >-
+            ./mach python --virtualenv taskgraph taskcluster/scripts/misc/shadow-scheduler-parameters.py
+            --decision-task-id $DECISION_TASK_ID
+            --set bugbug_confidence_threshold=$BUGBUG_CONFIDENCE_THRESHOLD
+            --set bugbug_num_pushes=$BUGBUG_NUM_PUSHES
+            /builds/worker/parameters.yml &&
+            ./mach taskgraph optimized -v --json -p /builds/worker/parameters.yml --output-file /builds/worker/optimized-tasks.json
         sparse-profile: taskgraph
 
 relevant_tests:
@@ -85,7 +95,8 @@ bugbug_disperse_low:
         job-name: shadow-scheduler-bugbug_disperse_low
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_low
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse
+            BUGBUG_CONFIDENCE_THRESHOLD: low
 
 bugbug_disperse_medium:
     description: Runs the bugbug_disperse_medium optimization strategy instead of the default.
@@ -96,7 +107,8 @@ bugbug_disperse_medium:
         job-name: shadow-scheduler-bugbug_disperse_medium
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_medium
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse
+            BUGBUG_CONFIDENCE_THRESHOLD: medium
 
 bugbug_disperse_reduced_medium:
     description: Runs the bugbug_disperse_reduced_medium optimization strategy instead of the default.
@@ -107,7 +119,8 @@ bugbug_disperse_reduced_medium:
         job-name: shadow-scheduler-bugbug_disperse_reduced_medium
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_reduced_medium
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_reduced
+            BUGBUG_CONFIDENCE_THRESHOLD: medium
 
 bugbug_reduced_manifests_config_selection_low:
     description: Runs the bugbug_reduced_manifests_config_selection_low optimization strategy instead of the default.
@@ -118,7 +131,8 @@ bugbug_reduced_manifests_config_selection_low:
         job-name: shadow-scheduler-bugbug_reduced_manifests_config_selection_low
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_reduced_manifests_config_selection_low
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_reduced_manifests_config_selection
+            BUGBUG_CONFIDENCE_THRESHOLD: low
 
 bugbug_reduced_manifests_config_selection_medium:
     description: Runs the bugbug_reduced_manifests_config_selection_medium optimization strategy instead of the default.
@@ -129,7 +143,8 @@ bugbug_reduced_manifests_config_selection_medium:
         job-name: shadow-scheduler-bugbug_reduced_manifests_config_selection_medium
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_reduced_manifests_config_selection_medium
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_reduced_manifests_config_selection
+            BUGBUG_CONFIDENCE_THRESHOLD: medium
 
 bugbug_disperse_medium_no_unseen:
     description: Runs the bugbug_disperse_medium_no_unseen optimization strategy instead of the default.
@@ -140,7 +155,8 @@ bugbug_disperse_medium_no_unseen:
         job-name: shadow-scheduler-bugbug_disperse_medium_no_unseen
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_medium_no_unseen
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_no_unseen
+            BUGBUG_CONFIDENCE_THRESHOLD: medium
 
 bugbug_disperse_medium_only_one:
     description: Runs the bugbug_disperse_medium_only_one optimization strategy instead of the default.
@@ -151,7 +167,8 @@ bugbug_disperse_medium_only_one:
         job-name: shadow-scheduler-bugbug_disperse_medium_only_one
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_medium_only_one
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_only_one
+            BUGBUG_CONFIDENCE_THRESHOLD: medium
 
 bugbug_disperse_high:
     description: Runs the bugbug_disperse_high optimization strategy instead of the default.
@@ -162,7 +179,8 @@ bugbug_disperse_high:
         job-name: shadow-scheduler-bugbug_disperse_high
     worker:
         env:
-            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse_high
+            TASKGRAPH_OPTIMIZE_STRATEGIES: gecko_taskgraph.optimize:experimental.bugbug_disperse
+            BUGBUG_CONFIDENCE_THRESHOLD: high
 
 bugbug_reduced:
     description: Runs the bugbug_reduced optimization strategy instead of the default.
@@ -204,11 +222,15 @@ perf_fixed_batch:
         # Re-run the decision task's scheduling with a target method that
         # targets every push-based perf task on every push (autoland only
         # targets those against shippable builds on backstop pushes), so the
-        # strategy under evaluation gets to judge all of them.
+        # strategy under evaluation gets to judge all of them. Performance tasks
+        # don't use bugbug, so it isn't queried for the previous pushes on
+        # expanded pushes.
         command: &perf-shadow-scheduler-command >-
             ./mach python --virtualenv taskgraph taskcluster/scripts/misc/shadow-scheduler-parameters.py
             --decision-task-id $DECISION_TASK_ID
             --target-tasks-method autoland_perf_shadow_scheduler_tasks
+            --set bugbug_confidence_threshold=$BUGBUG_CONFIDENCE_THRESHOLD
+            --set bugbug_num_pushes=$BUGBUG_NUM_PUSHES
             /builds/worker/parameters.yml &&
             ./mach taskgraph optimized -v --json -p /builds/worker/parameters.yml --output-file /builds/worker/optimized-tasks.json
 

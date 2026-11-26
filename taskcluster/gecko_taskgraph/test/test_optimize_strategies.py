@@ -609,6 +609,13 @@ def test_expanded(params):
     assert scheduled == all_labels
 
 
+def test_bugbug_manifest_strategies_use_parameters():
+    """The strategies selecting manifests select them like the manifest loader."""
+    for name, strategy in registry.items():
+        if isinstance(strategy, BugBugPushSchedules) and not strategy.tasks_only:
+            assert strategy.confidence_threshold is None, name
+
+
 @pytest.mark.parametrize(
     "threshold,num_pushes,expected",
     [
@@ -645,7 +652,7 @@ def test_bugbug_selection_parameters(
             {"attributes": {"test_manifests": ["baz.toml"]}},
         )
     )
-    opt = registry["bugbug-reduced-manifests-fallback"]
+    opt = registry["bugbug"]
     scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, {})}
     assert scheduled == expected
 
@@ -678,6 +685,38 @@ def test_project_autoland_test_very_low_manifests(monkeypatch, params):
     opt = project.autoland["test"]
     scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, {})}
     assert scheduled == {"task-0-label", "task-1-label"}
+
+
+def test_bugbug_config_selection_at_threshold(monkeypatch, params):
+    """A manifest at the threshold, which the manifest loader keeps, selects its
+    configurations, and one without recommended configurations selects none."""
+    monkeypatch.setattr(
+        bugbug_strategies,
+        "get_push_schedules",
+        lambda params, num_pushes: {
+            "groups": {"foo.toml": CT_LOW, "bar.toml": CT_LOW},
+            "config_groups": {"foo.toml": ["test-linux/opt-*"]},
+        },
+    )
+    tasks = list(
+        generate_tasks(
+            {
+                "label": "test-linux/opt-mochitest-1",
+                "attributes": {"test_manifests": ["foo.toml"]},
+            },
+            {
+                "label": "test-windows/opt-mochitest-1",
+                "attributes": {"test_manifests": ["foo.toml"]},
+            },
+            {
+                "label": "test-linux/opt-mochitest-2",
+                "attributes": {"test_manifests": ["bar.toml"]},
+            },
+        )
+    )
+    opt = registry["bugbug-reduced-manifests-config-selection"]
+    scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, {})}
+    assert scheduled == {"test-linux/opt-mochitest-1"}
 
 
 def test_bugbug_push_data_unavailable(monkeypatch, params):
@@ -722,7 +761,7 @@ def test_tryselect_backstop_expanded(responses, params, strategy):
     )
 
     tasks = list(generate_tasks({}, {}, {}))
-    opt = tryselect.bugbug_reduced_manifests_config_selection_medium[strategy]
+    opt = tryselect.bugbug_reduced_manifests_config_selection[strategy]
     scheduled = {t.label for t in tasks if not opt.should_remove_task(t, params, None)}
     assert scheduled == {"task-0-label"}
 
@@ -745,9 +784,7 @@ def test_tryselect_changed(responses, params):
     )
 
     tasks = list(generate_tasks({}, {}, {}))
-    opt = tryselect.bugbug_reduced_manifests_config_selection_medium[
-        "skip-unless-changed"
-    ]
+    opt = tryselect.bugbug_reduced_manifests_config_selection["skip-unless-changed"]
     patterns = {
         "task-0-label": ["js/src/**"],
         "task-1-label": ["dom/**"],
@@ -1253,6 +1290,19 @@ def test_shadow_scheduler_strategies_resolve():
         overrides = find_object(strategy_path)
         assert isinstance(overrides, dict), name
         assert overrides, name
+
+
+def test_shadow_scheduler_bugbug_parameters():
+    """Every shadow scheduler sets the bugbug parameters, rather than using the
+    ones the decision task sets on expanded pushes."""
+    tasks = load_yaml(
+        GECKO, "taskcluster", "kinds", "source-test", "shadow-scheduler.yml"
+    )
+    defaults = tasks.pop("task-defaults")
+    for name, task in tasks.items():
+        command = task.get("run", {}).get("command", defaults["run"]["command"])
+        assert "--set bugbug_confidence_threshold=" in command, name
+        assert "--set bugbug_num_pushes=" in command, name
 
 
 @pytest.mark.parametrize(
