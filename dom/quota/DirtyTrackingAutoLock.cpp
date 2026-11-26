@@ -22,13 +22,6 @@ DirtyTrackingAutoLock::DirtyTrackingAutoLock(Mutex& aLock,
     Unlock<true>();
     return;
   }
-
-  if (!mOriginInfo->LockedDirty()) {
-    EagerMarkAsDirty();
-  }
-  if (!IsValid()) {
-    Unlock<true>();
-  }
 }
 
 DirtyTrackingAutoLock::DirtyTrackingAutoLock(
@@ -42,37 +35,9 @@ DirtyTrackingAutoLock::DirtyTrackingAutoLock(
     Unlock<true>();
     return;
   }
-
-  if (!mOriginInfo->LockedDirty()) {
-    EagerMarkAsDirty();
-  }
-  if (!IsValid()) {
-    Unlock<true>();
-  }
 }
 
 DirtyTrackingAutoLock::~DirtyTrackingAutoLock() { Unlock<true>(); }
-void DirtyTrackingAutoLock::EagerMarkAsDirty() {
-  MOZ_ASSERT(IsValid());
-
-  auto* quotaManager = QuotaManager::Get();
-  MOZ_ASSERT(quotaManager);
-
-  auto stateMetadata = mOriginInfo->LockedFlattenToOriginStateMetadata();
-  stateMetadata.mDirty = true;
-  {
-    PauseLock pausedLock(*this);
-
-    quotaManager->AssertNotCurrentThreadOwnsQuotaMutex();
-
-    quotaManager->FlagOriginInfoAsDirtyOnDisk(*this, stateMetadata);
-  }
-
-  // The origin may have been removed while the lock was paused.
-  if (!mOriginInfo->GetGroupInfo()) {
-    mOriginInfo = nullptr;
-  }
-}
 
 bool DirtyTrackingAutoLock::IsValid() const { return !!mOriginInfo; }
 

@@ -39,7 +39,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
-#include <memory>
 #include <new>
 #include <numeric>
 #include <tuple>
@@ -3480,7 +3479,9 @@ void QuotaManager::UnloadQuota() {
 
           auto metadata = originInfo->LockedFlattenToFullOriginMetadata();
 
-          if (originInfo->LockedDirty()) {
+          // A leased origin may still be written to; keep its dirty flag on
+          // disk so the next startup rescans it.
+          if (originInfo->LockedDirty() && !originInfo->LockedHasWriteLease()) {
             // In-memory state diverged from disk: write the .metadata-v2
             // file and upsert the origin row in the cache DB.
             QM_WARNONLY_TRY_UNWRAP(auto originDirectory,
@@ -4061,8 +4062,11 @@ QuotaManager::GetOrCreateTemporaryOriginDirectory(
     QM_TRY(MOZ_TO_RESULT(
         CreateDirectoryMetadata2(*directory, fullOriginMetadata)));
 
-    WithOriginInfo(aOriginMetadata, [](const auto& originInfo) {
+    WithOriginInfo(aOriginMetadata, [dirty](const auto& originInfo) {
       originInfo->LockedClearCacheRowStale();
+      if (dirty) {
+        originInfo->LockedMarkDirtyOnDisk();
+      }
     });
   }
 
@@ -6514,6 +6518,13 @@ void QuotaManager::FlushDirtyOriginInfos() {
       continue;
     }
 
+    // A client may be writing; keep the dirty flag on disk until the last
+    // lease is released.
+    if (info->LockedHasWriteLease()) {
+      itemsToRequeue.AppendElement(std::move(info));
+      continue;
+    }
+
     const auto age = now - info->GetLastModifiedTime();
     if (age < writeQuiescentThresholdDuration) {
       itemsToRequeue.AppendElement(std::move(info));
@@ -8107,106 +8118,277 @@ RefPtr<BoolPromise> QuotaManager::InitializeAllTemporaryOrigins() {
   return promise;
 }
 
-nsresult QuotaManager::FlagOriginInfoAsDirtyOnDisk(
-    DirtyTrackingAutoLock& aProofOfLock,
-    const OriginStateMetadata& aStateMetadata) {
+Result<bool, nsresult> QuotaManager::FlagOriginInfoAsDirtyOnDisk(
+    const OriginMetadata& aOriginMetadata) {
+  AssertIsOnIOThread();
   AssertNotCurrentThreadOwnsQuotaMutex();
 
-  struct SharedState {
-    mozilla::Mutex mMutex;
-    mozilla::CondVar mCondVar;
-    nsresult mResult;
-    std::atomic<bool> mDone;
+  if (!IsStorageInitializedInternal() ||
+      !IsTemporaryStorageInitializedInternal()) {
+    return Err(NS_ERROR_NOT_INITIALIZED);
+  }
 
-    SharedState()
-        : mMutex("FlagOriginInfoAsDirtyOnDisk"),
-          mCondVar(mMutex, "FlagOriginInfoAsDirtyOnDisk::CondVar"),
-          mResult(NS_OK),
-          mDone(false) {}
+  MOZ_ASSERT(mStorageConnection);
 
-    void Done(nsresult result) {
-      MutexAutoLock lock(mMutex);
-      mResult = result;
-      mDone = true;
-      mCondVar.Notify();
+#ifdef DEBUG
+  {
+    // The update must auto-commit; an enclosing transaction could roll back
+    // the dirty flag after the caller has started modifying the origin.
+    bool transactionInProgress = false;
+    MOZ_ALWAYS_SUCCEEDS(
+        mStorageConnection->GetTransactionInProgress(&transactionInProgress));
+    MOZ_ASSERT(!transactionInProgress);
+  }
+#endif
+
+  if (mFlagOriginInfoAsDirtyStmt) {
+    MOZ_ALWAYS_SUCCEEDS(mFlagOriginInfoAsDirtyStmt->Reset());
+  } else {
+    QM_TRY_UNWRAP(
+        mFlagOriginInfoAsDirtyStmt,
+        MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+            nsCOMPtr<mozIStorageStatement>, mStorageConnection, CreateStatement,
+            "UPDATE origin SET metadata_flags = metadata_flags | :dirty_flag "
+            "WHERE repository_id = :repository_id AND origin = :origin;"_ns));
+  }
+
+  QM_TRY(MOZ_TO_RESULT(mFlagOriginInfoAsDirtyStmt->BindInt32ByName(
+      "dirty_flag"_ns, DirectoryMetadataFlags::Dirty)));
+  QM_TRY(MOZ_TO_RESULT(mFlagOriginInfoAsDirtyStmt->BindInt32ByName(
+      "repository_id"_ns, aOriginMetadata.mPersistenceType)));
+  QM_TRY(MOZ_TO_RESULT(mFlagOriginInfoAsDirtyStmt->BindUTF8StringByName(
+      "origin"_ns, aOriginMetadata.mOrigin)));
+  QM_TRY(MOZ_TO_RESULT(mFlagOriginInfoAsDirtyStmt->Execute()));
+
+  int32_t affectedRows = 0;
+  QM_TRY(MOZ_TO_RESULT(mStorageConnection->GetAffectedRows(&affectedRows)));
+  if (affectedRows) {
+    return false;
+  }
+
+  // A directory scan can initialize quota before its cache row is flushed.
+  auto metadata = GetFullOriginMetadata(aOriginMetadata);
+  QM_TRY(OkIf(metadata.isSome()), Err(NS_ERROR_NOT_AVAILABLE));
+
+  metadata->mAccessed = true;
+  metadata->mDirty = true;
+  QM_TRY(mOriginUpserter->Refresh(*metadata));
+
+  return true;
+}
+
+nsresult QuotaManager::MarkOriginDirtyOnDisk(
+    const OriginMetadata& aOriginMetadata, OriginInfo& aOriginInfo) {
+  AssertIsOnIOThread();
+  AssertNotCurrentThreadOwnsQuotaMutex();
+
+  QM_TRY_INSPECT(const bool& rowUpserted,
+                 FlagOriginInfoAsDirtyOnDisk(aOriginMetadata));
+
+  MutexAutoLock lock(mQuotaMutex);
+
+  // The directory lock held by the caller keeps the origin from being cleared
+  // or evicted while the mutex was not held; a detached OriginInfo here means
+  // that precondition was violated, and nothing may be mutated.
+  QM_TRY(OkIf(aOriginInfo.GetGroupInfo()), NS_ERROR_NOT_AVAILABLE);
+
+  aOriginInfo.LockedMarkDirtyOnDisk();
+  if (rowUpserted) {
+    aOriginInfo.LockedClearCacheRowStale();
+  }
+
+  return NS_OK;
+}
+
+WriteLease::WriteLease() = default;
+
+WriteLease::WriteLease(RefPtr<OriginInfo> aOriginInfo)
+    : mOriginInfo(std::move(aOriginInfo)) {}
+
+WriteLease::WriteLease(WriteLease&& aOther) noexcept
+    : mOriginInfo(std::move(aOther.mOriginInfo)) {
+  aOther.mOriginInfo = nullptr;
+}
+
+WriteLease& WriteLease::operator=(WriteLease&& aOther) noexcept {
+  if (this != &aOther) {
+    WriteLease released(std::move(*this));
+    mOriginInfo = std::move(aOther.mOriginInfo);
+    aOther.mOriginInfo = nullptr;
+  }
+  return *this;
+}
+
+WriteLease::~WriteLease() {
+  if (!mOriginInfo) {
+    return;
+  }
+
+  if (QuotaManager* quotaManager = QuotaManager::Get()) {
+    quotaManager->ReleaseWriteLease(std::move(mOriginInfo));
+  }
+}
+
+Maybe<WriteLease> QuotaManager::LockedTryAcquireWriteLease(
+    const OriginMetadata& aOriginMetadata) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  // Persistent storage has no quota tracking and nothing to protect.
+  if (!IsBestEffortPersistenceType(aOriginMetadata.mPersistenceType)) {
+    return Some(WriteLease());
+  }
+
+  RefPtr<OriginInfo> originInfo =
+      LockedGetOriginInfo(aOriginMetadata.mPersistenceType, aOriginMetadata);
+  if (!originInfo) {
+    return Some(WriteLease());
+  }
+
+  if (originInfo->LockedDirtyOnDisk()) {
+    originInfo->LockedAcquireWriteLease();
+    return Some(WriteLease(std::move(originInfo)));
+  }
+
+  // Private origins have no row in the storage database. Origins without a
+  // directory have no row yet either; the row is created with the dirty
+  // flag taken from the OriginInfo once the directory is created.
+  if (originInfo->IsPrivate() || !originInfo->LockedDirectoryExists()) {
+    originInfo->LockedAcquireWriteLease();
+    originInfo->LockedMarkDirty();
+    return Some(WriteLease(std::move(originInfo)));
+  }
+
+  return Nothing();
+}
+
+Maybe<WriteLease> QuotaManager::TryAcquireWriteLease(
+    const OriginMetadata& aOriginMetadata) {
+  MutexAutoLock lock(mQuotaMutex);
+  return LockedTryAcquireWriteLease(aOriginMetadata);
+}
+
+RefPtr<QuotaManager::WriteLeasePromise> QuotaManager::AcquireWriteLease(
+    const OriginMetadata& aOriginMetadata) {
+  MOZ_ASSERT(GetCurrentSerialEventTarget());
+  MOZ_ASSERT(!IsOnIOThread());
+
+  WriteLease lease;
+  RefPtr<OriginInfo> originInfo;
+  {
+    MutexAutoLock lock(mQuotaMutex);
+
+    Maybe<WriteLease> fastLease = LockedTryAcquireWriteLease(aOriginMetadata);
+    if (fastLease) {
+      return WriteLeasePromise::CreateAndResolve(std::move(*fastLease),
+                                                 __func__);
     }
 
-    nsresult WaitForResult() {
-      MutexAutoLock lock(mMutex);
-      while (!mDone) {
-        mCondVar.Wait();
-      }
+    originInfo =
+        LockedGetOriginInfo(aOriginMetadata.mPersistenceType, aOriginMetadata);
+    MOZ_ASSERT(originInfo);
 
-      return mResult;
-    }
-  };
+    originInfo->LockedAcquireWriteLease();
+    lease = WriteLease(originInfo);
+  }
 
-  auto sharedState = std::make_shared<SharedState>();
+  auto promise = MakeRefPtr<BoolPromise::Private>(__func__);
 
-  RefPtr<OriginInfo> originInfo = aProofOfLock.GetOriginInfo();
-  uint32_t metadataFlags =
-      aStateMetadata.ToMetadataFlags(originInfo->IsEncrypted());
-  int64_t lastAccessTime = aStateMetadata.mLastAccessTime;
+  // QuotaManager is not thread-safe refcounted, so the IO thread lambda must
+  // not hold a RefPtr to it.
   nsCOMPtr<nsIRunnable> runnable = NS_NewRunnableFunction(
-      "QuotaManager::FlagOriginInfoAsDirtyOnDisk",
-      [sharedState, originInfo = std::move(originInfo), metadataFlags,
-       lastAccessTime]() mutable {
-        AssertIsOnIOThread();
-
-        QuotaManager* self = QuotaManager::Get();
-        if (!self) {
-          sharedState->Done(NS_ERROR_ILLEGAL_DURING_SHUTDOWN);
+      "QuotaManager::AcquireWriteLease",
+      [aOriginMetadata, originInfo, promise]() {
+        QuotaManager* quotaManager = QuotaManager::Get();
+        if (!quotaManager) {
+          promise->Reject(NS_ERROR_ILLEGAL_DURING_SHUTDOWN, __func__);
           return;
         }
 
-        nsresult result = NS_OK;
-        do {
-          if (!self->IsStorageInitializedInternal() ||
-              !self->IsTemporaryStorageInitializedInternal()) {
-            QM_LOG(("FlagOriginInfoAsDirtyOnDisk: storage not initialized"));
-            result = NS_ERROR_NOT_INITIALIZED;
-            break;
-          }
+        nsresult rv =
+            quotaManager->MarkOriginDirtyOnDisk(aOriginMetadata, *originInfo);
+        if (NS_FAILED(rv)) {
+          promise->Reject(rv, __func__);
+          return;
+        }
 
-          result = originInfo->UpdateDirtyMetadata(
-              self->mStorageConnection, metadataFlags, lastAccessTime);
-        } while (false);
-
-        sharedState->Done(result);
+        promise->Resolve(true, __func__);
       });
-
-  if (IsOnIOThread()) {
-    // If we are already on the IO thread, run the task directly to avoid
-    // deadlock.
-    runnable->Run();
-    return sharedState->WaitForResult();
+  nsresult rv = mIOThread->get()->Dispatch(runnable.forget());
+  if (NS_FAILED(rv)) {
+    promise->Reject(rv, __func__);
   }
 
-  nsresult rv = mIOThread->get()->Dispatch(runnable, NS_DISPATCH_NORMAL);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    return rv;
-  }
+  return promise->Then(
+      GetCurrentSerialEventTarget(), __func__,
+      [lease = std::move(lease)](
+          const BoolPromise::ResolveOrRejectValue& aValue) mutable {
+        if (aValue.IsReject()) {
+          return WriteLeasePromise::CreateAndReject(aValue.RejectValue(),
+                                                    __func__);
+        }
 
-  const auto result = sharedState->WaitForResult();
-  return result;
+        return WriteLeasePromise::CreateAndResolve(std::move(lease), __func__);
+      });
 }
 
-void QuotaManager::RegisterDirtyOriginInfo(
-    DirtyTrackingAutoLock& aProofOfLock) {
-  MOZ_DIAGNOSTIC_ASSERT(aProofOfLock.IsValid());
+void QuotaManager::ReleaseWriteLease(RefPtr<OriginInfo> aOriginInfo) {
+  MOZ_ASSERT(aOriginInfo);
+  AssertNotCurrentThreadOwnsQuotaMutex();
+
+  MutexAutoLock lock(mQuotaMutex);
+  aOriginInfo->LockedReleaseWriteLease();
+}
+
+Result<WriteLease, nsresult> QuotaManager::AcquireWriteLeaseOnIOThread(
+    const OriginMetadata& aOriginMetadata) {
+  AssertIsOnIOThread();
+  MOZ_ASSERT(IsBestEffortPersistenceType(aOriginMetadata.mPersistenceType));
+  AssertNotCurrentThreadOwnsQuotaMutex();
+
+  RefPtr<OriginInfo> originInfo;
+  {
+    MutexAutoLock lock(mQuotaMutex);
+
+    originInfo =
+        LockedGetOriginInfo(aOriginMetadata.mPersistenceType, aOriginMetadata);
+    QM_TRY(OkIf(originInfo), Err(NS_ERROR_NOT_AVAILABLE));
+
+    if (originInfo->LockedDirtyOnDisk()) {
+      originInfo->LockedAcquireWriteLease();
+      return WriteLease(std::move(originInfo));
+    }
+
+    // See LockedTryAcquireWriteLease for why these need no row update.
+    if (originInfo->IsPrivate() || !originInfo->LockedDirectoryExists()) {
+      originInfo->LockedMarkDirty();
+      originInfo->LockedAcquireWriteLease();
+      return WriteLease(std::move(originInfo));
+    }
+  }
+
+  QM_TRY(MOZ_TO_RESULT(MarkOriginDirtyOnDisk(aOriginMetadata, *originInfo)));
+
+  MutexAutoLock lock(mQuotaMutex);
+
+  originInfo->LockedAcquireWriteLease();
+
+  return WriteLease(std::move(originInfo));
+}
+
+void QuotaManager::RegisterDirtyOriginInfo(RefPtr<OriginInfo> aOriginInfo) {
+  AssertCurrentThreadOwnsQuotaMutex();
+  MOZ_ASSERT(aOriginInfo);
 
   if (mUsageModificationDisabled.load()) {
     return;
   }
 
-  auto originInfo = aProofOfLock.GetOriginInfo();
-
-  if (originInfo->IsPrivate()) {
+  if (aOriginInfo->IsPrivate()) {
     return;
   }
 
   auto* message = new UnboundedMPSCQueue<RefPtr<OriginInfo>>::Message();
-  message->data = std::move(originInfo);
+  message->data = std::move(aOriginInfo);
   mDirtyOriginInfos.Push(message);
 }
 
@@ -8605,6 +8787,7 @@ void QuotaManager::ShutdownStorageInternal() {
     ReleaseIOThreadObjects();
 
     mOriginUpserter = nullptr;
+    mFlagOriginInfoAsDirtyStmt = nullptr;
     mStorageConnection = nullptr;
     mCacheUsable = false;
     mCacheRequiresFullScan = false;

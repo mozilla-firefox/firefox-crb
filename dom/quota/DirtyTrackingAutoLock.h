@@ -22,9 +22,8 @@ class OriginInfo;
 
 // RAII lock for quota operations that mutate origin metadata. Like
 // MutexAutoLock, it acquires the quota mutex on construction and releases it
-// on destruction. In addition, on construction it eagerly writes the dirty
-// flag to the storage database so that a crash mid-operation leaves the
-// origin marked as needing a full metadata resync on next startup.
+// on destruction. Construction requires the origin to have been marked dirty
+// on disk before the operation starts.
 class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
     DirtyTrackingAutoLock {
  public:
@@ -90,8 +89,6 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
       mLock->Lock();
     }
   }
-
-  void EagerMarkAsDirty();
 
   DirtyTrackingAutoLock(DirtyTrackingAutoLock&&) = default;
   DirtyTrackingAutoLock& operator=(DirtyTrackingAutoLock&&) = default;
