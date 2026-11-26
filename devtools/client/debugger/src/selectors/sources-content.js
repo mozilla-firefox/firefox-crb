@@ -23,7 +23,7 @@ export function getSourceTextContentForSource(
   sourceActor = null
 ) {
   if (source.isOriginal) {
-    return state.sourcesContent.mutableOriginalSourceTextContentMapBySourceId.get(
+    return state.sourcesContent.mutableSourceTextContentMapBySourceId.get(
       source.id
     );
   }
@@ -31,7 +31,7 @@ export function getSourceTextContentForSource(
   if (!sourceActor) {
     sourceActor = getFirstSourceActorForGeneratedSource(state, source.id);
   }
-  return state.sourcesContent.mutableGeneratedSourceTextContentMapBySourceActorId.get(
+  return state.sourcesContent.mutableSourceTextContentMapBySourceActorId.get(
     sourceActor.id
   );
 }
