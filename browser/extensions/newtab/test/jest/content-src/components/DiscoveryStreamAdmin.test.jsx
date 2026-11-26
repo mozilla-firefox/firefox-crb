@@ -1137,13 +1137,75 @@ describe("Feature availability section", () => {
     expect(getByLabelText("Version").value).toBe("151.0");
   });
 
+  it("enrolls matching rollouts that reach every client by default", () => {
+    const { getByLabelText, queryByLabelText } = renderAvailability({
+      ...AVAILABILITY,
+      recipes: [
+        ...AVAILABILITY.recipes,
+        {
+          ...AVAILABILITY.recipes[0],
+          slug: "partial-rollout",
+          bucketPercent: 1,
+        },
+      ],
+    });
+    expect(
+      getByLabelText("Branch to enroll in for partial-rollout").value
+    ).toBe("");
+    expect(getByLabelText("Branch to enroll in for de-rollout").value).toBe(
+      "control"
+    );
+    expect(getByLabelText("Branch to enroll in for de-experiment").value).toBe(
+      ""
+    );
+    expect(queryByLabelText("Branch to enroll in for fr-rollout")).toBeNull();
+  });
+
+  it("dispatches the form values and chosen branches when applying", () => {
+    const { getByText, getByLabelText, dispatch } = renderAvailability();
+    fireEvent.change(getByLabelText("Branch to enroll in for de-experiment"), {
+      target: { value: "widgets-only" },
+    });
+    fireEvent.click(getByText("Apply"));
+    expect(dispatch).toHaveBeenCalledWith(
+      ac.OnlyToMain({
+        type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_APPLY,
+        data: {
+          region: "DE",
+          locale: "de",
+          channel: "release",
+          version: "151.0",
+          defaultPrefs: true,
+          widgetsInteracted: false,
+          enrollments: {
+            "de-rollout": "control",
+            "de-experiment": "widgets-only",
+          },
+        },
+      })
+    );
+  });
+
+  it("leaves the branches to Apply when the values changed since the last result", () => {
+    const { getByText, getByLabelText, dispatch } = renderAvailability();
+    fireEvent.change(getByLabelText("Region"), { target: { value: "FR" } });
+    fireEvent.click(getByText("Apply"));
+    const { data } = dispatchedAction(
+      dispatch,
+      at.DISCOVERY_STREAM_DEV_AVAILABILITY_APPLY
+    );
+    expect(data.region).toBe("FR");
+    expect(data.useDefaultEnrollments).toBe(true);
+    expect(data.enrollments).toEqual({});
+  });
+
   it("disables the buttons until the answer arrives", () => {
     const dispatch = jest.fn();
     const { getByText, rerender } = render(
       <FeatureAvailability availability={AVAILABILITY} dispatch={dispatch} />
     );
-    fireEvent.click(getByText("Evaluate"));
-    expect(getByText("Evaluate")).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(getByText("Apply"));
+    expect(getByText("Apply")).toHaveAttribute("aria-disabled", "true");
     expect(getByText("Working...")).toBeInTheDocument();
 
     rerender(
@@ -1152,7 +1214,7 @@ describe("Feature availability section", () => {
         dispatch={dispatch}
       />
     );
-    expect(getByText("Evaluate")).not.toHaveAttribute("aria-disabled", "true");
+    expect(getByText("Apply")).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("offers a retry while loading, and asks again on its own", () => {
@@ -1176,6 +1238,80 @@ describe("Feature availability section", () => {
     }
   });
 
+  it("asks again, once, when another tab changed what's applied", () => {
+    jest.useFakeTimers();
+    try {
+      const dispatch = jest.fn();
+      const { rerender } = render(
+        <FeatureAvailability
+          availability={AVAILABILITY}
+          devtoolsChanges={[]}
+          dispatch={dispatch}
+        />
+      );
+      for (const changes of [
+        ["region FR (was US)"],
+        ["region FR (was US)", "1 pref changed in the devtools"],
+      ]) {
+        rerender(
+          <FeatureAvailability
+            availability={AVAILABILITY}
+            devtoolsChanges={changes}
+            dispatch={dispatch}
+          />
+        );
+      }
+      act(() => jest.advanceTimersByTime(1000));
+      expect(
+        dispatch.mock.calls.filter(
+          ([a]) => a.type === at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST
+        )
+      ).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("asks again on reopening if things changed while it was closed", () => {
+    jest.useFakeTimers();
+    const dispatch = jest.fn();
+    try {
+      render(
+        <FeatureAvailability
+          availability={{ ...AVAILABILITY, devtoolsChanges: [] }}
+          devtoolsChanges={["region FR (was US)"]}
+          dispatch={dispatch}
+        />
+      );
+      act(() => jest.advanceTimersByTime(1000));
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+    ).toBeDefined();
+  });
+
+  it("keeps unsaved form edits when a new result changes what's applied", () => {
+    const dispatch = jest.fn();
+    const { getByLabelText, rerender } = render(
+      <FeatureAvailability availability={AVAILABILITY} dispatch={dispatch} />
+    );
+    fireEvent.change(getByLabelText("Version"), {
+      target: { value: "150.0" },
+    });
+    rerender(
+      <FeatureAvailability
+        availability={{
+          ...AVAILABILITY,
+          devtoolsChanges: ["1 pref changed in the devtools"],
+        }}
+        dispatch={dispatch}
+      />
+    );
+    expect(getByLabelText("Version").value).toBe("150.0");
+  });
+
   it("keeps focus on a button while its request is pending, and announces the result", () => {
     const dispatch = jest.fn();
     const { getByText, container, rerender } = render(
@@ -1183,34 +1319,56 @@ describe("Feature availability section", () => {
     );
     const status = container.querySelector("[role=status]");
     expect(status).toBeInTheDocument();
-    const evaluate = getByText("Evaluate");
-    evaluate.focus();
-    fireEvent.click(evaluate);
-    expect(evaluate.disabled).toBe(false);
-    expect(evaluate).toHaveAttribute("aria-disabled", "true");
-    expect(document.activeElement).toBe(evaluate);
+    const apply = getByText("Apply");
+    apply.focus();
+    fireEvent.click(apply);
+    expect(apply.disabled).toBe(false);
+    expect(apply).toHaveAttribute("aria-disabled", "true");
+    expect(document.activeElement).toBe(apply);
     expect(status.textContent).toBe("Working...");
     // A second click while pending does nothing.
-    fireEvent.click(evaluate);
+    fireEvent.click(apply);
     expect(
       dispatch.mock.calls.filter(
-        ([a]) => a.type === at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST
+        ([a]) => a.type === at.DISCOVERY_STREAM_DEV_AVAILABILITY_APPLY
       )
     ).toHaveLength(1);
 
     rerender(
       <FeatureAvailability
-        availability={{ ...AVAILABILITY }}
+        availability={{ ...AVAILABILITY, messages: ["Skipped x."] }}
         dispatch={dispatch}
       />
     );
     expect(container.querySelector("[role=status]")).toBe(status);
-    expect(status.textContent).toBe("Done.");
+    expect(status.textContent).toBe("Done. Skipped x.");
   });
 
   it("names each targeting disclosure after its recipe", () => {
     const { getByText } = renderAvailability();
     expect(getByText("Targeting for de-rollout")).toBeInTheDocument();
+  });
+
+  it("doesn't ask again for the changes its own Apply caused", () => {
+    const dispatch = jest.fn();
+    const { getByText, rerender } = render(
+      <FeatureAvailability
+        availability={AVAILABILITY}
+        devtoolsChanges={[]}
+        dispatch={dispatch}
+      />
+    );
+    fireEvent.click(getByText("Apply"));
+    rerender(
+      <FeatureAvailability
+        availability={AVAILABILITY}
+        devtoolsChanges={["region DE (was US)"]}
+        dispatch={dispatch}
+      />
+    );
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+    ).toBeUndefined();
   });
 
   it("doesn't keep asking after an error", () => {
@@ -1245,12 +1403,12 @@ describe("Feature availability section", () => {
   it("shows each recipe's targeting in its own full-width row", () => {
     const { container } = renderAvailability();
     const cell = container.querySelector(
-      "tr.availability-targeting-row td[colspan='7']"
+      "tr.availability-targeting-row td[colspan='8']"
     );
     expect(cell.textContent).toContain("region in ['DE']");
   });
 
-  it("labels the widget visibility columns", () => {
+  it("labels the widget visibility and changed prefs columns", () => {
     const { container } = render(
       <DiscoveryStreamAdminUI
         dispatch={jest.fn()}
@@ -1266,6 +1424,118 @@ describe("Feature availability section", () => {
       ...container.querySelectorAll(".widget-visibility thead th"),
     ].map(th => th.textContent);
     expect(headers).toEqual(["Widget", "State", "Reason"]);
+  });
+
+  it("lists changed prefs next to their defaults and clears one", () => {
+    const { container, getByLabelText, dispatch } = renderAvailability({
+      ...AVAILABILITY,
+      changedPrefs: [
+        {
+          name: "asrouter.devtoolsEnabled",
+          defaultValue: false,
+          value: true,
+          touched: false,
+        },
+        {
+          name: "impressionId",
+          defaultValue: undefined,
+          value: "{id}",
+          touched: false,
+        },
+        {
+          name: "widgets.system.enabled",
+          defaultValue: false,
+          value: true,
+          touched: true,
+        },
+      ],
+    });
+    const rows = [...container.querySelectorAll("tr")].filter(tr =>
+      tr.textContent.includes("widgets.system.enabled")
+    );
+    expect(rows[0].textContent).toContain("(devtools)");
+    expect(rows[0].classList.contains("changed")).toBe(true);
+    expect(container.textContent).toContain(
+      "Prefs changed from their defaults (3)"
+    );
+    expect(
+      [...container.querySelectorAll("thead th")].map(th => th.textContent)
+    ).toContain("Actions");
+    // Content can't clear the devtools gate, so it gets no button.
+    expect(
+      container.querySelector("[aria-label='Clear asrouter.devtoolsEnabled']")
+    ).toBeNull();
+
+    fireEvent.click(getByLabelText("Clear widgets.system.enabled"));
+    expect(dispatch).toHaveBeenCalledWith(
+      ac.OnlyToMain({
+        type: at.CLEAR_PREF,
+        data: { name: "widgets.system.enabled" },
+      })
+    );
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+    ).toBeDefined();
+  });
+
+  it("warns up front when Nimbus studies are off", () => {
+    expect(renderAvailability().container.textContent).not.toContain(
+      "studies are off"
+    );
+    expect(
+      renderAvailability({ ...AVAILABILITY, studiesEnabled: false }).container
+        .textContent
+    ).toContain("Nimbus studies are off on this profile");
+  });
+
+  it("offers to enable nimbus.debug and shows apply problems", () => {
+    const { getByText, dispatch, container } = renderAvailability({
+      ...AVAILABILITY,
+      nimbusDebug: false,
+      messages: ["Skipped x: the rollout y already uses newtabTrainhop."],
+    });
+    expect(container.textContent).toContain("Skipped x");
+    fireEvent.click(getByText("Enable nimbus.debug"));
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_ENABLE_NIMBUS_DEBUG)
+    ).toBeDefined();
+  });
+
+  it("resets every field, not only the region", () => {
+    const { getByText, getByLabelText, dispatch } = renderAvailability();
+    fireEvent.change(getByLabelText("Region"), { target: { value: "FR" } });
+    fireEvent.click(getByText("Reset"));
+    expect(dispatch).toHaveBeenCalledWith(
+      ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_RESET })
+    );
+  });
+
+  it("summarizes what Apply changed", () => {
+    expect(
+      renderAvailability().container.querySelector(".availability-override")
+    ).toBeNull();
+    const { container } = renderAvailability({
+      ...AVAILABILITY,
+      devtoolsChanges: ["region DE (was US)", "1 forced enrollment"],
+      defaultPrefsApplied: true,
+    });
+    expect(container.querySelector(".availability-override").textContent).toBe(
+      "Applied: region DE (was US); 1 forced enrollment."
+    );
+    expect(container.querySelector("input[name=defaultPrefs]").checked).toBe(
+      true
+    );
+  });
+
+  it("keeps the default prefs box unchecked after applying without it", () => {
+    const { getByLabelText } = renderAvailability({
+      ...AVAILABILITY,
+      devtoolsChanges: ["region DE (was US)"],
+      defaultPrefsApplied: false,
+    });
+    expect(getByLabelText("Start from default New Tab prefs").checked).toBe(
+      false
+    );
   });
 });
 
@@ -1430,5 +1700,31 @@ describe("<DevtoolsChangesNotice>", () => {
     expect(reset).not.toHaveAttribute("disabled");
     fireEvent.click(reset);
     expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("<DiscoveryStreamAdminInner> pref tracking", () => {
+  it("records the prefs the pane writes", () => {
+    const dispatch = jest.fn();
+    const ref = React.createRef();
+    render(
+      <DiscoveryStreamAdminInner
+        ref={ref}
+        collapsed={false}
+        location={{ routes: [""] }}
+        Prefs={{ values: CONTEXTUAL_PREFS }}
+        DiscoveryStream={getDiscoveryStreamState()}
+        Weather={{ suggestions: [] }}
+        InferredPersonalization={getInferredState(null)}
+        dispatch={dispatch}
+      />
+    );
+    ref.current.trackingDispatch(ac.SetPref("widgets.system.enabled", true));
+    expect(dispatch).toHaveBeenCalledWith(
+      ac.OnlyToMain({
+        type: at.DISCOVERY_STREAM_DEV_TRACK_PREFS,
+        data: { names: ["widgets.system.enabled"] },
+      })
+    );
   });
 });

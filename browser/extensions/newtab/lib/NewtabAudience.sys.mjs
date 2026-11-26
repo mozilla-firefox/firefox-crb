@@ -67,3 +67,15 @@ export function newtabChannel() {
     buildChannel()
   );
 }
+
+/**
+ * Whether the newtab devtools left anything for their Reset to undo, so that
+ * their feed and notice stay available after the devtools are turned off.
+ *
+ * @returns {boolean}
+ */
+export function hasDevtoolsState() {
+  return Services.prefs
+    .getChildList("browser.newtabpage.activity-stream.devtools.")
+    .some(name => Services.prefs.prefHasUserValue(name));
+}

@@ -1420,13 +1420,16 @@ describe("<BaseContent> devtools changes notice", () => {
     expect(notice(false).parentElement).toHaveClass("newtab-main");
   });
 
-  it("stays hidden without the devtools or without changes", () => {
+  it("stays shown after the devtools are turned off, so Reset stays available", () => {
     expect(
       renderNotice({
         "asrouter.devtoolsEnabled": false,
         devtoolsChanges: ["region DE (was US)"],
       })
-    ).toBeNull();
+    ).not.toBeNull();
+  });
+
+  it("stays hidden without changes", () => {
     expect(
       renderNotice({ "asrouter.devtoolsEnabled": true, devtoolsChanges: [] })
     ).toBeNull();

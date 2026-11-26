@@ -278,6 +278,21 @@ describe("ActivityStream", () => {
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get("feeds.newtabdevtools").value).toBe(true);
     });
+    it("should keep the devtools feed while what they applied is in effect", () => {
+      const ORIGINAL_REGION =
+        "browser.newtabpage.activity-stream.devtools.originalRegion";
+      services.prefs.getBoolPref = jest.fn((_name, fallback) => fallback);
+      services.prefs.getChildList = jest.fn(() => [ORIGINAL_REGION]);
+      services.prefs.prefHasUserValue = jest.fn(
+        name => name === ORIGINAL_REGION
+      );
+      as._updateDynamicPrefs();
+      expect(PREFS_CONFIG.get("feeds.newtabdevtools").value).toBe(true);
+
+      services.prefs.prefHasUserValue = jest.fn(() => false);
+      as._updateDynamicPrefs();
+      expect(PREFS_CONFIG.get("feeds.newtabdevtools").value).toBe(false);
+    });
     it("should use the devtools locale and channel only while devtools are enabled", () => {
       const prefs = {
         "browser.newtabpage.activity-stream.devtools.localeOverride": "pl",

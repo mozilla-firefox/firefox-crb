@@ -978,12 +978,14 @@ export class BaseContent extends React.PureComponent {
     const { App, DiscoveryStream } = props;
     const { initialized, customizeMenuVisible } = App;
     const prefs = props.Prefs.values;
-    const devtoolsChangesNotice = prefs["asrouter.devtoolsEnabled"] ? (
+    // Not gated on asrouter.devtoolsEnabled, so that what the devtools changed
+    // can still be reset after they're turned off.
+    const devtoolsChangesNotice = (
       <DevtoolsChangesNotice
         changes={DiscoveryStream.devtoolsChanges}
         dispatch={props.dispatch}
       />
-    ) : null;
+    );
 
     // @nova-cleanup(remove-conditional):
     const novaEnabled = prefs[PREF_NOVA_ENABLED];
