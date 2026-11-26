@@ -23,6 +23,14 @@ const asyncControlProxies = new WeakSet();
 const stubTargetsByMethodName = new Map();
 
 /**
+ * Synchronously returns whether a call matches, based on its receiver
+ * and a shallow copy of its arguments.
+ *
+ * @template {unknown[]} MethodArgs
+ * @typedef {(receiver: unknown, args: [...MethodArgs]) => boolean} CallPredicate
+ */
+
+/**
  * The callable static properties of a class.
  *
  * @template {object} Owner
@@ -54,7 +62,8 @@ const stubTargetsByMethodName = new Map();
  *         ? MethodName
  *         : never
  *     : never]: Target[MethodName] extends (...args: infer MethodArgs) => PromiseLike<infer MethodResult>
- *       ? () => AsyncCallController<MethodName & string, MethodArgs, MethodResult>
+ *       ? (predicate?: CallPredicate<MethodArgs>)
+ *         => AsyncCallController<MethodName & string, MethodArgs, MethodResult>
  *       : never
  * }} AsyncControlMethods
  */
@@ -80,7 +89,83 @@ const stubTargetsByMethodName = new Map();
  */
 
 /**
- * Controls whether a single async method call runs and what its caller receives.
+ * Controls one call to a promise-returning method so that tests can exercise
+ * behavior that depends on when the method runs and when its caller receives
+ * the outcome.
+ *
+ * Invariants
+ *
+ * 1. One Capture
+ *
+ *      Each controller must capture at most one call. If the predicate for
+ *      a call returns true while the controller is still waiting, the
+ *      controller must capture that call. Calls that do not match must
+ *      run without waiting.
+ *
+ *      While the controller is waiting, a predicate that throws or returns
+ *      a non-boolean must stop the controller from waiting for a match.
+ *      The controller must report the same failure to the caller and the test.
+ *
+ * 2. Exclusive Ownership
+ *
+ *      Controllers waiting for calls to methods of the same name must have
+ *      distinct targets. Neither target may be in the other target's
+ *      prototype chain.
+ *
+ * 3. Capture Before Execution
+ *
+ *      The method must still be waiting to run at capture.
+ *      waitForCapture() must report capture without starting the method.
+ *
+ *      The caller's promise must stay pending until the controller releases,
+ *      rejects, or cancels the call.
+ *
+ *      A successful call to rejectCallerPromise() before capture must reject
+ *      the caller's promise when the matching call is captured.
+ *
+ * 4. One Branch
+ *
+ *      The first valid choice to run or reject must take effect synchronously.
+ *      Once the controller commits to a branch, operations on the other
+ *      branch must throw. A second rejectCallerPromise() must throw and
+ *      preserve the first rejection reason.
+ *
+ *      The test may invoke runCapturedCall() or rejectCallerPromise() before
+ *      capture to commit the controller to a branch.
+ *      releaseToCaller() must throw before capture.
+ *
+ * 5. One Execution
+ *
+ *      On the run branch, the captured call must run at most once with its
+ *      receiver and arguments. On the reject branch, the method must
+ *      never run for the captured call.
+ *
+ * 6. Independent Delivery
+ *
+ *      On the run branch, the test must be able to observe the captured
+ *      call's outcome while the caller's promise is pending.
+ *
+ *      releaseToCaller() must return the caller's promise and deliver
+ *      the captured call's outcome. rejectCallerPromise() must reject the
+ *      caller's promise with the supplied or default reason.
+ *
+ * 7. Cleanup Preserves the Decision
+ *
+ *      If the controller is still waiting for a match, restore() must abort
+ *      the test's capture and result waits with AbortError.
+ *
+ *      After capture, restore() must deliver the outcome if the test chose
+ *      to run the method, or preserve the rejection if the test chose to
+ *      reject the call.
+ *
+ *      If the test made neither choice, restore() must reject the caller's
+ *      promise with AbortError without running the method.
+ *
+ *      The controller must not allow a canceled call to run or change its
+ *      rejection reason.
+ *
+ *      restore() must preserve a predicate failure already reported by
+ *      the controller and be safe to repeat.
  *
  * @template {string} MethodName
  * @template {unknown[]} MethodArgs
@@ -102,6 +187,13 @@ class AsyncCallController {
   #methodName;
 
   /**
+   * Determines whether a call matches.
+   *
+   * @type {CallPredicate<MethodArgs>}
+   */
+  #predicate;
+
+  /**
    * The original function that runs when a call proceeds.
    *
    * @type {(...args: MethodArgs) => PromiseLike<MethodResult>}
@@ -116,7 +208,7 @@ class AsyncCallController {
   #stub = null;
 
   /**
-   * The signal that tells tests when the controller captures a call.
+   * The signal that tells tests when the controller captures a matching call.
    *
    * @type {PromiseWithResolvers<void>}
    */
@@ -137,17 +229,31 @@ class AsyncCallController {
   #capturedCall = null;
 
   /**
-   * Creates a controller for the next call.
+   * The predicate failure reported by later controller operations.
+   *
+   * @type {{ reason: unknown } | null}
+   */
+  #predicateFailure = null;
+
+  /**
+   * Creates a controller for the next matching call.
    *
    * @param {Record<MethodName, (...args: MethodArgs) => PromiseLike<MethodResult>>} stubTarget
    *   The object on which to install the stub.
    * @param {MethodName} methodName
    *   The name of the method whose calls the controller can capture.
-   * @throws {TypeError} If the method cannot be wrapped.
+   * @param {CallPredicate<MethodArgs>} [predicate=() => true]
+   *   Determines whether a call matches.
+   * @throws {TypeError} If the predicate is invalid or the method cannot be wrapped.
    */
-  constructor(stubTarget, methodName) {
+  constructor(stubTarget, methodName, predicate = () => true) {
+    if (typeof predicate !== "function") {
+      throw new TypeError("The call predicate must be a function");
+    }
+
     this.#stubTarget = stubTarget;
     this.#methodName = methodName;
+    this.#predicate = predicate;
 
     const registeredTargets = this.#getStubTargetsForRegistration();
     this.#originalMethod = this.#getOriginalMethod();
@@ -180,8 +286,8 @@ class AsyncCallController {
   /**
    * Resolves when the controller captures a call.
    *
-   * @returns {Promise<void>} Rejects with `AbortError` if the control
-   *   is restored before a call is captured.
+   * @returns {Promise<void>} Rejects with the predicate failure or with
+   *   `AbortError` if the controller is restored before capture.
    */
   waitForCapture() {
     return this.#captureSignal.promise;
@@ -195,8 +301,8 @@ class AsyncCallController {
    *
    * The controller holds the outcome for the caller until release or cleanup.
    *
-   * @returns {Promise<MethodResult>} Rejects if the method throws or rejects,
-   *   or cleanup cancels the wait or call.
+   * @returns {Promise<MethodResult>} Rejects if the predicate fails, the method
+   *   throws or rejects, or cleanup cancels the wait or call.
    * @throws {Error} If the test chose to reject the call.
    */
   runCapturedCall() {
@@ -234,8 +340,8 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} The same promise the caller received.
    *   Rejects if the method throws or rejects.
-   * @throws {unknown} If no call was captured, the test rejected the call,
-   *   or cleanup canceled the captured call.
+   * @throws {unknown} If the predicate failed, no call has been captured,
+   *   the test rejected the call, or cleanup canceled the captured call.
    */
   releaseToCaller() {
     const capturedCall = this.#requireCapturedCall();
@@ -254,8 +360,8 @@ class AsyncCallController {
    *
    * @param {unknown} [reason=new Error("Controlled call rejected")]
    *   The rejection reason to deliver to the caller.
-   * @throws {unknown} If the controller was restored or the test already chose
-   *   to run or reject the call.
+   * @throws {unknown} If capture failed, the controller was restored,
+   *   or the test already chose to run or reject the call.
    */
   rejectCallerPromise(reason = new Error("Controlled call rejected")) {
     const capturedCall = this.#stub ? null : this.#requireCapturedCall();
@@ -434,7 +540,8 @@ class AsyncCallController {
   }
 
   /**
-   * Captures the next call while the stub is installed.
+   * Evaluates the predicate and captures the call if it matches while the
+   * controller is still waiting.
    *
    * @param {unknown} receiver - The receiver of the call.
    * @param {MethodArgs} methodArgs - The arguments passed by the caller.
@@ -451,6 +558,61 @@ class AsyncCallController {
     if (!this.#stub) {
       return callOriginalMethod();
     }
+
+    const predicate = this.#predicate;
+    /**
+     * @type {unknown}
+     */
+    let predicateResult;
+
+    try {
+      predicateResult = predicate(receiver, [...methodArgs]);
+    } catch (reason) {
+      return this.#handlePredicateFailure(reason, callOriginalMethod);
+    }
+
+    // If the predicate returned a promise by mistake, we need to handle its
+    // rejection separately from the error we report for the invalid result.
+    if (
+      typeof predicateResult === "object" &&
+      predicateResult !== null &&
+      ChromeUtils.getClassName(predicateResult) === "Promise"
+    ) {
+      try {
+        Promise.prototype.then.call(predicateResult, undefined, () => {});
+      } catch {
+        // A Promise subclass can throw when then() reads Symbol.species.
+        // We still need to report the invalid predicate result.
+      }
+    }
+
+    return this.#applyPredicateResult(predicateResult, callOriginalMethod);
+  }
+
+  /**
+   * Captures a matching call, lets the call proceed, or reports an invalid
+   * predicate result.
+   *
+   * @param {unknown} predicateResult - The value returned by the predicate.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #applyPredicateResult(predicateResult, callOriginalMethod) {
+    // The predicate can invoke the method again, and the controller can
+    // capture that nested call before the outer predicate returns. We need
+    // to check that the controller is still waiting before using the result.
+    if (!this.#stub || predicateResult === false) {
+      return callOriginalMethod();
+    }
+
+    if (predicateResult !== true) {
+      const failure = new TypeError(
+        `The call predicate for ${this.#methodName} must return a boolean`
+      );
+
+      return this.#handlePredicateFailure(failure, callOriginalMethod);
+    }
+
     this.#removeStub();
     this.#capturedCall = {
       callerResultResolvers: Promise.withResolvers(),
@@ -493,6 +655,26 @@ class AsyncCallController {
   }
 
   /**
+   * Reports a predicate failure while the controller is waiting for a match.
+   *
+   * @param {unknown} reason - The predicate failure.
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   */
+  #handlePredicateFailure(reason, callOriginalMethod) {
+    if (!this.#stub) {
+      return callOriginalMethod();
+    }
+
+    this.#removeStub();
+    // We need to record the failure even when the rejection reason is undefined.
+    this.#predicateFailure = { reason };
+    this.#abandonPendingCapture(reason);
+
+    return Promise.reject(reason);
+  }
+
+  /**
    * Clears any decision made before capture and rejects the capture wait.
    *
    * @param {unknown} reason - Why capture could not happen.
@@ -515,9 +697,14 @@ class AsyncCallController {
    * Gets the captured call required by the controller operations.
    *
    * @returns {CapturedCall<MethodResult>}
-   * @throws {unknown} If no call was captured or cleanup canceled the captured call.
+   * @throws {unknown} If the predicate failed, no call has been captured,
+   *   or cleanup canceled the captured call.
    */
   #requireCapturedCall() {
+    if (this.#predicateFailure) {
+      throw this.#predicateFailure.reason;
+    }
+
     if (!this.#capturedCall) {
       throw new Error(`No captured call to ${this.#methodName}`);
     }
@@ -652,7 +839,8 @@ export function asyncControlProxy(owner) {
         return undefined;
       }
 
-      return () => new AsyncCallController(stubTarget, propertyKey);
+      return predicate =>
+        new AsyncCallController(stubTarget, propertyKey, predicate);
     },
   });
 
