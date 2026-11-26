@@ -71,6 +71,11 @@ export class FormAutofillHandler {
 
   #formMutationObserver = null;
 
+  // Live form control collections of `form.rootElement`, and their total
+  // length when `form` was last updated.
+  #liveFormControls = null;
+  #formControlCount = 0;
+
   #visibilityObserver = null;
   #visibilityStateObserverByElement = new WeakMap();
 
@@ -277,8 +282,7 @@ export class FormAutofillHandler {
       return _formLike;
     };
 
-    const currentForm = getFormLike();
-    if (currentForm.elements.length != this.form.elements.length) {
+    if (this.#formElementCountChanged(getFormLike)) {
       this.log.debug("The count of form elements is changed.");
       this._updateForm(getFormLike());
       return true;
@@ -308,6 +312,56 @@ export class FormAutofillHandler {
     this.form = form;
 
     this.#fieldDetails = null;
+    this.#formControlCount = this.#countFormControls();
+  }
+
+  /**
+   * Returns the number of form controls in the root element, read from live
+   * collections that the DOM keeps up to date. Reading their length does not
+   * search the document again unless a matching control was added or removed,
+   * so the collections are kept for as long as the root element is unchanged.
+   *
+   * The collections must match how FormLikeFactory builds `elements`:
+   * `form.elements` for a <form>, which includes controls associated through
+   * the form attribute from outside it, and the same <input>, <select> and
+   * <textarea> elements that FormLikeFactory.createFromDocumentRoot queries
+   * for a form-less root element.
+   *
+   * @returns {number}
+   */
+  #countFormControls() {
+    const root = this.form.rootElement;
+    if (this.#liveFormControls?.root != root) {
+      const lists = HTMLFormElement.isInstance(root)
+        ? [root.elements]
+        : ["input", "select", "textarea"].map(tag =>
+            root.getElementsByTagName(tag)
+          );
+      this.#liveFormControls = { root, lists };
+    }
+    return this.#liveFormControls.lists.reduce(
+      (sum, list) => sum + list.length,
+      0
+    );
+  }
+
+  /**
+   * Building a FormLike for a form-less root element queries every form
+   * control in the document, so it is only built when the live control count
+   * changed since the last check.
+   *
+   * @param {Function} getFormLike Returns a FormLike built from the focused
+   *        element.
+   * @returns {boolean} True if the live control count changed and that
+   *          FormLike has a different number of elements than `form`.
+   */
+  #formElementCountChanged(getFormLike) {
+    const count = this.#countFormControls();
+    if (count == this.#formControlCount) {
+      return false;
+    }
+    this.#formControlCount = count;
+    return getFormLike().elements.length != this.form.elements.length;
   }
 
   /**

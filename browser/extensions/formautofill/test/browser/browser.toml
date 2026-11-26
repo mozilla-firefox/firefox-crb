@@ -105,6 +105,8 @@ skip-if = [
 
 ["browser_fillclear_events.js"]
 
+["browser_focus_identified_fields.js"]
+
 ["browser_form_changes.js"]
 
 ["browser_iframe_autofill_cc_csc.js"]
