@@ -391,7 +391,7 @@ export var TestUtils = {
    * Calling a method on the proxy returns a controller for its next call.
    *
    * @template {object} Owner
-   * @param {Owner} owner - The object for which to create a proxy.
+   * @param {Owner} owner - The object or class for which to create a proxy.
    *
    * @returns {AsyncControlProxy<Owner>} The reusable proxy.
    */
