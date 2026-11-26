@@ -71,6 +71,7 @@ add_task(async function testPausedByBreakpoint() {
   const firstPopupBrowsingContext = await openPopup(POPUP_URL);
 
   let source = await waitForSource(dbg, POPUP_URL);
+  await waitForSourceActors(dbg, source);
 
   await selectSource(dbg, source);
   await addBreakpoint(dbg, source, 4);
@@ -135,6 +136,7 @@ add_task(async function testPausedInTwoPopups() {
   const popupBrowsingContext = await openPopup(POPUP_URL);
 
   const source = await waitForSource(dbg, POPUP_URL);
+  await waitForSourceActors(dbg, source);
 
   await selectSource(dbg, source);
   await addBreakpoint(dbg, source, 4);

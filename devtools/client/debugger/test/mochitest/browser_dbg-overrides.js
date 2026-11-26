@@ -48,7 +48,7 @@ add_task(async function () {
     "test.js"
   );
 
-  await waitForSourcesInSourceTree(dbg, ["test.js"], {
+  await waitForSourcesInSourceTree(dbg, ["index.html", "test.js"], {
     noExpand: false,
   });
 
@@ -120,7 +120,7 @@ add_task(async function () {
     BASE_URL + "index.html",
     "test.js"
   );
-  await waitForSourcesInSourceTree(otherDebugger, ["test.js"], {
+  await waitForSourcesInSourceTree(otherDebugger, ["index.html", "test.js"], {
     noExpand: false,
   });
   overrides = [

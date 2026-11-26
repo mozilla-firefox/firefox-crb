@@ -16,6 +16,7 @@
 const SOURCE_FILES = {
   nestedSource: "nested-source.js",
   codeReload1: "code_reload_1.js",
+  docBlackboxAllHtml: "doc-blackbox-all.html",
 };
 
 const NODE_SELECTORS = {
@@ -67,10 +68,25 @@ add_task(async function testBlackBoxOnMultipleFiles() {
 
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.nestedSource, true);
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.codeReload1, false);
+  assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.docBlackboxAllHtml, false);
 
   info("The invoked function is blackboxed and the debugger does not pause.");
   invokeInTab("computeSomething");
   assertNotPaused(dbg);
+
+  info("Blackbox the html document, which sits outside of both directories.");
+  await triggerSourceTreeContextMenu(
+    dbg,
+    findSourceNodeWithText(dbg, SOURCE_FILES.docBlackboxAllHtml),
+    "#node-menu-blackbox"
+  );
+  // The html source has no source actor of its own when the page has no inline
+  // script, so BLACKBOX_WHOLE_SOURCES is dispatched without a server round trip
+  // and waitForDispatch would miss it. Poll the state instead.
+  await waitForBlackboxCount(dbg, 2);
+  await waitForRequestsToSettle(dbg);
+
+  assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.docBlackboxAllHtml, true);
 
   info("Unblackbox files outside this directory.");
   rightClickEl(dbg, sourceTreeFolderNodeEls[2]);
@@ -95,6 +111,7 @@ add_task(async function testBlackBoxOnMultipleFiles() {
 
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.nestedSource, false);
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.codeReload1, false);
+  assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.docBlackboxAllHtml, false);
 
   info("All sources are unblackboxed and the debugger pauses on line 2.");
   invokeInTab("computeSomething");
@@ -110,11 +127,12 @@ add_task(async function testBlackBoxOnMultipleFiles() {
     "Ignore files in this group"
   );
   selectContextMenuItem(dbg, NODE_SELECTORS.nodeBlackBoxAllInside);
-  await waitForBlackboxCount(dbg, 2);
+  await waitForBlackboxCount(dbg, 3);
   await waitForRequestsToSettle(dbg);
 
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.nestedSource, true);
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.codeReload1, true);
+  assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.docBlackboxAllHtml, true);
 
   info("Unblackbox files in this group.");
   rightClickEl(dbg, sourceTreeRootNodeEl);
@@ -130,6 +148,7 @@ add_task(async function testBlackBoxOnMultipleFiles() {
 
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.nestedSource, false);
   assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.codeReload1, false);
+  assertSourceNodeIsBlackBoxed(dbg, SOURCE_FILES.docBlackboxAllHtml, false);
 });
 
 add_task(async function testHideAndShowBlackBoxedFiles() {

@@ -68,6 +68,47 @@ add_task(async function () {
   ok(getSelectedSource().url.includes("long.js"), "Selected source is long.js");
 });
 
+const httpServer = createTestHTTPServer();
+const BASE_URL = `http://localhost:${httpServer.identity.primaryPort}/`;
+
+httpServer.registerContentType("html", "text/html");
+
+httpServer.registerPathHandler("/index.html", (request, response) => {
+  response.setStatusLine(request.httpVersion, 200, "OK");
+  response.write(`<!doctype html>
+  <html>
+    <head>
+      <title>Html without inline scripts</title>
+    </head>
+    <body>
+      <div></div>
+    </body>
+  </html>
+  `);
+});
+
+// Test that navigating will clear a target source which has no inline scripts
+add_task(async function testClearHtmlWithoutInlineSources() {
+  const indexFile = BASE_URL + "index.html";
+  const dbg = await initDebuggerWithAbsoluteURL(indexFile);
+  await waitForSourcesInSourceTree(dbg, ["index.html"], { noExpand: true });
+
+  await selectSourceFromSourceTreeWithIndex(
+    dbg,
+    "index.html",
+    3,
+    "Select the index.html"
+  );
+
+  let selectedSource = dbg.selectors.getSelectedSource();
+  is(selectedSource.url, indexFile, "The index.html is selected");
+
+  await navigateTo("about:blank");
+
+  selectedSource = dbg.selectors.getSelectedSource();
+  is(selectedSource, undefined, "No source is selected");
+});
+
 function countSources(dbg) {
   return dbg.selectors.getSourceCount();
 }

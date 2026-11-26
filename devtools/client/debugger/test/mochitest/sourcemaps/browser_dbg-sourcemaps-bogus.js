@@ -24,7 +24,7 @@ add_task(async function () {
     "invalid-json-map.js"
   );
   // Make sure there is only the expected sources and we miss some original sources.
-  is(dbg.selectors.getSourceCount(), 4, "Only 4 source exists");
+  is(dbg.selectors.getSourceCount(), 5, "Only 5 source exists");
 
   await selectSource(dbg, "non-existant-map.js");
   is(
