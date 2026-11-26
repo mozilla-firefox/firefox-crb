@@ -88,6 +88,21 @@ load = [
   { type = "file", path = ".claude/skills/desktop-theme-tokens/SKILL.md" },
 ]
 
+# Address bar and search bars: the urlbar code, including its tests, since the
+# checklists cover test placement and message-path coverage.
+[[rules]]
+name = "Address bar and search bars"
+description = "Process boundary, provider, result, telemetry and test checklists for the address bar, toolbar search bar and New Tab search bar."
+when = { any_file = { include = [
+  "browser/components/urlbar/**",
+] } }
+load = [
+  { type = "file", path = ".claude/skills/urlbar-review/references/index.md" },
+  { type = "file", path = ".claude/skills/urlbar-review/references/boundary.md" },
+  { type = "file", path = ".claude/skills/urlbar-review/references/results.md" },
+  { type = "file", path = ".claude/skills/urlbar-review/references/telemetry-and-tests.md" },
+]
+
 # Web-standard implementation: native code behind WebIDL interfaces. Triggered
 # when a patch touches both a .webidl file and at least one native (.h/.cpp) file.
 [[rules]]
