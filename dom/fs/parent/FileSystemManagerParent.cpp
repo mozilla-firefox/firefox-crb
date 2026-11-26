@@ -8,13 +8,13 @@
 #include "FileSystemEncryptedFileStreams.h"
 #include "FileSystemParentTypes.h"
 #include "mozilla/Maybe.h"
-#include "mozilla/dom/FileBlobImpl.h"
 #include "mozilla/dom/FileSystemAccessHandle.h"
 #include "mozilla/dom/FileSystemAccessHandleControlParent.h"
 #include "mozilla/dom/FileSystemAccessHandleParent.h"
 #include "mozilla/dom/FileSystemCipherKeyManager.h"
 #include "mozilla/dom/FileSystemDataManager.h"
 #include "mozilla/dom/FileSystemLog.h"
+#include "mozilla/dom/FileSystemSnapshot.h"
 #include "mozilla/dom/FileSystemTypes.h"
 #include "mozilla/dom/FileSystemWritableFileStreamParent.h"
 #include "mozilla/dom/IPCBlobUtils.h"
@@ -292,9 +292,6 @@ IPCResult FileSystemManagerParent::RecvGetFile(
     return IPC_OK();
   }
 
-  // XXX Spec https://www.w3.org/TR/FileAPI/#dfn-file wants us to snapshot the
-  // state of the file at getFile() time
-
   // You can create a File with getFile() even if the file is locked
   // XXX factor out this part of the code for accesshandle/ and getfile
   auto reportError = [aResolver](const auto& rv) {
@@ -304,19 +301,23 @@ IPCResult FileSystemManagerParent::RecvGetFile(
 
   const auto& entryId = aRequest.entryId();
 
-  QM_TRY_INSPECT(
-      const fs::FileId& fileId,
-      mDataManager->MutableDatabaseManagerPtr()->EnsureFileId(entryId),
-      IPC_OK(), reportError);
+  auto* const databaseManager = mDataManager->MutableDatabaseManagerPtr();
+
+  QM_TRY_INSPECT(const fs::FileId& fileId,
+                 databaseManager->EnsureFileId(entryId), IPC_OK(), reportError);
 
   fs::ContentType type;
   fs::TimeStamp lastModifiedMilliSeconds;
   fs::Path path;
   nsCOMPtr<nsIFile> fileObject;
-  QM_TRY(MOZ_TO_RESULT(mDataManager->MutableDatabaseManagerPtr()->GetFile(
+  QM_TRY(MOZ_TO_RESULT(databaseManager->GetFile(
              entryId, fileId, fs::FileMode::EXCLUSIVE, type,
              lastModifiedMilliSeconds, path, fileObject)),
          IPC_OK(), reportError);
+
+  int64_t fileSize = 0;
+  QM_TRY(MOZ_TO_RESULT(fileObject->GetFileSize(&fileSize)), IPC_OK(),
+         reportError);
 
   if (LOG_ENABLED()) {
     nsAutoString path;
@@ -325,10 +326,22 @@ IPCResult FileSystemManagerParent::RecvGetFile(
     }
   }
 
+  // A sync access handle that is already open may have written the main
+  // file, so the snapshot starts out unreadable; one opened later invalidates
+  // the registered snapshot state.
+  auto snapshotState = MakeRefPtr<fs::SnapshotState>();
+  if (mDataManager->IsExclusivelyLocked(entryId)) {
+    snapshotState->Invalidate(NS_ERROR_DOM_FILE_NOT_READABLE_ERR);
+  } else {
+    mDataManager->RegisterSnapshot(fileId, snapshotState);
+  }
+
   // TODO: Currently, there is no way to assign type and it is empty.
   // See bug 1826780.
-  RefPtr<BlobImpl> blob = MakeRefPtr<FileBlobImpl>(
-      fileObject, path.LastElement(), NS_ConvertUTF8toUTF16(type));
+  RefPtr<BlobImpl> blob = MakeRefPtr<fs::SnapshotBlobImpl>(
+      fileObject, path.LastElement(), NS_ConvertUTF8toUTF16(type),
+      static_cast<uint64_t>(fileSize), lastModifiedMilliSeconds,
+      std::move(snapshotState));
 
   IPCBlob ipcBlob;
   QM_TRY(MOZ_TO_RESULT(IPCBlobUtils::Serialize(blob, ipcBlob)), IPC_OK(),

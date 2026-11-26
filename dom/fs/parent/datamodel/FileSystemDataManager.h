@@ -36,6 +36,7 @@ class FileSystemManagerParent;
 namespace fs {
 struct FileId;
 class FileSystemChildMetadata;
+class SnapshotState;
 }  // namespace fs
 
 namespace quota {
@@ -157,6 +158,20 @@ class FileSystemDataManager
   bool IsLockedWithDeprecatedSharedLock(const EntryId& aEntryId,
                                         const FileId& aFileId) const;
 
+  bool IsExclusivelyLocked(const EntryId& aEntryId) const {
+    return mExclusiveLocks.Contains(aEntryId);
+  }
+
+  /**
+   * The Files returned by getFile() read the main file in place. Their
+   * snapshot state is registered under the main file and invalidated when a
+   * sync access handle takes the exclusive lock or a writable commits, so
+   * reads started afterwards fail instead of observing the modified file.
+   */
+  void RegisterSnapshot(const FileId& aFileId, RefPtr<SnapshotState> aState);
+
+  void InvalidateSnapshots(const FileId& aFileId, nsresult aStatus);
+
   FileMode GetMode(bool aKeepData) const;
 
  protected:
@@ -185,6 +200,8 @@ class FileSystemDataManager
   nsTHashSet<EntryId> mExclusiveLocks;
   nsTHashMap<EntryId, uint32_t> mSharedLocks;
   nsTHashMap<EntryId, nsTArray<FileId>> mDeprecatedLocks;
+  // Live getFile() snapshots per main file, keyed by FileId::Value().
+  nsTHashMap<nsCString, nsTArray<RefPtr<SnapshotState>>> mSnapshots;
   NS_DECL_OWNINGEVENTTARGET
   const RefPtr<quota::QuotaManager> mQuotaManager;
   const NotNull<nsCOMPtr<nsISerialEventTarget>> mBackgroundTarget;
