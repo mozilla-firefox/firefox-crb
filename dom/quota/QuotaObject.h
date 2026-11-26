@@ -51,6 +51,16 @@ class QuotaObject {
 
   virtual bool IncreaseSize(int64_t aDelta) = 0;
 
+  // Reservations count against quota without changing recorded usage. Setting
+  // a larger reservation checks quota; shrinking it only releases space.
+  // CommitReservation atomically applies a committed delta and replaces the
+  // reservation, without another quota check. The caller must already cover
+  // the resulting usage plus reservation. Destruction releases any remainder.
+  [[nodiscard]] virtual bool MaybeSetReservation(int64_t aSize) = 0;
+
+  virtual void CommitReservation(int64_t aDelta,
+                                 int64_t aRemainingReservation) = 0;
+
   virtual void DisableQuotaCheck() = 0;
 
   virtual void EnableQuotaCheck() = 0;

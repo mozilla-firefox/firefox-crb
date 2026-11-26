@@ -26,6 +26,18 @@ DirtyTrackingAutoLock::DirtyTrackingAutoLock(Mutex& aLock,
   AssertDirtyOnDisk();
 }
 
+DirtyTrackingAutoLock::DirtyTrackingAutoLock(Mutex& aLock,
+                                             RefPtr<OriginInfo> aOriginInfo,
+                                             ReservationOnly)
+    : mLock(&aLock),
+      mOriginInfo(std::move(aOriginInfo)),
+      mReservationOnly(true) {
+  Lock();
+  if (!IsValid()) {
+    Unlock<true>();
+  }
+}
+
 DirtyTrackingAutoLock::DirtyTrackingAutoLock(
     Mutex& aLock,
     const nsClassHashtable<nsCStringHashKey, GroupInfoPair>& aGroupInfoPairs,
