@@ -3,9 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-from taskgraph.optimize.base import All, OptimizationStrategy, register_strategy
+from taskgraph.optimize.base import OptimizationStrategy, register_strategy
 
-from gecko_taskgraph.util.backstop import BACKSTOP_PUSH_INTERVAL
+from gecko_taskgraph.util.backstop import is_expanded
 
 
 @register_strategy("skip-unless-android-perftest-backstop")
@@ -44,13 +44,10 @@ class SkipUnlessPushInterval(OptimizationStrategy):
         return int(params["pushlog_id"]) % self.push_interval != 0
 
 
-# Strategy to run tasks on "expanded" pushes, currently defined as pushes that
-# are half the backstop interval. The 'All' composite strategy means that the
-# "backstop" strategy will prevent "expanded" from applying on backstop pushes.
-register_strategy(
-    "skip-unless-expanded",
-    args=(
-        "skip-unless-backstop",
-        SkipUnlessPushInterval(BACKSTOP_PUSH_INTERVAL / 2),
-    ),
-)(All)
+@register_strategy("skip-unless-expanded")
+class SkipUnlessExpanded(OptimizationStrategy):
+    """Always removes tasks except on "expanded" pushes, currently defined as
+    pushes at half the backstop interval, and on backstop pushes."""
+
+    def should_remove_task(self, task, params, _):
+        return not (params["backstop"] or is_expanded(params))
