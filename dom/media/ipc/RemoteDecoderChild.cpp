@@ -112,6 +112,8 @@ RefPtr<MediaDataDecoder::DecodePromise> RemoteDecoderChild::Decode(
         GetCrashedErrorCode(), __func__);
   }
 
+  OnDecode(aSamples);
+
   auto samples = MakeNotNull<RefPtr<ArrayOfRemoteMediaRawData>>();
   if (!samples->Fill(aSamples,
                      [&](size_t aSize) { return AllocateBuffer(aSize); })) {
@@ -164,6 +166,7 @@ RefPtr<MediaDataDecoder::FlushPromise> RemoteDecoderChild::Flush() {
   AssertOnManagerThread();
   mDecodePromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
   mDrainPromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
+  OnFlush();
 
   RefPtr<RemoteDecoderChild> self = this;
   SendFlush()->Then(
