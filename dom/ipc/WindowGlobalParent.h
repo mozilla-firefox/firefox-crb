@@ -291,6 +291,10 @@ class WindowGlobalParent final : public WindowContext,
   Maybe<uint64_t> GetSingleChannelId() { return mSingleChannelId; }
 
   uint32_t GetBFCacheStatus() { return mBFCacheStatus; }
+  // For BFCacheStatus flags the parent raises itself; the child lifts them.
+  void BlockBFCacheFor(uint32_t aFlags) {
+    (void)RecvUpdateBFCacheStatus(aFlags, 0);
+  }
 
   bool HasActivePeerConnections();
 
@@ -632,6 +636,9 @@ class WindowGlobalParent final : public WindowContext,
   // mSingleChannelId is set to Nothing().
   // Note: We ignore favicon loads when considering the requests in the
   // loadgroup.
+  // With docshell.navigation.new_load_group the navigation's
+  // channel is never in the document's loadgroup, so no id is reported and
+  // Some(0) only means that there are requests blocking BFCache.
   Maybe<uint64_t> mSingleChannelId;
 
   // True if the current loaded document is in fullscreen.

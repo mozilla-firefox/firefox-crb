@@ -350,6 +350,16 @@ class nsDocShell final : public nsDocLoader,
 
   static bool SandboxFlagsImplyCookies(const uint32_t& aSandboxFlags);
 
+  // Whether requests still in flight when a document enters BFCache are
+  // deferred instead of keeping it out. They stay in the document's own load
+  // group while it is cached, which only holds with the temporary navigation
+  // load group: without it, navigating cancels that group at navigation start.
+  static bool BFCacheRequestDeferralEnabled();
+
+  // BFCacheRequestDeferralEnabled() as latched for the current document. Use
+  // this rather than the prefs, which can change during the document's life.
+  bool DefersRequestsInBFCache() const { return mBFCacheRequestDeferral; }
+
   // See https://bugzilla.mozilla.org/show_bug.cgi?id=2089000
   MOZ_CAN_RUN_SCRIPT_BOUNDARY mozilla::Result<nsILoadGroup*, nsresult>
   StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
@@ -360,6 +370,10 @@ class nsDocShell final : public nsDocLoader,
   // the load group aChannel was moved to, or nullptr if it stays in its own.
   MOZ_CAN_RUN_SCRIPT_BOUNDARY mozilla::Result<nsILoadGroup*, nsresult>
   StartNavigationForJavascriptURLResult(nsIChannel* aChannel);
+
+  // Whether aRequest, still in flight, does not keep its document out of
+  // BFCache.
+  bool RequestAllowedInBFCache(nsIRequest* aRequest) const;
 
   // Tell the favicon service that aNewURI has the same favicon as aOldURI.
   static void CopyFavicon(nsIURI* aOldURI, nsIURI* aNewURI,
@@ -873,6 +887,14 @@ class nsDocShell final : public nsDocLoader,
 
   static void ReportBFCacheComboTelemetry(uint32_t aCombo);
 
+  // Holds back the events of the deferrable requests in the document's load
+  // group while it is in BFCache. They are replayed when it is shown again.
+  void DeferRequestsForBFCache();
+
+  // Resumes the requests deferred by DeferRequestsForBFCache, once the
+  // document is shown again.
+  void ResumeRequestsDeferredForBFCache();
+
   // Method to get our current position and size without flushing
   void DoGetPositionAndSize(int32_t* aX, int32_t* aY, int32_t* aWidth,
                             int32_t* aHeight);
@@ -1128,7 +1150,10 @@ class nsDocShell final : public nsDocLoader,
                                nsIURI* aLinkURI, nsIContent* aContent,
                                bool aIsUserTriggered);
 
+  bool RequestBlocksBFCache(nsIRequest* aRequest);
   void RecordSingleChannelId(bool aStartRequest, nsIRequest* aRequest);
+  void UpdateSingleChannelId(const mozilla::Maybe<uint64_t>& aSingleChannelId);
+  void RecountRequestsBlockingBFCache();
 
   void SetChannelToDisconnectOnPageHide(uint64_t aChannelId) {
     MOZ_ASSERT(mChannelToDisconnectOnPageHide == 0);
@@ -1383,6 +1408,11 @@ class nsDocShell final : public nsDocLoader,
   // See WindowGlobalParent::mSingleChannelId.
   mozilla::Maybe<uint64_t> mSingleChannelId;
   uint32_t mRequestForBlockingFromBFCacheCount = 0;
+  // BFCacheRequestDeferralEnabled() as of the last time
+  // mRequestForBlockingFromBFCacheCount was computed from scratch, so that a
+  // request is judged the same way when it's added and removed even if the
+  // prefs change in between.
+  bool mBFCacheRequestDeferral = BFCacheRequestDeferralEnabled();
 
   uint64_t mChannelToDisconnectOnPageHide;
 

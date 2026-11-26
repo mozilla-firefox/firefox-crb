@@ -3203,6 +3203,18 @@ void CanonicalBrowsingContext::ReactivateDocuments(
             return aValue.Info();
           }),
           Some(NavigationType::Traverse));
+
+  // Raised here rather than by the child, so that no traversal can cache these
+  // documents before they have replayed their deferred events.
+  if (nsDocShell::BFCacheRequestDeferralEnabled()) {
+    PreOrderWalk([](BrowsingContext* aContext) {
+      if (WindowGlobalParent* wgp =
+              aContext->Canonical()->GetCurrentWindowGlobal()) {
+        wgp->BlockBFCacheFor(BFCacheStatus::REPLAYING_DEFERRED_EVENTS);
+      }
+    });
+  }
+
   if (IsInProcess()) {
     BrowsingContext::ReactivateDocuments(reactivationData,
                                          previousEntryForActivation);
@@ -3657,6 +3669,10 @@ static void LogBFCacheBlockingForDoc(BrowsingContext* aBrowsingContext,
   }
   if (aBFCacheCombo & BFCacheStatus::PAGE_LOADING) {
     MOZ_LOG(gSHIPBFCacheLog, LogLevel::Debug, (" * has page loading"));
+  }
+  if (aBFCacheCombo & BFCacheStatus::REPLAYING_DEFERRED_EVENTS) {
+    MOZ_LOG(gSHIPBFCacheLog, LogLevel::Debug,
+            (" * replaying deferred requests"));
   }
 }
 

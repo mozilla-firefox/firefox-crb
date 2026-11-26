@@ -17,6 +17,7 @@
 #include "nsICacheEntry.h"
 #include "nsICacheInfoChannel.h"
 #include "nsIChildChannel.h"
+#include "nsIDeferrableRequest.h"
 #include "nsIHttpChannelChild.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsIInterfaceRequestorUtils.h"
@@ -50,6 +51,7 @@ class HttpChannelChild final : public PHttpChannelChild,
                                public nsIHttpChannelChild,
                                public nsIMultiPartChannel,
                                public nsIThreadRetargetableRequest,
+                               public nsIDeferrableRequest,
                                public NeckoTargetHolder {
   virtual ~HttpChannelChild();
 
@@ -62,6 +64,7 @@ class HttpChannelChild final : public PHttpChannelChild,
   NS_DECL_NSIHTTPCHANNELCHILD
   NS_DECL_NSIMULTIPARTCHANNEL
   NS_DECL_NSITHREADRETARGETABLEREQUEST
+  NS_DECL_NSIDEFERRABLEREQUEST
   NS_INLINE_DECL_STATIC_IID(HTTP_CHANNEL_CHILD_IID)
 
   HttpChannelChild();
@@ -268,13 +271,19 @@ class HttpChannelChild final : public PHttpChannelChild,
 
   void DoOnConsoleReport(nsTArray<ConsoleReportCollected>&& aConsoleReports);
   void DoOnStartRequest(nsIRequest* aRequest);
+  void DoOnStartRequestImpl(nsIRequest* aRequest);
   void DoOnStatus(nsIRequest* aRequest, nsresult status);
   void DoOnProgress(nsIRequest* aRequest, int64_t progress,
                     int64_t progressMax);
   void DoOnDataAvailable(nsIRequest* aRequest, nsIInputStream* aStream,
                          uint64_t offset, uint32_t count);
+  void ReplayOnDataAvailable();
   void DoPreOnStopRequest(nsresult aStatus);
   void DoOnStopRequest(nsIRequest* aRequest, nsresult aChannelStatus);
+  void ReplayOnStopRequest();
+  // Releases the listeners and the IPC actor of a request cancelled while its
+  // events are deferred, without notifying the listeners.
+  void DropDeferredEvents();
   void ContinueOnStopRequest();
 
   // Try send DeletingChannel message to parent side. Dispatch an async task to
@@ -341,6 +350,21 @@ class HttpChannelChild final : public PHttpChannelChild,
   // part ID during OnStartRequest.
   Maybe<uint32_t> mMultiPartID;
 
+  // We are deferring events to our listener, because the page is in BFCache.
+  Atomic<bool> mDeferringEvents{false};
+
+  // Main thread view of the deferral. Resuming covers the replay of the
+  // deferred events, until ReplayOnStopRequest.
+  enum class DeferralState : uint8_t { None, Deferring, Resuming, Dropped };
+  DeferralState mDeferralState = DeferralState::None;
+
+  // Passed to ResumeRequestEvents and held while Resuming. Main thread only.
+  nsCOMPtr<nsISupports> mReplayBlocker;
+
+  // Restored when the deferred events are resumed.
+  int32_t mPriorityBeforeDeferral = nsISupportsPriority::PRIORITY_NORMAL;
+  uint32_t mClassFlagsBeforeDeferral = 0;
+
   // To ensure only one SendDeletingChannel is triggered.
   Atomic<bool> mDeletingChannelSent{false};
 
@@ -368,6 +392,12 @@ class HttpChannelChild final : public PHttpChannelChild,
   // Should be only accessed on the main thread.
   using StreamFilters = nsTArray<extensions::StreamFilterParent*>;
   StreamFilters mStreamFilters;
+
+  // Bytes buffered up due to DoOnDataAvailable having been deferred.
+  // This may be accessed on the main thread if `mODATarget` has not
+  // been set. If `mODATarget` has been set, this may only be accessed
+  // on the thread of that event target.
+  nsTArray<uint8_t> mDeferredBytes;
 
 #ifdef MOZ_DIAGNOSTIC_ASSERT_ENABLED
   bool mDoDiagnosticAssertWhenOnStopNotCalledOnDestroy = false;
@@ -433,8 +463,27 @@ class HttpChannelChild final : public PHttpChannelChild,
   // get stuck in a loop.
   uint8_t mAlreadyReleased : 1;
 
+  // When replaying after defer, DoStartRequest must be called.
+  uint8_t mDeferredStartRequest : 1;
+
+  // When replaying after defer, DoStopRequest must be called.
+  uint8_t mDeferredStopRequest : 1;
+
+  // True if we already sent a BFCache eviction notification for exceeding
+  // the deferred byte limit during the current deferral. Set in
+  // DoOnStartRequest, then accessed on the ODA thread & mEventQ orders the two.
+  bool mDeferredEvictionNotified;
+
   // JavaScript stack captured during AsyncOpen for LNA console logging
   mozilla::UniquePtr<char[]> mCallStack;
+
+  nsresult mDeferredStopRequestChannelStatus;
+
+  // Only use on the thread where DoOnDataAvailable runs.
+  uint64_t mDeferredDataAvailableOffset;
+  nsresult mDeferredTransportStatus = NS_OK;
+  // Set if SendOnDataFinished was deferred.
+  Maybe<nsresult> mDeferredDataFinishedStatus;
 
   void CleanupRedirectingChannel(nsresult rv);
 

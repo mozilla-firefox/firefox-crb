@@ -16,6 +16,8 @@
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/PerfStats.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/Services.h"
+#include "mozilla/StaticPrefs_docshell.h"
 #include "mozilla/StaticPrefs_network.h"
 #include "mozilla/StoragePrincipalHelper.h"
 #include "mozilla/dom/BrowserChild.h"
@@ -42,6 +44,7 @@
 #include "nsContentPolicyUtils.h"
 #include "nsContentSecurityManager.h"
 #include "nsDOMNavigationTiming.h"
+#include "nsDocShellCID.h"
 #include "nsError.h"
 #include "nsHttp.h"
 #include "nsHttpChannel.h"
@@ -87,7 +90,12 @@ HttpChannelChild::HttpChannelChild()
       mSuspendForWaitCompleteRedirectSetup(false),
       mRecvOnStartRequestSentCalled(false),
       mSuspendedByWaitingForCookies(false),
-      mAlreadyReleased(false) {
+      mAlreadyReleased(false),
+      mDeferredStartRequest(false),
+      mDeferredStopRequest(false),
+      mDeferredEvictionNotified(false),
+      mDeferredStopRequestChannelStatus(NS_OK),
+      mDeferredDataAvailableOffset(0) {
   LOG(("Creating HttpChannelChild @%p\n", this));
 
   mChannelCreationTime = PR_Now();
@@ -263,6 +271,7 @@ NS_INTERFACE_MAP_BEGIN(HttpChannelChild)
   NS_INTERFACE_MAP_ENTRY(nsIClassOfService)
   NS_INTERFACE_MAP_ENTRY(nsIProxiedChannel)
   NS_INTERFACE_MAP_ENTRY(nsITraceableChannel)
+  NS_INTERFACE_MAP_ENTRY(nsIDeferrableRequest)
   NS_INTERFACE_MAP_ENTRY(nsIAsyncVerifyRedirectCallback)
   NS_INTERFACE_MAP_ENTRY(nsIChildChannel)
   NS_INTERFACE_MAP_ENTRY(nsIHttpChannelChild)
@@ -598,10 +607,65 @@ class HttpChannelChild::AkamaiWafBlockDetector final
   HttpChannelChild* mChannel;
 };
 
+static void NotifyBFCacheEviction(uint64_t aWindowID) {
+  NS_DispatchToMainThread(
+      NS_NewRunnableFunction("BFCacheEviction", [aWindowID]() {
+        nsCOMPtr<nsIObserverService> obs =
+            mozilla::services::GetObserverService();
+        if (obs) {
+          nsAutoString idStr;
+          idStr.AppendInt(aWindowID);
+          obs->NotifyObservers(nullptr, NS_BFCACHE_EVICT_DOCUMENT_TOPIC,
+                               idStr.get());
+        }
+      }));
+}
+
+static bool MaybeNotifyBFCacheEviction(uint64_t aDeferredLengthTotal,
+                                       uint64_t aWindowID) {
+  if (aDeferredLengthTotal <
+      StaticPrefs::docshell_shistory_bfcache_max_deferred_bytes()) {
+    return false;
+  }
+
+  NotifyBFCacheEviction(aWindowID);
+  return true;
+}
+
 void HttpChannelChild::DoOnStartRequest(nsIRequest* aRequest) {
+  if (mDeferringEvents) {
+    mDeferredStartRequest = true;
+
+    int64_t contentLength;
+    if (NS_FAILED(GetContentLength(&contentLength))) {
+      contentLength = -1;
+    }
+
+    if (contentLength > 0) {
+      mDeferredEvictionNotified = MaybeNotifyBFCacheEviction(
+          uint64_t(contentLength), mLoadInfo->GetInnerWindowID());
+      if (!mDeferredBytes.SetCapacity(
+              std::min(
+                  size_t(contentLength),
+                  size_t(StaticPrefs::
+                             docshell_shistory_bfcache_max_deferred_bytes())),
+              mozilla::fallible_t())) {
+        // Cancelling drops the deferred events, so the document must not be
+        // restored with this request silently gone.
+        NotifyBFCacheEviction(mLoadInfo->GetInnerWindowID());
+        Cancel(NS_ERROR_OUT_OF_MEMORY);
+      }
+    }
+    // defer the request
+    return;
+  }
+  DoOnStartRequestImpl(aRequest);
+}
+
+void HttpChannelChild::DoOnStartRequestImpl(nsIRequest* aRequest) {
   nsresult rv;
 
-  LOG(("HttpChannelChild::DoOnStartRequest [this=%p, request=%p]\n", this,
+  LOG(("HttpChannelChild::DoOnStartRequestImpl [this=%p, request=%p]\n", this,
        aRequest));
 
   // We handle all the listener chaining before OnStartRequest at this moment.
@@ -720,54 +784,75 @@ void HttpChannelChild::OnTransportAndData(const nsresult& aChannelStatus,
   // necko msg in between them.
   AutoEventEnqueuer ensureSerialDispatch(mEventQ);
 
-  int64_t progressMax;
-  if (NS_FAILED(GetContentLength(&progressMax))) {
-    progressMax = -1;
-  }
-
-  const int64_t progress = aOffset + aData.Length();
-
-  // OnTransportAndData will be run on retargeted thread if applicable, however
-  // OnStatus/OnProgress event can only be fired on main thread. We need to
-  // dispatch the status/progress event handling back to main thread with the
-  // appropriate event target for networking.
-  if (NS_IsMainThread()) {
-    DoOnStatus(this, aTransportStatus);
-    DoOnProgress(this, progress, progressMax);
+  if (mDeferringEvents) {
+    size_t oldLen = mDeferredBytes.Length();
+    if (!oldLen) {
+      mDeferredDataAvailableOffset = aOffset;
+    }
+    // If we exceed buffer size, notify of eviction once, but keep buffering
+    // because we may already be on our way in restoring-from-bfcache and in
+    // that case, we'll soon make use of this data. If eviction goes through, we
+    // stop buffering when the document get destroyed. This keeps the parent
+    // process as the authority of the lifetime for deferred requests.
+    mDeferredBytes.AppendElements(Span(aData));
+    mDeferredTransportStatus = aTransportStatus;
+    if (!mDeferredEvictionNotified &&
+        MaybeNotifyBFCacheEviction(mDeferredBytes.Length(),
+                                   mLoadInfo->GetInnerWindowID())) {
+      mDeferredEvictionNotified = true;
+    }
   } else {
-    RefPtr<HttpChannelChild> self = this;
-    nsCOMPtr<nsISerialEventTarget> neckoTarget = GetNeckoTarget();
-    MOZ_ASSERT(neckoTarget);
+    int64_t progressMax;
+    if (NS_FAILED(GetContentLength(&progressMax))) {
+      progressMax = -1;
+    }
 
-    DebugOnly<nsresult> rv = neckoTarget->Dispatch(
-        NS_NewRunnableFunction(
-            "net::HttpChannelChild::OnTransportAndData",
-            [self, aTransportStatus, progress, progressMax]() {
-              self->DoOnStatus(self, aTransportStatus);
-              self->DoOnProgress(self, progress, progressMax);
-            }),
-        NS_DISPATCH_NORMAL);
-    MOZ_ASSERT(NS_SUCCEEDED(rv));
+    const int64_t progress = aOffset + aData.Length();
+
+    // OnTransportAndData will be run on retargeted thread if applicable,
+    // however OnStatus/OnProgress event can only be fired on main thread. We
+    // need to dispatch the status/progress event handling back to main thread
+    // with the appropriate event target for networking.
+    if (NS_IsMainThread()) {
+      DoOnStatus(this, aTransportStatus);
+      DoOnProgress(this, progress, progressMax);
+    } else {
+      RefPtr<HttpChannelChild> self = this;
+      nsCOMPtr<nsISerialEventTarget> neckoTarget = GetNeckoTarget();
+      MOZ_ASSERT(neckoTarget);
+
+      DebugOnly<nsresult> rv = neckoTarget->Dispatch(
+          NS_NewRunnableFunction(
+              "net::HttpChannelChild::OnTransportAndData",
+              [self, aTransportStatus, progress, progressMax]() {
+                self->DoOnStatus(self, aTransportStatus);
+                self->DoOnProgress(self, progress, progressMax);
+              }),
+          NS_DISPATCH_NORMAL);
+      MOZ_ASSERT(NS_SUCCEEDED(rv));
+    }
+
+    // OnDataAvailable
+    //
+    // NOTE: the OnDataAvailable contract requires the client to read all the
+    // data in the inputstream.  This code relies on that ('data' will go away
+    // after this function).  Apparently the previous, non-e10s behavior was to
+    // actually support only reading part of the data, allowing later calls to
+    // read the rest.
+    nsCOMPtr<nsIInputStream> stringStream;
+    nsresult rv = NS_NewByteInputStream(getter_AddRefs(stringStream),
+                                        Span(aData), NS_ASSIGNMENT_DEPEND);
+    if (NS_FAILED(rv)) {
+      CancelWithReason(rv, "HttpChannelChild NS_NewByteInputStream failed"_ns);
+      return;
+    }
+
+    DoOnDataAvailable(this, stringStream, aOffset, aData.Length());
+    stringStream->Close();
   }
 
-  // OnDataAvailable
-  //
-  // NOTE: the OnDataAvailable contract requires the client to read all the data
-  // in the inputstream.  This code relies on that ('data' will go away after
-  // this function).  Apparently the previous, non-e10s behavior was to actually
-  // support only reading part of the data, allowing later calls to read the
-  // rest.
-  nsCOMPtr<nsIInputStream> stringStream;
-  nsresult rv = NS_NewByteInputStream(getter_AddRefs(stringStream), Span(aData),
-                                      NS_ASSIGNMENT_DEPEND);
-  if (NS_FAILED(rv)) {
-    CancelWithReason(rv, "HttpChannelChild NS_NewByteInputStream failed"_ns);
-    return;
-  }
-
-  DoOnDataAvailable(this, stringStream, aOffset, aData.Length());
-  stringStream->Close();
-
+  // TODO: Bug 1523916 backpressure needs to take into account if the data is
+  // coming from the main process or from the socket process via PBackground.
   if (NeedToReportBytesRead()) {
     mUnreportBytesRead += aData.Length();
     if (mUnreportBytesRead >= gHttpHandler->SendWindowSize() >> 2) {
@@ -881,7 +966,14 @@ void HttpChannelChild::DoOnDataAvailable(nsIRequest* aRequest,
 void HttpChannelChild::SendOnDataFinished(const nsresult& aChannelStatus) {
   LOG(("HttpChannelChild::SendOnDataFinished [this=%p]\n", this));
 
-  if (mCanceled) return;
+  if (mCanceled) {
+    return;
+  }
+
+  if (mDeferringEvents) {
+    mDeferredDataFinishedStatus = Some(aChannelStatus);
+    return;
+  }
 
   // we need to ensure we OnDataFinished only after all the progress
   // updates are dispatched on the main thread
@@ -940,7 +1032,13 @@ void HttpChannelChild::ProcessOnStopRequest(
        consoleReports = CopyableTArray{aConsoleReports.Clone()}]() mutable {
         self->OnStopRequest(aChannelStatus, aTiming, aResponseTrailers);
         self->DoOnConsoleReport(std::move(consoleReports));
-        self->ContinueOnStopRequest();
+        // When events are deferred for BFCache, OnStopRequest stores the
+        // status and returns early.  ContinueOnStopRequest tears down the
+        // IPC actor (TrySendDeletingChannel), which must not happen until
+        // after events have been replayed
+        if (!self->mDeferredStopRequest) {
+          self->ContinueOnStopRequest();
+        }
       }));
 }
 
@@ -1045,6 +1143,12 @@ void HttpChannelChild::OnStopRequest(
   }
 
   mResponseTrailers = std::make_unique<nsHttpHeaderArray>(aResponseTrailers);
+
+  if (mDeferringEvents) {
+    mDeferredStopRequest = true;
+    mDeferredStopRequestChannelStatus = aChannelStatus;
+    return;
+  }
 
   DoPreOnStopRequest(aChannelStatus);
 
@@ -1430,6 +1534,9 @@ void HttpChannelChild::ProcessOnProgress(const int64_t& aProgress,
                                          const int64_t& aProgressMax) {
   MOZ_ASSERT(OnSocketThread());
   LOG(("HttpChannelChild::ProcessOnProgress [this=%p]\n", this));
+  if (mDeferringEvents) {
+    return;
+  }
   mEventQ->RunOrEnqueue(std::make_unique<NeckoTargetChannelFunctionEvent>(
       this,
       [self = UnsafePtr<HttpChannelChild>(this), aProgress, aProgressMax]() {
@@ -1441,6 +1548,9 @@ void HttpChannelChild::ProcessOnProgress(const int64_t& aProgress,
 void HttpChannelChild::ProcessOnStatus(const nsresult& aStatus) {
   MOZ_ASSERT(OnSocketThread());
   LOG(("HttpChannelChild::ProcessOnStatus [this=%p]\n", this));
+  if (mDeferringEvents) {
+    return;
+  }
   mEventQ->RunOrEnqueue(std::make_unique<NeckoTargetChannelFunctionEvent>(
       this, [self = UnsafePtr<HttpChannelChild>(this), aStatus]() {
         AutoEventEnqueuer ensureSerialDispatch(self->mEventQ);
@@ -1859,6 +1969,13 @@ void HttpChannelChild::Redirect1Begin(
 
   MOZ_ASSERT(newOriginalURI, "newOriginalURI should not be null");
 
+  if (mDeferralState == DeferralState::Deferring) {
+    // A redirect while the document is in BFCache aborts the request, which
+    // evicts the document.
+    OnRedirectVerifyCallback(NS_BINDING_ABORTED);
+    return;
+  }
+
   ipc::MergeParentLoadInfoForwarder(loadInfoForwarder, mLoadInfo);
   ResourceTimingStructArgsToTimingsStruct(timing, mTransactionTimings);
 
@@ -2037,6 +2154,13 @@ void HttpChannelChild::ProcessSetClassifierMatchedTrackingInfo(
 void HttpChannelChild::Redirect3Complete() {
   LOG(("HttpChannelChild::Redirect3Complete [this=%p]\n", this));
   MOZ_ASSERT(NS_IsMainThread());
+
+  if (mDeferralState == DeferralState::Deferring) {
+    if (nsCOMPtr<nsIDeferrableRequest> defer =
+            do_QueryInterface(mRedirectChannelChild)) {
+      defer->DeferRequestEvents();
+    }
+  }
 
   // Using an error as the default so that when we fail to forward this redirect
   // to the target channel, we make sure to notify the current listener from
@@ -2229,6 +2353,14 @@ HttpChannelChild::OnRedirectVerifyCallback(nsresult aResult) {
   nsCOMPtr<nsIHttpChannel> newHttpChannel =
       do_QueryInterface(mRedirectChannelChild);
 
+  if (mDeferralState == DeferralState::Deferring ||
+      mDeferralState == DeferralState::Dropped) {
+    NotifyBFCacheEviction(mLoadInfo->GetInnerWindowID());
+    if (NS_SUCCEEDED(aResult)) {
+      aResult = NS_BINDING_ABORTED;
+    }
+  }
+
   if (NS_SUCCEEDED(aResult) && !mRedirectChannelChild) {
     // mRedirectChannelChild doesn't exist means we're redirecting to a protocol
     // that doesn't implement nsIChildChannel. The redirect result should be set
@@ -2354,6 +2486,10 @@ HttpChannelChild::Cancel(nsresult aStatus) {
                             !LoadOnStopRequestCalled())) {
       (void)AsyncAbort(mStatus);
     }
+  }
+
+  if (mDeferralState == DeferralState::Deferring) {
+    DropDeferredEvents();
   }
   return NS_OK;
 }
@@ -3725,6 +3861,163 @@ HttpChannelChild::GetCacheDisposition(
   }
   *aDisposition = mCacheDisposition;
   return NS_OK;
+}
+
+bool HttpChannelChild::ShouldBeDeferred() {
+  return mLoadInfo->GetHandlingInBFCache() == nsILoadInfo::BFCacheDefer;
+}
+
+bool HttpChannelChild::IsDeferred() {
+  MOZ_ASSERT(NS_IsMainThread());
+  return mDeferralState == DeferralState::Deferring ||
+         mDeferralState == DeferralState::Resuming;
+}
+
+void HttpChannelChild::DeferRequestEvents() {
+  MOZ_ASSERT(NS_IsMainThread());
+  // A document hidden again while this request is still deferred is evicted
+  // instead.
+  MOZ_ASSERT(mDeferralState == DeferralState::None);
+
+  (void)GetPriority(&mPriorityBeforeDeferral);
+  (void)GetClassFlags(&mClassFlagsBeforeDeferral);
+  SetPriority(nsISupportsPriority::PRIORITY_LOWEST);
+  AddClassFlags(nsIClassOfService::Background);
+
+  mDeferralState = DeferralState::Deferring;
+  mDeferringEvents = true;
+}
+
+void HttpChannelChild::DropDeferredEvents() {
+  MOZ_ASSERT(NS_IsMainThread());
+  mDeferralState = DeferralState::Dropped;
+  mReplayBlocker = nullptr;
+
+  // mDeferringEvents stays set so that events still arriving from the parent
+  // are held back too. mDeferredBytes is not cleared: OnTransportAndData may
+  // be accessing it on the ODA target thread concurrently. It will be freed
+  // when the channel is destroyed.
+  ReleaseListeners();
+  if (mLoadGroup) {
+    mLoadGroup->RemoveRequest(this, nullptr, mStatus);
+    mLoadGroup = nullptr;
+  }
+  CleanupBackgroundChannel();
+  TrySendDeletingChannel();
+}
+
+void HttpChannelChild::ResumeRequestEvents(nsISupports* aReplayBlocker) {
+  MOZ_ASSERT(NS_IsMainThread());
+  if (mDeferralState != DeferralState::Deferring) {
+    return;
+  }
+  mDeferralState = DeferralState::Resuming;
+
+  SetPriority(mPriorityBeforeDeferral);
+  SetClassFlags(mClassFlagsBeforeDeferral);
+
+  if (mDeferredStartRequest) {
+    mDeferredStartRequest = false;
+    DoOnStartRequestImpl(this);
+  }
+
+  // No OnStart has happened yet, deferred or otherwise, we can just return,
+  // because at some point it should, but at that point we're no longer
+  // deferring events.
+  if (!LoadOnStartRequestCalled()) {
+    mDeferralState = DeferralState::None;
+    mDeferringEvents = false;
+    return;
+  }
+
+  mReplayBlocker = aReplayBlocker;
+  nsCOMPtr<nsIEventTarget> target = GetODATarget();
+  target->Dispatch(NewRunnableMethod("HttpChannelChild::ReplayOnDataAvailable",
+                                     this,
+                                     &HttpChannelChild::ReplayOnDataAvailable));
+}
+
+void HttpChannelChild::ReplayOnDataAvailable() {
+  int64_t progressMax;
+  if (NS_FAILED(GetContentLength(&progressMax))) {
+    progressMax = -1;
+  }
+
+  size_t len = mDeferredBytes.Length();
+  MOZ_ASSERT(len <= UINT32_MAX);
+
+  const int64_t progress = int64_t(mDeferredDataAvailableOffset) + int64_t(len);
+
+  const nsresult transportStatus = mDeferredTransportStatus;
+
+  // ReplayOnDataAvailable will be run on retargeted thread if applicable,
+  // however OnStatus/OnProgress event can only be fired on main thread. We need
+  // to dispatch the status/progress event handling back to main thread with the
+  // appropriate event target for networking.
+  if (NS_IsMainThread()) {
+    DoOnStatus(this, transportStatus);
+    DoOnProgress(this, progress, progressMax);
+  } else {
+    RefPtr<HttpChannelChild> self = this;
+    nsCOMPtr<nsISerialEventTarget> neckoTarget = GetNeckoTarget();
+    MOZ_ASSERT(neckoTarget);
+
+    DebugOnly<nsresult> rv = neckoTarget->Dispatch(
+        NS_NewRunnableFunction(
+            "net::HttpChannelChild::ReplayOnDataAvailable",
+            [self, transportStatus, progress, progressMax]() {
+              self->DoOnStatus(self, transportStatus);
+              self->DoOnProgress(self, progress, progressMax);
+            }),
+        NS_DISPATCH_NORMAL);
+    MOZ_ASSERT(NS_SUCCEEDED(rv));
+  }
+  if (len) {
+    nsCOMPtr<nsIInputStream> stream;
+    nsresult rv = NS_NewByteInputStream(getter_AddRefs(stream),
+                                        std::move(mDeferredBytes));
+    if (NS_SUCCEEDED(rv)) {
+      DoOnDataAvailable(this, stream, mDeferredDataAvailableOffset,
+                        uint32_t(len));
+      MOZ_ASSERT(mDeferredBytes.IsEmpty());
+      stream->Close();
+    } else {
+      CancelOnMainThread(rv,
+                         "HttpChannelChild NS_NewByteInputStream failed"_ns);
+      mDeferredDataFinishedStatus.reset();
+    }
+  }
+  mDeferredEvictionNotified = false;
+  mDeferringEvents = false;
+  if (mDeferredDataFinishedStatus) {
+    SendOnDataFinished(mDeferredDataFinishedStatus.extract());
+  }
+
+  NS_DispatchToMainThread(
+      NewRunnableMethod("HttpChannelChild::ReplayOnStopRequest", this,
+                        &HttpChannelChild::ReplayOnStopRequest));
+}
+
+void HttpChannelChild::ReplayOnStopRequest() {
+  MOZ_ASSERT(NS_IsMainThread());
+  mDeferralState = DeferralState::None;
+  // Released once the replay is over, so the document can enter BFCache again.
+  nsCOMPtr<nsISupports> replayBlocker = std::move(mReplayBlocker);
+  if (mDeferredStopRequest) {
+    mDeferredStopRequest = false;
+    DoPreOnStopRequest(mDeferredStopRequestChannelStatus);
+
+    {
+      // We must flush the queue before we Send__delete__
+      // (although we really shouldn't receive any msgs after OnStop),
+      // so make sure this goes out of scope before then.
+      AutoEventEnqueuer ensureSerialDispatch(mEventQ);
+
+      DoOnStopRequest(this, mDeferredStopRequestChannelStatus);
+      // DoOnStopRequest() calls ReleaseListeners()
+    }
+    ContinueOnStopRequest();
+  }
 }
 
 }  // namespace mozilla::net

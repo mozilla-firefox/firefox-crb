@@ -2633,6 +2633,19 @@
   value: @IS_ANDROID@
   mirror: always
 
+# If true, enable BFCache deferrable requests
+- name: docshell.shistory.bfcache.enable_deferrable_requests
+  type: bool
+  value: true
+  mirror: always
+
+# Maximum bytes a single deferred response may buffer while a page is in
+# BFCache.  If exceeded the page is evicted from BFCache.
+- name: docshell.shistory.bfcache.max_deferred_bytes
+  type: RelaxedAtomicUint32
+  value: 1048576
+  mirror: always
+
 # If true, page with beforeunload event listeners can be bfcached.
 - name: docshell.shistory.bfcache.ship_allow_beforeunload_listeners
   type: bool

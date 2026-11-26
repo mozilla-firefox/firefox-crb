@@ -149,6 +149,10 @@ nsresult LoadInfoArgsToLoadInfo(const mozilla::net::LoadInfoArgs& aLoadInfoArgs,
   GETTER(bool, SkipContentSniffing, skipContentSniffing, false)                \
   SETTER(bool, SkipContentSniffing)                                            \
                                                                                \
+  GETTER(nsILoadInfo::BFCacheHandling, HandlingInBFCache, handlingInBFCache,   \
+         nsILoadInfo::BFCacheBlock)                                            \
+  SETTER(nsILoadInfo::BFCacheHandling, HandlingInBFCache)                      \
+                                                                               \
   GETTER(uint32_t, HttpsOnlyStatus, httpsOnlyStatus,                           \
          nsILoadInfo::HTTPS_ONLY_UNINITIALIZED)                                \
   SETTER(uint32_t, HttpsOnlyStatus)                                            \

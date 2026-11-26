@@ -1,0 +1,49 @@
+/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "nsISupports.idl"
+
+/**
+ * nsIDeferrableRequest
+ *
+ * Requests that implement this interface can put their event delivery on
+ * hold. The purpose is to let network activity continue while the page
+ * that started the request is in the BFCache but without reporting
+ * page-visible events while the page is in the BFCache, instead reporting
+ * them if/when the user goes back to the page.
+ */
+[uuid(b5ae8fae-4f63-4417-b664-e6253726f7e5)]
+interface nsIDeferrableRequest : nsISupports
+{
+  /**
+   * Whether this request should actually be deferred when entering BFCache.
+   * For channels this is whether nsILoadInfo.handlingInBFCache is
+   * BFCacheDefer; a request that is not deferred keeps its document out of
+   * BFCache.
+   */
+  [noscript, notxpcom] boolean shouldBeDeferred();
+
+  /**
+   * Put event delivery on hold. The request stays in the document's load
+   * group, which stays with the document while it is in the BFCache.
+   */
+  [noscript, notxpcom] void deferRequestEvents();
+
+  /**
+   * Restore the priority and resume the events held back by
+   * `deferRequestEvents`. Does nothing if the request is not deferred.
+   *
+   * aReplayBlocker keeps the document out of BFCache while it is alive. The
+   * request holds on to it until all the resumed events have been delivered.
+   */
+  [noscript, notxpcom] void resumeRequestEvents(in nsISupports aReplayBlocker);
+
+  /**
+   * Whether events are held back by `deferRequestEvents`, or have not all
+   * been delivered yet since `resumeRequestEvents`.
+   */
+  [noscript, notxpcom] boolean isDeferred();
+
+};

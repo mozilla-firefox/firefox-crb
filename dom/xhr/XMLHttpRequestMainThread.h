@@ -177,6 +177,7 @@ class RequestHeaders {
 
 class nsXHRParseEndListener;
 class XMLHttpRequestDoneNotifier;
+class XMLHttpRequestTimeoutThawObserver;
 
 // Make sure that any non-DOM interfaces added here are also added to
 // nsXMLHttpRequestXPCOMifier.
@@ -193,6 +194,7 @@ class XMLHttpRequestMainThread final : public XMLHttpRequest,
   friend class nsXHRParseEndListener;
   friend class nsXMLHttpRequestXPCOMifier;
   friend class XMLHttpRequestDoneNotifier;
+  friend class XMLHttpRequestTimeoutThawObserver;
 
  public:
   // Make sure that any additions done to ErrorType enum are also mirrored in
@@ -675,6 +677,9 @@ class XMLHttpRequestMainThread final : public XMLHttpRequest,
   void StartTimeoutTimer();
   void HandleTimeoutCallback();
   void CancelTimeoutTimer();
+
+  // Set while a timeout that elapsed in BFCache waits for the window to thaw.
+  RefPtr<XMLHttpRequestTimeoutThawObserver> mTimeoutThawObserver;
 
   nsCOMPtr<nsIRunnable> mResumeTimeoutRunnable;
 

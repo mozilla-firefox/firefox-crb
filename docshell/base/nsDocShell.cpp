@@ -90,6 +90,7 @@
 #include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/ToJSValue.h"
 #include "mozilla/dom/UserActivation.h"
+#include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/dom/ChildSHistory.h"
 #include "mozilla/dom/nsCSPContext.h"
 #include "mozilla/dom/nsHTTPSOnlyUtils.h"
@@ -117,6 +118,7 @@
 #include "nsIContentInlines.h"
 #include "nsIContentSecurityPolicy.h"
 #include "nsIController.h"
+#include "nsIDeferrableRequest.h"
 #include "nsIDocShellTreeItem.h"
 #include "nsIDocShellTreeOwner.h"
 #include "nsIDocumentViewer.h"
@@ -225,6 +227,7 @@
 #include "nsPIDOMWindowInlines.h"
 #include "nsPingListener.h"
 #include "nsPoint.h"
+#include "nsProxyRelease.h"
 #include "nsQueryObject.h"
 #include "nsQueryActor.h"
 #include "nsRect.h"
@@ -1474,6 +1477,9 @@ void nsDocShell::FirePageHideShowNonRecursive(
         inner->FireDelayedDOMEvents(false);
       }
     }
+
+    // pageshow has fired by now, deferred events are delivered after it.
+    ResumeRequestsDeferredForBFCache();
   } else if (!mFiredUnloadEvent) {
     // XXXBFCache check again that the page can enter bfcache.
     // XXXBFCache should mTiming->NotifyUnloadEventStart()/End() be called here?
@@ -1494,6 +1500,12 @@ void nsDocShell::FirePageHideShowNonRecursive(
     MaybeFirePageSwapOnDeactivate(aPageSwapTargetInfo, aNavigationType);
 
     viewer->PageHide(false);
+
+    // Only now is the page really being cached, and pagehide handlers have
+    // had their chance to start requests too. This docshell, and so
+    // mLoadGroup, stays with the document while it is cached: the navigation
+    // that replaced it committed in a new BrowsingContext.
+    DeferRequestsForBFCache();
 
     RefPtr<PresShell> presShell = GetPresShell();
     if (presShell) {
@@ -7034,6 +7046,158 @@ nsDocShell::CreateAboutBlankDocumentViewer(
 }
 
 /* static */
+bool nsDocShell::BFCacheRequestDeferralEnabled() {
+  return StaticPrefs::docshell_shistory_bfcache_enable_deferrable_requests() &&
+         StaticPrefs::docshell_navigation_new_load_group();
+}
+
+// Like nsDocShell::RequestAllowedInBFCache, but ignoring whether deferral is
+// enabled.
+static bool RequestHandledInBFCache(nsIRequest* aRequest) {
+  // Note: requests that are not channels, e.g. WebSocketImpl puts itself in the
+  // load group as a bare nsIRequest & isn't deferrable & block bfcache.
+  nsCOMPtr<nsIDeferrableRequest> deferrable = do_QueryInterface(aRequest);
+  return deferrable && deferrable->ShouldBeDeferred();
+}
+
+bool nsDocShell::RequestAllowedInBFCache(nsIRequest* aRequest) const {
+  return mBFCacheRequestDeferral && RequestHandledInBFCache(aRequest);
+}
+
+namespace {
+
+// Lifts the REPLAYING_DEFERRED_EVENTS block the parent raised when it restored
+// the document. Each request holds on to it until its replay is over.
+class DeferredRequestsReplayBlocker final : public nsISupports {
+ public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+
+  explicit DeferredRequestsReplayBlocker(WindowGlobalChild* aWindowGlobal)
+      : mWindowGlobal(new nsMainThreadPtrHolder<WindowGlobalChild>(
+            "DeferredRequestsReplayBlocker", aWindowGlobal)) {}
+
+ private:
+  ~DeferredRequestsReplayBlocker() {
+    auto unblock = [windowGlobal = std::move(mWindowGlobal)]() {
+      if (windowGlobal->CanSend()) {
+        windowGlobal->UnblockBFCacheFor(
+            BFCacheStatus::REPLAYING_DEFERRED_EVENTS);
+      }
+    };
+    if (NS_IsMainThread()) {
+      unblock();
+      return;
+    }
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "DeferredRequestsReplayBlocker::Unblock", std::move(unblock)));
+  }
+
+  nsMainThreadPtrHandle<WindowGlobalChild> mWindowGlobal;
+};
+
+NS_IMPL_ISUPPORTS0(DeferredRequestsReplayBlocker)
+
+}  // namespace
+
+void nsDocShell::DeferRequestsForBFCache() {
+  if (!mBFCacheRequestDeferral) {
+    return;
+  }
+  RefPtr<Document> doc = GetExtantDocument();
+  if (!doc || !doc->IsBFCacheEligible()) {
+    return;
+  }
+
+  // The document's own group, not mLoadGroup, which is the navigation's if the
+  // navigation that replaced this document has not ended here yet.
+  nsCOMPtr<nsILoadGroup> loadGroup = doc->GetDocumentLoadGroup();
+  if (!loadGroup) {
+    return;
+  }
+
+  nsCOMPtr<nsISimpleEnumerator> enumerator;
+  loadGroup->GetRequests(getter_AddRefs(enumerator));
+
+  nsTArray<nsCOMPtr<nsIRequest>> toDefer;
+  for (const auto& request : SimpleEnumerator<nsIRequest>(enumerator)) {
+    nsCOMPtr<nsIDeferrableRequest> deferrable = do_QueryInterface(request);
+    if (!deferrable || !deferrable->ShouldBeDeferred()) {
+      continue;
+    }
+    if (deferrable->IsDeferred()) {
+      MOZ_ASSERT_UNREACHABLE(
+          "REPLAYING_DEFERRED_EVENTS keeps a document out of BFCache until "
+          "its deferred events are replayed");
+      continue;
+    }
+    toDefer.AppendElement(request);
+  }
+
+  if (toDefer.IsEmpty()) {
+    return;
+  }
+
+  Document::EnsureBFCacheEvictionObserver();
+
+  for (auto& request : toDefer) {
+    if (MOZ_LOG_TEST(gPageCacheLog, LogLevel::Debug)) [[unlikely]] {
+      nsAutoCString nameStr;
+      request->GetName(nameStr);
+      MOZ_LOG_FMT(gPageCacheLog, LogLevel::Debug,
+                  "nsDocShell {}: Deferring request {} {}", fmt::ptr(this),
+                  fmt::ptr(request.get()), nameStr.get());
+    }
+
+    nsCOMPtr<nsIDeferrableRequest> deferrable = do_QueryInterface(request);
+    deferrable->DeferRequestEvents();
+  }
+}
+
+void nsDocShell::ResumeRequestsDeferredForBFCache() {
+  // Created even if there is nothing to replay, so that dropping it lifts the
+  // block the parent raised on restore. The parent reads the prefs, not this
+  // document's latch.
+  nsCOMPtr<nsISupports> replayBlocker;
+  if (mBFCacheRequestDeferral || BFCacheRequestDeferralEnabled()) {
+    if (RefPtr<Document> doc = GetExtantDocument()) {
+      if (WindowGlobalChild* wgc = doc->GetWindowGlobalChild()) {
+        replayBlocker = new DeferredRequestsReplayBlocker(wgc);
+      }
+    }
+  }
+
+  RefPtr<Document> doc = GetExtantDocument();
+  nsCOMPtr<nsILoadGroup> loadGroup =
+      doc ? doc->GetDocumentLoadGroup() : nullptr;
+  if (!loadGroup) {
+    return;
+  }
+
+  nsCOMPtr<nsISimpleEnumerator> enumerator;
+  loadGroup->GetRequests(getter_AddRefs(enumerator));
+
+  nsTArray<nsCOMPtr<nsIDeferrableRequest>> toResume;
+  for (const auto& request : SimpleEnumerator<nsIRequest>(enumerator)) {
+    nsCOMPtr<nsIDeferrableRequest> deferrable = do_QueryInterface(request);
+    if (deferrable && deferrable->IsDeferred()) {
+      toResume.AppendElement(std::move(deferrable));
+    }
+  }
+
+  for (auto& deferrable : toResume) {
+    // If the document was unloaded before this runs, the events stay deferred.
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "nsDocShell::ResumeRequestsDeferredForBFCache",
+        [self = RefPtr{this}, deferrable = std::move(deferrable),
+         replayBlocker]() {
+          if (!self->mFiredUnloadEvent) {
+            deferrable->ResumeRequestEvents(replayBlocker);
+          }
+        }));
+  }
+}
+
+/* static */
 void nsDocShell::ReportBFCacheComboTelemetry(uint32_t aCombo) {
   // There are many possible reasons to make a request fails to use BFCache
   // (see BFCacheStatus in dom/base/Document.h), and we'd like to record
@@ -7277,6 +7441,9 @@ nsresult nsDocShell::CreateDocumentViewer(const nsACString& aContentType,
   // started.
   if (HasPendingNavigationLoadGroup()) {
     CommitNavigationLoadGroup();
+    RecountRequestsBlockingBFCache();
+  } else if (mBFCacheRequestDeferral && !BFCacheRequestDeferralEnabled()) {
+    RecountRequestsBlockingBFCache();
   }
 
   // Set mFiredUnloadEvent = false so that the unload handler for the
@@ -13507,10 +13674,38 @@ static bool IsFaviconLoad(nsIRequest* aRequest) {
                    nsIContentPolicy::TYPE_INTERNAL_IMAGE_FAVICON;
 }
 
+bool nsDocShell::RequestBlocksBFCache(nsIRequest* aRequest) {
+  // Ignore favicon loads, they don't need to block caching.
+  if (IsFaviconLoad(aRequest) ||
+      (mBFCacheRequestDeferral && RequestHandledInBFCache(aRequest))) {
+    return false;
+  }
+
+  return true;
+}
+
+void nsDocShell::RecountRequestsBlockingBFCache() {
+  // The outgoing document's requests are gone, and the requests left in
+  // mLoadGroup are the new document's.
+  mBFCacheRequestDeferral = BFCacheRequestDeferralEnabled();
+  mRequestForBlockingFromBFCacheCount = 0;
+  if (mLoadGroup) {
+    mLoadGroup->VisitRequests([&](nsIRequest* aRequest) {
+      if (RequestBlocksBFCache(aRequest)) {
+        ++mRequestForBlockingFromBFCacheCount;
+      }
+      return true;
+    });
+  }
+  // The current window context is still the outgoing document's, so don't
+  // report the incoming document's requests to it. The incoming document's
+  // WindowGlobalParent starts out with Nothing(), so match that.
+  mSingleChannelId = Nothing();
+}
+
 void nsDocShell::RecordSingleChannelId(bool aStartRequest,
                                        nsIRequest* aRequest) {
-  // Ignore favicon loads, they don't need to block caching.
-  if (IsFaviconLoad(aRequest)) {
+  if (!RequestBlocksBFCache(aRequest)) {
     return;
   }
 
@@ -13518,74 +13713,79 @@ void nsDocShell::RecordSingleChannelId(bool aStartRequest,
 
   mRequestForBlockingFromBFCacheCount += aStartRequest ? 1 : -1;
 
-  if (mBrowsingContext->GetCurrentWindowContext()) {
-    // We have three states: no request, one request with an id and
-    // eiher one request without an id or multiple requests. Nothing() is no
-    // request, Some(non-zero) is one request with an id and Some(0) is one
-    // request without an id or multiple requests.
-    Maybe<uint64_t> singleChannelId;
-    if (mRequestForBlockingFromBFCacheCount > 1) {
-      singleChannelId = Some(0);
-    } else if (mRequestForBlockingFromBFCacheCount == 1) {
-      nsCOMPtr<nsIIdentChannel> identChannel;
-      if (aStartRequest) {
-        identChannel = do_QueryInterface(aRequest);
-      } else {
-        // aChannel is the channel that's being removed, but we need to check if
-        // the remaining channel in the loadgroups has an id.
-        for (nsILoadGroup* group :
-             {mLoadGroup.get(), mOutgoingLoadGroup.get()}) {
-          if (!group || identChannel) {
-            continue;
-          }
-          group->VisitRequests([&](nsIRequest* aRemaining) {
-            return IsFaviconLoad(aRemaining) ||
-                   !(identChannel = do_QueryInterface(aRemaining));
-          });
-        }
-      }
-
-      if (identChannel) {
-        singleChannelId = Some(identChannel->ChannelId());
-      } else {
-        singleChannelId = Some(0);
-      }
+  // We have three states: no request, one request with an id and
+  // eiher one request without an id or multiple requests. Nothing() is no
+  // request, Some(non-zero) is one request with an id and Some(0) is one
+  // request without an id or multiple requests.
+  Maybe<uint64_t> singleChannelId;
+  if (mRequestForBlockingFromBFCacheCount > 1) {
+    singleChannelId = Some(0);
+  } else if (mRequestForBlockingFromBFCacheCount == 1) {
+    nsCOMPtr<nsIIdentChannel> identChannel;
+    if (aStartRequest) {
+      identChannel = do_QueryInterface(aRequest);
     } else {
-      MOZ_ASSERT(mRequestForBlockingFromBFCacheCount == 0);
-      singleChannelId = Nothing();
-    }
-
-    if (MOZ_UNLIKELY(MOZ_LOG_TEST(gSHIPBFCacheLog, LogLevel::Verbose))) {
-      nsAutoCString uri("[no uri]");
-      if (mCurrentURI) {
-        uri = mCurrentURI->GetSpecOrDefault();
-      }
-      if (singleChannelId.isNothing()) {
-        MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
-                ("Loadgroup for %s doesn't have any requests relevant for "
-                 "blocking BFCache",
-                 uri.get()));
-      } else if (singleChannelId.value() == 0) {
-        MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
-                ("Loadgroup for %s has multiple requests relevant for blocking "
-                 "BFCache",
-                 uri.get()));
-      } else {
-        MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
-                ("Loadgroup for %s has one request with id %" PRIu64
-                 " relevant for blocking BFCache",
-                 uri.get(), singleChannelId.value()));
+      // aChannel is the channel that's being removed, but we need to check
+      // if the remaining channel has an id.
+      for (nsILoadGroup* group : {mLoadGroup.get(), mOutgoingLoadGroup.get()}) {
+        if (!group || identChannel) {
+          continue;
+        }
+        group->VisitRequests([&](nsIRequest* aRemaining) {
+          if (!RequestBlocksBFCache(aRemaining)) {
+            return true;
+          }
+          identChannel = do_QueryInterface(aRemaining);
+          return false;
+        });
       }
     }
 
-    if (mSingleChannelId != singleChannelId) {
-      mSingleChannelId = singleChannelId;
-      WindowGlobalChild* wgc =
-          mBrowsingContext->GetCurrentWindowContext()->GetWindowGlobalChild();
-      if (wgc) {
-        wgc->SendSetSingleChannelId(singleChannelId);
-      }
+    if (identChannel) {
+      singleChannelId = Some(identChannel->ChannelId());
+    } else {
+      singleChannelId = Some(0);
     }
+  }
+  UpdateSingleChannelId(singleChannelId);
+}
+
+void nsDocShell::UpdateSingleChannelId(
+    const Maybe<uint64_t>& aSingleChannelId) {
+  if (mSingleChannelId == aSingleChannelId) {
+    return;
+  }
+
+  WindowContext* windowContext = mBrowsingContext->GetCurrentWindowContext();
+  if (!windowContext) {
+    return;
+  }
+
+  if (MOZ_UNLIKELY(MOZ_LOG_TEST(gSHIPBFCacheLog, LogLevel::Verbose))) {
+    nsAutoCString uri("[no uri]");
+    if (mCurrentURI) {
+      uri = mCurrentURI->GetSpecOrDefault();
+    }
+    if (aSingleChannelId.isNothing()) {
+      MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
+              ("Loadgroup for %s doesn't have any requests relevant for "
+               "blocking BFCache",
+               uri.get()));
+    } else if (aSingleChannelId.value() == 0) {
+      MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
+              ("Loadgroup for %s has %u requests relevant for blocking BFCache",
+               uri.get(), mRequestForBlockingFromBFCacheCount));
+    } else {
+      MOZ_LOG(gSHIPBFCacheLog, LogLevel::Verbose,
+              ("Loadgroup for %s has one request with id %" PRIu64
+               " relevant for blocking BFCache",
+               uri.get(), aSingleChannelId.value()));
+    }
+  }
+
+  mSingleChannelId = aSingleChannelId;
+  if (WindowGlobalChild* wgc = windowContext->GetWindowGlobalChild()) {
+    wgc->SendSetSingleChannelId(aSingleChannelId);
   }
 }
 

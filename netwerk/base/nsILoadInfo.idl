@@ -505,6 +505,23 @@ interface nsILoadInfo : nsISupports
   [infallible] attribute boolean skipContentSniffing;
 
   /**
+   * How a request that is still in flight is treated when its document enters
+   * BFCache.
+   */
+  cenum BFCacheHandling : 8 {
+    // The request keeps the document out of BFCache.
+    BFCacheBlock = 0,
+    // The request's events are held back while the document is in BFCache
+    // and delivered when it is shown again. See nsIDeferrableRequest.
+    BFCacheDefer = 1,
+  };
+
+  /**
+   * Defaults to BFCacheBlock.
+   */
+  [infallible] attribute nsILoadInfo_BFCacheHandling handlingInBFCache;
+
+  /**
    * (default) If this flag is set, it has not yet been determined if the
    * HTTPS-Only mode will upgrade the request.
    */

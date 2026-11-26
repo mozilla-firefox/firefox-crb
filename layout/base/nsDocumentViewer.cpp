@@ -870,13 +870,13 @@ nsDocumentViewer::LoadComplete(nsresult aStatus) {
       }
 
       nsPIDOMWindowInner* innerWindow = window->GetCurrentInnerWindow();
-      d->SetLoadEventFiring(true);
+      d->SetLoadEventFiring(Document::LoadEventFireState::Firing);
       RefPtr<nsPresContext> presContext = mPresContext;
       // MOZ_KnownLive due to bug 1506441
       EventDispatcher::Dispatch(
           MOZ_KnownLive(nsGlobalWindowOuter::Cast(window)), presContext, &event,
           nullptr, &status);
-      d->SetLoadEventFiring(false);
+      d->SetLoadEventFiring(Document::LoadEventFireState::Fired);
 
       if (timing) {
         timing->NotifyLoadEventEnd();

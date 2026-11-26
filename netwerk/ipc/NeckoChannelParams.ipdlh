@@ -36,6 +36,7 @@ using mozilla::dom::ForceMediaDocument from "mozilla/dom/LoadURIOptionsBinding.h
 using nsILoadInfo::CrossOriginEmbedderPolicy from "nsILoadInfo.h";
 using nsILoadInfo::StoragePermissionState from "nsILoadInfo.h";
 using nsILoadInfo::IPAddressSpace from "nsILoadInfo.h";
+using nsILoadInfo::BFCacheHandling from "nsILoadInfo.h";
 using struct mozilla::dom::LoadingSessionHistoryInfo from "mozilla/dom/SessionHistoryEntry.h";
 using mozilla::dom::RequestMode from "mozilla/dom/RequestBinding.h";
 using mozilla::net::LinkHeader from "nsNetUtil.h";
@@ -197,6 +198,7 @@ struct LoadInfoArgs
   nsString                    cspNonce;
   nsString                    integrityMetadata;
   bool                        skipContentSniffing;
+  BFCacheHandling             handlingInBFCache;
   uint32_t                    httpsOnlyStatus;
   bool                        hstsStatus;
   bool                        hasValidUserGestureActivation;

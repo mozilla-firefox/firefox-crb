@@ -426,14 +426,20 @@ bool nsDocLoader::IsBusy() {
     return false;
   }
 
-  // Check if any in-process sub-document is awaiting its 'load' event:
-  bool busy;
-  rv = mLoadGroup->IsPending(&busy);
-  if (NS_FAILED(rv)) {
-    return false;
-  }
-  if (busy) {
-    return true;
+  // Check if any in-process sub-document is awaiting its 'load' event.
+  // A document restored from BFCache was done loading before it was cached.
+  // What is still pending in its load group are the requests it deferred
+  // while cached, which are not part of the restore.
+  if (!mIsRestoringDocument ||
+      !nsDocShell::Cast(ds)->DefersRequestsInBFCache()) {
+    bool busy;
+    rv = mLoadGroup->IsPending(&busy);
+    if (NS_FAILED(rv)) {
+      return false;
+    }
+    if (busy) {
+      return true;
+    }
   }
 
   /* check its child document loaders... */
@@ -1036,12 +1042,12 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
               // per spec.
               event.mTarget = doc;
               nsEventStatus unused = nsEventStatus_eIgnore;
-              doc->SetLoadEventFiring(true);
+              doc->SetLoadEventFiring(Document::LoadEventFireState::Firing);
               // MOZ_KnownLive due to bug 1506441
               EventDispatcher::Dispatch(
                   MOZ_KnownLive(nsGlobalWindowOuter::Cast(window)), nullptr,
                   &event, nullptr, &unused);
-              doc->SetLoadEventFiring(false);
+              doc->SetLoadEventFiring(Document::LoadEventFireState::Fired);
 
               // Now unsuppress painting on the presshell, if we
               // haven't done that yet.

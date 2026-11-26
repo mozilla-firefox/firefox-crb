@@ -344,6 +344,7 @@ enum BFCacheStatus {
   ACTIVE_WEBTRANSPORT = 1 << 17,         // Status 17
   PAGE_LOADING = 1 << 18,                // Status 18
   PARSER_ABORTED = 1 << 19,              // Status 19
+  REPLAYING_DEFERRED_EVENTS = 1 << 20,   // Status 20
 };
 
 }  // namespace dom
@@ -609,6 +610,8 @@ class Document : public nsINode,
   using ReferrerPolicyEnum = dom::ReferrerPolicy;
   using AdoptedStyleSheetCloneCache =
       nsRefPtrHashtable<nsPtrHashKey<const StyleSheet>, StyleSheet>;
+
+  enum class LoadEventFireState : uint8_t { NotFired, Firing, Fired };
 
   // nsINode overrides the new operator for DOM Arena allocation.
   // to use the default one, we need to bring it back again
@@ -1306,6 +1309,10 @@ class Document : public nsINode,
 
   bool IsBFCachingAllowed() const { return !mBFCacheDisallowed; }
 
+  // Checks for explicit disallowal and if the document can be considered
+  // eligible, (e.g. load event has been fired.)
+  bool IsBFCacheEligible() const;
+
   // Accepts null to clear the BFCache entry too.
   void SetBFCacheEntry(nsIBFCacheEntry* aEntry);
 
@@ -1691,6 +1698,10 @@ class Document : public nsINode,
   nsresult InitPermissionsPolicy(nsIChannel* aChannel);
 
   void EnsureNotEnteringAndExitFullscreen();
+
+  // Registers the observer that evicts a document from BFCache when one of its
+  // deferred requests has buffered too much.
+  static void EnsureBFCacheEvictionObserver();
 
  protected:
   friend class nsUnblockOnloadEvent;
@@ -3140,9 +3151,9 @@ class Document : public nsINode,
   void FireOrClearPostMessageEvents(bool aFireEvents);
 
   /**
-   * Flag whether we're about to fire the window's load event for this document.
+   * Informs whether we are firing the load event or have fired it, or not.
    */
-  void SetLoadEventFiring(bool aFiring) { mLoadEventFiring = aFiring; }
+  void SetLoadEventFiring(LoadEventFireState aLoadEventState);
 
   /**
    * Test whether we should be firing a load event for this document after a
@@ -5486,7 +5497,7 @@ class Document : public nsINode,
   // <https://github.com/whatwg/html/issues/4292>. What we have instead is a
   // flag that is set while the window's 'load' event is firing if this document
   // is the window's document.
-  bool mLoadEventFiring : 1;
+  LoadEventFireState mLoadEventFiring : 2;
 
   // The HTML spec has a "mute iframe load" flag, but that doesn't seem to have
   // the right semantics.  See <https://github.com/whatwg/html/issues/4292>.

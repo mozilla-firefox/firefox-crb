@@ -343,6 +343,7 @@
 #include "nsDOMString.h"
 #include "nsDeviceContext.h"
 #include "nsDocShell.h"
+#include "nsDocShellCID.h"
 #include "nsDocShellLoadTypes.h"
 #include "nsError.h"
 #include "nsEscape.h"
@@ -540,6 +541,48 @@ static LinkedList<Document>& AllDocumentsList() {
 }
 
 static LazyLogModule gDocumentLeakPRLog("DocumentLeak");
+
+class BFCacheEvictionObserver final : public nsIObserver {
+ public:
+  NS_DECL_ISUPPORTS
+
+  NS_IMETHOD Observe(nsISupports*, const char* aTopic,
+                     const char16_t* aData) override {
+    if (strcmp(aTopic, NS_BFCACHE_EVICT_DOCUMENT_TOPIC) != 0) {
+      return NS_OK;
+    }
+    nsresult rv;
+    uint64_t windowId = nsDependentString(aData).ToInteger64(&rv);
+    if (NS_FAILED(rv)) {
+      return NS_OK;
+    }
+    auto* win = nsGlobalWindowInner::GetInnerWindowWithId(windowId);
+    if (win && win->GetDoc()) {
+      win->GetDoc()->RemoveFromBFCacheSync();
+    }
+    return NS_OK;
+  }
+
+ private:
+  ~BFCacheEvictionObserver() = default;
+};
+
+NS_IMPL_ISUPPORTS(BFCacheEvictionObserver, nsIObserver)
+
+static StaticRefPtr<BFCacheEvictionObserver> sBFCacheEvictionObserver;
+
+/* static */
+void Document::EnsureBFCacheEvictionObserver() {
+  if (sBFCacheEvictionObserver) {
+    return;
+  }
+  sBFCacheEvictionObserver = new BFCacheEvictionObserver();
+  nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+  if (obs) {
+    obs->AddObserver(sBFCacheEvictionObserver, NS_BFCACHE_EVICT_DOCUMENT_TOPIC,
+                     false);
+  }
+}
 static LazyLogModule gCspPRLog("CSP");
 LazyLogModule gUserInteractionPRLog("UserInteraction");
 
@@ -1486,6 +1529,14 @@ Document::InternalCommandDataHashtable*
 
 // static
 void Document::Shutdown() {
+  if (sBFCacheEvictionObserver) {
+    nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+    if (obs) {
+      obs->RemoveObserver(sBFCacheEvictionObserver,
+                          NS_BFCACHE_EVICT_DOCUMENT_TOPIC);
+    }
+    sBFCacheEvictionObserver = nullptr;
+  }
   if (sInternalCommandDataHashtable) {
     sInternalCommandDataHashtable->Clear();
     delete sInternalCommandDataHashtable;
@@ -1585,7 +1636,7 @@ Document::Document(const char* aContentType,
       mParserAborted(false),
       mReportedDocumentUseCounters(false),
       mHasReportedShadowDOMUsage(false),
-      mLoadEventFiring(false),
+      mLoadEventFiring(LoadEventFireState::NotFired),
       mSkipLoadEventAfterClose(false),
       mDisableCookieAccess(false),
       mDisableDocWrite(false),
@@ -2110,6 +2161,21 @@ bool Document::IsAboutPage() const {
 
 void Document::ConstructUbiNode(void* storage) {
   JS::ubi::Concrete<Document>::construct(storage, this);
+}
+
+static bool DefersRequestsInBFCache(const Document& aDocument) {
+  nsDocShell* docShell = nsDocShell::Cast(aDocument.GetDocShell());
+  return docShell && docShell->DefersRequestsInBFCache();
+}
+
+void Document::SetLoadEventFiring(LoadEventFireState aLoadEventFireState) {
+  mLoadEventFiring = aLoadEventFireState;
+  if (aLoadEventFireState == LoadEventFireState::Fired &&
+      DefersRequestsInBFCache(*this)) {
+    if (auto* wgc = GetWindowGlobalChild()) {
+      wgc->UnblockBFCacheFor(BFCacheStatus::PAGE_LOADING);
+    }
+  }
 }
 
 void Document::LoadEventFired() {
@@ -8076,6 +8142,28 @@ void Document::DisallowBFCaching(uint32_t aStatus) {
   mBFCacheDisallowed = true;
 }
 
+bool Document::IsBFCacheEligible() const {
+  if (!IsBFCachingAllowed()) {
+    return false;
+  }
+
+  if (mLoadEventFiring == LoadEventFireState::Fired) {
+    return true;
+  }
+
+  // Initial about:blank documents are eligible for bfcache even though they
+  // may not have fired their load event.
+  if (IsInitialDocument() && mReadyState == ReadyState::READYSTATE_COMPLETE) {
+    MOZ_LOG_FMT(gPageCacheLog, LogLevel::Debug,
+                "Initial document {} not fired its load event, still "
+                "considered eligible",
+                (void*)this);
+    return true;
+  }
+
+  return false;
+}
+
 void Document::SetBFCacheEntry(nsIBFCacheEntry* aEntry) {
   MOZ_ASSERT(IsBFCachingAllowed() || !aEntry, "You should have checked!");
 
@@ -8751,7 +8839,8 @@ void Document::SetScriptGlobalObject(
 
   if (mReadyState != READYSTATE_COMPLETE) {
     if (auto* wgc = GetWindowGlobalChild()) {
-      // This gets unset on OnPageShow.
+      // This gets unset once the load event has fired, or on OnPageShow when
+      // requests aren't deferred for BFCache.
       wgc->BlockBFCacheFor(BFCacheStatus::PAGE_LOADING);
     }
   }
@@ -11001,7 +11090,7 @@ Document* Document::Open(const Optional<nsAString>& /* unused */,
   // correctly, which we don't right now for the about:blank case.
 
   // Step 17, but note <https://github.com/whatwg/html/issues/4292>.
-  mSkipLoadEventAfterClose = mLoadEventFiring;
+  mSkipLoadEventAfterClose = mLoadEventFiring == LoadEventFireState::Firing;
 
   // Preliminary to steps 18-21.  Set our ready state to uninitialized before
   // we do anything else, so we can then proceed to later ready state levels.
@@ -12589,6 +12678,14 @@ bool Document::CanSavePresentation(nsIRequest* aNewRequest,
     }
   }
 
+  if (DefersRequestsInBFCache(*this) && !IsBFCacheEligible()) {
+    MOZ_LOG(
+        gPageCacheLog, mozilla::LogLevel::Verbose,
+        ("Save of %s blocked because the load event has not fired", uri.get()));
+    aBFCacheCombo |= BFCacheStatus::PAGE_LOADING;
+    ret = false;
+  }
+
   if (EventHandlingSuppressed()) {
     MOZ_LOG(gPageCacheLog, mozilla::LogLevel::Verbose,
             ("Save of %s blocked on event handling suppression", uri.get()));
@@ -12655,6 +12752,7 @@ bool Document::CanSavePresentation(nsIRequest* aNewRequest,
       part->GetBaseChannel(getter_AddRefs(baseChannel));
     }
 
+    nsDocShell* docShell = nsDocShell::Cast(GetDocShell());
     bool blocked = false;
     loadGroup->VisitRequests([&](nsIRequest* aRequest) {
       if (aRequest == aNewRequest || aRequest == baseChannel.get()) {
@@ -12671,6 +12769,17 @@ bool Document::CanSavePresentation(nsIRequest* aNewRequest,
         }
       }
 
+      if (docShell && docShell->RequestAllowedInBFCache(aRequest)) {
+        if (MOZ_UNLIKELY(MOZ_LOG_TEST(gPageCacheLog, LogLevel::Verbose))) {
+          nsAutoCString requestName;
+          aRequest->GetName(requestName);
+          MOZ_LOG(gPageCacheLog, LogLevel::Verbose,
+                  ("Save of %s: request %s ignored for deciding cache "
+                   "eligibility (deferred)",
+                   uri.get(), requestName.get()));
+        }
+        return true;
+      }
       blocked = true;
 
       // Further requests can only set the same bit; keep going only to log.
@@ -13198,8 +13307,10 @@ void Document::OnPageShow(bool aPersisted, EventTarget* aDispatchStartTarget,
                            aPersisted, aOnlySystemGroup);
   }
 
-  if (auto* wgc = GetWindowGlobalChild()) {
-    wgc->UnblockBFCacheFor(BFCacheStatus::PAGE_LOADING);
+  if (!DefersRequestsInBFCache(*this)) {
+    if (auto* wgc = GetWindowGlobalChild()) {
+      wgc->UnblockBFCacheFor(BFCacheStatus::PAGE_LOADING);
+    }
   }
 
   mIsCompletelyLoaded = true;

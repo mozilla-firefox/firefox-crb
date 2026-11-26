@@ -32,6 +32,7 @@ XPIDL_SOURCES += [
     "nsIContentSniffer.idl",
     "nsIDashboard.idl",
     "nsIDashboardEventNotifier.idl",
+    "nsIDeferrableRequest.idl",
     "nsIDHCPClient.idl",
     "nsIDownloader.idl",
     "nsIEncodedChannel.idl",

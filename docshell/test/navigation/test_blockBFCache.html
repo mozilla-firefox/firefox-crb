@@ -24,9 +24,14 @@ const msePrefs = {
   ]
 };
 
+const deferrableRequests =
+  SpecialPowers.getBoolPref("docshell.navigation.new_load_group") &&
+  SpecialPowers.getBoolPref("docshell.shistory.bfcache.enable_deferrable_requests");
+
 const blockBFCacheTests = [
   {
     name: "Request",
+    allowedInBFCache: deferrableRequests,
     test: () => {
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
@@ -38,6 +43,7 @@ const blockBFCacheTests = [
   },
   {
     name: "Background request",
+    allowedInBFCache: deferrableRequests,
     test: () => {
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
@@ -265,8 +271,11 @@ function executeTest() {
 
   // If Fission is disabled, the pref is no-op.
   SpecialPowers.pushPrefEnv({set: [["fission.bfcacheInParent", true]]}, () => {
-    runTests(blockBFCacheTests, true);
-    runTests(dontBlockBFCacheTests, false);
+    runTests(blockBFCacheTests.filter(t => !t.allowedInBFCache), true);
+    runTests([
+      ...blockBFCacheTests.filter(t => t.allowedInBFCache),
+      ...dontBlockBFCacheTests,
+    ], false);
   });
 }
 

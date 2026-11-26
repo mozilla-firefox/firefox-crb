@@ -817,6 +817,7 @@ static void PrepareLoadInfoForScriptLoading(nsIChannel* aChannel,
                                    ParserMetadata::ParserInserted);
   loadInfo->SetCspNonce(aRequest->Nonce());
   loadInfo->SetIntegrityMetadata(aRequest->mIntegrity.GetIntegrityString());
+  loadInfo->SetHandlingInBFCache(nsILoadInfo::BFCacheDefer);
 }
 
 // static

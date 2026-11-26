@@ -641,6 +641,12 @@ struct ParamTraits<nsILoadInfo::IPAddressSpace>
                                       nsILoadInfo::IPAddressSpace::Unknown,
                                       nsILoadInfo::IPAddressSpace::Invalid> {};
 
+template <>
+struct ParamTraits<nsILoadInfo::BFCacheHandling>
+    : public ContiguousEnumSerializerInclusive<nsILoadInfo::BFCacheHandling,
+                                               nsILoadInfo::BFCacheBlock,
+                                               nsILoadInfo::BFCacheDefer> {};
+
 } /* namespace IPC */
 
 #endif /* IPC_GLUE_IPCMESSAGEUTILSSPECIALIZATIONS_H_ */

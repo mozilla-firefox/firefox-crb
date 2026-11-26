@@ -24,6 +24,7 @@
 #include "mozilla/Encoding.h"
 #include "mozilla/EventDispatcher.h"
 #include "mozilla/EventListenerManager.h"
+#include "mozilla/GlobalFreezeObserver.h"
 #include "mozilla/HoldDropJSObjects.h"
 #include "mozilla/LoadContext.h"
 #include "mozilla/LoadInfo.h"
@@ -148,6 +149,39 @@ constexpr nsLiteralCString kLiteralString_UTF_8 = "UTF-8"_ns;
 #define MAX_SYNC_TIMEOUT_WHEN_UNLOADING 10000 /* 10 secs */
 
 NS_IMPL_ISUPPORTS(nsXHRParseEndListener, nsIDOMEventListener)
+
+// Holds back a timeout that elapsed while the owning window was frozen (in
+// BFCache) until the window is thawed.
+class XMLHttpRequestTimeoutThawObserver final : public GlobalFreezeObserver {
+ public:
+  NS_DECL_ISUPPORTS
+
+  XMLHttpRequestTimeoutThawObserver(XMLHttpRequestMainThread* aXHR,
+                                    nsIGlobalObject* aGlobal)
+      : mXHR(aXHR) {
+    BindToGlobal(aGlobal);
+  }
+
+  void FrozenCallback(nsIGlobalObject* aGlobal) override {}
+
+  void ThawedCallback(nsIGlobalObject* aGlobal) override {
+    if (RefPtr<XMLHttpRequestMainThread> xhr = mXHR) {
+      xhr->StartTimeoutTimer();
+    }
+  }
+
+  void Disconnect() {
+    mXHR = nullptr;
+    DisconnectFreezeObserver();
+  }
+
+ private:
+  ~XMLHttpRequestTimeoutThawObserver() = default;
+
+  XMLHttpRequestMainThread* MOZ_NON_OWNING_REF mXHR;
+};
+
+NS_IMPL_ISUPPORTS0(XMLHttpRequestTimeoutThawObserver)
 
 class nsResumeTimeoutsEvent : public Runnable {
  public:
@@ -328,6 +362,10 @@ XMLHttpRequestMainThread::~XMLHttpRequestMainThread() {
       "How can we have mDelayedDoneNotifier, which owns us, in destructor?");
 
   mFlagDeleted = true;
+
+  if (mTimeoutThawObserver) {
+    mTimeoutThawObserver->Disconnect();
+  }
 
   if ((mState == XMLHttpRequest_Binding::OPENED && mFlagSend) ||
       mState == XMLHttpRequest_Binding::LOADING) {
@@ -2710,8 +2748,10 @@ nsresult XMLHttpRequestMainThread::CreateChannel() {
   }
   NS_ENSURE_SUCCESS(rv, rv);
 
+  nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
+  loadInfo->SetHandlingInBFCache(nsILoadInfo::BFCacheDefer);
+
   if (mAssociatedBrowsingContextID) {
-    nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
     rv = loadInfo->SetAssociatedBrowsingContextID(mAssociatedBrowsingContextID);
     NS_ENSURE_SUCCESS(rv, rv);
   }
@@ -2719,14 +2759,12 @@ nsresult XMLHttpRequestMainThread::CreateChannel() {
   mAlreadyGotStopRequest = false;
 
   if (mCSPEventListener) {
-    nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
     rv = loadInfo->SetCspEventListener(mCSPEventListener);
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
   if (nsCOMPtr<Document> doc = GetDocumentIfCurrent()) {
     net::ClassificationFlags flags = doc->GetScriptTrackingFlags();
-    nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
 
     loadInfo->SetTriggeringFirstPartyClassificationFlags(flags.firstPartyFlags);
     loadInfo->SetTriggeringThirdPartyClassificationFlags(flags.thirdPartyFlags);
@@ -3835,6 +3873,17 @@ void XMLHttpRequestMainThread::HandleTimeoutCallback() {
     return;
   }
 
+  // Hold the timeout steps until the document is restored from BFCache; the
+  // timer is restarted on thaw, which fires it right after pageshow.
+  if (nsIGlobalObject* global = GetRelevantGlobal();
+      global && global->IsFrozen()) {
+    if (!mTimeoutThawObserver) {
+      mTimeoutThawObserver =
+          new XMLHttpRequestTimeoutThawObserver(this, global);
+    }
+    return;
+  }
+
   mFlagTimedOut = true;
   CloseRequestWithError(Events::timeout);
 }
@@ -3844,6 +3893,10 @@ void XMLHttpRequestMainThread::CancelTimeoutTimer() {
   if (mTimeoutTimer) {
     mTimeoutTimer->Cancel();
     mTimeoutTimer = nullptr;
+  }
+  if (mTimeoutThawObserver) {
+    mTimeoutThawObserver->Disconnect();
+    mTimeoutThawObserver = nullptr;
   }
 }
 

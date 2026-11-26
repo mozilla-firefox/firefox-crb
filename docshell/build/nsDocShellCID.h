@@ -54,4 +54,10 @@
  */
 #define NS_CHROME_WEBNAVIGATION_DESTROY "chrome-webnavigation-destroy"
 
+/**
+ * An observer service topic fired when a document should be evicted from
+ * BFCache. The data string is the inner window ID.
+ */
+#define NS_BFCACHE_EVICT_DOCUMENT_TOPIC "bfcache-evict-document"
+
 #endif  // nsDocShellCID_h_
