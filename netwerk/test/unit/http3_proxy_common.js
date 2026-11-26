@@ -358,6 +358,41 @@ async function test_connect_udp() {
   }
 }
 
+/**
+ * CONNECT-UDP refused by the proxy. The request fails, and the h3 inner
+ * connection the attempt opened must not survive it: the xpcshell leak check
+ * at the end of the run catches an HttpConnectionUDP kept alive by its own
+ * handshake callback.
+ */
+async function test_connect_udp_refused() {
+  info("Running test_connect_udp_refused");
+  let h3Port = Services.env.get("MOZHTTP3_PORT");
+
+  // The inner connection path this exercises is only on by default in
+  // Nightly.
+  Services.prefs.setBoolPref(
+    "network.http.happy_eyeballs_tunnel_enabled",
+    true
+  );
+  Services.prefs.setCharPref(
+    "network.http.http3.alt-svc-mapping-for-testing",
+    `refused.example.com;h3=:${h3Port}`
+  );
+
+  let chan = makeChan(`https://refused.example.com:${h3Port}/no_body`);
+  let [req] = await channelOpenPromise(chan, CL_EXPECT_FAILURE);
+  Assert.equal(
+    req.status,
+    Cr.NS_ERROR_PROXY_FORBIDDEN,
+    "the proxy's 403 to the CONNECT-UDP is what the channel reports"
+  );
+
+  Services.prefs.clearUserPref(
+    "network.http.http3.alt-svc-mapping-for-testing"
+  );
+  Services.prefs.clearUserPref("network.http.happy_eyeballs_tunnel_enabled");
+}
+
 async function test_http_connect_fallback() {
   info("Running test_http_connect_fallback");
   pps.unregisterFilter(proxyFilter);
