@@ -14,6 +14,7 @@ export function initialSourcesContentState() {
   return {
     /**
      * Text content of all the original sources.
+     *
      * This is large data, so this is only fetched on-demand for a subset of sources.
      * This state attribute is mutable in order to avoid cloning this possibly large map
      * on each new source. But selectors are never based on the map. Instead they only
@@ -21,14 +22,14 @@ export function initialSourcesContentState() {
      *
      * Map(source id => AsyncValue<String>)
      */
-    mutableOriginalSourceTextContentMapBySourceId: new Map(),
+    mutableSourceTextContentMapBySourceId: new Map(),
 
     /**
      * Text content of all the generated sources.
      *
      * Map(source actor is => AsyncValue<String>)
      */
-    mutableGeneratedSourceTextContentMapBySourceActorId: new Map(),
+    mutableSourceTextContentMapBySourceActorId: new Map(),
 
     /**
      * Incremental number that is bumped each time we navigate to a new page.
@@ -55,9 +56,7 @@ function update(state = initialSourcesContentState(), action) {
       return updateSourceTextContent(state, action);
 
     case "REMOVE_GENERATED_SOURCE_TEXT":
-      state.mutableGeneratedSourceTextContentMapBySourceActorId.delete(
-        action.actorId
-      );
+      state.mutableSourceTextContentMapBySourceActorId.delete(action.actorId);
       return { ...state };
 
     case "REMOVE_SOURCES":
@@ -102,14 +101,11 @@ function updateSourceTextContent(state, action) {
   }
 
   if (action.source) {
-    state.mutableOriginalSourceTextContentMapBySourceId.set(
-      action.source.id,
-      content
-    );
+    state.mutableSourceTextContentMapBySourceId.set(action.source.id, content);
   }
 
   if (action.sourceActor) {
-    state.mutableGeneratedSourceTextContentMapBySourceActorId.set(
+    state.mutableSourceTextContentMapBySourceActorId.set(
       action.sourceActor.id,
       content
     );
@@ -124,21 +120,21 @@ function removeAllSourceTextContentForSourcesAndActors(state, action) {
   if (!action.sources.length && !action.actors.length) {
     return state;
   }
-  const originalSizeBefore =
-    state.mutableOriginalSourceTextContentMapBySourceId.size;
+  const sourceTextBySourceIdSizeBefore =
+    state.mutableSourceTextContentMapBySourceId.size;
   for (const source of action.sources) {
-    state.mutableOriginalSourceTextContentMapBySourceId.delete(source.id);
+    state.mutableSourceTextContentMapBySourceId.delete(source.id);
   }
-  const generatedSizeBefore =
-    state.mutableGeneratedSourceTextContentMapBySourceActorId.size;
+  const sourceTextBySourceActorIdSizeBefore =
+    state.mutableSourceTextContentMapBySourceActorId.size;
   for (const actor of action.actors) {
-    state.mutableGeneratedSourceTextContentMapBySourceActorId.delete(actor.id);
+    state.mutableSourceTextContentMapBySourceActorId.delete(actor.id);
   }
   if (
-    originalSizeBefore !=
-      state.mutableOriginalSourceTextContentMapBySourceId.size ||
-    generatedSizeBefore !=
-      state.mutableGeneratedSourceTextContentMapBySourceActorId.size
+    sourceTextBySourceIdSizeBefore !=
+      state.mutableSourceTextContentMapBySourceId.size ||
+    sourceTextBySourceActorIdSizeBefore !=
+      state.mutableSourceTextContentMapBySourceActorId.size
   ) {
     return { ...state };
   }
