@@ -1328,6 +1328,7 @@ ResourceCommand.TYPES = ResourceCommand.prototype.TYPES = {
   NETWORK_EVENT_STACKTRACE: "network-event-stacktrace",
   REFLOW: "reflow",
   SOURCE: "source",
+  HTML: "html",
   THREAD_STATE: "thread-state",
   JSTRACER_TRACE: "jstracer-trace",
   JSTRACER_STATE: "jstracer-state",

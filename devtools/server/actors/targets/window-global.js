@@ -678,6 +678,20 @@ class WindowGlobalTargetActor extends BaseTargetActor {
         const sourceActor = this.sourcesManager.getSourceActorById(resourceId);
         return await sourceActor.source();
       }
+      case "html": {
+        if (this.targetType !== Targets.TYPES.FRAME) {
+          return null;
+        }
+        const source = await this.sourcesManager.urlContents(
+          this.url,
+          false,
+          true
+        );
+        return {
+          source: new LongStringActor(this.conn, source.content),
+          contentType: "text/html",
+        };
+      }
     }
     return null;
   }
@@ -789,9 +803,12 @@ class WindowGlobalTargetActor extends BaseTargetActor {
         // Supports navigation by index
         navigationByIndex: true,
         // @backward-compat { version 160 } Supports getting the source content for a given
-        // resource (stylesheet, source, html).
+        // resource (stylesheet, source).
         // Remove once all clients are on version 160 or higher.
         supportsGetSourceContentForResource: true,
+        // @backward-compat { version 163 } Supports getting the source content for html resources.
+        // Remove once all clients are on version 163 or higher.
+        supportsGetSourceContentForHTMLResource: true,
       },
     };
 
