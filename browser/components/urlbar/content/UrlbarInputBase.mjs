@@ -1021,21 +1021,25 @@ ${
   }
 
   /**
+   * @typedef {object} SetURIOptions
+   * @property {?nsIURI} [uri]
+   *   If this is unspecified, the current URI will be used.
+   * @property {boolean} [dueToTabSwitch=false]
+   *   Whether this is being called due to switching tabs.
+   * @property {boolean} [dueToSessionRestore=false]
+   *   Whether this is being called due to session restore.
+   * @property {boolean} [hideSearchTerms=false]
+   *   True if overrideValue should not be overridden by search terms and false
+   *   otherwise.
+   * @property {boolean} [isSameDocument=false]
+   *   Whether the caller loaded a new document or not (e.g. location change
+   *   from an anchor scroll or a pushState event).
+   */
+
+  /**
    * Sets the URI to display in the location bar.
    *
-   * @param {object} [options]
-   * @param {?nsIURI} [options.uri]
-   *        If this is unspecified, the current URI will be used.
-   * @param {boolean} [options.dueToTabSwitch=false]
-   *        Whether this is being called due to switching tabs.
-   * @param {boolean} [options.dueToSessionRestore=false]
-   *        Whether this is being called due to session restore.
-   * @param {boolean} [options.hideSearchTerms=false]
-   *        True if overrideValue should not be overridden by search terms
-   *        and false otherwise.
-   * @param {boolean} [options.isSameDocument=false]
-   *        Whether the caller loaded a new document or not (e.g. location
-   *        change from an anchor scroll or a pushState event).
+   * @param {SetURIOptions} [options]
    */
   setURI({
     uri = null,
