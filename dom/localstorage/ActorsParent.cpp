@@ -4357,6 +4357,7 @@ void Connection::AbandonWrites(nsresult aResultCode) {
   MOZ_ASSERT(NS_FAILED(aResultCode));
 
   if (mWriteOptimizer.HasWrites()) {
+    glean::localstorage_database::final_flush_data_loss.Add();
     QM_SCOPED_CONTEXT("LSConnection::FinalFlushFailed::DataLoss"_ns);
     // Report the known failure without interrupting close and reservation
     // cleanup.

@@ -8,6 +8,8 @@ const { QuotaUtils } = ChromeUtils.importESModule(
 );
 
 add_task(async function testCommitOutcome() {
+  Services.fog.initializeFOG();
+
   const principal = getPrincipal("http://example.com");
   for (const seeded of [false, true]) {
     for (const [category, committed] of [
@@ -22,6 +24,7 @@ add_task(async function testCommitOutcome() {
         await requestFinished(resetClient(principal));
         storage = getLocalStorage(principal);
       }
+      Services.fog.testResetFOG();
       storage.setItem("key", "value");
       await QuotaUtils.withArtificialFailures(
         category,
@@ -31,6 +34,12 @@ add_task(async function testCommitOutcome() {
           storage.close();
           await requestFinished(resetClient(principal));
         }
+      );
+
+      is(
+        Glean.localstorageDatabase.finalFlushDataLoss.testGetValue() ?? 0,
+        committed ? 0 : 1,
+        "Only an uncommitted final flush counts as data loss"
       );
 
       const expectedUsage =

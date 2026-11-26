@@ -66,6 +66,24 @@ localstorage.request:
       - storage-telemetry@mozilla.com
     expires: never
 localstorage.database:
+  final_flush_data_loss:
+    type: counter
+    description: >
+      Counts final LocalStorage flushes that abandon pending writes because
+      acquiring a quota write lease or committing the pending changes failed
+      while the connection was closing.
+      Each increment represents one abandoned batch, not the number of keys
+      or bytes lost. Retryable failures while the connection remains open
+      are not counted.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2068220
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2068220
+    data_sensitivity:
+      - technical
+    notification_emails:
+      - storage-telemetry@mozilla.com
+    expires: 167
   new_object_setup_time:
     type: timing_distribution
     time_unit: microsecond

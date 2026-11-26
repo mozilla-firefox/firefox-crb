@@ -3,6 +3,9 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
+const { AppConstants } = ChromeUtils.importESModule(
+  "resource://gre/modules/AppConstants.sys.mjs"
+);
 const { QuotaUtils } = ChromeUtils.importESModule(
   "resource://testing-common/dom/quota/test/modules/QuotaUtils.sys.mjs"
 );
@@ -11,6 +14,8 @@ const { waitForOriginToSettle } = ChromeUtils.importESModule(
 );
 
 add_task(async function testSteps() {
+  Services.fog.initializeFOG();
+
   const principalA = getPrincipal("http://example.com");
   const principalB = getPrincipal("http://example.org");
   const pendingKey = "pending";
@@ -67,6 +72,7 @@ add_task(async function testSteps() {
 
       await waitForOriginToSettle(principalA);
 
+      Services.fog.testResetFOG();
       await QuotaUtils.withArtificialFailures(
         category,
         100,
@@ -76,6 +82,25 @@ add_task(async function testSteps() {
           await requestFinished(resetClient(principalA));
         }
       );
+
+      is(
+        Glean.localstorageDatabase.finalFlushDataLoss.testGetValue(),
+        1,
+        "Final flush abandonment increments the counter on every channel"
+      );
+
+      const events = (Glean.domQuotaTry.errorStep.testGetValue() ?? []).filter(
+        event =>
+          event.extra.context === "LSConnection::FinalFlushFailed::DataLoss"
+      );
+      is(
+        events.length,
+        AppConstants.DEBUG || AppConstants.NIGHTLY_BUILD ? 1 : 0,
+        "Final flush abandonment reports data loss when QM_TRY telemetry is enabled"
+      );
+      for (const event of events) {
+        is(event.extra.result, "NS_ERROR_FAILURE", "Reports the lease error");
+      }
 
       const committedUsage = existingDatabase
         ? "saved".length + "value".length
@@ -109,6 +134,11 @@ add_task(async function testSteps() {
         await requestFinished(getCachedOriginUsage(principalB)),
         largeKey.length + largeValue.length,
         "The other origin can commit its allocation"
+      );
+      is(
+        Glean.localstorageDatabase.finalFlushDataLoss.testGetValue(),
+        1,
+        "Successful flushes do not report data loss"
       );
     }
   }

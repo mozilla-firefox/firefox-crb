@@ -46,6 +46,9 @@ async function settle(principal) {
 }
 
 add_task(async function testSteps() {
+  Services.fog.initializeFOG();
+  Services.fog.testResetFOG();
+
   const principal = getPrincipal("http://example.com");
   const usageFile = getRelativeFile(
     "storage/default/http+++example.com/ls/usage"
@@ -207,4 +210,10 @@ add_task(async function testResetOnClose() {
 
   request = reset();
   await requestFinished(request);
+
+  is(
+    Glean.localstorageDatabase.finalFlushDataLoss.testGetValue() ?? 0,
+    0,
+    "Successful flushes, retryable failures, and empty closes do not report data loss"
+  );
 });
