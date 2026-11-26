@@ -17,4 +17,10 @@ void NotifyDatabaseWorkStarted() {
   quota::NotifyObserversOnMainThread("IndexedDB::DatabaseWorkStarted");
 }
 
+void NotifyIdleMaintenanceStarted() {
+  if (StaticPrefs::dom_indexedDB_testing()) {
+    quota::NotifyObserversOnMainThread("IndexedDB::IdleMaintenanceStarted");
+  }
+}
+
 }  // namespace mozilla::dom::indexedDB

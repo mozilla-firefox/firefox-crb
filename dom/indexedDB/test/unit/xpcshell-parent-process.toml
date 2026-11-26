@@ -64,6 +64,11 @@ skip-if = [
 # Bug 1996558: incompatible with SQLite at-rest encryption; runs with encryption off.
 prefs = ["security.storage.encryption.sqlite.enabled=false"]
 
+["test_connection_idle_maintenance_writeLease.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+# Bug 1996558: incompatible with SQLite at-rest encryption; runs with encryption off.
+prefs = ["security.storage.encryption.sqlite.enabled=false"]
+
 ["test_databaseWorkStarted.js"]
 
 ["test_database_close_without_onclose.js"]
@@ -94,6 +99,9 @@ prefs = ["security.storage.encryption.sqlite.enabled=false"]
 skip-if = [
   "true",
 ]
+
+["test_maintenance_writeLease.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
 
 ["test_marker_file.js"]
 
