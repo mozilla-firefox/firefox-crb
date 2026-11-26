@@ -8,6 +8,7 @@
 namespace mozilla::dom::indexedDB {
 
 void NotifyDatabaseWorkStarted();
+void NotifyIdleMaintenanceStarted();
 
 }  // namespace mozilla::dom::indexedDB
 
