@@ -20,8 +20,8 @@ def _remove(path):
         shutil.rmtree(path)
 
 
-def main(argv):
-    with open(argv[0], encoding="utf-8") as fh:
+def assemble_macos_bundle(spec_path):
+    with open(spec_path, encoding="utf-8") as fh:
         spec = json.load(fh)
 
     bundle = spec["bundle"]
@@ -102,6 +102,13 @@ def main(argv):
         _rsync(bundle + "/", dest + "/", "--delete")
 
     return 0
+
+
+def main(argv):
+    try:
+        return assemble_macos_bundle(argv[0])
+    except subprocess.CalledProcessError as e:
+        return e.returncode
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import inspect
 import os
 import tempfile
 import unittest
@@ -305,10 +306,53 @@ class TestSnapRepackage(unittest.TestCase):
         self.assertEqual(calls["application"].call_args.kwargs["mode"], "stage")
 
 
+class TestAssembleStagedMacOSBundles(unittest.TestCase):
+    def _assemble(self, rc=0):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(mozpath.join(tmp, "macos-bundles.json"), "w") as fh:
+                fh.write(
+                    '{"bundles": ['
+                    '{"spec": "/obj/a.bundle.json", "stage": false},'
+                    '{"spec": "/obj/b.bundle.json", "stage": true},'
+                    '{"spec": "/obj/c.bundle.json", "stage": true}]}'
+                )
+            context = _context()
+            context.topobjdir = tmp
+            with mock.patch(
+                "mozbuild.action.assemble_macos_bundle.main", return_value=rc
+            ) as assemble:
+                rc = mach_commands._assemble_staged_macos_bundles(context)
+        return rc, assemble.call_args_list
+
+    def test_staged_bundles(self):
+        self.assertEqual(
+            self._assemble(),
+            (0, [mock.call(["/obj/b.bundle.json"]), mock.call(["/obj/c.bundle.json"])]),
+        )
+
+    def test_staged_bundle_failure(self):
+        self.assertEqual(self._assemble(2), (2, [mock.call(["/obj/b.bundle.json"])]))
+
+
+class TestGtestCommand(unittest.TestCase):
+    def test_gtest_assembly_failure(self):
+        context = _context({**_SUBSTS, "MOZ_WIDGET_TOOLKIT": "cocoa"})
+        context._mach_context.commands.dispatch.return_value = 0
+        args = list(inspect.signature(mach_commands.gtest).parameters)[1:]
+        with mock.patch.object(
+            mach_commands, "_assemble_staged_macos_bundles", return_value=2
+        ) as assemble:
+            rc = mach_commands.gtest(context, **dict.fromkeys(args))
+        self.assertEqual(rc, 2)
+        assemble.assert_called_once_with(context)
+
+
 class TestMultiLocaleCommand(unittest.TestCase):
     @contextlib.contextmanager
     def _prerequisites(self):
-        with mock.patch.object(mach_commands, "ensure_l10n_central"):
+        with mock.patch.object(mach_commands, "ensure_l10n_central"), mock.patch.object(
+            mach_commands, "_assemble_staged_macos_bundles", return_value=0
+        ) as self.assemble:
             yield
 
     def _substs(self, **overrides):
@@ -328,6 +372,27 @@ class TestMultiLocaleCommand(unittest.TestCase):
         kwargs = calls["application"].call_args.kwargs
         self.assertEqual(kwargs["locales"], ["de", "fr"])
         self.assertIsNone(kwargs["ab_cd"])
+        self.assemble.assert_not_called()
+
+    def test_macos(self):
+        context = _context(self._substs(MOZ_WIDGET_TOOLKIT="cocoa"))
+        with self._prerequisites():
+            with _routed() as calls:
+                rc = mach_commands.package_l10n(context, locales=["de"])
+
+        self.assertEqual(rc, 0)
+        self.assemble.assert_called_once_with(context)
+        calls["application"].assert_called_once()
+
+    def test_macos_assembly_failure(self):
+        context = _context(self._substs(MOZ_WIDGET_TOOLKIT="cocoa"))
+        with self._prerequisites():
+            self.assemble.return_value = 2
+            with _routed() as calls:
+                rc = mach_commands.package_l10n(context, locales=["de"])
+
+        self.assertEqual(rc, 2)
+        calls["application"].assert_not_called()
 
     def test_android(self):
         context = _context(self._substs(MOZ_BUILD_APP="mobile/android"))
@@ -336,6 +401,7 @@ class TestMultiLocaleCommand(unittest.TestCase):
                 mach_commands.package_l10n(context, locales=["de"])
 
         self.assertEqual(calls["application"].call_args.kwargs["ab_cd"], "multi")
+        self.assemble.assert_not_called()
 
     def test_en_us(self):
         context = _context(self._substs())

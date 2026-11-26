@@ -1140,10 +1140,10 @@ def gtest(
         print("Could not build xul-gtest")
         return res
 
-    if command_context.substs.get("MOZ_WIDGET_TOOLKIT") == "cocoa":
-        command_context._run_make(
-            directory="browser/app", target="repackage", ensure_exit_code=True
-        )
+    if command_context.substs.get("MOZ_WIDGET_TOOLKIT") == "cocoa" and (
+        status := _assemble_staged_macos_bundles(command_context)
+    ):
+        return status
 
     cwd = os.path.join(command_context.topobjdir, "_tests", "gtest")
 
@@ -1693,6 +1693,26 @@ def source_package(command_context, output, upload):
         )
         return 1
     command_context.notify("Packaging complete")
+
+
+def _assemble_staged_macos_bundles(command_context):
+    from mozbuild.action import assemble_macos_bundle
+
+    path = mozpath.join(command_context.topobjdir, "macos-bundles.json")
+    with open(path, encoding="utf-8") as fh:
+        bundles = json.load(fh)["bundles"]
+    for bundle in bundles:
+        if not bundle["stage"]:
+            continue
+        if rc := assemble_macos_bundle.main([bundle["spec"]]):
+            command_context.log(
+                logging.ERROR,
+                "macos-bundle",
+                {"spec": bundle["spec"]},
+                "Could not assemble the bundle in {spec}",
+            )
+            return rc
+    return 0
 
 
 def _package_application(
@@ -4105,17 +4125,15 @@ def package_l10n(command_context, locales, verbose=False, package_tests=False):
         ensure_exit_code=True,
     )
 
-    if command_context.substs["MOZ_BUILD_APP"] == "browser":
+    if (
+        command_context.substs["MOZ_BUILD_APP"] == "browser"
+        and command_context.substs.get("MOZ_WIDGET_TOOLKIT") == "cocoa"
+    ):
         command_context.log(
             logging.INFO, "package-multi-locale", {}, "Repackaging browser"
         )
-        command_context._run_make(
-            directory=mozpath.join(command_context.topobjdir, "browser", "app"),
-            target=["tools"],
-            append_env=append_env,
-            pass_thru=True,
-            ensure_exit_code=True,
-        )
+        if status := _assemble_staged_macos_bundles(command_context):
+            return status
 
     command_context.log(
         logging.INFO,

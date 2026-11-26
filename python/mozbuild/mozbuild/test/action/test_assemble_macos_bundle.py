@@ -89,6 +89,15 @@ class TestAssembleMacOSBundle(unittest.TestCase):
             )
         )
 
+    def test_rsync_failure(self):
+        spec = self._spec(copies=[os.path.join(self.tmpdir, "copy")])
+        spec_path = self._write("spec.json", json.dumps(spec))
+        error = assemble_macos_bundle.subprocess.CalledProcessError(23, "rsync")
+        with mock.patch.object(
+            assemble_macos_bundle.subprocess, "run", side_effect=error
+        ):
+            self.assertEqual(main([spec_path]), 23)
+
     def test_staged_bundle_is_rebuilt(self):
         stage = os.path.join(self.tmpdir, "bin")
         os.makedirs(stage)
