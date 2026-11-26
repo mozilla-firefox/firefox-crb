@@ -85,6 +85,7 @@ class StyleSheetWatcher {
       resourceId,
       disabled: styleSheet.disabled,
       constructed: styleSheet.constructed,
+      isInlineStyle: !styleSheet.href,
       fileName,
       href: styleSheet.href,
       isNew: isCreatedByDevTools,

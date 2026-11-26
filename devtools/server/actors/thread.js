@@ -2228,7 +2228,7 @@ class ThreadActor extends Actor {
       );
 
       // Find the script tags in this HTML page by parsing a new document from
-      // the contentand looking for its script elements.
+      // the content and looking for its script elements.
       const document = new DOMParser().parseFromString(content, "text/html");
 
       // For each inline source found, see if there is a start offset for what

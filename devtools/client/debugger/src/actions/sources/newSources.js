@@ -11,6 +11,7 @@ import { insertSourceActors } from "../../actions/source-actors";
 import { setStyleSheetAtRules } from "./stylesheets";
 import {
   makeScriptSourceId,
+  makeStyleSheetSourceId,
   createGeneratedSource,
   createSourceMapOriginalSource,
   createStyleSheet,
@@ -374,29 +375,30 @@ export function newGeneratedSources(sourceResources) {
 }
 
 export function newStyleSheetSources(styleSheetResources) {
-  return async ({ dispatch }) => {
+  return async ({ dispatch, getState }) => {
     if (!styleSheetResources.length) {
       return;
     }
-    const styleSheets = [];
+    const styleSheetSources = {};
     const styleSheetActors = [];
     for (const styleSheetResource of styleSheetResources) {
       // By the time we process the sources, the related target
       // might already have been destroyed. It means that the sources
       // are also about to be destroyed, so ignore them.
       // (This is covered by browser_toolbox_backward_forward_navigation.js)
-      if (
-        styleSheetResource.targetFront.isDestroyed() ||
-        // Currently hide inline sources. Should remove in Bug 2037006
-        styleSheetResource.href == null
-      ) {
+      if (styleSheetResource.targetFront.isDestroyed()) {
         continue;
       }
-      const stylesheet = createStyleSheet(styleSheetResource);
-      styleSheets.push(stylesheet);
-      styleSheetActors.push(
-        createStyleSheetActor(styleSheetResource, stylesheet)
-      );
+      const id = makeStyleSheetSourceId(styleSheetResource);
+      if (!getSource(getState(), id) || !styleSheetSources[id]) {
+        styleSheetSources[id] = createStyleSheet(styleSheetResource);
+      }
+
+      if (!hasSourceActor(getState(), styleSheetResource.resourceId)) {
+        styleSheetActors.push(
+          createStyleSheetActor(styleSheetResource, getSource(getState(), id) || styleSheetSources[id])
+        );
+      }
       dispatch(
         setStyleSheetAtRules(
           styleSheetResource.resourceId,
@@ -404,12 +406,9 @@ export function newStyleSheetSources(styleSheetResources) {
         )
       );
     }
-    if (!styleSheets.length) {
-      return;
-    }
-    dispatch({ type: "ADD_SOURCES", sources: styleSheets });
+    dispatch({ type: "ADD_SOURCES", sources: Object.values(styleSheetSources) });
     dispatch(insertSourceActors(styleSheetActors));
-    await dispatch(checkNewSources(styleSheets));
+    await dispatch(checkNewSources(Object.values(styleSheetSources)));
     await dispatch(loadSourceMapsForSourceActors(styleSheetActors));
   };
 }

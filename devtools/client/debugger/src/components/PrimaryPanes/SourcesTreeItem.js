@@ -52,7 +52,7 @@ class SourceTreeItemContents extends Component {
     const { item, focusItem, selectSourceItem } = this.props;
 
     focusItem(item);
-    if (item.type == sourceTree.itemTypes.SOURCE) {
+    if (item.type == sourceTree.itemTypes.SOURCE){
       selectSourceItem(item);
     }
   };
@@ -143,7 +143,7 @@ class SourceTreeItemContents extends Component {
       return item.path.replace(parentItem.path, "").replace(/^\//, "");
     }
     if (item.type == sourceTree.itemTypes.SOURCE) {
-      return item.source.longName;
+      return item.longName;
     }
 
     return null;
@@ -162,7 +162,7 @@ class SourceTreeItemContents extends Component {
       return item.path;
     }
     if (item.type == sourceTree.itemTypes.SOURCE) {
-      return item.source.url;
+      return item.title;
     }
 
     return null;
@@ -268,9 +268,11 @@ class SourcesTreeItem extends Component {
 const mapStateToProps = (state, props) => {
   const { item } = props;
   if (item.type == sourceTree.itemTypes.SOURCE) {
-    const { source } = item;
     return {
-      hasMatchingGeneratedSource: getHasMatchingGeneratedSource(state, source),
+      hasMatchingGeneratedSource: getHasMatchingGeneratedSource(
+        state,
+        item.source
+      ),
       hideIgnoredSources: getHideIgnoredSources(state),
     };
   }
