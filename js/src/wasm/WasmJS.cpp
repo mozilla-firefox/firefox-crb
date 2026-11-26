@@ -1309,6 +1309,53 @@ bool js::WasmModuleExecute(JSContext* cx, Handle<ModuleObject*> record) {
 
   return true;
 }
+
+// https://webassembly.github.io/esm-integration/js-api/index.html#dom-webassembly-namespaceinstance
+static bool WebAssembly_namespaceInstance(JSContext* cx, unsigned argc,
+                                          Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+
+  // Step 1. If namespace is not a Module Namespace exotic object with a
+  //         [[Module]] internal slot, throw a TypeError exception.
+  JSObject* unwrapped = args.get(0).isObject()
+                            ? CheckedUnwrapStatic(&args[0].toObject())
+                            : nullptr;
+  if (!unwrapped || !unwrapped->is<ModuleNamespaceObject>()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
+                              JSMSG_WASM_ESM_BAD_NAMESPACE);
+    return false;
+  }
+
+  // Step 2. If namespace.[[Module]] is not a WebAssembly Module Record, throw
+  //         a TypeError exception.
+  // Step 3. Let module be namespace.[[Module]].
+  ModuleObject& module = unwrapped->as<ModuleNamespaceObject>().module();
+  if (!module.isWasmModule()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
+                              JSMSG_WASM_ESM_BAD_NAMESPACE);
+    return false;
+  }
+
+  // Step 4. Return module.[[Instance]].
+  // The spec doesn't handle module.[[Instance]] being ~empty~, which happens
+  // if the module has not executed yet. We throw a TypeError as proposed in
+  // https://github.com/WebAssembly/esm-integration/pull/132.
+  JSObject* instance = module.wasmInstance();
+  if (!instance) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
+                              JSMSG_WASM_ESM_NAMESPACE_NOT_INSTANTIATED);
+    return false;
+  }
+
+  args.rval().setObject(*instance);
+  return cx->compartment()->wrap(cx, args.rval());
+}
+
+static const JSFunctionSpec WebAssembly_esm_integration_methods[] = {
+    JS_FN("namespaceInstance", WebAssembly_namespaceInstance, 1,
+          JSPROP_ENUMERATE),
+    JS_FS_END,
+};
 #endif
 
 // ============================================================================
@@ -6949,6 +6996,13 @@ static bool WebAssemblyClassFinish(JSContext* cx, HandleObject object,
 #ifdef ENABLE_WASM_MOZ_INTGEMM
   if (MozIntGemmAvailable(cx) &&
       !JS_DefineFunctions(cx, wasm, WebAssembly_mozIntGemm_methods)) {
+    return false;
+  }
+#endif
+
+#ifdef NIGHTLY_BUILD
+  if (JS::Prefs::experimental_wasm_esm_integration() &&
+      !JS_DefineFunctions(cx, wasm, WebAssembly_esm_integration_methods)) {
     return false;
   }
 #endif
