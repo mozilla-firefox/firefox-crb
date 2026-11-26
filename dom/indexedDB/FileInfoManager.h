@@ -114,15 +114,14 @@ class FileInfoManager : public FileInfoManagerBase {
   template <typename FileInfoTableOp>
   [[nodiscard]] SafeRefPtr<FileInfoType> AcquireFileInfo(
       const FileInfoTableOp& aFileInfoTableOp) const {
-    if (!AssertValid()) {
-      // In release, the assertions are disabled.
-      return nullptr;
-    }
-
     // We cannot simply change this to SafeRefPtr<FileInfo>, because
     // FileInfo::AddRef also acquires the FileManager::Mutex.
-    auto fileInfo = [&aFileInfoTableOp]() -> RefPtr<FileInfoType> {
+    auto fileInfo = [this, &aFileInfoTableOp]() -> RefPtr<FileInfoType> {
       AutoLockType lock(Mutex());
+
+      if (NS_WARN_IF(Invalidated())) {
+        return nullptr;
+      }
 
       const auto maybeFileInfo = aFileInfoTableOp();
       if (maybeFileInfo) {

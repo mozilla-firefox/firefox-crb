@@ -103,6 +103,7 @@ TEST(DOM_IndexedDB_SimpleFileInfo, Create)
   {
     const auto fileManager = MakeSafeRefPtr<SimpleFileManager>(&stats);
     auto fileInfo = fileManager->CreateFileInfo();
+    MOZ_ASSERT(fileInfo);
 
     int32_t memRefCnt, dbRefCnt;
     fileInfo->GetReferences(&memRefCnt, &dbRefCnt);
@@ -203,6 +204,7 @@ TEST(DOM_IndexedDB_SimpleFileInfo, ReleaseWithFileManagerCleanup)
     fileManager->CreateDBOnlyFileInfos();
 
     auto* fileInfo = fileManager->CreateFileInfo().forget().take();
+    MOZ_ASSERT(fileInfo);
     fileInfo->Release(/* aSyncDeleteFile */ true);
 
     // This was the only reference and SimpleFileManager was not invalidated,
@@ -242,6 +244,7 @@ TEST(DOM_IndexedDB_SimpleFileInfo, Invalidate_Release)
 
     const auto fileInfo = fileManager->CreateFileInfo();
     (void)fileInfo;
+    MOZ_ASSERT(fileInfo);
 
     fileManager->Invalidate();
 
@@ -259,6 +262,7 @@ TEST(DOM_IndexedDB_SimpleFileInfo, Invalidate_ReleaseWithFileManagerCleanup)
     const auto fileManager = MakeSafeRefPtr<SimpleFileManager>(&stats);
 
     auto* fileInfo = fileManager->CreateFileInfo().forget().take();
+    MOZ_ASSERT(fileInfo);
 
     fileManager->Invalidate();
 

@@ -19324,6 +19324,7 @@ bool ObjectStoreAddOrPutRequestOp::Init(TransactionBase& aTransaction) {
   if (mDataOverThreshold) {
     auto fileInfo =
         aTransaction.GetDatabase().GetFileManager().CreateFileInfo();
+    MOZ_ASSERT(fileInfo);
     if (NS_WARN_IF(!fileInfo)) {
       return false;
     }
