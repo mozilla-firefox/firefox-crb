@@ -490,3 +490,8 @@
     }
   }
 }
+
+// Shown on New Tab itself, in both layouts, while devtools changes are in effect.
+.devtools-changes-notice {
+  margin-block-end: var(--space-large);
+}
