@@ -21,6 +21,15 @@ STRATEGY_TO_INDEX_MAP = {
 }
 
 
+def is_expanded(params):
+    """Whether the given parameters represent an "expanded" push, a push at half
+    the backstop push interval that isn't a backstop push."""
+    return (
+        not params["backstop"]
+        and int(params["pushlog_id"]) % (BACKSTOP_PUSH_INTERVAL // 2) == 0
+    )
+
+
 def is_backstop(
     params,
     push_interval=BACKSTOP_PUSH_INTERVAL,
