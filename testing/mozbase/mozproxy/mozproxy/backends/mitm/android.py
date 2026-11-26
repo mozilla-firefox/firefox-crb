@@ -20,14 +20,14 @@ from mozproxy.utils import LOG, download_file_from_url, tooltool_download
 # on local machine it is 'HOME', however it is different on production machines
 try:
     DEFAULT_CERT_PATH = os.path.join(
-        os.getenv("HOME"), ".mitmproxy", "mitmproxy-ca-cert.cer"
+        os.getenv("HOME"), ".mitmproxy", "mitmproxy-ca-cert.pem"
     )
 except Exception:
     DEFAULT_CERT_PATH = os.path.join(
         os.getenv("HOMEDRIVE"),
         os.getenv("HOMEPATH"),
         ".mitmproxy",
-        "mitmproxy-ca-cert.cer",
+        "mitmproxy-ca-cert.pem",
     )
 
 # On Windows, deal with mozilla-build having forward slashes in $HOME:
@@ -143,7 +143,7 @@ class MitmproxyAndroid(Mitmproxy):
             self.create_cert_db(cert_db_location)
 
         # DEFAULT_CERT_PATH has local path and name of mitmproxy cert i.e.
-        # /home/cltbld/.mitmproxy/mitmproxy-ca-cert.cer
+        # /home/cltbld/.mitmproxy/mitmproxy-ca-cert.pem
         self.import_certificate_in_cert_db(cert_db_location, DEFAULT_CERT_PATH)
 
         # cannot continue if failed to add CA cert to Firefox, need to check
