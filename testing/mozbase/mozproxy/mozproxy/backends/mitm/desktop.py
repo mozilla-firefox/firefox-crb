@@ -11,12 +11,14 @@ import mozinfo
 from mozproxy.backends.mitm.mitm import Mitmproxy
 from mozproxy.utils import LOG
 
-# to install mitmproxy certificate into Firefox and turn on/off proxy
+# Firefox policies to install the mitmproxy certificate and to set the proxy.
+# CaptivePortal is off to prevent detection requests that bypass the proxy.
 POLICIES_CONTENT_ON = """{
   "policies": {
     "Certificates": {
       "Install": ["%(cert)s"]
     },
+    "CaptivePortal": false,
     "Proxy": {
       "Mode": "manual",
       "HTTPProxy": "%(host)s:%(port)d",
