@@ -206,18 +206,28 @@
 
       <div id="ssltokens" class="tab" hidden="true">
         <div id="ssltokens_summary" class="ssltokens-summary"></div>
-        <table>
+        <span id="ssltokens_options" class="ssltokens-options">
+          <label class="toggle-container-with-text">
+            <input id="ssltokens_show_expired" type="checkbox" />
+            <span
+              data-l10n-id="about-networking-ssl-tokens-show-expired"
+            ></span>
+          </label>
+          <label class="toggle-container-with-text">
+            <input id="ssltokens_expand_tokens" type="checkbox" />
+            <span
+              data-l10n-id="about-networking-ssl-tokens-expand-tokens"
+            ></span>
+          </label>
+        </span>
+        <table id="ssltokens_table">
           <thead>
             <tr>
-              <th></th>
               <th data-l10n-id="about-networking-host"></th>
               <th data-l10n-id="about-networking-ssl-tokens-partition-key"></th>
-              <th data-l10n-id="about-networking-ssl-tokens-tokens-column"></th>
-              <th data-l10n-id="about-networking-ssl-tokens-expires"></th>
               <th data-l10n-id="about-networking-ssl-tokens-certificate"></th>
             </tr>
           </thead>
-          <tbody id="ssltokens_content"></tbody>
         </table>
       </div>
 

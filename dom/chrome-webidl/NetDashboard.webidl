@@ -190,6 +190,8 @@ dictionary SSLTokensCacheElement {
   unsigned long tokenLength = 0;
   unsigned long compressedLength = 0;
   unsigned long decompressedLength = 0;
+  // ALPN of the connection the token is from, if the token records one.
+  DOMString alpn = "";
   boolean evStatus = false;
   unsigned short certificateTransparencyStatus = 0;
   octet overridableErrorCategory = 0;
