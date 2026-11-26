@@ -128,11 +128,11 @@ class AccountObserverTest {
 
         verifyNoMoreInteractions(pushFeature)
 
-        observer.onAuthenticated(account, AuthType.Signup)
+        observer.onAuthenticated(account, AuthType.Signup())
 
         verifyNoMoreInteractions(pushFeature)
 
-        observer.onAuthenticated(account, AuthType.Signin)
+        observer.onAuthenticated(account, AuthType.Signin())
 
         verifyNoMoreInteractions(pushFeature)
     }

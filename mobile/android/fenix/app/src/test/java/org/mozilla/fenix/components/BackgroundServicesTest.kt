@@ -17,6 +17,7 @@ import kotlin.test.assertNull
 import kotlinx.coroutines.CoroutineScope
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.SyncEngine
 import mozilla.components.service.nimbus.NimbusApi
@@ -75,10 +76,24 @@ class BackgroundServicesTest {
     }
 
     @Test
+    fun `telemetry account observer tracks service specific auth types`() {
+        val account = mockk<OAuthAccount>()
+        FxaService.entries.forEach { service ->
+            registry.notifyObservers { onAuthenticated(account, AuthType.Signin(service)) }
+            registry.notifyObservers { onAuthenticated(account, AuthType.Signup(service)) }
+            registry.notifyObservers { onAuthenticated(account, AuthType.Pairing(service)) }
+        }
+
+        assertEquals(FxaService.entries.size, SyncAuth.signIn.testGetValue()!!.size)
+        assertEquals(FxaService.entries.size, SyncAuth.signUp.testGetValue()!!.size)
+        assertEquals(FxaService.entries.size, SyncAuth.paired.testGetValue()!!.size)
+    }
+
+    @Test
     fun `telemetry account observer tracks sign in event`() {
         val account = mockk<OAuthAccount>()
 
-        registry.notifyObservers { onAuthenticated(account, AuthType.Signin) }
+        registry.notifyObservers { onAuthenticated(account, AuthType.Signin()) }
         assertEquals(1, SyncAuth.signIn.testGetValue()!!.size)
         assertEquals(null, SyncAuth.signIn.testGetValue()!!.single().extra)
         verify { settings.signedInFxaAccount = true }
@@ -90,7 +105,7 @@ class BackgroundServicesTest {
     fun `telemetry account observer tracks sign up event`() {
         val account = mockk<OAuthAccount>()
 
-        registry.notifyObservers { onAuthenticated(account, AuthType.Signup) }
+        registry.notifyObservers { onAuthenticated(account, AuthType.Signup()) }
         assertEquals(1, SyncAuth.signUp.testGetValue()!!.size)
         assertEquals(null, SyncAuth.signUp.testGetValue()!!.single().extra)
         verify { settings.signedInFxaAccount = true }
@@ -102,7 +117,7 @@ class BackgroundServicesTest {
     fun `telemetry account observer tracks pairing event`() {
         val account = mockk<OAuthAccount>()
 
-        registry.notifyObservers { onAuthenticated(account, AuthType.Pairing) }
+        registry.notifyObservers { onAuthenticated(account, AuthType.Pairing()) }
         assertEquals(1, SyncAuth.paired.testGetValue()!!.size)
         assertEquals(null, SyncAuth.paired.testGetValue()!!.single().extra)
         verify { settings.signedInFxaAccount = true }
@@ -154,7 +169,7 @@ class BackgroundServicesTest {
 
     @Test
     fun `telemetry account observer records nimbus event for logins`() {
-        observer.onAuthenticated(mockk(), AuthType.Signin)
+        observer.onAuthenticated(mockk(), AuthType.Signin())
         verify {
             nimbus.recordEvent("sync_auth.sign_in")
         }
@@ -184,7 +199,7 @@ class BackgroundServicesTest {
     fun `GIVEN a pairing card flow WHEN the user pairs THEN the sign in is recorded and the entrypoint is cleared`() {
         every { settings.lastAuthFlowEntrypoint } returns FenixFxAEntryPoint.OnboardingPairing.entryName
 
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Pairing) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Pairing()) }
 
         val event = Onboarding.syncPairingCardSignedIn.testGetValue()!!.single()
         assertEquals("pairing", event.extra?.getValue("auth_type"))
@@ -195,7 +210,7 @@ class BackgroundServicesTest {
     fun `GIVEN a pairing card flow WHEN the user signs in THEN the sign in is recorded and the entrypoint is cleared`() {
         every { settings.lastAuthFlowEntrypoint } returns FenixFxAEntryPoint.OnboardingPairing.entryName
 
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin()) }
 
         val event = Onboarding.syncPairingCardSignedIn.testGetValue()!!.single()
         assertEquals("sign_in", event.extra?.getValue("auth_type"))
@@ -206,7 +221,7 @@ class BackgroundServicesTest {
     fun `GIVEN a pairing card flow WHEN the user signs up THEN the sign in is recorded and the entrypoint is cleared`() {
         every { settings.lastAuthFlowEntrypoint } returns FenixFxAEntryPoint.OnboardingPairing.entryName
 
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signup) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signup()) }
 
         val event = Onboarding.syncPairingCardSignedIn.testGetValue()!!.single()
         assertEquals("sign_up", event.extra?.getValue("auth_type"))
@@ -217,7 +232,7 @@ class BackgroundServicesTest {
     fun `GIVEN a flow from another entrypoint WHEN the user signs in THEN the sign in is not recorded and the entrypoint is cleared`() {
         every { settings.lastAuthFlowEntrypoint } returns FenixFxAEntryPoint.SettingsMenu.entryName
 
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin()) }
 
         assertNull(Onboarding.syncPairingCardSignedIn.testGetValue())
         verify { settings.lastAuthFlowEntrypoint = null }
@@ -227,7 +242,7 @@ class BackgroundServicesTest {
     fun `GIVEN a flow from the new user onboarding entrypoint WHEN the user signs in THEN the sign in is not recorded and the entrypoint is cleared`() {
         every { settings.lastAuthFlowEntrypoint } returns FenixFxAEntryPoint.NewUserOnboarding.entryName
 
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin()) }
 
         assertNull(Onboarding.syncPairingCardSignedIn.testGetValue())
         verify { settings.lastAuthFlowEntrypoint = null }
@@ -235,7 +250,7 @@ class BackgroundServicesTest {
 
     @Test
     fun `GIVEN no pairing flow WHEN the user signs in THEN the sign in is not recorded`() {
-        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin) }
+        registry.notifyObservers { onAuthenticated(mockk(), AuthType.Signin()) }
 
         assertNull(Onboarding.syncPairingCardSignedIn.testGetValue())
         verify(exactly = 0) { settings.lastAuthFlowEntrypoint = any() }

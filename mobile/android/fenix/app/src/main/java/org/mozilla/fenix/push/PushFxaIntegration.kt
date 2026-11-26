@@ -107,10 +107,7 @@ internal class OneTimeMessageDeliveryObserver(
     private val lazyAccount: Lazy<FxaAccountManager>,
     private val message: ByteArray,
 ) : AccountObserver {
-    override fun onAuthenticated(
-        account: OAuthAccount,
-        authType: AuthType,
-    ) {
+    override fun onAuthenticated(account: OAuthAccount, authType: AuthType) {
         lazyAccount.value.withConstellationIfExists {
             MainScope().launch { processRawEvent(String(message)) }
         }
