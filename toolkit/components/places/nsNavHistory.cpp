@@ -925,7 +925,7 @@ nsresult PlacesSQLQueryBuilder::SelectAsVisit() {
       "  v.visit_date, null, null, null, null, null, "
       "  (SELECT tags FROM tagged WHERE place_id = h.id) AS tags, "
       "  h.frecency, h.hidden, h.guid, v.id, v.from_visit, v.visit_type, "
-      "  null, null, null, null, null, null, null "
+      "  null, null, null, null, null, null, null, v.userContextId "
       "FROM moz_places h "
       "JOIN moz_historyvisits v ON h.id = v.place_id "
       // WHERE 1 is a no-op since additonal conditions will start with AND.

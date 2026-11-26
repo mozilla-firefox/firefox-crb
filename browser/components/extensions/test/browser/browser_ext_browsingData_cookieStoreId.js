@@ -14,7 +14,6 @@ add_task(async function test_remove_unsupported() {
         "cache",
         "downloads",
         "formData",
-        "history",
         "passwords",
         "pluginData",
         "serviceWorkers",

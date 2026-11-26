@@ -66,6 +66,9 @@ const convertRowToVisitItem = row => {
     visitTime: PlacesUtils.toDate(row.getResultByName("visit_date")).getTime(),
     referringVisitId: String(row.getResultByName("from_visit")),
     transition: getTransition(row.getResultByName("visit_type")),
+    cookieStoreId: getCookieStoreIdForOriginAttributes({
+      userContextId: row.getResultByName("userContextId"),
+    }),
   };
 };
 
@@ -112,6 +115,9 @@ this.history = class extends ExtensionAPIPersistent {
             lastVisitTime: event.visitTime,
             visitCount: event.visitCount,
             typedCount: event.typedCount,
+            cookieStoreId: getCookieStoreIdForOriginAttributes({
+              userContextId: event.userContextId,
+            }),
           };
           fire.sync(visit);
         }
@@ -195,6 +201,7 @@ this.history = class extends ExtensionAPIPersistent {
   };
 
   getAPI(context) {
+    const { extension } = context;
     return {
       history: {
         addUrl: function (details) {
@@ -207,6 +214,14 @@ this.history = class extends ExtensionAPIPersistent {
           if (details.visitTime) {
             date = normalizeTime(details.visitTime);
           }
+          let userContextId = 0;
+          if (details.cookieStoreId != null) {
+            userContextId = getUserContextIdForCookieStoreId(
+              extension,
+              details.cookieStoreId,
+              false
+            );
+          }
           let pageInfo = {
             title: details.title,
             url: details.url,
@@ -214,6 +229,7 @@ this.history = class extends ExtensionAPIPersistent {
               {
                 transition,
                 date,
+                userContextId,
               },
             ],
           };
@@ -233,6 +249,13 @@ this.history = class extends ExtensionAPIPersistent {
             beginDate: normalizeTime(filter.startTime),
             endDate: normalizeTime(filter.endTime),
           };
+          if (filter.cookieStoreId != null) {
+            newFilter.userContextId = getUserContextIdForCookieStoreId(
+              extension,
+              filter.cookieStoreId,
+              false
+            );
+          }
           // History.removeVisitsByFilter returns a boolean, but our API should return nothing
           return PlacesUtils.history
             .removeVisitsByFilter(newFilter)
@@ -241,6 +264,16 @@ this.history = class extends ExtensionAPIPersistent {
 
         deleteUrl: function (details) {
           let url = details.url;
+          if (details.cookieStoreId != null) {
+            let userContextId = getUserContextIdForCookieStoreId(
+              extension,
+              details.cookieStoreId,
+              false
+            );
+            return PlacesUtils.history
+              .removeVisitsByFilter({ url, userContextId })
+              .then(() => undefined);
+          }
           // History.remove returns a boolean, but our API should return nothing
           return PlacesUtils.history.remove(url).then(() => undefined);
         },
