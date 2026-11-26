@@ -37,6 +37,7 @@ if (
 ):
     UNIFIED_SOURCES += [
         "GeckoProfiler.cpp",
+        "ProfileAdditionalInformationTest.cpp",
         "ThreadProfileTest.cpp",
     ]
 

@@ -83,9 +83,20 @@ struct ProfileGenerationAdditionalInformation {
     mJSSourceEntries.AppendElements(std::move(aOther.mJSSourceEntries));
   }
 
-  void FinishGathering() { mSharedLibraries.DeduplicateEntries(); }
+  void FinishGathering() {
+    mSharedLibraries.DeduplicateEntries();
+    DeduplicateJSSourceEntries();
+  }
+
+  // Keep the entry with the most source data for each id, since IPC can drop
+  // source text or source map URLs from individual process profiles.
+  void DeduplicateJSSourceEntries();
 
   void ToJSValue(JSContext* aCx, JS::MutableHandle<JS::Value> aRetVal) const;
+
+  const nsTArray<JSSourceEntry>& JSSourceEntries() const {
+    return mJSSourceEntries;
+  }
 
   friend IPC::ParamTraits<mozilla::ProfileGenerationAdditionalInformation>;
 
