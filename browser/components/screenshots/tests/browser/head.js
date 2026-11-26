@@ -547,8 +547,18 @@ class ScreenshotsHelper {
     info(
       `Resizing window to ${width}x${height} from ${innerWidth}x${innerHeight} (outer ${outerWidth}x${outerHeight})`
     );
+    if (innerWidth === width && innerHeight === height) {
+      // No resize event would fire.
+      return;
+    }
     let targetW = outerWidth - innerWidth + width;
     let targetH = outerHeight - innerHeight + height;
+    // The content process only gets its new size once the parent has laid out
+    // the resized window, which can happen after outerWidth/outerHeight change.
+    let contentResized = BrowserTestUtils.waitForContentEvent(
+      this.browser,
+      "resize"
+    );
     window.resizeTo(targetW, targetH);
     await TestUtils.waitForCondition(() => {
       info(
@@ -556,6 +566,7 @@ class ScreenshotsHelper {
       );
       return outerHeight === targetH && outerWidth === targetW;
     }, "Waiting for window to resize");
+    await contentResized;
   }
 
   waitForContentMousePosition(left, top) {
