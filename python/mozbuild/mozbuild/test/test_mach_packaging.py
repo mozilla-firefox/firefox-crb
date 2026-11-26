@@ -105,15 +105,6 @@ def _routed():
         }
 
 
-class TestLegacySwitch(unittest.TestCase):
-    def test_legacy(self):
-        substs = {**_SUBSTS, "MOZ_LEGACY_PACKAGING": "1"}
-        self.assertTrue(mach_commands._use_legacy_packaging(_context(substs)))
-
-    def test_unset(self):
-        self.assertFalse(mach_commands._use_legacy_packaging(_context()))
-
-
 class TestPackageApplicationOptions(unittest.TestCase):
     def _options(self, substs=None, environ=None, **overrides):
         seen = {}
@@ -179,17 +170,6 @@ class TestPackageCommand(unittest.TestCase):
     def test_not_verbose(self):
         self.assertEqual(self._verbose_log(False), [None])
 
-    def test_legacy(self):
-        context = _context({**_SUBSTS, "MOZ_LEGACY_PACKAGING": "1"})
-        context._run_make.return_value = 0
-        with _routed() as calls:
-            with mock.patch.object(mach_commands, "_print_package_name"):
-                rc = mach_commands.package(context)
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(calls["application"].call_count, 0)
-        self.assertEqual(context._run_make.call_args.kwargs["target"], "package")
-
 
 class TestInstallCommand(unittest.TestCase):
     @contextlib.contextmanager
@@ -212,17 +192,6 @@ class TestInstallCommand(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(context._run_make.call_count, 0)
         self.assertEqual(calls["application"].call_args.kwargs["mode"], "install")
-
-    def test_legacy(self):
-        context = _context({**_SUBSTS, "MOZ_LEGACY_PACKAGING": "1"})
-        context._run_make.return_value = 0
-        with self._desktop():
-            with _routed() as calls:
-                rc = mach_commands.install(context)
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(calls["application"].call_count, 0)
-        self.assertEqual(context._run_make.call_args.kwargs["target"], "install")
 
     def test_js_standalone(self):
         context = _context({**_SUBSTS, "JS_STANDALONE": "1"})
