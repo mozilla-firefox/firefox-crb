@@ -381,10 +381,11 @@ def full_task_set(target_task_set):
               Calculated try_task_config.json:
               {
                   "parameters": {
+                      "bugbug_confidence_threshold": "medium",
                       "filters": [
                           "try_auto"
                       ],
-                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection_medium",
+                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection",
                       "optimize_target_tasks": true,
                       "test_manifest_loader": "bugbug",
                       "try_mode": "try_auto",
@@ -411,10 +412,11 @@ def full_task_set(target_task_set):
               Calculated try_task_config.json:
               {
                   "parameters": {
+                      "bugbug_confidence_threshold": "medium",
                       "filters": [
                           "try_auto"
                       ],
-                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection_medium",
+                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection",
                       "optimize_target_tasks": true,
                       "test_manifest_loader": "bugbug",
                       "try_mode": "try_auto",
@@ -441,10 +443,11 @@ def full_task_set(target_task_set):
               Calculated try_task_config.json:
               {
                   "parameters": {
+                      "bugbug_confidence_threshold": "medium",
                       "filters": [
                           "try_auto"
                       ],
-                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection_medium",
+                      "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection",
                       "optimize_target_tasks": true,
                       "test_manifest_loader": "bugbug",
                       "try_mode": "try_auto",

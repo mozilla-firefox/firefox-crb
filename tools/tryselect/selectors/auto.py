@@ -10,8 +10,9 @@ from ..push import push_to_try
 from ..util.dicttools import merge
 
 TRY_AUTO_PARAMETERS = {
+    "bugbug_confidence_threshold": "medium",
     "filters": ["try_auto"],
-    "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection_medium",  # noqa
+    "optimize_strategies": "gecko_taskgraph.optimize:tryselect.bugbug_reduced_manifests_config_selection",  # noqa
     "optimize_target_tasks": True,
     "test_manifest_loader": "bugbug",
     "try_mode": "try_auto",

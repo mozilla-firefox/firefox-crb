@@ -127,6 +127,10 @@ class experimental:
     with `./mach try auto`.  E.g:
 
         ./mach try auto --strategy relevant_tests
+
+    The bugbug strategies selecting manifests use the confidence threshold and
+    number of pushes of the `bugbug_confidence_threshold` and `bugbug_num_pushes`
+    parameters.
     """
 
     bugbug_tasks_medium = {
@@ -146,7 +150,7 @@ class experimental:
     bugbug_debug_disperse = {
         "test": Any(
             "skip-unless-schedules",
-            "bugbug-low",
+            "bugbug",
             "platform-debug",
             "platform-disperse",
             split_args=split_bugbug_arg,
@@ -154,27 +158,17 @@ class experimental:
     }
     """Restricts tests to debug platforms."""
 
-    bugbug_disperse_low = {
+    bugbug_disperse = {
         "test": Any(
             "skip-unless-schedules",
-            "bugbug-low",
+            "bugbug",
             "platform-disperse",
             split_args=split_bugbug_arg,
         ),
     }
-    """Disperse tests across platforms, low confidence threshold."""
+    """Disperse tests across platforms."""
 
-    bugbug_disperse_medium = {
-        "test": Any(
-            "skip-unless-schedules",
-            "bugbug-medium",
-            "platform-disperse",
-            split_args=split_bugbug_arg,
-        ),
-    }
-    """Disperse tests across platforms, medium confidence threshold."""
-
-    bugbug_disperse_reduced_medium = {
+    bugbug_disperse_reduced = {
         "test": Any(
             "skip-unless-schedules",
             "bugbug-reduced-manifests",
@@ -182,65 +176,36 @@ class experimental:
             split_args=split_bugbug_arg,
         ),
     }
-    """Disperse tests across platforms, medium confidence threshold with reduced tasks."""
+    """Disperse tests across platforms, with reduced tasks."""
 
-    bugbug_reduced_manifests_config_selection_low = {
-        "test": Any(
-            "skip-unless-schedules",
-            "bugbug-reduced-manifests-config-selection-low",
-            split_args=split_bugbug_arg,
-        ),
-    }
-    """Choose configs selected by bugbug, low confidence threshold with reduced tasks."""
-
-    bugbug_reduced_manifests_config_selection_medium = {
+    bugbug_reduced_manifests_config_selection = {
         "test": Any(
             "skip-unless-schedules",
             "bugbug-reduced-manifests-config-selection",
             split_args=split_bugbug_arg,
         ),
     }
-    """Choose configs selected by bugbug, medium confidence threshold with reduced tasks."""
+    """Choose configs selected by bugbug, with reduced tasks."""
 
-    bugbug_reduced_manifests_config_selection_high = {
+    bugbug_disperse_no_unseen = {
         "test": Any(
             "skip-unless-schedules",
-            "bugbug-reduced-manifests-config-selection-high",
-            split_args=split_bugbug_arg,
-        ),
-    }
-    """Choose configs selected by bugbug, medium confidence threshold with reduced tasks."""
-
-    bugbug_disperse_medium_no_unseen = {
-        "test": Any(
-            "skip-unless-schedules",
-            "bugbug-medium",
+            "bugbug",
             "platform-disperse-no-unseen",
             split_args=split_bugbug_arg,
         ),
     }
-    """Disperse tests across platforms (no modified for unseen configurations), medium confidence
-    threshold."""
+    """Disperse tests across platforms (no modified for unseen configurations)."""
 
-    bugbug_disperse_medium_only_one = {
+    bugbug_disperse_only_one = {
         "test": Any(
             "skip-unless-schedules",
-            "bugbug-medium",
+            "bugbug",
             "platform-disperse-only-one",
             split_args=split_bugbug_arg,
         ),
     }
-    """Disperse tests across platforms (one platform per group), medium confidence threshold."""
-
-    bugbug_disperse_high = {
-        "test": Any(
-            "skip-unless-schedules",
-            "bugbug-high",
-            "platform-disperse",
-            split_args=split_bugbug_arg,
-        ),
-    }
-    """Disperse tests across platforms, high confidence threshold."""
+    """Disperse tests across platforms (one platform per group)."""
 
     bugbug_reduced = {
         "test": Any(

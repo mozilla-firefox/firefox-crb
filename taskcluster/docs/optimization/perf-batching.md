@@ -53,6 +53,7 @@ They show up on Treeherder as `SS(<name>)` once tier 3 jobs are shown.
 
 On non-backstop pushes, the autoland target tasks method drops tests against shippable builds before optimization runs, which covers most performance tasks.
 The performance shadow schedulers therefore first rewrite the decision task's parameters with {searchfox}`taskcluster/scripts/misc/shadow-scheduler-parameters.py`, setting the target tasks method to `autoland_perf_shadow_scheduler_tasks`, which targets every task optimized through a `perf-cadence-*` alias on every push.
+They also reset the bugbug confidence threshold and number of pushes that the decision task changes on expanded pushes, since performance tasks don't use bugbug, to avoid querying it for the previous pushes.
 
 Each performance shadow scheduler uploads:
 
@@ -71,6 +72,8 @@ To reproduce a run locally for a decision task:
 ./mach python --virtualenv taskgraph taskcluster/scripts/misc/shadow-scheduler-parameters.py \
     --decision-task-id <decision task id> \
     --target-tasks-method autoland_perf_shadow_scheduler_tasks \
+    --set bugbug_confidence_threshold=low \
+    --set bugbug_num_pushes=1 \
     parameters.yml
 TASKGRAPH_OPTIMIZE_STRATEGIES=gecko_taskgraph.optimize:experimental.perf_rasb \
     ./mach taskgraph optimized -p parameters.yml
