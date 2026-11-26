@@ -20,6 +20,7 @@ import mozilla.components.feature.ipprotection.store.IPProtectionStore
 import mozilla.components.feature.ipprotection.store.state.EligibilityStatus
 import mozilla.components.feature.ipprotection.store.state.IPProtectionState
 import mozilla.components.service.fxa.manager.FxaAccountManager
+import mozilla.components.service.fxa.store.SyncStore
 import mozilla.components.service.fxrelay.eligibility.Eligible
 import mozilla.components.service.fxrelay.eligibility.Ineligible
 import mozilla.components.service.fxrelay.eligibility.RelayEligibilityStore
@@ -54,7 +55,10 @@ class SettingsFragmentTest {
         every { testContext.components.core.store.state.translationEngine } returns mockk(relaxed = true)
         every { testContext.components.addonManager } returns mockk(relaxed = true)
         every { testContext.components.analytics } returns mockk(relaxed = true)
-        every { testContext.components.backgroundServices } returns mockk(relaxed = true)
+        every { testContext.components.backgroundServices } returns
+            mockk(relaxed = true) {
+                every { syncStore } returns SyncStore()
+            }
 
         val activity = Robolectric.buildActivity(FragmentActivity::class.java).create().get()
         activity.supportFragmentManager.beginTransaction().add(settingsFragment, "test").commitNow()

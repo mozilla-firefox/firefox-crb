@@ -30,12 +30,14 @@ dependencies {
     implementation project(':components:support-ktx')
     implementation project(':components:support-webextensions')
 
+    implementation libs.androidx.credentials
     implementation libs.androidx.work.runtime
     implementation libs.kotlinx.coroutines
 
     testImplementation project(':components:support-test')
 
     testImplementation ComponentsDependencies.mozilla_appservices_full_megazord_libsForTests
+    testImplementation libs.androidx.credentials
     testImplementation libs.androidx.test.junit
     testImplementation libs.kotlinx.coroutines.test
     testImplementation libs.robolectric

@@ -35,6 +35,7 @@ import mozilla.components.concept.fetch.Client
 import mozilla.components.service.fxa.manager.AccountState.Authenticated
 import mozilla.components.service.fxa.manager.AccountState.AuthenticationProblem
 import mozilla.components.service.fxa.manager.AccountState.NotAuthenticated
+import mozilla.components.service.fxa.manager.AccountState.RestoredIdentity
 import mozilla.components.service.fxa.manager.AccountState.Unknown
 import mozilla.components.service.fxa.store.SyncState
 import mozilla.components.service.fxa.store.SyncStore
@@ -112,7 +113,7 @@ class MozillaAccountMenuItemProvider(
         val items = mutableItems ?: return
         items.value = listOf(state.toMenuItem())
 
-        if (state.accountState == AuthenticationProblem) {
+        if (state.accountState == AuthenticationProblem || state.accountState == RestoredIdentity) {
             return
         }
 
@@ -137,7 +138,8 @@ class MozillaAccountMenuItemProvider(
     private val SyncState.defaultIcon: MenuItemIcon
         get() =
             when (accountState) {
-                AuthenticationProblem -> warningIcon
+                AuthenticationProblem,
+                RestoredIdentity -> warningIcon
                 else -> MenuItemIconRes(iconsR.drawable.mozac_ic_avatar_circle_24)
             }
 
@@ -150,7 +152,8 @@ class MozillaAccountMenuItemProvider(
         menu.navigate(
             when (event.accountState) {
                 Authenticated -> NavGraphDirections.actionGlobalAccountSettingsFragment()
-                AuthenticationProblem ->
+                AuthenticationProblem,
+                RestoredIdentity ->
                     NavGraphDirections.actionGlobalAccountProblemFragment(
                         entrypoint = event.accesspoint.toFenixFxAEntryPoint()
                     )
@@ -177,7 +180,8 @@ private val SyncState.title: Text
             NotAuthenticated,
             Unknown -> Text.Resource(R.string.browser_menu_sign_in)
 
-            AuthenticationProblem ->
+            AuthenticationProblem,
+            RestoredIdentity ->
                 account?.displayName?.let(Text::String)
                     ?: account?.email?.let(Text::String)
                     ?: Text.Resource(R.string.browser_menu_sign_back_in_to_sync)
@@ -198,7 +202,8 @@ private val SyncState.summary: MenuItemSummary
                     maxLines = 2,
                 )
 
-            AuthenticationProblem ->
+            AuthenticationProblem,
+            RestoredIdentity ->
                 MenuItemSummary(
                     text = Text.Resource(R.string.browser_menu_syncing_paused_caption),
                     state = MenuItemState.WARNING,

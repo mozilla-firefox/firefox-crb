@@ -10,8 +10,10 @@ import androidx.preference.PreferenceFragmentCompat
 import kotlinx.coroutines.CoroutineScope
 import mozilla.components.concept.fetch.Client
 import mozilla.components.concept.sync.Profile
+import mozilla.components.service.fxa.manager.AccountState
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import org.mozilla.fenix.R
+import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.settings.requirePreference
 
 class AccountUiView(
@@ -41,6 +43,12 @@ class AccountUiView(
      */
     fun updateAccountUIState(context: Context, profile: Profile?) {
         val account = accountManager.authenticatedAccount()
+        val syncStoreState = context.components.backgroundServices.syncStore.state
+        val isRecognizedOrAuthProblem =
+            syncStoreState.account != null &&
+                (syncStoreState.accountState == AccountState.AuthenticationProblem ||
+                    syncStoreState.accountState == AccountState.RestoredIdentity)
+        val needsReauth = account != null && accountManager.accountNeedsReauth()
 
         // Signed-in, no problems.
         if (account != null && !accountManager.accountNeedsReauth()) {
@@ -52,15 +60,16 @@ class AccountUiView(
             preferenceFirefoxAccount.isVisible = true
             accountPreferenceCategory.isVisible = true
 
-            // Signed-in, need to re-authenticate.
-        } else if (account != null && accountManager.accountNeedsReauth()) {
+            // Signed-in, need to re-authenticate (or restored account identity recognized).
+        } else if (needsReauth || isRecognizedOrAuthProblem) {
+            val syncAccount = syncStoreState.account
             preferenceFirefoxAccount.isVisible = false
             preferenceFirefoxAccountAuthError.isVisible = true
             accountPreferenceCategory.isVisible = true
 
             preferenceSignInPromo.isVisible = false
 
-            preferenceFirefoxAccountAuthError.email = profile?.email
+            preferenceFirefoxAccountAuthError.email = profile?.email ?: syncAccount?.email
 
             // Signed-out.
         } else {

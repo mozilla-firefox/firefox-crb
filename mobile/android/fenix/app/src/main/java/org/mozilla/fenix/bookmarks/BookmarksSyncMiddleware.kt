@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.onEach
 import mozilla.components.lib.state.Middleware
 import mozilla.components.lib.state.Store
 import mozilla.components.lib.state.ext.flow
+import mozilla.components.service.fxa.manager.AccountState
 import mozilla.components.service.fxa.store.SyncStatus
 import mozilla.components.service.fxa.store.SyncStore
 
@@ -36,7 +37,7 @@ internal class BookmarksSyncMiddleware(
                 // instance of the Sync Engine to finish so we know it's safe to load bookmarks
                 syncStore
                     .flow()
-                    .map { it.account != null }
+                    .map { it.accountState == AccountState.Authenticated }
                     .distinctUntilChanged()
                     .onEach { isSignedIn ->
                         store.dispatch(ReceivedSyncSignInUpdate(isSignedIn))

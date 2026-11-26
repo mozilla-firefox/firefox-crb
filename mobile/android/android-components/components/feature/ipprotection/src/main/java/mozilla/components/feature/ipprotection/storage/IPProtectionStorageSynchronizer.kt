@@ -83,7 +83,8 @@ internal class FxaAccountStoreSync(
                                         AccountStatus.NeedsAuthorization
                                     }
                                 }
-                                AccountState.AuthenticationProblem -> AccountStatus.NeedsAuthentication
+                                AccountState.AuthenticationProblem,
+                                AccountState.RestoredIdentity -> AccountStatus.NeedsAuthentication
                                 AccountState.NotAuthenticated -> AccountStatus.NoAccount
                                 // Initialization step; once finished, the state will pop up in onReady()
                                 AccountState.Unknown -> AccountStatus.Uninitialized

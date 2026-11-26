@@ -18,6 +18,9 @@ sealed class AccountState {
     /** Account needs to be re-authenticated (e.g. due to a password change). */
     object AuthenticationProblem : AccountState()
 
+    /** Account identity was recognized from a restore credential and requires sign-in. */
+    object RestoredIdentity : AccountState()
+
     /** No authenticated account is available (e.g. account is logged out). */
     object NotAuthenticated : AccountState()
 }

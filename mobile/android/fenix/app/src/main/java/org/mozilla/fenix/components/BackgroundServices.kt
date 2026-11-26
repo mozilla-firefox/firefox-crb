@@ -27,6 +27,7 @@ import mozilla.components.concept.sync.PeriodicSyncConfig
 import mozilla.components.concept.sync.SyncConfig
 import mozilla.components.concept.sync.SyncEngine
 import mozilla.components.feature.accounts.FxaCapability
+import mozilla.components.feature.accounts.RestoreCredentialsManager
 import mozilla.components.feature.accounts.push.CloseTabsCommandReceiver
 import mozilla.components.feature.accounts.push.CloseTabsFeature
 import mozilla.components.feature.accounts.push.FxaPushSupportFeature
@@ -249,6 +250,15 @@ class BackgroundServices(
                 accountManager.register(accountAbnormalities)
 
                 accountManager.register(AccountManagerReadyObserver(accountManagerAvailableQueue))
+
+                // Register Restore Credentials manager for credential restoration
+                accountManager.register(
+                    RestoreCredentialsManager(
+                        context = context,
+                        syncStore = syncStore,
+                        coroutineScope = applicationScope,
+                    )
+                )
 
                 // Enable push if it's configured.
                 push.feature?.let { autoPushFeature ->

@@ -25,6 +25,7 @@ import mozilla.components.concept.sync.Device
 import mozilla.components.concept.sync.DeviceType
 import mozilla.components.concept.sync.SyncEngine
 import mozilla.components.feature.syncedtabs.storage.SyncedTabsStorage
+import mozilla.components.service.fxa.manager.AccountState
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.service.fxa.manager.SyncEnginesStorage
 import mozilla.components.service.fxa.manager.ext.withConstellationIfExists
@@ -600,12 +601,19 @@ class RecentSyncedTabFeatureTest {
     private fun SyncStore.setState(
         status: SyncStatus? = null,
         account: Account? = null,
+        accountState: AccountState? = null,
     ) {
         status?.let {
             this.dispatch(SyncAction.UpdateSyncStatus(status))
         }
         account?.let {
             this.dispatch(SyncAction.UpdateAccount(account))
+            if (accountState == null) {
+                this.dispatch(SyncAction.UpdateAccountState(AccountState.Authenticated))
+            }
+        }
+        accountState?.let {
+            this.dispatch(SyncAction.UpdateAccountState(accountState))
         }
     }
 
