@@ -20,6 +20,7 @@
 #include "nsIFile.h"
 #include "nsIFileURL.h"
 #include "nsNetUtil.h"
+#include "nsTHashMap.h"
 
 #include <cstring>
 
@@ -129,6 +130,31 @@ JSString* mozilla::ProfileGenerationAdditionalInformation::
       },
       [&](const ProfilerJSSourceData::Unavailable&) {});
   return result;
+}
+
+void mozilla::ProfileGenerationAdditionalInformation::
+    DeduplicateJSSourceEntries() {
+  auto quality = [](const JSSourceEntry& aEntry) {
+    return (aEntry.sourceData.data().is<ProfilerJSSourceData::Unavailable>()
+                ? 0
+                : 2) +
+           (aEntry.sourceData.sourceMapURLLength() > 0 ? 1 : 0);
+  };
+  nsTHashMap<nsCStringHashKey, size_t> indexById;
+  nsTArray<JSSourceEntry> uniqueEntries;
+  for (JSSourceEntry& entry : mJSSourceEntries) {
+    auto existing = indexById.Lookup(entry.id);
+    if (existing) {
+      JSSourceEntry& retained = uniqueEntries[existing.Data()];
+      if (quality(entry) > quality(retained)) {
+        retained = std::move(entry);
+      }
+    } else {
+      indexById.InsertOrUpdate(entry.id, uniqueEntries.Length());
+      uniqueEntries.AppendElement(std::move(entry));
+    }
+  }
+  mJSSourceEntries = std::move(uniqueEntries);
 }
 
 void mozilla::ProfileGenerationAdditionalInformation::ToJSValue(
