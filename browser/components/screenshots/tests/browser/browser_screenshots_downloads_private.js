@@ -26,7 +26,9 @@ add_task(async function test_download_private_browsing() {
   });
   let privateBrowser = privateWin.gBrowser.selectedBrowser;
   BrowserTestUtils.startLoadingURIString(privateBrowser, TEST_PAGE);
-  await BrowserTestUtils.browserLoaded(privateBrowser);
+  // The private window's initial about:privatebrowsing load can finish after
+  // this point, so wait for the test page specifically.
+  await BrowserTestUtils.browserLoaded(privateBrowser, false, TEST_PAGE);
 
   let privateDownloads = await Downloads.getList(Downloads.PRIVATE);
   let downloadFinishedPromise = new Promise(resolve => {
