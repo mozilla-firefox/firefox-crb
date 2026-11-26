@@ -487,6 +487,17 @@ class QuotaManager final : public BackgroundThreadObject {
   Result<WriteLease, nsresult> AcquireWriteLeaseOnIOThread(
       const OriginMetadata& aOriginMetadata);
 
+  // Blocking variant of AcquireWriteLease for threads that may wait: takes the
+  // fast path if possible, otherwise runs AcquireWriteLeaseOnIOThread on the
+  // IO thread and waits for the result. The IO thread itself blocks on the
+  // main thread (GetOrCreateCipherKeyManager) and on the PBackground thread
+  // (CollectOriginsHelper), so calling this from either of them or from the
+  // IO thread would deadlock; the caller must not be on any of those, and IO
+  // thread work must never wait on a thread that calls this. mQuotaMutex must
+  // not be held. The caller must hold a directory lock on the origin.
+  Result<WriteLease, nsresult> AcquireWriteLeaseSync(
+      const OriginMetadata& aOriginMetadata);
+
   void FlushDirtyOriginInfos();
 
  private:

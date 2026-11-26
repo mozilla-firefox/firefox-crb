@@ -140,6 +140,10 @@ class FileSystemDataManager
 
   RefPtr<BoolPromise> OnClose();
 
+  // Called on the data-manager queue; waits only for quota IO, without yielding
+  // to later file system requests.
+  Result<quota::WriteLease, nsresult> AcquireWriteLease();
+
   Result<bool, QMResult> IsLocked(const FileId& aFileId) const;
 
   Result<bool, QMResult> IsLocked(const EntryId& aEntryId) const;

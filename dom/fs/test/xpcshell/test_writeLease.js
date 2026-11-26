@@ -142,16 +142,34 @@ add_task(async function testSteps() {
           /TypeMismatchError/,
           "Directory lookup errors are preserved"
         );
-        await Assert.rejects(
-          root.getFileHandle("blocked.txt", { create: true }),
-          expectedError,
-          "Creating a file requires a lease"
-        );
-        await Assert.rejects(
-          root.getDirectoryHandle("blocked", { create: true }),
-          expectedError,
-          "Creating a directory requires a lease"
-        );
+        for (const [method, name] of [
+          ["getFileHandle", "blocked.txt"],
+          ["getDirectoryHandle", "blocked"],
+        ]) {
+          const [creation, lookup] = await Promise.allSettled([
+            root[method](name, { create: true }),
+            root[method](name),
+          ]);
+          Assert.equal(
+            creation.status,
+            "rejected",
+            "Creation requires a lease"
+          );
+          Assert.ok(
+            expectedError.test(creation.reason),
+            "Lease error is preserved"
+          );
+          Assert.equal(
+            lookup.status,
+            "rejected",
+            "Lookup rejects for the missing entry"
+          );
+          Assert.equal(
+            lookup.reason?.name,
+            "NotFoundError",
+            "The entry is absent"
+          );
+        }
         for (const handle of [lazyFile, missingBackingFile]) {
           await Assert.rejects(
             handle.getFile(),
@@ -282,6 +300,18 @@ add_task(async function testSteps() {
   Assert.equal((await other.getFile()).size, 1, "Writes work again");
 
   await settle();
+
+  info("Stage 7 - Creation precedes lookup without an intervening await");
+
+  for (const method of ["getFileHandle", "getDirectoryHandle"]) {
+    const [created, found] = await Promise.all([
+      root[method]("ordered", { create: true }),
+      root[method]("ordered"),
+    ]);
+    ok(await created.isSameEntry(found), "The lookup observes the new entry");
+    await root.removeEntry("ordered");
+    await settle();
+  }
 
   await root.removeEntry("other.txt");
   await root.removeEntry("lazy.txt");
