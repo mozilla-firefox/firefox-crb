@@ -197,12 +197,16 @@ sealed class AuthType {
  * Different types of errors that may be encountered during authorization. Intermittent network problems are the most
  * common reason for these errors.
  */
-enum class AuthFlowError {
+sealed interface AuthFlowError {
+
+    /** The service associated to this auth flow error, or null when unknown or not flow-specific. */
+    val service: FxaService?
+
     /** Couldn't begin authorization, i.e. failed to obtain an authorization URL. */
-    FailedToBeginAuth,
+    data class FailedToBeginAuth(override val service: FxaService? = null) : AuthFlowError
 
     /** Couldn't complete authorization after user entered valid credentials/paired correctly. */
-    FailedToCompleteAuth,
+    data class FailedToCompleteAuth(override val service: FxaService? = null) : AuthFlowError
 }
 
 /**

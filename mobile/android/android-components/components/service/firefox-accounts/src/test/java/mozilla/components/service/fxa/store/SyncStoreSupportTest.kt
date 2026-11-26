@@ -187,7 +187,7 @@ class SyncStoreSupportTest {
         assertNull(store.state.account)
         assertEquals(AccountState.Unknown, store.state.accountState)
 
-        accountObserver.onFlowError(AuthFlowError.FailedToBeginAuth)
+        accountObserver.onFlowError(AuthFlowError.FailedToBeginAuth())
 
         assertNull(store.state.account)
         assertEquals(AccountState.NotAuthenticated, store.state.accountState)

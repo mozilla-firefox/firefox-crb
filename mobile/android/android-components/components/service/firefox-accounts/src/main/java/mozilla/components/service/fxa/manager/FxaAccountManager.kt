@@ -34,6 +34,7 @@ import mozilla.components.concept.sync.AuthFlowError
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.FxAEntryPoint
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.Profile
 import mozilla.components.concept.sync.ServiceResult
@@ -561,14 +562,23 @@ open class FxaAccountManager(
                         resetAccount()
                         notifyObservers { onLoggedOut() }
                     }
-                    is Event.Account.BeginEmailFlow,
+                    is Event.Account.BeginEmailFlow -> {
+                        resetAccount()
+                        notifyObservers {
+                            onFlowError(AuthFlowError.FailedToBeginAuth(service = FxaService.fromString(via.service)))
+                        }
+                    }
                     is Event.Account.BeginPairingFlow -> {
                         resetAccount()
-                        notifyObservers { onFlowError(AuthFlowError.FailedToBeginAuth) }
+                        notifyObservers {
+                            onFlowError(AuthFlowError.FailedToBeginAuth(service = FxaService.fromString(via.service)))
+                        }
                     }
                     is Event.Progress.AuthData -> {
                         resetAccount()
-                        notifyObservers { onFlowError(AuthFlowError.FailedToCompleteAuth) }
+                        notifyObservers {
+                            onFlowError(AuthFlowError.FailedToCompleteAuth(service = via.authData.authType.service))
+                        }
                     }
                     else -> Unit
                 }
