@@ -38,3 +38,7 @@ prefs = ["security.storage.encryption.sqlite.enabled=false"]
 
 ["test_writableFileStream_worker.js"]
 prefs = ["security.storage.encryption.sqlite.enabled=false"]
+
+["test_writeLease.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+prefs = ["security.storage.encryption.sqlite.enabled=false"]

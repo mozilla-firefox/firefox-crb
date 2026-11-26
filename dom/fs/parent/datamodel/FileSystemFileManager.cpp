@@ -288,6 +288,21 @@ Result<nsCOMPtr<nsIFile>, QMResult> FileSystemFileManager::GetFile(
   return data::GetFile(mTopDirectory, aFileId);
 }
 
+nsresult FileSystemFileManager::GetExistingFile(
+    const FileId& aFileId, nsCOMPtr<nsIFile>& aFile) const {
+  QM_TRY_UNWRAP(aFile, GetFile(aFileId));
+
+  bool isDirectory;
+  const nsresult rv = aFile->IsDirectory(&isDirectory);
+  if (rv == NS_ERROR_FILE_NOT_FOUND) {
+    return rv;
+  }
+  QM_TRY(MOZ_TO_RESULT(rv));
+  QM_TRY(OkIf(!isDirectory), NS_ERROR_FILE_IS_DIRECTORY);
+
+  return NS_OK;
+}
+
 Result<nsCOMPtr<nsIFile>, QMResult> FileSystemFileManager::GetOrCreateFile(
     const FileId& aFileId) {
   return data::GetOrCreateFile(mTopDirectory, aFileId);

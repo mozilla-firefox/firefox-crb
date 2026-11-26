@@ -128,6 +128,9 @@ class FileSystemFileManager {
    */
   Result<nsCOMPtr<nsIFile>, QMResult> GetFile(const FileId& aFileId) const;
 
+  nsresult GetExistingFile(const FileId& aFileId,
+                           nsCOMPtr<nsIFile>& aFile) const;
+
   /**
    * @brief Get or create a disk-backed file object for a specified entry id.
    *
