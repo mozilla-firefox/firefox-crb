@@ -388,7 +388,8 @@ export var TestUtils = {
   /**
    * Creates a reusable proxy for controlling promise-returning method calls.
    *
-   * Calling a method on the proxy returns a controller for its next call.
+   * Calling a method on the proxy returns a controller for its next matching
+   * call.
    *
    * @template {object} Owner
    * @param {Owner} owner - The object or class for which to create a proxy.
