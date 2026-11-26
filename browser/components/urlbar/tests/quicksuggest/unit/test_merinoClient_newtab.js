@@ -88,3 +88,89 @@ add_task(async function errors() {
 
   MerinoTestUtils.server.reset();
 });
+
+// `onResult` should be called once for each request that is sent, and what the
+// methods return should not depend on it.
+add_task(async function onResult() {
+  let merino = new MerinoClient("test");
+  let endpointUrl = MerinoTestUtils.server.url.toString();
+
+  let tests = [
+    {
+      response: { body: { title: "Picture" } },
+      expectedReturn: { data: { title: "Picture" }, error: null },
+      expectedResult: ["success", { httpStatus: 200 }],
+    },
+    {
+      response: { status: 500 },
+      expectedReturn: { data: null, error: "load_error" },
+      expectedResult: ["http_error", { httpStatus: 500 }],
+    },
+    {
+      response: { contentType: "text/plain", body: "not json" },
+      expectedReturn: { data: null, error: "load_error" },
+      expectedResult: ["no_suggestion", { httpStatus: 200 }],
+    },
+    {
+      endpointUrl: "http://localhost/valid-but-unreachable-url",
+      expectedReturn: { data: null, error: "load_error" },
+      expectedResult: ["network_error", { httpStatus: null }],
+    },
+    {
+      endpointUrl: "",
+      expectedReturn: { data: null, error: null },
+      expectedResult: null,
+    },
+    {
+      endpointUrl: "not a url",
+      expectedReturn: { data: null, error: "invalid_url" },
+      expectedResult: null,
+    },
+  ];
+
+  for (let method of ["fetchPictureOfTheDay", "fetchFramedWidgets"]) {
+    for (let test of tests) {
+      info(`Testing ${method}: ` + JSON.stringify(test));
+      MerinoTestUtils.server.response = test.response ?? {};
+
+      let results = [];
+      let returned = await merino[method]({
+        endpointUrl: test.endpointUrl ?? endpointUrl,
+        onResult: (...args) => results.push(args),
+      });
+
+      Assert.deepEqual(returned, test.expectedReturn, "Return value");
+      Assert.deepEqual(
+        results,
+        test.expectedResult ? [test.expectedResult] : [],
+        "onResult calls"
+      );
+    }
+  }
+
+  MerinoTestUtils.server.reset();
+});
+
+// A request is aborted when the timeout the caller passes elapses.
+add_task(async function timeout() {
+  let merino = new MerinoClient("test");
+  let endpointUrl = MerinoTestUtils.server.url.toString();
+
+  for (let method of ["fetchPictureOfTheDay", "fetchFramedWidgets"]) {
+    MerinoTestUtils.server.response = { body: { widgets: [] }, delay: 400 };
+
+    let results = [];
+    Assert.deepEqual(
+      await merino[method]({
+        endpointUrl,
+        timeoutMs: 50,
+        onResult: (...args) => results.push(args),
+      }),
+      { data: null, error: "load_error" },
+      `${method}: the request is aborted when the timeout elapses`
+    );
+    Assert.deepEqual(results, [["timeout", { httpStatus: null }]]);
+  }
+
+  MerinoTestUtils.server.reset();
+});

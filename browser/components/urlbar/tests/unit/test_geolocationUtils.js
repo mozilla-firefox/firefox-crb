@@ -297,9 +297,15 @@ add_task(async function concurrentCallsShareOneRequest() {
   // Keep the first request in flight while the second one starts.
   MerinoTestUtils.server.response.delay = 300;
 
+  let firstResults = [];
+  let secondResults = [];
   let results = await Promise.all([
-    GeolocationUtils.geolocation(),
-    GeolocationUtils.geolocation(),
+    GeolocationUtils.geolocation({
+      onResult: (...args) => firstResults.push(args),
+    }),
+    GeolocationUtils.geolocation({
+      onResult: (...args) => secondResults.push(args),
+    }),
   ]);
 
   Assert.deepEqual(
@@ -311,6 +317,16 @@ add_task(async function concurrentCallsShareOneRequest() {
     MerinoTestUtils.server.requests.length,
     1,
     "Concurrent callers should share one Merino request"
+  );
+  Assert.deepEqual(
+    firstResults,
+    [["success", { httpStatus: 200 }]],
+    "The caller that sent the request gets its result"
+  );
+  Assert.deepEqual(
+    secondResults,
+    [],
+    "The caller that shared the request gets no result"
   );
 
   await MerinoTestUtils.initGeolocation();

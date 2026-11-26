@@ -28,6 +28,11 @@ const lazy = XPCOMUtils.declareLazy({
  * @typedef {{[key: string]:any} & MerinoClientBaseSuggestion} MerinoClientSuggestion
  *   Details of a suggestion received from Merino. Whilst the base properties are
  *   consistent the suggestion properties may vary depending on the provider.
+ *
+ * @typedef {(status: string, details: {httpStatus: ?number}) => void} MerinoClientResultCallback
+ *   Receives the result of a request that was sent to Merino. `status` is one
+ *   of the `lastFetchStatus` values. `details.httpStatus` is the status code of
+ *   the response, or null if there was no response.
  */
 
 const SEARCH_PARAMS = Object.freeze({
@@ -173,6 +178,12 @@ export class MerinoClient {
    *   used for accuweather's location autocomplete endpoint
    * @param {string} [options.endpointUrl]
    *   If specified, overrides the default `merinoEndpointURL` pref value.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   Called at most once, with the result of the request this fetch sends.
+   *   It isn't called when no request is sent (the fetch is served from the
+   *   cache or there is no valid endpoint URL) or when a newer fetch aborts
+   *   this one. When OHTTP is used and its config can't be fetched, it is
+   *   called with "http_error" even though no request was sent.
    * @returns {Promise<MerinoClientSuggestion[]>}
    *   The Merino suggestions or null if there's an error or unexpected
    *   response.
@@ -183,6 +194,7 @@ export class MerinoClient {
     timeoutMs = lazy.UrlbarPrefs.get("merinoTimeoutMs"),
     otherParams = {},
     endpointUrl = lazy.UrlbarPrefs.get("merinoEndpointURL"),
+    onResult = null,
   }) {
     this.#lazy.logger.debug("Fetch start", { query });
 
@@ -287,11 +299,12 @@ export class MerinoClient {
       url: url.toString(),
     });
 
-    /** @type {(category: string) => void} */
-    let recordResponse = category => {
+    /** @type {(category: string, httpStatus?: ?number) => void} */
+    let recordResponse = (category, httpStatus = null) => {
       this.#lazy.logger.debug("Fetch done", { status: category });
       this.#lastFetchStatus = category;
       recordResponse = null;
+      this.#reportResult(onResult, category, httpStatus);
     };
 
     // Set up the timeout timer.
@@ -339,7 +352,7 @@ export class MerinoClient {
             ...details,
           });
           if (!response?.ok) {
-            recordResponse?.("http_error");
+            recordResponse?.("http_error", response?.status ?? null);
           }
         } catch (error) {
           if (error.name != "AbortError") {
@@ -371,7 +384,7 @@ export class MerinoClient {
     if (response.status == 204) {
       // No content. We check for this because `response.json()` (below) throws
       // in this case, and since we log the error it can spam the console.
-      recordResponse?.("no_suggestion");
+      recordResponse?.("no_suggestion", response.status);
       return [];
     }
 
@@ -389,18 +402,18 @@ export class MerinoClient {
     }
 
     if (!body?.suggestions?.length) {
-      recordResponse?.("no_suggestion");
+      recordResponse?.("no_suggestion", response.status);
       return [];
     }
 
     let { suggestions, request_id } = body;
     if (!Array.isArray(suggestions)) {
       this.#lazy.logger.error("Unexpected response", body);
-      recordResponse?.("no_suggestion");
+      recordResponse?.("no_suggestion", response.status);
       return [];
     }
 
-    recordResponse?.("success");
+    recordResponse?.("success", response.status);
     suggestions = suggestions.map(suggestion => ({
       ...suggestion,
       request_id,
@@ -433,11 +446,18 @@ export class MerinoClient {
    *   Timeout in milliseconds. This method will return once the timeout
    *   elapses, a response is received, or an error occurs, whichever happens
    *   first.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   See `fetch()`.
    * @returns {Promise<MerinoClientSuggestion>}
    *   The Merino suggestions or null if there's an error or unexpected
    *   response.
    */
-  async autoCompleteWeatherLocation({ source, query, timeoutMs = undefined }) {
+  async autoCompleteWeatherLocation({
+    source,
+    query,
+    timeoutMs = undefined,
+    onResult = undefined,
+  }) {
     let response = await this.fetch({
       providers: ["accuweather"],
       query: query || "",
@@ -446,6 +466,7 @@ export class MerinoClient {
         source,
       },
       timeoutMs,
+      onResult,
     });
     return response?.[0] ?? null;
   }
@@ -478,6 +499,9 @@ export class MerinoClient {
    *   Timeout in milliseconds. This method will return once the timeout
    *   elapses, a response is received, or an error occurs, whichever happens
    *   first.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   See `fetch()`. It isn't called when geolocation fails, since no weather
+   *   request is sent then.
    * @returns {Promise<MerinoClientSuggestion>}
    *   The Merino suggestions or null if there's an error or unexpected
    *   response.
@@ -489,6 +513,7 @@ export class MerinoClient {
     region = undefined,
     locationName = undefined,
     timeoutMs = undefined,
+    onResult = undefined,
   }) {
     if (locationName) {
       city = undefined;
@@ -515,6 +540,7 @@ export class MerinoClient {
       otherParams,
       timeoutMs,
       endpointUrl: lazy.UrlbarPrefs.get("merino.weather.reportEndpointURL"),
+      onResult,
     });
     return response?.[0] ?? null;
   }
@@ -548,9 +574,15 @@ export class MerinoClient {
    *   region codes.
    * @param {string=} options.city
    *   The city that should be a city name.
+   * @param {number=} options.timeoutMs
+   *   Timeout in milliseconds, after which the request is aborted. There is no
+   *   timeout if it isn't given.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   Called at most once, with the result of the request if one is sent. A
+   *   response that isn't a non-empty array is reported as "no_suggestion".
    * @returns {Promise<Array<{date_time: string, epoch_date_time: number, icon_id: number, temperature: {c: number, f: number}, url: string}>|null>}
    *   Array of hourly forecast slots, or null if the endpoint is not
-   *   configured or an error occurs.
+   *   configured, an error occurs, or the response isn't a non-empty array.
    */
   async fetchHourlyForecasts({
     source,
@@ -558,6 +590,8 @@ export class MerinoClient {
     city = undefined,
     region = undefined,
     country = undefined,
+    timeoutMs = undefined,
+    onResult = undefined,
   }) {
     const hourlyEndpointURL = lazy.UrlbarPrefs.get(
       "merino.weather.hourlyEndpointURL"
@@ -567,8 +601,7 @@ export class MerinoClient {
       return null;
     }
 
-    let url = URL.parse(hourlyEndpointURL);
-    if (!url) {
+    if (!URL.canParse(hourlyEndpointURL)) {
       this.#lazy.logger.error(
         "Invalid hourly forecast endpoint URL",
         hourlyEndpointURL
@@ -576,8 +609,10 @@ export class MerinoClient {
       return null;
     }
 
+    /** @type {{[key: string]: string}} */
+    let params = {};
     if (locationName) {
-      url.searchParams.set("q", locationName);
+      params.q = locationName;
     }
 
     // Unlike the suggest endpoint used by fetchWeatherReport(), the hourly
@@ -588,33 +623,18 @@ export class MerinoClient {
     if (!geoParams) {
       return null;
     }
-    for (let [key, value] of Object.entries(geoParams)) {
-      url.searchParams.set(key, value);
-    }
+    Object.assign(params, geoParams);
 
-    if (source) {
-      url.searchParams.set("source", source);
-    }
-
-    try {
-      const response = await fetch(url);
-      /**
-       * @type {Array<{
-       *   date_time: string,
-       *   epoch_date_time: number,
-       *   icon_id: number,
-       *   temperature: {c: number, f: number},
-       *   url: string
-       * }>}
-       */
-      const data = /** @type {any} */ (await response.json());
-
-      this.#lazy.logger.debug("fetchHourlyForecasts response", data);
-      return data;
-    } catch (e) {
-      this.#lazy.logger.error("Hourly forecast fetch error", e);
-      return null;
-    }
+    let { data } = await this.#fetchNewTabJSON("Hourly forecast", {
+      source,
+      endpointUrl: hourlyEndpointURL,
+      params,
+      timeoutMs,
+      onResult,
+      isUsable: body => Array.isArray(body) && !!body.length,
+    });
+    this.#lazy.logger.debug("fetchHourlyForecasts response", data);
+    return /** @type {any} */ (data);
   }
 
   /**
@@ -629,14 +649,28 @@ export class MerinoClient {
    * @param {string} [options.acceptLanguage]
    *   Sent as the Accept-Language header so Merino can localize the
    *   description.
+   * @param {number} [options.timeoutMs]
+   *   Timeout in milliseconds, after which the request is aborted. There is no
+   *   timeout if it isn't given.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   Called at most once, with the result of the request if one is sent. Any
+   *   JSON response is reported as "success".
    * @returns {Promise<{data: object|null, error: null | "invalid_url" | "load_error"}>}
    *   `error: null` with `data: null` means the endpoint is not configured.
    */
-  async fetchPictureOfTheDay({ source, endpointUrl, acceptLanguage }) {
+  async fetchPictureOfTheDay({
+    source,
+    endpointUrl,
+    acceptLanguage,
+    timeoutMs,
+    onResult,
+  }) {
     return this.#fetchNewTabJSON("Picture of the Day", {
       source,
       endpointUrl,
       acceptLanguage,
+      timeoutMs,
+      onResult,
     });
   }
 
@@ -652,15 +686,27 @@ export class MerinoClient {
    * @param {string} [options.locale]
    *   Sent as the `locale` search param and the Accept-Language header.
    *   Merino defaults to en-US without it.
+   * @param {number} [options.timeoutMs]
+   *   See fetchPictureOfTheDay().
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   See fetchPictureOfTheDay().
    * @returns {Promise<{data: object|null, error: null | "invalid_url" | "load_error"}>}
    *   Same contract as fetchPictureOfTheDay().
    */
-  async fetchFramedWidgets({ source, endpointUrl, locale }) {
+  async fetchFramedWidgets({
+    source,
+    endpointUrl,
+    locale,
+    timeoutMs,
+    onResult,
+  }) {
     return this.#fetchNewTabJSON("framed widgets", {
       source,
       endpointUrl,
       acceptLanguage: locale,
       params: locale ? { locale } : {},
+      timeoutMs,
+      onResult,
     });
   }
 
@@ -805,8 +851,27 @@ export class MerinoClient {
   }
 
   /**
-   * GETs a Merino JSON endpoint for fetchPictureOfTheDay() and
-   * fetchFramedWidgets().
+   * Calls an `onResult` callback if there is one. An exception it throws is
+   * logged and doesn't reach the caller.
+   *
+   * @param {?MerinoClientResultCallback} onResult
+   * @param {string} status
+   * @param {?number} httpStatus
+   */
+  #reportResult(onResult, status, httpStatus) {
+    if (!onResult) {
+      return;
+    }
+    try {
+      onResult(status, { httpStatus });
+    } catch (error) {
+      this.#lazy.logger.error("Error in onResult callback", error);
+    }
+  }
+
+  /**
+   * GETs a Merino JSON endpoint for fetchHourlyForecasts(),
+   * fetchPictureOfTheDay() and fetchFramedWidgets().
    *
    * @param {string} label
    *   Names the request in log messages.
@@ -816,11 +881,27 @@ export class MerinoClient {
    * @param {string} [options.acceptLanguage]
    * @param {{[key: string]: string}} [options.params]
    *   Extra search params.
+   * @param {number} [options.timeoutMs]
+   *   If given, the request is aborted after this many milliseconds.
+   * @param {MerinoClientResultCallback} [options.onResult]
+   *   Called once if a request is sent, with "success", "no_suggestion",
+   *   "timeout", "network_error" or "http_error".
+   * @param {(body: any) => boolean} [options.isUsable]
+   *   If given and it returns false for the response body, the response is
+   *   treated as "no_suggestion" and `data` is null.
    * @returns {Promise<{data: object|null, error: null | "invalid_url" | "load_error"}>}
    */
   async #fetchNewTabJSON(
     label,
-    { source, endpointUrl, acceptLanguage, params = {} }
+    {
+      source,
+      endpointUrl,
+      acceptLanguage,
+      params = {},
+      timeoutMs = 0,
+      onResult = null,
+      isUsable = null,
+    }
   ) {
     if (!endpointUrl) {
       return { data: null, error: null };
@@ -836,23 +917,54 @@ export class MerinoClient {
     for (let [name, value] of Object.entries(params)) {
       url.searchParams.set(name, value);
     }
-    let fetchOptions = acceptLanguage
-      ? { headers: { "Accept-Language": acceptLanguage } }
-      : undefined;
+    let controller = new AbortController();
+    /** @type {RequestInit} */
+    let fetchOptions = { signal: controller.signal };
+    if (acceptLanguage) {
+      fetchOptions.headers = { "Accept-Language": acceptLanguage };
+    }
+    let timer = timeoutMs
+      ? new lazy.SkippableTimer({
+          name: `Merino ${label} timeout`,
+          time: timeoutMs,
+          logger: this.#lazy.logger,
+          callback: () => controller.abort(),
+        })
+      : null;
+
+    let data = null;
+    let status = "network_error";
+    let httpStatus = null;
     try {
       let response = await fetch(url, fetchOptions);
+      httpStatus = response.status;
       if (!response.ok) {
+        status = "http_error";
         this.#lazy.logger.error(
           `${label} fetch failed with status ${response.status}`
         );
-        return { data: null, error: "load_error" };
+      } else {
+        // As in fetch(), a body that can't be read as JSON is "no_suggestion".
+        status = "no_suggestion";
+        let body = /** @type {any} */ (await response.json());
+        if (!isUsable || isUsable(body)) {
+          status = "success";
+          data = body;
+        }
       }
-      let data = /** @type {any} */ (await response.json());
-      return { data, error: null };
     } catch (e) {
-      this.#lazy.logger.error(`${label} fetch error`, e);
-      return { data: null, error: "load_error" };
+      if (controller.signal.aborted) {
+        status = "timeout";
+        this.#lazy.logger.debug(`${label} fetch timed out`, { timeoutMs });
+      } else {
+        this.#lazy.logger.error(`${label} fetch error`, e);
+      }
+    } finally {
+      timer?.cancel();
     }
+
+    this.#reportResult(onResult, status, httpStatus);
+    return { data, error: status == "success" ? null : "load_error" };
   }
 
   static _test_disableCache = false;
