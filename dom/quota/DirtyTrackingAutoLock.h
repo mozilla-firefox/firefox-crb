@@ -55,7 +55,14 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
     DirtyTrackingAutoLock& mLock;
   };
 
+  // Tag for locks that only adjust quota reservations, which are not part of
+  // the persisted metadata, so the dirty flag is not required.
+  struct ReservationOnly {};
+
   DirtyTrackingAutoLock(Mutex& aLock, RefPtr<OriginInfo> aOriginInfo);
+
+  DirtyTrackingAutoLock(Mutex& aLock, RefPtr<OriginInfo> aOriginInfo,
+                        ReservationOnly);
 
   DirtyTrackingAutoLock(
       Mutex& aLock,
@@ -69,6 +76,8 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
   ~DirtyTrackingAutoLock();
 
   bool IsValid() const;
+
+  bool IsReservationOnly() const { return mReservationOnly; }
 
   RefPtr<OriginInfo> GetOriginInfo() const;
 
@@ -105,6 +114,7 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
 
   Mutex* mLock;
   mutable RefPtr<OriginInfo> mOriginInfo;
+  bool mReservationOnly = false;
 };
 
 }  // namespace mozilla::dom::quota

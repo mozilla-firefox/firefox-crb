@@ -34,6 +34,8 @@ function writeLocalStorage(principal, value = "bar") {
 
 async function testSteps() {
   const principal = getPrincipal(underflowedOrigin);
+  Services.fog.initializeFOG();
+  Services.fog.testResetFOG();
 
   await initStorageAndTemporaryStorage();
 
@@ -70,13 +72,18 @@ async function testSteps() {
 
     {
       const storage = LocalStorageUtils.createStorage(principal);
-      // Ending an explicit snapshot is synchronous, so the usage decrease is
-      // applied before the next writes.
       storage.beginExplicitSnapshot();
       storage.removeItem("foo");
       storage.endExplicitSnapshot();
       storage.close();
     }
+
+    await requestFinished(resetClient(principal, "ls"));
+    Assert.equal(
+      Glean.quotamanager.hadTemporaryStorageUsageUnderflow.testGetValue(),
+      true,
+      "The deletion flush exercised the usage underflow"
+    );
 
     info("Writing localStorage data for the underflowed origin");
 
@@ -85,6 +92,9 @@ async function testSteps() {
     info("Writing localStorage data for another origin");
 
     writeLocalStorage(getPrincipal(otherOrigin));
+
+    await requestFinished(resetClient(principal, "ls"));
+    await requestFinished(resetClient(getPrincipal(otherOrigin), "ls"));
 
     request = getCachedOriginUsage(getPrincipal(otherOrigin));
     await requestFinished(request);

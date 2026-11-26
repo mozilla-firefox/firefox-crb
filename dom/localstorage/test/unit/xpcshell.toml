@@ -56,6 +56,8 @@ skip-if = [
 ["test_eviction.js"]
 
 ["test_flushFailure.js"]
+prefs = ["dom.storage.testing.flushDelayMs=100"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
 # Checks persistence across a reset, but private browsing data under
 # storage/private is cleared at reset.
 skip-if = [
@@ -63,6 +65,8 @@ skip-if = [
 ]
 
 ["test_flushing.js"]
+prefs = ["dom.storage.testing.flushDelayMs=100"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
 # Hard-codes the non-PB on-disk path (storage/default/http+++example1.com/...);
 # PB origin directories live under storage/private/uuid+++<UUID>/.
 skip-if = [
@@ -147,6 +151,22 @@ prefs = ["security.storage.encryption.sqlite.enabled=false"]
 skip-if = [
   "privateBrowsing"
 ]
+
+["test_reservation.js"]
+
+["test_reservationCommitFailure.js"]
+
+["test_reservationDeletion.js"]
+
+["test_reservationRelease.js"]
+
+["test_reservationRetry.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+prefs = [
+  "dom.storage.testing.flushDelayMs=100",
+  "security.storage.encryption.sqlite.enabled=false",
+]
+skip-if = ["privateBrowsing"]
 
 ["test_schema3upgrade.js"]
 prefs = ["security.storage.encryption.sqlite.enabled=false"]

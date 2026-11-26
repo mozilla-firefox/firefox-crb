@@ -5679,6 +5679,12 @@
   value: false
   mirror: always
 
+# Delay before flushing pending LocalStorage writes when testing is enabled.
+- name: dom.storage.testing.flushDelayMs
+  type: RelaxedAtomicUint32
+  value: 5000
+  mirror: always
+
 # A pref that is used to slow down database initialization for testing purposes.
 - name: dom.storage.databaseInitialization.pauseOnIOThreadMs
   type: RelaxedAtomicUint32
