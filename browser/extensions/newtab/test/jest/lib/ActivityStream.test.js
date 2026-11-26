@@ -205,8 +205,9 @@ describe("ActivityStream", () => {
     it("should call .store.uninit", () => {
       expect(as.store.uninit).toHaveBeenCalledTimes(1);
     });
-    it("should call removeObserver for the region", () => {
-      as.geo = "";
+    it("should call removeObserver for the region if still observing it", () => {
+      region.home = "";
+      as.init();
       as.uninit();
       expect(services.obs.removeObserver).toHaveBeenCalledWith(
         as,
@@ -224,6 +225,135 @@ describe("ActivityStream", () => {
       expect(services.prefs.removeObserver).toHaveBeenCalledWith(
         MARKET_GATE_PREF,
         as
+      );
+    });
+  });
+  describe("region observer", () => {
+    const regionObserverCalls = mockFn =>
+      mockFn.mock.calls.filter(([, topic]) => topic === region.REGION_TOPIC);
+
+    it("should observe the region only until it is known", () => {
+      region.home = "";
+      as._updateDynamicPrefs();
+      expect(regionObserverCalls(services.obs.addObserver)).toHaveLength(1);
+
+      region.home = "US";
+      as._updateDynamicPrefs();
+      expect(regionObserverCalls(services.obs.removeObserver)).toHaveLength(1);
+
+      as._updateDynamicPrefs();
+      expect(regionObserverCalls(services.obs.addObserver)).toHaveLength(1);
+      expect(regionObserverCalls(services.obs.removeObserver)).toHaveLength(1);
+    });
+    it("should keep observing a known region while devtools are enabled", () => {
+      region.home = "US";
+      services.prefs.getBoolPref = jest.fn(
+        name =>
+          name === "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled"
+      );
+      as._updateDynamicPrefs();
+      expect(regionObserverCalls(services.obs.addObserver)).toHaveLength(1);
+
+      services.prefs.getBoolPref = jest.fn(() => false);
+      as.observe(
+        undefined,
+        "nsPref:changed",
+        "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled"
+      );
+      expect(regionObserverCalls(services.obs.removeObserver)).toHaveLength(1);
+    });
+  });
+  describe("devtools overrides", () => {
+    it("should use the devtools locale and channel only while devtools are enabled", () => {
+      const prefs = {
+        "browser.newtabpage.activity-stream.devtools.localeOverride": "pl",
+        "browser.newtabpage.activity-stream.devtools.channelOverride":
+          "release",
+      };
+      let devtools = true;
+      services.prefs.getBoolPref = jest.fn((name, fallback) =>
+        name === "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled"
+          ? devtools
+          : fallback
+      );
+      const { getStringPref } = services.prefs;
+      services.prefs.getStringPref = jest.fn((name, fallback) =>
+        name in prefs ? prefs[name] : getStringPref(name, fallback)
+      );
+      services.locale.appLocaleAsBCP47 = "en-US";
+
+      as._updateDynamicPrefs();
+      expect(as.locale).toBe("pl");
+
+      devtools = false;
+      as._updateDynamicPrefs();
+      expect(as.locale).toBe("en-US");
+    });
+    it("should apply the devtools channel to the Nightly widget defaults", () => {
+      const BRANCH = "browser.newtabpage.activity-stream.";
+      const wasNightly = globalThis.AppConstants.NIGHTLY_BUILD;
+      let channelOverride = "release";
+      services.prefs.getBoolPref = jest.fn((name, fallback) =>
+        name === `${BRANCH}asrouter.devtoolsEnabled` ? true : fallback
+      );
+      services.prefs.getStringPref = jest.fn((name, fallback) => {
+        if (name === `${BRANCH}devtools.channelOverride`) {
+          return channelOverride;
+        }
+        if (name === `${BRANCH}widgets.system.lists.region-block`) {
+          return "PL";
+        }
+        return fallback;
+      });
+      services.locale.appLocaleAsBCP47 = "pl";
+      region.home = "PL";
+      try {
+        globalThis.AppConstants.NIGHTLY_BUILD = true;
+        as._updateDynamicPrefs();
+        expect(PREFS_CONFIG.get("widgets.system.lists.enabled").value).toBe(
+          false
+        );
+        expect(PREFS_CONFIG.get("widgets.lists.enabled").value).toBe(false);
+
+        globalThis.AppConstants.NIGHTLY_BUILD = false;
+        channelOverride = "nightly";
+        as._updateDynamicPrefs();
+        expect(PREFS_CONFIG.get("widgets.system.lists.enabled").value).toBe(
+          true
+        );
+        expect(PREFS_CONFIG.get("widgets.lists.enabled").value).toBe(true);
+      } finally {
+        globalThis.AppConstants.NIGHTLY_BUILD = wasNightly;
+      }
+    });
+    it("should broadcast a locale change after init", () => {
+      const OVERRIDE =
+        "browser.newtabpage.activity-stream.devtools.localeOverride";
+      let localeOverride = "";
+      services.prefs.getBoolPref = jest.fn((name, fallback) =>
+        name === "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled"
+          ? true
+          : fallback
+      );
+      services.prefs.getStringPref = jest.fn((name, fallback) =>
+        name === OVERRIDE ? localeOverride : fallback
+      );
+      services.locale.appLocaleAsBCP47 = "en-US";
+      as.store.dispatch = jest.fn();
+      as._updateDynamicPrefs();
+      as.initialized = true;
+      as._updateDynamicPrefs();
+      expect(as.store.dispatch).not.toHaveBeenCalled();
+
+      localeOverride = "pl";
+      as._updateDynamicPrefs();
+      expect(as.store.dispatch).toHaveBeenCalledTimes(1);
+      expect(as.store.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "LOCALE_UPDATED",
+          data: { locale: "pl" },
+          meta: expect.objectContaining({ to: CONTENT_MESSAGE_TYPE }),
+        })
       );
     });
   });

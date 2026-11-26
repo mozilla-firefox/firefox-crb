@@ -5,6 +5,7 @@
 /** @import {Store} from "resource://newtab/lib/Store.sys.mjs" */
 
 import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -121,7 +122,7 @@ export class FramedWidgetsFeed {
     const { data, error } = await this.merino.fetchFramedWidgets({
       source: "newtab",
       endpointUrl,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: newtabLocale(),
     });
     if (error || !Array.isArray(data?.widgets)) {
       return null;
