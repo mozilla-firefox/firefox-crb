@@ -276,9 +276,22 @@ class ArenaCollection {
     return true;
   }
 
+  // Initialise mArenaIdKey and mArenaIdRotation for encrypting arena IDs.
+  // this must be done after the rest of the allocator starts because it
+  // might allocate.
+  void InitCrypt() {
+    MOZ_ASSERT(!mArenaIdKey);
+
+    mozilla::Maybe<uint64_t> maybeRandom = mozilla::RandomUint64();
+    MOZ_RELEASE_ASSERT(maybeRandom.isSome());
+    mArenaIdKey = maybeRandom.value();
+    maybeRandom = mozilla::RandomUint64();
+    MOZ_RELEASE_ASSERT(maybeRandom.isSome());
+    mArenaIdRotation = maybeRandom.value() & (sizeof(void*) * 8 - 1);
+  }
+
   // The requested arena must exist.
-  inline arena_t* GetById(arena_id_t aArenaId, bool aIsPrivate)
-      MOZ_EXCLUDES(mLock);
+  inline arena_t* GetById(arena_id_t aArenaId, bool aIsPrivate);
 
   arena_t* CreateArena(bool aIsPrivate, arena_params_t* aParams)
       MOZ_EXCLUDES(mLock);
@@ -3196,14 +3209,7 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
 
   // For private arenas, slightly obfuscate the id by XORing a key generated
   // once, and rotate the bits by an amount also generated once.
-  if (mArenaIdKey == 0) {
-    mozilla::Maybe<uint64_t> maybeRandom = mozilla::RandomUint64();
-    MOZ_RELEASE_ASSERT(maybeRandom.isSome());
-    mArenaIdKey = maybeRandom.value();
-    maybeRandom = mozilla::RandomUint64();
-    MOZ_RELEASE_ASSERT(maybeRandom.isSome());
-    mArenaIdRotation = maybeRandom.value() & (sizeof(void*) * 8 - 1);
-  }
+  MOZ_ASSERT(mArenaIdKey);
   arena_id_t id = reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey;
   ret->mId =
       (id >> mArenaIdRotation) | (id << (sizeof(void*) * 8 - mArenaIdRotation));
@@ -3588,6 +3594,9 @@ static bool malloc_init_hard() {
   // PHC must be initialised after mozjemalloc.
   phc_init();
 #endif
+
+  // This may allocate so it is called last.
+  gArenas.InitCrypt();
 
   return true;
 }
