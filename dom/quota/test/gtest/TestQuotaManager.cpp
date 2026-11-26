@@ -3100,6 +3100,67 @@ TEST_F(TestQuotaManager, ClearStoragesForOrigin_ClientDirectoryExists) {
   ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
 }
 
+TEST_F(TestQuotaManager, ClearStoragesForClient_OriginNotInMemory) {
+  const auto originMetadata = GetTestOriginMetadata();
+  auto testClientMetadata = GetTestClientMetadata();
+
+  ASSERT_NO_FATAL_FAILURE(ClearStorage());
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(
+      originMetadata, /* aCreateIfNonExistent */ true));
+
+  // Create the SDB client directory on the IO thread without going through QM
+  // so it does not record an access (Accessed stays 0).
+  PerformOnIOThread([originMetadata]() {
+    auto directoryRes = QuotaManager::Get()->GetOriginDirectory(originMetadata);
+    MOZ_RELEASE_ASSERT(directoryRes.isOk());
+    auto directory = directoryRes.unwrap();
+    MOZ_RELEASE_ASSERT(NS_SUCCEEDED(directory->Append(u"sdb"_ns)));
+    MOZ_RELEASE_ASSERT(
+        NS_SUCCEEDED(directory->Create(nsIFile::DIRECTORY_TYPE, 0755)));
+  });
+
+  auto initialMetadata = LoadDirectoryMetadataHeader(originMetadata);
+  ASSERT_TRUE(initialMetadata);
+  EXPECT_FALSE(initialMetadata->mDirty);
+
+  // Shutdown and reinitialize storage+temporary storage only, so the origin
+  // is NOT loaded (Accessed=0 means LoadQuotaFromCache skips it).
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(AssertTemporaryOriginNotInitialized(originMetadata));
+
+  // Clear the SDB client while the origin has no OriginInfo.
+  PerformOnBackgroundThread([testClientMetadata]() {
+    nsCOMPtr<nsIPrincipal> principal =
+        BasePrincipal::CreateContentPrincipal(testClientMetadata.mOrigin);
+    QM_TRY(MOZ_TO_RESULT(principal), QM_TEST_FAIL);
+
+    mozilla::ipc::PrincipalInfo principalInfo;
+    QM_TRY(MOZ_TO_RESULT(PrincipalToPrincipalInfo(principal, &principalInfo)),
+           QM_TEST_FAIL);
+
+    QuotaManager* quotaManager = QuotaManager::Get();
+    ASSERT_TRUE(quotaManager);
+
+    auto value = Await(quotaManager->ClearStoragesForClient(
+        /* aPersistenceType */ Nothing(), principalInfo,
+        testClientMetadata.mClientType));
+    ASSERT_TRUE(value.IsResolve());
+  });
+
+  // The on-disk metadata must now be dirty and accessed.
+  auto metadata = LoadDirectoryMetadataHeader(originMetadata);
+  ASSERT_TRUE(metadata);
+  EXPECT_TRUE(metadata->mDirty);
+  EXPECT_TRUE(metadata->mAccessed);
+
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+}
+
 // Test simple ClearStoragesForClient.
 TEST_F(TestQuotaManager, ClearStoragesForClient_Simple) {
   auto testClientMetadata = GetTestClientMetadata();
