@@ -1047,15 +1047,15 @@ class ScreenshotsHelper {
 }
 
 /**
- * Create a new tab in the current window and wait for its browser to be loaded
+ * Open a new foreground tab in the current window and wait for its browser to
+ * be loaded. Loading a low priority background tab can take very long on a
+ * loaded machine.
  *
  * @param {string} [url] Optional url to load, defaults to value of TEST_PAGE
  * @returns The tab
  */
-async function addTabAndLoadBrowser(url = TEST_PAGE) {
-  const tab = BrowserTestUtils.addTab(gBrowser, url);
-  await BrowserTestUtils.browserLoaded(tab.linkedBrowser);
-  return tab;
+function addTabAndLoadBrowser(url = TEST_PAGE) {
+  return BrowserTestUtils.openNewForegroundTab(gBrowser, url);
 }
 
 /**
