@@ -1111,6 +1111,27 @@ add_task(async function test_telemetry_reports_if_parsing_fails() {
 });
 add_task(clear_state);
 
+add_task(async function test_telemetry_reports_client_errors_as_sync_error() {
+  await client.db.importChanges({}, 12000);
+
+  let error;
+  try {
+    await client.maybeSync(12001);
+  } catch (e) {
+    error = e;
+  }
+
+  assertTelemetryEvents([
+    {
+      value: UptakeTelemetry.STATUS.SYNC_START,
+    },
+    {
+      value: UptakeTelemetry.STATUS.SYNC_ERROR,
+    },
+  ]);
+});
+add_task(clear_state);
+
 add_task(async function test_telemetry_reports_if_fetching_signature_fails() {
   await client.db.importChanges({}, 11000);
 
@@ -1602,6 +1623,23 @@ wNuvFqc=
         ],
         status: { status: 200, statusText: "OK" },
         responseBody: "<invalid json",
+      },
+    "GET:/v1/buckets/main/collections/password-fields/changeset?_expected=12001&_since=12000":
+      {
+        sampleHeaders: [
+          "Access-Control-Allow-Origin: *",
+          "Access-Control-Expose-Headers: Retry-After, Content-Length, Alert, Backoff",
+          "Content-Type: application/json; charset=UTF-8",
+          "Server: waitress",
+        ],
+        status: { status: 422, statusText: "Unprocessable Entity" },
+        responseBody: {
+          code: 422,
+          errno: 107,
+          error: "Invalid parameters",
+          message:
+            "_since in query: Value must be a timestamp in milliseconds since epoch",
+        },
       },
     "GET:/v1/buckets/main/collections/password-fields/changeset?_expected=11001&_since=11000":
       {

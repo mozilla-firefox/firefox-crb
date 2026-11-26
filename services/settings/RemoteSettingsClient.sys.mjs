@@ -1020,7 +1020,7 @@ export class RemoteSettingsClient extends EventEmitter {
     if (/Timeout/.test(e.message)) {
       return new RemoteSettingsClient.TimeoutError(e);
     }
-    if (/HTTP 5??/.test(e.message)) {
+    if (/HTTP 5\d\d/.test(e.message)) {
       return new RemoteSettingsClient.BackendError(e);
     }
     if (/Backoff/.test(e.message)) {
