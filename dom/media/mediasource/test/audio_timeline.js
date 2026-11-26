@@ -82,8 +82,11 @@ async function record(aElement) {
   const recorder = new AudioWorkletNode(ctx, "recorder");
   const chunks = [];
   let chunksAfterEnded = -1;
+  let started;
+  const running = new Promise(resolve => (started = resolve));
   const recorded = new Promise(resolve => {
     recorder.port.onmessage = e => {
+      started();
       chunks.push(e.data);
       if (chunksAfterEnded >= 0 && ++chunksAfterEnded == 50) {
         resolve();
@@ -92,6 +95,7 @@ async function record(aElement) {
   });
   ctx.createMediaElementSource(aElement).connect(recorder);
   recorder.connect(ctx.destination);
+  await running;
   aElement.play();
   await once(aElement, "ended");
   chunksAfterEnded = 0;

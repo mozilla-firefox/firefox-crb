@@ -47,6 +47,13 @@ aac_with_priming_edit "$tmp/click-2400.wav" 64k aac_priming_click.mp4
 # A different init segment, as from another encode, with the click in the first
 # frame after the priming.
 aac_with_priming_edit "$tmp/click-500.wav" 96k aac_priming_click_start_96k.mp4
+# The same packets in fragments of one packet, except the last fragment,
+# which holds two.
+rm -rf "$tmp/dash" && mkdir "$tmp/dash"
+MP4Box -quiet -dash 21 -frag 21 -rap -segment-name s_ \
+    -out "$tmp/dash/o.mpd" "$tmp/plain.mp4"
+cat "$tmp/dash/s_init.mp4" $(ls "$tmp"/dash/s_*.m4s | sort -t_ -k2 -n) \
+    > aac_priming_click_start_96k_frags.mp4
 # The click lies after mehd - media_time, but within the presentation.
 aac_with_priming_edit "$tmp/click-24000.wav" 64k aac_priming_click_end.mp4
 # The edit list skips 2112 frames, the historical QuickTime value, so the first

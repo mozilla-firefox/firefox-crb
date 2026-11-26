@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>MSE: the AAC priming is decoded when appended on its own</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <script type="text/javascript" src="mediasource.js"></script>
+  <script type="text/javascript" src="audio_timeline.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+<pre id="test">
+<script class="testbody" type="text/javascript">
+
+// Both files hold the same AAC packets: 1024 frames of priming, which the edit
+// list skips, then a click in the first frame after the priming.
+// aac_priming_click_start_96k_frags.mp4 holds each packet in its own fragment.
+const kWhole = "aac-priming/aac_priming_click_start_96k.mp4";
+const kFrags = "aac-priming/aac_priming_click_start_96k_frags.mp4";
+
+// Returns the offset of the end of the first fragment, which holds the
+// priming.
+function firstFragmentEnd(aData) {
+  const view = new DataView(aData);
+  let offset = 0;
+  for (;;) {
+    const size = view.getUint32(offset);
+    const type = String.fromCharCode(
+      ...new Uint8Array(aData, offset + 4, 4)
+    );
+    offset += size;
+    if (type == "mdat") {
+      return offset;
+    }
+  }
+}
+
+// The number of frames compared before and after the peak of the click, which
+// is 500 frames after the start of the presentation.
+const kBefore = 480;
+const kAfter = 2048;
+
+// Records the clip appended in the given parts, and returns the number of
+// frames in the track buffer and the recording around the click.
+async function recordClick(aParts) {
+  const ms = new MediaSource();
+  const el = document.createElement("audio");
+  el.src = URL.createObjectURL(ms);
+  await once(ms, "sourceopen");
+  const sb = ms.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"');
+  for (const part of aParts) {
+    await loadSegment(sb, part);
+  }
+  ms.endOfStream();
+  const info = await SpecialPowers.wrap(ms).mozDebugReaderData();
+  const data = await record(el);
+  el.removeAttribute("src");
+  el.load();
+  const clicks = findClicks(data);
+  is(clicks.length, 1, "One click is recorded");
+  const peak = clicks[0];
+  ok(Math.abs(data[peak]) > 0.1, "The click is audible");
+  const click = data.slice(Math.max(peak - kBefore, 0), peak + kAfter);
+  is(click.length, kBefore + kAfter, "The recording holds the whole click");
+  return { frames: info.demuxer.audioTrack.numSamples, click };
+}
+
+SimpleTest.waitForExplicitFinish();
+
+runWithMSE(async () => {
+  const files = await fetchClips([kWhole, kFrags]);
+  const expected = await recordClick([files[kWhole]]);
+  is(expected.frames, 25, "The priming and the 24 frames after it are kept");
+  const frags = files[kFrags];
+  const split = firstFragmentEnd(frags);
+  for (const [name, parts] of [
+    ["in one append", [frags]],
+    [
+      "with the priming appended on its own",
+      [frags.slice(0, split), frags.slice(split)],
+    ],
+  ]) {
+    const actual = await recordClick(parts);
+    is(actual.frames, expected.frames, `${name}: the priming is kept`);
+    const diff = actual.click.reduce(
+      (m, s, i) => Math.max(m, Math.abs(s - expected.click[i])),
+      0
+    );
+    info(`${name}: largest difference ${diff}`);
+    ok(diff < 1e-4, `${name}: the click is decoded as in one fragment`);
+  }
+  SimpleTest.finish();
+});
+
+</script>
+</pre>
+</body>
+</html>
