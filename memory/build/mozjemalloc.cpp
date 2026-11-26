@@ -284,7 +284,12 @@ class ArenaCollection {
 
     mozilla::Maybe<uint64_t> maybeRandom = mozilla::RandomUint64();
     MOZ_RELEASE_ASSERT(maybeRandom.isSome());
-    mArenaIdKey = maybeRandom.value();
+    // Save the key and always set the lowest bit to 1, this bit is xor'd
+    // with the lowest bit in the arena address which is always zero and
+    // therefore every arena_id generated will have at least one bit set and
+    // never be equal to zero which is the default arena's ID.
+    mArenaIdKey = maybeRandom.value() | 1;
+
     maybeRandom = mozilla::RandomUint64();
     MOZ_RELEASE_ASSERT(maybeRandom.isSome());
     mArenaIdRotation = maybeRandom.value() & (sizeof(void*) * 8 - 1);
@@ -3213,6 +3218,8 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
   arena_id_t id = reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey;
   ret->mId =
       (id >> mArenaIdRotation) | (id << (sizeof(void*) * 8 - mArenaIdRotation));
+  // It's impossible to generate an ID of 0, see InitCrypt().
+  MOZ_ASSERT(ret->mId != 0);
   mPrivateArenas.Insert(ret);
   return ret;
 }
