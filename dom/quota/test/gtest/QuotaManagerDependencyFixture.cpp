@@ -19,11 +19,13 @@
 #include "mozilla/ipc/BackgroundUtils.h"
 #include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "nsIBinaryInputStream.h"
+#include "nsIEventTarget.h"
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
 #include "nsIQuotaCallbacks.h"
 #include "nsIQuotaRequests.h"
 #include "nsIVariant.h"
+#include "nsNetCID.h"
 #include "nsScriptSecurityManager.h"
 #include "nsThreadUtils.h"
 
@@ -96,6 +98,12 @@ void QuotaManagerDependencyFixture::InitializeFixture() {
   nsCOMPtr<mozIStorageService> storageService =
       do_GetService(MOZ_STORAGE_SERVICE_CONTRACTID);
   ASSERT_TRUE(storageService);
+
+  // The stream transport service registers a main thread observer when it is
+  // first created, and OPFS creates it from the PBackground thread.
+  nsCOMPtr<nsIEventTarget> streamTransportService =
+      do_GetService(NS_STREAMTRANSPORTSERVICE_CONTRACTID);
+  ASSERT_TRUE(streamTransportService);
 
   nsIObserver* observer = QuotaManager::GetObserver();
   ASSERT_TRUE(observer);
@@ -442,6 +450,19 @@ void QuotaManagerDependencyFixture::ProcessPendingNormalOriginOperations() {
     MOZ_RELEASE_ASSERT(quotaManager);
 
     quotaManager->ProcessPendingNormalOriginOperations();
+  });
+}
+
+// static
+Maybe<OriginStateMetadata>
+QuotaManagerDependencyFixture::GetCachedOriginStateMetadataForTesting(
+    const OriginMetadata& aOriginMetadata) {
+  return PerformOnIOThread([aOriginMetadata]() -> Maybe<OriginStateMetadata> {
+    QuotaManager* quotaManager = QuotaManager::Get();
+    MOZ_RELEASE_ASSERT(quotaManager);
+
+    return quotaManager->GetCachedOriginStateMetadataForTesting(
+        aOriginMetadata);
   });
 }
 

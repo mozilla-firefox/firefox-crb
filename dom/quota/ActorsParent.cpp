@@ -9031,6 +9031,49 @@ Maybe<OriginStateMetadata> QuotaManager::GetOriginStateMetadata(
   return Nothing();
 }
 
+Maybe<OriginStateMetadata> QuotaManager::GetCachedOriginStateMetadataForTesting(
+    const OriginMetadata& aOriginMetadata) {
+  AssertIsOnIOThread();
+  MOZ_DIAGNOSTIC_ASSERT(mStorageConnection);
+
+  QM_TRY_INSPECT(
+      const auto& stmt,
+      MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+          nsCOMPtr<mozIStorageStatement>, mStorageConnection, CreateStatement,
+          "SELECT last_access_time, last_maintenance_date, "
+          "metadata_flags FROM origin "
+          "WHERE repository_id = :repository_id "
+          "AND origin = :origin;"_ns),
+      Nothing());
+
+  QM_TRY(MOZ_TO_RESULT(stmt->BindInt32ByName("repository_id"_ns,
+                                             aOriginMetadata.mPersistenceType)),
+         Nothing());
+  QM_TRY(MOZ_TO_RESULT(
+             stmt->BindUTF8StringByName("origin"_ns, aOriginMetadata.mOrigin)),
+         Nothing());
+
+  QM_TRY_INSPECT(const bool& hasResult,
+                 MOZ_TO_RESULT_INVOKE_MEMBER(stmt, ExecuteStep), Nothing());
+  if (!hasResult) {
+    return Nothing();
+  }
+
+  QM_TRY_INSPECT(const int64_t& lastAccessTime,
+                 MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt64, 0), Nothing());
+  QM_TRY_INSPECT(const int32_t& lastMaintenanceDate,
+                 MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt32, 1), Nothing());
+  QM_TRY_INSPECT(const int32_t& metadataFlags,
+                 MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt32, 2), Nothing());
+
+  OriginStateMetadata metadata{lastAccessTime, lastMaintenanceDate,
+                               /* aAccessed */ false, /* aPersisted */ false,
+                               /* aDirty */ false};
+  metadata.FromMetadataFlags(static_cast<uint32_t>(metadataFlags));
+
+  return Some(metadata);
+}
+
 std::pair<uint64_t, uint64_t> QuotaManager::GetUsageAndLimitForEstimate(
     const OriginMetadata& aOriginMetadata) {
   AssertIsOnIOThread();
