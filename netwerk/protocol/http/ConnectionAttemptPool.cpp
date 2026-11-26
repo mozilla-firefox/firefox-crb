@@ -130,14 +130,26 @@ void ConnectionAttemptPool::OnConnectionAttemptConnected() {
   --mUnconnectedCount;
 }
 
-void ConnectionAttemptPool::CloseAllConnectionAttempts() {
+void ConnectionAttemptPool::CloseAllConnectionAttempts(
+    HttpConnectionBase* aExcept) {
+  nsTArray<RefPtr<ConnectionAttempt>> kept;
   for (const auto& sock : mAttempts) {
+    if (aExcept && sock->OwnsConnection(aExcept)) {
+      // Cancelling this one would tear aExcept down with it.
+      kept.AppendElement(sock);
+      continue;
+    }
     sock->Abandon();
     gHttpHandler->ConnMgr()->DecreaseNumDnsAndConnectSockets();
   }
 
-  mAttempts.Clear();
+  mAttempts = std::move(kept);
   mUnconnectedCount = 0;
+  for (const auto& sock : mAttempts) {
+    if (!sock->HasConnected()) {
+      ++mUnconnectedCount;
+    }
+  }
 
   RefPtr<ConnectionEntry> entry(mEntry);
   if (entry) {
