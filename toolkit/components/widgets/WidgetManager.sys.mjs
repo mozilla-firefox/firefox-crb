@@ -20,6 +20,25 @@ function prefKeyFor(id) {
 }
 
 /**
+ * @param {string} id - the id of a widget's extension
+ * @returns {string} the pref storing the widget's custom pref branch
+ */
+function customPrefBranchPrefFor(id) {
+  return `${PREF_ROOT}${prefKeyFor(id)}.customPrefBranch`;
+}
+
+/**
+ * @param {string} id - the id of a widget's extension
+ * @returns {string} the pref branch storing the widget's prefs
+ */
+function prefBranchFor(id) {
+  return Services.prefs.getStringPref(
+    customPrefBranchPrefFor(id),
+    `${PREF_ROOT}${prefKeyFor(id)}`
+  );
+}
+
+/**
  * @typedef {object} WidgetOptions
  * @property {string} id - the widget id (from the extension that provides it)
  * @property {string} src - moz-extension: URL of the widget page
@@ -117,11 +136,16 @@ const REQUIRED_OPTIONS = ["id", "src", "name", "sizes"];
  * Manages the widgets registered by extensions.
  *
  * Each widget's enabled state and size are stored in prefs under its pref
- * branch, by default `extensions.widgets.<key>`.
+ * branch, by default `extensions.widgets.<key>`. A custom branch is kept in
+ * `extensions.widgets.<key>.customPrefBranch` so it can be cleared after the
+ * widget unregisters.
  *
  * Emits "change" with a widget's id when the widget registers, unregisters,
  * or one of its prefs changes after init, and at init for each widget
  * registered before it.
+ *
+ * Emits "uninstall" with an extension's id when the extension is
+ * uninstalled, after its widget prefs are cleared.
  */
 export class _WidgetManager {
   /** @type {Map<string, Widget>} registered widgets keyed by widget id */
@@ -227,6 +251,11 @@ export class _WidgetManager {
     }
     const widget = new Widget(properties);
     this.#widgets.set(id, widget);
+    if (options.prefBranch) {
+      Services.prefs.setStringPref(customPrefBranchPrefFor(id), prefBranch);
+    } else {
+      Services.prefs.clearUserPref(customPrefBranchPrefFor(id));
+    }
     for (const pref of prefs) {
       this.#prefHolders.set(pref, id);
       Services.prefs.addObserver(pref, this.#onPrefChanged);
@@ -251,6 +280,32 @@ export class _WidgetManager {
       }
     }
     this.#emitChange(id);
+  }
+
+  /**
+   * @param {string} id - an extension id
+   * @returns {boolean} whether the extension has widget prefs to clear
+   */
+  hasWidgetPreferences(id) {
+    const branch = prefBranchFor(id);
+    return [
+      customPrefBranchPrefFor(id),
+      `${branch}.enabled`,
+      `${branch}.size`,
+    ].some(pref => Services.prefs.prefHasUserValue(pref));
+  }
+
+  /**
+   * Clear the prefs of a widget whose extension was uninstalled.
+   *
+   * @param {string} id - a widget id
+   */
+  cleanupPrefs(id) {
+    const branch = prefBranchFor(id);
+    Services.prefs.clearUserPref(`${branch}.enabled`);
+    Services.prefs.clearUserPref(`${branch}.size`);
+    Services.prefs.clearUserPref(customPrefBranchPrefFor(id));
+    this.emit("uninstall", id);
   }
 
   /**
