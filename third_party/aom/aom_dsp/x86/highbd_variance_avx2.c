@@ -613,9 +613,9 @@ static uint32_t aom_highbd_var_filter_block2d_bil_avx2(
   *sse = (uint32_t)ROUND_POWER_OF_TWO(sse_long, 4);
   int sum = (int)ROUND_POWER_OF_TWO(sum_long, 2);
 
-  int32_t var = *sse - (uint32_t)(((int64_t)sum * sum) >> rshift);
+  const int64_t var = (int64_t)*sse - (((int64_t)sum * sum) >> rshift);
 
-  return (var > 0) ? var : 0;
+  return (var > 0) ? (uint32_t)var : 0;
 }
 
 static void highbd_calc8x8var_avx2(const uint16_t *src, int src_stride,
@@ -762,16 +762,23 @@ SSE2_HEIGHT(16)
 
 #undef SSE2_HEIGHT
 
+// The 8-wide SSE2 versions are x86 assembly; use C when that is unavailable.
+#if HAVE_X86_ASM
+#define HIGHBD_10_SUBPIX_VAR_8XH(H) aom_highbd_10_sub_pixel_variance8x##H##_sse2
+#else
+#define HIGHBD_10_SUBPIX_VAR_8XH(H) aom_highbd_10_sub_pixel_variance8x##H##_c
+#endif
+
 #define HIGHBD_SUBPIX_VAR(W, H)                                              \
   uint32_t aom_highbd_10_sub_pixel_variance##W##x##H##_avx2(                 \
       const uint8_t *src, int src_stride, int xoffset, int yoffset,          \
       const uint8_t *dst, int dst_stride, uint32_t *sse) {                   \
     if (W == 8 && H == 16)                                                   \
-      return aom_highbd_10_sub_pixel_variance8x16_sse2(                      \
-          src, src_stride, xoffset, yoffset, dst, dst_stride, sse);          \
+      return HIGHBD_10_SUBPIX_VAR_8XH(16)(src, src_stride, xoffset, yoffset, \
+                                          dst, dst_stride, sse);             \
     else if (W == 8 && H == 8)                                               \
-      return aom_highbd_10_sub_pixel_variance8x8_sse2(                       \
-          src, src_stride, xoffset, yoffset, dst, dst_stride, sse);          \
+      return HIGHBD_10_SUBPIX_VAR_8XH(8)(src, src_stride, xoffset, yoffset,  \
+                                         dst, dst_stride, sse);              \
     else                                                                     \
       return aom_highbd_var_filter_block2d_bil_avx2(                         \
           src, src_stride, 1, H, W, xoffset, yoffset, dst, dst_stride, sse); \
@@ -792,6 +799,7 @@ HIGHBD_SUBPIX_VAR(8, 16)
 HIGHBD_SUBPIX_VAR(8, 8)
 
 #undef HIGHBD_SUBPIX_VAR
+#undef HIGHBD_10_SUBPIX_VAR_8XH
 
 static uint64_t mse_4xh_16bit_highbd_avx2(uint16_t *dst, int dstride,
                                           uint16_t *src, int sstride, int h) {

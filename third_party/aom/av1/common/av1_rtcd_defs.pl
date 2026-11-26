@@ -97,6 +97,16 @@ if ($opts{arch} eq "x86_64") {
   $avx2_x86_64 = 'avx2';
 }
 
+# Flavors of functions that require x86 assembly (nasm/yasm), either directly
+# or through helpers. They are unavailable when the assembly is disabled
+# (ENABLE_X86_ASM=0) or the x86 intrinsics are built for other targets, e.g.
+# wasm32 with Emscripten.
+$sse2_asm = $ssse3_asm = '';
+if (aom_config("HAVE_X86_ASM") eq "yes") {
+  $sse2_asm = 'sse2';
+  $ssse3_asm = 'ssse3';
+}
+
 add_proto qw/void av1_convolve_horiz_rs/, "const uint8_t *src, int src_stride, uint8_t *dst, int dst_stride, int w, int h, const int16_t *x_filters, int x0_qn, int x_step_qn";
 specialize qw/av1_convolve_horiz_rs sse4_1 neon/;
 
@@ -285,22 +295,31 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
   # the transform coefficients are held in 32-bit
   # values, so the assembler code for  av1_block_error can no longer be used.
   add_proto qw/int64_t av1_block_error/, "const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, int64_t *ssz";
-  specialize qw/av1_block_error sse2 avx2 neon sve/;
+  specialize qw/av1_block_error avx2 avx512 neon sve/, "$sse2_asm";
+
+  add_proto qw/int64_t av1_block_error_qm/, "const tran_low_t *coeff, const tran_low_t *dqcoeff, intptr_t block_size, const qm_val_t *qmatrix, const int16_t *scan, int64_t *ssz, int bd";
+  specialize qw/av1_block_error_qm avx2/;
 
   add_proto qw/int64_t av1_block_error_lp/, "const int16_t *coeff, const int16_t *dqcoeff, intptr_t block_size";
-  specialize qw/av1_block_error_lp sse2 avx2 neon sve/;
+  specialize qw/av1_block_error_lp sse2 avx2 avx512 neon sve/;
 
   add_proto qw/void av1_quantize_fp/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan";
-  specialize qw/av1_quantize_fp sse2 avx2 neon/;
+  specialize qw/av1_quantize_fp sse2 avx2 avx512 neon/;
 
   add_proto qw/void av1_quantize_lp/, "const int16_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, int16_t *qcoeff_ptr, int16_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan";
-  specialize qw/av1_quantize_lp sse2 avx2 neon/;
+  specialize qw/av1_quantize_lp sse2 avx2 avx512 neon/;
 
   add_proto qw/void av1_quantize_fp_32x32/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan";
-  specialize qw/av1_quantize_fp_32x32 neon avx2/;
+  specialize qw/av1_quantize_fp_32x32 neon avx2 avx512/;
 
   add_proto qw/void av1_quantize_fp_64x64/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan";
-  specialize qw/av1_quantize_fp_64x64 neon avx2/;
+  specialize qw/av1_quantize_fp_64x64 neon avx2 avx512/;
+
+  add_proto qw/void av1_quantize_fp_qm/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale";
+  specialize qw/av1_quantize_fp_qm avx2/;
+
+  add_proto qw/void av1_quantize_b_qm/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale";
+  specialize qw/av1_quantize_b_qm avx2/;
 
   add_proto qw/void aom_quantize_b_helper/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, const int log_scale";
   specialize qw/aom_quantize_b_helper neon/;
@@ -312,7 +331,7 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
 
   #fwd txfm
   add_proto qw/void av1_lowbd_fwd_txfm/, "const int16_t *src_diff, tran_low_t *coeff, int diff_stride, TxfmParam *txfm_param";
-  specialize qw/av1_lowbd_fwd_txfm sse4_1 avx2 neon/, $sse2_x86;
+  specialize qw/av1_lowbd_fwd_txfm sse4_1 avx2 avx512 neon/, $sse2_x86;
 
   add_proto qw/void av1_fwd_txfm2d_4x8/, "const int16_t *input, int32_t *output, int stride, TX_TYPE tx_type, int bd";
   specialize qw/av1_fwd_txfm2d_4x8 sse4_1 neon/;
@@ -346,7 +365,6 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
   specialize qw/av1_fwd_txfm2d_16x4 sse4_1 neon/;
 
   if (aom_config("CONFIG_HIGHWAY") eq "yes") {
-    specialize qw/av1_lowbd_fwd_txfm avx512/;
     specialize qw/av1_fwd_txfm2d_4x8 avx512/;
     specialize qw/av1_fwd_txfm2d_8x4 avx512/;
     specialize qw/av1_fwd_txfm2d_8x16 avx512/;
@@ -388,16 +406,16 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
   #
   if (aom_config("CONFIG_REALTIME_ONLY") ne "yes") {
     add_proto qw/void av1_apply_temporal_filter/, "const struct yv12_buffer_config *frame_to_filter, const struct macroblockd *mbd, const BLOCK_SIZE block_size, const int mb_row, const int mb_col, const int num_planes, const double *noise_levels, const MV *subblock_mvs, const int *subblock_mses, const int q_factor, const int filter_strength, int tf_wgt_calc_lvl, const uint8_t *pred, uint32_t *accum, uint16_t *count";
-    specialize qw/av1_apply_temporal_filter sse2 avx2 neon neon_dotprod/;
+    specialize qw/av1_apply_temporal_filter sse2 avx2 avx512 neon neon_dotprod/;
 
     add_proto qw/double av1_estimate_noise_from_single_plane/, "const uint8_t *src, int height, int width, int stride, int edge_thresh";
-    specialize qw/av1_estimate_noise_from_single_plane avx2 neon/;
+    specialize qw/av1_estimate_noise_from_single_plane avx2 avx512 neon/;
     if (aom_config("CONFIG_AV1_HIGHBITDEPTH") eq "yes") {
       add_proto qw/void av1_highbd_apply_temporal_filter/, "const struct yv12_buffer_config *frame_to_filter, const struct macroblockd *mbd, const BLOCK_SIZE block_size, const int mb_row, const int mb_col, const int num_planes, const double *noise_levels, const MV *subblock_mvs, const int *subblock_mses, const int q_factor, const int filter_strength, int tf_wgt_calc_lvl, const uint8_t *pred, uint32_t *accum, uint16_t *count";
-      specialize qw/av1_highbd_apply_temporal_filter sse2 avx2 neon/;
+      specialize qw/av1_highbd_apply_temporal_filter sse2 avx2 avx512 neon/;
 
       add_proto qw/double av1_highbd_estimate_noise_from_single_plane/, "const uint16_t *src, int height, int width, int stride, int bit_depth, int edge_thresh";
-      specialize qw/av1_highbd_estimate_noise_from_single_plane neon/;
+      specialize qw/av1_highbd_estimate_noise_from_single_plane avx512 neon/;
     }
   }
 
@@ -423,26 +441,34 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
   if (aom_config("CONFIG_AV1_HIGHBITDEPTH") eq "yes") {
     add_proto qw/void av1_highbd_quantize_fp/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, int log_scale";
     specialize qw/av1_highbd_quantize_fp sse4_1 avx2 neon/;
+
+    add_proto qw/void av1_highbd_quantize_fp_qm/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *round_ptr, const int16_t *quant_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale";
+    specialize qw/av1_highbd_quantize_fp_qm avx2/;
+
+    add_proto qw/void av1_highbd_quantize_b_qm/, "const tran_low_t *coeff_ptr, intptr_t n_coeffs, const int16_t *zbin_ptr, const int16_t *round_ptr, const int16_t *quant_ptr, const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr, uint16_t *eob_ptr, const int16_t *scan, const int16_t *iscan, const qm_val_t *qm_ptr, const qm_val_t *iqm_ptr, int log_scale";
+    specialize qw/av1_highbd_quantize_b_qm avx2/;
   }
 
   # End av1_high encoder functions
 
   # txb
   add_proto qw/void av1_get_nz_map_contexts/, "const uint8_t *const levels, const int16_t *const scan, const int eob, const TX_SIZE tx_size, const TX_CLASS tx_class, int8_t *const coeff_contexts";
-  specialize qw/av1_get_nz_map_contexts sse2 neon/;
+  specialize qw/av1_get_nz_map_contexts sse2 avx512 neon/;
   add_proto qw/void av1_txb_init_levels/, "const tran_low_t *const coeff, const int width, const int height, uint8_t *const levels";
-  specialize qw/av1_txb_init_levels sse4_1 avx2 neon/;
+  specialize qw/av1_txb_init_levels sse4_1 avx2 avx512 neon/;
 
   add_proto qw/uint64_t av1_wedge_sse_from_residuals/, "const int16_t *r1, const int16_t *d, const uint8_t *m, int N";
-  specialize qw/av1_wedge_sse_from_residuals sse2 avx2 neon sve/;
+  specialize qw/av1_wedge_sse_from_residuals sse2 avx2 avx512 neon sve/;
   add_proto qw/int8_t av1_wedge_sign_from_residuals/, "const int16_t *ds, const uint8_t *m, int N, int64_t limit";
-  specialize qw/av1_wedge_sign_from_residuals sse2 avx2 neon sve/;
+  specialize qw/av1_wedge_sign_from_residuals sse2 avx2 avx512 neon sve/;
   add_proto qw/void av1_wedge_compute_delta_squares/, "int16_t *d, const int16_t *a, const int16_t *b, int N";
-  specialize qw/av1_wedge_compute_delta_squares sse2 avx2 neon/;
+  specialize qw/av1_wedge_compute_delta_squares sse2 avx2 avx512 neon/;
 
   # hash
   add_proto qw/uint32_t av1_get_crc32c_value/, "void *crc_calculator, const uint8_t *p, size_t length";
   specialize qw/av1_get_crc32c_value sse4_2 arm_crc32/;
+  add_proto qw/void av1_combine_block_hashes/, "void *crc_calculator, const uint32_t *top, const uint32_t *bottom, uint32_t *dst, int width, int sub_size";
+  specialize qw/av1_combine_block_hashes sse4_2 arm_crc32/;
 
   if (aom_config("CONFIG_REALTIME_ONLY") ne "yes") {
     add_proto qw/void av1_compute_stats/,  "int wiener_win, const uint8_t *dgd8, const uint8_t *src8, int16_t *dgd_avg, int16_t *src_avg, int h_start, int h_end, int v_start, int v_end, int dgd_stride, int src_stride, int64_t *M, int64_t *H, int use_downsampled_wiener_stats";
@@ -464,6 +490,9 @@ if (aom_config("CONFIG_AV1_ENCODER") eq "yes") {
 
   add_proto qw/void av1_get_horver_correlation_full/, "const int16_t *diff, int stride, int w, int h, float *hcorr, float *vcorr";
   specialize qw/av1_get_horver_correlation_full sse4_1 avx2 neon/;
+
+  add_proto qw/void av1_get_energy_distribution_finer/, "const int16_t *diff, int stride, int bw, int bh, float *hordist, float *verdist";
+  specialize qw/av1_get_energy_distribution_finer avx2/;
 
   add_proto qw/void av1_interp_cubic_rate_dist/, "const double *p1, const double *p2, double x, double rate_dist_f[2]";
   specialize qw/av1_interp_cubic_rate_dist sse2/;

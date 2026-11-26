@@ -1512,11 +1512,16 @@ int av1_encode_strategy(AV1_COMP *const cpi, size_t *const size,
           cm->seq_params->film_grain_params_present;
     }
 #endif
-    // only one operating point supported now
-    const int64_t pts64 = ticks_to_timebase_units(timestamp_ratio, *time_stamp);
-    if (pts64 < 0 || pts64 > UINT32_MAX) return AOM_CODEC_ERROR;
-
-    cm->frame_presentation_time = (uint32_t)pts64;
+    if (cm->seq_params->decoder_model_info_present_flag &&
+        cm->seq_params->timing_info.equal_picture_interval == 0) {
+      // only one operating point supported now
+      const int64_t pts64 =
+          ticks_to_timebase_units(timestamp_ratio, *time_stamp);
+      const int frame_presentation_time_length =
+          cm->seq_params->decoder_model_info.frame_presentation_time_length;
+      const int64_t pts_mask = (1LL << frame_presentation_time_length) - 1LL;
+      cm->frame_presentation_time = (uint32_t)(pts64 & pts_mask);
+    }
   }
 
 #if CONFIG_COLLECT_COMPONENT_TIMING

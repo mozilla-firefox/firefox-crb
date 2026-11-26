@@ -17,7 +17,11 @@
 extern const int16_t av1_eob_group_start[12];
 extern const int16_t av1_eob_offset_bits[12];
 
-extern const int8_t *av1_nz_map_ctx_offset[TX_SIZES_ALL];
+extern const int8_t *const av1_nz_map_ctx_offset[TX_SIZES_ALL];
+
+// Indexed by [bhl - MIN_TX_SIZE_LOG2][coeff_idx].
+extern const int16_t *const
+    av1_txb_padded_idx[MAX_TX_SIZE_LOG2 - MIN_TX_SIZE_LOG2];
 
 typedef struct txb_ctx {
   int txb_skip_ctx;
@@ -67,7 +71,7 @@ static inline uint8_t *set_levels(uint8_t *const levels_buf, const int height) {
 }
 
 static inline int get_padded_idx(const int idx, const int bhl) {
-  return idx + ((idx >> bhl) << TX_PAD_HOR_LOG2);
+  return av1_txb_padded_idx[bhl - MIN_TX_SIZE_LOG2][idx];
 }
 
 static inline int get_br_ctx_2d(const uint8_t *const levels,
@@ -77,7 +81,7 @@ static inline int get_br_ctx_2d(const uint8_t *const levels,
   const int col = c >> bhl;
   const int row = c - (col << bhl);
   const int stride = (1 << bhl) + TX_PAD_HOR;
-  const int pos = col * stride + row;
+  const int pos = c + (col << TX_PAD_HOR_LOG2);
   int mag = AOMMIN(levels[pos + 1], MAX_BASE_BR_RANGE) +
             AOMMIN(levels[pos + stride], MAX_BASE_BR_RANGE) +
             AOMMIN(levels[pos + 1 + stride], MAX_BASE_BR_RANGE);
@@ -106,7 +110,7 @@ static AOM_FORCE_INLINE int get_br_ctx(const uint8_t *const levels,
   const int col = c >> bhl;
   const int row = c - (col << bhl);
   const int stride = (1 << bhl) + TX_PAD_HOR;
-  const int pos = col * stride + row;
+  const int pos = c + (col << TX_PAD_HOR_LOG2);
   int mag = levels[pos + 1];
   mag += levels[pos + stride];
   switch (tx_class) {
@@ -150,23 +154,24 @@ static const uint8_t clip_max3[256] = {
 static AOM_FORCE_INLINE int get_nz_mag(const uint8_t *const levels,
                                        const int bhl, const TX_CLASS tx_class) {
   int mag;
+  const ptrdiff_t stride = (1 << bhl) + TX_PAD_HOR;
 
   // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
-  mag = clip_max3[levels[(1 << bhl) + TX_PAD_HOR]];  // { 0, 1 }
-  mag += clip_max3[levels[1]];                       // { 1, 0 }
+  mag = clip_max3[levels[stride]];  // { 0, 1 }
+  mag += clip_max3[levels[1]];      // { 1, 0 }
 
   if (tx_class == TX_CLASS_2D) {
-    mag += clip_max3[levels[(1 << bhl) + TX_PAD_HOR + 1]];          // { 1, 1 }
-    mag += clip_max3[levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]];  // { 0, 2 }
-    mag += clip_max3[levels[2]];                                    // { 2, 0 }
+    mag += clip_max3[levels[stride + 1]];  // { 1, 1 }
+    mag += clip_max3[levels[stride * 2]];  // { 0, 2 }
+    mag += clip_max3[levels[2]];           // { 2, 0 }
   } else if (tx_class == TX_CLASS_VERT) {
     mag += clip_max3[levels[2]];  // { 2, 0 }
     mag += clip_max3[levels[3]];  // { 3, 0 }
     mag += clip_max3[levels[4]];  // { 4, 0 }
   } else {
-    mag += clip_max3[levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]];  // { 0, 2 }
-    mag += clip_max3[levels[(3 << bhl) + (3 << TX_PAD_HOR_LOG2)]];  // { 0, 3 }
-    mag += clip_max3[levels[(4 << bhl) + (4 << TX_PAD_HOR_LOG2)]];  // { 0, 4 }
+    mag += clip_max3[levels[stride * 2]];  // { 0, 2 }
+    mag += clip_max3[levels[stride * 3]];  // { 0, 3 }
+    mag += clip_max3[levels[stride * 4]];  // { 0, 4 }
   }
 
   return mag;
@@ -252,8 +257,24 @@ static AOM_FORCE_INLINE int get_lower_levels_ctx(const uint8_t *levels,
                                                  int coeff_idx, int bhl,
                                                  TX_SIZE tx_size,
                                                  TX_CLASS tx_class) {
-  const int stats =
-      get_nz_mag(levels + get_padded_idx(coeff_idx, bhl), bhl, tx_class);
+  assert(bhl >= MIN_TX_SIZE_LOG2 && bhl <= MAX_TX_SIZE_LOG2 - 1);
+  const uint8_t *const nb = levels + get_padded_idx(coeff_idx, bhl);
+  const int stride = (1 << bhl) + TX_PAD_HOR;
+  // When all the neighbors read by get_nz_mag() are zero, stats is 0 and the
+  // context is the offset alone.
+  if (tx_class == TX_CLASS_2D) {
+    if (coeff_idx == 0) return 0;
+    if ((nb[1] | nb[2] | nb[stride] | nb[stride + 1] | nb[2 * stride]) == 0)
+      return av1_nz_map_ctx_offset[tx_size][coeff_idx];
+  } else if (tx_class == TX_CLASS_VERT) {
+    if ((nb[stride] | nb[1] | nb[2] | nb[3] | nb[4]) == 0)
+      return nz_map_ctx_offset_1d[coeff_idx & ((1 << bhl) - 1)];
+  } else {
+    if ((nb[stride] | nb[1] | nb[2 * stride] | nb[3 * stride] |
+         nb[4 * stride]) == 0)
+      return nz_map_ctx_offset_1d[coeff_idx >> bhl];
+  }
+  const int stats = get_nz_mag(nb, bhl, tx_class);
   return get_nz_map_ctx_from_stats(stats, coeff_idx, bhl, tx_size, tx_class);
 }
 
