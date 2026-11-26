@@ -232,7 +232,8 @@ static_assert(kSQLiteGrowthIncrement >= 0 &&
 constexpr auto kDataFileName = u"data.sqlite"_ns;
 
 /**
- * The journal corresponding to kDataFileName.  (We don't use WAL mode.)
+ * The journal corresponding to kDataFileName.  (We don't use WAL mode, except
+ * for encrypted databases, where the obfuscating VFS forces it.)
  * Currently only needed in QuotaClient::InitOrigin and only in DEBUG builds.
  * See the corresponding comment in QuotaClient::InitOrigin.
  */
@@ -531,10 +532,21 @@ Result<nsCOMPtr<mozIStorageConnection>, nsresult> OpenStorageConnection(
                              .SetQuery("cache=private"_ns + keyClause)
                              .Finalize(dbFileUrl)));
 
-    QM_TRY_RETURN(MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
-        nsCOMPtr<mozIStorageConnection>, storageService,
-        OpenDatabaseWithFileURL, dbFileUrl, ""_ns /* aTelemetryFilename */,
-        mozIStorageService::CONNECTION_DEFAULT));
+    QM_TRY_UNWRAP(
+        auto connection,
+        MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+            nsCOMPtr<mozIStorageConnection>, storageService,
+            OpenDatabaseWithFileURL, dbFileUrl, ""_ns /* aTelemetryFilename */,
+            mozIStorageService::CONNECTION_DEFAULT));
+
+    // The obfuscating VFS puts encrypted databases in WAL mode, so closing
+    // would checkpoint, which is a write without a write lease. Encrypted
+    // databases only exist in private browsing, where the data is discarded
+    // at the end of the session, so no explicit checkpoint is needed either;
+    // the WAL is replayed if the database is reopened within the session.
+    QM_TRY(MOZ_TO_RESULT(connection->DisableCheckpointOnClose()));
+
+    return connection;
   }
 
   QM_TRY_RETURN(MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
@@ -1259,6 +1271,7 @@ class Connection final : public CachingDatabaseConnection {
   // Set when Close is called while a flush is in progress. The close is then
   // deferred until the flush finishes.
   nsCOMPtr<nsIRunnable> mPendingCloseCallback;
+  RefPtr<CloseOp> mPendingCloseOp;
   RefPtr<QuotaObject> mQuotaObject;
   LSQuotaAccounting mQuotaAccounting;
   ConnectionWriteOptimizer mWriteOptimizer;
@@ -1277,6 +1290,7 @@ class Connection final : public CachingDatabaseConnection {
   const bool mDatabaseWasNotAvailable;
   bool mHasCreatedDatabase;
   bool mFlushScheduled;
+  // Includes the wait for a write lease.
   bool mFlushInProgress;
   bool mCloseDispatched = false;
   bool mDatabaseUsageRecorded;
@@ -1397,6 +1411,8 @@ class Connection final : public CachingDatabaseConnection {
 
   void DispatchFlush();
 
+  void DispatchFlushOp(Result<quota::WriteLease, nsresult> aWriteLease);
+
   void FlushAndClose(nsIRunnable* aCallback);
 
   void OnFlushFinished(nsresult aResultCode);
@@ -1449,11 +1465,13 @@ class Connection::GetOrCreateTemporaryOriginDirectoryHelper final
 
 class Connection::FlushOp final : public ConnectionDatastoreOperationBase {
   ConnectionWriteOptimizer mWriteOptimizer;
+  quota::WriteLease mWriteLease;
   const int64_t mTotalDelta;
   bool mCommitted = false;
 
  public:
-  FlushOp(Connection* aConnection, ConnectionWriteOptimizer&& aWriteOptimizer);
+  FlushOp(Connection* aConnection, ConnectionWriteOptimizer&& aWriteOptimizer,
+          quota::WriteLease aWriteLease);
 
  private:
   nsresult DoDatastoreWork() override;
@@ -1676,6 +1694,8 @@ class Datastore final
   void MaybeClose();
 
   void ConnectionClosedCallback();
+
+  void FinishConnectionClosed();
 
   void CleanupMetadata();
 
@@ -3968,6 +3988,7 @@ Connection::~Connection() {
   MOZ_ASSERT(!mFlushScheduled);
   MOZ_ASSERT(!mFlushInProgress);
   MOZ_ASSERT(!mPendingCloseCallback);
+  MOZ_ASSERT(!mPendingCloseOp);
   MOZ_ASSERT(!mInUpdateBatch);
   MOZ_ASSERT(mFinished);
 }
@@ -4238,11 +4259,59 @@ void Connection::DispatchFlush() {
   MOZ_ASSERT(mWriteOptimizer.HasWrites());
   MOZ_ASSERT(!mFlushInProgress);
 
-  RefPtr<FlushOp> op = new FlushOp(this, std::move(mWriteOptimizer));
-
   mFlushInProgress = true;
 
-  Dispatch(op);
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  if (Maybe<quota::WriteLease> lease =
+          quotaManager->TryAcquireWriteLease(mOriginMetadata)) {
+    DispatchFlushOp(std::move(*lease));
+    return;
+  }
+
+  quotaManager->AcquireWriteLease(mOriginMetadata)
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          [self = RefPtr(this)](
+              QuotaManager::WriteLeasePromise::ResolveOrRejectValue&& aValue) {
+            if (aValue.IsReject()) {
+              self->DispatchFlushOp(Err(aValue.RejectValue()));
+              return;
+            }
+
+            self->DispatchFlushOp(std::move(aValue.ResolveValue()));
+          });
+}
+
+void Connection::DispatchFlushOp(
+    Result<quota::WriteLease, nsresult> aWriteLease) {
+  AssertIsOnOwningThread();
+  MOZ_ASSERT(mFlushInProgress);
+
+  nsresult resultCode = NS_OK;
+  bool dispatched = false;
+  if (aWriteLease.isErr()) {
+    resultCode = aWriteLease.unwrapErr();
+    if (mPendingCloseOp) {
+      AbandonWrites(resultCode);
+    }
+  } else if (mWriteOptimizer.HasWrites()) {
+    RefPtr<FlushOp> op =
+        new FlushOp(this, std::move(mWriteOptimizer), aWriteLease.unwrap());
+    Dispatch(op);
+    dispatched = true;
+  }
+
+  if (mPendingCloseOp) {
+    mCloseDispatched = true;
+    RefPtr<CloseOp> op = std::move(mPendingCloseOp);
+    Dispatch(op);
+  }
+
+  if (!dispatched) {
+    OnFlushFinished(resultCode);
+  }
 }
 
 void Connection::FlushAndClose(nsIRunnable* aCallback) {
@@ -4251,16 +4320,16 @@ void Connection::FlushAndClose(nsIRunnable* aCallback) {
   MOZ_ASSERT(!mFlushScheduled);
   MOZ_ASSERT(!mFlushInProgress);
   MOZ_ASSERT(!mCloseDispatched);
-
-  mCloseDispatched = true;
-
-  if (mWriteOptimizer.HasWrites()) {
-    DispatchFlush();
-  }
+  MOZ_ASSERT(!mPendingCloseOp);
 
   RefPtr<CloseOp> op = new CloseOp(this, aCallback);
-
-  Dispatch(op);
+  if (mWriteOptimizer.HasWrites()) {
+    mPendingCloseOp = std::move(op);
+    DispatchFlush();
+  } else {
+    mCloseDispatched = true;
+    Dispatch(op);
+  }
 }
 
 void Connection::OnFlushFinished(nsresult aResultCode) {
@@ -4284,7 +4353,7 @@ void Connection::OnFlushFinished(nsresult aResultCode) {
 
 void Connection::AbandonWrites(nsresult aResultCode) {
   AssertIsOnOwningThread();
-  MOZ_ASSERT(mCloseDispatched);
+  MOZ_ASSERT(mCloseDispatched || mPendingCloseOp);
   MOZ_ASSERT(NS_FAILED(aResultCode));
 
   if (mWriteOptimizer.HasWrites()) {
@@ -4363,9 +4432,11 @@ Connection::GetOrCreateTemporaryOriginDirectoryHelper::Run() {
 }
 
 Connection::FlushOp::FlushOp(Connection* aConnection,
-                             ConnectionWriteOptimizer&& aWriteOptimizer)
+                             ConnectionWriteOptimizer&& aWriteOptimizer,
+                             quota::WriteLease aWriteLease)
     : ConnectionDatastoreOperationBase(aConnection),
       mWriteOptimizer(std::move(aWriteOptimizer)),
+      mWriteLease(std::move(aWriteLease)),
       mTotalDelta(mWriteOptimizer.TotalDelta()) {
   aConnection->mQuotaAccounting.BeginFlush(mTotalDelta);
 }
@@ -4427,6 +4498,9 @@ void Connection::FlushOp::Cleanup() {
   mWriteOptimizer.Reset();
 
   MOZ_ASSERT(!mWriteOptimizer.HasWrites());
+
+  // NoteFlushed must hold the lease while CommitReservation updates usage.
+  mWriteLease = quota::WriteLease();
 
   mConnection->OnFlushFinished(mCommitted ? NS_OK : ResultCode());
 
@@ -5292,15 +5366,52 @@ void Datastore::ConnectionClosedCallback() {
   bool hasCreatedDatabase;
   mConnection->GetFinishInfo(databaseWasNotAvailable, hasCreatedDatabase);
 
+  mConnection = nullptr;
+
   if (databaseWasNotAvailable && !hasCreatedDatabase) {
     QuotaManager* quotaManager = QuotaManager::Get();
     MOZ_ASSERT(quotaManager);
 
-    quotaManager->ResetUsageForClient(
-        ClientMetadata{mOriginMetadata, mozilla::dom::quota::Client::LS});
+    // Resetting the client usage modifies the origin metadata, so the origin
+    // must be marked dirty on disk first. The directory lock is kept until
+    // that is done.
+    const ClientMetadata clientMetadata{mOriginMetadata,
+                                        mozilla::dom::quota::Client::LS};
+
+    if (Maybe<quota::WriteLease> lease =
+            quotaManager->TryAcquireWriteLease(mOriginMetadata)) {
+      quotaManager->ResetUsageForClient(clientMetadata);
+    } else {
+      quotaManager->AcquireWriteLease(mOriginMetadata)
+          ->Then(GetCurrentSerialEventTarget(), __func__,
+                 [self = RefPtr(this), clientMetadata](
+                     QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
+                         aValue) {
+                   // Without the lease the metadata must not be modified;
+                   // the stale zero usage entry is harmless.
+                   if (aValue.IsResolve()) {
+                     if (QuotaManager* quotaManager = QuotaManager::Get()) {
+                       quota::WriteLease lease =
+                           std::move(aValue.ResolveValue());
+
+                       quotaManager->ResetUsageForClient(clientMetadata);
+                     }
+                   }
+
+                   self->FinishConnectionClosed();
+                 });
+      return;
+    }
   }
 
-  mConnection = nullptr;
+  FinishConnectionClosed();
+}
+
+void Datastore::FinishConnectionClosed() {
+  AssertIsOnBackgroundThread();
+  MOZ_ASSERT(mDirectoryLockHandle);
+  MOZ_ASSERT(!mConnection);
+  MOZ_ASSERT(mClosed);
 
   // Now it's safe to release the directory lock and unregister itself from
   // the hashtable.

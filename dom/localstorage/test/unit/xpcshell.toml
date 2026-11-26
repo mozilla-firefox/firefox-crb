@@ -288,3 +288,16 @@ skip-if = [
   "privateBrowsing",
   "debug",
 ]
+
+["test_writeLease.js"]
+prefs = ["dom.storage.testing.flushDelayMs=100"]
+# One-minute polling budget plus setup and cleanup.
+requesttimeoutfactor = 4
+
+["test_writeLeaseCloseFailure.js"]
+prefs = ["dom.storage.testing.flushDelayMs=120000"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+# Private origins do not need IO to acquire a write lease.
+skip-if = [
+  "privateBrowsing",
+]
