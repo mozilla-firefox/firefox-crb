@@ -7,9 +7,11 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from functools import partial
@@ -28,6 +30,8 @@ from mozlint.result import Issue, IssueEncoder, ResultSummary
 here = os.path.abspath(os.path.dirname(__file__))
 topsrcdir = os.path.abspath(os.path.dirname(os.path.dirname(here)))
 DOC_ROOT = os.path.join(topsrcdir, "docs")
+DOCS_PREFIX = "docs"
+NOT_FOUND_ROOT = os.path.join(here, "not_found")
 BASE_LINK = "http://gecko-docs.mozilla.org-l1.s3-website.us-west-2.amazonaws.com/"
 PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
 
@@ -163,6 +167,7 @@ def build_docs(
 
     outdir = outdir or os.path.join(command_context.topobjdir, "docs")
     savedir = os.path.join(outdir, fmt)
+    docs_savedir = os.path.join(savedir, DOCS_PREFIX)
 
     if path is None:
         path = command_context.topsrcdir
@@ -193,14 +198,17 @@ def build_docs(
             )
         toggle_no_autodoc()
 
-    status, warnings = _run_sphinx(docdir, savedir, fmt=fmt, jobs=jobs, verbose=verbose)
+    status, warnings = _run_sphinx(
+        docdir, docs_savedir, fmt=fmt, jobs=jobs, verbose=verbose
+    )
     if status != 0:
         print(_dump_sphinx_backtrace())
         return die(
             f"failed to generate documentation:\n{path}: sphinx return code {status}"
         )
-    else:
-        print(f"\nGenerated documentation:\n{savedir}")
+    if fmt == "html":
+        _install_not_found_page(savedir)
+    print(f"\nGenerated documentation:\n{docs_savedir}")
 
     if not disable_warnings_check:
         with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
@@ -216,9 +224,9 @@ def build_docs(
     # This would be used by code-review to post the link to Phabricator
     if write_url is not None:
         if _publishes(project()):
-            unique_link = PUBLISHED_LINK + "index.html"
+            unique_link = f"{PUBLISHED_LINK}{DOCS_PREFIX}/index.html"
         else:
-            unique_link = BASE_LINK + unique_id + "/index.html"
+            unique_link = f"{BASE_LINK}{unique_id}/{DOCS_PREFIX}/index.html"
         with open(write_url, "w") as fp:
             fp.write(unique_link)
             fp.flush()
@@ -233,14 +241,14 @@ def build_docs(
 
     if archive:
         archive_path = os.path.join(outdir, f"{project()}.tar.gz")
-        create_tarball(archive_path, savedir)
+        create_tarball(archive_path, docs_savedir)
         print(f"Archived to {archive_path}")
 
     if upload:
         _s3_upload(savedir, project(), unique_id, version())
 
     if not serve:
-        index_path = os.path.join(savedir, "index.html")
+        index_path = os.path.join(docs_savedir, "index.html")
         if auto_open and os.path.isfile(index_path):
             webbrowser.open(index_path)
         return
@@ -255,18 +263,21 @@ def build_docs(
 
     server = Server()
 
-    sphinx_trees = manager().trees or {savedir: docdir}
+    sphinx_trees = manager().trees or {docs_savedir: docdir}
     for _, src in sphinx_trees.items():
         run_sphinx = partial(
-            _run_sphinx, src, savedir, fmt=fmt, jobs=jobs, verbose=verbose
+            _run_sphinx, src, docs_savedir, fmt=fmt, jobs=jobs, verbose=verbose
         )
         server.watch(src, run_sphinx)
-    server.serve(
-        host=host,
-        port=port,
-        root=savedir,
-        open_url_delay=0.1 if auto_open else None,
-    )
+    if auto_open:
+        docs_url = f"http://{host}:{port}/{DOCS_PREFIX}/index.html"
+        threading.Timer(0.1, webbrowser.open, (docs_url,)).start()
+    server.serve(host=host, port=port, root=savedir)
+
+
+def _install_not_found_page(savedir):
+    shutil.copytree(NOT_FOUND_ROOT, savedir, dirs_exist_ok=True)
+    _write_redirects(os.path.join(savedir, "redirects.js"))
 
 
 def _dump_sphinx_backtrace():
@@ -421,6 +432,23 @@ def _publishes(project):
     return project == "main" and os.environ.get("MOZ_SCM_LEVEL") == "3"
 
 
+def _write_redirects(path):
+    """Write the docs redirects as a script for 404.html to apply.
+
+    The S3 routing rules only redirect by prefix, so the pre-/docs/ URLs that
+    no longer exist are redirected client side when a request misses.
+    """
+    with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
+        redirects = yaml.safe_load(fh)["redirects"]
+
+    redirects = [
+        [f"/{DOCS_PREFIX}/{k.strip('/')}", f"/{DOCS_PREFIX}/{v.strip('/')}"]
+        for k, v in redirects.items()
+    ]
+    with open(path, "w") as fh:
+        fh.write(f"const DOCS_REDIRECTS = {json.dumps(redirects, indent=1)};\n")
+
+
 def _s3_upload(root, project, unique_id, version=None):
     # Workaround the issue
     # BlockingIOError: [Errno 11] write could not complete without blocking
@@ -436,7 +464,7 @@ def _s3_upload(root, project, unique_id, version=None):
     # site, and to a per run prefix otherwise, which the review bot links to.
     # A <project>/<version> copy is added when the docs set a version.
 
-    files = list(distribution_files(root))
+    files = list(distribution_files(root, ignore_prefix=DOCS_PREFIX))
 
     # Until we redirect / to main/latest, upload the main docs
     # to the root of the production bucket.
@@ -453,14 +481,17 @@ def _s3_upload(root, project, unique_id, version=None):
         with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
             redirects = yaml.safe_load(fh)["redirects"]
 
-        redirects = {k.strip("/"): v.strip("/") for k, v in redirects.items()}
+        redirects = {
+            f"{DOCS_PREFIX}/{k.strip('/')}": f"{DOCS_PREFIX}/{v.strip('/')}"
+            for k, v in redirects.items()
+        }
 
         print("Redirects currently staged")
         pprint(redirects, indent=1)
 
         s3_set_redirects(redirects)
     else:
-        unique_link = BASE_LINK + dest + "/index.html"
+        unique_link = f"{BASE_LINK}{dest}/{DOCS_PREFIX}/index.html"
         print("Uploaded documentation can be accessed here " + unique_link)
 
 
