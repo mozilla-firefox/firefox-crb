@@ -42,7 +42,48 @@ export var CrashTestUtils = {
   // Constants for dumpHasStream()
   // From google_breakpad/common/minidump_format.h
   MD_THREAD_LIST_STREAM: 3,
+  MD_MODULE_LIST_STREAM: 4,
   MD_MEMORY_INFO_LIST_STREAM: 16,
+  MD_MOZ_SOFT_ERRORS_STREAM: 0x4d7a0004,
+
+  // Extract each minidump stream into a map, indexed by the stream IDs, with
+  // the contents available as UInt8Array.
+  async extractMinidumpStreams(dumpPath) {
+    const minidump = await IOUtils.read(dumpPath);
+    const view = new DataView(minidump.buffer);
+    const streamCount = view.getUint32(8, true);
+    const directory = view.getUint32(12, true);
+    const streams = {};
+    for (let i = 0; i < streamCount; i++) {
+      const entry = directory + 12 * i;
+      const streamId = view.getUint32(entry, true);
+      const size = view.getUint32(entry + 4, true);
+      const rva = view.getUint32(entry + 8, true);
+      streams[streamId] = minidump.subarray(rva, rva + size);
+    }
+    return streams;
+  }
+
+  // Return the structured soft error stream for the given minidump.
+  // Should be an array of nested objects.
+  async getSoftErrors(dumpPath) {
+    const streams = await extractMinidumpStreams(dumpPath);
+    const errorStream = streams[this.MD_MOZ_SOFT_ERRORS_STREAM];
+    if (errorStream === undefined) {
+      throw new Error("No soft errors stream in " + dumpPath);
+    }
+    const errors = JSON.parse(new TextDecoder().decode(errorStream));
+    if (!Array.isArray(errors)) {
+      throw new Error(`Soft errors are not a list`);
+    }
+  }
+
+  // Return the errors yielded in a given category, or an empty list
+  // if none. Examples of category: "InitErrors", "WriteModuleListErrors"...
+  async getErrorsForCategory(dumpPath, category) {
+    const errors = await this.getSoftErrors(dumpPath);
+    return errors.find(e => typeof e == "object" && key in e)?.[key] ?? [];
+  }
 };
 
 // Grab APIs from the testcrasher shared library
