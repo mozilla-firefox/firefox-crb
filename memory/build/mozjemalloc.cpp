@@ -277,8 +277,7 @@ class ArenaCollection {
   }
 
   // The requested arena must exist.
-  inline arena_t* GetById(arena_id_t aArenaId, bool aIsPrivate)
-      MOZ_EXCLUDES(mLock);
+  inline arena_t* GetPrivateArena(arena_id_t aArenaId) MOZ_EXCLUDES(mLock);
 
   arena_t* CreateArena(bool aIsPrivate, arena_params_t* aParams)
       MOZ_EXCLUDES(mLock);
@@ -4051,15 +4050,11 @@ inline void MozJemalloc::jemalloc_free_excess_dirty_pages(void) {
   }
 }
 
-inline arena_t* ArenaCollection::GetById(arena_id_t aArenaId, bool aIsPrivate) {
+inline arena_t* ArenaCollection::GetPrivateArena(arena_id_t aArenaId) {
   if (!malloc_initialized) {
     return nullptr;
   }
 
-  // This function is never called with aIsPrivate = false, let's make sure it
-  // doesn't silently change while we're making that assumption below because
-  // we can't resolve non-private arenas this way.
-  MOZ_RELEASE_ASSERT(aIsPrivate);
   // This function is not expected to be called before at least one private
   // arena was created.
   // coverity[missing_lock]
@@ -4083,7 +4078,7 @@ inline arena_id_t MozJemalloc::moz_create_arena_with_params(
 }
 
 inline void MozJemalloc::moz_dispose_arena(arena_id_t aArenaId) {
-  arena_t* arena = gArenas.GetById(aArenaId, /* IsPrivate = */ true);
+  arena_t* arena = gArenas.GetPrivateArena(aArenaId);
   gArenas.DisposeArena(arena);
 }
 
@@ -4259,8 +4254,7 @@ void ArenaCollection::MayPurgeAll(PurgeCondition aCond, const char* aCaller) {
 #define MALLOC_DECL(name, return_type, ...)                          \
   inline return_type MozJemalloc::moz_arena_##name(                  \
       arena_id_t aArenaId, ARGS_HELPER(TYPED_ARGS, ##__VA_ARGS__)) { \
-    BaseAllocator allocator(                                         \
-        gArenas.GetById(aArenaId, /* IsPrivate = */ true));          \
+    BaseAllocator allocator(gArenas.GetPrivateArena(aArenaId));      \
     return allocator.name(ARGS_HELPER(ARGS, ##__VA_ARGS__));         \
   }
 #define MALLOC_FUNCS MALLOC_FUNCS_MALLOC_BASE
