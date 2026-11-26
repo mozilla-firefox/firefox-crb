@@ -7,11 +7,6 @@
     },
     {
       "login": false,
-      "name": "amazon",
-      "test_url": "https://www.amazon.com"
-    },
-    {
-      "login": false,
       "name": "amazon-search",
       "test_url": "https://www.amazon.com/s/ref=nb_sb_noss_2/139-6317191-5622045?url=search-alias%3Daps&field-keywords=mobile+phone"
     },
@@ -27,11 +22,6 @@
     },
     {
       "login": false,
-      "name": "booking",
-      "test_url": "https://www.booking.com/"
-    },
-    {
-      "login": false,
       "name": "cnn-ampstories",
       "test_url": "https://cnn.com/ampstories/us/why-hurricane-michael-is-a-monster-unlike-any-other"
     },
@@ -39,26 +29,6 @@
       "login": false,
       "name": "dailymail",
       "test_url": "https://www.dailymail.co.uk/sciencetech/article-9749081/Experts-say-Hubble-repair-despite-NASA-insisting-multiple-options-fix.html"
-    },
-    {
-      "login": false,
-      "name": "ebay-kleinanzeigen",
-      "test_url": "https://m.ebay-kleinanzeigen.de"
-    },
-    {
-      "login": false,
-      "name": "ebay-kleinanzeigen-search",
-      "test_url": "https://m.ebay-kleinanzeigen.de/s-anzeigen/auf-zeit-wg-berlin/zimmer/c199-l3331"
-    },
-    {
-      "login": false,
-      "name": "espn",
-      "test_url": "http://www.espn.com/nba/story/_/page/allstarweekend25788027/the-comparison-lebron-james-michael-jordan-their-own-words"
-    },
-    {
-      "login": false,
-      "name": "google-maps",
-      "test_url": "https://www.google.com/maps?force=pwa"
     },
     {
       "login": true,
@@ -72,16 +42,6 @@
     },
     {
       "login": false,
-      "name": "reddit",
-      "test_url": "https://www.reddit.com"
-    },
-    {
-      "login": false,
-      "name": "stackoverflow",
-      "test_url": "https://stackoverflow.com/"
-    },
-    {
-      "login": false,
       "name": "web-de",
       "test_url": "https://web.de/magazine/politik/politologe-glaubt-grossen-koalition-herbst-knallen-33563566"
     },
@@ -89,11 +49,6 @@
       "login": false,
       "name": "wikipedia",
       "test_url": "https://en.m.wikipedia.org/wiki/Main_Page"
-    },
-    {
-      "login": false,
-      "name": "youtube",
-      "test_url": "https://m.youtube.com"
     }
   ],
   "desktop": [
@@ -146,22 +101,6 @@
     },
     {
       "login": false,
-      "name": "ebay",
-      "test_url": "https://www.ebay.com/",
-      "secondary_url": "https://www.ebay.com/deals",
-      "test_cmds": [
-        [
-          "click.byXpathAndWait",
-          "/html/body/div[5]/div[1]/div[2]/div[2]/div[2]/a"
-        ],
-        [
-          "click.byXpathAndWait",
-          "/html/body/div[4]/div/div[2]/section[3]/section/button"
-        ]
-      ]
-    },
-    {
-      "login": false,
       "name": "espn",
       "test_url": "http://www.espn.com/nba/story/_/page/allstarweekend25788027/the-comparison-lebron-james-michael-jordan-their-own-words",
       "test_cmds": [
@@ -171,12 +110,6 @@
           "/html/body/div[10]/div[2]/div[3]/div[1]/button"
         ]
       ]
-    },
-    {
-      "login": false,
-      "name": "expedia",
-      "test_url": "https://expedia.com/Hotel-Search?destination=New+York%2C+New+York&latLong=40.756680%2C-73.986470&regionId=178293&startDate=&endDate=&rooms=1&_xpid=11905%7C1&adults=2",
-      "secondary_url": "https://groups.expedia.com/Group-Rate/?locale=en_US&ol=1"
     },
     {
       "login": true,
@@ -279,16 +212,6 @@
       "login": true,
       "name": "twitter",
       "test_url": "https://twitter.com/BarackObama"
-    },
-    {
-      "login": false,
-      "name": "wikia",
-      "test_url": "https://marvel.fandom.com/wiki/Black_Panther",
-      "secondary_url": "https://marvel.fandom.com/wiki/Celestials",
-      "test_cmds": [
-        ["click.byXpathAndWait", "/html/body/div[6]/div/div/div[2]/div[1]"],
-        ["click.byXpathAndWait", "/html/body/div[7]/div/div/div[2]/div[2]"]
-      ]
     },
     {
       "login": false,

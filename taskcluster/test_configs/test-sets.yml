@@ -661,9 +661,6 @@ android-hw-browsertime:
     - browsertime-hev3-connection-m
     - browsertime-doh-busy-site-m
 
-android-hw-browsertime-profiling:
-    - browsertime-tp6m-profiling
-
 android-hw-speedometer-tests:
     - browsertime-benchmark-speedometer2-mobile
     - browsertime-benchmark-speedometer3-mobile

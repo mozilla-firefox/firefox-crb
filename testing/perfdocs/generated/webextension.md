@@ -80,33 +80,26 @@ When it's removed there will no longer be a `shouldAlert` field in the output Pe
 
 ### High value tests
 
-We have a notion of **high-value** tests in performance testing. These are chosen based on how many alerts they can catch using [this script](https://github.com/gmierz/moz-current-tests/blob/master/high-value-tests/generate_high_value_tests.py) along with [a redash query](https://github.com/gmierz/moz-current-tests/blob/master/high-value-tests/sql_query.txt). The lists below are the minimum set of test pages we should run to catch as many alerts as we can.
+We have a notion of **high-value** tests in performance testing. These are chosen based on how many alerts they can catch using [this script](https://github.com/gmierz/moz-current-tests/blob/master/high-value-tests/generate_high_value_tests.py) along with [a redash query](https://github.com/gmierz/moz-current-tests/blob/master/high-value-tests/sql_query.txt). The lists below are the minimum set of test pages we should run to catch as many alerts as we can. They are the pages run in the `browsertime-tp6-essential` and `browsertime-tp6m-essential` tasks.
 
 **Desktop**
 
-Last updated: June 2021
+Last updated: November 2026
 
 > - amazon
-> - bing
+> - bing-search
 > - cnn
 > - fandom
-> - gslides
-> - instagram
+> - google-slides
 > - twitter
 > - wikipedia
-> - yahoo-mail
 
 **Mobile**
 
-Last updated: November 2020
+Last updated: November 2026
 
 > - allrecipes
 > - amazon-search
-> - espn
-> - facebook
-> - google-search
-> - microsoft-support
-> - youtube-watch
 
 ## WebExtension Benchmark Tests
 
