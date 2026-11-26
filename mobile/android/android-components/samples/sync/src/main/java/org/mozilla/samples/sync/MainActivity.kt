@@ -30,6 +30,7 @@ import mozilla.components.concept.sync.DeviceCommandOutgoing
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceConstellationObserver
 import mozilla.components.concept.sync.DeviceType
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.PeriodicSyncConfig
 import mozilla.components.concept.sync.Profile
@@ -39,7 +40,6 @@ import mozilla.components.concept.sync.TabPrivacy
 import mozilla.components.lib.dataprotect.SecureAbove22Preferences
 import mozilla.components.lib.fetch.httpurlconnection.HttpURLConnectionClient
 import mozilla.components.service.fxa.FxaAuthData
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.ServerConfig
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.service.fxa.sync.GlobalSyncableStoreProvider
