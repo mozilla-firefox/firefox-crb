@@ -113,10 +113,6 @@ browsertime-tp6m:
         description: Raptor (browsertime) tp6 page-load tests on android
         max-run-time:
             by-subtest:
-                reddit:
-                    by-app:
-                        geckoview: 7200
-                        default: 3600
                 imdb:
                     by-app:
                         geckoview: 7200
@@ -137,22 +133,13 @@ browsertime-tp6m:
         run-visual-metrics: true
         test: tp6m
         subtests:
-            - amazon
             - bing
             - [bing-search-restaurants, bing-s-r]
-            - booking
             - [cnn-ampstories, cnn-amp]
             - dailymail
-            - [ebay-kleinanzeigen, ebay-k]
-            - [ebay-kleinanzeigen-search, ebay-k-s]
-            - [google-maps, gmaps]
             - [google-search-restaurants, gsearch-r]
             - imdb
-            - reddit
-            - [stackoverflow, stacko]
-            - bild-de
             - wikipedia
-            - youtube
     run-on-projects:
         by-app:
             geckoview: []
@@ -176,7 +163,6 @@ browsertime-tp6m-essential:
         subtests:
             - allrecipes
             - [amazon-search, amazon-s]
-            - espn
     run-on-projects:
         by-app:
             geckoview: []
@@ -324,38 +310,28 @@ browsertime-tp6m-live:
         test: tp6m
         subtests:
             - allrecipes
-            - amazon
             - [amazon-search, amazon-s]
             - bing
             - [bing-search-restaurants, bing-s-r]
-            - booking
             - booking-sf
             - [cnn-ampstories, cnn-amp]
             - dailymail
             - discord
-            - [ebay-kleinanzeigen, ebay-k]
-            - [ebay-kleinanzeigen-search, ebay-k-s]
-            - espn
             - expedia
             - [fashionbeans, fashbea]
             - [google-accounts, gacc]
-            - [google-maps, gmaps]
             - [google-search-restaurants, gsearch-r]
             - imdb
             - [imdb-firefox, imdb-f]
             - [medium-article, medium]
             - nytimes
             - [people-article, people]
-            - reddit
             - [reddit-thread, reddit-thr]
             - rumble-fox
-            - [stackoverflow, stacko]
             - [stackoverflow-question, stack-q]
             - [urbandictionary-define, urbict-def]
-            - bild-de
             - [wikia-marvel, wikia-m]
             - wikipedia
-            - youtube
     mozharness:
         extra-options:
             - --live-sites
@@ -372,29 +348,6 @@ browsertime-tp6m-live:
             fenix: 1
             default: 3
     treeherder-symbol: Btime-live(tp6m)
-
-browsertime-tp6m-profiling:
-    description: Raptor (browsertime) tp6 page-load tests on android with Gecko profiling
-    raptor:
-        apps: [geckoview]
-        test: tp6m
-        subtests: [amazon, youtube]
-    treeherder-symbol: Btime-Prof(tp6m)
-    mozharness:
-        script: raptor_script.py
-        config:
-            - raptor/android_hw_config.py
-        extra-options:
-            - --chimera
-            - --gecko-profile
-    run-on-projects:
-        by-test-platform:
-            android-hw-a55.*shippable.*/opt: [mozilla-central]
-            default: []
-    tier:
-        by-app:
-            fenix: 1
-            default: 3
 
 browsertime-video-playback-latency-mobile:
     <<: *tp6m-defaults

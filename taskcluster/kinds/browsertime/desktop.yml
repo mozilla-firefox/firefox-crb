@@ -142,15 +142,12 @@ browsertime-tp6:
         run-visual-metrics: true
         subtests:
             - buzzfeed
-            - ebay
             - espn
-            - expedia
             - [google-docs, gdocs]
             - [google-search, gsearch]
             - imdb
             - microsoft
             - reddit
-            - wikia
             - youtube
     tier:
         by-app:
@@ -736,7 +733,6 @@ browsertime-tp6-live:
         subtests:
             - amazon
             - [bing-search, bing]
-            - ebay
             - fandom
             - [google-docs, gdocs]
             - [google-search, gsearch]
