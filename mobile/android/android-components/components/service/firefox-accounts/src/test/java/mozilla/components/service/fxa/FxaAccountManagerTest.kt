@@ -329,6 +329,45 @@ class FxaAccountManagerTest {
     }
 
     @Test
+    fun `OAuth completion errors are forwarded to observers with the corresponding service`() = runTest {
+        // signing in to IP protection service
+        val authType = AuthType.Signin(service = FxaService.IpProtection)
+
+        val manager = createFxaManager(coroutineContext, emptySet())
+        val account = manager.testableStorageWrapper.account
+        val observer: AccountObserver = mock()
+        manager.register(observer)
+        whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
+        manager.start()
+        whenever(account.processEvent(any()))
+            .thenReturn(FxaState.Authenticating("https://test-oauth.example.com/", FxaState.Connected))
+        manager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
+        whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
+
+        manager.finishAuthentication(FxaAuthData(authType, "test-code", "test-auth-state"))
+
+        verify(observer).onFlowError(AuthFlowError.FailedToCompleteAuth(FxaService.IpProtection))
+    }
+
+    @Test
+    fun `OAuth initiation errors forward the requested service for email and pairing`() = runTest {
+        val manager = createFxaManager(coroutineContext, emptySet())
+        val account = manager.testableStorageWrapper.account
+        val observer: AccountObserver = mock()
+        manager.register(observer)
+        whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
+        manager.start()
+
+        manager.beginAuthentication(
+            service = FxaService.Relay.identifier,
+            entrypoint = entryPoint,
+            pairingUrl = "https://pairing-url.com",
+        )
+
+        verify(observer).onFlowError(AuthFlowError.FailedToBeginAuth(service = FxaService.Relay))
+    }
+
+    @Test
     fun `OAuth email login finalizes device without capabilities when sync scope is missing`() = runTest {
         val fxaManager =
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
@@ -517,7 +556,7 @@ class FxaAccountManagerTest {
         whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
-        verify(accountObserver, times(1)).onFlowError(AuthFlowError.FailedToBeginAuth)
+        verify(accountObserver, times(1)).onFlowError(AuthFlowError.FailedToBeginAuth(service = FxaService.Sync))
     }
 
     @Test
@@ -547,7 +586,7 @@ class FxaAccountManagerTest {
         whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
         fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
-        verify(accountObserver, times(1)).onFlowError(AuthFlowError.FailedToCompleteAuth)
+        verify(accountObserver, times(1)).onFlowError(AuthFlowError.FailedToCompleteAuth(null))
     }
 
     @Test

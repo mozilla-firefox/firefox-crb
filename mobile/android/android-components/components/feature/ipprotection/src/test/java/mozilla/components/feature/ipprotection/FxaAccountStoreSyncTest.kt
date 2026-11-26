@@ -159,7 +159,7 @@ class FxaAccountStoreSyncTest {
 
         val sync = FxaAccountStoreSync(syncStore, ipProtectionStore, lazyOf(accountManager), StandardTestDispatcher())
 
-        sync.onFlowError(AuthFlowError.FailedToCompleteAuth)
+        sync.onFlowError(AuthFlowError.FailedToCompleteAuth())
 
         captureMiddleware.assertLastAction(IPProtectionAction.AccountAction.AccountManagerStateChanged::class) {
             assertEquals(AccountStatus.AuthFailed, it.status)

@@ -419,8 +419,8 @@ class MainActivity :
                         getString(
                             R.string.account_error,
                             when (error) {
-                                AuthFlowError.FailedToBeginAuth -> "Failed to begin authentication"
-                                AuthFlowError.FailedToCompleteAuth -> "Failed to complete authentication"
+                                is AuthFlowError.FailedToBeginAuth -> "Failed to begin authentication"
+                                is AuthFlowError.FailedToCompleteAuth -> "Failed to complete authentication"
                             },
                         )
                 }
