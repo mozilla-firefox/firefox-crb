@@ -20,6 +20,7 @@ export class ScreenshotsComponentChild extends JSWindowActorChild {
   #scrollTask;
   #overlay;
   #chromeEventHandler = null;
+  #overlayStarted;
   #preventableEventsAdded = false;
 
   static OVERLAY_EVENTS = [
@@ -61,7 +62,8 @@ export class ScreenshotsComponentChild extends JSWindowActorChild {
   receiveMessage(message) {
     switch (message.name) {
       case "Screenshots:ShowOverlay":
-        return this.startScreenshotsOverlay(message.data?.mode);
+        this.#overlayStarted = this.startScreenshotsOverlay(message.data?.mode);
+        return this.#overlayStarted;
       case "Screenshots:HideOverlay":
         return this.endScreenshotsOverlay(message.data);
       case "Screenshots:isOverlayShowing":
@@ -317,7 +319,7 @@ export class ScreenshotsComponentChild extends JSWindowActorChild {
     this.addEventListeners();
 
     // Pass mode so a reused overlay rebuilds its buttons for this session.
-    overlay.initialize(mode);
+    await overlay.initialize(mode);
     return true;
   }
 
@@ -392,7 +394,9 @@ export class ScreenshotsComponentChild extends JSWindowActorChild {
    *      height (int):
    *        The scroll height of the content window.
    */
-  getFullPageBounds() {
+  async getFullPageBounds() {
+    // The window dimensions are only known once the overlay is initialized.
+    await this.#overlayStarted;
     let {
       scrollMinX,
       scrollMinY,
@@ -435,7 +439,8 @@ export class ScreenshotsComponentChild extends JSWindowActorChild {
    *      height (int):
    *        The height of the content window.
    */
-  getVisibleBounds() {
+  async getVisibleBounds() {
+    await this.#overlayStarted;
     let {
       pageScrollX,
       pageScrollY,
