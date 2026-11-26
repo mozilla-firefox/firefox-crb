@@ -53,32 +53,20 @@ add_task(async function test_submission_before_fields_are_identified() {
 
       const actor =
         browser.browsingContext.currentWindowGlobal.getActor("FormAutofill");
-      const originalReceiveMessage = actor.receiveMessage;
-
-      let onFieldsDetected;
-      const fieldsDetected = new Promise(
-        resolve => (onFieldsDetected = resolve)
-      );
-      let releaseReply;
-      const replyGate = new Promise(resolve => (releaseReply = resolve));
 
       // Hold back the reply so that the child still has an uninitialized
       // `fieldDetails` for the second form when it is submitted.
-      actor.receiveMessage = function (message) {
-        if (message.name == "FormAutofill:OnFieldsDetected") {
-          onFieldsDetected();
-          return replyGate.then(() =>
-            originalReceiveMessage.call(this, message)
-          );
-        }
-        return originalReceiveMessage.call(this, message);
-      };
+      using receiveMessageController = TestUtils.asyncControlProxy(
+        actor
+      ).receiveMessage(
+        (_, [message]) => message.name === "FormAutofill:OnFieldsDetected"
+      );
 
       await SpecialPowers.spawn(browser, [], function () {
         content.document.querySelector("#form-not-filled #email").focus();
       });
 
-      await fieldsDetected;
+      await receiveMessageController.waitForCapture();
 
       await SpecialPowers.spawn(browser, [], function () {
         content.document
@@ -86,8 +74,7 @@ add_task(async function test_submission_before_fields_are_identified() {
           .click();
       });
 
-      releaseReply();
-      actor.receiveMessage = originalReceiveMessage;
+      await receiveMessageController.releaseResultToCaller();
 
       await ensureNoAddressSaved();
 
