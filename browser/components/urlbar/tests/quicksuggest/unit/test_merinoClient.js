@@ -851,6 +851,138 @@ add_task(async function ohttp_noConfig() {
   sandbox.restore();
 });
 
+// `onResult` should be called once with the status and the HTTP status of the
+// request.
+add_task(async function onResult_statuses() {
+  let tests = [
+    { response: {}, expected: ["success", { httpStatus: 200 }] },
+    {
+      response: { status: 204 },
+      expected: ["no_suggestion", { httpStatus: 204 }],
+    },
+    {
+      response: { status: 500 },
+      expected: ["http_error", { httpStatus: 500 }],
+    },
+  ];
+
+  for (let { response, expected } of tests) {
+    info("Testing response: " + JSON.stringify(response));
+    MerinoTestUtils.server.reset();
+    Object.assign(MerinoTestUtils.server.response, response);
+
+    let client = new MerinoClient("onResult");
+    let results = await fetchAndGetResults(client, { query: "search" });
+
+    Assert.deepEqual(results, [expected], "onResult should be called once");
+  }
+
+  MerinoTestUtils.server.reset();
+});
+
+// A request that times out should be reported once, as a timeout, even when
+// its response arrives later with an HTTP error.
+add_task(async function onResult_timeoutThenLateResponse() {
+  MerinoTestUtils.server.response = { status: 500, delay: 400 };
+
+  let client = new MerinoClient("onResult");
+  let responsePromise = client.waitForNextResponse();
+  let results = await fetchAndGetResults(client, {
+    query: "search",
+    timeoutMs: 1,
+  });
+
+  Assert.deepEqual(results, [["timeout", { httpStatus: null }]]);
+
+  let httpResponse = await responsePromise;
+  Assert.equal(httpResponse.status, 500, "The late response was received");
+  Assert.deepEqual(
+    results,
+    [["timeout", { httpStatus: null }]],
+    "onResult should not be called again for the late response"
+  );
+  Assert.equal(client.lastFetchStatus, "timeout");
+
+  MerinoTestUtils.server.reset();
+});
+
+// `onResult` should not be called for a fetch that a newer fetch aborts.
+add_task(async function onResult_abortedByNewerFetch() {
+  MerinoTestUtils.server.response.delay = 100 * TEST_TIMEOUT_MS;
+
+  let client = new MerinoClient("onResult");
+  let firstResults = [];
+  let requestPromise = MerinoTestUtils.server.waitForNextRequest();
+  let firstFetch = client.fetch({
+    query: "first",
+    onResult: (...args) => firstResults.push(args),
+  });
+  await requestPromise;
+
+  delete MerinoTestUtils.server.response.delay;
+  let secondResults = await fetchAndGetResults(client, { query: "second" });
+
+  Assert.deepEqual(await firstFetch, [], "The first fetch returns nothing");
+  Assert.deepEqual(
+    firstResults,
+    [],
+    "onResult should not be called for the aborted fetch"
+  );
+  Assert.deepEqual(secondResults, [["success", { httpStatus: 200 }]]);
+
+  MerinoTestUtils.server.reset();
+});
+
+// `onResult` should not be called for a fetch that's served from the cache.
+add_task(async function onResult_cache() {
+  MerinoTestUtils.enableClientCache(true);
+
+  let client = new MerinoClient("onResult", { cachePeriodMs: 60 * 1000 });
+  let args = { query: "search", providers: ["test-provider"] };
+
+  Assert.deepEqual(
+    await fetchAndGetResults(client, args),
+    [["success", { httpStatus: 200 }]],
+    "onResult should be called for the fetch that sends a request"
+  );
+  Assert.deepEqual(
+    await fetchAndGetResults(client, args),
+    [],
+    "onResult should not be called for the fetch served from the cache"
+  );
+  Assert.equal(
+    MerinoTestUtils.server.requests.length,
+    1,
+    "Only one request should have been sent"
+  );
+
+  MerinoTestUtils.enableClientCache(false);
+  MerinoTestUtils.server.reset();
+});
+
+// An exception thrown by `onResult` should not change what `fetch()` returns.
+add_task(async function onResult_throws() {
+  let onResult = () => {
+    throw new Error("Error thrown by onResult");
+  };
+
+  let client = new MerinoClient("onResult");
+  Assert.deepEqual(
+    await client.fetch({ query: "search", onResult }),
+    EXPECTED_MERINO_SUGGESTIONS,
+    "fetch() should return the suggestions"
+  );
+
+  MerinoTestUtils.server.reset();
+});
+
+async function fetchAndGetResults(client, args) {
+  let results = [];
+  await client.fetch({ ...args, onResult: (...a) => results.push(a) });
+  client.resetSession();
+  return results;
+}
+
 async function fetchAndCheckSuggestions({
   expected,
   args = {
