@@ -335,7 +335,7 @@ class BrowserMenuConfigurationTest {
     @Test
     fun `GIVEN no customization WHEN checking notifications THEN return whether item is shown by default`() {
         assertFalse(
-            BrowserMenuConfiguration.hasNotificationToShow(listOf(SupportedMenuNotifications.NotDefaultBrowser), null)
+            BrowserMenuConfiguration.hasNotificationToShow(listOf(SupportedMenuNotifications.BannerMenuItem), null)
         )
         assertTrue(BrowserMenuConfiguration.hasNotificationToShow(listOf(SupportedMenuNotifications.Downloads), null))
         assertTrue(BrowserMenuConfiguration.hasNotificationToShow(listOf(SupportedMenuNotifications.OpenInApp), null))
@@ -351,7 +351,7 @@ class BrowserMenuConfigurationTest {
 
         assertFalse(
             BrowserMenuConfiguration.hasNotificationToShow(
-                listOf(SupportedMenuNotifications.NotDefaultBrowser),
+                listOf(SupportedMenuNotifications.BannerMenuItem),
                 customization,
             )
         )

@@ -251,7 +251,7 @@ object BrowserMenuConfiguration {
                 is SupportedMenuNotifications.OpenInApp -> OpenInApp
                 is SupportedMenuNotifications.Summarize -> SummarizePage
                 is SupportedMenuNotifications.ExtensionUpdate -> Extensions
-                is SupportedMenuNotifications.NotDefaultBrowser,
+                is SupportedMenuNotifications.BannerMenuItem,
                 is SupportedMenuNotifications.TabGroups -> null
             }
 

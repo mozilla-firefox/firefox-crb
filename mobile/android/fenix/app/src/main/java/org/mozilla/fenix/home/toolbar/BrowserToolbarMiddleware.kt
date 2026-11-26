@@ -622,7 +622,7 @@ class BrowserToolbarMiddleware(
     }
 
     private fun removeMenuButtonHighlight() {
-        val notification = SupportedMenuNotifications.NotDefaultBrowser
+        val notification = SupportedMenuNotifications.BannerMenuItem
         if (notification in appStore.state.supportedMenuNotifications) {
             appStore.dispatch(AppAction.MenuNotification.RemoveMenuNotification(notification))
         }

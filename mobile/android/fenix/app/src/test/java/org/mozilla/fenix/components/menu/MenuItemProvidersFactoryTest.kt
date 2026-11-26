@@ -19,15 +19,20 @@ import mozilla.components.feature.ipprotection.store.state.EligibilityStatus
 import mozilla.components.feature.ipprotection.store.state.IPProtectionState
 import mozilla.components.feature.tabdata.coordinator.fakes.FakeTabDataCoordinator
 import mozilla.components.service.fxa.store.SyncStore
+import mozilla.components.service.nimbus.messaging.Message
+import mozilla.components.service.nimbus.messaging.MessageData
+import mozilla.components.service.nimbus.messaging.StyleData
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mozilla.experiments.nimbus.NullVariables
+import org.mozilla.experiments.nimbus.StringHolder
 import org.mozilla.fenix.addons.ExtensionsMenuItemProvider
 import org.mozilla.fenix.bookmarks.BookmarkMenuItemProvider
 import org.mozilla.fenix.bookmarks.BookmarksScreenMenuItemProvider
 import org.mozilla.fenix.browser.BackMenuItemProvider
-import org.mozilla.fenix.browser.DefaultBrowserMenuItemProvider
 import org.mozilla.fenix.browser.DesktopSiteMenuItemProvider
 import org.mozilla.fenix.browser.ForwardMenuItemProvider
 import org.mozilla.fenix.browser.RefreshMenuItemProvider
@@ -42,6 +47,7 @@ import org.mozilla.fenix.browser.readermode.ReaderViewMenuItemProvider
 import org.mozilla.fenix.components.AppStore
 import org.mozilla.fenix.components.FindInPageMenuItemProvider
 import org.mozilla.fenix.components.accounts.MozillaAccountMenuItemProvider
+import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.menu.configuration.FenixMenuItem
 import org.mozilla.fenix.components.menu.configuration.HomeMenuConfiguration
 import org.mozilla.fenix.components.menu.fake.reachableEvents
@@ -51,6 +57,9 @@ import org.mozilla.fenix.home.CustomizeHomepageMenuItemProvider
 import org.mozilla.fenix.home.topsites.ShortcutMenuItemProvider
 import org.mozilla.fenix.ipprotection.VpnMenuItemProvider
 import org.mozilla.fenix.library.history.HistoryMenuItemProvider
+import org.mozilla.fenix.messaging.BannerMenuItemProvider
+import org.mozilla.fenix.messaging.FenixMessageSurfaceId
+import org.mozilla.fenix.messaging.MessagingState
 import org.mozilla.fenix.pdf.SaveAsPdfMenuItemProvider
 import org.mozilla.fenix.print.PrintMenuItemProvider
 import org.mozilla.fenix.settings.SettingsMenuItemProvider
@@ -67,6 +76,11 @@ import org.mozilla.fenix.webcompat.ReportBrokenSiteMenuItemProvider
 @RunWith(AndroidJUnit4::class)
 class MenuItemProvidersFactoryTest {
     private val scope = CoroutineScope(StandardTestDispatcher())
+
+    @Before
+    fun setup() {
+        NullVariables.instance.setContext(testContext)
+    }
 
     @After
     fun tearDown() {
@@ -87,8 +101,6 @@ class MenuItemProvidersFactoryTest {
     fun `WHEN building the home menu THEN show all its items and handle each of their events exactly once`() {
         val settings: Settings =
             mockk(relaxed = true) {
-                every { shouldShowMenuBanner } returns true
-                every { isDefaultBrowser } returns false
                 every { isAutofillSupported } returns true
                 every { shouldDeleteBrowsingDataOnQuit } returns true
             }
@@ -98,6 +110,7 @@ class MenuItemProvidersFactoryTest {
                 accessPoint = MenuAccessPoint.Home,
                 target = MenuTarget.Home,
                 ipProtectionStore = IPProtectionStore(eligibleState),
+                appStore = AppStore(AppState(messaging = MessagingState(messageToShow = menuBannerMessageToShow()))),
                 settings = settings,
             )
         val registry =
@@ -128,6 +141,24 @@ class MenuItemProvidersFactoryTest {
             }
     }
 
+    private fun menuBannerMessageToShow() =
+        mapOf(
+            FenixMessageSurfaceId.MENU_BANNER to
+                Message(
+                    id = "message",
+                    data =
+                        MessageData(
+                            surface = FenixMessageSurfaceId.MENU_BANNER,
+                            title = StringHolder(null, "title"),
+                            text = StringHolder(null, "text"),
+                        ),
+                    action = "action",
+                    style = StyleData(),
+                    triggerIfAll = listOf(),
+                    metadata = Message.Metadata(id = "message"),
+                )
+        )
+
     private fun allMenuItems(): List<FenixMenuItem> =
         FenixMenuItem::class.sealedSubclasses.map { type ->
             type.objectInstance
@@ -141,6 +172,7 @@ class MenuItemProvidersFactoryTest {
         accessPoint: MenuAccessPoint = MenuAccessPoint.Browser,
         target: MenuTarget = MenuTarget.BrowserTab,
         ipProtectionStore: IPProtectionStore = IPProtectionStore(),
+        appStore: AppStore = AppStore(),
         settings: Settings = mockk(relaxed = true),
     ) =
         MenuItemProvidersFactory(
@@ -148,7 +180,7 @@ class MenuItemProvidersFactoryTest {
             accessPoint = accessPoint,
             target = target,
             browserStore = BrowserStore(),
-            appStore = AppStore(),
+            appStore = appStore,
             ipProtectionStore = ipProtectionStore,
             syncStore = SyncStore(),
             httpClient = mockk(relaxed = true),
@@ -177,7 +209,7 @@ class MenuItemProvidersFactoryTest {
         mapOf(
             FenixMenuItem.NewTab::class to NewTabMenuItemProvider::class,
             FenixMenuItem.NewPrivateTab::class to NewPrivateTabMenuItemProvider::class,
-            FenixMenuItem.DefaultBrowserBanner::class to DefaultBrowserMenuItemProvider::class,
+            FenixMenuItem.DefaultBrowserBanner::class to BannerMenuItemProvider::class,
             FenixMenuItem.CustomizeReaderView::class to ReaderViewMenuItemProvider::class,
             FenixMenuItem.IPProtection::class to VpnMenuItemProvider::class,
             FenixMenuItem.Bookmark::class to BookmarkMenuItemProvider::class,

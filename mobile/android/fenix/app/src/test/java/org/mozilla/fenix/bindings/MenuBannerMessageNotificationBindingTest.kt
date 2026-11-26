@@ -36,7 +36,7 @@ class MenuBannerMessageNotificationBindingTest {
             appStore.dispatch(UpdateMessageToShow(createMessage(id = "message", menuNotification = true)))
             testScheduler.advanceUntilIdle()
             assertEquals(
-                setOf(SupportedMenuNotifications.NotDefaultBrowser),
+                setOf(SupportedMenuNotifications.BannerMenuItem),
                 appStore.state.supportedMenuNotifications,
             )
 
@@ -89,7 +89,7 @@ class MenuBannerMessageNotificationBindingTest {
             appStore.dispatch(UpdateMessageToShow(createMessage(id = "message", menuNotification = true)))
             testScheduler.advanceUntilIdle()
 
-            appStore.dispatch(RemoveMenuNotification(SupportedMenuNotifications.NotDefaultBrowser))
+            appStore.dispatch(RemoveMenuNotification(SupportedMenuNotifications.BannerMenuItem))
             appStore.dispatch(
                 UpdateMessageToShow(createMessage(id = "message", menuNotification = true, displayCount = 1))
             )
@@ -105,12 +105,12 @@ class MenuBannerMessageNotificationBindingTest {
             appStore.dispatch(UpdateMessageToShow(createMessage(id = "first-message", menuNotification = true)))
             testScheduler.advanceUntilIdle()
 
-            appStore.dispatch(RemoveMenuNotification(SupportedMenuNotifications.NotDefaultBrowser))
+            appStore.dispatch(RemoveMenuNotification(SupportedMenuNotifications.BannerMenuItem))
             appStore.dispatch(UpdateMessageToShow(createMessage(id = "second-message", menuNotification = true)))
             testScheduler.advanceUntilIdle()
 
             assertEquals(
-                setOf(SupportedMenuNotifications.NotDefaultBrowser),
+                setOf(SupportedMenuNotifications.BannerMenuItem),
                 appStore.state.supportedMenuNotifications,
             )
         }

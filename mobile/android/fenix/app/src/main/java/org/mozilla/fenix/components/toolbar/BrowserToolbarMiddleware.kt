@@ -120,6 +120,8 @@ import org.mozilla.fenix.components.appstate.AppAction.SearchAction.SearchEnded
 import org.mozilla.fenix.components.appstate.AppAction.SearchAction.SearchStarted
 import org.mozilla.fenix.components.appstate.AppAction.SnackbarAction.SnackbarDismissed
 import org.mozilla.fenix.components.appstate.AppAction.URLCopiedToClipboard
+import org.mozilla.fenix.components.appstate.SupportedMenuNotifications
+import org.mozilla.fenix.components.appstate.SupportedMenuNotifications.BannerMenuItem
 import org.mozilla.fenix.components.appstate.snackbar.SnackbarState
 import org.mozilla.fenix.components.menu.MenuAccessPoint
 import org.mozilla.fenix.components.menu.MenuCustomizationRepository
@@ -1672,4 +1674,6 @@ class BrowserToolbarMiddleware(
             FxNimbus.features.translations.value().mainFlowToolbarEnabled &&
             translationsFeatureSettings.isEnabled.first()
     }
+
+    private fun Set<SupportedMenuNotifications>.shouldHighlightBrowserMenuButton() = any { it != BannerMenuItem }
 }
