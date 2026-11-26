@@ -1,0 +1,5 @@
+[DEFAULT]
+apps = "fenix"
+playback_version = "8.1.1"
+
+["include:browsertime-quota-usage-common.toml"]

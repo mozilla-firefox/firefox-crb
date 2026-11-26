@@ -21352,6 +21352,1368 @@ Browsertime tests that use a custom pageload test script. These use the pageload
 
 ::::
 
+(quota-usage-all-c)=
+
+::::{dropdown} quota-usage-all
+:class-container: anchor-id-quota-usage-all-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-all
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage with all storage types combined (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: qm_use
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#58`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-all**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-all**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-all-large-c)=
+
+::::{dropdown} quota-usage-all-large
+:class-container: anchor-id-quota-usage-all-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-all-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage with all storage types combined (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#77`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
+(quota-usage-cache-c)=
+
+::::{dropdown} quota-usage-cache
+:class-container: anchor-id-quota-usage-cache-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-cache
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for Cache API (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["cache"]}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#52`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-cache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-cache**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-cache-large-c)=
+
+::::{dropdown} quota-usage-cache-large
+:class-container: anchor-id-quota-usage-cache-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-cache-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for Cache API (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["cache"], "data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#71`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
+(quota-usage-fs-c)=
+
+::::{dropdown} quota-usage-fs
+:class-container: anchor-id-quota-usage-fs-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-fs
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for OPFS (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["fs"]}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#55`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-fs**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-fs**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-fs-large-c)=
+
+::::{dropdown} quota-usage-fs-large
+:class-container: anchor-id-quota-usage-fs-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-fs-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for OPFS (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["fs"], "data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#74`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
+(quota-usage-idb-eb-c)=
+
+::::{dropdown} quota-usage-idb-eb
+:class-container: anchor-id-quota-usage-idb-eb-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-idb-eb
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for IndexedDB external blob storage (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["idb-eb"]}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#49`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-idb-eb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-eb**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-idb-eb-large-c)=
+
+::::{dropdown} quota-usage-idb-eb-large
+:class-container: anchor-id-quota-usage-idb-eb-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-idb-eb-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for IndexedDB external blob storage (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["idb-eb"], "data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#68`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
+(quota-usage-idb-v-c)=
+
+::::{dropdown} quota-usage-idb-v
+:class-container: anchor-id-quota-usage-idb-v-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-idb-v
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for IndexedDB value storage (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["idb-v"]}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#46`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-idb-v**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-idb-v**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-idb-v-large-c)=
+
+::::{dropdown} quota-usage-idb-v-large
+:class-container: anchor-id-quota-usage-idb-v-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-idb-v-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for IndexedDB value storage (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["idb-v"], "data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#65`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
+(quota-usage-ls-c)=
+
+::::{dropdown} quota-usage-ls
+:class-container: anchor-id-quota-usage-ls-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-ls
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for localStorage (1 byte)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["ls"]}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#43`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+* **Test Task**:
+
+:::{list-table} **{ref}`test-android-hw-a55-14-0-aarch64-shippable/opt <hardware-samsung-a55>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-mobile-fenix-quota-usage-ls**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-nightlyasrelease/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64-shippable/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-linux2404-64/opt <hardware-hpe-moonshot>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-nightlyasrelease/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-macosx1500-aarch64-shippable/opt <hardware-mac-mini-m4>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-nightlyasrelease/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2-shippable/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ✅
+  - ✅
+  - ❌
+  - ❌
+:::
+
+
+:::{list-table} **{ref}`test-windows11-64-24h2/opt <hardware-nuc13-windows11>`**
+:widths: 30 15 15 15 15
+:header-rows: 1
+
+* - **Test Name**
+  - mozilla-central
+  - autoland
+  - mozilla-release
+  - mozilla-beta
+* - **browsertime-quota-usage-firefox-quota-usage-ls**
+  - ❌
+  - ❌
+  - ❌
+  - ❌
+:::
+
+
+::::
+
+(quota-usage-ls-large-c)=
+
+::::{dropdown} quota-usage-ls-large
+:class-container: anchor-id-quota-usage-ls-large-c
+
+* **Command to Run Locally**
+
+  ```
+  ./mach raptor -t quota-usage-ls-large
+  ```
+
+**Owner**: DOM Lifecycle, Workers and Storage Team
+
+**Description**: Asserts QuotaManager storage usage for localStorage (1 MB)
+
+* **alert threshold**: 0.01
+* **browser cycles**: 1
+* **conditioned profile**: qm_use
+* **custom data**: true
+* **customization**: {"storage_types": ["ls"], "data_size_bytes": 1048576}
+* **expected**: pass
+* **link searchfox**: {searchfox}`testing/raptor/raptor/tests/custom/browsertime-quota-usage-common.toml#62`
+* **lower is better**: false
+* **page cycles**: 1
+* **page timeout**: 600000
+* **persistent profile**: true
+* **preferences**: dom.fs.enabled=true dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true dom.quotaManager.caching.checkBuildId=false
+* **subtest unit**: bytes
+* **support class**: quota_usage.py
+* **test script**: quota_usage_assert.js
+* **test url**: <https://test-quota-usage.org/check>
+* **type**: pageload
+* **unit**: bytes
+* **use live sites**: false
+::::
+
 (sample-python-support-c)=
 
 ::::{dropdown} sample-python-support

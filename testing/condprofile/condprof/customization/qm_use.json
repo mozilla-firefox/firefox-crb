@@ -1,0 +1,21 @@
+{
+  "name": "qm_use",
+  "addons": {},
+  "keep_cache": true,
+  "prefs": {
+    "dom.fs.enabled": true,
+    "dom.quotaManager.caching.checkBuildId": false,
+    "dom.quotaManager.originWriteQuiescentThresholdMs": 100,
+    "dom.quotaManager.originMetadataFlushCheckIntervalMs": 100,
+    "dom.quotaManager.maxOriginsToSaveInOneBatch": 25
+  },
+  "scenario": [
+    {
+      "qm_use": {
+        "storage_types": ["ls", "idb-v", "idb-eb", "cache", "fs"],
+        "data_size_bytes": 1,
+        "idle_time_ms": 2000
+      }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+# Shared settings and subtests for the QuotaManager quota usage assertion
+# tests. Included by the desktop and mobile manifests, which supply the
+# platform-specific keys (apps, playback_version).
+#
+# Small tests (1 byte) measure bookkeeping overhead. Large tests (1 MB)
+# exercise caching and paging -- the data spans many database pages.
+#
+# The conditioned profile and the intercept proxy are set up by the support
+# class (see condprof_support.py), which reads conditioned_profile,
+# customization, playback_version and persistent_profile. The command line
+# overrides them with e.g. --browsertime-arg condprof.customization=JSON.
+#
+# Each `customization` below is a flat JSON object of overrides applied to
+# the scenario's base customization, qm_use.json. A key without "/" is
+# glob-matched against every leaf of the base file, so the override keys
+# must be ones the base already declares.
+[DEFAULT]
+alert_threshold = 0.01
+browser_cycles = 1
+custom_data = true
+lower_is_better = false
+owner = "DOM Lifecycle, Workers and Storage Team"
+page_cycles = 1
+page_timeout = 600000
+subtest_unit = "bytes"
+type = "pageload"
+unit = "bytes"
+test_url = "https://test-quota-usage.org/check"
+use_live_sites = false
+conditioned_profile = "qm_use"
+customization = "qm_use"
+persistent_profile = true
+test_script = "quota_usage_assert.js"
+support_class = "quota_usage.py"
+preferences = [
+    "dom.fs.enabled=true",
+    "dom.quotaManager.temporaryStorage.incrementalOriginInitialization=true",
+    "dom.quotaManager.caching.checkBuildId=false",
+]
+
+# --- Small (1 byte) subtests: one per storage type for defect isolation ---
+
+["quota-usage-ls"]
+customization = '{"storage_types": ["ls"]}'
+
+["quota-usage-idb-v"]
+customization = '{"storage_types": ["idb-v"]}'
+
+["quota-usage-idb-eb"]
+customization = '{"storage_types": ["idb-eb"]}'
+
+["quota-usage-cache"]
+customization = '{"storage_types": ["cache"]}'
+
+["quota-usage-fs"]
+customization = '{"storage_types": ["fs"]}'
+
+["quota-usage-all"]
+
+# --- Large (1 MB) subtests: exercise caching and paging behavior ---
+
+["quota-usage-ls-large"]
+customization = '{"storage_types": ["ls"], "data_size_bytes": 1048576}'
+
+["quota-usage-idb-v-large"]
+customization = '{"storage_types": ["idb-v"], "data_size_bytes": 1048576}'
+
+["quota-usage-idb-eb-large"]
+customization = '{"storage_types": ["idb-eb"], "data_size_bytes": 1048576}'
+
+["quota-usage-cache-large"]
+customization = '{"storage_types": ["cache"], "data_size_bytes": 1048576}'
+
+["quota-usage-fs-large"]
+customization = '{"storage_types": ["fs"], "data_size_bytes": 1048576}'
+
+["quota-usage-all-large"]
+customization = '{"data_size_bytes": 1048576}'

@@ -79,6 +79,12 @@
 ["include:tests/custom/browsertime-process-switch.toml"]
 # Fission process switch time test
 
+["include:tests/custom/browsertime-quota-usage.toml"]
+# QuotaManager usage assertion test (desktop)
+
+["include:tests/custom/browsertime-quota-usage-mobile.toml"]
+# QuotaManager usage assertion test (mobile)
+
 ["include:tests/custom/browsertime-regression-test.toml"]
 # Tests that are used for testing our regression system
 

@@ -16,6 +16,7 @@ perf-sheriffing
 perfcompare
 performance-infrastructure
 perftest-in-a-nutshell
+QuotaManager
 raptor
 talos
 telemetry-alerting
@@ -38,6 +39,7 @@ For more detailed information about each test suite and project, see their docum
 * {doc}`perfcompare`
 * {doc}`performance-infrastructure`
 * {doc}`perftest-in-a-nutshell`
+* {doc}`QuotaManager`
 * {doc}`raptor`
 * {doc}`talos`
 * {doc}`telemetry-alerting`

@@ -21,8 +21,9 @@ setup(
             "condprof",
             [
                 "condprof/customization/default.json",
-                "condprof/customization/youtube.json",
+                "condprof/customization/qm_use.json",
                 "condprof/customization/webext.json",
+                "condprof/customization/youtube.json",
             ],
         )
     ],
