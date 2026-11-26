@@ -61,7 +61,9 @@ class IDBEncryptionLockstore(QuotaTestCase):
                 ),
             )
 
-            self.ensureInvariantHolds(lambda _: self.sqliteWALReleased())
+            self.assertTrue(
+                self.resetStoragesForClient(self.persistenceType, self.origin, "idb")
+            )
             self.ensureInvariantHolds(
                 lambda _: (
                     self.findDirObj(self.getIDBStoragePath(), ".sqlite", True)
@@ -95,7 +97,9 @@ class IDBEncryptionLockstore(QuotaTestCase):
                 ),
             )
 
-            self.ensureInvariantHolds(lambda _: self.sqliteWALReleased())
+            self.assertTrue(
+                self.resetStoragesForClient(self.persistenceType, self.origin, "idb")
+            )
             self.ensureInvariantHolds(
                 lambda _: (
                     self.findDirObj(self.getIDBStoragePath(), ".files", False)
@@ -151,12 +155,6 @@ class IDBEncryptionLockstore(QuotaTestCase):
         )
         return self.idbStoragePath
 
-    def sqliteWALReleased(self):
-        if not os.path.exists(self.getIDBStoragePath()):
-            return False
-        walPath = self.findDirObj(self.idbStoragePath, ".sqlite-wal", True)
-        return walPath is None or os.stat(walPath).st_size == 0
-
 
 class IDBEncryptionLockstoreControl(QuotaTestCase):
     """
@@ -202,7 +200,9 @@ class IDBEncryptionLockstoreControl(QuotaTestCase):
                 ),
             )
 
-            self.ensureInvariantHolds(lambda _: self.sqliteWALReleased())
+            self.assertTrue(
+                self.resetStoragesForClient(self.persistenceType, self.origin, "idb")
+            )
             self.ensureInvariantHolds(
                 lambda _: (
                     self.findDirObj(self.getIDBStoragePath(), ".sqlite", True)
@@ -231,9 +231,3 @@ class IDBEncryptionLockstoreControl(QuotaTestCase):
             self.profilePath, self.origin, self.persistenceType, "idb"
         )
         return self.idbStoragePath
-
-    def sqliteWALReleased(self):
-        if not os.path.exists(self.getIDBStoragePath()):
-            return False
-        walPath = self.findDirObj(self.idbStoragePath, ".sqlite-wal", True)
-        return walPath is None or os.stat(walPath).st_size == 0

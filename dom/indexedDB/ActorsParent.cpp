@@ -807,9 +807,48 @@ constexpr nsresult mapNoDeviceSpaceError(nsresult aRv) {
   return aRv;
 }
 
+void CheckpointBeforeCloseOnIOThread(
+    mozIStorageConnection& aConnection, nsIFile& aDatabaseFile,
+    const quota::OriginMetadata& aOriginMetadata, int64_t aDirectoryLockId) {
+  AssertIsOnIOThread();
+
+  QM_TRY_INSPECT(
+      const auto& path,
+      MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsString, aDatabaseFile, GetPath),
+      QM_VOID);
+  QM_TRY_INSPECT(const auto& walFile, QM_NewLocalFile(path + u"-wal"_ns),
+                 QM_VOID);
+  QM_TRY_INSPECT(
+      const int64_t& walSize,
+      QM_OR_ELSE_LOG_VERBOSE_IF(
+          MOZ_TO_RESULT_INVOKE_MEMBER(walFile, GetFileSize),
+          IsSpecificError<NS_ERROR_FILE_NOT_FOUND>, (ErrToOk<0, int64_t>)),
+      QM_VOID);
+  if (!walSize) {
+    return;
+  }
+
+  quota::WriteLease writeLease;
+  // Origin initialization uses untracked connections and measures usage after
+  // closing them. Other best-effort connections need a lease to checkpoint.
+  if (aDirectoryLockId >= 0 &&
+      IsBestEffortPersistenceType(aOriginMetadata.mPersistenceType)) {
+    QuotaManager* const quotaManager = QuotaManager::Get();
+    MOZ_ASSERT(quotaManager);
+    QM_TRY_UNWRAP(writeLease,
+                  quotaManager->AcquireWriteLeaseOnIOThread(aOriginMetadata),
+                  QM_VOID);
+  }
+
+  // Match SQLite's last-connection close by reclaiming the WAL as well.
+  QM_WARNONLY_TRY(MOZ_TO_RESULT(
+      aConnection.ExecuteSimpleSQL("PRAGMA wal_checkpoint(TRUNCATE);"_ns)));
+}
+
 Result<MovingNotNull<nsCOMPtr<mozIStorageConnection>>, nsresult>
 CreateStorageConnection(nsIFile& aDBFile, nsIFile& aFMDirectory,
-                        const nsAString& aName, const nsACString& aOrigin,
+                        const nsAString& aName,
+                        const quota::OriginMetadata& aOriginMetadata,
                         const int64_t aDirectoryLockId,
                         const uint32_t aTelemetryId,
                         const Maybe<CipherKey>& aMaybeKey) {
@@ -859,6 +898,13 @@ CreateStorageConnection(nsIFile& aDBFile, nsIFile& aFMDirectory,
     QM_TRY_UNWRAP(connection, OpenDatabaseAndHandleBusy(
                                   *storageService, *dbFileUrl, aTelemetryId));
   }
+
+  QM_TRY(MOZ_TO_RESULT(connection->DisableCheckpointOnClose()));
+
+  auto checkpointOnFailure = MakeScopeExit([&] {
+    CheckpointBeforeCloseOnIOThread(*connection, aDBFile, aOriginMetadata,
+                                    aDirectoryLockId);
+  });
 
   QM_TRY(MOZ_TO_RESULT(SetDefaultPragmas(*connection)));
   QM_TRY(MOZ_TO_RESULT(connection->EnableModule("filesystem"_ns)));
@@ -949,11 +995,13 @@ CreateStorageConnection(nsIFile& aDBFile, nsIFile& aFMDirectory,
               "VALUES (:name, :origin)"_ns));
 
       QM_TRY(MOZ_TO_RESULT(stmt->BindStringByIndex(0, aName)));
-      QM_TRY(MOZ_TO_RESULT(stmt->BindUTF8StringByIndex(1, aOrigin)));
+      QM_TRY(MOZ_TO_RESULT(
+          stmt->BindUTF8StringByIndex(1, aOriginMetadata.mOrigin)));
       QM_TRY(MOZ_TO_RESULT(stmt->Execute()));
     } else {
-      QM_TRY_UNWRAP(vacuumNeeded, MaybeUpgradeSchema(*connection, schemaVersion,
-                                                     aFMDirectory, aOrigin));
+      QM_TRY_UNWRAP(vacuumNeeded,
+                    MaybeUpgradeSchema(*connection, schemaVersion, aFMDirectory,
+                                       aOriginMetadata.mOrigin));
     }
 
     QM_TRY(MOZ_TO_RESULT_INVOKE_MEMBER(transaction, Commit)
@@ -1051,6 +1099,7 @@ CreateStorageConnection(nsIFile& aDBFile, nsIFile& aFMDirectory,
     QM_TRY(MOZ_TO_RESULT(SetJournalMode(*connection)));
   }
 
+  checkpointOnFailure.release();
   return WrapMovingNotNullUnchecked(std::move(connection));
 }
 
@@ -1088,6 +1137,8 @@ GetStorageConnection(nsIFile& aDatabaseFile, const int64_t aDirectoryLockId,
   QM_TRY_UNWRAP(
       nsCOMPtr<mozIStorageConnection> connection,
       OpenDatabaseAndHandleBusy(*storageService, *dbFileUrl, aTelemetryId));
+
+  QM_TRY(MOZ_TO_RESULT(connection->DisableCheckpointOnClose()));
 
   QM_TRY(MOZ_TO_RESULT(SetDefaultPragmas(*connection)));
 
@@ -1173,6 +1224,8 @@ class DatabaseConnection final : public CachingDatabaseConnection {
 
   void DoIdleProcessing(bool aNeedsCheckpoint,
                         const Atomic<bool>& aInterrupted);
+
+  void CheckpointBeforeClose();
 
   void Close();
 
@@ -1441,6 +1494,7 @@ class ConnectionPool final {
   uint64_t Start(const nsID& aBackgroundChildLoggingId,
                  const nsACString& aDatabaseId, int64_t aLoggingSerialNumber,
                  const nsTArray<nsString>& aObjectStoreNames,
+                 const quota::OriginMetadata& aOriginMetadata,
                  bool aIsWriteTransaction,
                  TransactionDatabaseOperationBase* aTransactionOp);
 
@@ -1500,6 +1554,9 @@ class ConnectionPool final {
 
   bool ScheduleTransaction(TransactionInfo& aTransactionInfo,
                            bool aFromQueuedTransactions);
+
+  void NoteWriteLeaseAcquired(uint64_t aTransactionId,
+                              Result<quota::WriteLease, nsresult> aWriteLease);
 
   void NoteFinishedTransaction(uint64_t aTransactionId);
 
@@ -1567,7 +1624,11 @@ struct ConnectionPool::DatabaseInfo final {
 
   RefPtr<ConnectionPool> mConnectionPool;
   const nsCString mDatabaseId;
+  const quota::OriginMetadata mOriginMetadata;
   RefPtr<DatabaseConnection> mConnection;
+  // Held while the connection is being closed, since closing may write to the
+  // database.
+  Maybe<quota::WriteLease> mCloseWriteLease;
   nsClassHashtable<nsStringHashKey, TransactionInfoPair> mBlockingTransactions;
   nsTArray<NotNull<TransactionInfo*>> mTransactionsScheduledDuringClose;
   nsTArray<NotNull<TransactionInfo*>> mScheduledWriteTransactions;
@@ -1584,7 +1645,8 @@ struct ConnectionPool::DatabaseInfo final {
   nsISerialEventTarget* mDEBUGConnectionEventTarget;
 #endif
 
-  DatabaseInfo(ConnectionPool* aConnectionPool, const nsACString& aDatabaseId);
+  DatabaseInfo(ConnectionPool* aConnectionPool, const nsACString& aDatabaseId,
+               const quota::OriginMetadata& aOriginMetadata);
 
   void AssertIsOnConnectionThread() const {
     MOZ_ASSERT(mDEBUGConnectionEventTarget);
@@ -1680,7 +1742,14 @@ class ConnectionPool::TransactionInfo final {
   const nsTArray<nsString> mObjectStoreNames;
   nsTHashSet<TransactionInfo*> mBlockedOn;
   mozilla::Queue<nsCOMPtr<nsIRunnable>, 16> mQueuedOps;
+  // Held by write transactions from before their first operation until they are
+  // finished, so the origin stays marked dirty on disk while it may be written.
+  Maybe<quota::WriteLease> mWriteLease;
+  // The op that starts the transaction; used to abort the transaction if the
+  // write lease cannot be acquired.
+  RefPtr<TransactionDatabaseOperationBase> mTransactionOp;
   const bool mIsWriteTransaction;
+  bool mWaitingForWriteLease = false;
   bool mRunning;
   bool mRunningOp;
 
@@ -1947,6 +2016,7 @@ class TransactionDatabaseOperationBase : public DatabaseOperationBase {
                                  const nsACString& aDatabaseId,
                                  int64_t aLoggingSerialNumber,
                                  const nsTArray<nsString>& aObjectStoreNames,
+                                 const quota::OriginMetadata& aOriginMetadata,
                                  bool aIsWriteTransaction);
 
   void DispatchToConnectionPool();
@@ -2579,6 +2649,7 @@ class TransactionBase : public AtomicSafeRefCounted<TransactionBase> {
   const int64_t mLoggingSerialNumber;
   uint64_t mActiveRequestCount;
   Atomic<bool> mInvalidatedOnAnyThread;
+  Atomic<bool> mWriteLeaseFailed{false};
   const Mode mMode;
   const Durability mDurability;
   FlippedOnce<false> mInitialized;
@@ -2617,6 +2688,16 @@ class TransactionBase : public AtomicSafeRefCounted<TransactionBase> {
   // May be called on any thread, but is more expensive than IsInvalidated().
   bool IsInvalidatedOnAnyThread() const { return mInvalidatedOnAnyThread; }
 
+  bool HasWriteLeaseFailed() const { return mWriteLeaseFailed; }
+
+  void NoteWriteLeaseFailed() {
+    AssertIsOnBackgroundThread();
+    MOZ_ASSERT(mMode != Mode::ReadOnly);
+    MOZ_ASSERT(!mWriteLeaseFailed);
+    MOZ_ASSERT(!mHasBeenActiveOnConnectionThread);
+    mWriteLeaseFailed = true;
+  }
+
   void Init(const uint64_t aTransactionId) {
     AssertIsOnBackgroundThread();
     MOZ_ASSERT(aTransactionId);
@@ -2627,6 +2708,7 @@ class TransactionBase : public AtomicSafeRefCounted<TransactionBase> {
 
   void SetActiveOnConnectionThread() {
     AssertIsOnConnectionThread();
+    MOZ_DIAGNOSTIC_ASSERT(!mWriteLeaseFailed);
     mHasBeenActiveOnConnectionThread.Flip();
   }
 
@@ -7334,6 +7416,18 @@ Result<uint32_t, nsresult> DatabaseConnection::GetFreelistCount(
   return uint32_t(freelistCount);
 }
 
+void DatabaseConnection::CheckpointBeforeClose() {
+  AssertIsOnConnectionThread();
+
+  if (mInReadTransaction) {
+    QM_WARNONLY_TRY(MOZ_TO_RESULT(
+        MutableStorageConnection().ExecuteSimpleSQL("ROLLBACK;"_ns)));
+    mInReadTransaction = false;
+  }
+
+  QM_WARNONLY_TRY(QM_TO_RESULT(CheckpointInternal(CheckpointMode::Truncate)));
+}
+
 void DatabaseConnection::Close() {
   AssertIsOnConnectionThread();
   MOZ_ASSERT(!mDEBUGSavepointCount);
@@ -7932,7 +8026,7 @@ ConnectionPool::GetOrCreateConnection(const Database& aDatabase) {
 uint64_t ConnectionPool::Start(
     const nsID& aBackgroundChildLoggingId, const nsACString& aDatabaseId,
     int64_t aLoggingSerialNumber, const nsTArray<nsString>& aObjectStoreNames,
-    bool aIsWriteTransaction,
+    const quota::OriginMetadata& aOriginMetadata, bool aIsWriteTransaction,
     TransactionDatabaseOperationBase* aTransactionOp) {
   AssertIsOnOwningThread();
   MOZ_ASSERT(!aDatabaseId.IsEmpty());
@@ -7953,8 +8047,9 @@ uint64_t ConnectionPool::Start(
     MutexAutoLock lock(mDatabasesMutex);
 
     dbInfo = mDatabases
-                 .InsertOrUpdate(aDatabaseId, std::make_unique<DatabaseInfo>(
-                                                  this, aDatabaseId))
+                 .InsertOrUpdate(aDatabaseId,
+                                 std::make_unique<DatabaseInfo>(
+                                     this, aDatabaseId, aOriginMetadata))
                  .get();
   }
 
@@ -8011,6 +8106,37 @@ uint64_t ConnectionPool::Start(
   }
 
   return transactionId;
+}
+
+void ConnectionPool::NoteWriteLeaseAcquired(
+    uint64_t aTransactionId, Result<quota::WriteLease, nsresult> aWriteLease) {
+  AssertIsOnOwningThread();
+
+  auto* const transactionInfo = mTransactions.Get(aTransactionId);
+  if (!transactionInfo) {
+    return;
+  }
+
+  MOZ_ASSERT(transactionInfo->mWaitingForWriteLease);
+  MOZ_ASSERT(!transactionInfo->mRunning);
+  MOZ_ASSERT(transactionInfo->mBlockedOn.IsEmpty());
+  MOZ_ASSERT(!transactionInfo->mDatabaseInfo.mClosing);
+  MOZ_ASSERT(transactionInfo->mDatabaseInfo.mRunningWriteTransaction.refEquals(
+      *transactionInfo));
+
+  if (aWriteLease.isErr()) {
+    MOZ_ASSERT(transactionInfo->mTransactionOp);
+    auto& transaction = transactionInfo->mTransactionOp->Transaction();
+    transaction.NoteWriteLeaseFailed();
+    transaction.Abort(NS_ERROR_DOM_INDEXEDDB_UNKNOWN_ERR, /* aForce */ false);
+  }
+
+  if (aWriteLease.isOk()) {
+    transactionInfo->mWriteLease = Some(aWriteLease.unwrap());
+  }
+  transactionInfo->mWaitingForWriteLease = false;
+
+  transactionInfo->SetRunning();
 }
 
 void ConnectionPool::StartOp(uint64_t aTransactionId,
@@ -8227,6 +8353,9 @@ void ConnectionPool::CloseIdleDatabases() {
 bool ConnectionPool::ScheduleTransaction(TransactionInfo& aTransactionInfo,
                                          bool aFromQueuedTransactions) {
   AssertIsOnOwningThread();
+  MOZ_ASSERT(aTransactionInfo.mBlockedOn.IsEmpty());
+  MOZ_ASSERT(!aTransactionInfo.mWaitingForWriteLease);
+  MOZ_ASSERT(!aTransactionInfo.mRunning);
 
   AUTO_PROFILER_LABEL("ConnectionPool::ScheduleTransaction", DOM);
 
@@ -8277,7 +8406,32 @@ bool ConnectionPool::ScheduleTransaction(TransactionInfo& aTransactionInfo,
     }
 
     dbInfo.mRunningWriteTransaction = SomeRef(aTransactionInfo);
-    dbInfo.mNeedsCheckpoint = true;
+
+    QuotaManager* const quotaManager = QuotaManager::Get();
+    MOZ_ASSERT(quotaManager);
+
+    aTransactionInfo.mWriteLease =
+        quotaManager->TryAcquireWriteLease(dbInfo.mOriginMetadata);
+
+    if (!aTransactionInfo.mWriteLease) {
+      // Reserve the writer slot while requests queue behind the lease.
+      aTransactionInfo.mWaitingForWriteLease = true;
+      quotaManager->AcquireWriteLease(dbInfo.mOriginMetadata)
+          ->Then(GetCurrentSerialEventTarget(), __func__,
+                 [self = RefPtr{this},
+                  transactionId = aTransactionInfo.mTransactionId](
+                     QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
+                         aValue) {
+                   if (aValue.IsReject()) {
+                     self->NoteWriteLeaseAcquired(transactionId,
+                                                  Err(aValue.RejectValue()));
+                   } else {
+                     self->NoteWriteLeaseAcquired(
+                         transactionId, std::move(aValue.ResolveValue()));
+                   }
+                 });
+      return true;
+    }
   }
 
   aTransactionInfo.SetRunning();
@@ -8305,7 +8459,7 @@ void ConnectionPool::NoteFinishedTransaction(uint64_t aTransactionId) {
   if (dbInfo.mRunningWriteTransaction &&
       dbInfo.mRunningWriteTransaction.refEquals(*transactionInfo)) {
     MOZ_ASSERT(transactionInfo->mIsWriteTransaction);
-    MOZ_ASSERT(dbInfo.mNeedsCheckpoint);
+    MOZ_ASSERT_IF(transactionInfo->mWriteLease, dbInfo.mNeedsCheckpoint);
 
     dbInfo.mRunningWriteTransaction = Nothing();
 
@@ -8407,6 +8561,7 @@ void ConnectionPool::NoteClosedDatabase(DatabaseInfo& aDatabaseInfo) {
   AUTO_PROFILER_LABEL("ConnectionPool::NoteClosedDatabase", DOM);
 
   aDatabaseInfo.mClosing = false;
+  aDatabaseInfo.mCloseWriteLease.reset();
 
   // Schedule any transactions that were started while we were closing the
   // connection.
@@ -8511,11 +8666,47 @@ void ConnectionPool::CloseDatabase(DatabaseInfo& aDatabaseInfo) const {
   MOZ_ASSERT(!aDatabaseInfo.mClosing);
 
   aDatabaseInfo.mIdle = false;
+  const bool needsCheckpoint = aDatabaseInfo.mNeedsCheckpoint;
   aDatabaseInfo.mNeedsCheckpoint = false;
   aDatabaseInfo.mClosing = true;
 
-  MOZ_ALWAYS_SUCCEEDS(aDatabaseInfo.Dispatch(
-      MakeAndAddRef<CloseConnectionRunnable>(aDatabaseInfo)));
+  if (!needsCheckpoint) {
+    MOZ_ALWAYS_SUCCEEDS(aDatabaseInfo.Dispatch(
+        MakeAndAddRef<CloseConnectionRunnable>(aDatabaseInfo)));
+    return;
+  }
+
+  // Closing the connection runs a manual WAL checkpoint if a write lease was
+  // acquired, so the origin must be marked dirty on disk first. The close
+  // proceeds even if the lease is rejected (skipping the checkpoint), since the
+  // connection has to be closed regardless.
+  QuotaManager* const quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  if (Maybe<quota::WriteLease> lease =
+          quotaManager->TryAcquireWriteLease(aDatabaseInfo.mOriginMetadata)) {
+    aDatabaseInfo.mCloseWriteLease = std::move(lease);
+
+    MOZ_ALWAYS_SUCCEEDS(aDatabaseInfo.Dispatch(
+        MakeAndAddRef<CloseConnectionRunnable>(aDatabaseInfo)));
+    return;
+  }
+
+  // The DatabaseInfo stays alive until NoteClosedDatabase runs after the
+  // close, and it keeps the connection pool alive.
+  quotaManager->AcquireWriteLease(aDatabaseInfo.mOriginMetadata)
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          [&aDatabaseInfo](
+              QuotaManager::WriteLeasePromise::ResolveOrRejectValue&& aValue) {
+            if (aValue.IsResolve()) {
+              aDatabaseInfo.mCloseWriteLease =
+                  Some(std::move(aValue.ResolveValue()));
+            }
+
+            MOZ_ALWAYS_SUCCEEDS(aDatabaseInfo.Dispatch(
+                MakeAndAddRef<CloseConnectionRunnable>(aDatabaseInfo)));
+          });
 }
 
 bool ConnectionPool::CloseDatabaseWhenIdleInternal(
@@ -8604,6 +8795,10 @@ ConnectionPool::CloseConnectionRunnable::Run() {
     if (mDatabaseInfo.mConnection) {
       mDatabaseInfo.AssertIsOnConnectionThread();
 
+      if (mDatabaseInfo.mCloseWriteLease.isSome()) {
+        mDatabaseInfo.mConnection->CheckpointBeforeClose();
+      }
+
       mDatabaseInfo.mConnection->Close();
 
       IDB_DEBUG_LOG(("ConnectionPool closed connection 0x%p",
@@ -8627,10 +8822,12 @@ ConnectionPool::CloseConnectionRunnable::Run() {
   return NS_OK;
 }
 
-ConnectionPool::DatabaseInfo::DatabaseInfo(ConnectionPool* aConnectionPool,
-                                           const nsACString& aDatabaseId)
+ConnectionPool::DatabaseInfo::DatabaseInfo(
+    ConnectionPool* aConnectionPool, const nsACString& aDatabaseId,
+    const quota::OriginMetadata& aOriginMetadata)
     : mConnectionPool(aConnectionPool),
       mDatabaseId(aDatabaseId),
+      mOriginMetadata(aOriginMetadata),
       mReadTransactionCount(0),
       mWriteTransactionCount(0),
       mNeedsCheckpoint(false),
@@ -8830,6 +9027,7 @@ ConnectionPool::TransactionInfo::TransactionInfo(
       mTransactionId(aTransactionId),
       mLoggingSerialNumber(aLoggingSerialNumber),
       mObjectStoreNames(aObjectStoreNames.Clone()),
+      mTransactionOp(aTransactionOp),
       mIsWriteTransaction(aIsWriteTransaction),
       mRunning(false),
       mRunningOp(false) {
@@ -8883,10 +9081,21 @@ void ConnectionPool::TransactionInfo::RemoveBlockingTransactions() {
 void ConnectionPool::TransactionInfo::SetRunning() {
   AssertIsOnBackgroundThread();
   MOZ_ASSERT(!mRunning);
+  MOZ_ASSERT(!mWaitingForWriteLease);
+  MOZ_ASSERT(mBlockedOn.IsEmpty());
+  MOZ_ASSERT(!mDatabaseInfo.mClosing);
+  MOZ_ASSERT_IF(mIsWriteTransaction,
+                mDatabaseInfo.mRunningWriteTransaction.refEquals(*this));
+  MOZ_DIAGNOSTIC_ASSERT_IF(
+      mIsWriteTransaction,
+      mWriteLease || mTransactionOp->Transaction().HasWriteLeaseFailed());
 
   AUTO_PROFILER_LABEL("ConnectionPool::FinishOp", DOM);
 
   mRunning = true;
+  if (mWriteLease) {
+    mDatabaseInfo.mNeedsCheckpoint = true;
+  }
 
   if (!mQueuedOps.IsEmpty()) {
     mRunningOp = true;
@@ -9843,7 +10052,7 @@ mozilla::ipc::IPCResult Database::RecvPBackgroundIDBTransactionConstructor(
 
   uint64_t transactionId = startOp->StartOnConnectionPool(
       GetLoggingInfo()->Id(), mMetadata->mDatabaseId,
-      transaction->LoggingSerialNumber(), aObjectStoreNames,
+      transaction->LoggingSerialNumber(), aObjectStoreNames, mOriginMetadata,
       aMode != IDBTransaction::Mode::ReadOnly);
 
   transaction->Init(transactionId);
@@ -12065,10 +12274,9 @@ nsCOMPtr<nsIFile> DatabaseFileManager::GetCheckedFileForId(nsIFile* aDirectory,
 }
 
 // static
-nsresult DatabaseFileManager::InitDirectory(nsIFile& aDirectory,
-                                            nsIFile& aDatabaseFile,
-                                            const nsACString& aOrigin,
-                                            uint32_t aTelemetryId) {
+nsresult DatabaseFileManager::InitDirectory(
+    nsIFile& aDirectory, nsIFile& aDatabaseFile,
+    const quota::OriginMetadata& aOriginMetadata, uint32_t aTelemetryId) {
   AssertIsOnIOThread();
 
   {
@@ -12117,9 +12325,15 @@ nsresult DatabaseFileManager::InitDirectory(nsIFile& aDirectory,
 
     if (hasJournals) {
       QM_TRY_UNWRAP(const NotNull<nsCOMPtr<mozIStorageConnection>> connection,
-                    CreateStorageConnection(
-                        aDatabaseFile, aDirectory, VoidString(), aOrigin,
-                        /* aDirectoryLockId */ -1, aTelemetryId, Nothing{}));
+                    CreateStorageConnection(aDatabaseFile, aDirectory,
+                                            VoidString(), aOriginMetadata,
+                                            /* aDirectoryLockId */ -1,
+                                            aTelemetryId, Nothing{}));
+
+      auto checkpointOnClose = MakeScopeExit([&] {
+        CheckpointBeforeCloseOnIOThread(*connection, aDatabaseFile,
+                                        aOriginMetadata, -1);
+      });
 
       mozStorageTransaction transaction(connection.get(), false);
 
@@ -12668,7 +12882,7 @@ nsresult QuotaClient::GetUsageForOriginInternal(
 
     if (aInitializing) {
       QM_TRY(MOZ_TO_RESULT(DatabaseFileManager::InitDirectory(
-          *fmDirectory, *databaseFile, aOriginMetadata.mOrigin,
+          *fmDirectory, *databaseFile, aOriginMetadata,
           TelemetryIdForFile(databaseFile))));
     }
 
@@ -15756,11 +15970,23 @@ nsresult OpenDatabaseOp::DoDatabaseWork() {
     maybeKey = Some(key);
   }
 
-  QM_TRY_UNWRAP(
-      NotNull<nsCOMPtr<mozIStorageConnection>> connection,
-      CreateStorageConnection(*dbFile, *fmDirectory, databaseName,
-                              mOriginMetadata.mOrigin, mDirectoryLockId,
-                              mTelemetryId, maybeKey));
+  quota::WriteLease writeLease;
+  if (mEnforcingQuota) {
+    QM_TRY_UNWRAP(writeLease,
+                  quotaManager->AcquireWriteLeaseOnIOThread(mOriginMetadata));
+  }
+
+  QM_TRY_UNWRAP(NotNull<nsCOMPtr<mozIStorageConnection>> connection,
+                CreateStorageConnection(*dbFile, *fmDirectory, databaseName,
+                                        mOriginMetadata, mDirectoryLockId,
+                                        mTelemetryId, maybeKey));
+
+  const auto closeConnection = [&] {
+    CheckpointBeforeCloseOnIOThread(*connection, *dbFile, mOriginMetadata,
+                                    mDirectoryLockId);
+    MOZ_ALWAYS_SUCCEEDS(connection->Close());
+  };
+  auto autoCloseConnection = MakeScopeExit([&] { closeConnection(); });
 
   AutoSetProgressHandler asph;
   QM_TRY(MOZ_TO_RESULT(asph.Register(*connection, this)));
@@ -15798,7 +16024,8 @@ nsresult OpenDatabaseOp::DoDatabaseWork() {
   // connection thread which needs to open the same database.
   asph.Unregister();
 
-  MOZ_ALWAYS_SUCCEEDS(connection->Close());
+  closeConnection();
+  autoCloseConnection.release();
 
   SleepIfEnabled(
       StaticPrefs::dom_indexedDB_databaseInitialization_pauseOnIOThreadMs());
@@ -16288,7 +16515,7 @@ nsresult OpenDatabaseOp::DispatchToWorkThread() {
 
   uint64_t transactionId = versionChangeOp->StartOnConnectionPool(
       backgroundChildLoggingId, mVersionChangeTransaction->DatabaseId(),
-      loggingSerialNumber, objectStoreNames,
+      loggingSerialNumber, objectStoreNames, mOriginMetadata,
       /* aIsWriteTransaction */ true);
 
   mVersionChangeOp = versionChangeOp;
@@ -16839,6 +17066,9 @@ nsresult DeleteDatabaseOp::LoadPreviousVersion(nsIFile& aDatabaseFile) {
   QM_TRY_UNWRAP(const NotNull<nsCOMPtr<mozIStorageConnection>> connection,
                 OpenDatabaseAndHandleBusy(*ss, *dbFileUrl), NS_OK);
 
+  // Preserve the WAL until removal accounts for its usage.
+  QM_TRY(MOZ_TO_RESULT(connection->DisableCheckpointOnClose()), NS_OK);
+
   // Unreadable metadata must not prevent removal of a damaged database.
   QM_TRY_INSPECT(const auto& nameStmt,
                  CreateAndExecuteSingleStepStatement<
@@ -17348,11 +17578,22 @@ nsresult GetDatabasesOp::DoDatabaseWork() {
         CloneFileAndAppend(*clientDirectory,
                            databaseFilename + kFileManagerDirectoryNameSuffix));
 
+    quota::WriteLease writeLease;
+    if (IsBestEffortPersistenceType(mPersistenceType)) {
+      QM_TRY_UNWRAP(writeLease,
+                    quotaManager->AcquireWriteLeaseOnIOThread(mOriginMetadata));
+    }
+
     QM_TRY_UNWRAP(
         const NotNull<nsCOMPtr<mozIStorageConnection>> connection,
         CreateStorageConnection(*databaseFile, *fmDirectory, VoidString(),
-                                mOriginMetadata.mOrigin, mDirectoryLockId,
+                                mOriginMetadata, mDirectoryLockId,
                                 TelemetryIdForFile(databaseFile), Nothing{}));
+
+    auto checkpointOnClose = MakeScopeExit([&] {
+      CheckpointBeforeCloseOnIOThread(*connection, *databaseFile,
+                                      mOriginMetadata, mDirectoryLockId);
+    });
 
     {
       // Load version information.
@@ -17468,7 +17709,7 @@ void TransactionDatabaseOperationBase::AssertIsOnConnectionThread() const {
 uint64_t TransactionDatabaseOperationBase::StartOnConnectionPool(
     const nsID& aBackgroundChildLoggingId, const nsACString& aDatabaseId,
     int64_t aLoggingSerialNumber, const nsTArray<nsString>& aObjectStoreNames,
-    bool aIsWriteTransaction) {
+    const quota::OriginMetadata& aOriginMetadata, bool aIsWriteTransaction) {
   AssertIsOnOwningThread();
   MOZ_ASSERT(mInternalState == InternalState::Initial);
 
@@ -17478,7 +17719,7 @@ uint64_t TransactionDatabaseOperationBase::StartOnConnectionPool(
 
   return gConnectionPool->Start(aBackgroundChildLoggingId, aDatabaseId,
                                 aLoggingSerialNumber, aObjectStoreNames,
-                                aIsWriteTransaction, this);
+                                aOriginMetadata, aIsWriteTransaction, this);
 }
 
 void TransactionDatabaseOperationBase::DispatchToConnectionPool() {
@@ -17498,7 +17739,8 @@ void TransactionDatabaseOperationBase::RunOnConnectionThread() {
 
   // There are several cases where we don't actually have to to any work here.
 
-  if (mTransactionIsAborted || (*mTransaction)->IsInvalidatedOnAnyThread()) {
+  if (mTransactionIsAborted || (*mTransaction)->IsInvalidatedOnAnyThread() ||
+      (*mTransaction)->HasWriteLeaseFailed()) {
     // This transaction is already set to be aborted or invalidated.
     SetFailureCode(NS_ERROR_DOM_INDEXEDDB_ABORT_ERR);
   } else if (!OperationMayProceed()) {
