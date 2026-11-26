@@ -388,8 +388,9 @@ export var TestUtils = {
   /**
    * Creates a reusable proxy for controlling promise-returning method calls.
    *
-   * Calling a method on the proxy returns a controller for its next matching
-   * call.
+   * ..
+   *    See the Firefox Source Docs for a detailed walkthrough of how to use this utility.
+   *    https://firefox-source-docs.mozilla.org/testing/testutils.html#TestUtils.asyncControlProxy
    *
    * @template {object} Owner
    * @param {Owner} owner - The object or class for which to create a proxy.
