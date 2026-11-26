@@ -125,7 +125,7 @@ master_doc = "index"
 project = "Firefox Source Docs"
 
 # Override the search box to use Google instead of
-# sphinx search on firefox-source-docs.mozilla.org
+# sphinx search on source.firefox.com
 if (
     os.environ.get("MOZ_SOURCE_DOCS_USE_GOOGLE") == "1"
     and os.environ.get("MOZ_SCM_LEVEL") == "3"
