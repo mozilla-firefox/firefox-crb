@@ -19,6 +19,7 @@
 #include "ConnectionHandle.h"
 #include "Http3Session.h"
 #include "HttpConnectionUDP.h"
+#include "TunnelSetupTransaction.h"
 #include "mozilla/StaticPrefs_network.h"
 #include "mozilla/glean/NetwerkMetrics.h"
 #include "nsComponentManagerUtils.h"
@@ -583,6 +584,10 @@ void HttpConnectionUDP::OnConnected() {
     }
   }
 
+  if (auto callback = std::move(mHandshakeDoneCallback)) {
+    callback();
+  }
+
   if (mIsInTunnel) {
     return;
   }
@@ -635,6 +640,40 @@ already_AddRefed<nsIInputStream> HttpConnectionUDP::CreateProxyConnectStream(
   nsCOMPtr<nsIInputStream> stream;
   NS_NewCStringInputStream(getter_AddRefs(stream), std::move(result));
   return stream.forget();
+}
+
+nsresult HttpConnectionUDP::CreateInnerConnection(
+    TunnelSetupTransaction* aDriver, HttpConnectionBase** aInnerConnection) {
+  if (!mHttp3Session) {
+    return NS_ERROR_UNEXPECTED;
+  }
+
+  nsCOMPtr<nsIInterfaceRequestor> callbacks = GetCallbacks();
+
+  // An HTTP/3 inner connection is carried by CONNECT-UDP, anything else by a
+  // CONNECT tunnel stream.
+  if (aDriver->ConnectionInfo()->IsHttp3()) {
+    nsCOMPtr<nsIInputStream> requestStream = CreateProxyConnectStream(aDriver);
+    if (!requestStream) {
+      return NS_ERROR_OUT_OF_MEMORY;
+    }
+    aDriver->SetRequestStream(requestStream);
+    RefPtr<HttpConnectionUDP> udpConn =
+        mHttp3Session->CreateTunnelStream(aDriver, callbacks);
+    if (!udpConn) {
+      return NS_ERROR_FAILURE;
+    }
+    udpConn.forget(aInnerConnection);
+    return NS_OK;
+  }
+
+  RefPtr<nsHttpConnection> conn = mHttp3Session->CreateTunnelStream(
+      aDriver, callbacks, mRtt, /* aIsExtendedCONNECT */ false);
+  if (!conn) {
+    return NS_ERROR_FAILURE;
+  }
+  conn.forget(aInnerConnection);
+  return NS_OK;
 }
 
 nsresult HttpConnectionUDP::CreateTunnelStream(
@@ -701,6 +740,11 @@ void HttpConnectionUDP::Close(nsresult reason, bool aIsShutdown) {
       MOZ_ASSERT(mTrafficCategory.IsEmpty());
     }
   }
+
+  // A closed connection never completes a handshake; dropping the callback
+  // also releases whatever it captured (the owner of this connection, which
+  // would otherwise keep it alive in a cycle).
+  mHandshakeDoneCallback = nullptr;
 
   nsCOMPtr<nsIUDPSocket> socket = std::move(mSocket);
   if (socket) {
