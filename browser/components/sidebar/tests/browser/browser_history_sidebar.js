@@ -774,12 +774,14 @@ add_task(async function test_history_context_menu() {
 });
 
 add_task(async function test_select_and_remove() {
+  // Disabling containers in a previous task cleared their history.
+  ({ URLs } = await populateHistory());
   const { component, contentWindow } = await showHistorySidebar();
   await component.updateComplete;
   await BrowserTestUtils.waitForMutationCondition(
     component.lists[0].shadowRoot,
     { subtree: true, childList: true },
-    () => component.lists[0].rowEls.length
+    () => component.lists[0].rowEls.length === URLs.length
   );
   const rows = component.lists[0].rowEls;
   Assert.ok(rows, "History rows are shown.");

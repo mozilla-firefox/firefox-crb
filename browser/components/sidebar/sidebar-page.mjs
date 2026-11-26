@@ -212,8 +212,11 @@ export class SidebarPage extends MozLitElement {
    *   The primary action event of the row.
    * @param {string} url
    *   The URL to open.
+   * @param {object} [options]
+   * @param {number} [options.userContextId]
+   *   The container to open the URL in.
    */
-  navigateToPlacesLink(e, url) {
+  navigateToPlacesLink(e, url, { userContextId } = {}) {
     let win = this.topWindow;
     let where = lazy.PlacesUIUtils.whereToOpenUILink(
       url,
@@ -222,7 +225,12 @@ export class SidebarPage extends MozLitElement {
     );
     win.openTrustedLinkIn(url, where, {
       inBackground: lazy.PlacesUIUtils.loadUILinkInBackground,
+      userContextId,
     });
+  }
+
+  getUserContextIdToOpen(_row) {
+    return undefined;
   }
 
   /**
@@ -236,6 +244,13 @@ export class SidebarPage extends MozLitElement {
     let promise;
     switch (e.target.id) {
       case "sidebar-history-context-open-in-tab":
+        this.topWindow.openTrustedLinkIn(this.triggerNode.url, "tab", {
+          inBackground: Services.prefs.getBoolPref(
+            "browser.tabs.loadInBackground"
+          ),
+          userContextId: this.getUserContextIdToOpen(this.triggerNode),
+        });
+        break;
       case "sidebar-synced-tabs-context-open-in-tab":
         this.topWindow.openTrustedLinkIn(this.triggerNode.url, "tab", {
           inBackground: Services.prefs.getBoolPref(
@@ -247,6 +262,11 @@ export class SidebarPage extends MozLitElement {
         this.forgetAboutThisSite().catch(console.error);
         break;
       case "sidebar-history-context-open-in-window":
+        this.topWindow.openTrustedLinkIn(this.triggerNode.url, "window", {
+          private: false,
+          userContextId: this.getUserContextIdToOpen(this.triggerNode),
+        });
+        break;
       case "sidebar-synced-tabs-context-open-in-window":
       case "sidebar-opentabs-context-open-in-window":
         this.topWindow.openTrustedLinkIn(this.triggerNode.url, "window", {

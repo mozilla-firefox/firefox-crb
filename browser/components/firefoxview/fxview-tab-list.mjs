@@ -33,6 +33,8 @@ if (!window.IS_STORYBOOK) {
 
   ChromeUtils.defineESModuleGetters(lazy, {
     BrowserUtils: "resource://gre/modules/BrowserUtils.sys.mjs",
+    ContextualIdentityService:
+      "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
   });
 }
 
@@ -108,6 +110,9 @@ export class FxviewTabListBase extends MozLitElement {
     if (this.maxTabsLength > 0) {
       this.tabItems = this.tabItems.slice(0, this.maxTabsLength);
     }
+
+    this.hasContainerTab =
+      !this.compactRows && this.tabItems.some(tabItem => tabItem.containerObj);
   }
 
   startIntervalTimer() {
@@ -290,6 +295,9 @@ export class FxviewTabListBase extends MozLitElement {
         .time=${time}
         .title=${tabItem.title}
         .url=${tabItem.url}
+        .userContextId=${tabItem.userContextId}
+        .containerObj=${tabItem.containerObj}
+        .hasContainerTab=${this.hasContainerTab}
         .searchQuery=${this.searchQuery}
         .timeMsPref=${this.timeMsPref}
         .hasPopup=${this.hasPopup}
@@ -313,7 +321,10 @@ export class FxviewTabListBase extends MozLitElement {
       ${this.stylesheets()}
       <div
         id="fxview-tab-list"
-        class="fxview-tab-list"
+        class=${classMap({
+          "fxview-tab-list": true,
+          hasContainerTab: this.hasContainerTab,
+        })}
         role="list"
         @keydown=${this.handleFocusElementInRow}
       >
@@ -392,6 +403,7 @@ export class FxviewTabRowBase extends MozLitElement {
     timeMsPref: { type: Number },
     url: { type: String },
     uri: { type: String },
+    userContextId: { type: Number },
     searchQuery: { type: String },
   };
 
@@ -629,6 +641,36 @@ export class FxviewTabRowBase extends MozLitElement {
     />`;
   }
 
+  /**
+   * The container badge of the row, or an empty placeholder keeping the
+   * columns aligned when the row has no container.
+   */
+  containerIndicatorTemplate() {
+    if (!this.containerObj) {
+      return html`<span
+        class="fxview-tab-row-container-indicator icon"
+      ></span>`;
+    }
+    let { icon, color } = this.containerObj;
+    let classes = [
+      "fxview-tab-row-container-indicator",
+      "icon",
+      `identity-icon-${icon}`,
+      `identity-color-${color}`,
+    ];
+    return html`<span
+      class=${classes.join(" ")}
+      role="img"
+      data-l10n-id="fxviewtabrow-container-indicator"
+      data-l10n-args=${JSON.stringify({
+        containerName:
+          lazy.ContextualIdentityService?.getUserContextLabel(
+            this.containerObj.userContextId
+          ) ?? this.containerObj.name,
+      })}
+    ></span>`;
+  }
+
   faviconTemplate() {
     return html`<span
       class="fxview-tab-row-favicon icon"
@@ -777,9 +819,30 @@ export class FxviewTabRowBase extends MozLitElement {
 }
 
 export class FxviewTabRow extends FxviewTabRowBase {
+  static properties = {
+    containerObj: { type: Object },
+    hasContainerTab: { type: Boolean },
+  };
+
+  #containerIndicatorTemplate() {
+    if (!this.hasContainerTab) {
+      return null;
+    }
+    return this.containerIndicatorTemplate();
+  }
+
   render() {
     return html`
       ${this.stylesheets()}
+      ${when(
+        this.containerObj,
+        () => html`
+          <link
+            rel="stylesheet"
+            href="chrome://browser/content/usercontext/usercontext.css"
+          />
+        `
+      )}
       <a
         href=${ifDefined(this.url)}
         class="fxview-tab-row-main"
@@ -798,8 +861,8 @@ export class FxviewTabRow extends FxviewTabRowBase {
         ${when(
           !this.compact,
           () =>
-            html`${this.urlTemplate()} ${this.dateTemplate()}
-            ${this.timeTemplate()}`
+            html`${this.#containerIndicatorTemplate()} ${this.urlTemplate()}
+            ${this.dateTemplate()} ${this.timeTemplate()}`
         )}
       </a>
       ${this.secondaryButtonTemplate()} ${this.tertiaryButtonTemplate()}

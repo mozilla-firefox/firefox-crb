@@ -221,6 +221,52 @@ add_task(async function test_dedupe_visits_by_url() {
   await PlacesUtils.history.clear();
 });
 
+add_task(async function test_visits_split_by_container() {
+  placesQuery.close();
+  const now = Date.now();
+  await PlacesUtils.history.insert({
+    url: "https://www.example.com/",
+    visits: [
+      { date: new Date(now - 2000) },
+      { date: new Date(now - 1000), userContextId: 1 },
+    ],
+  });
+
+  let history = await placesQuery.getHistory({ sortBy: "lastvisited" });
+  Assert.deepEqual(
+    history.map(({ url, userContextId }) => [url, userContextId]),
+    [
+      ["https://www.example.com/", 1],
+      ["https://www.example.com/", 0],
+    ],
+    "Visits to the same URL in different containers are not deduped."
+  );
+
+  history = await waitForUpdateHistoryTask(() =>
+    PlacesUtils.history.insert({
+      url: "https://www.example.com/",
+      visits: [{ date: new Date(now), userContextId: 1 }],
+    })
+  );
+  Assert.deepEqual(
+    history.map(({ userContextId, date }) => [userContextId, date.getTime()]),
+    [
+      [1, now],
+      [0, now - 2000],
+    ],
+    "Visits inserted from `page-visited` events are deduped per container."
+  );
+
+  let results = await placesQuery.searchHistory("example");
+  Assert.deepEqual(
+    results.map(({ userContextId }) => userContextId).sort(),
+    [0, 1],
+    "Search results are split by container."
+  );
+
+  await PlacesUtils.history.clear();
+});
+
 add_task(async function test_search_visits() {
   const now = new Date();
   await PlacesUtils.history.insertMany([

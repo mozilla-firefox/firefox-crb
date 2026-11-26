@@ -77,9 +77,14 @@ export class ViewPageContent extends MozLitElement {
     this.recordContextMenuTelemetry("copy-link", e);
   }
 
+  getUserContextIdToOpen(_row) {
+    return undefined;
+  }
+
   openInNewWindow(e) {
     this.getWindow().openTrustedLinkIn(this.triggerNode.url, "window", {
       private: false,
+      userContextId: this.getUserContextIdToOpen(this.triggerNode),
     });
     this.recordContextMenuTelemetry("open-in-new-window", e);
   }

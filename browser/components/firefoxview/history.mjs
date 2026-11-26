@@ -94,8 +94,14 @@ class HistoryInView extends ViewPage {
     await Promise.all(Array.from(this.cards).map(card => card.updateComplete));
   }
 
+  getUserContextIdToOpen(row) {
+    return this.controller.getUserContextIdToOpen(row, this.getWindow());
+  }
+
   onPrimaryAction(e) {
-    navigateToLink(e);
+    navigateToLink(e, e.originalTarget.url, {
+      userContextId: this.getUserContextIdToOpen(e.originalTarget),
+    });
     // Record telemetry
     Glean.firefoxviewNext.historyVisits.record();
 

@@ -11,10 +11,14 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
  */
 
 const lazy = XPCOMUtils.declareLazy({
+  ContextualIdentityService:
+    "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
+  containersEnabled: { pref: "privacy.userContext.enabled", default: false },
   HistoryDateRegistry:
     "moz-src:///browser/components/places/history/HistoryDateRegistry.sys.mjs",
   PlacesQuery: "resource://gre/modules/PlacesQuery.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   ProfileAge: "resource://gre/modules/ProfileAge.sys.mjs",
 });
 
@@ -153,6 +157,16 @@ export class HistoryController {
     }
   }
 
+  getUserContextIdToOpen(row, win) {
+    if (
+      !lazy.containersEnabled ||
+      lazy.PrivateBrowsingUtils.isWindowPrivate(win)
+    ) {
+      return undefined;
+    }
+    return row.containerObj?.userContextId ?? 0;
+  }
+
   async #updateProfileAge() {
     const profileAccessor = await lazy.ProfileAge();
     const profileCreateTime = await profileAccessor.created;
@@ -192,7 +206,11 @@ export class HistoryController {
   }
 
   deleteFromHistory() {
-    return lazy.PlacesUtils.history.remove(this.host.triggerNode.url);
+    const { url, userContextId } = this.host.triggerNode;
+    return lazy.PlacesUtils.history.removeVisitsByFilter({
+      url,
+      userContextId,
+    });
   }
 
   onSearchQuery(e) {
@@ -343,6 +361,15 @@ export class HistoryController {
             visit.date
           )}`
         : visit.pageGuid;
+    if (visit.userContextId) {
+      visit.guid += `|${visit.userContextId}`;
+    }
+    visit.containerObj =
+      lazy.containersEnabled && visit.userContextId
+        ? lazy.ContextualIdentityService.getPublicIdentityFromId(
+            visit.userContextId
+          )
+        : null;
     visit.title = visit.title || visit.url;
     visit.icon = `page-icon:${visit.url}`;
     visit.secondaryL10nId = "fxviewtabrow-options-menu-button";

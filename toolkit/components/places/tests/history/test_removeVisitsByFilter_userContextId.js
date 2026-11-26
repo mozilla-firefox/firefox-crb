@@ -177,6 +177,37 @@ add_task(async function test_removeVisitsByFilter_userContextId_and_url() {
   await PlacesUtils.history.clear();
 });
 
+add_task(async function test_removeVisitsByFilter_userContextId_and_urls() {
+  await insertVisits();
+
+  Assert.throws(
+    () => PlacesUtils.history.removeVisitsByFilter({ url: [] }),
+    /TypeError: Expected a valid URL for `url`/,
+    "An empty array of urls should be rejected"
+  );
+
+  Assert.ok(
+    await PlacesUtils.history.removeVisitsByFilter({
+      userContextId: 0,
+      url: [DEFAULT_URL, Services.io.newURI(MIXED_URL)],
+    }),
+    "Some visits should have been removed"
+  );
+
+  Assert.deepEqual(
+    await fetchVisits(),
+    [
+      [CONTAINER_URL, 2],
+      [CONTAINER_URL, 2],
+      [MIXED_URL, 3],
+      [MIXED_URL, 2],
+    ],
+    "Only the container visits of the urls should have been removed"
+  );
+
+  await PlacesUtils.history.clear();
+});
+
 add_task(async function test_removeVisitsByFilter_default_container() {
   await insertVisits();
 
