@@ -11,6 +11,7 @@ UNIFIED_SOURCES = [
     "TestFileSystemOriginInitialization.cpp",
     "TestFileSystemOrphanCleanup.cpp",
     "TestFileSystemUsageTracking.cpp",
+    "TestFileSystemWritableFileStreamParent.cpp",
 ]
 
 include("/ipc/chromium/chromium-config.mozbuild")
@@ -20,6 +21,7 @@ FINAL_LIBRARY = "xul-gtest"
 LOCAL_INCLUDES += [
     "/dom/fs/parent",
     "/dom/fs/test/gtest",
+    "/dom/quota",
 ]
 
 SOURCE_HEADERS += [
