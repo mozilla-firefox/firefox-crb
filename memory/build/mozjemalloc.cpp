@@ -2619,6 +2619,14 @@ inline void MozJemalloc::jemalloc_ptr_info(const void* aPtr,
     return;
   }
 
+#ifdef MOZ_PHC
+  // JemallocPtrInfo will safely check if a pointer is known to PHC, but we
+  // also use FastIsPHCPtr() in a short-cut &&.
+  if (phc::FastIsPHCPtr(aPtr) && phc::JemallocPtrInfo(aPtr, aInfo, nullptr)) {
+    return;
+  }
+#endif
+
   // Look for huge allocations before looking for |chunk| in gChunkRTree.
   // This is necessary because |chunk| won't be in gChunkRTree if it's
   // the second or subsequent chunk in a huge allocation.
@@ -3652,8 +3660,17 @@ inline void* BaseAllocator::malloc(size_t aSize) {
   // If mArena is non-null, it must not be in the first page.
   MOZ_DIAGNOSTIC_ASSERT_IF(mArena, (size_t)mArena >= gPageSize);
   arena_t* arena = mArena ? mArena : choose_arena(aSize);
-  void* ret = arena->Malloc(aSize, /* aZero = */ false);
 
+#ifdef MOZ_PHC
+  if (MOZ_UNLIKELY(phc::ShouldAllocHot(aSize))) {
+    void* ret = phc::MaybeAlloc(arena->mId, aSize);
+    if (ret) {
+      return ret;
+    }
+  }
+#endif
+
+  void* ret = arena->Malloc(aSize, /* aZero = */ false);
   if (MOZ_UNLIKELY(!ret)) {
     errno = ENOMEM;
   }
@@ -3674,6 +3691,16 @@ inline void* BaseAllocator::memalign(size_t aAlignment, size_t aSize) {
 
   aAlignment = aAlignment < sizeof(void*) ? sizeof(void*) : aAlignment;
   arena_t* arena = mArena ? mArena : choose_arena(aSize);
+
+#ifdef MOZ_PHC
+  if (MOZ_UNLIKELY(phc::ShouldAllocHot(aSize))) {
+    void* ret = phc::MaybeAlloc(arena->mId, aSize, aAlignment);
+    if (ret) {
+      return ret;
+    }
+  }
+#endif
+
   return arena->Palloc(aAlignment, aSize);
 }
 
@@ -3703,6 +3730,90 @@ inline void* BaseAllocator::calloc(size_t aNum, size_t aSize) {
   return ret;
 }
 
+#ifdef MOZ_PHC
+static void* realloc_maybe_phc(void* aPtr, size_t aNewSize,
+                               arena_t* aMaybeArena, bool aFromPHC,
+                               bool aToPHC) {
+  // Get old size and arena.
+  size_t old_size;
+  arena_id_t from_arena_id;
+  arena_t* to_arena;
+  if (aFromPHC) {
+    jemalloc_ptr_info_t info;
+    phc::JemallocPtrInfo(aPtr, &info, &from_arena_id);
+    old_size = info.size;
+    // info.arena.Id is debug-only, so we can't use it, but we can check it
+    // in debug builds.
+    MOZ_ASSERT(from_arena_id == info.arenaId);
+
+    // We could lookup from_arena_id to get to_arena, but that is only
+    // legal for private arenas.
+    //
+    // Instead to_arena is either aMaybeArena (for moz_arena_realloc()) or
+    // the thread local arena from choose_arena().  That means that
+    // realloc() may move objects between thread local arenas, which
+    // matches the behavior within mozjemalloc for moving realloc()s and
+    // is invisible to the caller.
+    if (aMaybeArena) {
+      to_arena = aMaybeArena;
+      // if aMaybeArena is non-null then we know this was called by
+      // moz_arena_realloc(), that expects to be called with the
+      // arena ID of the original allocation.
+      MOZ_RELEASE_ASSERT(to_arena->mId == from_arena_id);
+    } else {
+      to_arena = choose_arena(aNewSize);
+    }
+  } else {
+    auto info = AllocInfo::Get(aPtr);
+    old_size = info.Size();
+    to_arena = info.Arena();
+    from_arena_id = to_arena->mId;
+
+    // moz_arena_realloc() expects to be called with the arena of the
+    // original allocation.
+    MOZ_RELEASE_ASSERT(!aMaybeArena || to_arena == aMaybeArena);
+  }
+
+  // If either the new or old allocation uses or should use PHC,
+  // then always move the allocation.
+  void* to_ptr = nullptr;
+  if (aToPHC) {
+    to_ptr = phc::MaybeAlloc(to_arena->mId, aNewSize);
+  }
+  if (!to_ptr) {
+    if (!aFromPHC) {
+      // If the from pointer was not in PHC and PHC refused to allocate
+      // a to_ptr, then revert to regular realloc since it can probably
+      // avoid a moving realloc (and makes the test suite more
+      // reliable, since this can happen when the test suite disables
+      // PHC on one thread).
+      void* to_ptr = to_arena->Ralloc(aPtr, aNewSize, old_size);
+      if (MOZ_LIKELY(to_ptr)) {
+        return to_ptr;
+      }
+    } else {
+      to_ptr = to_arena->Malloc(aNewSize, /* aZero = */ false);
+    }
+  }
+
+  if (to_ptr) {
+    memcpy(to_ptr, aPtr, std::min(aNewSize, old_size));
+
+    if (aFromPHC) {
+      phc::Free(aPtr);
+    } else {
+      // When aFromPHC is false an earlier branch will have set to_arena
+      // based on the arena of the original allocation.
+      idalloc(aPtr, to_arena);
+    }
+
+    return to_ptr;
+  }
+
+  return nullptr;
+}
+#endif
+
 inline void* BaseAllocator::realloc(void* aPtr, size_t aSize) {
   if (aSize == 0) {
     aSize = 1;
@@ -3711,10 +3822,30 @@ inline void* BaseAllocator::realloc(void* aPtr, size_t aSize) {
   if (aPtr) {
     MOZ_RELEASE_ASSERT(malloc_initialized);
 
-    auto info = AllocInfo::Get(aPtr);
-    auto arena = info.Arena();
-    MOZ_RELEASE_ASSERT(!mArena || arena == mArena);
-    void* ret = arena->Ralloc(aPtr, aSize, info.Size());
+    void* ret;
+#ifdef MOZ_PHC
+    // Is the old pointer a PHC pointer?
+    bool from_phc = phc::FastIsPHCPtr(aPtr);
+
+    // Should the new memory be allocated in PHC?
+    bool to_phc = phc::ShouldAllocHot(aSize);
+
+    if (MOZ_UNLIKELY(from_phc || to_phc)) {
+      // If either the from or to allocation is/should be in PHC then take
+      // this slow path.
+      ret = realloc_maybe_phc(aPtr, aSize, mArena, from_phc, to_phc);
+    } else {
+#endif
+      auto info = AllocInfo::Get(aPtr);
+      arena_t* arena = info.Arena();
+      MOZ_RELEASE_ASSERT(!mArena || arena == mArena);
+
+      // This is a regular mozjemalloc realloc and might not move.
+      ret = arena->Ralloc(aPtr, aSize, info.Size());
+#ifdef MOZ_PHC
+    }
+#endif
+
     if (MOZ_LIKELY(ret)) {
       return ret;
     }
@@ -3726,10 +3857,17 @@ inline void* BaseAllocator::realloc(void* aPtr, size_t aSize) {
 }
 
 inline void BaseAllocator::free(void* aPtr) {
-  size_t offset;
-
   // A version of idalloc that checks for nullptr pointer.
-  offset = GetChunkOffsetForPtr(aPtr);
+  MOZ_RELEASE_ASSERT(malloc_initialized);
+
+#ifdef MOZ_PHC
+  if (MOZ_UNLIKELY(phc::FastIsPHCPtr(aPtr))) {
+    phc::Free(aPtr);
+    return;
+  }
+#endif
+
+  size_t offset = GetChunkOffsetForPtr(aPtr);
   if (offset != 0) {
     MOZ_RELEASE_ASSERT(malloc_initialized);
     arena_dalloc(aPtr, offset, mArena);
@@ -3774,6 +3912,12 @@ inline size_t MozJemalloc::malloc_good_size(size_t aSize) {
 }
 
 inline size_t MozJemalloc::malloc_usable_size(usable_ptr_t aPtr) {
+#ifdef MOZ_PHC
+  if (phc::FastIsPHCPtr(aPtr)) {
+    return phc::JemallocUsableSize(aPtr);
+  }
+#endif
+
   return AllocInfo::GetValidated(aPtr).Size();
 }
 
@@ -3936,6 +4080,10 @@ inline void MozJemalloc::jemalloc_stats_internal(
 
   MOZ_ASSERT(aStats->mapped >= aStats->allocated + aStats->waste +
                                    aStats->pages_dirty + aStats->bookkeeping);
+
+#ifdef MOZ_PHC
+  phc::JemallocStats(aStats, aBinStats);
+#endif
 }
 
 inline void MozJemalloc::jemalloc_stats_lite(jemalloc_stats_lite_t* aStats) {
@@ -3967,6 +4115,9 @@ inline void MozJemalloc::jemalloc_stats_lite(jemalloc_stats_lite_t* aStats) {
     }
     aStats->num_operations += gArenas.OperationsDisposedArenas();
   }
+
+  // Note that PHC is not considered for jemalloc_stats_lite, since it would
+  // take a lock.
 }
 
 inline size_t MozJemalloc::jemalloc_stats_num_bins() {
