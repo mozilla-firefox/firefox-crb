@@ -332,7 +332,7 @@ add_task(async function test_network_markers_service_worker_use() {
         Assert.objectContainsOnly(parentRedirectMarker.data, {
           ...commonDataProperties,
           status: "STATUS_REDIRECT",
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
           requestStatus: "NS_OK",
           contentType: null,
           cache: "Unresolved",
@@ -346,7 +346,7 @@ add_task(async function test_network_markers_service_worker_use() {
           ...commonDataProperties,
           status: "STATUS_STOP",
           responseStatus: 200,
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
           httpVersion: "http/1.1",
         });
 
