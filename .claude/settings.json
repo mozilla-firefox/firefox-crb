@@ -4,7 +4,8 @@
     "desktop-theme-colors": "name-only",
     "desktop-theme-layout": "name-only",
     "desktop-theme-screenshots": "name-only",
-    "desktop-theme-tokens": "name-only"
+    "desktop-theme-tokens": "name-only",
+    "urlbar-review": "name-only"
   },
   "extraKnownMarketplaces": {
     "firefox-aidev-plugins": {
