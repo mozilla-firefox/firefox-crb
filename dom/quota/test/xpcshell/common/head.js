@@ -147,6 +147,13 @@ function temporaryStorageInitialized(callback) {
   return request;
 }
 
+function flushDirtyOriginInfos(callback) {
+  let request = SpecialPowers._getQuotaManager().flushDirtyOriginInfos();
+  request.callback = callback;
+
+  return request;
+}
+
 function persistentOriginInitialized(principal, callback) {
   let request =
     SpecialPowers._getQuotaManager().persistentOriginInitialized(principal);

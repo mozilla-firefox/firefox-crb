@@ -90,6 +90,14 @@ FullOriginMetadataResult::GetPersisted(bool* aPersisted) {
 }
 
 NS_IMETHODIMP
+FullOriginMetadataResult::GetDirty(bool* aDirty) {
+  MOZ_ASSERT(aDirty);
+
+  *aDirty = mFullOriginMetadata.mDirty;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 FullOriginMetadataResult::GetClientUsages(nsACString& aClientUsages) {
   mFullOriginMetadata.mClientUsages.Serialize(aClientUsages);
   return NS_OK;

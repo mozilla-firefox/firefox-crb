@@ -9,6 +9,7 @@
 #include "mozIStorageService.h"
 #include "mozStorageCID.h"
 #include "mozilla/BasePrincipal.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/quota/QuotaManagerService.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
@@ -24,6 +25,7 @@
 #include "nsIQuotaRequests.h"
 #include "nsIVariant.h"
 #include "nsScriptSecurityManager.h"
+#include "nsThreadUtils.h"
 
 namespace mozilla::dom::quota::test {
 
@@ -63,6 +65,24 @@ void CreateContentPrincipalInfo(const nsACString& aOrigin,
 }  // namespace
 
 NS_IMPL_ISUPPORTS(RequestResolver, nsIQuotaCallback)
+
+// static
+void QuotaManagerDependencyFixture::WaitForCondition(
+    const std::function<bool()>& aCondition) {
+  const auto deadline = TimeStamp::Now() + TimeDuration::FromSeconds(10);
+  while (!aCondition()) {
+    ASSERT_FALSE(HasFatalFailure());
+    ASSERT_TRUE(TimeStamp::Now() < deadline)
+    << "Condition did not become true";
+    bool elapsed = false;
+    RefPtr<CancelableRunnable> timer = NS_NewCancelableRunnableFunction(
+        "QuotaManager test poll", [&] { elapsed = true; });
+    ASSERT_NS_SUCCEEDED(
+        NS_DelayedDispatchToCurrentThread(do_AddRef(timer), 10));
+    SpinEventLoopUntil("QuotaManager test poll"_ns, [&] { return elapsed; });
+    timer->Cancel();
+  }
+}
 
 // static
 void QuotaManagerDependencyFixture::InitializeFixture() {
