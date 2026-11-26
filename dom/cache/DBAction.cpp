@@ -120,7 +120,9 @@ Result<nsCOMPtr<mozIStorageConnection>, nsresult> DBAction::OpenConnection(
   QM_TRY_INSPECT(const auto& dbFile,
                  CloneFileAndAppend(aDBDir, kCachesSQLiteFilename));
 
-  QM_TRY_RETURN(OpenDBConnection(aDirectoryMetadata, *dbFile, aMaybeCipherKey));
+  QM_TRY_RETURN(OpenDBConnection(aDirectoryMetadata, *dbFile, aMaybeCipherKey,
+                                 /* aAllowWipe */ mMode == Mode::Create,
+                                 CheckpointOnClose::Disabled));
 }
 
 SyncDBAction::SyncDBAction(Mode aMode) : DBAction(aMode) {}
@@ -142,7 +144,8 @@ void SyncDBAction::RunWithDBOnTarget(
 
 Result<nsCOMPtr<mozIStorageConnection>, nsresult> OpenDBConnection(
     const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile& aDBFile,
-    const Maybe<CipherKey>& aMaybeCipherKey) {
+    const Maybe<CipherKey>& aMaybeCipherKey, bool aAllowWipe,
+    CheckpointOnClose aCheckpointOnClose) {
   GECKO_TRACE_SCOPE("dom::cache", "OpenDBConnection");
 
   MOZ_ASSERT(!NS_IsMainThread());
@@ -187,45 +190,57 @@ Result<nsCOMPtr<mozIStorageConnection>, nsresult> OpenDBConnection(
                                          MOZ_STORAGE_SERVICE_CONTRACTID),
                  Err(NS_ERROR_UNEXPECTED));
 
+  const auto openConnection =
+      [&]() -> Result<nsCOMPtr<mozIStorageConnection>, nsresult> {
+    QM_TRY_UNWRAP(auto conn,
+                  MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+                      nsCOMPtr<mozIStorageConnection>, storageService,
+                      OpenDatabaseWithFileURL, dbFileUrl, ""_ns,
+                      mozIStorageService::CONNECTION_DEFAULT));
+    if (aCheckpointOnClose == CheckpointOnClose::Disabled) {
+      QM_TRY(MOZ_TO_RESULT(conn->DisableCheckpointOnClose()));
+    }
+    return conn;
+  };
+
   QM_TRY_UNWRAP(
       auto conn,
       QM_OR_ELSE_WARN_IF(
           // Expression.
-          MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
-              nsCOMPtr<mozIStorageConnection>, storageService,
-              OpenDatabaseWithFileURL, dbFileUrl, ""_ns,
-              mozIStorageService::CONNECTION_DEFAULT),
+          openConnection(),
           // Predicate.
           IsDatabaseCorruptionError,
           // Fallback.
-          ([&aDirectoryMetadata, &aDBFile, &storageService,
-            &dbFileUrl](const nsresult rv)
+          ([&aDirectoryMetadata, &aDBFile, &openConnection,
+            aAllowWipe](const nsresult rv)
                -> Result<nsCOMPtr<mozIStorageConnection>, nsresult> {
+            if (!aAllowWipe) {
+              return Err(rv);
+            }
+
             NS_WARNING("Cache database corrupted. Recreating empty database.");
 
             // There is nothing else we can do to recover.  Also, this data
             // can be deleted by QuotaManager at any time anyways.
             QM_TRY(MOZ_TO_RESULT(WipeDatabase(aDirectoryMetadata, aDBFile)));
 
-            QM_TRY_RETURN(MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
-                nsCOMPtr<mozIStorageConnection>, storageService,
-                OpenDatabaseWithFileURL, dbFileUrl, ""_ns,
-                mozIStorageService::CONNECTION_DEFAULT));
+            QM_TRY_RETURN(openConnection());
           })));
 
   // Check the schema to make sure it is not too old.
   QM_TRY_INSPECT(const int32_t& schemaVersion,
                  MOZ_TO_RESULT_INVOKE_MEMBER(conn, GetSchemaVersion));
   if (schemaVersion > 0 && schemaVersion < db::kFirstShippedSchemaVersion) {
+    if (!aAllowWipe) {
+      return Err(NS_ERROR_FILE_CORRUPTED);
+    }
+
     // Close existing connection before wiping database.
     conn = nullptr;
 
     QM_TRY(MOZ_TO_RESULT(WipeDatabase(aDirectoryMetadata, aDBFile)));
 
-    QM_TRY_UNWRAP(conn, MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
-                            nsCOMPtr<mozIStorageConnection>, storageService,
-                            OpenDatabaseWithFileURL, dbFileUrl, ""_ns,
-                            mozIStorageService::CONNECTION_DEFAULT));
+    QM_TRY_UNWRAP(conn, openConnection());
   }
 
   QM_TRY(MOZ_TO_RESULT(db::InitializeConnection(*conn)));
