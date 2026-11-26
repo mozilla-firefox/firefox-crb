@@ -512,7 +512,7 @@ class HomeFragment : Fragment(), UserInteractionHandler, OnLongPressedListener {
             val messagingFeature =
                 MessagingFeature(
                     appStore = requireComponents.appStore,
-                    surfaces = listOf(FenixMessageSurfaceId.HOMESCREEN),
+                    surfaces = listOf(FenixMessageSurfaceId.HOMESCREEN, FenixMessageSurfaceId.MENU_BANNER),
                 )
             messagingFeatureHomescreen.set(
                 feature = messagingFeature,

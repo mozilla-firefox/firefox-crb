@@ -17,4 +17,7 @@ object FenixMessageSurfaceId {
 
     /** A microsurvey UI for a specific feature. */
     const val MICROSURVEY = "microsurvey"
+
+    /** A banner in the menu. */
+    const val MENU_BANNER = "menu-banner"
 }
