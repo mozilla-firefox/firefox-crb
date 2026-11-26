@@ -4,3 +4,10 @@ subsuite = "condprof"
 ["test_check_install.py"]
 
 ["test_client.py"]
+
+["test_client_cache.py"]
+
+["test_customization.py"]
+requirements = "testing/condprofile/condprof/tests/requirements.txt"
+
+["test_mozproxy_dir.py"]

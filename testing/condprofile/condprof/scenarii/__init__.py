@@ -2,6 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import sys
+
 from condprof.scenarii.full import full
 from condprof.scenarii.settled import settled
 from condprof.scenarii.settled2 import settled2
@@ -13,3 +15,12 @@ scenarii = {
     "settled-youtube": settled_youtube,
     "settled2": settled2,
 }
+
+
+def get_scenario_module(name):
+    """Module that implements the scenario registered under `name`.
+
+    Names are registry keys, which may be aliases, so the module is found
+    through the registered function rather than from the name.
+    """
+    return sys.modules[scenarii[name].__module__]

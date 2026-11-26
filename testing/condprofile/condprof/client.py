@@ -6,6 +6,8 @@
 #
 import datetime
 import functools
+import hashlib
+import json
 import os
 import shutil
 import tarfile
@@ -52,6 +54,85 @@ class ProfileNotFoundError(Exception):
 
 class RetriesError(Exception):
     pass
+
+
+def compute_customization_key(customization):
+    """Compute a stable cache key from a customization identifier.
+
+    For plain string names (e.g. "default"), returns the string as-is.
+    For JSON overrides (dict or JSON string), returns a truncated SHA-256 hex
+    digest of the minified JSON content, suitable for use in filenames and
+    cache paths.
+    """
+
+    def _try_json(value):
+        try:
+            s = json.dumps(value) if isinstance(value, dict) else value
+            if not isinstance(s, str):
+                return None
+            return json.loads(s)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return None
+
+    parsed = _try_json(customization)
+    if not isinstance(parsed, dict):
+        return customization
+
+    minified = json.dumps(
+        parsed,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    return hashlib.sha256(minified.encode("utf-8")).hexdigest()[:16]
+
+
+def get_profile_archive_name(platform, scenario, customization, version=None):
+    """Archive file name for a conditioned profile.
+
+    Both the TaskCluster artifacts and the local cache in CONDPROF_CACHE use
+    this name, so anything that writes a profile archive for get_profile to
+    find must build the name here.
+    """
+    return ARTIFACT_NAME % {
+        "version": f"-v{version}" if version else "",
+        "platform": platform,
+        "scenario": scenario,
+        "customization": compute_customization_key(customization),
+    }
+
+
+def save_profile_to_cache(
+    profile_dir, platform, scenario, customization, cache_dir=CONDPROF_CACHE
+):
+    """Archive a locally built profile under the name get_profile(run_local=True)
+    looks up. Returns the archive path."""
+    cache_dir = os.path.expanduser(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    archive_path = os.path.join(
+        cache_dir, get_profile_archive_name(platform, scenario, customization)
+    )
+    # Build into a temporary file and rename, so a failure part-way through
+    # can't leave a truncated archive that later runs would treat as a valid
+    # cache hit.
+    partial_path = f"{archive_path}.partial"
+    try:
+        with tarfile.open(partial_path, "w:gz", dereference=True) as tar:
+            for name in os.listdir(profile_dir):
+                # "lock" is a symlink to <ip>:+<pid> that a dirty shutdown
+                # leaves dangling, which dereference=True cannot stat. Firefox
+                # recreates it on startup.
+                if name == "lock":
+                    continue
+                tar.add(os.path.join(profile_dir, name), name)
+    except Exception:
+        if os.path.exists(partial_path):
+            os.remove(partial_path)
+        raise
+    os.replace(partial_path, archive_path)
+    logger.info(f"Cached conditioned profile to {archive_path}")
+    return archive_path
 
 
 def _check_service(url):
@@ -123,6 +204,25 @@ def _retries(callable, onerror=None, retries=RETRIES):
     raise RetriesError()
 
 
+def _extract_profile(archive_path, target_dir):
+    with tarfile.open(archive_path, "r:gz") as tar:
+        logger.info(f"Extracting the tarball content in {target_dir}")
+        size = len(list(tar))
+        with progress.Bar(expected_size=size) as bar:
+
+            def _extract(self, *args, **kw):
+                if not TASK_CLUSTER:
+                    bar.show(bar.last_progress + 1)
+                return self.old(*args, **kw)
+
+            tar.old = tar.extract
+            try:
+                tar.extract = functools.partial(_extract, tar)
+                tar.extractall(target_dir)
+            finally:
+                tar.extract = tar.old
+
+
 def get_profile(
     target_dir,
     platform,
@@ -134,14 +234,19 @@ def get_profile(
     remote_test_root="/sdcard/test_root/",
     version=None,
     retries=RETRIES,
+    run_local=False,
 ):
     """Extract a conditioned profile in the target directory.
 
     If task_id is provided, will grab the profile from that task. when not
     provided (default) will grab the latest profile.
+
+    If run_local is True, only the local cache is checked; no network
+    download is attempted.
     """
 
     # XXX assert values
+    filename = get_profile_archive_name(platform, scenario, customization, version)
     if version:
         version = f"-v{version}"
     else:
@@ -150,23 +255,19 @@ def get_profile(
     # when we bump the Firefox version on trunk, autoland still needs to catch up
     # in this case we want to download an older profile- 2 days to account for closures/etc.
     oldday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2)
+
+    customization_key = compute_customization_key(customization)
+
     params = {
         "platform": platform,
         "scenario": scenario,
-        "customization": customization,
+        "customization": customization_key,
         "task_id": task_id,
         "repo": repo,
         "version": version,
         "date": str(oldday.date()).replace("-", "."),
     }
     logger.info(f"Getting conditioned profile with arguments: {params}")
-    filename = ARTIFACT_NAME % params
-    if task_id is None:
-        url = TC_LINK % params + filename
-        _check_service(TC_SERVICE)
-    else:
-        url = DIRECT_LINK % params + filename
-        _check_service(ARTIFACTS_SERVICE)
 
     logger.info("preparing download dir")
     if not download_cache:
@@ -180,26 +281,9 @@ def get_profile(
     downloaded_archive = os.path.join(download_dir, filename)
     logger.info(f"Downloaded archive path: {downloaded_archive}")
 
-    def _get_profile():
-        logger.info(f"Getting {url}")
+    def _get_profile_archive(archive):
         try:
-            archive = download_file(url, target=downloaded_archive)
-        except ArchiveNotFound:
-            raise ProfileNotFoundError(url)
-        try:
-            with tarfile.open(archive, "r:gz") as tar:
-                logger.info(f"Extracting the tarball content in {target_dir}")
-                size = len(list(tar))
-                with progress.Bar(expected_size=size) as bar:
-
-                    def _extract(self, *args, **kw):
-                        if not TASK_CLUSTER:
-                            bar.show(bar.last_progress + 1)
-                        return self.old(*args, **kw)
-
-                    tar.old = tar.extract
-                    tar.extract = functools.partial(_extract, tar)
-                    tar.extractall(target_dir)
+            _extract_profile(archive, target_dir)
         except (OSError, tarfile.ReadError) as e:
             logger.info("Failed to extract the tarball")
             if download_cache and os.path.exists(archive):
@@ -221,6 +305,30 @@ def get_profile(
                 os.remove(downloaded_archive)
             except Exception:
                 logger.error("Could not remove the file")
+
+    # In local-only mode, use the cache without network checks
+    if run_local:
+        if os.path.exists(downloaded_archive):
+            return _get_profile_archive(downloaded_archive)
+        raise ProfileNotFoundError(
+            f"Could not get profile from local cache: {downloaded_archive}"
+        )
+
+    # Network download
+    if task_id is None:
+        url = TC_LINK % params + filename
+        _check_service(TC_SERVICE)
+    else:
+        url = DIRECT_LINK % params + filename
+        _check_service(ARTIFACTS_SERVICE)
+
+    def _get_profile():
+        logger.info(f"Getting {url}")
+        try:
+            archive = download_file(url, target=downloaded_archive)
+        except ArchiveNotFound:
+            raise ProfileNotFoundError(url)
+        return _get_profile_archive(archive)
 
     try:
         return _retries(_get_profile, onerror, retries)
