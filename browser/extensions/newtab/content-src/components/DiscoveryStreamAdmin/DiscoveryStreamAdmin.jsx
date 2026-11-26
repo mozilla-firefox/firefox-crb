@@ -5,7 +5,10 @@
 import { actionCreators as ac, actionTypes as at } from "common/Actions.mjs";
 import {
   WIDGET_REGISTRY,
+  getWidgetAddableSources,
+  getWidgetsContainerSources,
   hasContentAreaWidgets,
+  isWidgetDataUnavailable,
   isWidgetsContainerVisible,
 } from "common/WidgetsRegistry.mjs";
 import {
@@ -13,9 +16,11 @@ import {
   PAGE_LAYOUT_VARIANTS,
   PREF_PAGE_LAYOUT_VARIANT,
   isSideBySideAssigned,
+  isSpaceOverridden,
   isSpacesAssigned,
   isSpacesThematicAssigned,
   PREF_SPACES_CONFIG,
+  SPACE_IDS,
   resolvePageLayoutVariant,
   resolvePopulatedSpaces,
   resolveThematicSpacesConfig,
@@ -67,6 +72,126 @@ function prettyJson(value) {
   } catch {
     return value;
   }
+}
+
+/**
+ * Explains whether a widget renders, following the same checks as Widgets.jsx.
+ *
+ * @param {object} widget - a WIDGET_REGISTRY entry
+ * @param {object} prefs - current pref values from the Redux store
+ * @param {object} state
+ * @param {boolean} state.discoveryStreamEnabled - whether the Discovery Stream
+ *   layout, which mounts the widgets, is on
+ * @param {boolean} state.weatherInitialized - whether weather data has loaded
+ * @returns {{shown: boolean, reason: string}}
+ */
+export function explainWidgetVisibility(
+  widget,
+  prefs,
+  { discoveryStreamEnabled = true, weatherInitialized } = {}
+) {
+  const hidden = reason => ({ shown: false, reason });
+  if (!discoveryStreamEnabled) {
+    return hidden(
+      "The Discovery Stream layout that holds the widgets is off (discoverystream.config)"
+    );
+  }
+  if (!isWidgetsContainerVisible(prefs)) {
+    return hidden(
+      "The widgets container is off: none of widgets.system.enabled, the newtabWidgets Nimbus feature's enabled, trainhopConfig.widgets.enabled or trainhopConfig.widgetsSettings.enabled is set. On Release a newtabTrainhop rollout normally turns it on"
+    );
+  }
+  if (
+    !prefs["widgets.enabled"] &&
+    !isSpaceOverridden(SPACE_IDS.WIDGETS, prefs)
+  ) {
+    return hidden("The user turned all widgets off (widgets.enabled)");
+  }
+  if (isWidgetDataUnavailable(widget, prefs)) {
+    return hidden(
+      prefs.recordsHistory === false && widget.requiresHistory
+        ? "Needs browsing history, which this profile doesn't record"
+        : "Needs search partner codes this Firefox version can't generate"
+    );
+  }
+  const sources = getWidgetAddableSources(widget, prefs);
+  if (!sources.length) {
+    const candidates = [
+      widget.systemEnabledPref,
+      widget.trainhopEnabledKey &&
+        `trainhopConfig.widgets.${widget.trainhopEnabledKey}`,
+      widget.trainhopNamespace &&
+        `trainhopConfig.${widget.trainhopNamespace}.visible`,
+      widget.widgetsSettingsVisibleKey &&
+        `trainhopConfig.widgetsSettings.${widget.widgetsSettingsVisibleKey}`,
+    ].filter(Boolean);
+    return hidden(`Not available: none of ${candidates.join(", ")} is set`);
+  }
+  if (!prefs[widget.enabledPref]) {
+    return hidden(`The user turned it off (${widget.enabledPref})`);
+  }
+  if (widget.id === "weather") {
+    if (!prefs.showWeather) {
+      return hidden("The user turned weather off (showWeather)");
+    }
+    if (
+      !prefs["system.showWeather"] &&
+      !prefs.trainhopConfig?.weather?.enabled
+    ) {
+      return hidden(
+        "Weather isn't enabled here (system.showWeather or trainhopConfig.weather.enabled)"
+      );
+    }
+    if (!weatherInitialized) {
+      return hidden("Weather data hasn't loaded");
+    }
+  }
+  return { shown: true, reason: `Available via ${sources.join(", ")}` };
+}
+
+function WidgetVisibility({ prefs, state }) {
+  const containerSources = getWidgetsContainerSources(prefs);
+  return (
+    <>
+      <h4>Why each widget is or isn&apos;t showing</h4>
+      <p>
+        Widgets container:{" "}
+        {containerSources.length
+          ? `on via ${containerSources.join(", ")}`
+          : "off"}
+        . See the Train Hop section for the trainhopConfig your enrollments
+        deliver, and Feature availability for which recipes set it.
+      </p>
+      <table className="availability-table widget-visibility">
+        <thead>
+          <tr>
+            <th>Widget</th>
+            <th>State</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {WIDGET_REGISTRY.filter(widget => !widget.retired).map(widget => {
+            const { shown, reason } = explainWidgetVisibility(
+              widget,
+              prefs,
+              state
+            );
+            return (
+              <Row
+                key={widget.id}
+                className={shown ? "message-item" : "message-item changed"}
+              >
+                <td className="min">{widget.id}</td>
+                <td className="min">{shown ? "Shown" : "Hidden"}</td>
+                <td>{reason}</td>
+              </Row>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
+  );
 }
 
 // Sorted A-Z by the customize panel label, the rule the panel and the
@@ -282,6 +407,409 @@ export class TogglePrefCheckbox extends React.PureComponent {
   }
 }
 
+const AVAILABILITY_CHANNELS = ["release", "beta", "nightly", "esr"];
+const AVAILABILITY_FORM_ID = "feature-availability-form";
+const AVAILABILITY_RECIPE_COLUMNS = 7;
+const AVAILABILITY_RETRY_MS = 8000;
+
+/**
+ * Lists, per widget, the matching recipe branches that make it available.
+ *
+ * @param {object[]} recipes - availability recipe results
+ * @returns {Map<string, string[]>} widget id to descriptions of its sources
+ */
+function widgetSources(recipes) {
+  const sources = new Map();
+  for (const r of recipes.filter(recipe => recipe.matches)) {
+    const branchesByWidget = new Map();
+    for (const { branch, widgets } of r.widgets) {
+      for (const id of widgets) {
+        branchesByWidget.set(id, [...(branchesByWidget.get(id) ?? []), branch]);
+      }
+    }
+    for (const [id, branches] of branchesByWidget) {
+      const type = r.isRollout ? "rollout" : "experiment";
+      const branchNote =
+        branches.length < r.branches.length
+          ? `, ${branches.length} of ${r.branches.length} branches: ${branches.join(", ")}`
+          : "";
+      sources.set(id, [
+        ...(sources.get(id) ?? []),
+        `${r.slug} (${type}, ${r.bucketPercent}% of clients${branchNote})`,
+      ]);
+    }
+  }
+  return sources;
+}
+
+const MATCH_LABELS = new Map([
+  [true, "Yes"],
+  [false, "No"],
+  [null, "Error"],
+]);
+
+function formatPrefValue(value) {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/**
+ * Shows which newtab Nimbus recipes and region/locale dependent default prefs
+ * apply to a given region, locale, channel and version.
+ */
+// Memoized: the pane re-renders on every feed and pref update, and this
+// renders a row pair per recipe.
+export const FeatureAvailability = React.memo(function FeatureAvailability({
+  availability,
+  dispatch,
+}) {
+  const [onlyMatching, setOnlyMatching] = React.useState(false);
+  const formRef = React.useRef(null);
+  // The audience picked since the last result, keyed by that result so a new
+  // one starts from its own region and locale.
+  const [audienceChoice, setAudienceChoice] = React.useState(null);
+  // Set while a request is in flight, so Evaluate can't be clicked again
+  // before the last one finished.
+  const [pending, setPending] = React.useState(false);
+  const pendingRef = React.useRef(false);
+  pendingRef.current = pending;
+  // Announced by the always-present status region once a request finishes.
+  const [statusText, setStatusText] = React.useState("");
+  React.useEffect(() => {
+    if (pendingRef.current) {
+      setStatusText(
+        availability?.error ? `Failed: ${availability.error}` : "Done."
+      );
+    }
+    setPending(false);
+  }, [availability]);
+
+  const requestAvailability = React.useCallback(
+    () =>
+      dispatch(
+        ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST })
+      ),
+    [dispatch]
+  );
+  // Ask again while no answer at all has arrived, rather than showing Loading
+  // forever. An error is an answer: it offers Retry instead.
+  const loaded = !!availability?.recipes;
+  const waiting = !availability;
+  React.useEffect(() => {
+    if (!waiting) {
+      return undefined;
+    }
+    const timer = setInterval(requestAvailability, AVAILABILITY_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [waiting, requestAvailability]);
+
+  const sourcesByWidget = React.useMemo(
+    () => widgetSources(availability?.recipes ?? []),
+    [availability?.recipes]
+  );
+
+  if (!loaded) {
+    return (
+      <p role="status">
+        {availability?.error
+          ? `Couldn't load feature availability: ${availability.error}`
+          : "Loading..."}{" "}
+        <button type="button" className="button" onClick={requestAvailability}>
+          Retry
+        </button>
+      </p>
+    );
+  }
+
+  const {
+    region,
+    locale,
+    channel,
+    version,
+    widgetsInteracted,
+    options,
+    error,
+  } = availability;
+
+  const send = type => {
+    // aria-disabled rather than disabled, so the focused button keeps focus.
+    if (pending) {
+      return;
+    }
+    const data = Object.fromEntries(new FormData(formRef.current));
+    // Sent either way, since an unchecked box is missing from FormData.
+    data.widgetsInteracted = formRef.current.elements.widgetsInteracted.checked;
+    setPending(true);
+    dispatch(ac.OnlyToMain({ type, data }));
+  };
+  const onSubmit = e => {
+    e.preventDefault();
+    send(at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST);
+  };
+  const audienceFor = (audienceRegion, audienceLocale) =>
+    options.presets.some(
+      p => p.region === audienceRegion && p.locale === audienceLocale
+    )
+      ? `${audienceRegion}|${audienceLocale}`
+      : "";
+  const formKey = [region, locale, channel, version, widgetsInteracted].join();
+  const audience =
+    audienceChoice?.formKey === formKey
+      ? audienceChoice.value
+      : audienceFor(region, locale);
+  const recipes = onlyMatching
+    ? availability.recipes.filter(r => r.matches)
+    : availability.recipes;
+
+  return (
+    <div className="feature-availability">
+      <form
+        id={AVAILABILITY_FORM_ID}
+        ref={formRef}
+        onSubmit={onSubmit}
+        key={formKey}
+      >
+        <div className="availability-row">
+          <label>
+            Audience{" "}
+            <select
+              aria-describedby="availability-audience-note"
+              value={audience}
+              onChange={e => {
+                const { value } = e.target;
+                if (value) {
+                  const [presetRegion, presetLocale] = value.split("|");
+                  formRef.current.elements.region.value = presetRegion;
+                  formRef.current.elements.locale.value = presetLocale;
+                }
+                setAudienceChoice({ formKey, value });
+              }}
+            >
+              <option value="">Custom</option>
+              {options.presets.map(p => (
+                <option
+                  key={`${p.region}|${p.locale}`}
+                  value={`${p.region}|${p.locale}`}
+                >
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {/* Hidden rather than removed, so the form still submits the region and
+        locale the audience set. */}
+        <div className="availability-row" hidden={audience !== ""}>
+          <label>
+            Region{" "}
+            <select name="region" defaultValue={region}>
+              {options.regions.map(r => (
+                <option key={r.value} value={r.value}>
+                  {r.label} ({r.value})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Locale{" "}
+            <select name="locale" defaultValue={locale}>
+              {options.locales.map(l => (
+                <option key={l.value} value={l.value}>
+                  {l.label} ({l.value})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="availability-row">
+          <label>
+            Channel{" "}
+            <select name="channel" defaultValue={channel}>
+              {[...new Set([channel, ...AVAILABILITY_CHANNELS])].map(c => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Version{" "}
+            <select
+              name="version"
+              defaultValue={version}
+              onChange={e => {
+                const choice = options.versions.find(
+                  v => v.value === e.target.value
+                );
+                if (choice?.channel) {
+                  formRef.current.elements.channel.value = choice.channel;
+                }
+              }}
+            >
+              {options.versions.map(v => (
+                <option key={v.value} value={v.value}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="availability-row">
+          <label>
+            <input
+              type="checkbox"
+              name="widgetsInteracted"
+              defaultChecked={widgetsInteracted}
+              aria-describedby="availability-interaction-note"
+            />{" "}
+            Has interacted with widgets
+          </label>
+        </div>
+        <div className="availability-row">
+          <button
+            type="submit"
+            className="button"
+            aria-disabled={pending ? "true" : undefined}
+          >
+            Evaluate
+          </button>
+          <span role="status" className="availability-status">
+            {pending ? "Working..." : statusText}
+          </span>
+        </div>
+      </form>
+      <p id="availability-audience-note" className="availability-note">
+        Audiences are the region and locale pairs our newtab recipes target,
+        most targeted first. Choose Custom to pick the region and locale
+        yourself. Versions come from whattrainisitnow.com, and picking one also
+        picks its channel.
+      </p>
+      <p id="availability-interaction-note" className="availability-note">
+        Some rollouts only target users who have used a widget, read from the
+        widgets.*.interaction prefs. The box starts from this profile, and
+        Evaluate uses it in place of those prefs.
+      </p>
+      <p className="availability-note">
+        Evaluate only simulates targeting, as a client that isn&apos;t enrolled
+        in anything. It doesn&apos;t change this profile.
+      </p>
+      {error ? (
+        <p className="availability-override">Last request failed: {error}</p>
+      ) : null}
+      <h3>Nimbus recipes ({recipes.length})</h3>
+      <h4>Widgets made available by matching recipes</h4>
+      {sourcesByWidget.size ? (
+        <ul className="availability-widget-sources">
+          {[...sourcesByWidget].map(([id, sources]) => (
+            <li key={id}>
+              {id}: {sources.join("; ")}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>None</p>
+      )}
+      <label>
+        <input
+          type="checkbox"
+          checked={onlyMatching}
+          onChange={e => setOnlyMatching(e.target.checked)}
+        />{" "}
+        Only matching
+      </label>
+      <table className="availability-table">
+        <thead>
+          <tr>
+            <th>Slug</th>
+            <th>Type</th>
+            <th>Features</th>
+            <th>Widgets</th>
+            <th>Bucket</th>
+            <th>Matches</th>
+            <th>Enrolled</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recipes.map(r => (
+            <React.Fragment key={r.slug}>
+              <Row className="message-item availability-recipe-row">
+                <td>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    href={`https://experimenter.services.mozilla.com/nimbus/${r.slug}/summary`}
+                  >
+                    {r.slug}
+                  </a>
+                  {r.userFacingDescription ? (
+                    <p className="availability-description">
+                      {r.userFacingDescription}
+                    </p>
+                  ) : null}
+                </td>
+                <td>{r.isRollout ? "Rollout" : "Experiment"}</td>
+                <td>{r.featureIds.join(", ")}</td>
+                <td>
+                  {r.widgets.map(({ branch, widgets }) => (
+                    <div key={branch}>
+                      {r.widgets.length > 1 ? `${branch}: ` : ""}
+                      {widgets.join(", ")}
+                    </div>
+                  ))}
+                </td>
+                <td className="min">{r.bucketPercent}%</td>
+                <td className="min">
+                  {MATCH_LABELS.get(r.matches)}
+                  {r.profileTargeting.length ? (
+                    <div className="availability-profile-targeting">
+                      Also depends on this profile&apos;s{" "}
+                      {r.profileTargeting.join(", ")}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="min">{r.enrolledBranch ?? ""}</td>
+              </Row>
+              <Row className="message-item availability-targeting-row">
+                <td colSpan={AVAILABILITY_RECIPE_COLUMNS}>
+                  <details>
+                    <summary>Targeting for {r.slug}</summary>
+                    <code>{r.targeting}</code>
+                  </details>
+                </td>
+              </Row>
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+      <h3>Region and locale dependent prefs</h3>
+      <table className="availability-table">
+        <thead>
+          <tr>
+            <th>Pref</th>
+            <th>Current</th>
+            <th>Simulated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {availability.prefs.map(p => (
+            <Row
+              key={p.name}
+              className={
+                p.current === p.simulated
+                  ? "message-item"
+                  : "message-item changed"
+              }
+            >
+              <td>{p.name}</td>
+              <td>{formatPrefValue(p.current)}</td>
+              <td>{formatPrefValue(p.simulated)}</td>
+            </Row>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+
 /**
  * A notice across New Tab while changes the devtools made are still in effect,
  * since the page then doesn't show what a regular install would.
@@ -368,6 +896,7 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
     this.toggleIABBanners = this.toggleIABBanners.bind(this);
     this.handleAllizomToggle = this.handleAllizomToggle.bind(this);
     this.sendConversionEvent = this.sendConversionEvent.bind(this);
+    this.handleAvailabilityToggle = this.handleAvailabilityToggle.bind(this);
     this.state = {
       toggledStories: {},
       weatherQuery: "",
@@ -375,6 +904,7 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
       overridesTogglePressed: null,
       // null means "show the pref", so an external change is picked up.
       spacesConfigDraft: null,
+      availabilityOpen: false,
     };
   }
 
@@ -1129,6 +1659,16 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
     );
   }
 
+  handleAvailabilityToggle(e) {
+    this.setState({ availabilityOpen: e.target.open });
+    // Only read the Nimbus recipes once the section is opened.
+    if (e.target.open && !this.props.state.DiscoveryStream.availability) {
+      this.props.dispatch(
+        ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST })
+      );
+    }
+  }
+
   renderTrainhop() {
     const {
       trainhopConfig = {},
@@ -1457,6 +1997,19 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
           <summary>Train Hop</summary>
           {this.renderTrainhop()}
         </details>
+        <details
+          className="details-section"
+          onToggle={this.handleAvailabilityToggle}
+        >
+          <summary>Feature availability</summary>
+          {/* Mounted only while open, so nothing is requested until then. */}
+          {this.state.availabilityOpen ? (
+            <FeatureAvailability
+              availability={this.props.state.DiscoveryStream.availability}
+              dispatch={this.props.dispatch}
+            />
+          ) : null}
+        </details>
         <details className="details-section">
           <summary>Page Layouts (experimental)</summary>
           {this.renderLayouts()}
@@ -1515,6 +2068,14 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
             otherPrefs={this.props.otherPrefs}
             widgetsSystemEnabled={widgetsSystemEnabled}
             onToggle={this.handleWidgetToggle}
+          />
+          <WidgetVisibility
+            prefs={this.props.otherPrefs}
+            state={{
+              discoveryStreamEnabled:
+                !!this.props.state.DiscoveryStream.config?.enabled,
+              weatherInitialized: this.props.state.Weather?.initialized,
+            }}
           />
         </details>
         <h3>Layout</h3>
