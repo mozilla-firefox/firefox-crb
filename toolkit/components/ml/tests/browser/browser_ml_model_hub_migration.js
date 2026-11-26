@@ -211,9 +211,6 @@ add_task(async function test_migration_repairs_stale_entries() {
  */
 add_task(async function test_migration_preserves_concurrent_cache_writes() {
   const dbName = `modelFiles-${crypto.randomUUID()}`;
-  const repairStarted = Promise.withResolvers();
-  const releaseRepair = Promise.withResolvers();
-  const originalGetFileHandle = SharedOPFS.getFileHandle;
   const openedCaches = [];
   let repair;
   let concurrentWrite;
@@ -235,14 +232,9 @@ add_task(async function test_migration_preserves_concurrent_cache_writes() {
     });
     await oldCache.dispose();
 
-    SharedOPFS.getFileHandle = async (...args) => {
-      if (args[0] === healthyPath) {
-        repairStarted.resolve();
-        await releaseRepair.promise;
-      }
-
-      return originalGetFileHandle(...args);
-    };
+    using getFileHandleController = TestUtils.asyncControlProxy(
+      SharedOPFS
+    ).getFileHandle((_, [path]) => path === healthyPath);
 
     info("Pause repair after it has read the existing headers.");
     repair = IndexedDBCache.init({ dbName }).then(cache => {
@@ -250,7 +242,7 @@ add_task(async function test_migration_preserves_concurrent_cache_writes() {
 
       return cache;
     });
-    await repairStarted.promise;
+    await getFileHandleController.waitForCapture();
 
     info("An unrelated database can initialize while repair is paused.");
     const independentCache = await IndexedDBCache.init({
@@ -303,7 +295,7 @@ add_task(async function test_migration_preserves_concurrent_cache_writes() {
     );
 
     info("Finish repair and check that the concurrent entry survives.");
-    releaseRepair.resolve();
+    getFileHandleController.releaseToCaller();
     await repair;
     const otherCache = await concurrentWrite;
 
@@ -321,9 +313,7 @@ add_task(async function test_migration_preserves_concurrent_cache_writes() {
       "Repair preserves the concurrent entry's task ownership."
     );
   } finally {
-    releaseRepair.resolve();
     await Promise.allSettled([repair, concurrentWrite]);
-    SharedOPFS.getFileHandle = originalGetFileHandle;
     for (const cache of openedCaches) {
       await cache.dispose();
     }
