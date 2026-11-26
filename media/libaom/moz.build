@@ -100,6 +100,8 @@ for f in SOURCES:
         SOURCES[f].flags += ['-mavx']
     elif f.endswith('avx2.c'):
         SOURCES[f].flags += ['-mavx2']
+    elif f.endswith('avx512.c'):
+        SOURCES[f].flags += ['-mavx512f', '-mavx512cd', '-mavx512bw', '-mavx512dq', '-mavx512vl']
     elif f.endswith('neon.c'):
         SOURCES[f].flags += CONFIG['NEON_FLAGS']
     elif f.endswith('neon_i8mm.c'):
