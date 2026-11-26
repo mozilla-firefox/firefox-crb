@@ -436,9 +436,14 @@ nsresult HttpConnectionUDP::Activate(nsAHttpTransaction* trans, uint32_t caps,
     if (deferPrivate) {
       mDeferredLnaTransactions.AppendElement(hTrans);
     } else if (!hTrans->AllowedToConnectToIpAddressSpace(addrSpace)) {
+      // Only tear down a session that is unused and not yet connected; a
+      // shared one may carry transactions that are allowed to use it.
       // we could probably fail early and avoid recreating the H3 session
       // See Bug 1968908
-      CloseTransaction(mHttp3Session, NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
+      if (!mHttp3Session || (!mHttp3Session->IsConnected() &&
+                             mHttp3Session->HasNoActiveStreams())) {
+        CloseTransaction(mHttp3Session, NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
+      }
       trans->Close(NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
       return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;
     }
@@ -556,28 +561,31 @@ void HttpConnectionUDP::OnConnected() {
   // Deferred LNA check: now that the QUIC handshake has succeeded (and the
   // peer presented a valid certificate for the requested name), check
   // whether any deferred transactions are permitted to reach this address
-  // space. If denied, tear down the session and close all of them.
+  // space. Close the denied ones, and tear down the session only if no other
+  // transaction is left on it.
   if (!mDeferredLnaTransactions.IsEmpty()) {
     nsTArray<RefPtr<nsHttpTransaction>> deferred =
         std::move(mDeferredLnaTransactions);
     NetAddr peerAddr;
     if (NS_SUCCEEDED(GetPeerAddr(&peerAddr))) {
       auto addrSpace = peerAddr.GetIpAddressSpace();
-      bool denied = false;
+      nsTArray<RefPtr<nsHttpTransaction>> denied;
       for (const auto& t : deferred) {
         if (!t->AllowedToConnectToIpAddressSpace(addrSpace)) {
-          denied = true;
-          // We might want to break here, but AllowedToConnectToIpAddressSpace
-          // has a side effect of setting mTargetIpAddressSpace. In practice
-          // the array will usually just contain one transaction.
+          denied.AppendElement(t);
         }
       }
-      if (denied) {
+      for (const auto& t : denied) {
+        if (mHttp3Session) {
+          mHttp3Session->CloseTransaction(t,
+                                          NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
+        }
+        t->Close(NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
+      }
+      if (!denied.IsEmpty() &&
+          (!mHttp3Session || mHttp3Session->HasNoActiveStreams())) {
         DontReuse();
         CloseTransaction(mHttp3Session, NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
-        for (const auto& t : deferred) {
-          t->Close(NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
-        }
         return;
       }
     }

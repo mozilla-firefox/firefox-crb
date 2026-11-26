@@ -743,15 +743,15 @@ nsresult nsHttpConnection::AddTransaction(nsAHttpTransaction* httpTransaction,
   nsHttpConnectionInfo* transCI = httpTransaction->ConnectionInfo();
   if (httpTrans && !transCI->UsingProxy()) {
     // this is a httptransaction object, being dispatched into a H2 session
-    // ensure it does not violate local network access.
+    // ensure it does not violate local network access. Only the denied
+    // transaction is failed: the session and its other streams may belong to
+    // requests that are allowed to use it.
     NetAddr peerAddr;
     if (NS_SUCCEEDED(GetPeerAddr(&peerAddr)) &&
         !httpTrans->AllowedToConnectToIpAddressSpace(
             peerAddr.GetIpAddressSpace())) {
-      mSocketOutCondition = NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;
-      CloseTransaction(httpTransaction, mSocketOutCondition);
-      httpTransaction->Close(mSocketOutCondition);
-      return mSocketOutCondition;
+      httpTransaction->Close(NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED);
+      return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;
     }
   }
 

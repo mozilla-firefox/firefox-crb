@@ -244,6 +244,12 @@ class Http3Session final : public Http3SessionBase,
   bool IsClosing() const { return (mState == CLOSING || mState == CLOSED); }
   bool IsClosed() const { return mState == CLOSED; }
 
+  inline bool HasNoActiveStreams() const {
+    return mStreamTransactionHash.Count() == 0 &&
+           mWebTransportSessions.IsEmpty() && mWebTransportStreams.IsEmpty() &&
+           mTunnelStreams.IsEmpty();
+  }
+
   // Called from the connection manager's timeout tick. Closes a TRR session
   // whose path went silent; returns the seconds until the next check is due.
   uint32_t ReadTimeoutTick();
@@ -570,12 +576,6 @@ class Http3Session final : public Http3SessionBase,
   // Also, implement the case when the  HTTP/3 session fails before settings
   // are exchanged.
   void FinishNegotiation(ExtendedConnectKind aKind, bool aSuccess);
-
-  inline bool HasNoActiveStreams() const {
-    return mStreamTransactionHash.Count() == 0 &&
-           mWebTransportSessions.IsEmpty() && mWebTransportStreams.IsEmpty() &&
-           mTunnelStreams.IsEmpty();
-  }
 
   nsTArray<RefPtr<Http3StreamBase>> mWebTransportSessions;
   nsTArray<RefPtr<Http3StreamBase>> mWebTransportStreams;
