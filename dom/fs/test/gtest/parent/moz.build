@@ -12,6 +12,7 @@ UNIFIED_SOURCES = [
     "TestFileSystemOrphanCleanup.cpp",
     "TestFileSystemUsageTracking.cpp",
     "TestFileSystemWritableFileStreamParent.cpp",
+    "TestFileSystemWriteLeaseOrdering.cpp",
 ]
 
 include("/ipc/chromium/chromium-config.mozbuild")

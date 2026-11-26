@@ -397,6 +397,24 @@ RefPtr<BoolPromise> FileSystemDataManager::OnClose() {
   return mClosePromiseHolder.Ensure(__func__);
 }
 
+Result<quota::WriteLease, nsresult> FileSystemDataManager::AcquireWriteLease() {
+  MOZ_DIAGNOSTIC_ASSERT(mIOTaskQueue->IsOnCurrentThread());
+  MOZ_ASSERT(mDirectoryLockId >= 0);
+  MOZ_ASSERT(mDatabaseManager);
+
+  auto* quotaManager = quota::QuotaManager::Get();
+  QM_TRY(OkIf(quotaManager), Err(NS_ERROR_ILLEGAL_DURING_SHUTDOWN));
+
+  // Blocks this queue task until quota IO has recorded the dirty flag, so
+  // later requests on the queue cannot overtake this one. This queue runs on
+  // the stream transport pool, which no quota IO work waits on, and
+  // AcquireWriteLeaseSync asserts we are not on a thread quota IO waits on.
+  // BeginClose drains this queue before releasing the directory lock and
+  // removing the data manager, and QuotaManager::Shutdown joins its IO thread
+  // only after all clients have finished.
+  return quotaManager->AcquireWriteLeaseSync(mOriginMetadata);
+}
+
 // Note: Input can be temporary or main file id
 Result<bool, QMResult> FileSystemDataManager::IsLocked(
     const FileId& aFileId) const {
