@@ -61,6 +61,7 @@ class PictureInPictureWindowFeatureTest {
         verify(context).startActivity(intent.capture())
         assertEquals(TestPictureInPictureActivity::class.java.name, intent.value.component?.className)
         assertTrue(intent.value.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertTrue(intent.value.flags and Intent.FLAG_ACTIVITY_NO_ANIMATION != 0)
     }
 
     @Test

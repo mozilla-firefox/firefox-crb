@@ -576,7 +576,8 @@
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
-            android:taskAffinity="" />
+            android:taskAffinity=""
+            android:theme="@style/PictureInPictureTheme" />
 
         <activity
             android:name=".IntentReceiverActivity"

@@ -104,6 +104,8 @@ abstract class AbstractPictureInPictureActivity : AppCompatActivity() {
     internal companion object {
         /** Creates the intent starting [activityClass]. */
         fun createIntent(context: Context, activityClass: Class<out AbstractPictureInPictureActivity>): Intent =
-            Intent(context, activityClass).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(context, activityClass)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
     }
 }

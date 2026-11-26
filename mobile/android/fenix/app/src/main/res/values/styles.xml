@@ -189,6 +189,10 @@
 
     <style name="NormalTheme" parent="NormalThemeBase" />
 
+    <style name="PictureInPictureTheme" parent="NormalTheme">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- The OLED theme inherits from NormalThemeBase and overrides only the tokens that differ from dark theme. -->
     <style name="OledThemeBase" parent="NormalThemeBase">
         <item name="android:windowBackground">@color/fx_mobile_oled_surface</item>
