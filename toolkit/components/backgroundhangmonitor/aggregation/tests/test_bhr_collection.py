@@ -193,6 +193,7 @@ def _make_row(
     hangs_reports,
     hangs_modules="",
     sample_slice=0,
+    client_id=None,
 ):
     """Build a fake BQ row as a nested dict — same shape google-cloud-bigquery
     returns for our SELECT."""
@@ -203,6 +204,7 @@ def _make_row(
             "os_version": os_version,
             "architecture": arch,
             "app_build": app_build,
+            "client_id": client_id,
         },
         "metrics": {
             "object": {
@@ -1268,6 +1270,59 @@ def test_aggregate_child_sampling_and_rollup(monkeypatch, tmp_path, sample_size,
     series = bhr_timeseries.build_timeseries(tmp_path, tmp_path, output_tag="child")
     assert len(series["signatures"]) == 1
     assert (tmp_path / "hangs_timeseries_child.json").is_file()
+
+
+def _aggregate_client_metrics(monkeypatch, tmp_path, rows):
+    import symbolication
+
+    _install_fake_bigquery(monkeypatch, rows)
+    monkeypatch.setattr(symbolication, "fetch_url", lambda _url: (False, ""))
+    bhr_collection.aggregate(
+        date=datetime.date(2026, 5, 2),
+        sample_size=0.1,
+        billing_project="test-project",
+        output_dir=str(tmp_path),
+        config_overrides={"client_metrics": True},
+    )
+    profile = json.loads((tmp_path / "hangs_main_20260502.json").read_text())
+    return profile["affectedClients"]
+
+
+def _client_metrics_row(client_id, modules, os_name="Linux", os_version="6.8.0"):
+    hangs = [
+        {
+            "thread": "Gecko",
+            "process": "default",
+            "duration": 500,
+            "stack": [{"frame": "1000", "module": index}],
+            "annotations": [["UserInteracting", "true"]],
+        }
+        for index in range(len(modules))
+    ]
+    return _make_row(
+        os_name,
+        os_version,
+        "x86_64",
+        "20260502123456",
+        json.dumps(hangs),
+        json.dumps([[module, "ABC"] for module in modules]),
+        client_id=client_id,
+    )
+
+
+def test_aggregate_counts_distinct_affected_clients(monkeypatch, tmp_path):
+    rows = [
+        _client_metrics_row("client-a", ["xul.pdb", "nss3.pdb"]),
+        _client_metrics_row("client-a", ["xul.pdb"]),
+        _client_metrics_row("client-b", ["xul.pdb"]),
+    ]
+    affected = _aggregate_client_metrics(monkeypatch, tmp_path, rows)
+
+    assert affected["totalDistinct"] == 2
+    assert sorted(affected["bySignature"].values()) == [1, 2]
+    assert set(affected["sketchBySignature"]) == set(affected["bySignature"])
+    with open(tmp_path / "hangs_main_20260502.json") as f:
+        assert "client-a" not in f.read()
 
 
 def test_get_data_by_day_reads_the_window_one_build_date_at_a_time(monkeypatch):

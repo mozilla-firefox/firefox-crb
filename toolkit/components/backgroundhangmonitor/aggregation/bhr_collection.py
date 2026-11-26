@@ -109,7 +109,7 @@ _SIG_FRAME_SEP = "\x1e"
 
 def _signature_key(symbolicated_stack):
     frames = []
-    for name, lib in reversed(symbolicated_stack):
+    for name, lib, _ in reversed(symbolicated_stack):
         lib_name = lib[:-4] if lib.endswith(".pdb") else lib
         frames.append(f"{name}{_SIG_FIELD_SEP}{lib_name}")
     return _SIG_FRAME_SEP.join(frames)
