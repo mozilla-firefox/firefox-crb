@@ -51,6 +51,14 @@ function* testSteps() {
 
   let dbCount = 0;
 
+  const accessTimeOffsetPref =
+    "dom.quotaManager.temporaryStorage.initialOriginAccessTimeOffsetSec";
+  registerCleanupFunction(() =>
+    Services.prefs.clearUserPref(accessTimeOffsetPref)
+  );
+  // Backdate creation so later access makes the origin eligible for maintenance.
+  Services.prefs.setIntPref(accessTimeOffsetPref, 2 * 24 * 60 * 60);
+
   for (let persistence of ["persistent", "temporary", "default"]) {
     for (let i = 1; i <= 5; i++) {
       let dbName = "foo-" + i;
@@ -105,6 +113,17 @@ function* testSteps() {
       dbCount++;
     }
   }
+  yield undefined;
+
+  Services.prefs.clearUserPref(accessTimeOffsetPref);
+
+  // db.close() returns before the connection's checkpoint finishes.
+  info("Waiting for the measured origin's connections to close");
+  const resetRequest = Services.qms.resetStoragesForClient(principal, "idb");
+  resetRequest.callback = () => {
+    is(resetRequest.resultCode, Cr.NS_OK, "Connections closed successfully");
+    continueToNextStep();
+  };
   yield undefined;
 
   info("Getting usage before maintenance");

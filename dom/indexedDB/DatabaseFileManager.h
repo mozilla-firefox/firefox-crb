@@ -57,7 +57,7 @@ class DatabaseFileManager final
       nsIFile* aDirectory, int64_t aId);
 
   static nsresult InitDirectory(nsIFile& aDirectory, nsIFile& aDatabaseFile,
-                                const nsACString& aOrigin,
+                                const quota::OriginMetadata& aOriginMetadata,
                                 uint32_t aTelemetryId);
 
   template <typename KnownDirEntryOp, typename UnknownDirEntryOp>
