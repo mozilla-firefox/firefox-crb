@@ -498,6 +498,36 @@ add_task(async function testSourceTreeWithWebExtensionContentScript() {
   await extension.unload();
 });
 
+// Assert that the html sources are reselected in the source tree on reload
+add_task(async function testHtmlSourceSelectOnReload() {
+  const httpServer = createTestHTTPServer();
+  httpServer.registerContentType("html", "text/html");
+  httpServer.registerPathHandler("/index.html", (request, response) => {
+    response.setStatusLine(request.httpVersion, 200, "OK");
+    response.write(`<!DOCTYPE html>
+      <html>
+        <head></head>
+        <body> 
+          <script type="text/javascript">
+            function inlineSource() {}
+          </script>
+        </body>
+      </html>
+    `);
+  });
+
+  const port = httpServer.identity.primaryPort;
+  const dbg = await initDebuggerWithAbsoluteURL(
+    `http://localhost:${port}/index.html`
+  );
+  await waitForSourcesInSourceTree(dbg, ["index.html"]);
+  await selectSourceFromSourceTree(dbg, "index.html");
+  await assertNodeIsFocused(dbg, 3, "index.html");
+  await reload(dbg);
+  await waitForSelectedSource(dbg, "index.html");
+  await assertNodeIsFocused(dbg, 3, "index.html");
+});
+
 add_task(async function testSourceTreeWithEncodedPaths() {
   const httpServer = createTestHTTPServer();
   httpServer.registerContentType("html", "text/html");
@@ -539,7 +569,11 @@ add_task(async function testSourceTreeWithEncodedPaths() {
     "my file.js"
   );
 
-  await waitForSourcesInSourceTree(dbg, ["my file.js", "malformedUri.js?%"]);
+  await waitForSourcesInSourceTree(dbg, [
+    "my file.js",
+    "index.html",
+    "malformedUri.js?%",
+  ]);
   ok(
     true,
     "source name are decoded in the tree, and malformed uri source are displayed"

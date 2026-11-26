@@ -57,7 +57,7 @@ add_task(async function testStylesheetOpenAndEditTelemetry() {
   await selectSourceFromSourceTreeWithIndex(
     dbg,
     "style.css",
-    3,
+    4,
     "Select the style sheet"
   );
 

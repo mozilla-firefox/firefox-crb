@@ -47,7 +47,7 @@ add_task(async function testToggleStyleSheetVisibility() {
   await selectSourceFromSourceTreeWithIndex(
     dbg,
     "style.css",
-    3,
+    4,
     "Select the style sheet"
   );
 

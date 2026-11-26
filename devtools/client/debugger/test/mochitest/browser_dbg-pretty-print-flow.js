@@ -34,8 +34,8 @@ add_task(async function () {
   );
   is(
     dbg.selectors.getSourceCount(),
-    2,
-    "There are 2 sources before pretty printing"
+    3,
+    "There are 3 sources before pretty printing"
   );
   await togglePrettyPrint(dbg);
 
@@ -45,8 +45,8 @@ add_task(async function () {
   is(countTabs(dbg), 2, "Pretty printing did not open any new tab");
   is(
     dbg.selectors.getSourceCount(),
-    3,
-    "There are three sources after pretty printing"
+    4,
+    "There are four sources after pretty printing"
   );
 
   info("Navigate to previous frame in call stack");
@@ -74,7 +74,7 @@ add_task(async function () {
   await waitForSelectedLocation(dbg, 11, 17);
   is(
     dbg.selectors.getSourceCount(),
-    3,
+    4,
     "There are still 3 sources after retrying to pretty print the same source"
   );
 });

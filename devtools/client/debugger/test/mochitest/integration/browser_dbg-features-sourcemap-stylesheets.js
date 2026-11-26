@@ -80,7 +80,7 @@ add_task(async function testSourcemappedStyleSheets() {
   await selectSourceFromSourceTreeWithIndex(
     dbg,
     "sourcemaps.scss",
-    4,
+    5,
     "Select the scss file"
   );
 

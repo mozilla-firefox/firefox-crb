@@ -109,8 +109,8 @@ add_task(async function () {
     content.document.querySelector("iframe").remove();
   });
 
-  info("Wait for all sources to be removed");
-  await waitFor(() => dbg.selectors.getSourceCount() == 0);
+  info("Wait for all but the target source to be removed");
+  await waitFor(() => dbg.selectors.getSourceCount() == 1);
   info("Wait for target to be removed");
   await waitFor(() => dbg.selectors.getAllThreads().length == 1);
 
@@ -121,7 +121,7 @@ add_task(async function () {
 
   // First via common selectors
   is(editor.sourcesCount(), 0, "No sources exists in the source editor cache");
-  is(dbg.selectors.getSourceCount(), 0, "No sources exists");
+  is(dbg.selectors.getSourceCount(), 1, "Only the target source exists");
   is(dbg.selectors.getBreakpointCount(), 0, "No breakpoints exists");
   is(countTabs(dbg), 0, "No tabs exists");
   is(
@@ -131,8 +131,8 @@ add_task(async function () {
   );
   is(
     dbg.selectors.getSourcesTreeSources().length,
-    0,
-    "There is no source in the SourceTree"
+    1,
+    "There is only the target source in the SourceTree"
   );
   is(
     dbg.selectors.getSelectedLocation(),
@@ -142,8 +142,8 @@ add_task(async function () {
   ok(!dbg.selectors.getFocusedSourceItem(), "No more focused source tree item");
   is(
     dbg.selectors.getExpandedState().size,
-    0,
-    "No more expanded source tree items"
+    2,
+    "The target sources tree path is expanded source tree items"
   );
 
   // But also directly querying the reducer states, as we don't necessarily
