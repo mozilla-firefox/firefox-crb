@@ -754,6 +754,10 @@ body {
   > :is(toolbarbutton, toolbaritem):first-child,
   > toolbarpaletteitem:first-child > :is(toolbarbutton, toolbaritem) {
     padding-inline-start: var(--toolbar-start-edge-padding);
+
+    &::before {
+      inset-inline-start: var(--toolbar-start-edge-padding);
+    }
   }
 }
 

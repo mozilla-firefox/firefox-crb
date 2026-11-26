@@ -45,7 +45,7 @@ toolbar .toolbarbutton-1 {
 #PlacesChevron:-moz-locale-dir(rtl) > .toolbarbutton-icon,
 #panic-button:-moz-locale-dir(rtl) > .toolbarbutton-icon,
 #PanelUI-menu-button:-moz-locale-dir(rtl) > .toolbarbutton-badge-stack > .toolbarbutton-icon {
-  scale: -1 1;
+  transform: scaleX(-1);
 }
 
 #back-button {
@@ -156,10 +156,13 @@ toolbar .toolbarbutton-1 {
 #profiler-button-button.profiler-active > image {
   fill: var(--profiler-button-image-fill-active);
   fill-opacity: 1;
+}
+
+#profiler-button-button.profiler-active::before {
   background-color: color-mix(in srgb, var(--profiler-button-image-fill-active) 20%, transparent);
 }
 
-#profiler-button-button.profiler-active:hover > image {
+#profiler-button-button.profiler-active:hover::before {
   background-color: color-mix(in srgb, var(--profiler-button-image-fill-active) 13%, transparent);
 }
 
@@ -606,6 +609,19 @@ toolbar .toolbarbutton-1 {
     &.ipprotection-included .ipprotection-icon-layer[data-state="included"],
     &.ipprotection-paused .ipprotection-icon-layer[data-state="paused"] {
       opacity: 1;
+    }
+
+    /* The active state's layer stands in for the hidden icon, so it has to
+     * shrink with it when the button is pressed. */
+    toolbar & .ipprotection-icon-layer {
+      transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      toolbar &:not([disabled]):hover:active .ipprotection-icon-layer {
+        scale: var(--toolbarbutton-motion-scale);
+        transition: scale var(--toolbarbutton-motion-duration-press) var(--toolbarbutton-motion-easing);
+      }
     }
 
     /* Icon Inactive State */

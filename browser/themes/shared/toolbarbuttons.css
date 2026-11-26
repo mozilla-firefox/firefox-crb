@@ -218,20 +218,56 @@ toolbar .toolbarbutton-1 {
   padding: 0 var(--toolbarbutton-padding-outer);
   justify-content: center;
 
+  /* A plain button paints its background beneath its icon rather than on it,
+   * so that the icon can be scaled on its own when pressed. This box covers
+   * the icon's, which fills the button's content box and is centered in it.
+   * Anchoring it to the icon instead would reflow it when the icon scales.
+   * This goes by the markup rather than [badged], which can change after the
+   * button has built its children. The :has() only looks at direct children,
+   * which toolbar buttons rarely change. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
+  &:has(> .toolbarbutton-icon) {
+    position: relative;
+    isolation: isolate;
+
+    &::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0 var(--toolbarbutton-padding-outer);
+      height: var(--toolbarbutton-icon-size);
+      margin-block: auto;
+      pointer-events: none;
+    }
+  }
+
+  toolbar[mode="text"] &,
+  &:is(#zoom-reset-button, #smartwindow-ask-button-inner) {
+    &::before {
+      content: none;
+    }
+  }
+
   > .toolbarbutton-icon,
   > .toolbarbutton-text,
   > .toolbarbutton-badge-stack {
     padding: var(--toolbarbutton-padding-inner);
+    overflow-clip-margin: padding-box;
+  }
+
+  &::before,
+  > .toolbarbutton-text,
+  > .toolbarbutton-badge-stack {
     border-radius: var(--toolbarbutton-border-radius);
     outline: var(--toolbarbutton-outline);
     outline-offset: var(--toolbarbutton-outline-offset);
-    overflow-clip-margin: padding-box;
+    transition: background-color var(--toolbarbutton-motion-duration-hover) var(--toolbarbutton-motion-easing);
   }
 
   &:focus-visible {
     outline: none;
 
-    > .toolbarbutton-icon,
+    &::before,
     > .toolbarbutton-text,
     > .toolbarbutton-badge-stack {
       outline: var(--focus-outline);
@@ -242,6 +278,12 @@ toolbar .toolbarbutton-1 {
   > .toolbarbutton-icon {
     width: var(--toolbarbutton-icon-size);
     height: var(--toolbarbutton-icon-size);
+  }
+
+  > .toolbarbutton-icon,
+  > .toolbarbutton-badge-stack > .toolbarbutton-icon,
+  > .toolbarbutton-badge-stack > hbox > .avatar-container {
+    transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
   }
 
   > .toolbarbutton-text {
@@ -259,41 +301,68 @@ toolbar .toolbarbutton-1 {
   }
 
   &[disabled] {
-    > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
+    &::before,
+    > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
       background-color: var(--toolbarbutton-background-color-disabled);
     }
   }
 
-  :root:not([customizing]) &[disabled] > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack),
-  &:is(#nav-bar-overflow-button, #PanelUI-menu-button)[disabled] > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
-    outline-color: var(--toolbarbutton-outline-color-disabled);
+  :root:not([customizing]) &[disabled],
+  &:is(#nav-bar-overflow-button, #PanelUI-menu-button)[disabled] {
+    &::before,
+    > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
+      outline-color: var(--toolbarbutton-outline-color-disabled);
+    }
   }
 
   &:not([disabled]) {
-    > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
+    &::before,
+    > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
       background-color: var(--toolbarbutton-background-color);
     }
 
-    &:hover > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
-      background-color: var(--toolbarbutton-background-color-hover);
-      color: inherit;
+    &:hover {
+      &::before,
+      > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
+        background-color: var(--toolbarbutton-background-color-hover);
+        color: inherit;
+      }
     }
 
-    &:is(:hover:active, [open], [checked]) > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
-      background-color: var(--toolbarbutton-background-color-active);
-      color: inherit;
+    &:is(:hover:active, [open], [checked]) {
+      &::before,
+      > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
+        background-color: var(--toolbarbutton-background-color-active);
+        color: inherit;
+      }
     }
 
-    &:not(:focus-visible) {
-      &:hover > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
+    @media (prefers-reduced-motion: no-preference) {
+      &:is(:hover:active, [held]) > .toolbarbutton-icon,
+      &:is(:hover:active, [held]) > .toolbarbutton-badge-stack > .toolbarbutton-icon,
+      &:is(:hover:active, [held]) > .toolbarbutton-badge-stack > hbox > .avatar-container {
+        scale: var(--toolbarbutton-motion-scale);
+        transition: scale var(--toolbarbutton-motion-duration-press) var(--toolbarbutton-motion-easing);
+      }
+    }
+
+    &:not(:focus-visible):hover {
+      &::before,
+      > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
         outline-color: var(--toolbarbutton-outline-color-hover);
       }
+    }
 
-      &:hover:active > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
+    &:not(:focus-visible):hover:active {
+      &::before,
+      > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
         outline-color: var(--toolbarbutton-outline-color-active);
       }
+    }
 
-      &:is([open], [checked]) > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
+    &:not(:focus-visible):is([open], [checked]) {
+      &::before,
+      > :is(.toolbarbutton-text, .toolbarbutton-badge-stack) {
         outline-color: var(--toolbarbutton-outline-color-selected);
       }
     }
@@ -314,6 +383,10 @@ toolbar .toolbaritem-combined-buttons {
 
   > .toolbarbutton-1 {
     padding-inline: 0;
+
+    &::before {
+      inset-inline: 0;
+    }
   }
 
   > .toolbarbutton-combined-buttons-dropmarker > .toolbarbutton-icon {
@@ -386,7 +459,7 @@ toolbar .toolbaritem-combined-buttons {
   }
 
   /* The button should look both disabled and open in customize mode. */
-  #nav-bar[customizing] > & > .toolbarbutton-icon {
+  #nav-bar[customizing] > &::before {
     background-color: var(--toolbarbutton-background-color-active);
   }
 
@@ -460,7 +533,7 @@ toolbar .toolbaritem-combined-buttons {
     color: inherit;
     fill: var(--toolbarbutton-icon-fill);
 
-    > .toolbarbutton-icon {
+    &::before {
       outline-color: var(--toolbarbutton-outline-color);
     }
 
@@ -469,7 +542,7 @@ toolbar .toolbaritem-combined-buttons {
     }
   }
 
-  &:hover > .toolbarbutton-icon {
+  &:hover::before {
     background-color: var(--toolbarbutton-background-color-hover);
   }
 }
@@ -501,7 +574,8 @@ toolbarbutton.bookmark-item:not(.subviewbutton) {
      * how e.g. combined items work, and maybe we should just remove this.
      */
     align-items: stretch;
-    > .toolbarbutton-icon {
+    > .toolbarbutton-icon,
+    &::before {
       height: auto;
     }
     > .toolbarbutton-badge-stack {
@@ -834,7 +908,7 @@ toolbar[keyNav]:not([collapsed], [customizing]) toolbartabstop,
     -moz-context-properties: fill, fill-opacity;
   }
 
-  &[aria-expanded="true"] > .toolbarbutton-icon {
+  &[aria-expanded="true"]::before {
     background-color: var(--toolbarbutton-background-color-active);
   }
 }
