@@ -151,3 +151,104 @@ add_task(async function test_searchBrowsingHistory_wrapper_boolean_args() {
     "error or message present"
   );
 });
+
+const AITAB_PREF = "browser.smartwindow.aitab.enabled";
+const SMART_PAGE_URL = "about:smartpage?page=moth-defences-against-bats";
+const WEB_URL = "https://example.com/smart-pages-help";
+
+/**
+ * Seeds one generated page and one web page. The generated page needs the
+ * AITab pref, because history refuses every other about: URL.
+ */
+async function seedSmartPageHistory() {
+  await PlacesUtils.history.clear();
+  Services.prefs.setBoolPref(AITAB_PREF, true);
+  registerCleanupFunction(async () => {
+    Services.prefs.clearUserPref(AITAB_PREF);
+    await PlacesUtils.history.clear();
+  });
+  await PlacesUtils.history.insertMany([
+    {
+      url: SMART_PAGE_URL,
+      title: "Moth Defences Against Bats",
+      visits: [{ date: new Date(Date.now() - 60 * 1000) }],
+    },
+    {
+      url: WEB_URL,
+      title: "Smart pages help",
+      visits: [{ date: new Date() }],
+    },
+  ]);
+}
+
+add_task(async function test_searchBrowsingHistory_smart_pages_only() {
+  await seedSmartPageHistory();
+
+  const output = await searchBrowsingHistory(
+    { searchTerm: "smart pages", smartPagesOnly: true },
+    makeConversation()
+  );
+
+  Assert.deepEqual(
+    output.results.map(r => r.url),
+    [SMART_PAGE_URL],
+    "Only the generated page is returned"
+  );
+  Assert.equal(
+    output.results[0].title,
+    '"Moth Defences Against Bats" (Untrusted webpage data)',
+    "The title is still marked as untrusted"
+  );
+});
+
+add_task(async function test_searchBrowsingHistory_smart_pages_only_empty() {
+  await seedSmartPageHistory();
+  await PlacesUtils.history.remove(SMART_PAGE_URL);
+
+  const output = await searchBrowsingHistory(
+    { smartPagesOnly: true },
+    makeConversation()
+  );
+
+  Assert.equal(output.count, 0, "No generated page is in history");
+  Assert.equal(
+    output.message,
+    "No Smart Pages found in the browser history.",
+    "The message names Smart Pages"
+  );
+});
+
+add_task(
+  async function test_searchBrowsingHistory_smart_pages_only_needs_pref() {
+    await seedSmartPageHistory();
+    Services.prefs.setBoolPref(AITAB_PREF, false);
+
+    const output = await searchBrowsingHistory(
+      { smartPagesOnly: true },
+      makeConversation()
+    );
+
+    Assert.deepEqual(
+      output.results.map(r => r.url).sort(),
+      [SMART_PAGE_URL, WEB_URL].sort(),
+      "smartPagesOnly is ignored while the AITab pref is off"
+    );
+  }
+);
+
+add_task(
+  async function test_searchBrowsingHistory_smart_pages_only_is_strict() {
+    await seedSmartPageHistory();
+
+    const output = await searchBrowsingHistory(
+      { smartPagesOnly: "true" },
+      makeConversation()
+    );
+
+    Assert.equal(
+      output.results.length,
+      2,
+      "Only the boolean true limits the results to generated pages"
+    );
+  }
+);

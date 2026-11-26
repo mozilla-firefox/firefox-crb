@@ -328,6 +328,87 @@ async function searchBrowsingHistoryTimeRange({
   return rows;
 }
 
+// How many prefix matches to read before ranking them against a search term.
+const URL_PREFIX_CANDIDATE_LIMIT = 200;
+
+/**
+ * Browsing history search limited to URLs that start with `urlPrefix`, most
+ * recent first. Semantic and Places text search match the title and the words
+ * of the URL, so they cannot find a kind of page (e.g. every generated page)
+ * when the user names the kind and not the topic.
+ *
+ * A search term does not remove rows. It moves the rows whose title has more
+ * of its words to the front, so a topic search still works when there are
+ * more matches than `historyLimit`.
+ *
+ * @param {object} params
+ * @param {string} params.urlPrefix
+ * @param {string} params.searchTerm
+ * @param {number|null} params.startTs
+ * @param {number|null} params.endTs
+ * @param {number} params.historyLimit
+ * @returns {Promise<HistoryRow[]>}
+ */
+async function searchBrowsingHistoryUrlPrefix({
+  urlPrefix,
+  searchTerm,
+  startTs,
+  endTs,
+  historyLimit,
+}) {
+  const words = (searchTerm ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = [];
+  await lazy.PlacesUtils.withConnectionWrapper(
+    "SearchBrowsingHistory:searchBrowsingHistoryUrlPrefix",
+    async db => {
+      const stmt = await db.executeCached(
+        `
+          SELECT id,
+                 title,
+                 url,
+                 NULL AS distance,
+                 visit_count,
+                 frecency,
+                 last_visit_date,
+                 preview_image_url
+          FROM moz_places
+          WHERE url_hash BETWEEN hash(:scheme, 'prefix_lo')
+                             AND hash(:scheme, 'prefix_hi')
+          AND substr(url, 1, length(:urlPrefix)) = :urlPrefix
+          AND hidden = 0
+          AND last_visit_date NOTNULL
+          AND (:startTs IS NULL OR last_visit_date >= :startTs)
+          AND (:endTs IS NULL OR last_visit_date <= :endTs)
+          ORDER BY last_visit_date DESC
+          LIMIT :limit
+        `,
+        {
+          scheme: urlPrefix.slice(0, urlPrefix.indexOf(":")),
+          urlPrefix,
+          startTs,
+          endTs,
+          limit: words.length ? URL_PREFIX_CANDIDATE_LIMIT : historyLimit,
+        }
+      );
+
+      for (const row of stmt) {
+        rows.push(buildHistoryRow(row));
+      }
+    }
+  );
+
+  if (words.length) {
+    const matchCount = row => {
+      const title = row.title.toLowerCase();
+      return words.filter(word => title.includes(word)).length;
+    };
+    const counts = new Map(rows.map(row => [row, matchCount(row)]));
+    // The sort is stable, so rows with the same count stay most recent first.
+    rows.sort((a, b) => counts.get(b) - counts.get(a));
+  }
+  return rows.slice(0, historyLimit);
+}
+
 /**
  * Normalize tensor/output format from the embedder into a single vector.
  *
@@ -605,6 +686,7 @@ async function searchBrowsingHistoryBasic({
  * otherwise Places history search or time-range filtering.
  *
  * Rules:
+ *   - urlPrefix given: only URLs with that prefix, most recent first.
  *   - Empty searchTerm: time-range search (if start/end given) or recent history.
  *   - Non-empty searchTerm: hybrid semantic + Places history search when available,
  *     otherwise Places history search with time filtering.
@@ -620,6 +702,8 @@ async function searchBrowsingHistoryBasic({
  *  Optional local ISO-8601 end timestamp (e.g. "2025-11-07T09:00:00").
  * @param {number} params.historyLimit
  *  Maximum number of history results to return.
+ * @param {string|null} [params.urlPrefix]
+ *  When set, return only pages whose URL starts with this string.
  * @returns {Promise<HistorySearchSummary>}
  *  A promise resolving to an object with the search term and history results.
  *  Includes `count` when matches exist, a `message` when none are found, or an
@@ -630,6 +714,7 @@ export async function searchBrowsingHistory({
   startTs = null,
   endTs = null,
   historyLimit = 15,
+  urlPrefix = null,
 }) {
   /** @type {HistoryRow[]} */
   let rows = [];
@@ -655,7 +740,15 @@ export async function searchBrowsingHistory({
       semanticManager.isEnabledForSmartWindow &&
       (await semanticManager.hasSufficientEntriesForSearching());
 
-    if (!searchTerm?.trim()) {
+    if (urlPrefix) {
+      rows = await searchBrowsingHistoryUrlPrefix({
+        urlPrefix,
+        searchTerm,
+        startTs: startUs,
+        endTs: endUs,
+        historyLimit,
+      });
+    } else if (!searchTerm?.trim()) {
       // Plain time-range search (no searchTerm)
       rows = await searchBrowsingHistoryTimeRange({
         startTs: startUs,
