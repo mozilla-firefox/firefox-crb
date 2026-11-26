@@ -2084,6 +2084,31 @@ preferences-doh-status-item-off =
     .message = DNS over HTTPS is off
 
 # Variables:
+#   $region (string) - The localized name of the region Firefox detected, for example Germany.
+preferences-doh-status-item-off-region =
+    .message = DNS over HTTPS isn’t turned on automatically in your region ({ $region })
+
+preferences-doh-status-item-off-region-unknown =
+    .message = DNS over HTTPS isn’t turned on automatically because your region couldn’t be determined
+
+preferences-doh-status-item-off-policy =
+    .message = DNS over HTTPS isn’t turned on automatically because { -brand-short-name } is managed by your organization
+
+preferences-doh-status-item-off-user =
+    .message = DNS over HTTPS is off because you turned it off
+
+preferences-doh-status-item-off-manual =
+    .message = DNS over HTTPS isn’t turned on automatically because of a preferences override in about:config
+
+preferences-doh-status-item-off-pending =
+    .message = DNS over HTTPS isn’t on yet because { -brand-short-name } is still checking your network
+
+# Variables:
+#   $heuristics (string) - A list of one or more preferences-doh-heuristic-* labels, joined according to the locale, for example “a VPN and parental controls”.
+preferences-doh-status-item-off-heuristics =
+    .message = DNS over HTTPS isn’t turned on automatically because { -brand-short-name } detected { $heuristics }
+
+# Variables:
 #   $reason (string) - A string representation of the reason DoH is not active. For example NS_ERROR_UNKNOWN_HOST or TRR_RCODE_FAIL.
 #   $name (string) - The name of the DNS over HTTPS resolver. If a custom resolver is used, the name will be the domain of the URL.
 preferences-doh-status-item-not-active =
@@ -2124,6 +2149,22 @@ preferences-doh-custom-provider-label =
 
 preferences-doh-header2 =
   .heading = DNS over HTTPS
+
+## Labels for the network conditions that keep DNS over HTTPS off. They are
+## inserted into the $heuristics list of preferences-doh-status-item-off-heuristics.
+
+preferences-doh-heuristic-google = Google SafeSearch
+preferences-doh-heuristic-youtube = YouTube Restricted Mode
+preferences-doh-heuristic-zscaler-canary = Zscaler Shift
+preferences-doh-heuristic-canary = a network setting that turns it off
+preferences-doh-heuristic-browser-parent = parental controls
+preferences-doh-heuristic-policy = an enterprise policy
+preferences-doh-heuristic-vpn = a VPN
+preferences-doh-heuristic-proxy = a proxy
+# NRPT is the Windows Name Resolution Policy Table.
+preferences-doh-heuristic-nrpt = Name Resolution Policy Table rules
+# Private DNS is an Android setting.
+preferences-doh-heuristic-private-dns = Private DNS
 
 ## Connection and software security section
 

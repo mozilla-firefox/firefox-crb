@@ -32,6 +32,7 @@ const lazy = XPCOMUtils.declareLazy({
   AppUpdater: "resource://gre/modules/AppUpdater.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   DoHConfigController: "moz-src:///toolkit/components/doh/DoHConfig.sys.mjs",
+  DoHController: "moz-src:///toolkit/components/doh/DoHController.sys.mjs",
   DownloadUtils: "resource://gre/modules/DownloadUtils.sys.mjs",
   ExtensionSettingsStore:
     "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
@@ -3423,116 +3424,217 @@ Preferences.addSetting({
   },
 });
 
-Preferences.addSetting({
-  id: "dohStatusBox",
-  deps: ["dohMode", "dohURL"],
-  getControlConfig: config => {
-    let l10nId = "preferences-doh-status-item-off";
-    let l10nArgs = {};
-    let supportPage = "";
-    let controlAttrs = { type: "info" };
+const DOH_HEURISTIC_L10N_IDS = {
+  google: "preferences-doh-heuristic-google",
+  youtube: "preferences-doh-heuristic-youtube",
+  zscalerCanary: "preferences-doh-heuristic-zscaler-canary",
+  canary: "preferences-doh-heuristic-canary",
+  browserParent: "preferences-doh-heuristic-browser-parent",
+  policy: "preferences-doh-heuristic-policy",
+  vpn: "preferences-doh-heuristic-vpn",
+  proxy: "preferences-doh-heuristic-proxy",
+  nrpt: "preferences-doh-heuristic-nrpt",
+  privateDns: "preferences-doh-heuristic-private-dns",
+};
 
-    let trrURI = Services.dns.currentTrrURI;
-    let hostname = URL.parse(trrURI)?.hostname;
-
-    let displayName = hostname || trrURI;
-    let nameFound = false;
-    let steering = false;
-    for (let resolver of lazy.DoHConfigController.currentConfig.providerList) {
-      if (resolver.uri == trrURI) {
-        displayName = resolver.UIName || displayName;
-        nameFound = true;
-        break;
+/**
+ * @param {number} mode The effective TRR mode, not 2 or 3.
+ * @returns {Promise<?{l10nId: string, l10nArgs?: object}>} The status message
+ *   explaining why DoH is off, or null if there is no specific reason.
+ */
+async function getDoHOffStatus(mode) {
+  let { reason, trippedHeuristics } = lazy.DoHController.offReason;
+  if (reason == "policyDisabled") {
+    return { l10nId: "preferences-doh-status-item-off-policy" };
+  }
+  if (mode == Ci.nsIDNSService.MODE_TRROFF) {
+    return { l10nId: "preferences-doh-status-item-off-user" };
+  }
+  switch (reason) {
+    case "rollback": {
+      let region = Services.prefs.getStringPref("doh-rollout.home-region", "");
+      if (!region) {
+        return { l10nId: "preferences-doh-status-item-off-region-unknown" };
       }
-    }
-    if (!nameFound) {
-      for (let resolver of lazy.DoHConfigController.currentConfig
-        .providerSteering.providerList) {
-        if (resolver.uri == trrURI) {
-          steering = true;
-          displayName = resolver.UIName || displayName;
-          break;
-        }
-      }
-    }
-
-    let mode = Services.dns.currentTrrMode;
-    if (
-      (mode == Ci.nsIDNSService.MODE_TRRFIRST ||
-        mode == Ci.nsIDNSService.MODE_TRRONLY) &&
-      lazy.gParentalControlsService?.parentalControlsEnabled
-    ) {
-      l10nId = "preferences-doh-status-item-not-active";
-      supportPage = "doh-status";
-      l10nArgs = {
-        reason: Services.dns.getTRRSkipReasonName(
-          Ci.nsITRRSkipReason.TRR_PARENTAL_CONTROL
-        ),
-        name: displayName,
+      return {
+        l10nId: "preferences-doh-status-item-off-region",
+        l10nArgs: {
+          region: new Intl.DisplayNames(undefined, { type: "region" }).of(
+            region
+          ),
+        },
       };
-    } else {
-      let confirmationState = Services.dns.currentTrrConfirmationState;
+    }
+    case "manuallyDisabled":
+      return { l10nId: "preferences-doh-status-item-off-manual" };
+    case "incomplete":
+      return { l10nId: "preferences-doh-status-item-off-pending" };
+    case "disabled": {
+      let labels = await document.l10n.formatValues(
+        trippedHeuristics.map(heuristic => ({
+          id: DOH_HEURISTIC_L10N_IDS[heuristic],
+        }))
+      );
+      return {
+        l10nId: "preferences-doh-status-item-off-heuristics",
+        l10nArgs: {
+          heuristics: new Intl.ListFormat(undefined, {
+            type: "conjunction",
+          }).format(labels),
+        },
+      };
+    }
+  }
+  return null;
+}
+
+const DOH_STATUS_TOPICS = [
+  "network:trr-mode-changed",
+  "network:trr-uri-changed",
+  "network:trr-confirmation",
+  "doh:off-reason-changed",
+];
+const DOH_STATUS_PREFS = ["network.trr.mode", "network.trr.uri"];
+
+Preferences.addSetting(
+  class extends Preferences.AsyncSetting {
+    static id = "dohStatusBox";
+
+    setup() {
+      for (let topic of DOH_STATUS_TOPICS) {
+        Services.obs.addObserver(this.emitChange, topic);
+      }
+      for (let pref of DOH_STATUS_PREFS) {
+        Services.prefs.addObserver(pref, this.emitChange);
+      }
+      return () => {
+        for (let topic of DOH_STATUS_TOPICS) {
+          Services.obs.removeObserver(this.emitChange, topic);
+        }
+        for (let pref of DOH_STATUS_PREFS) {
+          Services.prefs.removeObserver(pref, this.emitChange);
+        }
+      };
+    }
+
+    async getControlConfig() {
+      let l10nId = "preferences-doh-status-item-off";
+      let l10nArgs = {};
+      let supportPage = "";
+      let controlAttrs = { type: "info" };
+
+      let mode = Services.dns.currentTrrMode;
       if (
         mode != Ci.nsIDNSService.MODE_TRRFIRST &&
         mode != Ci.nsIDNSService.MODE_TRRONLY
       ) {
-        l10nId = "preferences-doh-status-item-off";
-      } else if (
-        confirmationState == Ci.nsIDNSService.CONFIRM_TRYING_OK ||
-        confirmationState == Ci.nsIDNSService.CONFIRM_OK ||
-        confirmationState == Ci.nsIDNSService.CONFIRM_DISABLED
-      ) {
-        if (steering) {
-          l10nId = "preferences-doh-status-item-active-local";
-          controlAttrs = { type: "success" };
-        } else {
-          l10nId = "preferences-doh-status-item-active";
-          controlAttrs = { type: "success" };
+        let offStatus = await getDoHOffStatus(mode);
+        if (offStatus) {
+          return { l10nArgs, supportPage, controlAttrs, ...offStatus };
         }
-      } else if (steering) {
-        l10nId = "preferences-doh-status-item-not-active-local";
-        supportPage = "doh-status";
-        controlAttrs = { type: "warning" };
-      } else {
-        l10nId = "preferences-doh-status-item-not-active";
-        supportPage = "doh-status";
-        controlAttrs = { type: "warning" };
       }
 
-      let confirmationStatus = Services.dns.lastConfirmationStatus;
-      if (confirmationStatus != Cr.NS_OK) {
-        l10nArgs = {
-          reason: ChromeUtils.getXPCOMErrorName(confirmationStatus),
-          name: displayName,
-        };
-      } else {
+      let trrURI = Services.dns.currentTrrURI;
+      let hostname = URL.parse(trrURI)?.hostname;
+
+      let displayName = hostname || trrURI;
+      let nameFound = false;
+      let steering = false;
+      for (let resolver of lazy.DoHConfigController.currentConfig
+        .providerList) {
+        if (resolver.uri == trrURI) {
+          displayName = resolver.UIName || displayName;
+          nameFound = true;
+          break;
+        }
+      }
+      if (!nameFound) {
+        for (let resolver of lazy.DoHConfigController.currentConfig
+          .providerSteering.providerList) {
+          if (resolver.uri == trrURI) {
+            steering = true;
+            displayName = resolver.UIName || displayName;
+            break;
+          }
+        }
+      }
+
+      if (
+        (mode == Ci.nsIDNSService.MODE_TRRFIRST ||
+          mode == Ci.nsIDNSService.MODE_TRRONLY) &&
+        lazy.gParentalControlsService?.parentalControlsEnabled
+      ) {
+        l10nId = "preferences-doh-status-item-not-active";
+        supportPage = "doh-status";
         l10nArgs = {
           reason: Services.dns.getTRRSkipReasonName(
-            Services.dns.lastConfirmationSkipReason
+            Ci.nsITRRSkipReason.TRR_PARENTAL_CONTROL
           ),
           name: displayName,
         };
+      } else {
+        let confirmationState = Services.dns.currentTrrConfirmationState;
         if (
-          Services.dns.lastConfirmationSkipReason ==
-            Ci.nsITRRSkipReason.TRR_BAD_URL ||
-          !displayName
+          mode != Ci.nsIDNSService.MODE_TRRFIRST &&
+          mode != Ci.nsIDNSService.MODE_TRRONLY
         ) {
-          l10nId = "preferences-doh-status-item-not-active-bad-url";
+          l10nId = "preferences-doh-status-item-off";
+        } else if (
+          confirmationState == Ci.nsIDNSService.CONFIRM_TRYING_OK ||
+          confirmationState == Ci.nsIDNSService.CONFIRM_OK ||
+          confirmationState == Ci.nsIDNSService.CONFIRM_DISABLED
+        ) {
+          if (steering) {
+            l10nId = "preferences-doh-status-item-active-local";
+            controlAttrs = { type: "success" };
+          } else {
+            l10nId = "preferences-doh-status-item-active";
+            controlAttrs = { type: "success" };
+          }
+        } else if (steering) {
+          l10nId = "preferences-doh-status-item-not-active-local";
+          supportPage = "doh-status";
+          controlAttrs = { type: "warning" };
+        } else {
+          l10nId = "preferences-doh-status-item-not-active";
           supportPage = "doh-status";
           controlAttrs = { type: "warning" };
         }
-      }
-    }
 
-    return {
-      ...config,
-      l10nId,
-      l10nArgs,
-      supportPage,
-      controlAttrs,
-    };
-  },
-});
+        let confirmationStatus = Services.dns.lastConfirmationStatus;
+        if (confirmationStatus != Cr.NS_OK) {
+          l10nArgs = {
+            reason: ChromeUtils.getXPCOMErrorName(confirmationStatus),
+            name: displayName,
+          };
+        } else {
+          l10nArgs = {
+            reason: Services.dns.getTRRSkipReasonName(
+              Services.dns.lastConfirmationSkipReason
+            ),
+            name: displayName,
+          };
+          if (
+            Services.dns.lastConfirmationSkipReason ==
+              Ci.nsITRRSkipReason.TRR_BAD_URL ||
+            !displayName
+          ) {
+            l10nId = "preferences-doh-status-item-not-active-bad-url";
+            supportPage = "doh-status";
+            controlAttrs = { type: "warning" };
+          }
+        }
+      }
+
+      return {
+        l10nId,
+        l10nArgs,
+        supportPage,
+        controlAttrs,
+      };
+    }
+  }
+);
 
 Preferences.addSetting({
   id: "dohRadioGroup",

@@ -79,6 +79,18 @@ add_setup(async function setup() {
   setMockParentalControlEnabled(false);
 });
 
+async function withStatusBox(fn) {
+  await openPreferencesViaOpenPreferencesAPI("dnsOverHttps", {
+    leaveOpen: true,
+  });
+  let doc = gBrowser.selectedBrowser.contentDocument;
+  let statusBox = await TestUtils.waitForCondition(() =>
+    doc.getElementById("dohStatusBox")
+  );
+  await fn(statusBox, doc);
+  gBrowser.removeCurrentTab();
+}
+
 // Regression test for Bug 2037133: the dohStatusBox in the settings-redesign
 // DoH advanced sub-pane was falsely showing the "bad URL" error because a
 // missed `name` -> `displayName` rename caused `!name` to always be true.
@@ -92,18 +104,6 @@ add_task(async function testStatusBoxRedesignPane() {
     autoDefaultProviders: "",
     id: "global",
   });
-
-  async function withStatusBox(fn) {
-    await openPreferencesViaOpenPreferencesAPI("dnsOverHttps", {
-      leaveOpen: true,
-    });
-    let doc = gBrowser.selectedBrowser.contentDocument;
-    let statusBox = await TestUtils.waitForCondition(() =>
-      doc.getElementById("dohStatusBox")
-    );
-    await fn(statusBox, doc);
-    gBrowser.removeCurrentTab();
-  }
 
   info("Active DoH should show the active status with the provider name");
   Services.prefs.setIntPref(TRR_MODE_PREF, Ci.nsIDNSService.MODE_TRRFIRST);
@@ -161,6 +161,55 @@ add_task(async function testStatusBoxRedesignPane() {
     id: "global",
   });
   await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function testStatusBoxOffReasons() {
+  await resetPrefs();
+  await withStatusBox(async statusBox => {
+    async function checkStatus(l10nId, l10nArgs = {}) {
+      await TestUtils.waitForCondition(
+        () => statusBox.getAttribute("data-l10n-id") == l10nId,
+        `waiting for ${l10nId}`
+      );
+      if (l10nArgs) {
+        Assert.deepEqual(
+          JSON.parse(statusBox.getAttribute("data-l10n-args") || "{}"),
+          l10nArgs
+        );
+      }
+    }
+
+    Services.prefs.clearUserPref("doh-rollout.home-region");
+    DoHController._setOffReason("rollback");
+    await checkStatus("preferences-doh-status-item-off-region-unknown");
+
+    Services.prefs.setStringPref("doh-rollout.home-region", "DE");
+    DoHController._setOffReason("rollback");
+    await checkStatus("preferences-doh-status-item-off-region", {
+      region: "Germany",
+    });
+
+    DoHController._setOffReason("manuallyDisabled");
+    await checkStatus("preferences-doh-status-item-off-manual");
+
+    DoHController._setOffReason("incomplete");
+    await checkStatus("preferences-doh-status-item-off-pending");
+
+    DoHController._setOffReason("disabled", ["vpn", "browserParent"]);
+    await checkStatus("preferences-doh-status-item-off-heuristics", {
+      heuristics: "a VPN and parental controls",
+    });
+
+    DoHController._setOffReason(null);
+    await checkStatus("preferences-doh-status-item-off", null);
+
+    Services.prefs.setIntPref(TRR_MODE_PREF, Ci.nsIDNSService.MODE_TRROFF);
+    await checkStatus("preferences-doh-status-item-off-user");
+
+    DoHController._setOffReason("policyDisabled");
+    await checkStatus("preferences-doh-status-item-off-policy");
+  });
+  await resetPrefs();
 });
 
 // Regression test for Bug 2043551: the dohFallbackIfCustom checkbox and the
