@@ -1757,4 +1757,21 @@ class SettingsTest {
 
         assertEquals(listOf(false, true), values)
     }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `WHEN signedInFxaAccount changes THEN signedInFxaAccountFlow emits the new value`() = runTest {
+        settings.signedInFxaAccount = false
+        val values = mutableListOf<Boolean>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            settings.signedInFxaAccountFlow.toList(values)
+        }
+
+        settings.signedInFxaAccount = true
+        shadowOf(Looper.getMainLooper()).idle()
+        settings.signedInFxaAccount = false
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(listOf(false, true, false), values)
+    }
 }
