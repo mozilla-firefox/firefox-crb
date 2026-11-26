@@ -302,14 +302,19 @@ export class ScreenshotsOverlay {
 
     this.windowDimensions.reset();
 
-    this.#content = this.document.insertAnonymousContent();
-    this.#content.root.appendChild(this.fragment);
+    const content = this.document.insertAnonymousContent();
+    this.#content = content;
+    content.root.appendChild(this.fragment);
 
     this.initializeElements();
     this.screenshotsContainer.dir = Services.locale.isAppLocaleRTL
       ? "rtl"
       : "ltr";
     await this.updateWindowDimensions();
+    // The overlay may have been torn down while waiting for a frame.
+    if (this.#content !== content) {
+      return;
+    }
 
     this.#setState(STATES.CROSSHAIRS);
 
@@ -374,6 +379,7 @@ export class ScreenshotsOverlay {
         // If the current window isn't the one the content was inserted into, this
         // will fail, but that's fine.
       }
+      this.#content = null;
     }
     this.#initialized = false;
     this.#setState("");
