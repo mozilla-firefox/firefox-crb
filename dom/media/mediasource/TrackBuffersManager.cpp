@@ -1799,12 +1799,6 @@ void TrackBuffersManager::OnAudioDemuxCompleted(
     const RefPtr<MediaTrackDemuxer::SamplesHolder>& aSamples) {
   mTaskQueueCapability->AssertOnCurrentThread();
   MSE_DEBUG("{} audio samples demuxed", aSamples->GetSamples().Length());
-  // When using MSE, it's possible for each fragments to have their own
-  // duration, with a duration that is incorrectly rounded. Ignore the trimming
-  // information set by the demuxer to ensure a continous playback.
-  for (const auto& sample : aSamples->GetSamples()) {
-    sample->mOriginalPresentationWindow = Nothing();
-  }
   mAudioTracks.mDemuxRequest.Complete();
   mAudioTracks.mQueuedSamples.AppendElements(aSamples->GetSamples());
   CompleteCodedFrameProcessing();
@@ -1937,15 +1931,24 @@ void TrackBuffersManager::CheckSequenceDiscontinuity(
   }
 }
 
+// Returns the interval of a demuxed coded frame, including what the container
+// excludes from the presentation at its start, which ProcessFrames trims.
+static TimeInterval CodedFrameInterval(const MediaRawData* aSample) {
+  TimeInterval interval(aSample->mTime, aSample->GetEndTime());
+  if (const auto& window = aSample->mOriginalPresentationWindow) {
+    interval.mStart = std::min(interval.mStart, window->mStart);
+    interval.mEnd = std::min(interval.mEnd, window->mEnd);
+  }
+  return interval;
+}
+
 TimeInterval TrackBuffersManager::PresentationInterval(
     const TrackBuffer& aSamples) const {
-  TimeInterval presentationInterval =
-      TimeInterval(aSamples[0]->mTime, aSamples[0]->GetEndTime());
+  TimeInterval presentationInterval = CodedFrameInterval(aSamples[0]);
 
   for (uint32_t i = 1; i < aSamples.Length(); i++) {
-    const auto& sample = aSamples[i];
-    presentationInterval = presentationInterval.Span(
-        TimeInterval(sample->mTime, sample->GetEndTime()));
+    presentationInterval =
+        presentationInterval.Span(CodedFrameInterval(aSamples[i]));
   }
   return presentationInterval;
 }
@@ -1964,7 +1967,7 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
   // representation of the coded frame's presentation timestamp in seconds.
   TimeUnit presentationTimestamp = mSourceBufferAttributes->mGenerateTimestamps
                                        ? TimeUnit::Zero()
-                                       : aSamples[0]->mTime;
+                                       : CodedFrameInterval(aSamples[0]).mStart;
 
   // 3. If mode equals "sequence" and group start timestamp is set, then run the
   // following steps:
@@ -2029,6 +2032,20 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
     if (sampleEndTime > aTrackData.mLastParsedEndTime) {
       aTrackData.mLastParsedEndTime = sampleEndTime;
     }
+
+    // The demuxer gives a frame that the container excludes from the
+    // presentation, such as the encoder priming that an MP4 edit list skips,
+    // the interval to present in mTime and mDuration, and its original
+    // interval in mOriginalPresentationWindow. Process the frame with its
+    // original interval, and trim what precedes the interval to present as if
+    // it preceded appendWindowStart. Trimming at the end of the frame is
+    // ignored, as each fragment can carry a duration that cuts its last frame
+    // short.
+    const TimeInterval codedFrameInterval = CodedFrameInterval(sample);
+    const TimeUnit leadingTrim = sample->mTime - codedFrameInterval.mStart;
+    sample->mOriginalPresentationWindow.reset();
+    sample->mTime = codedFrameInterval.mStart;
+    sample->mDuration = codedFrameInterval.Length();
 
     // We perform step 10 right away as we can't do anything should a keyframe
     // be needed until we have one.
@@ -2198,14 +2215,20 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
     // 9. If frame end timestamp is greater than appendWindowEnd, then set the
     // need random access point flag to true, drop the coded frame, and jump to
     // the top of the loop to start processing the next coded frame.
-    if (!mAppendWindow.ContainsStrict(frameStartAndEnd)) {
+    if (leadingTrim.IsPositive() ||
+        !mAppendWindow.ContainsStrict(frameStartAndEnd)) {
       // Calculate the intersection using the same denominator as will be used
       // for the sample time and duration so that a truncated sample is
       // collected only if its truncated duration would be non-zero.
       TimeInterval appendWindow(
           TimeUnit::FromSecondsWithBaseOf(mAppendWindow.mStart, sampleTime),
           TimeUnit::FromSecondsWithBaseOf(mAppendWindow.mEnd, sampleTime));
-      if (appendWindow.IntersectsStrict(sampleInterval)) {
+      if (leadingTrim.IsPositive()) {
+        appendWindow.mStart =
+            std::max(appendWindow.mStart, sampleInterval.mStart + leadingTrim);
+      }
+      if (appendWindow.mStart < appendWindow.mEnd &&
+          appendWindow.IntersectsStrict(sampleInterval)) {
         // 8. Note: Some implementations MAY choose to collect some of these
         //    coded frames with presentation timestamp less than
         //    appendWindowStart and use them to generate a splice at the first
