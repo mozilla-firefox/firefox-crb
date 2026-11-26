@@ -8,15 +8,17 @@ from taskgraph.util.dependencies import get_primary_dependency
 zucchini_transforms = TransformSequence()
 partials_transforms = TransformSequence()
 
-# Projects that will use the legacy "partials" implementation as upstream.
-# These stable release channels continue using the proven implementation while
-# partials-zucchini is being tested on nightly.
-# TODO: Once we're ready to roll this out to production, we should decide if we want to
-# hold it in beta for a few cycles, or let it ride the train to release.
-# If holding in beta, we'll need to uplift a patch to remove the release entry.
+# Projects that will use the "partials-zucchini" implementation as upstream.
+# Every other project uses the legacy "partials" implementation. Each branch reads
+# its own copy of this file, so beta and release only pick up zucchini partials
+# once this change rides the trains to them.
 # TODO: update taskcluster/docs/partials.rst once we are fully rolled out
 ZUCCHINI_PARTIALS_PROJECTS = {
     "mozilla-central",
+    "mozilla-beta",
+    "mozilla-release",
+    "pine",
+    "try",
 }
 
 
@@ -39,8 +41,7 @@ def filter_partials_by_project(config, tasks):
 
     This transform manages the gradual transition from the legacy "partials" implementation
     to the new "partials-zucchini" implementation. It ensures that partials-zucchini is only
-    used on nightly builds, allowing thorough testing before the implementation rides the
-    train to beta, release, and ESR channels.
+    used on the projects listed in ZUCCHINI_PARTIALS_PROJECTS.
 
     The transform filters tasks based on their primary dependency (partials or partials-zucchini)
     and the current project/channel, ensuring the appropriate implementation is used for each

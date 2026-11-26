@@ -122,19 +122,22 @@ diffing. The `zucchini_partial_rollout` transform controls which
 implementation is active for each release channel, based on the
 `ZUCCHINI_PARTIALS_PROJECTS` set:
 
-- **mozilla-central** (nightly): uses `partials-zucchini`
-- **elsewhere**: uses legacy `partials`
+- **mozilla-central**, **mozilla-beta**, **mozilla-release**, **pine**
+  and **try**: use `partials-zucchini`
+- **elsewhere** (including ESR channels): uses legacy `partials`
+
+Each branch reads its own copy of the transform, so a change to this set
+on mozilla-central only reaches beta and release by riding the trains.
 
 The transform exposes two sequences:
 
 - `partials_transforms`, used by the `partials` kind, skips generating
   the legacy `partials` tasks entirely on non-legacy projects, so they
-  never run outside the release/ESR channels.
+  only run on legacy projects.
 - `zucchini_transforms`, used by the `partials-signing` kind, filters
   out the unused implementation. `partials-signing` depends on both
   `partials` (legacy) and `partials-zucchini`, so on legacy projects it
   drops the zucchini-derived signing tasks while keeping the legacy ones.
 
-As zucchini partials are validated on nightly, the rollout will expand
-to other channels by adding entries to the
+To move another channel to zucchini partials, add it to the
 `ZUCCHINI_PARTIALS_PROJECTS` set in the rollout transform.
