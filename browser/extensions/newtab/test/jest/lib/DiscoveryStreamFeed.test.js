@@ -232,6 +232,27 @@ describe("DiscoveryStreamFeed", () => {
     restoreGlobals();
   });
 
+  describe("#locale", () => {
+    const DEVTOOLS =
+      "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled";
+    const OVERRIDE =
+      "browser.newtabpage.activity-stream.devtools.localeOverride";
+    beforeEach(() => {
+      services.locale.appLocaleAsBCP47 = "en-US";
+      services.prefs.getStringPref.mockImplementation((name, fallback) =>
+        name === OVERRIDE ? "pl" : fallback
+      );
+    });
+    it("should request content in the locale the devtools applied", () => {
+      services.prefs.getBoolPref.mockImplementation(name => name === DEVTOOLS);
+      expect(feed.locale).toBe("pl");
+    });
+    it("should ignore that locale while the devtools are off", () => {
+      services.prefs.getBoolPref.mockImplementation(() => false);
+      expect(feed.locale).toBe("en-US");
+    });
+  });
+
   describe("#fetchFromEndpoint", () => {
     beforeEach(() => {
       fetchStub.mockResolvedValue({
@@ -3293,6 +3314,35 @@ describe("DiscoveryStreamFeed", () => {
       });
       expect(feed.retryFeed).toHaveBeenCalledTimes(1);
       expect(feed.retryFeed).toHaveBeenCalledWith({ url: "https://feed.com" });
+    });
+  });
+
+  describe("#onAction: LOCALE_UPDATED", () => {
+    it("should refetch content for the new locale once loaded", async () => {
+      jest.spyOn(feed.cache, "set").mockResolvedValue();
+      jest.spyOn(feed, "enable").mockResolvedValue();
+      setPref(CONFIG_PREF_NAME, { enabled: true });
+      feed.loaded = false;
+      await feed.onAction({ type: at.LOCALE_UPDATED, data: { locale: "pl" } });
+      expect(feed.enable).not.toHaveBeenCalled();
+
+      feed.loaded = true;
+      await feed.onAction({ type: at.LOCALE_UPDATED, data: { locale: "pl" } });
+      expect(feed.cache.set).toHaveBeenCalledWith("feeds", {});
+      expect(feed.cache.set).toHaveBeenCalledWith("spocs", {});
+      expect(feed.enable).toHaveBeenCalledTimes(1);
+    });
+    it("should keep spoc impressions, flight blocks and recsImpressions", async () => {
+      jest.spyOn(feed.cache, "set").mockResolvedValue();
+      jest.spyOn(feed, "enable").mockResolvedValue();
+      jest.spyOn(feed, "writeDataPref");
+      setPref(CONFIG_PREF_NAME, { enabled: true });
+      feed.loaded = true;
+
+      await feed.onAction({ type: at.LOCALE_UPDATED, data: { locale: "pl" } });
+
+      expect(feed.writeDataPref).not.toHaveBeenCalled();
+      expect(feed.cache.set).not.toHaveBeenCalledWith("recsImpressions", {});
     });
   });
 

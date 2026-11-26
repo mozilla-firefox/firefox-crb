@@ -34,6 +34,7 @@ const { TOP_SITES_MAX_ROWS, TOP_SITES_MAX_SITES_PER_ROW } = ImportHelper.import(
   "moz-src:///browser/components/topsites/constants.mjs",
   "resource:///modules/topsites/"
 );
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 import { Dedupe } from "resource:///modules/Dedupe.sys.mjs";
 
 import {
@@ -1459,12 +1460,12 @@ export class TopSitesFeed {
       }
 
       // Filter by locale.
-      if (topsite.exclude_locales?.includes(Services.locale.appLocaleAsBCP47)) {
+      if (topsite.exclude_locales?.includes(newtabLocale())) {
         return false;
       }
       if (
         topsite.include_locales?.length &&
-        !topsite.include_locales.includes(Services.locale.appLocaleAsBCP47)
+        !topsite.include_locales.includes(newtabLocale())
       ) {
         return false;
       }

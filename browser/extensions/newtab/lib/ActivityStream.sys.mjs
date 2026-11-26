@@ -15,12 +15,6 @@ const { XPCOMUtils } = ChromeUtils.importESModule(
   "resource://gre/modules/XPCOMUtils.sys.mjs"
 );
 
-// Eager (not lazy) — the pref default below reads it unconditionally at load.
-// eslint-disable-next-line mozilla/use-static-import
-const { AppConstants } = ChromeUtils.importESModule(
-  "resource://gre/modules/AppConstants.sys.mjs"
-);
-
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -84,6 +78,13 @@ import {
 } from "resource://newtab/common/Actions.mjs";
 import { RegionLocaleMap } from "moz-src:///toolkit/modules/RegionLocaleMap.sys.mjs";
 import { WIDGET_REGISTRY } from "resource://newtab/common/WidgetsRegistry.mjs";
+import {
+  DEVTOOLS_OVERRIDE_PREFS,
+  PREF_DEVTOOLS_ENABLED,
+  buildChannel,
+  newtabChannel,
+  newtabLocale,
+} from "resource://newtab/lib/NewtabAudience.sys.mjs";
 
 const REGION_INFERRED_PERSONALIZATION_CONFIG =
   "browser.newtabpage.activity-stream.discoverystream.sections.personalization.inferred.region-config";
@@ -117,11 +118,6 @@ const STORIES_REGION_LOCALE_CONFIG =
 // payload.
 /** @type {RegionLocaleEntries} */
 const STORIES_REGION_LOCALE_DEFAULT = [
-  // Nightly also gets a global English feed, standing in for the reach
-  // locale-list-config used to provide until one is configured remotely.
-  ...(AppConstants.NIGHTLY_BUILD
-    ? /** @type {RegionLocaleEntries} */ ([["*", ["en-*"]]])
-    : []),
   ["US", ["en-*"]],
   ["CA", ["en-*"]],
   ["GB", ["en-*"]],
@@ -340,9 +336,10 @@ function getStoriesTrainhopPayload() {
  *
  * @param {string} geo - region code
  * @param {string} locale - BCP 47 language tag
+ * @param {string} [channel] - see buildChannel
  * @returns {boolean}
  */
-function storiesRegionLocaleMatches(geo, locale) {
+function storiesRegionLocaleMatches(geo, locale, channel = buildChannel()) {
   // A trainhop payload holds the entries themselves, since Nimbus parses it.
   const entries = getStoriesTrainhopPayload()?.config;
   if (Array.isArray(entries)) {
@@ -352,7 +349,14 @@ function storiesRegionLocaleMatches(geo, locale) {
   // variable is absent on hosts whose FeatureManifest predates it.
   const json = Services.prefs.getStringPref(STORIES_REGION_LOCALE_CONFIG, null);
   return RegionLocaleMap.fromJSON(json, {
-    fallback: STORIES_REGION_LOCALE_DEFAULT,
+    fallback: [
+      // Nightly also gets a global English feed, standing in for the reach
+      // locale-list-config used to provide until one is configured remotely.
+      ...(channel === "nightly"
+        ? /** @type {RegionLocaleEntries} */ ([["*", ["en-*"]]])
+        : []),
+      ...STORIES_REGION_LOCALE_DEFAULT,
+    ],
   }).matches(geo, locale);
 }
 
@@ -541,9 +545,14 @@ function marketGateEnabled() {
   );
 }
 
-function showsEveryWidgetOnNightly(prefKey) {
+/**
+ * @param {string} prefKey - PREFS_CONFIG key, ending in ".enabled"
+ * @param {string} [channel] - see buildChannel
+ * @returns {boolean}
+ */
+function showsEveryWidgetOnNightly(prefKey, channel = buildChannel()) {
   return (
-    AppConstants.NIGHTLY_BUILD &&
+    channel === "nightly" &&
     !skipsNightlyDefault(prefKey) &&
     !Services.prefs.getBoolPref(
       PREF_MARKET_GATE_ENFORCE_ON_NIGHTLY,
@@ -555,7 +564,8 @@ function showsEveryWidgetOnNightly(prefKey) {
 
 // Off by default once gating is on, except on Nightly, which shows every widget.
 function offByDefault(prefKey) {
-  return () => !marketGateEnabled() || showsEveryWidgetOnNightly(prefKey);
+  return ({ channel }) =>
+    !marketGateEnabled() || showsEveryWidgetOnNightly(prefKey, channel);
 }
 
 /**
@@ -564,18 +574,18 @@ function offByDefault(prefKey) {
  * widgets.system.lists.enabled reads widgets.system.lists.region-block.
  *
  * @param {string} prefKey - PREFS_CONFIG key, ending in ".enabled"
- * @returns {function({geo: string, locale: string}): boolean}
+ * @returns {function({geo: string, locale: string, channel?: string}): boolean}
  */
 function marketGate(prefKey) {
   const base = ACTIVITY_STREAM_PREF_BRANCH + prefKey.replace(/\.enabled$/, "");
-  return ({ geo, locale }) => {
+  return ({ geo, locale, channel }) => {
     // Gating off restores the defaults from before it existed.
     if (!marketGateEnabled()) {
       return !prefKey.startsWith("widgets.system.");
     }
     // Nightly gets every widget in every market so the team sees the whole
     // feature, which is why no widget pref carries an #ifdef in firefox.js.
-    if (showsEveryWidgetOnNightly(prefKey)) {
+    if (showsEveryWidgetOnNightly(prefKey, channel)) {
       return true;
     }
     // With nothing restricting the region, geo cannot change the answer, so a
@@ -734,7 +744,7 @@ export const PREFS_CONFIG = new Map([
       title:
         "System pref that fetches content recommendations from a configurable content provider",
       // Dynamically determine if stories should be shown for a geo / locale
-      getValue: ({ geo, locale }) => {
+      getValue: ({ geo, locale, channel }) => {
         // If we don't have geo, we don't want to flash the screen with stories while geo loads.
         // Best to display nothing until geo is ready.
         if (!geo) {
@@ -750,7 +760,7 @@ export const PREFS_CONFIG = new Map([
           return false;
         }
         return (
-          storiesRegionLocaleMatches(geo, locale) ||
+          storiesRegionLocaleMatches(geo, locale, channel) ||
           matchesLegacyRegionStoriesConfig(geo, locale)
         );
       },
@@ -2993,6 +3003,9 @@ export class ActivityStream {
     Services.obs.addObserver(this, "intl:app-locales-changed");
     Services.prefs.addObserver(PREF_IMAGE_PROXY_ENABLED, this);
     Services.prefs.addObserver(PREF_MARKET_GATE_ENABLED, this);
+    for (const pref of DEVTOOLS_OVERRIDE_PREFS) {
+      Services.prefs.addObserver(pref, this);
+    }
     lazy.NewTabActorRegistry.init();
 
     // Hook up the store and let all feeds and pages initialize
@@ -3163,14 +3176,18 @@ export class ActivityStream {
   }
 
   uninit() {
-    if (this.geo === "") {
+    if (this._observingRegion) {
       Services.obs.removeObserver(this, lazy.Region.REGION_TOPIC);
+      this._observingRegion = false;
     }
     delete this.geo;
 
     Services.obs.removeObserver(this, "intl:app-locales-changed");
     Services.prefs.removeObserver(PREF_IMAGE_PROXY_ENABLED, this);
     Services.prefs.removeObserver(PREF_MARKET_GATE_ENABLED, this);
+    for (const pref of DEVTOOLS_OVERRIDE_PREFS) {
+      Services.prefs.removeObserver(pref, this);
+    }
 
     this.store.uninit();
     this.unregisterNetworkProxy();
@@ -3178,21 +3195,34 @@ export class ActivityStream {
     this.initialized = false;
   }
 
-  _updateDynamicPrefs() {
-    // Save the geo pref if we have it
-    if (lazy.Region.home) {
-      if (this.geo === "") {
-        // The observer has become obsolete.
-        Services.obs.removeObserver(this, lazy.Region.REGION_TOPIC);
-      }
-      this.geo = lazy.Region.home;
-    } else if (this.geo !== "") {
-      // Watch for geo changes and use a dummy value for now
-      Services.obs.addObserver(this, lazy.Region.REGION_TOPIC);
-      this.geo = "";
+  /**
+   * Region changes are only observed until the region is first known, unless
+   * the newtab devtools are enabled, since they can change the region at any
+   * time.
+   */
+  _updateRegionObserver() {
+    const shouldObserve =
+      !lazy.Region.home ||
+      Services.prefs.getBoolPref(PREF_DEVTOOLS_ENABLED, false);
+    if (shouldObserve === !!this._observingRegion) {
+      return;
     }
+    if (shouldObserve) {
+      Services.obs.addObserver(this, lazy.Region.REGION_TOPIC);
+    } else {
+      Services.obs.removeObserver(this, lazy.Region.REGION_TOPIC);
+    }
+    this._observingRegion = shouldObserve;
+  }
 
-    this.locale = Services.locale.appLocaleAsBCP47;
+  _updateDynamicPrefs() {
+    this._updateRegionObserver();
+    // Use a dummy value until the region is known
+    this.geo = lazy.Region.home || "";
+
+    const previousLocale = this.locale;
+    this.locale = newtabLocale();
+    const channel = newtabChannel();
 
     // Update the pref config of those with dynamic values
     for (const pref of PREFS_CONFIG.keys()) {
@@ -3218,6 +3248,7 @@ export class ActivityStream {
       const newValue = prefConfig.getValue({
         geo: this.geo,
         locale: this.locale,
+        channel,
       });
 
       // If there's an existing value and it has changed, that means we need to
@@ -3228,6 +3259,17 @@ export class ActivityStream {
 
       prefConfig.value = newValue;
     }
+
+    // Content only gets App.locale with INIT, so tell it, and the feeds whose
+    // requests and caches depend on it, when it changes afterwards.
+    if (this.initialized && previousLocale !== this.locale) {
+      this.store.dispatch(
+        ac.BroadcastToContent({
+          type: at.LOCALE_UPDATED,
+          data: { locale: this.locale },
+        })
+      );
+    }
   }
 
   observe(subject, topic, data) {
@@ -3237,10 +3279,12 @@ export class ActivityStream {
         this._updateDynamicPrefs();
         break;
       case "nsPref:changed":
-        if (data === PREF_MARKET_GATE_ENABLED) {
+        if (
+          data === PREF_MARKET_GATE_ENABLED ||
+          DEVTOOLS_OVERRIDE_PREFS.includes(data)
+        ) {
           this._updateDynamicPrefs();
-        }
-        if (data === PREF_IMAGE_PROXY_ENABLED) {
+        } else if (data === PREF_IMAGE_PROXY_ENABLED) {
           const enabled = Services.prefs.getBoolPref(
             PREF_IMAGE_PROXY_ENABLED,
             false
