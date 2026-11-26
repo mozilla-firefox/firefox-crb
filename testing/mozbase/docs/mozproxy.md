@@ -36,6 +36,8 @@ finally:
 - **run_local**: if True, the test is running locally.
 - **app**: tested app. Can be "firefox", "geckoview", "refbrow", "fenix" or "firefox"
 - **host**: hostname for the policies.json file
+- **port**: listen port for the proxy. A free port is picked when unset
+- **proxy_mode**: "playback" (default), "record" or "intercept". See [Proxy modes](#proxy-modes)
 - **local_profile_dir**: profile dir
 
 ## Playback modes
@@ -54,6 +56,15 @@ specs; the supported in-tree versions are 11.0.0 and 12.2.1, so recordings
 pinned to 8.1.1 must stay in proxy mode.
 
 HTTP/3 is not supported in either mode.
+
+## Proxy modes
+
+**proxy_mode** selects what mitmproxy does with the traffic:
+
+- **playback** (default): replays the recordings listed in `playback_files`
+- **record**: records traffic into `recording_file`
+- **intercept**: runs the mitmproxy addon script at `intercept_script_path`,
+  which synthesizes responses itself; no recording is used
 
 Supported environment variables:
 

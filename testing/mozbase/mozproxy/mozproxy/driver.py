@@ -22,19 +22,22 @@ def main():
     parser.add_argument(
         "--mode",
         default="playback",
-        choices=["record", "playback"],
+        choices=["record", "playback", "intercept"],
         help="Proxy server mode. Use `playback` to replay from the provided file(s). "
         "Use `record` to generate a new recording at the path specified by `--file`. "
+        "Use `intercept` to serve custom responses via a mitmproxy addon script. "
         "playback - replay from provided file. "
-        "record - generate a new recording at the specified path.",
+        "record - generate a new recording at the specified path. "
+        "intercept - serve responses from a mitmproxy addon script.",
     )
     parser.add_argument(
         "file",
         nargs="+",
-        help="The playback files to replay, or the file that a recording will be saved to. "
+        help="The playback files to replay, the file that a recording will be saved to, "
+        "or the path to a mitmproxy addon script (for intercept mode). "
         "For playback, it can be any combination of the following: zip file, manifest file, "
         "or a URL to zip/manifest file. "
-        "For recording, it's a zip fle.",
+        "For recording, it's a zip file.",
     )
     parser.add_argument(
         "--host", default="localhost", help="The host to use for the proxy server."
@@ -77,7 +80,7 @@ def main():
         "--verbose",
         action="store_true",
         default=False,
-        help="Run this locally (i.e. not in production).",
+        help="Show more log output.",
     )
     parser.add_argument(
         "--deterministic",
@@ -125,7 +128,7 @@ def main():
                 "local_profile_dir": args.profiledir,
                 "verbose": args.verbose,
             })
-        if args.mode == "record":
+        elif args.mode == "record":
             # Record mode
             if len(args.file) > 1:
                 raise Exception("Please provide only one recording file!")
@@ -146,6 +149,25 @@ def main():
                 "verbose": args.verbose,
                 "inject_deterministic": args.deterministic,
             })
+        elif args.mode == "intercept":
+            if len(args.file) != 1:
+                raise Exception("Please provide exactly one intercept script path!")
+            proxy_service = get_playback({
+                "run_local": args.local,
+                "host": args.host,
+                "binary": args.binary,
+                "obj_path": args.objdir,
+                "platform": mozinfo.os,
+                "playback_tool": args.tool,
+                "playback_version": args.tool_version,
+                "proxy_mode": "intercept",
+                "intercept_script_path": args.file[0],
+                "app": args.app,
+                "local_profile_dir": args.profiledir,
+                "verbose": args.verbose,
+            })
+        else:
+            raise Exception(f"Unhandled mode: {args.mode}")
         LOG.info(f"Proxy settings {proxy_service}")
         proxy_service.start()
         LOG.info(f"Proxy running on port {proxy_service.port}")
