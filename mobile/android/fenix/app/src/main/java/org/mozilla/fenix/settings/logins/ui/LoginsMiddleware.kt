@@ -140,7 +140,8 @@ internal class LoginsMiddleware(
             is DetailLoginMenuAction.DeleteLoginMenuItemClicked,
             is LoginDeletionDialogAction.CancelTapped,
             is ImportPasswordsOverflowMenuClicked,
-            is ImportPasswordsOverflowMenuDismissed -> Unit
+            is ImportPasswordsOverflowMenuDismissed,
+            is SnackbarAction.Dismissed -> Unit
         }
     }
 

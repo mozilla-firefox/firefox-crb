@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.settings.logins.ui
 
+import mozilla.components.concept.fileimporter.FileImporterError
 import mozilla.components.lib.state.State
 
 /**
@@ -19,6 +20,7 @@ import mozilla.components.lib.state.State
  * @property loginsEditLoginState State representing the edit login subscreen, if visible.
  * @property loginsLoginDetailState State representing the login detail subscreen, if visible.
  * @property loginDeletionDialogState State representing the deletion state.
+ * @property loginsSnackbarState State representing the login screen snackbar status.
  * @property newLoginState State representing the new login to be added state.
  * @property updateLoginState State representing the new login to be edited state.
  */
@@ -33,6 +35,7 @@ internal data class LoginsState(
     val loginsEditLoginState: LoginsEditLoginState?,
     val loginsLoginDetailState: LoginsLoginDetailState?,
     val loginDeletionDialogState: LoginDeletionDialogState,
+    val loginsSnackbarState: LoginsSnackbarState,
     val newLoginState: NewLoginState?,
     val updateLoginState: UpdateLoginState?,
 ) : State {
@@ -49,6 +52,7 @@ internal data class LoginsState(
                 loginsEditLoginState = null,
                 loginsLoginDetailState = null,
                 loginDeletionDialogState = LoginDeletionDialogState.None,
+                loginsSnackbarState = LoginsSnackbarState.None,
                 newLoginState = NewLoginState.None,
                 updateLoginState = UpdateLoginState.None,
             )
@@ -133,4 +137,16 @@ sealed class LoginsSortOrder {
             is LoginDeletionDialogState.Presenting -> loginDeletionDialogState.guidToDelete == guid
             else -> false
         }
+}
+
+/** Login screen snackbar state */
+internal sealed class LoginsSnackbarState {
+    /** No snackbar */
+    data object None : LoginsSnackbarState()
+
+    /** Import finished successfully */
+    data object ImportSucceeded : LoginsSnackbarState()
+
+    /** Import finished with an error */
+    data class ImportFailed(val error: FileImporterError) : LoginsSnackbarState()
 }
