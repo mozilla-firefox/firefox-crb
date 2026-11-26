@@ -53,14 +53,14 @@ POLICIES_CONTENT_OFF = """{
 # on local machine it is 'HOME', however it is different on production machines
 try:
     DEFAULT_CERT_PATH = os.path.join(
-        os.getenv("HOME"), ".mitmproxy", "mitmproxy-ca-cert.cer"
+        os.getenv("HOME"), ".mitmproxy", "mitmproxy-ca-cert.pem"
     )
 except Exception:
     DEFAULT_CERT_PATH = os.path.join(
         os.getenv("HOMEDRIVE"),
         os.getenv("HOMEPATH"),
         ".mitmproxy",
-        "mitmproxy-ca-cert.cer",
+        "mitmproxy-ca-cert.pem",
     )
 
 # On Windows, deal with mozilla-build having forward slashes in $HOME:
