@@ -98,7 +98,8 @@ mozilla::ipc::IPCResult RemoteDecoderParent::RecvInit(
                   self->mDecoder->GetProcessName(),
                   self->mDecoder->GetCodecName(), hardwareAccelerated,
                   hardwareReason, self->mDecoder->NeedsConversion(),
-                  self->mDecoder->ShouldDecoderAlwaysBeRecycled(), properties});
+                  self->mDecoder->ShouldDecoderAlwaysBeRecycled(),
+                  self->mDecoder->SupportDecoderRecycling(), properties});
             }
           })
       ->Track(mInitRequest);
