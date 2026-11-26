@@ -240,10 +240,13 @@ class _TabState {
 
     // If there is a urlbarOverrideValue set, then either the user has typed something
     // in the URL bar, or a new tab was opened with a URI to load.
-    // If so, we also track whether we were still in the process of loading something.
+    // If so, we also track whether we were still in the process of loading it.
     if (!("urlbarOverrideValue" in tabData) && browser.urlbarOverrideValue) {
       tabData.urlbarOverrideValue = browser.urlbarOverrideValue;
-      if (browser.loadStartedSinceUrlbarOverride) {
+      if (
+        browser.loadStartedSinceUrlbarOverride &&
+        browser.urlbarOverride.valueLoading
+      ) {
         tabData.urlbarOverrideLoadStarted = true;
       }
     }

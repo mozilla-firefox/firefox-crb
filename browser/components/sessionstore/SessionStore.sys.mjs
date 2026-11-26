@@ -3296,7 +3296,9 @@ class _SessionStore {
     aTab.removeAttribute("crashed");
 
     let { urlbarOverrideValue = null } = browser;
-    let hasStartedLoad = browser.loadStartedSinceUrlbarOverride;
+    let hasStartedLoad =
+      browser.loadStartedSinceUrlbarOverride &&
+      browser.urlbarOverride.valueLoading;
 
     let cacheState = lazy.TabStateCache.get(browser.permanentKey);
 
@@ -3326,7 +3328,7 @@ class _SessionStore {
       // #restoreTabEntry to work properly.
       lazy.TabStateCache.update(browser.permanentKey, {
         urlbarOverrideValue,
-        urlbarOverrideLoadStarted: true,
+        urlbarOverrideLoadStarted: browser.urlbarOverride.valueLoading || null,
       });
     }
 
