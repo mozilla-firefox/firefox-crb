@@ -17818,6 +17818,14 @@
   value: @IS_NIGHTLY_BUILD@
   mirror: always
 
+# Use Happy Eyeballs to establish the inner connection through a CONNECT
+# tunnel, instead of creating the tunnel synchronously and letting the real
+# transaction drive the CONNECT.
+- name: network.http.happy_eyeballs_tunnel_enabled
+  type: RelaxedAtomicBool
+  value: @IS_NIGHTLY_BUILD@
+  mirror: always
+
 # The time to wait before starting the next inner connection attempt through a
 # CONNECT tunnel (ms).
 - name: network.http.happy_eyeballs_inner_connection_attempt_delay

@@ -1400,6 +1400,23 @@ run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_inhibit_caching.js"]
 
+["test_inner_connection_h2_plain_tunnel.js"]
+skip-if = [
+  "os == 'android'",
+]
+
+["test_inner_connection_http11_required.js"]
+skip-if = [
+  "os == 'android'",
+]
+
+["test_inner_connection_sibling_attempts.js"]
+run-sequentially = ["true"] # node server exceptions dont replay well
+requesttimeoutfactor = 2
+skip-if = [
+  "os == 'android'",
+]
+
 ["test_invalid_cookie_fix.js"]
 
 ["test_ioservice.js"]
