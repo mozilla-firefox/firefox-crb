@@ -105,7 +105,6 @@ add_task(async function test_companion_lookup_cancels_when_source_changes() {
     });
     const panel = FullPageTranslationsPanel;
     const { onCompanionButton } = panel;
-    let targetLookup;
     const initialTabs = new Set(gBrowser.tabs);
     let otherTab;
     let companionRequest;
@@ -136,14 +135,20 @@ add_task(async function test_companion_lookup_cancels_when_source_changes() {
       );
       let splitView;
       const initialTabCount = gBrowser.tabs.length;
-      targetLookup =
-        FullPageTranslationsTestUtils.holdNextPreferredTargetResult(["en"]);
+      using getTopPreferredSupportedToLangController =
+        TestUtils.asyncControlProxy(
+          TranslationsParent
+        ).getTopPreferredSupportedToLang(
+          (_, [options]) => options?.excludeLangTags?.join(",") === "en"
+        );
       panel.onCompanionButton = () => {
         companionRequest = onCompanionButton.call(panel);
         return companionRequest;
       };
       await FullPageTranslationsTestUtils.clickCompanionButton();
-      await targetLookup.entered;
+      await getTopPreferredSupportedToLangController.waitForCapture();
+      const targetLanguagePromise =
+        getTopPreferredSupportedToLangController.runCapturedCall();
 
       switch (change) {
         case "switch tabs":
@@ -170,7 +175,12 @@ add_task(async function test_companion_lookup_cancels_when_source_changes() {
           );
           break;
       }
-      targetLookup.release();
+      Assert.equal(
+        await targetLanguagePromise,
+        "fr",
+        "The stale target lookup should still resolve to French"
+      );
+      getTopPreferredSupportedToLangController.releaseToCaller();
       await companionRequest;
 
       Assert.equal(
@@ -185,7 +195,6 @@ add_task(async function test_companion_lookup_cancels_when_source_changes() {
       );
     } finally {
       delete panel.onCompanionButton;
-      targetLookup?.restore();
       await companionRequest?.catch(() => {});
       sourceTab.splitview?.unsplitTabs();
       for (const tab of [...gBrowser.tabs]) {
