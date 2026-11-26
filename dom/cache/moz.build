@@ -115,3 +115,5 @@ SOURCE_HEADERS += [
     "NotifyUtils.h",
     "QuotaClientImpl.h",
 ]
+
+TEST_DIRS += ["test/gtest"]

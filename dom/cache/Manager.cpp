@@ -243,6 +243,8 @@ class DeleteOrphanedBodyAction final : public SyncDBAction {
         mManager(std::move(aManager)),
         mDeletedBodyIdList{aBodyId} {}
 
+  bool IsWrite() const override { return true; }
+
   virtual nsresult RunSyncWithDBOnTarget(
       const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile* aDBDir,
       mozIStorageConnection* aConn) override {
@@ -627,6 +629,8 @@ class Manager::DeleteOrphanedCacheAction final : public SyncDBAction {
         mManager(std::move(aManager)),
         mCacheId(aCacheId) {}
 
+  bool IsWrite() const override { return true; }
+
   virtual nsresult RunSyncWithDBOnTarget(
       const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile* aDBDir,
       mozIStorageConnection* aConn) override {
@@ -866,6 +870,8 @@ class Manager::CachePutAllAction final : public DBAction {
 
  private:
   ~CachePutAllAction() = default;
+
+  bool IsWrite() const override { return true; }
 
   virtual void RunWithDBOnTarget(
       SafeRefPtr<Resolver> aResolver,
@@ -1271,6 +1277,8 @@ class Manager::CacheDeleteAction final : public Manager::BaseAction {
         mArgs(aArgs),
         mSuccess(false) {}
 
+  bool IsWrite() const override { return true; }
+
   virtual nsresult RunSyncWithDBOnTarget(
       const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile* aDBDir,
       mozIStorageConnection* aConn) override {
@@ -1527,6 +1535,8 @@ class Manager::StorageOpenAction final : public Manager::BaseAction {
         mArgs(aArgs),
         mCacheId(INVALID_CACHE_ID) {}
 
+  bool IsWrite() const override { return true; }
+
   virtual nsresult RunSyncWithDBOnTarget(
       const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile* aDBDir,
       mozIStorageConnection* aConn) override {
@@ -1581,6 +1591,8 @@ class Manager::StorageDeleteAction final : public Manager::BaseAction {
         mArgs(aArgs),
         mCacheDeleted(false),
         mCacheId(INVALID_CACHE_ID) {}
+
+  bool IsWrite() const override { return true; }
 
   virtual nsresult RunSyncWithDBOnTarget(
       const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile* aDBDir,
