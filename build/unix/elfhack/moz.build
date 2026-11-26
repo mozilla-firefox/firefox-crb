@@ -24,18 +24,33 @@ else:
 
     HostProgram("elfhack")
 
+    DIRS += [
+        "tests/array",
+        "tests/ctors",
+    ]
+
+    inputs = [
+        f"!tests/{name}/{CONFIG['DLL_PREFIX']}test-{name}{CONFIG['DLL_SUFFIX']}"
+        for name in ("array", "ctors")
+    ] + [f"!elfhack{CONFIG['HOST_BIN_SUFFIX']}"]
+
     if not CONFIG["CROSS_COMPILE"]:
         SOURCES += [
             "dummy.c",
         ]
         SOURCES["dummy.c"].flags += ["-fno-lto"]
 
-    SOURCES += [
-        "test-array.c",
-        "test-ctors.c",
-    ]
-    SOURCES["test-array.c"].flags += ["-fno-lto"]
-    SOURCES["test-ctors.c"].flags += ["-fno-lto"]
+        Program("dummy")
+        inputs += [f"!dummy{CONFIG['BIN_SUFFIX']}"]
+
+    if CONFIG["COMPILE_ENVIRONMENT"]:
+        GeneratedFile(
+            "elfhack-test.stamp",
+            script="/python/mozbuild/mozbuild/action/check_elfhack.py",
+            inputs=inputs,
+            extra_deps=[f"!inject/{CONFIG['TARGET_CPU']}.{CONFIG['OBJ_SUFFIX']}"],
+            flags=[CONFIG["READELF"]],
+        )
 
 NO_PGO = True
 

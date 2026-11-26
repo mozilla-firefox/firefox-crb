@@ -1133,9 +1133,7 @@ class TreeMetadataEmitter(LoggingMixin):
             return
 
         # TODO: objdirs with only host things in them shouldn't need target
-        # flags, but there's at least one Makefile.in (in
-        # build/unix/elfhack) that relies on the value of LDFLAGS being
-        # passed to one-off rules.
+        # flags.
         self._compile_dirs.add(context.objdir)
 
         if host_linkables or any(
