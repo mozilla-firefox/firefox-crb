@@ -53,6 +53,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   calculateTheme: "resource://newtab/lib/Wallpapers/WallpaperThemeUtils.mjs",
 });
 
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 import {
   actionTypes as at,
   actionCreators as ac,
@@ -192,7 +193,7 @@ export class PictureOfTheDayFeed {
     const { data, error } = await this.merino.fetchPictureOfTheDay({
       source: "newtab",
       endpointUrl,
-      acceptLanguage: Services.locale.appLocaleAsBCP47,
+      acceptLanguage: newtabLocale(),
     });
     const picture = this.normalize(data);
     if (error || !picture) {

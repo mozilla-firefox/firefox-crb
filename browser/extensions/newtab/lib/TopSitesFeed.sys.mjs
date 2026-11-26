@@ -14,6 +14,7 @@ import {
   actionCreators as ac,
   actionTypes as at,
 } from "resource://newtab/common/Actions.mjs";
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 import { TippyTopProvider } from "resource:///modules/topsites/TippyTopProvider.sys.mjs";
 import { insertPinned } from "resource:///modules/topsites/TopSites.sys.mjs";
 import {
@@ -1407,12 +1408,12 @@ export class TopSitesFeed {
       }
 
       // Filter by locale.
-      if (topsite.exclude_locales?.includes(Services.locale.appLocaleAsBCP47)) {
+      if (topsite.exclude_locales?.includes(newtabLocale())) {
         return false;
       }
       if (
         topsite.include_locales?.length &&
-        !topsite.include_locales.includes(Services.locale.appLocaleAsBCP47)
+        !topsite.include_locales.includes(newtabLocale())
       ) {
         return false;
       }
