@@ -11,6 +11,9 @@
   if (params.has("tag")) {
     rule.tag = params.get("tag");
   }
+  if (params.has("hint")) {
+    rule.expects_no_vary_search = params.get("hint");
+  }
   const script = document.createElement("script");
   script.type = "speculationrules";
   script.textContent = JSON.stringify({ prefetch: [rule] });

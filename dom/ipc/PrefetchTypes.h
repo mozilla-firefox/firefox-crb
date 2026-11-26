@@ -6,6 +6,7 @@
 #ifndef mozilla_dom_PrefetchTypes_h
 #define mozilla_dom_PrefetchTypes_h
 
+#include "mozilla/Assertions.h"
 #include "mozilla/TimeStamp.h"
 #include "nsCOMPtr.h"
 #include "nsIURI.h"
@@ -27,6 +28,52 @@ enum class PrefetchState : uint8_t {
   // Candidate recorded but never fetched; experiment control branch.
   DryRun,
 };
+
+// Outcome of a navigation a prefetch candidate covered. Ordered closest to
+// served first: with several candidates, the lowest value is reported.
+enum class PrefetchNavigationResult : uint8_t {
+  Served,
+  CacheMiss,
+  Expired,
+  HintMismatch,
+  WaitTimeout,
+  HttpError,
+  TooLarge,
+  NetworkError,
+  Canceled,
+  DryRun,
+  NavigationCanceled,
+};
+
+inline nsLiteralCString PrefetchNavigationResultLabel(
+    PrefetchNavigationResult aResult) {
+  switch (aResult) {
+    case PrefetchNavigationResult::Served:
+      return "served"_ns;
+    case PrefetchNavigationResult::CacheMiss:
+      return "cache_miss"_ns;
+    case PrefetchNavigationResult::Expired:
+      return "expired"_ns;
+    case PrefetchNavigationResult::HintMismatch:
+      return "hint_mismatch"_ns;
+    case PrefetchNavigationResult::WaitTimeout:
+      return "wait_timeout"_ns;
+    case PrefetchNavigationResult::HttpError:
+      return "http_error"_ns;
+    case PrefetchNavigationResult::TooLarge:
+      return "too_large"_ns;
+    case PrefetchNavigationResult::NetworkError:
+      return "network_error"_ns;
+    case PrefetchNavigationResult::Canceled:
+      return "canceled"_ns;
+    case PrefetchNavigationResult::DryRun:
+      return "dry_run"_ns;
+    case PrefetchNavigationResult::NavigationCanceled:
+      return "navigation_canceled"_ns;
+  }
+  MOZ_ASSERT_UNREACHABLE("Unknown PrefetchNavigationResult");
+  return "canceled"_ns;
+}
 
 // Spec:
 // https://wicg.github.io/nav-speculation/prefetch.html#prefetch-ip-anonymization-policy

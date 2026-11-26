@@ -94,7 +94,8 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
 
   // Cancels the fetch and marks state=Canceled. Idempotent.
   // Called by RecvCancel and WindowGlobalParent::DedupePrefetchRecords.
-  void MarkCanceled();
+  void MarkCanceled(
+      PrefetchNavigationResult aReason = PrefetchNavigationResult::Canceled);
 
   // Called when a navigation activates this record.
   void MarkActivated() { mOutcome = Outcome::Used; }
@@ -116,6 +117,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // Unlike IsExpectedToMatch, this never consults response data, which the
   // dry-run branch cannot observe.
   bool MatchesCandidateURL(nsIURI* aURL) const;
+
+  // Why this record did not serve a navigation to aURL that it covered.
+  PrefetchNavigationResult NotServedReason(nsIURI* aURL) const;
 
   void ActorDestroy(ActorDestroyReason aReason) override;
 
@@ -158,6 +162,7 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   nsString mIsolatedPartitionKey;
   bool mHadConflictingCredentials = false;
   bool mIsEligibleForPrefetch = false;
+  PrefetchNavigationResult mCancelReason = PrefetchNavigationResult::Canceled;
 
   // Only moves forward, and unlike mState it survives a later MarkCanceled.
   enum class Outcome : uint8_t { NotStarted, Incomplete, Unused, Used };
