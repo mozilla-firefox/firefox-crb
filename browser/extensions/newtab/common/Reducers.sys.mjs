@@ -89,6 +89,10 @@ export const INITIAL_STATE = {
     },
     // Used to show blocks in newtab devtools.
     blocks: {},
+    // Used to show feature availability in newtab devtools.
+    availability: null,
+    // What the newtab devtools changed on this profile, for the notice.
+    devtoolsChanges: [],
     spocs: {
       spocs_endpoint: "",
       lastUpdated: null,
@@ -869,6 +873,10 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
         ...INITIAL_STATE.DiscoveryStream,
         config: prevState.config,
         sectionPersonalization: prevState.sectionPersonalization,
+        // Not content feed state: the devtools' Apply resets the layout right
+        // after these arrive.
+        availability: prevState.availability,
+        devtoolsChanges: prevState.devtoolsChanges,
       };
     case at.DISCOVERY_STREAM_FEEDS_UPDATE:
       return {
@@ -904,6 +912,19 @@ function DiscoveryStream(prevState = INITIAL_STATE.DiscoveryStream, action) {
       return {
         ...prevState,
         blocks: action.data,
+      };
+    case at.DISCOVERY_STREAM_DEV_CHANGES:
+      return {
+        ...prevState,
+        devtoolsChanges: action.data,
+      };
+    case at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE:
+      return {
+        ...prevState,
+        // An error keeps the last result on screen.
+        availability: action.data.error
+          ? { ...prevState.availability, error: action.data.error }
+          : action.data,
       };
     case at.DISCOVERY_STREAM_SPOCS_CAPS:
       return {
