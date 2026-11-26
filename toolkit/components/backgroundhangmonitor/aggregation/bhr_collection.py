@@ -124,14 +124,17 @@ _CLIENT_ID_INDEX = 8
 _PLATFORM_CELLS_INDEX = 9
 
 
-def _os_version_bucket(os_name, os_version):
+def _os_version_bucket(os_name, os_version, windows_build_number):
     """The OS release a client_info.os_version denotes, as users know it.
 
     Glean reports the kernel version, not the release. macOS gives the Darwin
     version, so its major is translated (Darwin 24 is macOS 15, Darwin 25 is
     macOS 26). Linux gives the whole kernel release, cut to major.minor so the
-    cells stay few. Windows gives "10.0" for both 10 and 11.
+    cells stay few. Windows gives "10.0" for both 10 and 11, so its build
+    number tells them apart: 11 starts at build 22000.
     """
+    if os_name == "Windows" and windows_build_number is not None:
+        return "11" if windows_build_number >= 22000 else "10"
     parts = os_version.split(".")[:2]
     if not all(part.isdigit() for part in parts):
         return "unknown"
@@ -148,7 +151,11 @@ def _os_version_bucket(os_name, os_version):
 def _platform_cells(ping):
     """The cell of each _PLATFORM_DIMENSIONS a ping's client is counted in."""
     os_name = ping["client_info/os"]
-    os_version = _os_version_bucket(os_name, ping["client_info/os_version"])
+    os_version = _os_version_bucket(
+        os_name,
+        ping["client_info/os_version"],
+        ping.get("client_info/windows_build_number"),
+    )
     return (
         os_name,
         f"{os_name}/{os_version}",
@@ -342,8 +349,11 @@ def build_query_sql(date, end_date, sample_slices, client_metrics=False):
     end_date_str = end_date.strftime("%Y%m%d")
     # SAFE so a malformed app_build drops its ping instead of failing the query.
     ping_build_date = "SAFE.PARSE_DATE('%Y%m%d', SUBSTR(client_info.app_build, 1, 8))"
-    client_id_field = (
-        ",\n        client_info.client_id AS client_id" if client_metrics else ""
+    client_metrics_fields = (
+        ",\n        client_info.client_id AS client_id,"
+        "\n        client_info.windows_build_number AS windows_build_number"
+        if client_metrics
+        else ""
     )
     sample_slice = f"ABS(MOD(FARM_FINGERPRINT(document_id), {_MAX_SAMPLE_SLICES}))"
     return f"""
@@ -354,7 +364,7 @@ def build_query_sql(date, end_date, sample_slices, client_metrics=False):
         client_info.os AS os,
         client_info.os_version AS os_version,
         client_info.architecture AS architecture,
-        client_info.app_build AS app_build{client_id_field}
+        client_info.app_build AS app_build{client_metrics_fields}
       ) AS client_info,
       STRUCT(
         STRUCT(
@@ -537,17 +547,17 @@ def get_data_by_day(
     ]
     if len(build_dates) == 1:
         rows = _query_bigquery(sql, billing_project, reuse)
-        yield build_dates[0], _pings(rows, properties)
+        yield build_dates[0], _pings(rows, properties, client_metrics)
         return
 
     _, window_table_id = _materialize(sql, billing_project, reuse, clustered=True)
     for build_date in build_dates:
         day_sql = f"SELECT * FROM `{window_table_id}` WHERE build_date = '{build_date}'"
         rows = _query_bigquery(day_sql, billing_project, reuse=False)
-        yield build_date, _pings(rows, properties)
+        yield build_date, _pings(rows, properties, client_metrics)
 
 
-def _pings(rows, properties):
+def _pings(rows, properties, client_metrics):
     # The build-date window is filtered in SQL (see build_query_sql), so every
     # row that comes back is already in-window. Here we only drop rows that are
     # missing a required field.
@@ -560,6 +570,11 @@ def _pings(rows, properties):
         ping = get_ping_properties(row, properties)
         if not properties_are_not_none(ping, properties):
             continue
+        if client_metrics:
+            # Null off Windows, so not a required property.
+            ping["client_info/windows_build_number"] = get_prop(
+                row, "client_info/windows_build_number"
+            )
         kept += 1
         yield ping
 

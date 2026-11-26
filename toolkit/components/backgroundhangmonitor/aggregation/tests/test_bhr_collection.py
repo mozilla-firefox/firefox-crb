@@ -182,6 +182,26 @@ def test_query_sql_selects_only_needed_nested_fields():
         assert field in sql
 
 
+def test_query_sql_selects_client_metrics_fields_only_when_asked():
+    def sql(client_metrics):
+        return bhr_collection.build_query_sql(
+            datetime.date(2026, 5, 1),
+            datetime.date(2026, 5, 1),
+            1,
+            client_metrics=client_metrics,
+        )
+
+    for field in (
+        "client_info.client_id AS client_id",
+        "client_info.windows_build_number AS windows_build_number",
+    ):
+        assert field in sql(True)
+        assert field not in sql(False)
+
+
+# --- Materializing the query -------------------------------------------------
+
+
 # --- get_data end-to-end with mocked BQ client -----------------------------
 
 
@@ -194,6 +214,7 @@ def _make_row(
     hangs_modules="",
     sample_slice=0,
     client_id=None,
+    windows_build_number=None,
 ):
     """Build a fake BQ row as a nested dict — same shape google-cloud-bigquery
     returns for our SELECT."""
@@ -205,6 +226,7 @@ def _make_row(
             "architecture": arch,
             "app_build": app_build,
             "client_id": client_id,
+            "windows_build_number": windows_build_number,
         },
         "metrics": {
             "object": {
@@ -1288,7 +1310,14 @@ def _aggregate_client_metrics(monkeypatch, tmp_path, rows):
     return profile["affectedClients"]
 
 
-def _client_metrics_row(client_id, modules, os_name="Linux", os_version="6.8.0"):
+def _client_metrics_row(
+    client_id,
+    modules,
+    os_name="Linux",
+    os_version="6.8.0",
+    arch="x86_64",
+    windows_build_number=None,
+):
     hangs = [
         {
             "thread": "Gecko",
@@ -1302,11 +1331,12 @@ def _client_metrics_row(client_id, modules, os_name="Linux", os_version="6.8.0")
     return _make_row(
         os_name,
         os_version,
-        "x86_64",
+        arch,
         "20260502123456",
         json.dumps(hangs),
         json.dumps([[module, "ABC"] for module in modules]),
         client_id=client_id,
+        windows_build_number=windows_build_number,
     )
 
 
@@ -1340,7 +1370,7 @@ def test_aggregate_counts_distinct_affected_clients(monkeypatch, tmp_path):
     ],
 )
 def test_os_version_bucket(os_name, os_version, expected):
-    assert bhr_collection._os_version_bucket(os_name, os_version) == expected
+    assert bhr_collection._os_version_bucket(os_name, os_version, None) == expected
 
 
 def test_aggregate_splits_affected_clients_by_platform(monkeypatch, tmp_path):
@@ -1382,6 +1412,25 @@ def test_aggregate_splits_affected_clients_by_platform(monkeypatch, tmp_path):
             "arch": {"Darwin/x86_64": 2, "Linux/x86_64": 2},
         },
     ]
+
+
+def test_aggregate_tells_windows_10_and_11_apart(monkeypatch, tmp_path):
+    rows = [
+        _client_metrics_row("win-1", ["xul.pdb"], "Windows", "10.0", "x86_64", 19045),
+        _client_metrics_row("win-2", ["xul.pdb"], "Windows", "10.0", "aarch64", 26100),
+        _client_metrics_row("win-3", ["xul.pdb"], "Windows", "10.0", "x86_64", 22631),
+        _client_metrics_row("linux-1", ["xul.pdb"]),
+    ]
+    totals = _aggregate_client_metrics(monkeypatch, tmp_path, rows)["platforms"][
+        "total"
+    ]
+
+    assert totals["osVersion"] == {"Windows/10": 1, "Windows/11": 2, "Linux/6.8": 1}
+    assert totals["arch"] == {
+        "Windows/x86_64": 2,
+        "Windows/aarch64": 1,
+        "Linux/x86_64": 1,
+    }
 
 
 def test_get_data_by_day_reads_the_window_one_build_date_at_a_time(monkeypatch):
