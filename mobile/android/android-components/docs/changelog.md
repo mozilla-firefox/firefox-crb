@@ -35,6 +35,8 @@ permalink: /changelog/
   * 🆕 Added `CustomizableMenuItemsAction.ItemsChanged`, which `EditMenuItemsContent` dispatches when the user drags an item to another place inside its section or inside the item it is in. [Bug 2090976](https://bugzilla.mozilla.org/show_bug.cgi?id=2090976)
 * **service-firefox-accounts**
   * ⚠️ **Breaking change**: Moved `FxaService` and `FxaScope` to `concept-sync`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
+* **concept-sync**
+  * ⚠️ **Breaking change**: `AuthType.Signin`, `AuthType.Signup`, and `AuthType.Pairing` are now data classes carrying an optional `service: FxaService?`. `AuthType.OtherExternal` also carries the service. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 162.0
 * **concept-engine**
