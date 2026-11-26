@@ -21,6 +21,16 @@ _UNSUPPORTED = ("WINNT", "Darwin")
 _EXCLUDES = ("--exclude=precomplete", "--exclude=.mkdir.done")
 
 
+def check_supported() -> int:
+    if buildconfig.substs.get("OS_TARGET") in _UNSUPPORTED:
+        print(
+            "Installing is not supported on this platform. Build the package instead.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def package_install(
     *,
     destdir: str = "",
@@ -28,14 +38,11 @@ def package_install(
     bindir: Optional[str] = None,
     pkg_dir: Optional[str] = None,
 ) -> int:
-    substs = buildconfig.substs
-    if substs.get("OS_TARGET") in _UNSUPPORTED:
-        print(
-            "Installing is not supported on this platform. Build the package instead.",
-            file=sys.stderr,
-        )
-        return 1
+    rc = check_supported()
+    if rc:
+        return rc
 
+    substs = buildconfig.substs
     dist = mozpath.join(buildconfig.topobjdir, "dist")
     paths = PackagePaths(substs=substs, dist_dir=dist, pkg_dir=pkg_dir)
     staged = mozpath.join(dist, paths.pkg_dir)
