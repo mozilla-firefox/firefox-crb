@@ -265,3 +265,6 @@ prefs = ["security.storage.encryption.sqlite.enabled=false"]
 support-files = ["unsetLastAccessTime_profile.zip"]
 
 ["test_validOrigins.js"]
+
+["test_writeLeaseMutations.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
