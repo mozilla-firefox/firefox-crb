@@ -79,6 +79,9 @@ RefPtr<ResolvableNormalOriginOp<bool>> CreatePersistentStorageInitializedOp(
 RefPtr<ResolvableNormalOriginOp<bool>> CreateTemporaryStorageInitializedOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager);
 
+RefPtr<ResolvableNormalOriginOp<bool>> CreateFlushDirtyOriginInfosOp(
+    MovingNotNull<RefPtr<QuotaManager>> aQuotaManager);
+
 RefPtr<ResolvableNormalOriginOp<bool>> CreateTemporaryGroupInitializedOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager,
     const PrincipalMetadata& aPrincipalMetadata);

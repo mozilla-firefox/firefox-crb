@@ -385,6 +385,24 @@ class TemporaryStorageInitializedOp final : public InitializedRequestBase {
   bool UnwrapResolveValue() override;
 };
 
+// Reuse the base's open/close behavior without a directory lock; mInitialized
+// reports whether a flush round ran, rather than whether storage is
+// initialized.
+class FlushDirtyOriginInfosOp final : public InitializedRequestBase {
+ public:
+  explicit FlushDirtyOriginInfosOp(
+      MovingNotNull<RefPtr<QuotaManager>> aQuotaManager)
+      : InitializedRequestBase(std::move(aQuotaManager),
+                               "dom::quota::FlushDirtyOriginInfosOp") {}
+
+ private:
+  ~FlushDirtyOriginInfosOp() = default;
+
+  nsresult DoDirectoryWork(QuotaManager& aQuotaManager) override;
+
+  bool UnwrapResolveValue() override;
+};
+
 class TemporaryGroupInitializedOp final
     : public ResolvableNormalOriginOp<bool> {
   const PrincipalMetadata mPrincipalMetadata;
@@ -1134,6 +1152,11 @@ RefPtr<ResolvableNormalOriginOp<bool>> CreatePersistentStorageInitializedOp(
 RefPtr<ResolvableNormalOriginOp<bool>> CreateTemporaryStorageInitializedOp(
     MovingNotNull<RefPtr<QuotaManager>> aQuotaManager) {
   return MakeRefPtr<TemporaryStorageInitializedOp>(std::move(aQuotaManager));
+}
+
+RefPtr<ResolvableNormalOriginOp<bool>> CreateFlushDirtyOriginInfosOp(
+    MovingNotNull<RefPtr<QuotaManager>> aQuotaManager) {
+  return MakeRefPtr<FlushDirtyOriginInfosOp>(std::move(aQuotaManager));
 }
 
 RefPtr<ResolvableNormalOriginOp<bool>> CreateTemporaryGroupInitializedOp(
@@ -1996,6 +2019,26 @@ nsresult PersistentStorageInitializedOp::DoDirectoryWork(
 }
 
 bool PersistentStorageInitializedOp::UnwrapResolveValue() {
+  AssertIsOnOwningThread();
+
+  return mInitialized;
+}
+
+nsresult FlushDirtyOriginInfosOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
+  AssertIsOnIOThread();
+
+  AUTO_PROFILER_LABEL("FlushDirtyOriginInfosOp::DoDirectoryWork", OTHER);
+
+  if (aQuotaManager.IsStorageInitializedInternal() &&
+      aQuotaManager.IsTemporaryStorageInitializedInternal()) {
+    aQuotaManager.FlushDirtyOriginInfos();
+    mInitialized = true;
+  }
+
+  return NS_OK;
+}
+
+bool FlushDirtyOriginInfosOp::UnwrapResolveValue() {
   AssertIsOnOwningThread();
 
   return mInitialized;
