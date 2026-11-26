@@ -11,7 +11,6 @@
 # and from other information in the `xpi-stage` directory.
 ###
 
-import argparse
 import datetime
 import json
 import logging
@@ -30,12 +29,6 @@ from mozpack.chrome.manifest import Manifest, ManifestLocale, parse_manifest
 from redo import retry
 
 from mozbuild.configure.util import Version
-
-
-def write_file(path, content):
-    with open(path, "w", encoding="utf-8") as out:
-        out.write(content + "\n")
-
 
 pushlog_api_url = "{0}/json-rev/{1}"
 
@@ -541,44 +534,27 @@ def create_webmanifest(
     return json.dumps(manifest, indent=2, ensure_ascii=False)
 
 
-def main(args):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--locales", help="List of language codes provided by the langpack"
-    )
-    parser.add_argument("--app-version", help="Version of the application")
-    parser.add_argument(
-        "--max-app-ver", help="Max version of the application the langpack is for"
-    )
-    parser.add_argument(
-        "--app-name", help="Name of the application the langpack is for"
-    )
-    parser.add_argument(
-        "--l10n-basedir", help="Base directory for locales used in the language pack"
-    )
-    parser.add_argument(
-        "--langpack-eid", help="Language pack id to use for this locale"
-    )
-    parser.add_argument(
-        "--metadata",
-        help="FTL file defining langpack metadata",
-    )
-    parser.add_argument("--input", help="Langpack directory.")
-
-    args = parser.parse_args(args)
-
+def langpack_manifest(
+    *,
+    locales,
+    app_version,
+    max_app_ver,
+    app_name,
+    l10n_basedir,
+    langpack_eid,
+    metadata,
+    input,
+):
     chrome_entries = []
-    parse_chrome_manifest(
-        os.path.join(args.input, "chrome.manifest"), args.input, chrome_entries
-    )
+    parse_chrome_manifest(os.path.join(input, "chrome.manifest"), input, chrome_entries)
 
-    ftl = parse_flat_ftl(args.metadata)
+    ftl = parse_flat_ftl(metadata)
 
     # Mangle the app version to set min version (remove patch level)
-    min_app_version = args.app_version
+    min_app_version = app_version
     if "a" not in min_app_version:  # Don't mangle alpha versions
         v = Version(min_app_version)
-        if args.app_name == "SeaMonkey":
+        if app_name == "SeaMonkey":
             # SeaMonkey is odd in that <major> hasn't changed for many years.
             # So min is <major>.<minor>.0
             min_app_version = f"{v.major}.{v.minor}.0"
@@ -586,19 +562,14 @@ def main(args):
             # Language packs should be minversion of {major}.0
             min_app_version = f"{v.major}.0"
 
-    res = create_webmanifest(
-        args.locales,
-        args.app_version,
+    return create_webmanifest(
+        locales,
+        app_version,
         min_app_version,
-        args.max_app_ver,
-        args.app_name,
-        args.l10n_basedir,
-        args.langpack_eid,
+        max_app_ver,
+        app_name,
+        l10n_basedir,
+        langpack_eid,
         ftl,
         chrome_entries,
     )
-    write_file(os.path.join(args.input, "manifest.json"), res)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
