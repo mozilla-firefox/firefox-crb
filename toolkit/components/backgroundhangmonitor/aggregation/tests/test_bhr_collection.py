@@ -1325,6 +1325,65 @@ def test_aggregate_counts_distinct_affected_clients(monkeypatch, tmp_path):
         assert "client-a" not in f.read()
 
 
+@pytest.mark.parametrize(
+    "os_name,os_version,expected",
+    [
+        ("Darwin", "19.6.0", "10.15"),
+        ("Darwin", "20.6.0", "11"),
+        ("Darwin", "24.1.0", "15"),
+        ("Darwin", "25.0.0", "26"),
+        ("Linux", "6.8.0-45-generic", "6.8"),
+        ("Linux", "6.10.3-arch1-1", "6.10"),
+        ("Windows", "10.0", "10.0"),
+        ("Linux", "Unknown", "unknown"),
+        ("Darwin", "", "unknown"),
+    ],
+)
+def test_os_version_bucket(os_name, os_version, expected):
+    assert bhr_collection._os_version_bucket(os_name, os_version) == expected
+
+
+def test_aggregate_splits_affected_clients_by_platform(monkeypatch, tmp_path):
+    rows = [
+        _client_metrics_row("mac-1", ["xul.pdb"], "Darwin", "24.1.0"),
+        _client_metrics_row("mac-2", ["xul.pdb"], "Darwin", "25.0.0"),
+        _client_metrics_row("linux-1", ["xul.pdb", "nss3.pdb"]),
+        # One client across a kernel update: one Linux user, in both versions.
+        _client_metrics_row("linux-2", ["xul.pdb"], os_version="6.8.0-45-generic"),
+        _client_metrics_row("linux-2", ["xul.pdb"], os_version="6.11.2"),
+    ]
+    platforms = _aggregate_client_metrics(monkeypatch, tmp_path, rows)["platforms"]
+
+    assert platforms["total"] == {
+        "os": {"Darwin": 2, "Linux": 2},
+        "osVersion": {"Darwin/15": 1, "Darwin/26": 1, "Linux/6.8": 2, "Linux/6.11": 1},
+        "arch": {"Darwin/x86_64": 2, "Linux/x86_64": 2},
+    }
+    for dimension, cells in platforms["totalSketch"].items():
+        assert set(cells) == set(platforms["total"][dimension])
+
+    by_signature = sorted(
+        platforms["bySignature"].values(), key=lambda counts: sum(counts["os"].values())
+    )
+    assert by_signature == [
+        {
+            "os": {"Linux": 1},
+            "osVersion": {"Linux/6.8": 1},
+            "arch": {"Linux/x86_64": 1},
+        },
+        {
+            "os": {"Darwin": 2, "Linux": 2},
+            "osVersion": {
+                "Darwin/15": 1,
+                "Darwin/26": 1,
+                "Linux/6.8": 2,
+                "Linux/6.11": 1,
+            },
+            "arch": {"Darwin/x86_64": 2, "Linux/x86_64": 2},
+        },
+    ]
+
+
 def test_get_data_by_day_reads_the_window_one_build_date_at_a_time(monkeypatch):
     rows = [
         _make_row("Linux", "5.10", "x86_64", f"2026050{d}123456", "[]") for d in (2, 3)

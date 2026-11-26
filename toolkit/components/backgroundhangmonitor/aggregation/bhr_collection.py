@@ -29,6 +29,7 @@ import shutil
 import sys
 import time
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from client_metrics import HyperLogLog
@@ -115,36 +116,121 @@ def _signature_key(symbolicated_stack):
     return _SIG_FRAME_SEP.join(frames)
 
 
+# Cells other than "os" are prefixed by their OS, e.g. "Darwin/15".
+_PLATFORM_DIMENSIONS = ("os", "osVersion", "arch")
+
+# Positions of the fields process_hangs appends under --client-metrics.
+_CLIENT_ID_INDEX = 8
+_PLATFORM_CELLS_INDEX = 9
+
+
+def _os_version_bucket(os_name, os_version):
+    """The OS release a client_info.os_version denotes, as users know it.
+
+    Glean reports the kernel version, not the release. macOS gives the Darwin
+    version, so its major is translated (Darwin 24 is macOS 15, Darwin 25 is
+    macOS 26). Linux gives the whole kernel release, cut to major.minor so the
+    cells stay few. Windows gives "10.0" for both 10 and 11.
+    """
+    parts = os_version.split(".")[:2]
+    if not all(part.isdigit() for part in parts):
+        return "unknown"
+    if os_name != "Darwin":
+        return ".".join(parts)
+    major = int(parts[0])
+    if major >= 25:
+        return str(major + 1)
+    if major >= 20:
+        return str(major - 9)
+    return f"10.{major - 4}"
+
+
+def _platform_cells(ping):
+    """The cell of each _PLATFORM_DIMENSIONS a ping's client is counted in."""
+    os_name = ping["client_info/os"]
+    os_version = _os_version_bucket(os_name, ping["client_info/os_version"])
+    return (
+        os_name,
+        f"{os_name}/{os_version}",
+        f"{os_name}/{ping['client_info/architecture']}",
+    )
+
+
+def _count_by_cell(clients, index):
+    """Distinct clients per cell of the index'th dimension, from (client_id, cells)."""
+    pairs = {(cells[index], client_id) for client_id, cells in clients}
+    return dict(Counter(cell for cell, _ in pairs))
+
+
 def _compute_affected_clients(symbolicated):
     """Distinct affected clients per signature (HyperLogLog), plus the day total.
 
-    `symbolicated` hangs carry client_id as their last element (appended by
-    process_hangs under --client-metrics). Keyed by the frontend signature key
-    so the dashboard can join the counts to each hang row.
+    `symbolicated` hangs carry client_id and the client's platform cells after
+    the 8 aggregation fields (appended by process_hangs under
+    --client-metrics). Keyed by the frontend signature key so the dashboard can
+    join the counts to each hang row.
 
     Emits both the day's distinct-client estimate and the mergeable HLL sketch
     per signature and for the day total. The secondary roll-up job
     unions these register-wise across a trailing window to report the share of
     users a signature affected over 7 / 28 / 365 days. Only counts and sketches
     (never client ids) are emitted, so cross-day counting stays privacy-safe.
+
+    The same counts are also split by platform under "platforms": the day's
+    distinct clients per cell, with sketches, and each signature's. A
+    signature's cell counts are exact, from the (client_id, cells) pairs that
+    hit it, since a sketch per signature per cell would cost far more memory
+    than most signatures have clients; no sketch is published for them.
     """
     by_key = {}
+    clients_by_key = {}
     day_total = HyperLogLog()
+    day_clients = set()
     for hang in symbolicated:
-        client_id = hang[-1]
+        client_id = hang[_CLIENT_ID_INDEX]
         if client_id is None:
             continue
+        client = (client_id, hang[_PLATFORM_CELLS_INDEX])
         day_total.add(client_id)
+        day_clients.add(client)
         key = _signature_key(hang[0])
         hll = by_key.get(key)
         if hll is None:
             hll = by_key[key] = HyperLogLog()
+            clients_by_key[key] = set()
         hll.add(client_id)
+        clients_by_key[key].add(client)
+
+    cell_totals = {dimension: {} for dimension in _PLATFORM_DIMENSIONS}
+    for client_id, cells in day_clients:
+        for dimension, cell in zip(_PLATFORM_DIMENSIONS, cells):
+            hll = cell_totals[dimension].get(cell)
+            if hll is None:
+                hll = cell_totals[dimension][cell] = HyperLogLog()
+            hll.add(client_id)
+
     return {
         "totalDistinct": day_total.count(),
         "totalSketch": day_total.serialize(),
         "bySignature": {key: hll.count() for key, hll in by_key.items()},
         "sketchBySignature": {key: hll.serialize() for key, hll in by_key.items()},
+        "platforms": {
+            "total": {
+                dimension: {cell: hll.count() for cell, hll in cells.items()}
+                for dimension, cells in cell_totals.items()
+            },
+            "totalSketch": {
+                dimension: {cell: hll.serialize() for cell, hll in cells.items()}
+                for dimension, cells in cell_totals.items()
+            },
+            "bySignature": {
+                key: {
+                    dimension: _count_by_cell(clients, index)
+                    for index, dimension in enumerate(_PLATFORM_DIMENSIONS)
+                }
+                for key, clients in clients_by_key.items()
+            },
+        },
     }
 
 
@@ -585,6 +671,9 @@ def process_hangs(ping, config, threads):
     if isinstance(raw_hangs, str):
         raw_hangs = json.loads(raw_hangs)
 
+    if config.get("client_metrics"):
+        client = (ping["client_info/client_id"], _platform_cells(ping))
+
     result = []
     for raw_hang in raw_hangs:
         h = process_hang(raw_hang)
@@ -612,11 +701,12 @@ def process_hangs(ping, config, threads):
             build_date,
             platform,
         )
-        # Under --client-metrics, carry the ping's client_id as the last element
-        # so the affected-clients pass can attribute the hang. Stripped again
-        # before group_hangs, which unpacks the 8-element aggregation row.
+        # Under --client-metrics, carry the ping's client_id and platform cells
+        # at the end so the affected-clients pass can attribute the hang.
+        # Stripped again before group_hangs, which unpacks the 8-element
+        # aggregation row.
         if config.get("client_metrics"):
-            row = row + (ping["client_info/client_id"],)
+            row = row + client
         result.append(row)
 
     return result
