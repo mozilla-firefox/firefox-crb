@@ -28,6 +28,7 @@ add_task(async function testPolicyOverride() {
 
   Services.prefs.setBoolPref(prefs.ENABLED_PREF, true);
   await waitForStateTelemetry(["shutdown", "policyDisabled"]);
+  checkOffReason("policyDisabled");
   ok(
     !Services.prefs.prefHasUserValue(prefs.BREADCRUMB_PREF),
     "Breadcrumb not saved."

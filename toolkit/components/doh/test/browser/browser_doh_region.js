@@ -3,9 +3,18 @@
  */
 
 "use strict";
+add_task(async function testFirstRunOffReason() {
+  await setup();
+  await DoHController._uninit();
+  Services.prefs.clearUserPref(prefs.FIRST_RUN_PREF);
+  await waitForOffReason(() => DoHController.init());
+  checkOffReason("rollback");
+});
+
 add_task(async function testPrefFirstRollout() {
   await setup();
   await setupRegion();
+  checkOffReason("rollback");
   let defaults = Services.prefs.getDefaultBranch("");
 
   is(
@@ -25,6 +34,7 @@ add_task(async function testPrefFirstRollout() {
     "Rollout should be enabled"
   );
   await ensureTRRMode(2);
+  checkOffReason(null);
 
   is(
     Services.prefs.getStringPref("doh-rollout.home-region"),

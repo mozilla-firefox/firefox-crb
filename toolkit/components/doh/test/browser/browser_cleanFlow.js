@@ -33,6 +33,7 @@ add_task(async function testCleanFlow() {
   simulateUserDecision(true);
 
   await ensureTRRMode(2);
+  checkOffReason(null);
   await checkHeuristicsTelemetry("enable_doh", "startup");
 
   await prefPromise;
@@ -53,6 +54,7 @@ add_task(async function testCleanFlow() {
   setFailingHeuristics();
   simulateNetworkChange();
   await ensureTRRMode(0);
+  checkOffReason("disabled", ["zscalerCanary"]);
   await checkHeuristicsTelemetry("disable_doh", "netchange");
 
   // Trigger another network change.
@@ -71,6 +73,7 @@ add_task(async function testCleanFlow() {
   setPassingHeuristics();
   simulateNetworkChange();
   await ensureTRRMode(2);
+  checkOffReason(null);
   await checkHeuristicsTelemetry("enable_doh", "netchange");
 
   // Again, repeat and check nothing changed.
