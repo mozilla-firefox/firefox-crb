@@ -1619,7 +1619,7 @@ nsDefaultCommandLineHandler.prototype = {
         appStateBeforeClick
       );
 
-      if (action == "settings") {
+      if (action == "snooze" || action == "settings") {
         Cc[
           originPrincipal.privateBrowsingId
             ? "@mozilla.org/memoryNotificationStorage;1"
@@ -1627,6 +1627,12 @@ nsDefaultCommandLineHandler.prototype = {
         ]
           .getService(Ci.nsINotificationStorage)
           .delete(originPrincipal.origin, notificationId);
+        if (action == "snooze") {
+          Services.perms.removeFromPrincipal(
+            originPrincipal,
+            "desktop-notification"
+          );
+        }
         if (
           !lazy.BrowserWindowTracker.getTopWindow({
             allowFromInactiveWorkspace: true,
