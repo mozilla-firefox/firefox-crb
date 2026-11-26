@@ -73,10 +73,11 @@ extern PlainObject* NewPlainObjectWithUniqueNames(
     const NewObjectOptions& options = {});
 
 // Create a plain object with the given properties. The list may contain integer
-// keys or duplicate keys.
+// keys or duplicate keys. If |nullProto| is true, the object has a null
+// prototype instead of %Object.prototype%.
 extern PlainObject* NewPlainObjectWithMaybeDuplicateKeys(
     JSContext* cx, Handle<IdValueVector> properties,
-    const NewObjectOptions& options = {});
+    const NewObjectOptions& options = {}, bool nullProto = false);
 
 }  // namespace js
 

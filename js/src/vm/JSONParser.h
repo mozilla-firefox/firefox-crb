@@ -214,6 +214,9 @@ class MOZ_STACK_CLASS JSONFullParseHandlerAnyChar {
 
   ParseType parseType = ParseType::JSONParse;
 
+  bool freeze_ = false;
+  bool nullProto_ = false;
+
   AutoSelectGCHeap gcHeap;
 
  private:
@@ -577,9 +580,12 @@ class MOZ_STACK_CLASS JSONParser
 
   /* Create a parser for the provided JSON data. */
   JSONParser(JSContext* cx, mozilla::Range<const CharT> data,
-             ParseType parseType)
+             ParseType parseType, bool freeze = false,
+             bool preferNullPrototype = false)
       : Base(cx, data) {
     this->handler.parseType = parseType;
+    this->handler.freeze_ = freeze;
+    this->handler.nullProto_ = preferNullPrototype;
   }
 
   /* Allow move construction for use with Rooted. */

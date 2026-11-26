@@ -40,6 +40,7 @@
 #include "vm/ErrorReporting.h"   // ReportCompileErrorLatin1, ErrorMetadata
 #include "vm/JSAtomUtils.h"      // AtomizeChars
 #include "vm/JSContext.h"        // JSContext
+#include "vm/JSObject.h"         // FreezeObject
 #include "vm/PlainObject.h"  // NewPlainObjectWithMaybeDuplicateKeys, NewPlainObjectWithProto
 #include "vm/Realm.h"  // JS::Realm
 #include "vm/StringType.h"  // JSString, JSAtom, JSLinearString, NewStringCopyN, NameToId
@@ -646,6 +647,8 @@ JSONFullParseHandlerAnyChar::JSONFullParseHandlerAnyChar(
     : cx(other.cx),
       v(other.v),
       parseType(other.parseType),
+      freeze_(other.freeze_),
+      nullProto_(other.nullProto_),
       gcHeap(cx, 1),
       freeElements(std::move(other.freeElements)),
       freeProperties(std::move(other.freeProperties)) {}
@@ -723,12 +726,19 @@ inline bool JSONFullParseHandlerAnyChar::finishObject(
   // properties is traced in the parser; see JSONParser<CharT>::trace()
   JSObject* obj = NewPlainObjectWithMaybeDuplicateKeys(
       cx, Handle<IdValueVector>::fromMarkedLocation(properties),
-      {.newKind = newKind});
+      {.newKind = newKind}, nullProto_);
   if (!obj) {
     return false;
   }
 
   vp.setObject(*obj);
+  if (freeze_) {
+    Rooted<JSObject*> rootedObj(cx, obj);
+    if (!FreezeObject(cx, rootedObj)) {
+      return false;
+    }
+  }
+
   if (!freeProperties.append(properties)) {
     return false;
   }
@@ -778,6 +788,13 @@ inline bool JSONFullParseHandlerAnyChar::finishArray(
   }
 
   vp.setObject(*obj);
+  if (freeze_) {
+    Rooted<JSObject*> rootedObj(cx, obj);
+    if (!FreezeObject(cx, rootedObj)) {
+      return false;
+    }
+  }
+
   if (!freeElements.append(elements)) {
     return false;
   }

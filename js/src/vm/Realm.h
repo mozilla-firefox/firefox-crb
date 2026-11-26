@@ -130,7 +130,7 @@ class NewPlainObjectWithPropsCache {
  public:
   NewPlainObjectWithPropsCache() { purge(); }
 
-  SharedShape* lookup(Handle<IdValueVector> properties) const;
+  SharedShape* lookup(Handle<IdValueVector> properties, bool nullProto) const;
   void add(SharedShape* shape);
 
   void purge() {

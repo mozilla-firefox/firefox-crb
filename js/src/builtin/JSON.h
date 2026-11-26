@@ -51,10 +51,16 @@ extern bool Stringify(JSContext* cx, js::MutableHandleValue vp,
                       JSObject* replacer, const Value& space, StringBuilder& sb,
                       StringifyBehavior stringifyBehavior);
 
+struct JSONParseOptions {
+  bool freeze = false;
+  bool preferNullPrototype = false;
+};
+
 template <typename CharT>
 extern bool ParseJSONWithReviver(JSContext* cx,
                                  const mozilla::Range<const CharT> chars,
-                                 HandleValue reviver, MutableHandleValue vp);
+                                 HandleValue reviver, MutableHandleValue vp,
+                                 const JSONParseOptions& options = {});
 
 }  // namespace js
 

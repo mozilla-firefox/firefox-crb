@@ -5,6 +5,7 @@
 #include "builtin/JSON.h"
 
 #include "mozilla/CheckedInt.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/Range.h"
 #include "mozilla/ScopeExit.h"
 #include "mozilla/Variant.h"
@@ -1921,16 +1922,18 @@ static bool Revive(JSContext* cx, HandleValue reviver,
 
 template <typename CharT>
 bool ParseJSON(JSContext* cx, const mozilla::Range<const CharT> chars,
-               MutableHandleValue vp) {
+               const JSONParseOptions& options, MutableHandleValue vp) {
   Rooted<JSONParser<CharT>> parser(cx, cx, chars,
-                                   JSONParser<CharT>::ParseType::JSONParse);
+                                   JSONParser<CharT>::ParseType::JSONParse,
+                                   options.freeze, options.preferNullPrototype);
   return parser.parse(vp);
 }
 
 template <typename CharT>
 bool js::ParseJSONWithReviver(JSContext* cx,
                               const mozilla::Range<const CharT> chars,
-                              HandleValue reviver, MutableHandleValue vp) {
+                              HandleValue reviver, MutableHandleValue vp,
+                              const JSONParseOptions& options) {
   js::AutoGeckoProfilerEntry pseudoFrame(cx, "parse JSON",
                                          JS::ProfilingCategoryPair::JS_Parsing);
   /* https://262.ecma-international.org/14.0/#sec-json.parse steps 2-10. */
@@ -1940,7 +1943,7 @@ bool js::ParseJSONWithReviver(JSContext* cx,
     if (!parser.get().parse(vp, &pro)) {
       return false;
     }
-  } else if (!ParseJSON(cx, chars, vp)) {
+  } else if (!ParseJSON(cx, chars, options, vp)) {
     return false;
   }
 
@@ -1953,15 +1956,65 @@ bool js::ParseJSONWithReviver(JSContext* cx,
 
 template bool js::ParseJSONWithReviver(
     JSContext* cx, const mozilla::Range<const Latin1Char> chars,
-    HandleValue reviver, MutableHandleValue vp);
+    HandleValue reviver, MutableHandleValue vp,
+    const JSONParseOptions& options);
 
 template bool js::ParseJSONWithReviver(
     JSContext* cx, const mozilla::Range<const char16_t> chars,
-    HandleValue reviver, MutableHandleValue vp);
+    HandleValue reviver, MutableHandleValue vp,
+    const JSONParseOptions& options);
 
 static bool json_toSource(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
   args.rval().setString(cx->names().JSON);
+  return true;
+}
+
+static bool GetOptionalBooleanOption(JSContext* cx, HandleObject options,
+                                     Handle<PropertyName*> name,
+                                     const char* displayName,
+                                     mozilla::Maybe<bool>* result) {
+  Rooted<Value> v(cx);
+
+  if (!GetProperty(cx, options, options, name, &v)) {
+    return false;
+  }
+
+  if (v.isUndefined()) {
+    result->reset();
+    return true;
+  }
+
+  if (!v.isBoolean()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr,
+                              JSMSG_NOT_EXPECTED_TYPE, displayName, "a boolean",
+                              InformalValueTypeName(v));
+    return false;
+  }
+
+  *result = mozilla::Some(v.toBoolean());
+  return true;
+}
+
+static bool CreateJSONParseOptions(JSContext* cx, HandleObject options,
+                                   JSONParseOptions* result) {
+  mozilla::Maybe<bool> freeze;
+
+  if (!GetOptionalBooleanOption(cx, options, cx->names().freeze,
+                                "JSON.parse options.freeze", &freeze)) {
+    return false;
+  }
+
+  result->freeze = freeze.valueOr(false);
+  mozilla::Maybe<bool> preferNullPrototype;
+
+  if (!GetOptionalBooleanOption(cx, options, cx->names().preferNullPrototype,
+                                "JSON.parse options.preferNullPrototype",
+                                &preferNullPrototype)) {
+    return false;
+  }
+
+  result->preferNullPrototype = preferNullPrototype.valueOr(result->freeze);
   return true;
 }
 
@@ -1971,10 +2024,21 @@ static bool json_parse(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
 
   /* Step 1. */
-  JSString* str = (args.length() >= 1) ? ToString<CanGC>(cx, args[0])
-                                       : cx->names().undefined;
+  Rooted<JSString*> str(cx, (args.length() >= 1) ? ToString<CanGC>(cx, args[0])
+                                                 : cx->names().undefined);
   if (!str) {
     return false;
+  }
+
+  HandleValue reviver = args.get(1);
+
+  JSONParseOptions options;
+  if (JS::Prefs::experimental_json_parse_options() && reviver.isObject() &&
+      !IsCallable(reviver)) {
+    Rooted<JSObject*> optionsObj(cx, &reviver.toObject());
+    if (!CreateJSONParseOptions(cx, optionsObj, &options)) {
+      return false;
+    }
   }
 
   JSLinearString* linear = str->ensureLinear(cx);
@@ -1987,14 +2051,12 @@ static bool json_parse(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-  HandleValue reviver = args.get(1);
-
   /* Steps 2-12. */
   return linearChars.isLatin1()
              ? ParseJSONWithReviver(cx, linearChars.latin1Range(), reviver,
-                                    args.rval())
+                                    args.rval(), options)
              : ParseJSONWithReviver(cx, linearChars.twoByteRange(), reviver,
-                                    args.rval());
+                                    args.rval(), options);
 }
 
 /* https://tc39.es/proposal-json-parse-with-source/#sec-json.israwjson */
@@ -2064,11 +2126,13 @@ static bool json_rawJSON(JSContext* cx, unsigned argc, Value* vp) {
   /* Step 3. */
   RootedValue parsedValue(cx);
   if (linearChars.isLatin1()) {
-    if (!ParseJSON(cx, linearChars.latin1Range(), &parsedValue)) {
+    if (!ParseJSON(cx, linearChars.latin1Range(), JSONParseOptions(),
+                   &parsedValue)) {
       return false;
     }
   } else {
-    if (!ParseJSON(cx, linearChars.twoByteRange(), &parsedValue)) {
+    if (!ParseJSON(cx, linearChars.twoByteRange(), JSONParseOptions(),
+                   &parsedValue)) {
       return false;
     }
   }

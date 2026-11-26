@@ -183,6 +183,7 @@
   MACRO_(fractionalSecond, "fractionalSecond")                                 \
   MACRO_(fractionalSecondDigits, "fractionalSecondDigits")                     \
   MACRO_(frame, "frame")                                                       \
+  MACRO_(freeze, "freeze")                                                     \
   MACRO_(from, "from")                                                         \
   MACRO_(fromBase64, "fromBase64")                                             \
   MACRO_(fromHex, "fromHex")                                                   \
@@ -394,6 +395,7 @@
   MACRO_(plainTime, "plainTime")                                               \
   MACRO_(pluralCategories, "pluralCategories")                                 \
   MACRO_(plusSign, "plusSign")                                                 \
+  MACRO_(preferNullPrototype, "preferNullPrototype")                           \
   MACRO_(preventExtensions, "preventExtensions")                               \
   MACRO_(private_, "private")                                                  \
   MACRO_(promise, "promise")                                                   \

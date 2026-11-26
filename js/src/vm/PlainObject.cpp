@@ -155,7 +155,11 @@ void js::NewPlainObjectWithPropsCache::add(SharedShape* shape) {
   entries_[0] = shape;
 }
 
-static bool ShapeMatches(Handle<IdValueVector> properties, SharedShape* shape) {
+static bool ShapeMatches(Handle<IdValueVector> properties, SharedShape* shape,
+                         bool nullProto) {
+  if (shape->proto().isObject() == nullProto) {
+    return false;
+  }
   if (shape->slotSpan() != properties.length()) {
     return false;
   }
@@ -173,10 +177,10 @@ static bool ShapeMatches(Handle<IdValueVector> properties, SharedShape* shape) {
 }
 
 SharedShape* js::NewPlainObjectWithPropsCache::lookup(
-    Handle<IdValueVector> properties) const {
+    Handle<IdValueVector> properties, bool nullProto) const {
   for (size_t i = 0; i < NumEntries; i++) {
     SharedShape* shape = entries_[i];
-    if (shape && ShapeMatches(properties, shape)) {
+    if (shape && ShapeMatches(properties, shape, nullProto)) {
       return shape;
     }
   }
@@ -188,12 +192,12 @@ enum class KeysKind { UniqueNames, Unknown };
 template <KeysKind Kind>
 static PlainObject* NewPlainObjectWithProperties(
     JSContext* cx, Handle<IdValueVector> properties,
-    const NewObjectOptions& options) {
+    const NewObjectOptions& options, bool nullProto) {
   auto& cache = cx->realm()->newPlainObjectWithPropsCache;
 
   // If we recently created an object with these properties, we can use that
   // Shape directly.
-  if (SharedShape* shape = cache.lookup(properties)) {
+  if (SharedShape* shape = cache.lookup(properties, nullProto)) {
     Rooted<SharedShape*> shapeRoot(cx, shape);
     PlainObject* obj =
         PlainObject::createWithShape(cx, shapeRoot, options.newKind);
@@ -208,8 +212,11 @@ static PlainObject* NewPlainObjectWithProperties(
   }
 
   gc::AllocKind allocKind = gc::GetGCObjectKind(properties.length());
-  Rooted<PlainObject*> obj(cx, NewPlainObject(cx, {.newKind = options.newKind,
-                                                   .allocKind = allocKind}));
+  NewObjectOptions newOptions = {.newKind = options.newKind,
+                                 .allocKind = allocKind};
+  Rooted<PlainObject*> obj(
+      cx, nullProto ? NewPlainObjectWithProto(cx, nullptr, newOptions)
+                    : NewPlainObject(cx, newOptions));
   if (!obj) {
     return nullptr;
   }
@@ -271,13 +278,13 @@ static PlainObject* NewPlainObjectWithProperties(
 PlainObject* js::NewPlainObjectWithUniqueNames(
     JSContext* cx, Handle<IdValueVector> properties,
     const NewObjectOptions& options) {
-  return NewPlainObjectWithProperties<KeysKind::UniqueNames>(cx, properties,
-                                                             options);
+  return NewPlainObjectWithProperties<KeysKind::UniqueNames>(
+      cx, properties, options, /* nullProto = */ false);
 }
 
 PlainObject* js::NewPlainObjectWithMaybeDuplicateKeys(
     JSContext* cx, Handle<IdValueVector> properties,
-    const NewObjectOptions& options) {
+    const NewObjectOptions& options, bool nullProto) {
   return NewPlainObjectWithProperties<KeysKind::Unknown>(cx, properties,
-                                                         options);
+                                                         options, nullProto);
 }

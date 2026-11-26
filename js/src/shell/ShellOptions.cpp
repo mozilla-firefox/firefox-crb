@@ -633,6 +633,8 @@ bool shell::InitOptionParser() {
                               "Enable Iterator Chunking") ||
       !gOptions.addBoolOption('\0', "enable-iterator-join",
                               "Enable Iterator.join") ||
+      !gOptions.addBoolOption('\0', "enable-json-parse-options",
+                              "Enable the JSON.parse options argument") ||
       !gOptions.addBoolOption('\0', "enable-iterator-includes",
                               "Enable Iterator.prototype.includes") ||
       !gOptions.addBoolOption('\0', "enable-intl-locale-info",
@@ -942,6 +944,9 @@ bool shell::SetGlobalOptionsPreJSInit() {
   }
   if (gOptions.getBoolOption("enable-iterator-join")) {
     JS::Prefs::setAtStartup_experimental_iterator_join(true);
+  }
+  if (gOptions.getBoolOption("enable-json-parse-options")) {
+    JS::Prefs::setAtStartup_experimental_json_parse_options(true);
   }
   if (gOptions.getBoolOption("enable-iterator-chunking")) {
     JS::Prefs::setAtStartup_experimental_iterator_chunking(true);
