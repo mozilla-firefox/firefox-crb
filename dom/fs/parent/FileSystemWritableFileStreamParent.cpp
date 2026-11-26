@@ -24,10 +24,12 @@ class FileSystemWritableFileStreamParent::FileSystemWritableFileStreamCallbacks
 
 FileSystemWritableFileStreamParent::FileSystemWritableFileStreamParent(
     RefPtr<FileSystemManagerParent> aManager, const fs::EntryId& aEntryId,
-    const fs::FileId& aTemporaryFileId, bool aIsExclusive)
+    const fs::FileId& aTemporaryFileId, bool aIsExclusive,
+    quota::WriteLease aWriteLease)
     : mManager(std::move(aManager)),
       mEntryId(aEntryId),
       mTemporaryFileId(aTemporaryFileId),
+      mWriteLease(std::move(aWriteLease)),
       mIsExclusive(aIsExclusive) {}
 
 FileSystemWritableFileStreamParent::~FileSystemWritableFileStreamParent() {
@@ -78,6 +80,9 @@ void FileSystemWritableFileStreamParent::Close(bool aAbort) {
     mManager->DataManagerStrongRef()->UnlockShared(mEntryId, mTemporaryFileId,
                                                    aAbort);
   }
+
+  // Unlocking has updated the usage, nothing is written anymore.
+  mWriteLease = quota::WriteLease();
 }
 
 }  // namespace mozilla::dom

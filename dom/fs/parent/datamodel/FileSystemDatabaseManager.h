@@ -110,7 +110,8 @@ class FileSystemDatabaseManager {
   virtual nsresult GetFile(const EntryId& aEntryId, const FileId& aFileId,
                            const FileMode& aMode, ContentType& aType,
                            TimeStamp& lastModifiedMilliSeconds, Path& aPath,
-                           nsCOMPtr<nsIFile>& aFile) const = 0;
+                           nsCOMPtr<nsIFile>& aFile,
+                           bool aCreate = true) const = 0;
 
   virtual Result<FileSystemDirectoryListing, QMResult> GetDirectoryEntries(
       const EntryId& aParent, PageNumber aPage) const = 0;

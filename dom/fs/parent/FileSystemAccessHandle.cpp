@@ -14,6 +14,7 @@
 #include "mozilla/dom/quota/FileStreams.h"
 #include "mozilla/dom/quota/PersistenceType.h"
 #include "mozilla/dom/quota/QuotaCommon.h"
+#include "mozilla/dom/quota/QuotaManager.h"
 #include "mozilla/dom/quota/RemoteQuotaObjectParent.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
 #include "mozilla/ipc/RandomAccessStreamParams.h"
@@ -128,6 +129,8 @@ RefPtr<BoolPromise> FileSystemAccessHandle::BeginClose() {
     return BoolPromise::CreateAndResolve(true, __func__);
   }
   MOZ_ASSERT(IsOpen());
+  MOZ_DIAGNOSTIC_ASSERT(
+      mDataManager->MutableIOTaskQueuePtr()->IsOnCurrentThread());
 
   LOG(("Closing AccessHandle"));
 
@@ -146,11 +149,14 @@ RefPtr<BoolPromise> FileSystemAccessHandle::BeginClose() {
                return self->mIOTaskQueue->BeginShutdown();
              })
       ->Then(
-          GetCurrentSerialEventTarget(), __func__,
+          mDataManager->MutableIOTaskQueuePtr(), __func__,
           [self = RefPtr(this)](const ShutdownPromise::ResolveOrRejectValue&) {
             if (self->mLocked) {
               self->mDataManager->UnlockExclusive(self->mEntryId);
             }
+
+            // Unlocking has updated the usage, nothing is written anymore.
+            self->mWriteLease = quota::WriteLease();
 
             return BoolPromise::CreateAndResolve(true, __func__);
           })
@@ -172,6 +178,50 @@ bool FileSystemAccessHandle::IsInactive() const {
 
 RefPtr<FileSystemAccessHandle::InitPromise>
 FileSystemAccessHandle::BeginInit() {
+  MOZ_DIAGNOSTIC_ASSERT(
+      mDataManager->MutableIOTaskQueuePtr()->IsOnCurrentThread());
+
+  // Locking the entry starts usage tracking, which already writes to the file
+  // system database, and the child then writes to the file directly, so the
+  // origin must be marked dirty on disk before any of that.
+  quota::QuotaManager* quotaManager = quota::QuotaManager::Get();
+  if (!quotaManager) {
+    return InitPromise::CreateAndReject(NS_ERROR_ILLEGAL_DURING_SHUTDOWN,
+                                        __func__);
+  }
+
+  const quota::OriginMetadata& originMetadata =
+      mDataManager->OriginMetadataRef();
+
+  RefPtr<quota::QuotaManager::WriteLeasePromise> leasePromise;
+  if (Maybe<quota::WriteLease> lease =
+          quotaManager->TryAcquireWriteLease(originMetadata)) {
+    leasePromise = quota::QuotaManager::WriteLeasePromise::CreateAndResolve(
+        std::move(*lease), __func__);
+  } else {
+    leasePromise = quotaManager->AcquireWriteLease(originMetadata);
+  }
+
+  return leasePromise->Then(
+      mDataManager->MutableIOTaskQueuePtr(), __func__,
+      [self = RefPtr(this)](
+          quota::QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
+              aValue) {
+        if (aValue.IsReject()) {
+          return InitPromise::CreateAndReject(aValue.RejectValue(), __func__);
+        }
+
+        self->mWriteLease = std::move(aValue.ResolveValue());
+
+        return self->FinishInit();
+      });
+}
+
+RefPtr<FileSystemAccessHandle::InitPromise>
+FileSystemAccessHandle::FinishInit() {
+  MOZ_DIAGNOSTIC_ASSERT(
+      mDataManager->MutableIOTaskQueuePtr()->IsOnCurrentThread());
+
   QM_TRY_UNWRAP(fs::FileId fileId, mDataManager->LockExclusive(mEntryId),
                 [](const auto& aRv) {
                   return InitPromise::CreateAndReject(ToNSResult(aRv),
