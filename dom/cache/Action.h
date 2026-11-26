@@ -81,6 +81,11 @@ class Action : public SafeRefCounted<Action> {
   // given cache ID then override this to return true.
   virtual bool MatchesCacheId(CacheId aCacheId) const { return false; }
 
+  // Executed on the initiating thread.  If this Action may modify files or
+  // the database of the origin then override this to return true, so that a
+  // quota write lease is held while it runs.
+  virtual bool IsWrite() const { return false; }
+
   NS_DECL_OWNINGTHREAD
   MOZ_DECLARE_REFCOUNTED_TYPENAME(cache::Action)
 

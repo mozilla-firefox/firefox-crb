@@ -14,9 +14,12 @@ class nsIFile;
 
 namespace mozilla::dom::cache {
 
+enum class CheckpointOnClose { Enabled, Disabled };
+
 Result<nsCOMPtr<mozIStorageConnection>, nsresult> OpenDBConnection(
     const CacheDirectoryMetadata& aDirectoryMetadata, nsIFile& aDBFile,
-    const Maybe<CipherKey>& aMaybeCipherKey);
+    const Maybe<CipherKey>& aMaybeCipherKey, bool aAllowWipe,
+    CheckpointOnClose aCheckpointOnClose);
 
 class DBAction : public Action {
  protected:
