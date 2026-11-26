@@ -13,7 +13,9 @@ import { pending, fulfilled, rejected } from "../utils/async-value";
 export function initialSourcesContentState() {
   return {
     /**
-     * Text content of all the original sources.
+     * Text content of all original and HTML sources.
+     * In both these cases their content is indexed by their source ID
+     * and so aren't specific to any source actor.
      *
      * This is large data, so this is only fetched on-demand for a subset of sources.
      * This state attribute is mutable in order to avoid cloning this possibly large map
@@ -25,9 +27,10 @@ export function initialSourcesContentState() {
     mutableSourceTextContentMapBySourceId: new Map(),
 
     /**
-     * Text content of all the generated sources.
+     * Text content of all other sources (<script>, eval(), workers,...),
+     * which are derived from a very specific source actor.
      *
-     * Map(source actor is => AsyncValue<String>)
+     * Map(source actor id => AsyncValue<String>)
      */
     mutableSourceTextContentMapBySourceActorId: new Map(),
 
@@ -44,6 +47,7 @@ export function initialSourcesContentState() {
 function update(state = initialSourcesContentState(), action) {
   switch (action.type) {
     case "LOAD_ORIGINAL_SOURCE_TEXT":
+    case "LOAD_HTML_SOURCE_TEXT":
       if (!action.source) {
         throw new Error("Missing source");
       }
@@ -94,21 +98,15 @@ function updateSourceTextContent(state, action) {
     });
   }
 
-  if (action.source && action.sourceActor) {
-    throw new Error(
-      "Both the source and the source actor should not exist at the same time"
-    );
-  }
-
-  if (action.source) {
+  if (action.source && (action.source.isHTML || action.source.isOriginal)) {
     state.mutableSourceTextContentMapBySourceId.set(action.source.id, content);
-  }
-
-  if (action.sourceActor) {
+  } else if (action.sourceActor) {
     state.mutableSourceTextContentMapBySourceActorId.set(
       action.sourceActor.id,
       content
     );
+  } else {
+    throw new Error("Either a source or a source actor should exist");
   }
 
   return {
