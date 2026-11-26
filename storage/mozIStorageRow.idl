@@ -28,4 +28,14 @@ interface mozIStorageRow : mozIStorageValueArray {
    *       unspecified and may change from one release to the next.
    */
   nsIVariant getResultByName(in AUTF8String aName);
+
+  /**
+   * Obtains the index of a given column specified by aName.
+   *
+   * @param aName
+   *        Name of the result column, see getResultByName.
+   * @returns the zero-based index of the specified column.
+   * @throws NS_ERROR_INVALID_ARG if there is no column with that name.
+   */
+  unsigned long getColumnIndex(in AUTF8String aName);
 };

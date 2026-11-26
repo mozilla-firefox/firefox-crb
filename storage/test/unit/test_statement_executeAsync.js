@@ -368,6 +368,31 @@ function test_tuple_out_of_bounds() {
   run_next_test();
 }
 
+function test_tuple_getColumnIndex() {
+  var stmt = makeTestStatement(
+    "SELECT string, number AS num, NULL AS placeholder FROM test WHERE id = ?"
+  );
+  stmt.bindByIndex(0, INTEGER);
+  execAsync(stmt, {}, [
+    function (tuple) {
+      Assert.equal(0, tuple.getColumnIndex("string"));
+      Assert.equal(1, tuple.getColumnIndex("num"));
+      Assert.equal(2, tuple.getColumnIndex("placeholder"));
+
+      for (let name of ["number", "STRING", "nonexistent"]) {
+        Assert.throws(
+          () => tuple.getColumnIndex(name),
+          /NS_ERROR_INVALID_ARG/,
+          `getColumnIndex("${name}") should throw`
+        );
+      }
+    },
+  ]);
+  stmt.finalize();
+
+  run_next_test();
+}
+
 function test_no_listener_works_on_success() {
   var stmt = makeTestStatement("DELETE FROM test WHERE id = ?");
   stmt.bindByIndex(0, 0);
@@ -875,6 +900,7 @@ var tests = [
   test_add_data,
   test_get_data,
   test_tuple_out_of_bounds,
+  test_tuple_getColumnIndex,
   test_no_listener_works_on_success,
   test_no_listener_works_on_results,
   test_no_listener_works_on_error,
