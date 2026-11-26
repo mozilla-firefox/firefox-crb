@@ -15,7 +15,6 @@ import threading
 import time
 import uuid
 from functools import partial
-from pprint import pprint
 
 import attr
 import mozpack.path as mozpath
@@ -32,8 +31,8 @@ topsrcdir = os.path.abspath(os.path.dirname(os.path.dirname(here)))
 DOC_ROOT = os.path.join(topsrcdir, "docs")
 DOCS_PREFIX = "docs"
 NOT_FOUND_ROOT = os.path.join(here, "not_found")
-BASE_LINK = "http://gecko-docs.mozilla.org-l1.s3-website.us-west-2.amazonaws.com/"
-PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
+BASE_LINK = "https://firefox-source-docs-stage.data-static-websites.nonprod.webservices.mozgcp.net/"
+PUBLISHED_LINK = "https://source.firefox.com/"
 
 
 # Helps manage in-tree documentation.
@@ -84,7 +83,7 @@ PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
     help="Serve documentation on the specified host and port, "
     'default "localhost:5500".',
 )
-@CommandArgument("--upload", action="store_true", help="Upload generated files to S3.")
+@CommandArgument("--upload", action="store_true", help="Upload generated files to GCS.")
 @CommandArgument(
     "-j",
     "--jobs",
@@ -92,7 +91,7 @@ PUBLISHED_LINK = "https://firefox-source-docs.mozilla.org/"
     dest="jobs",
     help="Distribute the build over N processes in parallel.",
 )
-@CommandArgument("--write-url", default=None, help="Write S3 Upload URL to text file")
+@CommandArgument("--write-url", default=None, help="Write the upload URL to text file")
 @CommandArgument(
     "--linkcheck", action="store_true", help="Check if the links are still valid"
 )
@@ -220,7 +219,7 @@ def build_docs(
         if len(fatal_errors):
             return 1
 
-    # Upload the artifact containing the link to S3
+    # Write the artifact containing the link to the uploaded docs
     # This would be used by code-review to post the link to Phabricator
     if write_url is not None:
         if _publishes(project()):
@@ -245,7 +244,7 @@ def build_docs(
         print(f"Archived to {archive_path}")
 
     if upload:
-        _s3_upload(savedir, project(), unique_id, version())
+        _gcs_upload(savedir, project(), unique_id, version())
 
     if not serve:
         index_path = os.path.join(docs_savedir, "index.html")
@@ -435,8 +434,8 @@ def _publishes(project):
 def _write_redirects(path):
     """Write the docs redirects as a script for 404.html to apply.
 
-    The S3 routing rules only redirect by prefix, so the pre-/docs/ URLs that
-    no longer exist are redirected client side when a request misses.
+    Neither GCS nor the CDN in front of it can redirect by prefix, so the
+    redirects happen client side when a request misses.
     """
     with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
         redirects = yaml.safe_load(fh)["redirects"]
@@ -449,14 +448,14 @@ def _write_redirects(path):
         fh.write(f"const DOCS_REDIRECTS = {json.dumps(redirects, indent=1)};\n")
 
 
-def _s3_upload(root, project, unique_id, version=None):
+def _gcs_upload(root, project, unique_id, version=None):
     # Workaround the issue
     # BlockingIOError: [Errno 11] write could not complete without blocking
     # https://github.com/travis-ci/travis-ci/issues/8920
     import fcntl
 
     from moztreedocs.package import distribution_files
-    from moztreedocs.upload import s3_set_redirects, s3_upload
+    from moztreedocs.upload import gcs_upload
 
     fcntl.fcntl(1, fcntl.F_SETFL, 0)
 
@@ -466,31 +465,13 @@ def _s3_upload(root, project, unique_id, version=None):
 
     files = list(distribution_files(root, ignore_prefix=DOCS_PREFIX))
 
-    # Until we redirect / to main/latest, upload the main docs
-    # to the root of the production bucket.
     publish = _publishes(project)
     dest = "" if publish else unique_id
-    s3_upload(files, dest)
+    gcs_upload(files, dest)
     if version:
-        s3_upload(files, f"{project}/{version}")
+        gcs_upload(files, f"{project}/{version}")
 
-    if publish:
-        # Only the root gets redirects. The "version" or "uuid" prefixes would
-        # exceed a 50 redirect limit and external things are unlikely to link
-        # there anyway (see bug 1614908).
-        with open(os.path.join(DOC_ROOT, "config.yml")) as fh:
-            redirects = yaml.safe_load(fh)["redirects"]
-
-        redirects = {
-            f"{DOCS_PREFIX}/{k.strip('/')}": f"{DOCS_PREFIX}/{v.strip('/')}"
-            for k, v in redirects.items()
-        }
-
-        print("Redirects currently staged")
-        pprint(redirects, indent=1)
-
-        s3_set_redirects(redirects)
-    else:
+    if not publish:
         unique_link = f"{BASE_LINK}{dest}/{DOCS_PREFIX}/index.html"
         print("Uploaded documentation can be accessed here " + unique_link)
 
