@@ -116,6 +116,71 @@ add_task(async function test_controller_uses_a_private_sandbox() {
 });
 
 /**
+ * This test case ensures that a base class controller captures inherited
+ * calls and calls through super, while overrides that run independently
+ * leave the controller waiting for a match.
+ */
+add_task(async function test_base_class_proxy_captures_inherited_calls() {
+  class InheritedOperation extends TestOperation {}
+
+  class OverridingOperation extends TestOperation {
+    /**
+     * Runs independently of the base method.
+     *
+     * @returns {Promise<string>}
+     */
+    async run() {
+      return "override";
+    }
+  }
+
+  class DelegatingOperation extends TestOperation {
+    /**
+     * Runs the base method with a distinct input.
+     *
+     * @returns {Promise<string>}
+     */
+    async run() {
+      return super.run("super");
+    }
+  }
+
+  const operationProxy = TestUtils.asyncControlProxy(TestOperation);
+  const overridingOperation = new OverridingOperation();
+
+  for (const [operation, expectedInput] of [
+    [new InheritedOperation(), null],
+    [new DelegatingOperation(), "super"],
+  ]) {
+    using runController = operationProxy.run();
+
+    const overridePromise = overridingOperation.run();
+    const callerPromise = operation.run();
+
+    await runController.waitForCapture();
+    Assert.equal(operation.callCount, 0, "The call to the base method is held");
+    Assert.equal(
+      await overridePromise,
+      "override",
+      "The independent override completes while the base method is held"
+    );
+
+    runController.releaseResultToCaller();
+    Assert.equal(
+      await callerPromise,
+      "value",
+      "The caller gets the base result"
+    );
+    Assert.equal(operation.callCount, 1, "The base method runs once");
+    Assert.equal(
+      operation.lastInput,
+      expectedInput,
+      "The base method gets its input"
+    );
+  }
+});
+
+/**
  * This test case ensures that awaiting or converting a proxy cannot
  * install stubs on its target.
  */
@@ -424,6 +489,169 @@ add_task(async function test_duplicate_controller_preserves_first() {
     await result,
     "value",
     "The first controller releases the result"
+  );
+});
+
+/**
+ * This test case ensures that instance controllers can wait independently and
+ * that a prototype controller can be created once both calls are captured.
+ */
+add_task(
+  async function test_instance_controls_block_prototype_until_captured() {
+    const firstOperation = new TestOperation("first");
+    const secondOperation = new TestOperation("second");
+    const prototypeProxy = TestUtils.asyncControlProxy(TestOperation);
+    using firstRunController =
+      TestUtils.asyncControlProxy(firstOperation).run();
+    using secondRunController =
+      TestUtils.asyncControlProxy(secondOperation).run();
+
+    Assert.throws(
+      () => prototypeProxy.run().restore(),
+      /A controller for run is already waiting on an overlapping target/,
+      "Creating a prototype controller fails while both instance controllers are waiting"
+    );
+
+    const firstResult = firstOperation.run("first call");
+    await firstRunController.waitForCapture();
+    Assert.throws(
+      () => prototypeProxy.run().restore(),
+      /A controller for run is already waiting on an overlapping target/,
+      "The remaining instance control still blocks the prototype"
+    );
+
+    const secondResult = secondOperation.run("second call");
+    await secondRunController.waitForCapture();
+    using prototypeRunController = prototypeProxy.run();
+    Assert.equal(
+      firstOperation.lastInput,
+      null,
+      "The first call is still paused"
+    );
+    Assert.equal(
+      secondOperation.lastInput,
+      null,
+      "The second call is still paused"
+    );
+
+    const prototypeResult = firstOperation.run("prototype call");
+    await prototypeRunController.waitForCapture();
+    prototypeRunController.releaseResultToCaller();
+    Assert.equal(
+      await prototypeResult,
+      "first",
+      "The prototype captures a later call"
+    );
+    Assert.equal(
+      firstOperation.lastInput,
+      "prototype call",
+      "The later call runs first"
+    );
+
+    firstRunController.releaseResultToCaller();
+    secondRunController.releaseResultToCaller();
+    Assert.equal(
+      await firstResult,
+      "first",
+      "The first control releases its call"
+    );
+    Assert.equal(
+      await secondResult,
+      "second",
+      "The second control releases its call"
+    );
+    Assert.equal(
+      firstOperation.lastInput,
+      "first call",
+      "The first call runs on release"
+    );
+  }
+);
+
+/**
+ * This test case ensures that a prototype controller waiting for a call
+ * blocks instance controllers
+ * until it captures a call.
+ */
+add_task(async function test_prototype_control_blocks_instance_controls() {
+  const firstOperation = new TestOperation("first");
+  const secondOperation = new TestOperation("second");
+  const selectedOperation = new TestOperation("selected");
+  using prototypeRunController =
+    TestUtils.asyncControlProxy(TestOperation).run();
+
+  for (const operation of [firstOperation, secondOperation]) {
+    Assert.throws(
+      () => TestUtils.asyncControlProxy(operation).run().restore(),
+      /A controller for run is already waiting on an overlapping target/,
+      "The prototype controller blocks creation of an instance controller"
+    );
+  }
+
+  const selectedResult = selectedOperation.run("selected");
+  await prototypeRunController.waitForCapture();
+  using firstRunController = TestUtils.asyncControlProxy(firstOperation).run();
+  using secondRunController =
+    TestUtils.asyncControlProxy(secondOperation).run();
+  Assert.equal(
+    selectedOperation.lastInput,
+    null,
+    "The prototype call is still paused"
+  );
+
+  const firstResult = firstOperation.run("first call");
+  const secondResult = secondOperation.run("second call");
+  firstRunController.releaseResultToCaller();
+  secondRunController.releaseResultToCaller();
+  prototypeRunController.releaseResultToCaller();
+  Assert.equal(
+    await firstResult,
+    "first",
+    "The first instance captures its own call"
+  );
+  Assert.equal(
+    await secondResult,
+    "second",
+    "The second instance captures its own call"
+  );
+  Assert.equal(
+    await selectedResult,
+    "selected",
+    "The prototype still releases its call"
+  );
+});
+
+/**
+ * This test case ensures that restoring or disposing an unused controller
+ * allows another controller to be created on an overlapping target.
+ */
+add_task(async function test_restore_unused_control_clears_overlap() {
+  const operation = new TestOperation();
+  using instanceRunController = TestUtils.asyncControlProxy(operation).run();
+  instanceRunController.restore();
+
+  {
+    using prototypeRunController =
+      TestUtils.asyncControlProxy(TestOperation).run();
+    Assert.ok(
+      prototypeRunController,
+      "Restoring the instance controller lets us create a prototype controller"
+    );
+    instanceRunController.restore();
+    Assert.throws(
+      () => TestUtils.asyncControlProxy(operation).run().restore(),
+      /A controller for run is already waiting on an overlapping target/,
+      "Restoring the old instance leaves the prototype controller waiting"
+    );
+  }
+
+  using nextRunController = TestUtils.asyncControlProxy(operation).run();
+  const result = operation.run();
+  nextRunController.releaseResultToCaller();
+  Assert.equal(
+    await result,
+    "value",
+    "Disposal lets us create an instance controller again"
   );
 });
 
