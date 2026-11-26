@@ -18,6 +18,7 @@ class UsageInfo;
 
 namespace fs {
 
+struct FileId;
 class FileSystemChildMetadata;
 template <class T>
 class Registered;
@@ -48,6 +49,11 @@ void CreateNewEmptyFile(data::FileSystemDatabaseManager* const aDatabaseManager,
 void WriteDataToFile(const quota::OriginMetadata& aOriginMetadata,
                      data::FileSystemDatabaseManager* const aDatabaseManager,
                      const EntryId& aEntryId, const nsCString& aData);
+
+void WriteDataToFileId(const quota::OriginMetadata& aOriginMetadata,
+                       data::FileSystemDatabaseManager* const aDatabaseManager,
+                       const EntryId& aEntryId, const FileId& aFileId,
+                       const nsCString& aData);
 
 void CreateRegisteredDataManager(
     const quota::OriginMetadata& aOriginMetadata,

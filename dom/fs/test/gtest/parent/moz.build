@@ -10,6 +10,7 @@ UNIFIED_SOURCES = [
     "TestFileSystemHashSource.cpp",
     "TestFileSystemOriginInitialization.cpp",
     "TestFileSystemOrphanCleanup.cpp",
+    "TestFileSystemSnapshot.cpp",
     "TestFileSystemUsageTracking.cpp",
 ]
 

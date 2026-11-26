@@ -76,12 +76,20 @@ void WriteDataToFile(const quota::OriginMetadata& aOriginMetadata,
   TEST_TRY_UNWRAP(FileId fileId, aDatabaseManager->EnsureFileId(aEntryId));
   ASSERT_FALSE(fileId.IsEmpty());
 
+  ASSERT_NO_FATAL_FAILURE(WriteDataToFileId(aOriginMetadata, aDatabaseManager,
+                                            aEntryId, fileId, aData));
+}
+
+void WriteDataToFileId(const quota::OriginMetadata& aOriginMetadata,
+                       data::FileSystemDatabaseManager* const aDatabaseManager,
+                       const EntryId& aEntryId, const FileId& aFileId,
+                       const nsCString& aData) {
   ContentType type;
   TimeStamp lastModMilliS = 0;
   Path path;
   nsCOMPtr<nsIFile> fileObj;
   ASSERT_NSEQ(NS_OK,
-              aDatabaseManager->GetFile(aEntryId, fileId, FileMode::EXCLUSIVE,
+              aDatabaseManager->GetFile(aEntryId, aFileId, FileMode::EXCLUSIVE,
                                         type, lastModMilliS, path, fileObj));
 
   uint32_t written = 0;
