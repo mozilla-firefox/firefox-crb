@@ -622,6 +622,8 @@ ${
       window.addEventListener("draggableregionleftmousedown", this);
     }
     this.addEventListener("mousedown", this);
+    this.addEventListener("focusout", this);
+    this.addEventListener("hidden", this);
 
     // This listener handles clicks from our children too, included the search mode
     // indicator close button.
@@ -685,6 +687,8 @@ ${
       window.removeEventListener("draggableregionleftmousedown", this);
     }
     this.removeEventListener("mousedown", this);
+    this.removeEventListener("focusout", this);
+    this.removeEventListener("hidden", this);
 
     // This listener handles clicks from our children too, included the search mode
     // indicator close button.
@@ -1041,6 +1045,7 @@ ${
    *
    * @param {SetURIOptions} [options]
    */
+  // eslint-disable-next-line complexity
   setURI({
     uri = null,
     dueToTabSwitch = false,
@@ -1062,11 +1067,25 @@ ${
       throw new Error("Document PiP should show its opener URL");
     }
 
+    if (
+      this.#maybeDeferLocationChange({
+        uri,
+        dueToTabSwitch,
+        dueToSessionRestore,
+        hideSearchTerms,
+        isSameDocument,
+      })
+    ) {
+      return;
+    }
+
     // A load finishing behind the open view must not overwrite the value the
     // user's selection put in the input, otherwise Enter won't pick it.
     if (uri && !dueToTabSwitch && this.view.selectedResult) {
       return;
     }
+
+    this.#updateEditSessionForLocationChange({ uri, dueToTabSwitch });
 
     // We only need to update the searchModeUI on tab switch conditionally
     // as we only persist searchMode with ScotchBonnet enabled.
@@ -1251,6 +1270,181 @@ ${
     // Dispatch URIUpdate event to synchronize the tab status when switching.
     let event = new CustomEvent("SetURI", { bubbles: true });
     this.inputField.dispatchEvent(event);
+  }
+
+  /**
+   * A location change must not replace the value while the user is editing it,
+   * so it is applied once focus leaves the input and its popups. Until then,
+   * the value no longer describes the loaded page.
+   *
+   * @param {SetURIOptions} options
+   * @returns {boolean}
+   *   Whether the location change was deferred.
+   */
+  #maybeDeferLocationChange({
+    uri,
+    dueToTabSwitch,
+    dueToSessionRestore,
+    hideSearchTerms,
+    isSameDocument,
+  }) {
+    if (
+      !uri ||
+      dueToTabSwitch ||
+      dueToSessionRestore ||
+      !this.#isAddressbar ||
+      !this.isEditingOverrideValue(this.browserWindow.gBrowser.selectedBrowser)
+    ) {
+      return false;
+    }
+    // A same-document change keeps showing a typed value.
+    if (isSameDocument && this.overrideValue && !this.#deferredLocationChange) {
+      return false;
+    }
+    this.#setDeferredLocationChange({
+      hideSearchTerms,
+      isSameDocument:
+        isSameDocument &&
+        (this.#deferredLocationChange?.isSameDocument ?? true),
+    });
+    this.setPageProxyState("invalid", true);
+    return true;
+  }
+
+  /**
+   * Ends the edit session for a location change that setURI() applies.
+   *
+   * @param {SetURIOptions} options
+   */
+  #updateEditSessionForLocationChange({ uri, dueToTabSwitch }) {
+    if (
+      uri &&
+      !dueToTabSwitch &&
+      this.#deferredLocationChange &&
+      !this.#focusWithin
+    ) {
+      // The edit session ended without us noticing, so this location change
+      // applies.
+      this.overrideValue = null;
+    }
+    // Like setURI(), show the page address when switching back to a tab where
+    // the user emptied the input.
+    if (dueToTabSwitch && this.overrideValue === "") {
+      this.overrideValue = null;
+    }
+    if (this.overrideValue === null) {
+      this.#setDeferredLocationChange(null);
+    }
+  }
+
+  /**
+   * Whether the user is editing the value they typed into the address bar for
+   * a browser, so that a location change in it must not replace the value.
+   *
+   * @param {MozBrowser} browser
+   * @returns {boolean}
+   */
+  isEditingOverrideValue(browser) {
+    return (
+      this.#isAddressbar &&
+      browser == this.browserWindow.gBrowser.selectedBrowser &&
+      browser.urlbarOverrideValueTyped &&
+      this.#focusWithin &&
+      UrlbarPrefs.get("stickyEdit.featureGate")
+    );
+  }
+
+  /**
+   * Whether focus is in the input or in one of its popups.
+   */
+  get #focusWithin() {
+    return this.#isInEditSession(document.activeElement);
+  }
+
+  /**
+   * Whether a node is in the input or in one of its popups, e.g. the result
+   * menu or the search mode switcher. Other buttons in the address bar, e.g.
+   * the page actions, are outside of the edit session.
+   *
+   * @param {?EventTarget} node
+   */
+  #isInEditSession(node) {
+    let element = /** @type {?Element} */ (node);
+    return (
+      !!element &&
+      (this.inputField.contains(element) ||
+        this.panel.contains(element) ||
+        (this.contains(element) &&
+          !!element.closest(
+            ".searchmode-switcher, .searchmode-switcher-panel-list"
+          )))
+    );
+  }
+
+  /**
+   * Ends the edit session if focus has left the input and its popups. Focus
+   * moving into or out of a popup has no related target, so a popup's hidden
+   * event repeats the check.
+   *
+   * @param {?EventTarget} [newFocus]
+   *   The element receiving focus, if known.
+   */
+  #maybeEndEditSession(newFocus = null) {
+    if (
+      !this.#isInEditSession(newFocus) &&
+      // A window deactivation doesn't move focus.
+      !this.#focusWithin &&
+      !this.querySelector("panel-list[open]")
+    ) {
+      this.#endEditSession();
+    }
+  }
+
+  /**
+   * Ends the edit session after focus left the input and its popups. A
+   * location change deferred during the session replaces the typed value.
+   */
+  #endEditSession() {
+    let change = this.#deferredLocationChange;
+    if (change) {
+      this.overrideValue = null;
+      this.setURI({
+        ...change,
+        uri: this.browserWindow.gBrowser.currentURI,
+      });
+    }
+  }
+
+  /**
+   * The setURI() options of the latest location change in the selected tab
+   * that arrived while the user was editing the value, to be applied on blur
+   * with the tab's current URI.
+   *
+   * @returns {?SetURIOptions}
+   */
+  get #deferredLocationChange() {
+    if (!this.#isAddressbar) {
+      return null;
+    }
+    return (
+      this.getBrowserState(this.browserWindow.gBrowser.selectedBrowser)
+        .deferredLocationChange ?? null
+    );
+  }
+
+  /**
+   * Stores a deferred location change for the selected tab. While there is
+   * one, the page address shows in a footer of the tab's panel.
+   *
+   * @param {?SetURIOptions} change
+   */
+  #setDeferredLocationChange(change) {
+    let gBrowser = this.browserWindow.gBrowser;
+    let state = this.getBrowserState(gBrowser.selectedBrowser);
+    if (!state.deferredLocationChange != !change) {
+      gBrowser.toggleAddressFooter(gBrowser.selectedTab, !!change);
+    }
+    state.deferredLocationChange = change;
   }
 
   /**
@@ -4320,6 +4514,8 @@ ${
 
     let urlbarOverrideValue;
     if (this.#isAddressbar && where == "current") {
+      // The user is done editing, so the location change of this load applies.
+      this.#setDeferredLocationChange(null);
       if (loadRequest.engineSearch) {
         this.value = loadRequest.engineSearch.query;
       } else {
@@ -5408,6 +5604,20 @@ ${
     }
 
     this.#maybeSelectAll();
+  }
+
+  _on_focusout(event) {
+    // Focus leaves a popup while it hides, before settling, so the check waits
+    // for the popup's hidden event.
+    if (!(/** @type {Element} */ (event.target).closest("panel-list"))) {
+      this.#maybeEndEditSession(event.relatedTarget);
+    }
+  }
+
+  _on_hidden(event) {
+    if (event.target.localName == "panel-list") {
+      this.#maybeEndEditSession();
+    }
   }
 
   _on_focus(event) {

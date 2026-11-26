@@ -213,6 +213,9 @@ add_task(async function dontTemporarilyShowAboutHome() {
  * the homepage is one of the initial pages set.
  */
 add_task(async function () {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.urlbar.stickyEdit.featureGate", false]],
+  });
   await BrowserTestUtils.withNewTab(
     {
       url: "http://example.com",
@@ -233,4 +236,42 @@ add_task(async function () {
       );
     }
   );
+  await SpecialPowers.popPrefEnv();
+});
+
+/**
+ * Test that with browser.urlbar.stickyEdit.featureGate, clicking the Home Button while the
+ * user is editing the URL bar keeps the typed value.
+ */
+add_task(async function homeButtonWhileEditing() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.urlbar.stickyEdit.featureGate", true]],
+  });
+  await BrowserTestUtils.withNewTab(
+    {
+      url: "http://example.com",
+      gBrowser,
+    },
+    async browser => {
+      gURLBar.focus();
+      gURLBar.select();
+      EventUtils.sendString("typed");
+
+      document.getElementById("home-button").click();
+      await BrowserTestUtils.browserLoaded(browser, false, HomePage.get());
+      is(gURLBar.value, "typed", "The typed value is kept");
+      is(
+        browser.urlbarOverrideValue,
+        "typed",
+        "The typed value is kept for the tab"
+      );
+      ok(
+        BrowserTestUtils.isVisible(
+          gBrowser.getPanel(browser).querySelector("address-footer")
+        ),
+        "The address footer is visible"
+      );
+    }
+  );
+  await SpecialPowers.popPrefEnv();
 });

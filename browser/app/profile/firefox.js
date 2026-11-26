@@ -737,6 +737,11 @@ pref("browser.urlbar.showSearchTerms.featureGate", false);
 // a default search engine results page.
 pref("browser.urlbar.showSearchTerms.enabled", true);
 
+// Whether a page load keeps the value the user is editing in the address bar,
+// showing the page's address in a footer instead, until the address bar loses
+// focus.
+pref("browser.urlbar.stickyEdit.featureGate", false);
+
 // Whether the urlbar displays one-offs to filter searches to history,
 // bookmarks, or tabs.
 pref("browser.urlbar.shortcuts.bookmarks", true);

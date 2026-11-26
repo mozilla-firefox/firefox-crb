@@ -83,6 +83,9 @@ https_first_disabled = true
 
 ["browser_historyInSearchMode.js"]
 
+["browser_keepTypedValueDuringLoad.js"]
+support-files = ["slow-page.sjs"]
+
 ["browser_l10nCache.js"]
 
 ["browser_loadRace.js"]

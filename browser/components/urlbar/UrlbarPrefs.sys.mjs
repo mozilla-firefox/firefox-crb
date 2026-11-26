@@ -552,6 +552,11 @@ const PREF_URLBAR_DEFAULTS = /** @type {PreferenceDefinition[]} */ ([
   // for sports suggestions.
   ["sports.showLessFrequentlyCount", 0],
 
+  // Whether a page load keeps the value the user is editing in the address
+  // bar, showing the page's address in a footer instead, until the address bar
+  // loses focus.
+  ["stickyEdit.featureGate", false],
+
   // If `browser.urlbar.addons.featureGate` is true, this controls whether
   // addon suggestions are turned on.
   ["suggest.addons", true],

@@ -147,6 +147,7 @@ add_task(async function clearURLs() {
   let win = BrowserWindowTracker.getTopWindow();
   await UrlbarTestUtils.promisePopupClose(win);
   for (let { loadUrl, token } of tests) {
+    win.gURLBar.blur();
     let browser = win.gBrowser.selectedBrowser;
     let loadedPromise = BrowserTestUtils.browserLoaded(browser, false, loadUrl);
     BrowserTestUtils.startLoadingURIString(browser, loadUrl);

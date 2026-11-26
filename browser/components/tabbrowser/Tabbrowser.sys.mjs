@@ -10904,11 +10904,13 @@ class TabProgressListener {
       // navigation initiated by the user.
       // Finally, we do insert the URL if this is a same-document navigation
       // and the user cleared the URL manually.
+      // The address bar keeps the value while the user is editing it.
       if (
-        this._browser.loadStartedSinceUrlbarOverride ||
-        (isErrorPage && aLocation.spec != "about:blank") ||
-        (isSameDocument && this._browser.isNavigating) ||
-        (isSameDocument && !this._browser.urlbarOverrideValue)
+        (this._browser.loadStartedSinceUrlbarOverride ||
+          (isErrorPage && aLocation.spec != "about:blank") ||
+          (isSameDocument && this._browser.isNavigating) ||
+          (isSameDocument && !this._browser.urlbarOverrideValue)) &&
+        !this.#documentGlobal.gURLBar.isEditingOverrideValue(this._browser)
       ) {
         this._browser.urlbarOverrideValue = null;
       }

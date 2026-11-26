@@ -77,7 +77,9 @@ async function doClickLinkTest(searchString, href) {
       entry: "oneoff",
     });
 
-    // Add a link to the page and click it.
+    // Add a link to the page and click it. Clicking the page moves focus out of
+    // the address bar.
+    gBrowser.selectedBrowser.focus();
     let loadPromise = BrowserTestUtils.browserLoaded(gBrowser.selectedBrowser);
     await SpecialPowers.spawn(gBrowser.selectedBrowser, [href], async cHref => {
       let link = this.content.document.createElement("a");

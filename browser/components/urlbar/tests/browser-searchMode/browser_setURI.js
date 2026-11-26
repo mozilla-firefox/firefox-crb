@@ -103,7 +103,9 @@ async function doSetURITest(initialURL, searchString, url, expectSearchMode) {
       `urlbarOverrideValue should be ${searchString}`
     );
 
-    // Call setURI.
+    // Call setURI. Blur first, since a location change doesn't apply while the
+    // user is editing.
+    gURLBar.blur();
     let uri = url ? Services.io.newURI(url) : null;
     gURLBar.setURI({ uri });
 
