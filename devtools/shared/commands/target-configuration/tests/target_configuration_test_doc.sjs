@@ -90,7 +90,9 @@ function handleRequest(request, response) {
     <body>
       <h1>Test color-scheme simulation</h1>
       <button>Target</button>
-      <iframe src='${iframeOrigin}/document-builder.sjs?html=${encodeURI(
+      <iframe ${
+        query.get("hiddenIframe") === "true" ? "style='display: none'" : ""
+      } src='${iframeOrigin}/document-builder.sjs?html=${encodeURI(
         IFRAME_HTML
       )}'></iframe>
     </body>
