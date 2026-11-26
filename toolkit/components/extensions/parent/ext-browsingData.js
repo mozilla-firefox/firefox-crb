@@ -334,6 +334,9 @@ class BrowsingDataImpl {
 
     if (options.cookieStoreId) {
       const SUPPORTED_TYPES = ["cookies", "indexedDB"];
+      if (AppConstants.MOZ_PLACES) {
+        SUPPORTED_TYPES.push("history");
+      }
       if (Services.domStorageManager.nextGenLocalStorageEnabled) {
         // Only the next-gen storage supports removal by cookieStoreId.
         SUPPORTED_TYPES.push("localStorage");
@@ -375,7 +378,7 @@ class BrowsingDataImpl {
         `Firefox does not support dataTypes: ${invalidDataTypes.toString()}.`
       );
     }
-    return Promise.all(removalPromises);
+    return Promise.all(removalPromises).then(() => {});
   }
 
   settings() {

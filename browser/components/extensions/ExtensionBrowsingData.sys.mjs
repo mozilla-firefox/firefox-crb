@@ -12,9 +12,37 @@ ChromeUtils.defineLazyGetter(lazy, "makeRange", () => {
   return ExtensionParent.apiManager.global.makeRange;
 });
 
+ChromeUtils.defineLazyGetter(
+  lazy,
+  "getOriginAttributesPatternForCookieStoreId",
+  () => {
+    const { ExtensionParent } = ChromeUtils.importESModule(
+      "resource://gre/modules/ExtensionParent.sys.mjs"
+    );
+    // Defined in ext-toolkit.js
+    return ExtensionParent.apiManager.global
+      .getOriginAttributesPatternForCookieStoreId;
+  }
+);
+
 ChromeUtils.defineESModuleGetters(lazy, {
+  PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   Sanitizer: "resource:///modules/Sanitizer.sys.mjs",
 });
+
+function removeHistoryForCookieStoreId(options) {
+  let { userContextId, privateBrowsingId } =
+    lazy.getOriginAttributesPatternForCookieStoreId(options.cookieStoreId);
+  if (privateBrowsingId) {
+    // Nothing to clear for private browsing.
+    return Promise.resolve();
+  }
+  let filter = { userContextId };
+  if (options.since != null) {
+    filter.beginDate = new Date(options.since);
+  }
+  return lazy.PlacesUtils.history.removeVisitsByFilter(filter);
+}
 
 export class BrowsingDataDelegate {
   // Unused for now
@@ -31,6 +59,9 @@ export class BrowsingDataDelegate {
       case "formData":
         return lazy.Sanitizer.items.formdata.clear(lazy.makeRange(options), o);
       case "history":
+        if (options.cookieStoreId) {
+          return removeHistoryForCookieStoreId(options);
+        }
         return lazy.Sanitizer.items.history.clear(lazy.makeRange(options), o);
 
       default:

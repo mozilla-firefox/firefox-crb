@@ -23,6 +23,8 @@ dupe-manifest = ""
 
 ["test_ext_history.js"]
 
+["test_ext_history_cookieStoreId.js"]
+
 ["test_ext_homepage_overrides_private.js"]
 
 ["test_ext_manifest.js"]
