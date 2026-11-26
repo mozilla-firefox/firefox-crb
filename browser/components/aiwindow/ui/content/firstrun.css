@@ -33,7 +33,9 @@
       --header-bg-image: light-dark(linear-gradient(91deg, #7630c0 22.04%, #5c66ee 78.7%), linear-gradient(65deg, #9165ff 18.85%, #d8c9ff 78.79%));
       --card-bg: light-dark(var(--color-white-alpha-50), var(--color-gray-80));
       --card-bg-hover: var(--background-color-box);
-      --card-border-color: light-dark(var(--color-violet-10), var(--color-white-alpha-30));
+      @media not (prefers-contrast) {
+        --card-border-color: light-dark(var(--color-violet-10), var(--color-white-alpha-30));
+      }
       --card-border-color-hover: var(--color-violet-20);
       --button-background-color-primary: light-dark(var(--aiwindow-gradient-button), var(--aiwindow-gradient-button-dark));
       --button-text-color-primary: light-dark(var(--color-white), #fbfbfe);
@@ -51,7 +53,9 @@
       );
       --card-bg: light-dark(var(--color-white), var(--color-gray-75));
       --card-bg-hover: var(--card-bg);
-      --card-border-color: light-dark(var(--color-violet-desaturated-20), var(--color-violet-desaturated-50));
+      @media not (prefers-contrast) {
+        --card-border-color: light-dark(var(--color-violet-desaturated-20), var(--color-violet-desaturated-50));
+      }
       --card-border-color-hover: var(--color-violet-desaturated-30);
       --card-icon-bg: light-dark(var(--color-violet-0), color-mix(in srgb, var(--color-violet-40) 25%, transparent));
       --card-border-color-gradient: linear-gradient(244deg, var(--color-orange-30) 14.32%, var(--color-pink-30) 28.57%, var(--color-violet-40) 59.95%);
