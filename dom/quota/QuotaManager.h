@@ -34,6 +34,7 @@
 #include "mozilla/dom/quota/OpenClientDirectoryInfo.h"
 #include "mozilla/dom/quota/OriginOperationCallbacks.h"
 #include "mozilla/dom/quota/PersistenceType.h"
+#include "mozilla/dom/quota/WriteLease.h"
 #include "nsCOMPtr.h"
 #include "nsClassHashtable.h"
 #include "nsDebug.h"
@@ -49,6 +50,7 @@
 #define GTEST_CLASS(testFixture, testName) testFixture##_##testName##_Test
 
 class mozIStorageConnection;
+class mozIStorageStatement;
 class nsIEventTarget;
 class nsIFile;
 class nsIRunnable;
@@ -448,9 +450,39 @@ class QuotaManager final : public BackgroundThreadObject {
 
   RefPtr<BoolPromise> TemporaryStorageInitialized();
 
-  nsresult FlagOriginInfoAsDirtyOnDisk(
-      DirtyTrackingAutoLock& aProofOfLock,
-      const OriginStateMetadata& aStateMetadata);
+  using WriteLeasePromise = MozPromise<WriteLease, nsresult, true>;
+
+  // Acquires a write lease on the origin and makes sure its dirty flag is
+  // recorded on disk before resolving. While a lease is held, the origin is
+  // not settled by FlushDirtyOriginInfos. Clients take a lease right before a
+  // write and drop it when the write is done, so idle origins can settle.
+  // Resolves with an empty lease if the origin has no OriginInfo (nothing to
+  // protect). May be called on any serial event target except the IO thread;
+  // the promise resolves on the calling target.
+  RefPtr<WriteLeasePromise> AcquireWriteLease(
+      const OriginMetadata& aOriginMetadata);
+
+  // Synchronous fast path of AcquireWriteLease. Returns Some when no IO is
+  // needed to record the dirty flag (already recorded, private origin, or no
+  // directory yet), Nothing otherwise, in which case no lease was taken and
+  // AcquireWriteLease must be used. May be called on any thread.
+  Maybe<WriteLease> TryAcquireWriteLease(const OriginMetadata& aOriginMetadata);
+
+  void ReleaseWriteLease(RefPtr<OriginInfo> aOriginInfo);
+
+  // Lease API for IO thread work that mutates origin metadata: quota manager
+  // operations (PersistOp, SaveOriginAccessTimeOp, ClearClientOp) and quota
+  // clients that reach origin data through a directory lock other than
+  // OpenClientDirectory (e.g. IndexedDB maintenance). The caller must hold a
+  // directory lock on the origin for the whole lease so that the OriginInfo
+  // cannot be replaced meanwhile.
+  //
+  // Records the dirty flag synchronously, without holding mQuotaMutex over the
+  // IO, and acquires the lease. Fails if the origin has no OriginInfo or the
+  // flag could not be recorded; the caller must then not mutate the origin.
+  // IO thread only.
+  Result<WriteLease, nsresult> AcquireWriteLeaseOnIOThread(
+      const OriginMetadata& aOriginMetadata);
 
   void FlushDirtyOriginInfos();
 
@@ -587,7 +619,7 @@ class QuotaManager final : public BackgroundThreadObject {
     return mTemporaryStorageInitialized;
   }
 
-  void RegisterDirtyOriginInfo(DirtyTrackingAutoLock& aProofOfLock);
+  void RegisterDirtyOriginInfo(RefPtr<OriginInfo> aOriginInfo);
 
  private:
   nsresult InitializeTemporaryStorageInternal();
@@ -1200,6 +1232,23 @@ class QuotaManager final : public BackgroundThreadObject {
    */
   void IncreaseSaveOriginAccessTimeCountInternal();
 
+  Maybe<WriteLease> LockedTryAcquireWriteLease(
+      const OriginMetadata& aOriginMetadata);
+
+  // Records the dirty flag in the origin's row of the storage database. IO
+  // thread only; auto-commits. mQuotaMutex must not be held. Returns true if
+  // the row was missing and a full row was upserted from the OriginInfo.
+  Result<bool, nsresult> FlagOriginInfoAsDirtyOnDisk(
+      const OriginMetadata& aOriginMetadata);
+
+  // FlagOriginInfoAsDirtyOnDisk followed by LockedMarkDirtyOnDisk on
+  // aOriginInfo, the OriginInfo the caller resolved for aOriginMetadata. Both
+  // happen on the IO thread so that no IO thread metadata writer can run in
+  // between and upsert the row back to clean while the OriginInfo still
+  // reports the flag as recorded. IO thread only.
+  nsresult MarkOriginDirtyOnDisk(const OriginMetadata& aOriginMetadata,
+                                 OriginInfo& aOriginInfo);
+
   template <typename Collect, typename Pred>
   static OriginInfosFlatTraversable CollectLRUOriginInfosUntil(
       Collect&& aCollect, Pred&& aPred);
@@ -1210,6 +1259,7 @@ class QuotaManager final : public BackgroundThreadObject {
   nsCOMPtr<mozIStorageConnection> mStorageConnection;
 
   RefPtr<OriginUpserter> mOriginUpserter;
+  nsCOMPtr<mozIStorageStatement> mFlagOriginInfoAsDirtyStmt;
 
   EnumeratedArray<Client::Type, nsCString, size_t(Client::TYPE_MAX)>
       mShutdownSteps;
