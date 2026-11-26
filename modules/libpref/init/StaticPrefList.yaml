@@ -17818,6 +17818,13 @@
   value: @IS_NIGHTLY_BUILD@
   mirror: always
 
+# The time to wait before starting the next inner connection attempt through a
+# CONNECT tunnel (ms).
+- name: network.http.happy_eyeballs_inner_connection_attempt_delay
+  type: RelaxedAtomicUint32
+  value: 500
+  mirror: always
+
 # The time to wait after receiving the first DNS response before moving on
 # to the connection phase (ms).
 - name: network.http.happy_eyeballs_resolution_delay
