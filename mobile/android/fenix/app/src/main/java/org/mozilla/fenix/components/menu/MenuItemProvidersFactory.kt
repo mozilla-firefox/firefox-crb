@@ -47,6 +47,7 @@ import org.mozilla.fenix.home.topsites.ShortcutMenuItemProvider
 import org.mozilla.fenix.ipprotection.VpnMenuItemProvider
 import org.mozilla.fenix.library.history.HistoryMenuItemProvider
 import org.mozilla.fenix.messaging.BannerMenuItemProvider
+import org.mozilla.fenix.messaging.MessageController
 import org.mozilla.fenix.pdf.SaveAsPdfMenuItemProvider
 import org.mozilla.fenix.print.PrintMenuItemProvider
 import org.mozilla.fenix.settings.SettingsMenuItemProvider
@@ -94,7 +95,7 @@ class MenuItemProvidersFactory(
     private val translationsSettings: TranslationsEnabledSettings,
     private val isAndroidAutomotiveAvailable: Boolean,
     private val quitApplicationDelegate: () -> Unit,
-    private val setAsDefaultBrowserDelegate: () -> Unit,
+    private val messageController: MessageController,
     private val tabDataCoordinator: TabDataCoordinator,
     private val menuViewScope: CoroutineScope,
     private val applicationScope: CoroutineScope,
@@ -127,7 +128,7 @@ class MenuItemProvidersFactory(
                     appStore = appStore,
                     settings = settings,
                     appName = context.getString(R.string.app_name),
-                    setAsDefaultBrowser = setAsDefaultBrowserDelegate,
+                    messageController = messageController,
                     scope = menuViewScope,
                 )
 

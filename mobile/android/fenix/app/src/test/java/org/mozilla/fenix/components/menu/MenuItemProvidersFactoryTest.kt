@@ -197,7 +197,7 @@ class MenuItemProvidersFactoryTest {
             translationsSettings = mockk(relaxed = true),
             isAndroidAutomotiveAvailable = false,
             quitApplicationDelegate = {},
-            setAsDefaultBrowserDelegate = {},
+            messageController = mockk(relaxed = true),
             menuViewScope = scope,
             applicationScope = scope,
             browsingModeManager = mockk(relaxed = true),
