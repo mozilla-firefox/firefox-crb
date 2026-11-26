@@ -264,6 +264,20 @@ describe("ActivityStream", () => {
     });
   });
   describe("devtools overrides", () => {
+    it("should only create the devtools feed while devtools are enabled", () => {
+      let devtools = false;
+      services.prefs.getBoolPref = jest.fn((name, fallback) =>
+        name === "browser.newtabpage.activity-stream.asrouter.devtoolsEnabled"
+          ? devtools
+          : fallback
+      );
+      as._updateDynamicPrefs();
+      expect(PREFS_CONFIG.get("feeds.newtabdevtools").value).toBe(false);
+
+      devtools = true;
+      as._updateDynamicPrefs();
+      expect(PREFS_CONFIG.get("feeds.newtabdevtools").value).toBe(true);
+    });
     it("should use the devtools locale and channel only while devtools are enabled", () => {
       const prefs = {
         "browser.newtabpage.activity-stream.devtools.localeOverride": "pl",

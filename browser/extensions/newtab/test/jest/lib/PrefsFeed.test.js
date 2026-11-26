@@ -2060,6 +2060,53 @@ describe("PrefsFeed", () => {
         "default"
       );
     });
+
+    describe("devtools gate", () => {
+      it("should not let content open the gate with an object pref name", () => {
+        // Preferences.set treats an object name as a map of names to values.
+        feed.onAction(
+          ac.OnlyToMain(
+            ac.SetPref({ "asrouter.devtoolsEnabled": true }, undefined),
+            "tab-1"
+          )
+        );
+        feed.onAction(
+          ac.OnlyToMain(
+            { type: at.CLEAR_PREF, data: { name: { toString: () => "x" } } },
+            "tab-1"
+          )
+        );
+        expect(feed._prefs.set).not.toHaveBeenCalled();
+        expect(services.prefs.clearUserPref).not.toHaveBeenCalled();
+      });
+
+      it("should not let content write the devtools gate or its bookkeeping", () => {
+        for (const name of [
+          "asrouter.devtoolsEnabled",
+          "devtools.originalRegion",
+        ]) {
+          feed.onAction(ac.OnlyToMain(ac.SetPref(name, "x"), "tab-1"));
+          feed.onAction(
+            ac.OnlyToMain({ type: at.CLEAR_PREF, data: { name } }, "tab-1")
+          );
+        }
+        feed.onAction(
+          ac.OnlyToMain(
+            ac.SetMultiplePrefs({ "devtools.prefBackup": "{}", foo: 2 }),
+            "tab-1"
+          )
+        );
+        expect(calledNames(feed._prefs.set)).toEqual(["foo"]);
+        expect(services.prefs.clearUserPref).not.toHaveBeenCalled();
+
+        // The parent's own feeds can still write them.
+        feed.onAction(ac.SetPref("asrouter.devtoolsEnabled", true));
+        expect(feed._prefs.set).toHaveBeenLastCalledWith(
+          "asrouter.devtoolsEnabled",
+          true
+        );
+      });
+    });
   });
 
   describe("Activation Window Evaluation", () => {
