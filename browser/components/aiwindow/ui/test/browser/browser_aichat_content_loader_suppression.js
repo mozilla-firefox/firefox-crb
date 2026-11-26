@@ -3,6 +3,10 @@
 
 "use strict";
 
+const { MockEngineManager } = ChromeUtils.importESModule(
+  "resource://testing-common/AIWindowTestUtils.sys.mjs"
+);
+
 /**
  * The pending loader (chat-assistant-loader spinner) is only shown while the
  * assistant is generating AND there is nothing else on screen communicating
@@ -120,4 +124,78 @@ add_task(async function test_loader_suppression_across_states() {
       Assert.ok(!loader(), "Spinner is hidden once generation finishes");
     });
   });
+});
+
+add_task(async function test_thinking_spinner_stops_with_reduced_motion() {
+  await SpecialPowers.pushPrefEnv({ set: [["ui.prefersReducedMotion", 0]] });
+  const restoreSignIn = skipSignIn();
+  const mockEngineManager = new MockEngineManager();
+  let win;
+
+  try {
+    win = await openAIWindow();
+    const browser = win.gBrowser.selectedBrowser;
+    await typeInSmartbar(browser, "hello");
+    await submitSmartbar(browser);
+    const aichatBrowser = await getAichatBrowser(browser);
+
+    await spawnBounded(
+      aichatBrowser,
+      [],
+      async () => {
+        const chatRoot =
+          content.document.querySelector("ai-chat-content").shadowRoot;
+        await ContentTaskUtils.waitForMutationCondition(
+          chatRoot,
+          { childList: true, subtree: true },
+          () => chatRoot.querySelector("chat-assistant-loader")
+        );
+        const loaderRoot = chatRoot.querySelector(
+          "chat-assistant-loader"
+        ).shadowRoot;
+        await ContentTaskUtils.waitForMutationCondition(
+          loaderRoot,
+          { childList: true, subtree: true },
+          () => loaderRoot.querySelector(".chat-assistant-loader__spinner")
+        );
+        Assert.equal(
+          loaderRoot
+            .querySelector(".chat-assistant-loader__spinner")
+            .getAnimations().length,
+          1,
+          "Spinner animates while the response is pending"
+        );
+      },
+      "the spinner to animate"
+    );
+
+    await SpecialPowers.pushPrefEnv({ set: [["ui.prefersReducedMotion", 1]] });
+
+    await spawnBounded(
+      aichatBrowser,
+      [],
+      async () => {
+        const spinner = content.document
+          .querySelector("ai-chat-content")
+          .shadowRoot.querySelector("chat-assistant-loader")
+          .shadowRoot.querySelector(".chat-assistant-loader__spinner");
+        if (spinner.getAnimations().length) {
+          await ContentTaskUtils.waitForEvent(spinner, "animationcancel");
+        }
+        Assert.deepEqual(
+          spinner.getAnimations(),
+          [],
+          "Spinner stops animating with reduced motion"
+        );
+      },
+      "the spinner to stop animating"
+    );
+  } finally {
+    await mockEngineManager.rejectAllRequests();
+    if (win) {
+      await BrowserTestUtils.closeWindow(win);
+    }
+    restoreSignIn();
+    mockEngineManager.cleanupMocks();
+  }
 });

@@ -24,9 +24,12 @@
 }
 
 .chat-assistant-loader__spinner {
-  animation: 0.9s spinLoader infinite linear;
   background-image: url("chrome://browser/content/aiwindow/assets/loader.svg");
-  will-change: transform;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: 0.9s spinLoader infinite linear;
+    will-change: transform;
+  }
 }
 
 @keyframes spinLoader {
