@@ -75,6 +75,8 @@ MOZ_DEFINE_ENUM_CLASS_WITH_TOSTRING(
 
      AssertCanInstantiate,  // Assert that a wrapping decoder can instantiate
                             // its underlying decoder up front.
+     DiscardPreSkip,  // The Opus decoder discards the pre-skip of the Opus
+                      // header. Otherwise the demuxer trims it.
 
      SENTINEL  // one past the last valid value
      ));

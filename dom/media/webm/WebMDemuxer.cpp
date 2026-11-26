@@ -404,16 +404,6 @@ nsresult WebMDemuxer::SetAudioCodecInfo(nestegg* aContext, int aTrackId,
     audioCodecSpecificBlob->AppendElements(headers[0], headerLens[0]);
   }
 
-  // The demuxer discards the CodecDelay, so the decoder must not discard the
-  // pre-skip of the Opus header as well.
-  constexpr size_t kOpusHeadPreSkipOffset = 10;
-  if (mAudioCodec == NESTEGG_CODEC_OPUS &&
-      OpusCodecDelay(aParams.codec_delay) &&
-      audioCodecSpecificBlob->Length() >= kOpusHeadPreSkipOffset + 2) {
-    LittleEndian::writeUint16(
-        audioCodecSpecificBlob->Elements() + kOpusHeadPreSkipOffset, 0);
-  }
-
   return NS_OK;
 }
 
@@ -654,6 +644,18 @@ nsresult WebMDemuxer::ReadMetadata() {
       if (mAudioCodec == NESTEGG_CODEC_OPUS) {
         mAudioCodecDelay = TimeUnit::FromMicroseconds(AssertedCast<int64_t>(
             OpusCodecDelay(params.codec_delay) / NSECS_PER_USEC));
+        // Without a CodecDelay, or with one that is ignored, the pre-skip of
+        // the Opus header is the delay.
+        constexpr size_t kOpusHeadPreSkipOffset = 10;
+        const MediaByteBuffer& header =
+            *mInfo.mAudio.mCodecSpecificConfig.as<OpusCodecSpecificData>()
+                 .mHeadersBinaryBlob;
+        if (!mAudioCodecDelay.IsPositive() &&
+            header.Length() >= kOpusHeadPreSkipOffset + 2) {
+          const int64_t preSkip = LittleEndian::readUint16(
+              header.Elements() + kOpusHeadPreSkipOffset);
+          mAudioCodecDelay = TimeUnit(preSkip, 48000);
+        }
       }
       mInfo.mAudio.mRate = rate;
       mInfo.mAudio.mChannels = params.channels;

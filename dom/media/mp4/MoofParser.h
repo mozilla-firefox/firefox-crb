@@ -131,6 +131,8 @@ class Edts : public Atom {
     // edts is optional
     return true;
   }
+  // Whether an edit list was parsed.
+  bool IsPresent() const { return mValid; }
 
   int64_t mMediaStart;
   int64_t mEmptyOffset;

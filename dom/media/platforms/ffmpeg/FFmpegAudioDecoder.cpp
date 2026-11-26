@@ -15,6 +15,7 @@
 #if defined(FFVPX_VERSION)
 #  include "libavutil/channel_layout.h"
 #endif
+#include "mozilla/EndianUtils.h"
 #include "mozilla/StaticPrefs_media.h"
 
 #ifdef MOZ_WIDGET_ANDROID
@@ -87,6 +88,13 @@ FFmpegAudioDecoder<LIBAV_VER>::FFmpegAudioDecoder(
   if (mCodecID == AV_CODEC_ID_OPUS) {
     mDefaultPlaybackDeviceMono = aDecoderParams.mOptions.contains(
         CreateDecoderParams::Option::DefaultPlaybackDeviceMono);
+    constexpr size_t kOpusHeadPreSkipOffset = 10;
+    if (!aDecoderParams.mOptions.contains(
+            CreateDecoderParams::Option::DiscardPreSkip) &&
+        mExtraData && mExtraData->Length() >= kOpusHeadPreSkipOffset + 2) {
+      LittleEndian::writeUint16(mExtraData->Elements() + kOpusHeadPreSkipOffset,
+                                0);
+    }
   }
 }
 

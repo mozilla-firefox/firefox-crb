@@ -1,0 +1,129 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>The Opus pre-skip is discarded once, in each container</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <script type="text/javascript" src="mediasource.js"></script>
+  <script type="text/javascript" src="audio_timeline.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+<pre id="test">
+<script class="testbody" type="text/javascript">
+
+// The files in opus-preskip/ hold the same Opus packets: 48000 frames of
+// silence at 48 kHz with single sample clicks, after the 312 frames of
+// pre-skip that libopus adds. Each container excludes the pre-skip from the
+// presentation.
+const kFrames = 48000;
+const kClicks = [100, 2000, 12100, 13500, 30000];
+// The first packet decodes to 960 frames, of which the pre-skip is the first
+// 312, so the first click is in the part of the first packet that is played,
+// and the second one after it.
+const kPreSkip = 312;
+const kPacketFrames = 960;
+// A seek target in the packet that holds the third click.
+const kSeekFrame = 12072;
+
+const kOpusFrag = {
+  file: "opus-preskip/opus_clicks_frag.mp4",
+  type: 'audio/mp4; codecs="opus"',
+  frames: kFrames,
+};
+// flac_click_48k.mp4 holds 24576 frames with a click at frame 21600, and no
+// codec delay.
+const kFLAC = {
+  file: "aac-priming/flac_click_48k.mp4",
+  type: 'audio/mp4; codecs="flac"',
+  frames: 24576,
+  click: 21600,
+};
+
+// Returns the frames after the first of the given clicks that the others are
+// at.
+function after(aClicks) {
+  return aClicks.slice(1).map(c => c - aClicks[0]);
+}
+
+// Plays aFile from aSeekFrame, and checks that the clicks after it are each
+// played once, at the expected distance from the first.
+async function checkFileClicks(aName, aFile, aSeekFrame) {
+  const el = document.createElement("audio");
+  el.src = aFile;
+  await once(el, "loadedmetadata");
+  if (aSeekFrame) {
+    el.currentTime = aSeekFrame / kRate;
+    await once(el, "seeked");
+  }
+  const data = await record(el);
+  el.removeAttribute("src");
+  el.load();
+  const clicks = findClicks(data);
+  info(`${aName}: clicks at ${clicks}`);
+  // The clicks are below full scale, so anything louder is decoded from a
+  // decoder that hasn't converged.
+  ok(
+    data.every(s => Math.abs(s) < 1),
+    `${aName}: the output stays below full scale`
+  );
+  const expected = kClicks.filter(c => c >= (aSeekFrame ?? 0));
+  is(clicks.length, expected.length, `${aName}: each click is played`);
+  const near = (a, b) => Math.abs(a - b) <= 32;
+  const actual = after(clicks);
+  after(expected).forEach((e, i) =>
+    ok(
+      near(actual[i], e),
+      `${aName}: a click is played ${e} frames after the first (got ${actual[i]})`
+    )
+  );
+}
+
+// Decodes aFile, and checks that it holds the frames of the presentation, with
+// the clicks where they were encoded.
+async function checkDecodedClicks(aName, aFile) {
+  const response = await fetch(aFile);
+  const ctx = new OfflineAudioContext(1, 1, kRate);
+  const buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+  is(buffer.length, kFrames, `${aName}: decodes to the frames presented`);
+  isDeeply(
+    findClicks(buffer.getChannelData(0)),
+    kClicks,
+    `${aName}: decodes the clicks where they were encoded`
+  );
+}
+
+SimpleTest.waitForExplicitFinish();
+
+runWithMSE(async () => {
+  ok(kClicks[0] < kPacketFrames - kPreSkip, "The first click is in the first packet");
+  ok(kClicks[1] > kPacketFrames - kPreSkip, "The second click is after it");
+  for (const file of ["opus_clicks.opus", "opus_clicks.mp4", "opus_clicks.webm"]) {
+    await checkDecodedClicks(`${file} decoded`, `opus-preskip/${file}`);
+    await checkFileClicks(file, `opus-preskip/${file}`);
+    await checkFileClicks(`${file} after a seek`, `opus-preskip/${file}`, kSeekFrame);
+  }
+  const files = await fetchClips([kOpusFrag.file, kFLAC.file]);
+  await checkClicks(
+    "MSE",
+    files,
+    "segments",
+    [{ ...kOpusFrag, start: 0 }],
+    after(kClicks)
+  );
+  await checkClicks(
+    "MSE after another clip",
+    files,
+    "segments",
+    [
+      { ...kFLAC, start: 0 },
+      { ...kOpusFrag, start: kFLAC.frames },
+    ],
+    kClicks.map(c => kFLAC.frames + c - kFLAC.click)
+  );
+  SimpleTest.finish();
+});
+
+</script>
+</pre>
+</body>
+</html>

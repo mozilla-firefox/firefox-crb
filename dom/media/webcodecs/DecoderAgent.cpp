@@ -114,6 +114,8 @@ RefPtr<DecoderAgent::ConfigurePromise> DecoderAgent::Configure(
   // Always even use the pts that were set on the input samples when returning
   // decoded video frames.
   params.mOptions += CreateDecoderParams::Option::KeepOriginalPts;
+  // WebCodecs has no demuxer to trim the Opus pre-skip.
+  params.mOptions += CreateDecoderParams::Option::DiscardPreSkip;
 
   LOG("DecoderAgent #{} ({}) is creating a decoder (mime: {}) - PreferSW: {}, "
       "low-latency: {}, create-decoder-params: {}",

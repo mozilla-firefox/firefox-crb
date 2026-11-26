@@ -33,8 +33,9 @@ class RemoteDataDecoder : public MediaDataDecoder,
 
   // Returns the codec specific data buffers, in csd-N order, in the format that
   // MediaCodec expects for the given audio codec.
+  // aDiscardPreSkip tells MediaCodec to discard the pre-skip of Opus.
   static nsTArray<RefPtr<MediaByteBuffer>> GetAudioCodecSpecificData(
-      const AudioInfo& aConfig);
+      const AudioInfo& aConfig, bool aDiscardPreSkip = true);
 
   RefPtr<InitPromise> Init() override;
   RefPtr<DecodePromise> Decode(MediaRawData* aSample) override;

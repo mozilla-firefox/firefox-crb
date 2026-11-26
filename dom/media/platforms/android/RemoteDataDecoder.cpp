@@ -670,7 +670,7 @@ class RemoteVideoDecoder final : public RemoteDataDecoder {
 
 /* static */
 nsTArray<RefPtr<MediaByteBuffer>> RemoteDataDecoder::GetAudioCodecSpecificData(
-    const AudioInfo& aConfig) {
+    const AudioInfo& aConfig, bool aDiscardPreSkip) {
   nsTArray<RefPtr<MediaByteBuffer>> csd;
   const AudioCodecSpecificVariant& config = aConfig.mCodecSpecificConfig;
 
@@ -736,7 +736,8 @@ nsTArray<RefPtr<MediaByteBuffer>> RemoteDataDecoder::GetAudioCodecSpecificData(
     csd.AppendElement(std::move(headerBuffer));
     // Round the codec delay up so that MediaCodec's conversion back to frames,
     // which truncates, yields the exact pre-skip.
-    const int64_t preSkip = LittleEndian::readUint16(header.Elements() + 10);
+    const int64_t preSkip =
+        aDiscardPreSkip ? LittleEndian::readUint16(header.Elements() + 10) : 0;
     const int64_t codecDelayNs = (preSkip * 1000000000 + 47999) / 48000;
     for (int64_t value : {codecDelayNs, kSeekPreRollNs}) {
       RefPtr<MediaByteBuffer> buffer = new MediaByteBuffer(sizeof(value));
@@ -759,7 +760,7 @@ class RemoteAudioDecoder final : public RemoteDataDecoder {
  public:
   RemoteAudioDecoder(const AudioInfo& aConfig,
                      java::sdk::MediaFormat::Param aFormat,
-                     const nsString& aDrmStubId)
+                     const nsString& aDrmStubId, bool aDiscardPreSkip)
       : RemoteDataDecoder(MediaData::Type::AUDIO_DATA, aConfig.mMimeType,
                           aFormat, aDrmStubId),
         mOutputChannels(AssertedCast<int32_t>(aConfig.mChannels)),
@@ -772,7 +773,7 @@ class RemoteAudioDecoder final : public RemoteDataDecoder {
       return;
     }
 
-    mCodecSpecificData = GetAudioCodecSpecificData(aConfig);
+    mCodecSpecificData = GetAudioCodecSpecificData(aConfig, aDiscardPreSkip);
     for (size_t i = 0; i < mCodecSpecificData.Length(); ++i) {
       jni::ByteBuffer::LocalRef buffer(env);
       buffer = jni::ByteBuffer::New(mCodecSpecificData[i]->Elements(),
@@ -1032,8 +1033,9 @@ RemoteDataDecoder::CreateAudioDecoder(const CreateDecoderParams& aParams,
   // format->SetInteger(java::sdk::MediaFormat::KEY_PCM_ENCODING,
   //                    java::sdk::AudioFormat::ENCODING_PCM_FLOAT);
 
-  RefPtr<RemoteDataDecoder> decoder =
-      new RemoteAudioDecoder(config, format, aDrmStubId);
+  RefPtr<RemoteDataDecoder> decoder = new RemoteAudioDecoder(
+      config, format, aDrmStubId,
+      aParams.mOptions.contains(CreateDecoderParams::Option::DiscardPreSkip));
   return ConstructDecoder(aParams, decoder, aProxy, decoder->Construct());
 }
 

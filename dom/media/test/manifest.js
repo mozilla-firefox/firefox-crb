@@ -404,13 +404,11 @@ var gPlayTests = [
   // Test playback of a MP4 file with a non-zero start time (and audio starting
   // a second later).
   { name: "bipbop-lateaudio.mp4", type: "video/mp4" },
-  // Opus in MP4 channel mapping=0 sample file (content shorter due to preskip)
-  {
-    name: "opus-sample.mp4",
-    type: "audio/mp4; codecs=opus",
-    duration: 10.92,
-    contentDuration: 10.09,
-  },
+  // Opus in MP4 channel mapping=0 sample file, generated with:
+  // ffmpeg -i source.wav -c:a libopus -b:a 75k opus-sample.mp4
+  // source.wav is the audio of the previous opus-sample.mp4, whose dOps had
+  // PreSkip and InputSampleRate in little-endian byte order.
+  { name: "opus-sample.mp4", type: "audio/mp4; codecs=opus", duration: 10.917 },
   // Opus in MP4 channel mapping=2 sample file
   { name: "opus-mapping2.mp4", type: "audio/mp4; codecs=opus", duration: 10.0 },
 
@@ -1789,8 +1787,10 @@ var gEMETests = [
     duration: 2.05,
   },
   {
-    // File generated with shaka packager:
-    // packager-osx --enable_raw_key_encryption --keys label=:key_id=7e571d047e571d047e571d047e571d21:key=7e5744447e5744447e5744447e574421 --segment_duration 1 --clear_lead 0 in=test-opus.mp4,stream=audio,output=opus-sample-cenc.mp4
+    // The first 2 s of the audio of opus-sample.mp4, generated with:
+    // ffmpeg -i source.wav -t 2 -c:a libopus -b:a 75k clip.mp4
+    // MP4Box -dash 1000 -frag 1000 -rap -single-file -subsegs-per-sidx -1 -out clip.mpd clip.mp4
+    // mp4encrypt --method MPEG-CENC --key 1:7e5744447e5744447e5744447e574421:random --property 1:KID:7e571d047e571d047e571d047e571d21 --pssh-v1 1077efecc0b24d02ace33c1e52e2fb4b:empty clip_dashinit.mp4 opus-sample-cenc.mp4
     name: "opus in mp4 clearkey",
     tracks: [
       {
@@ -1805,7 +1805,7 @@ var gEMETests = [
     },
     sessionType: "temporary",
     sessionCount: 1,
-    duration: 1.98,
+    duration: 2.0,
   },
   // ffmpeg -i bipbop.mp4 -t 00:00:02 -c:v libaom-av1 bipbop_av1.mp4
   // packager-linux-x64 in=bipbop_av1.mp4,stream=video,out=bipbop-clearkey-video-av1.mp4 --enable_raw_key_encryption --keys label=:key_id=8b5df745ad84145b5617c33116e35a67:key=bddfd35dd9be033ee73bc18bc1885056 --clear_lead 0

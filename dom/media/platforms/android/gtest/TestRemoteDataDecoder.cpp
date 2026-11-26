@@ -191,6 +191,17 @@ TEST(RemoteDataDecoder, OpusCodecDelayRoundsUp)
   ExpectOpusCsd(UINT16_MAX, 1365312500);
 }
 
+TEST(RemoteDataDecoder, OpusPreSkipTrimmedByDemuxer)
+{
+  // The demuxer trims the pre-skip, so MediaCodec is told about none.
+  constexpr uint16_t kPreSkip = 312;
+  nsTArray<RefPtr<MediaByteBuffer>> csd =
+      RemoteDataDecoder::GetAudioCodecSpecificData(
+          MakeOpusInfo(MakeOpusHeader(kPreSkip)), false);
+  ASSERT_EQ(csd.Length(), 3u);
+  EXPECT_EQ(ReadInt64(*csd[1]), 0);
+}
+
 TEST(RemoteDataDecoder, OpusTooShort)
 {
   RefPtr<MediaByteBuffer> header = MakeOpusHeader(312);

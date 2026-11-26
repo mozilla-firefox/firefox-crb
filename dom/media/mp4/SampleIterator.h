@@ -193,6 +193,11 @@ class MP4SampleIndex : public DecoderDoctorLifeLogger<MP4SampleIndex> {
       const mozilla::MediaByteRangeSet& aByteRanges);
   uint64_t GetEvictionOffset(const media::TimeUnit& aTime);
   bool IsFragmented() { return !!mMoofParser; }
+  // Whether a fragmented file has an edit list. mp4parse doesn't tell for a
+  // file that isn't fragmented, so it is assumed to have one.
+  bool HasEditList() const {
+    return !mMoofParser || mMoofParser->mEdts.IsPresent();
+  }
 
   // Return result of codec based keyframe analysis, if it exists.
   Maybe<bool> IsKeyframe(const media::TimeUnit& aTime) const;

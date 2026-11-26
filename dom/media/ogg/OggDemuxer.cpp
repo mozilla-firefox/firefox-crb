@@ -1403,6 +1403,16 @@ RefPtr<MediaRawData> OggTrackDemuxer::NextSample() {
   if (!data->mTime.IsValid()) {
     return nullptr;
   }
+  // What precedes the start of an Opus stream is its pre-skip, to discard.
+  if (mType == TrackInfo::kAudioTrack &&
+      state->GetType() == OggCodecState::TYPE_OPUS &&
+      data->mTime < totalDuration) {
+    data->mOriginalPresentationWindow =
+        Some(TimeInterval{data->mTime, data->GetEndTime()});
+    data->mDuration = std::max(TimeUnit::Zero(data->mTime),
+                               data->GetEndTime() - totalDuration);
+    data->mTime = totalDuration;
+  }
   TimeUnit mediaStartTime = mParent->mStartTime.valueOr(TimeUnit::Zero());
   TimeUnit mediaEndTime =
       mediaStartTime +
@@ -1428,8 +1438,10 @@ RefPtr<MediaRawData> OggTrackDemuxer::NextSample() {
           data->mTime.ToString().get(), data->GetEndTime().ToString().get(),
           data->mTime.ToString().get(),
           (data->mTime + originalDuration).ToString().get());
-      data->mOriginalPresentationWindow =
-          Some(TimeInterval{data->mTime, data->GetEndTime()});
+      if (!data->mOriginalPresentationWindow) {
+        data->mOriginalPresentationWindow =
+            Some(TimeInterval{data->mTime, data->GetEndTime()});
+      }
       data->mDuration -= toTrim;
       if (data->mDuration.IsNegative()) {
         data->mDuration = TimeUnit::Zero(data->mTime);

@@ -4,6 +4,7 @@
 
 #include "MP4Demuxer.h"
 
+#include <opus/opus.h>
 #include <stdint.h>
 
 #include <algorithm>
@@ -83,6 +84,10 @@ class MP4TrackDemuxer : public MediaTrackDemuxer,
   // Queued samples extracted by the demuxer, but not yet returned.
   RefPtr<MediaRawData> mQueuedSample;
   bool mNeedReIndex;
+  // The Opus pre-skip, by which the sample times of an Opus track without an
+  // edit list exceed its presentation times.
+  TimeUnit mOpusPreSkip;
+  bool mIsOpus = false;
   enum CodecType { kH264, kVP9, kAV1, kAAC, kHEVC, kOther } mType = kOther;
 };
 
@@ -320,6 +325,10 @@ UniquePtr<EncryptionInfo> MP4Demuxer::GetCrypto() {
   return crypto;
 }
 
+// The pre-roll that Encapsulation of Opus in ISOBMFF, section 4.3.6.2,
+// requires after random access.
+static constexpr int64_t kOpusSeekPreRollUs = 80000;
+
 MP4TrackDemuxer::MP4TrackDemuxer(MediaResource* aResource,
                                  UniquePtr<TrackInfo>&& aInfo,
                                  const IndiceWrapper& aIndices,
@@ -353,6 +362,19 @@ MP4TrackDemuxer::MP4TrackDemuxer(MediaResource* aResource,
     mType = kAV1;
   } else if (audioInfo && MP4Decoder::IsAAC(mInfo->mMimeType)) {
     mType = kAAC;
+  } else if (audioInfo &&
+             audioInfo->mCodecSpecificConfig.is<OpusCodecSpecificData>()) {
+    mIsOpus = true;
+    // Encapsulation of Opus in ISOBMFF, section 4.4, requires an edit list to
+    // exclude the priming samples from the presentation, and makes PreSkip
+    // informative. Fragmented files from some muxers, such as ffmpeg, have no
+    // edit list, so their PreSkip is the priming, as in Chrome.
+    if (!mIndex->HasEditList()) {
+      mOpusPreSkip =
+          TimeUnit(audioInfo->mCodecSpecificConfig.as<OpusCodecSpecificData>()
+                       .mContainerCodecDelayFrames,
+                   48000);
+    }
   } else if (videoInfo && MP4Decoder::IsHEVC(mInfo->mMimeType)) {
     mType = kHEVC;
     if (auto rv = H265::DecodeSPSFromHVCCExtraData(videoInfo->mExtraData);
@@ -383,8 +405,14 @@ void MP4TrackDemuxer::EnsureUpToDateIndex() {
 }
 
 RefPtr<MP4TrackDemuxer::SeekPromise> MP4TrackDemuxer::Seek(
-    const TimeUnit& aTime) {
-  LOGV("Seek to {}", aTime.ToString());
+    const TimeUnit& aTarget) {
+  LOGV("Seek to {}", aTarget.ToString());
+  // The Opus decoder needs the audio before the target to converge.
+  const TimeUnit time =
+      mIsOpus
+          ? std::max(aTarget - TimeUnit::FromMicroseconds(kOpusSeekPreRollUs),
+                     TimeUnit::Zero(aTarget))
+          : aTarget;
   mQueuedSample = nullptr;
   bool oldKeyframeInfoWasWrong = false;
   bool doExhaustiveScan = false;
@@ -398,7 +426,7 @@ RefPtr<MP4TrackDemuxer::SeekPromise> MP4TrackDemuxer::Seek(
   // The loop retries earlier keyframe map entries until one is confirmed or
   // there are none left.
   do {
-    mIterator->Seek(aTime);
+    mIterator->Seek(time + mOpusPreSkip);
     auto next = GetNextSample(&oldKeyframeInfoWasWrong);
     if (next.isErr()) {
       auto error = next.unwrapErr();
@@ -429,7 +457,8 @@ RefPtr<MP4TrackDemuxer::SeekPromise> MP4TrackDemuxer::Seek(
   // For exhaustive search, check all samples up to the next keyframe at or
   // after the target time to ensure the seek resolves to the closest keyframe.
   if (doExhaustiveScan || !mQueuedSample) {
-    mIterator->Seek(aTime);  // seek will reset and do nothing else
+    // seek will reset and do nothing else
+    mIterator->Seek(time + mOpusPreSkip);
     do {
       auto next = GetNextSample();
       if (next.isErr()) {
@@ -448,12 +477,12 @@ RefPtr<MP4TrackDemuxer::SeekPromise> MP4TrackDemuxer::Seek(
         // This sample can't be decoded, continue searching.
         continue;
       }
-      if (sample->mTime == aTime || mInfo->IsAudio()) {
+      if (sample->mTime == time || mInfo->IsAudio()) {
         mQueuedSample = sample;
         break;
       }
 
-      if (!currClosestSample && sample->mTime > aTime) {
+      if (!currClosestSample && sample->mTime > time) {
         LOG("No keyframe before target, use keyframe at {}",
             sample->mTime.ToString());
         mQueuedSample = sample;
@@ -467,14 +496,14 @@ RefPtr<MP4TrackDemuxer::SeekPromise> MP4TrackDemuxer::Seek(
       const auto oldTime = currClosestSample->mTime;
       // If both are before the target, the later one is closer.
       // Otherwise the earlier keyframe is preferred.
-      if (sample->mTime < aTime && oldTime < aTime && oldTime < sample->mTime) {
+      if (sample->mTime < time && oldTime < time && oldTime < sample->mTime) {
         currClosestSample = sample;
         currClosestIter = *mIterator;
       } else if (sample->mTime < oldTime) {
         currClosestSample = sample;
         currClosestIter = *mIterator;
       }
-      if (aTime < sample->mTime) {
+      if (time < sample->mTime) {
         LOG("Sample {} past target, use last saved sample at {}",
             sample->mTime.ToString(), oldTime.ToString());
         mQueuedSample = currClosestSample;
@@ -607,6 +636,8 @@ MP4TrackDemuxer::GetNextSample(bool* aKeyframeFlagWasWrong) {
   // Adjust trimming information if needed.
   if (mInfo->GetAsAudioInfo()) {
     AudioInfo* info = mInfo->GetAsAudioInfo();
+    sample->mTime -= mOpusPreSkip;
+    sample->mTimecode -= mOpusPreSkip;
     TimeUnit originalPts = sample->mTime;
     TimeUnit originalEnd = sample->GetEndTime();
     if (sample->mTime.IsNegative()) {
@@ -640,6 +671,19 @@ MP4TrackDemuxer::GetNextSample(bool* aKeyframeFlagWasWrong) {
       // left anyway.
       mIterator->Seek(sample->mTime);
       RefPtr<MediaRawData> dummy = mIterator->GetNext().unwrapOr(nullptr);
+    }
+    // An Opus packet gives the number of frames it decodes to.
+    if (mIsOpus && totalMediaDurationIncludingTrimming.IsPositive() &&
+        sample->GetEndTime() >= totalMediaDurationIncludingTrimming) {
+      const int frames = opus_packet_get_nb_samples(
+          sample->Data(), AssertedCast<int32_t>(sample->Size()), 48000);
+      if (frames > 0) {
+        sample->mOriginalPresentationWindow =
+            Some(TimeInterval{sample->mOriginalPresentationWindow
+                                  ? sample->mOriginalPresentationWindow->mStart
+                                  : originalPts,
+                              originalPts + TimeUnit(frames, 48000)});
+      }
     }
   }
 
@@ -708,7 +752,7 @@ void MP4TrackDemuxer::SetNextKeyFrameTime() {
   mNextKeyframeTime.reset();
   TimeUnit frameTime = mIterator->GetNextKeyframeTime();
   if (frameTime.IsValid()) {
-    mNextKeyframeTime.emplace(frameTime);
+    mNextKeyframeTime.emplace(frameTime - mOpusPreSkip);
   }
 }
 
