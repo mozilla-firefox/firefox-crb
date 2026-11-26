@@ -5,7 +5,6 @@
 #include "mozilla/dom/cache/Connection.h"
 
 #include "mozStorageHelper.h"
-#include "mozilla/dom/cache/DBSchema.h"
 
 namespace mozilla::dom::cache {
 
@@ -32,10 +31,6 @@ Connection::Close() {
     return NS_OK;
   }
   mClosed = true;
-
-  // If we are closing here, then Cache must not have a transaction
-  // open anywhere else.  This may fail if storage is corrupted.
-  (void)NS_WARN_IF(NS_FAILED(db::IncrementalVacuum(*this)));
 
   return mBase->Close();
 }
@@ -130,6 +125,11 @@ NS_IMETHODIMP
 Connection::Clone(bool aReadOnly, mozIStorageConnection** aConnectionOut) {
   nsCOMPtr<mozIStorageConnection> conn;
   nsresult rv = mBase->Clone(aReadOnly, getter_AddRefs(conn));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+
+  rv = conn->DisableCheckpointOnClose();
   if (NS_WARN_IF(NS_FAILED(rv))) {
     return rv;
   }

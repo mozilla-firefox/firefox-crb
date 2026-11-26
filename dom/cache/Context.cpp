@@ -13,6 +13,7 @@
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/dom/SafeRefPtr.h"
 #include "mozilla/dom/cache/Action.h"
+#include "mozilla/dom/cache/DBSchema.h"
 #include "mozilla/dom/cache/FileUtils.h"
 #include "mozilla/dom/cache/Manager.h"
 #include "mozilla/dom/cache/ManagerId.h"
@@ -29,28 +30,78 @@
 #include "nsIThread.h"
 #include "nsThreadUtils.h"
 
+namespace mozilla::dom::cache {
+
 namespace {
 
-using mozilla::dom::cache::Action;
-using mozilla::dom::cache::CacheDirectoryMetadata;
+template <typename Callback>
+void RunWithWriteLease(const CacheDirectoryMetadata& aMetadata,
+                       Callback&& aCallback) {
+  using mozilla::dom::quota::QuotaManager;
+  using mozilla::dom::quota::WriteLease;
 
-class NullAction final : public Action {
+  auto* quotaManager = QuotaManager::Get();
+  MOZ_DIAGNOSTIC_ASSERT(quotaManager);
+
+  if (auto lease = quotaManager->TryAcquireWriteLease(aMetadata)) {
+    std::forward<Callback>(aCallback)(
+        Result<WriteLease, nsresult>(std::move(*lease)));
+    return;
+  }
+
+  quotaManager->AcquireWriteLease(aMetadata)->Then(
+      GetCurrentSerialEventTarget(), __func__,
+      [callback = std::forward<Callback>(aCallback)](
+          QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
+              aValue) mutable {
+        if (aValue.IsReject()) {
+          callback(Err(aValue.RejectValue()));
+        } else {
+          callback(
+              Result<WriteLease, nsresult>(std::move(aValue.ResolveValue())));
+        }
+      });
+}
+
+class CloseAction final : public Action {
  public:
-  NullAction() = default;
+  CloseAction() = default;
 
-  virtual void RunOnTarget(mozilla::SafeRefPtr<Resolver> aResolver,
-                           const mozilla::Maybe<CacheDirectoryMetadata>&, Data*,
-                           const mozilla::Maybe<mozilla::dom::cache::CipherKey>&
+  virtual void RunOnTarget(SafeRefPtr<Resolver> aResolver,
+                           const Maybe<CacheDirectoryMetadata>& aMetadata,
+                           Data* aData, const Maybe<CipherKey>&
                            /* aMaybeCipherKey */) override {
-    // Resolve success immediately.  This Action does no actual work.
     MOZ_DIAGNOSTIC_ASSERT(aResolver);
-    aResolver->Resolve(NS_OK);
+    nsCOMPtr<mozIStorageConnection> connection = aData->GetConnection();
+    if (!connection) {
+      aResolver->Resolve(NS_OK);
+      return;
+    }
+
+    MOZ_DIAGNOSTIC_ASSERT(aMetadata);
+    RunWithWriteLease(
+        *aMetadata,
+        [connection = std::move(connection), resolver = std::move(aResolver)](
+            Result<quota::WriteLease, nsresult> aLease) mutable {
+          // Vacuum and checkpoint write to the database and need the lease.
+          // Without it we only close; the WAL replays on next open.
+          if (aLease.isOk()) {
+            QM_WARNONLY_TRY(ToResult(db::IncrementalVacuum(*connection)));
+            QM_WARNONLY_TRY(ToResult(connection->ExecuteSimpleSQL(
+                "PRAGMA wal_checkpoint(TRUNCATE);"_ns)));
+          } else {
+            QM_WARNONLY_TRY(MOZ_TO_RESULT(aLease.unwrapErr()));
+          }
+
+          MOZ_ALWAYS_SUCCEEDS(connection->Close());
+          connection = nullptr;
+          resolver->Resolve(NS_OK);
+          resolver = nullptr;
+        });
   }
 };
 
 }  // namespace
-
-namespace mozilla::dom::cache {
 
 using mozilla::dom::quota::AssertIsOnIOThread;
 using mozilla::dom::quota::ClientDirectoryLock;
@@ -152,6 +203,8 @@ class Context::QuotaInitRunnable final : public nsIRunnable {
   void DirectoryLockFailed();
 
  private:
+  void DispatchToIOThread();
+
   class SyncResolver final : public Action::Resolver {
    public:
     SyncResolver() : mResolved(false), mResult(NS_OK) {}
@@ -210,6 +263,7 @@ class Context::QuotaInitRunnable final : public nsIRunnable {
     mContext = nullptr;
     mManager = nullptr;
     mInitAction = nullptr;
+    mWriteLease = quota::WriteLease();
   }
 
   SafeRefPtr<Context> mContext;
@@ -223,6 +277,7 @@ class Context::QuotaInitRunnable final : public nsIRunnable {
   Maybe<mozilla::ipc::PrincipalInfo> mPrincipalInfo;
   Maybe<CacheDirectoryMetadata> mDirectoryMetadata;
   ClientDirectoryLockHandle mDirectoryLockHandle;
+  quota::WriteLease mWriteLease;
   RefPtr<CipherKeyManager> mCipherKeyManager;
   State mState;
   Atomic<bool> mCanceled;
@@ -248,6 +303,24 @@ void Context::QuotaInitRunnable::DirectoryLockAcquired(
     Complete(NS_ERROR_ABORT);
     return;
   }
+
+  // The init action may write (padding file, database setup), so the origin
+  // must be marked dirty on disk before it runs.
+  RunWithWriteLease(
+      *mDirectoryMetadata,
+      [self = RefPtr(this)](Result<quota::WriteLease, nsresult> aLease) {
+        if (aLease.isErr()) {
+          self->Complete(aLease.unwrapErr());
+          return;
+        }
+        self->mWriteLease = aLease.unwrap();
+        self->DispatchToIOThread();
+      });
+}
+
+void Context::QuotaInitRunnable::DispatchToIOThread() {
+  NS_ASSERT_OWNINGTHREAD(QuotaInitRunnable);
+  MOZ_DIAGNOSTIC_ASSERT(mState == STATE_WAIT_FOR_DIRECTORY_LOCK);
 
   QuotaManager* qm = QuotaManager::Get();
   MOZ_DIAGNOSTIC_ASSERT(qm);
@@ -519,13 +592,15 @@ class Context::ActionRunnable final : public nsIRunnable,
   ActionRunnable(SafeRefPtr<Context> aContext, Data* aData,
                  nsISerialEventTarget* aTarget, SafeRefPtr<Action> aAction,
                  const Maybe<CacheDirectoryMetadata>& aDirectoryMetadata,
-                 RefPtr<CipherKeyManager> aCipherKeyManager)
+                 RefPtr<CipherKeyManager> aCipherKeyManager,
+                 quota::WriteLease aWriteLease)
       : mContext(std::move(aContext)),
         mData(aData),
         mTarget(aTarget),
         mAction(std::move(aAction)),
         mDirectoryMetadata(aDirectoryMetadata),
         mCipherKeyManager(std::move(aCipherKeyManager)),
+        mWriteLease(std::move(aWriteLease)),
         mInitiatingThread(GetCurrentSerialEventTarget()),
         mState(STATE_INIT),
         mResult(NS_OK),
@@ -615,6 +690,8 @@ class Context::ActionRunnable final : public nsIRunnable,
     mContext->RemoveActivity(*this);
     mContext = nullptr;
     mAction = nullptr;
+    // Release at action completion, not when the last Resolver ref dies.
+    mWriteLease = quota::WriteLease();
   }
 
   enum State {
@@ -632,6 +709,7 @@ class Context::ActionRunnable final : public nsIRunnable,
   SafeRefPtr<Action> mAction;
   const Maybe<CacheDirectoryMetadata> mDirectoryMetadata;
   RefPtr<CipherKeyManager> mCipherKeyManager;
+  quota::WriteLease mWriteLease;
   nsCOMPtr<nsIEventTarget> mInitiatingThread;
   State mState;
   nsresult mResult;
@@ -878,14 +956,79 @@ void Context::Dispatch(SafeRefPtr<Action> aAction) {
     return;
   }
 
-  if (mState == STATE_CONTEXT_INIT || mState == STATE_CONTEXT_PREINIT) {
-    PendingAction* pending = mPendingActions.AppendElement();
-    pending->mAction = std::move(aAction);
+  PendingAction* pending = mPendingActions.AppendElement();
+  pending->mAction = std::move(aAction);
+  if (mState == STATE_CONTEXT_READY) {
+    DispatchPendingActions();
+  }
+}
+
+void Context::MaybeDispatchWithWriteLease(SafeRefPtr<Action> aAction) {
+  NS_ASSERT_OWNINGTHREAD(Context);
+  MOZ_DIAGNOSTIC_ASSERT(mState == STATE_CONTEXT_READY);
+  MOZ_DIAGNOSTIC_ASSERT(!mWaitingForWriteLease);
+
+  if (!aAction->IsWrite()) {
+    DispatchAction(std::move(aAction));
     return;
   }
 
-  MOZ_DIAGNOSTIC_ASSERT(mState == STATE_CONTEXT_READY);
-  DispatchAction(std::move(aAction));
+  MOZ_DIAGNOSTIC_ASSERT(mDirectoryMetadata);
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_DIAGNOSTIC_ASSERT(quotaManager);
+
+  if (Maybe<quota::WriteLease> lease =
+          quotaManager->TryAcquireWriteLease(*mDirectoryMetadata)) {
+    DispatchAction(std::move(aAction), /* aDoomData */ false,
+                   std::move(*lease));
+    return;
+  }
+
+  mWaitingForWriteLease = true;
+  mWriteLeaseAction = aAction.unsafeGetRawPtr();
+
+  quotaManager->AcquireWriteLease(*mDirectoryMetadata)
+      ->Then(GetCurrentSerialEventTarget(), __func__,
+             [self = SafeRefPtrFromThis(), action = std::move(aAction)](
+                 QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
+                     aValue) mutable {
+               if (aValue.IsReject()) {
+                 self->OnWriteLeaseAcquired(std::move(action),
+                                            Err(aValue.RejectValue()));
+                 return;
+               }
+
+               self->OnWriteLeaseAcquired(std::move(action),
+                                          std::move(aValue.ResolveValue()));
+             });
+}
+
+void Context::OnWriteLeaseAcquired(
+    SafeRefPtr<Action> aAction,
+    Result<quota::WriteLease, nsresult> aWriteLease) {
+  NS_ASSERT_OWNINGTHREAD(Context);
+  MOZ_DIAGNOSTIC_ASSERT(mWaitingForWriteLease);
+  MOZ_DIAGNOSTIC_ASSERT(mWriteLeaseAction == aAction.unsafeGetRawPtr());
+
+  {
+    AutoRestore<bool> dispatching(mDispatchingPendingActions);
+    mDispatchingPendingActions = true;
+    mWaitingForWriteLease = false;
+    mWriteLeaseAction = nullptr;
+
+    if (mState == STATE_CONTEXT_CANCELED) {
+      aAction->CompleteOnInitiatingThread(NS_ERROR_ABORT);
+    } else if (aWriteLease.isErr()) {
+      // Without the dirty flag recorded on disk the action must not write.
+      aAction->CompleteOnInitiatingThread(aWriteLease.unwrapErr());
+    } else {
+      DispatchAction(std::move(aAction), /* aDoomData */ false,
+                     aWriteLease.unwrap());
+    }
+  }
+
+  DispatchPendingActions();
 }
 
 Maybe<ClientDirectoryLock&> Context::MaybeDirectoryLockRef() const {
@@ -939,7 +1082,11 @@ void Context::CancelAll() {
   mState = STATE_CONTEXT_CANCELED;
   // Allow completion of pending actions in Context::OnQuotaInit
   if (!mInitRunnable) {
+    for (const auto& pendingAction : mPendingActions) {
+      pendingAction.mAction->CompleteOnInitiatingThread(NS_ERROR_ABORT);
+    }
     mPendingActions.Clear();
+    MaybeDoomTargetData();
   }
   for (const auto& activity : mActivityList.ForwardRange()) {
     activity->Cancel();
@@ -972,6 +1119,10 @@ void Context::CancelForCacheId(CacheId aCacheId) {
   mPendingActions.RemoveElementsBy([aCacheId](const auto& pendingAction) {
     return pendingAction.mAction->MatchesCacheId(aCacheId);
   });
+
+  if (mWriteLeaseAction && mWriteLeaseAction->MatchesCacheId(aCacheId)) {
+    mWriteLeaseAction->CancelOnInitiatingThread();
+  }
 
   // Cancel activities and let them remove themselves
   for (const auto& activity : mActivityList.ForwardRange()) {
@@ -1049,12 +1200,13 @@ void Context::Start() {
   }
 }
 
-void Context::DispatchAction(SafeRefPtr<Action> aAction, bool aDoomData) {
+void Context::DispatchAction(SafeRefPtr<Action> aAction, bool aDoomData,
+                             quota::WriteLease aWriteLease) {
   NS_ASSERT_OWNINGTHREAD(Context);
 
   auto runnable = MakeSafeRefPtr<ActionRunnable>(
       SafeRefPtrFromThis(), mData, mTarget, std::move(aAction),
-      mDirectoryMetadata, mCipherKeyManager);
+      mDirectoryMetadata, mCipherKeyManager, std::move(aWriteLease));
 
   if (aDoomData) {
     mData = nullptr;
@@ -1105,6 +1257,7 @@ void Context::OnQuotaInit(
       mPendingActions[i].mAction->CompleteOnInitiatingThread(aRv);
     }
     mPendingActions.Clear();
+    MaybeDoomTargetData();
     mThreadsafeHandle->AllowToClose();
     // Context will destruct after return here and last ref is released.
     return;
@@ -1120,10 +1273,29 @@ void Context::OnQuotaInit(
   MOZ_DIAGNOSTIC_ASSERT(mState == STATE_CONTEXT_INIT);
   mState = STATE_CONTEXT_READY;
 
-  for (uint32_t i = 0; i < mPendingActions.Length(); ++i) {
-    DispatchAction(std::move(mPendingActions[i].mAction));
+  DispatchPendingActions();
+}
+
+void Context::DispatchPendingActions() {
+  NS_ASSERT_OWNINGTHREAD(Context);
+  if (mDispatchingPendingActions || mWaitingForWriteLease) {
+    return;
   }
-  mPendingActions.Clear();
+
+  {
+    AutoRestore<bool> dispatching(mDispatchingPendingActions);
+    mDispatchingPendingActions = true;
+    while (mState == STATE_CONTEXT_READY && !mWaitingForWriteLease &&
+           !mPendingActions.IsEmpty()) {
+      auto action = std::move(mPendingActions[0].mAction);
+      mPendingActions.RemoveElementAt(0);
+      MaybeDispatchWithWriteLease(std::move(action));
+    }
+  }
+
+  if (!mWaitingForWriteLease) {
+    MaybeDoomTargetData();
+  }
 }
 
 void Context::AddActivity(Activity& aActivity) {
@@ -1163,17 +1335,40 @@ void Context::DoomTargetData() {
   NS_ASSERT_OWNINGTHREAD(Context);
   MOZ_DIAGNOSTIC_ASSERT(mData);
 
+  // In CANCELED state, pending actions are completed on the owning thread
+  // (CompleteOnInitiatingThread) and are never dispatched to the target.
+  //
+  // In other states, wait for a pending write lease and queued actions to drain
+  // before dooming, so that those actions reuse the shared connection before
+  // CloseAction closes it.  Initialization must provide the metadata needed by
+  // CloseAction first.
+  if (mInitRunnable || mDispatchingPendingActions ||
+      (mState != STATE_CONTEXT_CANCELED &&
+       (mWaitingForWriteLease || !mPendingActions.IsEmpty()))) {
+    mDoomTargetDataPending = true;
+    return;
+  }
+
+  mDoomTargetDataPending = false;
+
   // We are about to drop our reference to the Data.  We need to ensure that
   // the ~Context() destructor does not run until contents of Data have been
   // released on the Target thread.
 
-  // Dispatch a no-op Action.  This will hold the Context alive through a
+  // Dispatch a close Action.  This will hold the Context alive through a
   // roundtrip to the target thread and back to the owning thread.  The
   // ref to the Data object is cleared on the owning thread after creating
   // the ActionRunnable, but before dispatching it.
-  DispatchAction(MakeSafeRefPtr<NullAction>(), true /* doomed data */);
+  DispatchAction(MakeSafeRefPtr<CloseAction>(), true /* doomed data */);
 
   MOZ_DIAGNOSTIC_ASSERT(!mData);
+}
+
+void Context::MaybeDoomTargetData() {
+  NS_ASSERT_OWNINGTHREAD(Context);
+  if (mDoomTargetDataPending && mData) {
+    DoomTargetData();
+  }
 }
 
 void Context::DoStringify(nsACString& aData) {

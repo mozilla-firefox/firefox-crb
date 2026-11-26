@@ -78,8 +78,10 @@ Result<int64_t, nsresult> GetPaddingSizeFromDB(
   }
 #endif
 
-  QM_TRY_INSPECT(const auto& conn,
-                 OpenDBConnection(directoryMetadata, aDBFile, aMaybeCipherKey));
+  QM_TRY_INSPECT(
+      const auto& conn,
+      OpenDBConnection(directoryMetadata, aDBFile, aMaybeCipherKey,
+                       /* aAllowWipe */ true, CheckpointOnClose::Enabled));
 
   // Make sure that the database has the latest schema before we try to read
   // from it. We have to do this because GetPaddingSizeFromDB is called
@@ -124,8 +126,10 @@ Result<int64_t, nsresult> GetTotalDiskUsageFromDB(
   }
 #endif
 
-  QM_TRY_INSPECT(const auto& conn,
-                 OpenDBConnection(directoryMetadata, aDBFile, aMaybeCipherKey));
+  QM_TRY_INSPECT(
+      const auto& conn,
+      OpenDBConnection(directoryMetadata, aDBFile, aMaybeCipherKey,
+                       /* aAllowWipe */ true, CheckpointOnClose::Enabled));
 
   // Make sure that the database has the latest schema before we try to read
   // from it. We have to do this because GetTotalDiskUsageFromDB is called
