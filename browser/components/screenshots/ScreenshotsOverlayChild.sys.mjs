@@ -2054,6 +2054,12 @@ export class ScreenshotsOverlay {
    */
   scrollWindow(x, y) {
     this.window.scrollBy(x, y);
+    // updateWindowDimensions waits for a frame, and the next pointer or key
+    // event must not scroll again from the old scroll position before then.
+    this.windowDimensions.dimensions = {
+      scrollX: this.window.scrollX,
+      scrollY: this.window.scrollY,
+    };
     this.updateScreenshotsOverlayDimensions("scroll");
   }
 
