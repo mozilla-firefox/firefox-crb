@@ -185,11 +185,19 @@ def test_query_sql_selects_only_needed_nested_fields():
 # --- get_data end-to-end with mocked BQ client -----------------------------
 
 
-def _make_row(os_name, os_version, arch, app_build, hangs_reports, hangs_modules=""):
+def _make_row(
+    os_name,
+    os_version,
+    arch,
+    app_build,
+    hangs_reports,
+    hangs_modules="",
+    sample_slice=0,
+):
     """Build a fake BQ row as a nested dict — same shape google-cloud-bigquery
-    returns for our SELECT (top-level columns are client_info and metrics, each
-    a nested record/dict)."""
+    returns for our SELECT."""
     return {
+        "sample_slice": sample_slice,
         "client_info": {
             "os": os_name,
             "os_version": os_version,
@@ -515,6 +523,7 @@ def test_get_data_exclude_modules_omits_hangs_modules_property(monkeypatch):
         # properties_are_not_none. With exclude_modules=True, hangs_modules
         # isn't required so the ping passes.
         {
+            "sample_slice": 0,
             "client_info": {
                 "os": "Linux",
                 "os_version": "5.10",
@@ -670,33 +679,33 @@ def test_process_frame_bare_value_fallback_is_pseudo():
 
 # --- filter_hang ------------------------------------------------------------
 
-_FILTER_CONFIG = {"thread_filter": "Gecko"}
+_FILTER_THREADS = {"Gecko"}
 
 
 def test_filter_hang_keeps_matching_thread_with_valid_stack():
     hang = {"thread": "Gecko", "stack": [{"frame": "0", "module": 0}]}
-    assert bhr_collection.filter_hang(hang, _FILTER_CONFIG) is True
+    assert bhr_collection.filter_hang(hang, _FILTER_THREADS) is True
 
 
 def test_filter_hang_drops_wrong_thread():
     hang = {"thread": "Compositor", "stack": [{"frame": "0"}]}
-    assert bhr_collection.filter_hang(hang, _FILTER_CONFIG) is False
+    assert bhr_collection.filter_hang(hang, _FILTER_THREADS) is False
 
 
 def test_filter_hang_drops_missing_stack():
     # Some Glean records arrive without a stack field.
     hang = {"thread": "Gecko"}
-    assert bhr_collection.filter_hang(hang, _FILTER_CONFIG) is False
+    assert bhr_collection.filter_hang(hang, _FILTER_THREADS) is False
 
 
 def test_filter_hang_drops_empty_stack():
     hang = {"thread": "Gecko", "stack": []}
-    assert bhr_collection.filter_hang(hang, _FILTER_CONFIG) is False
+    assert bhr_collection.filter_hang(hang, _FILTER_THREADS) is False
 
 
 def test_filter_hang_drops_overlong_stack():
     hang = {"thread": "Gecko", "stack": [{"frame": "0"}] * 300}
-    assert bhr_collection.filter_hang(hang, _FILTER_CONFIG) is False
+    assert bhr_collection.filter_hang(hang, _FILTER_THREADS) is False
 
 
 # --- process_hang -----------------------------------------------------------
@@ -746,7 +755,7 @@ def test_process_hangs_expands_one_hang_into_a_tuple():
         ],
         hangs_modules=[["xul.pdb", "ABC"], ["kernel32.pdb", "XYZ"]],
     )
-    out = bhr_collection.process_hangs(ping, {"thread_filter": "Gecko"})
+    out = bhr_collection.process_hangs(ping, {}, _FILTER_THREADS)
 
     assert len(out) == 1
     stack, duration, thread, runnable, process, annotations, build_date, platform = out[
@@ -773,7 +782,7 @@ def test_process_hangs_parses_json_string_payloads():
         ]),
         hangs_modules=json.dumps([["xul.pdb", "ABC"]]),
     )
-    out = bhr_collection.process_hangs(ping, {"thread_filter": "Gecko"})
+    out = bhr_collection.process_hangs(ping, {}, _FILTER_THREADS)
     assert len(out) == 1
     assert out[0][0] == [(("xul.pdb", "ABC"), "1000")]
 
@@ -791,7 +800,7 @@ def test_process_hangs_drops_hangs_on_other_threads():
         ],
         hangs_modules=[["xul.pdb", "ABC"]],
     )
-    assert bhr_collection.process_hangs(ping, {"thread_filter": "Gecko"}) == []
+    assert bhr_collection.process_hangs(ping, {}, _FILTER_THREADS) == []
 
 
 # --- symbolicate_stacks -----------------------------------------------------
@@ -1010,9 +1019,6 @@ def test_aggregate_end_to_end_offline(monkeypatch, tmp_path):
             {"frame": "1000", "module": 0},
             {"frame": "2000", "module": 1},
         ],
-        # Real BHR hangs always carry at least one annotation; an empty list
-        # would leave the annotationsTable empty and make process_thread raise
-        # (a python_mozetl quirk we preserve).
         "annotations": [["UserInteracting", "true"]],
     }
     row = _make_row(
@@ -1026,16 +1032,22 @@ def test_aggregate_end_to_end_offline(monkeypatch, tmp_path):
     _install_fake_bigquery(monkeypatch, [row])
     monkeypatch.setattr(symbolication, "fetch_url", lambda _url: (False, ""))
 
-    profile = bhr_collection.aggregate(
+    bhr_collection.aggregate(
         date=datetime.date(2026, 5, 2),
         sample_size=0.001,
         billing_project="test-project",
         output_dir=str(tmp_path),
     )
 
+    profile = json.loads((tmp_path / "hangs_main_20260502.json").read_text())
+    child = json.loads((tmp_path / "hangs_child_20260502.json").read_text())
+    assert child["threads"] == []
+    assert child["sampleRate"] == 0.0001
+    assert (tmp_path / "hangs_child_current.json").is_file()
+
     # Profile shape the frontend expects. leafGroups is attached by the
     # near-duplicate grouping pass (empty here: a single hang can't group).
-    assert set(profile.keys()) == {"threads", "usageHoursByDate", "uuid", "leafGroups"}
+    assert set(profile) == {"threads", "usageHoursByDate", "uuid", "leafGroups", "sampleRate"}
     assert profile["leafGroups"] == {"Gecko": []}
     assert profile["usageHoursByDate"] == {"20260502": 1.0}
     assert len(profile["threads"]) == 1
@@ -1088,7 +1100,7 @@ def test_aggregate_window_writes_one_artifact_per_build_date(monkeypatch, tmp_pa
     bq = _install_fake_bigquery(monkeypatch, rows)
     monkeypatch.setattr(symbolication, "fetch_url", lambda _url: (False, ""))
 
-    profile = bhr_collection.aggregate(
+    bhr_collection.aggregate(
         date=datetime.date(2026, 5, 2),
         end_date=datetime.date(2026, 5, 4),
         sample_size=0.001,
@@ -1111,8 +1123,7 @@ def test_aggregate_window_writes_one_artifact_per_build_date(monkeypatch, tmp_pa
     with open(tmp_path / "hangs_main_20260503.json") as f:
         assert json.load(f)["usageHoursByDate"] == {"20260503": 1.0}
 
-    # `current` is the newest day, and is what aggregate() returns.
-    assert profile["usageHoursByDate"] == {"20260504": 1.0}
+    # `current` is the newest day.
     with open(tmp_path / "hangs_main_current.json") as f:
         assert json.load(f)["usageHoursByDate"] == {"20260504": 1.0}
 
@@ -1185,17 +1196,78 @@ def test_aggregate_single_day_is_unchanged(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(symbolication, "fetch_url", lambda _url: (False, ""))
 
-    profile = bhr_collection.aggregate(
+    bhr_collection.aggregate(
         date=datetime.date(2026, 5, 2),
         sample_size=0.001,
         billing_project="test-project",
         output_dir=str(tmp_path),
     )
 
-    assert profile["usageHoursByDate"] == {"20260502": 1.0}
     assert (tmp_path / "hangs_main_20260502.json").exists()
     assert (tmp_path / "hangs_main_current.json").exists()
     assert len(bq.queries) == 1, "A single day is read straight from its scan"
+
+
+@pytest.mark.parametrize("sample_size, cutoff", [(0.5, 600), (0.005, 6), (1.0, 600)])
+def test_aggregate_child_sampling_and_rollup(monkeypatch, tmp_path, sample_size, cutoff):
+    import bhr_timeseries
+    import symbolication
+
+    child = {
+        "thread": "Gecko_Child",
+        "process": "tab",
+        "duration": 500,
+        "stack": [{"frame": "1000", "module": 0}],
+    }
+    hangs = [
+        dict(child, remoteType="webIsolated=https://example.org"),
+        dict(child, remoteType="extension"),
+        child,
+        dict(child, process="gpu"),
+        dict(child, thread="Gecko", process="default"),
+    ]
+    rows = [
+        _make_row(
+            "Linux",
+            "5.10",
+            "x86_64",
+            "20260502123456",
+            json.dumps(hangs),
+            json.dumps([["xul.pdb", "ABC"]]),
+            sample_slice=sample_slice,
+        )
+        for sample_slice in (cutoff - 1, cutoff)
+    ]
+    bq = _install_fake_bigquery(monkeypatch, rows)
+    monkeypatch.setattr(symbolication, "fetch_url", lambda _url: (False, ""))
+
+    tags = bhr_collection.aggregate(
+        date=datetime.date(2026, 5, 2),
+        sample_size=sample_size,
+        billing_project="test-project",
+        output_dir=str(tmp_path),
+    )
+
+    assert tags == ("main", "child")
+    assert len(bq.queries) == 1
+    assert "ABS(MOD(FARM_FINGERPRINT(document_id), 10000)) AS sample_slice" in bq.queries[0]
+    main = json.loads((tmp_path / "hangs_main_current.json").read_text())
+    assert main["sampleRate"] == sample_size
+    assert main["threads"][0]["dates"][0]["sampleHangCount"] == [2]
+    assert main["threads"][0]["annotationsTable"]["length"] == 0
+    child_json = (tmp_path / "hangs_child_current.json").read_text()
+    assert child_json == (tmp_path / "hangs_child_20260502.json").read_text()
+    profile = json.loads(child_json)
+    assert profile["sampleRate"] == cutoff / 10000
+    thread = profile["threads"][0]
+    assert thread["processType"] == "tab"
+    assert thread["dates"][0]["sampleHangCount"] == [1, 1, 1]
+    assert {"RemoteType", "webIsolated", "extension"} <= set(thread["stringArray"])
+    assert "example.org" not in child_json
+
+    series = bhr_timeseries.build_timeseries(tmp_path, tmp_path, output_tag="child")
+    assert len(series["signatures"]) == 1
+    assert (tmp_path / "hangs_timeseries_child.json").is_file()
 
 
 def test_get_data_by_day_reads_the_window_one_build_date_at_a_time(monkeypatch):

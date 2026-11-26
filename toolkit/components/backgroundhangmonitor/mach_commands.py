@@ -98,13 +98,11 @@ def _run_gcloud_login():
 )
 @CommandArgument(
     "--output-tag",
-    default="main",
-    help="Tag in the output filename, hangs_<tag>_<date>.json (default: main).",
+    help="Write a single thread under this tag. Uses Gecko if no thread is set.",
 )
 @CommandArgument(
     "--thread-filter",
-    default="Gecko",
-    help="Which thread's hangs to process (default: Gecko, e.g. Gecko_Child).",
+    help="Process only this thread (e.g. Gecko or Gecko_Child).",
 )
 @CommandArgument(
     "--login",
