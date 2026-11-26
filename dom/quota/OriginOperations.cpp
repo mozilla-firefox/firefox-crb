@@ -3247,14 +3247,16 @@ Result<Ok, nsresult> ClearClientOp::DeleteFiles(
       OriginScope::FromOrigin(aClientMetadata),
       ClientStorageScope::CreateFromClient(aClientMetadata.mClientType))));
 
-  QM_TRY_INSPECT(const auto& directory,
+  QM_TRY_INSPECT(const auto& originDirectory,
                  mQuotaManager->GetOriginDirectory(aClientMetadata));
 
-  QM_TRY(MOZ_TO_RESULT(
-      directory->Append(Client::TypeToString(aClientMetadata.mClientType))));
+  QM_TRY_INSPECT(
+      const auto& clientDirectory,
+      CloneFileAndAppend(*originDirectory,
+                         Client::TypeToString(aClientMetadata.mClientType)));
 
   QM_TRY_INSPECT(const bool& exists,
-                 MOZ_TO_RESULT_INVOKE_MEMBER(directory, Exists));
+                 MOZ_TO_RESULT_INVOKE_MEMBER(clientDirectory, Exists));
   if (!exists) {
     return Ok{};
   }
@@ -3267,15 +3269,30 @@ Result<Ok, nsresult> ClearClientOp::DeleteFiles(
 
   // The client's usage is reset once its directory is gone, so the dirty flag
   // has to be on disk before the removal starts.
+  const bool hasOriginInfo =
+      IsBestEffortPersistenceType(aClientMetadata.mPersistenceType) &&
+      initialized &&
+      mQuotaManager->IsTemporaryOriginInitializedInternal(aClientMetadata);
+
   WriteLease writeLease;
-  if (initialized &&
-      aClientMetadata.mPersistenceType != PERSISTENCE_TYPE_PERSISTENT &&
-      mQuotaManager->IsTemporaryOriginInitializedInternal(aClientMetadata)) {
+  if (hasOriginInfo) {
     QM_TRY_UNWRAP(writeLease,
                   mQuotaManager->AcquireWriteLeaseOnIOThread(aClientMetadata));
+  } else if (IsBestEffortPersistenceType(aClientMetadata.mPersistenceType)) {
+    // The origin has no OriginInfo in memory (either temporary storage is not
+    // initialized, or the origin was not loaded because Accessed=0). Mark the
+    // origin dirty and accessed on disk so the next initialization rescans
+    // usage instead of trusting the stale cached value.
+    QM_TRY_UNWRAP(
+        auto metadata,
+        mQuotaManager->LoadFullOriginMetadataWithRestore(originDirectory));
+    metadata.mDirty = true;
+    metadata.mAccessed = true;
+    QM_TRY(MOZ_TO_RESULT(
+        mQuotaManager->CreateDirectoryMetadata2(*originDirectory, metadata)));
   }
 
-  QM_TRY(MOZ_TO_RESULT(directory->Remove(true)));
+  QM_TRY(MOZ_TO_RESULT(clientDirectory->Remove(true)));
 
   mClientMetadataArray.AppendElement(aClientMetadata);
 
@@ -3283,13 +3300,16 @@ Result<Ok, nsresult> ClearClientOp::DeleteFiles(
     return Ok{};
   }
 
-  if (aClientMetadata.mPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
+  if (hasOriginInfo) {
     mQuotaManager->ResetUsageForClient(aClientMetadata);
   }
 
-  mQuotaManager->OriginClearCompleted(
-      aClientMetadata,
-      ClientStorageScope::CreateFromClient(aClientMetadata.mClientType));
+  if (hasOriginInfo ||
+      aClientMetadata.mPersistenceType == PERSISTENCE_TYPE_PERSISTENT) {
+    mQuotaManager->OriginClearCompleted(
+        aClientMetadata,
+        ClientStorageScope::CreateFromClient(aClientMetadata.mClientType));
+  }
   return Ok{};
 }
 
