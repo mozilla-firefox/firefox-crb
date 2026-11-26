@@ -7,6 +7,7 @@ import { WrapWithProvider } from "test/jest/test-utils";
 import {
   CollapseToggle,
   DiscoveryStreamAdminInner,
+  DevtoolsChangesNotice,
   DiscoveryStreamAdminUI,
   ToggleStoryButton,
 } from "content-src/components/DiscoveryStreamAdmin/DiscoveryStreamAdmin";
@@ -841,5 +842,50 @@ describe("<DiscoveryStreamAdminUI> Layouts", () => {
       },
     }).container;
     expect(working.querySelector(".layout-status")).toBeNull();
+  });
+});
+
+describe("<DevtoolsChangesNotice>", () => {
+  it("renders nothing without changes", () => {
+    const { container } = render(
+      <DevtoolsChangesNotice changes={[]} dispatch={jest.fn()} />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("lists the changes and resets them", () => {
+    const dispatch = jest.fn();
+    const { container } = render(
+      <DevtoolsChangesNotice
+        changes={["region DE (was US)", "2 forced enrollments"]}
+        dispatch={dispatch}
+      />
+    );
+    const bar = container.querySelector("moz-message-bar");
+    // A standing state, so not an alert on every New Tab.
+    expect(bar.getAttribute("role")).toBe("status");
+    expect(bar.getAttribute("message")).toBe(
+      "The New Tab devtools changed: region DE (was US); 2 forced enrollments."
+    );
+    const reset = container.querySelector("moz-button");
+    fireEvent.click(reset);
+    expect(dispatch).toHaveBeenCalledWith(
+      ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_RESET })
+    );
+  });
+
+  it("keeps Reset available when the changes stay the same afterwards", () => {
+    const dispatch = jest.fn();
+    const { container } = render(
+      <DevtoolsChangesNotice
+        changes={["region DE (was US)"]}
+        dispatch={dispatch}
+      />
+    );
+    const reset = container.querySelector("moz-button");
+    fireEvent.click(reset);
+    expect(reset).not.toHaveAttribute("disabled");
+    fireEvent.click(reset);
+    expect(dispatch).toHaveBeenCalledTimes(2);
   });
 });
