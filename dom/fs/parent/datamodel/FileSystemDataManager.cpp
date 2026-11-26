@@ -638,28 +638,53 @@ RefPtr<BoolPromise> FileSystemDataManager::BeginOpen() {
   mQuotaManager
       ->OpenClientDirectory(
           {mOriginMetadata, mozilla::dom::quota::Client::FILESYSTEM})
-      ->Then(GetCurrentSerialEventTarget(), __func__,
-             [self = RefPtr<FileSystemDataManager>(this)](
-                 quota::QuotaManager::ClientDirectoryLockHandlePromise::
-                     ResolveOrRejectValue&& value) {
-               if (value.IsReject()) {
-                 return BoolPromise::CreateAndReject(value.RejectValue(),
-                                                     __func__);
-               }
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          [self = RefPtr<FileSystemDataManager>(this)](
+              quota::QuotaManager::ClientDirectoryLockHandlePromise::
+                  ResolveOrRejectValue&& value) -> RefPtr<BoolPromise> {
+            if (value.IsReject()) {
+              return BoolPromise::CreateAndReject(value.RejectValue(),
+                                                  __func__);
+            }
 
-               self->mDirectoryLockHandle = std::move(value.ResolveValue());
+            self->mDirectoryLockHandle = std::move(value.ResolveValue());
 
-               MOZ_ASSERT(self->mDirectoryLockHandle->Id() >= 0);
-               self->mDirectoryLockId = self->mDirectoryLockHandle->Id();
+            MOZ_ASSERT(self->mDirectoryLockHandle->Id() >= 0);
+            self->mDirectoryLockId = self->mDirectoryLockHandle->Id();
 
-               if (self->mDirectoryLockHandle->Invalidated()) {
-                 return BoolPromise::CreateAndReject(NS_ERROR_ABORT, __func__);
-               }
+            if (self->mDirectoryLockHandle->Invalidated()) {
+              return BoolPromise::CreateAndReject(NS_ERROR_ABORT, __func__);
+            }
 
-               NotifyDatabaseWorkStarted();
+            NotifyDatabaseWorkStarted();
 
-               return BoolPromise::CreateAndResolve(true, __func__);
-             })
+            // Initializing the database below may write to it, so the
+            // origin must be marked dirty on disk first.
+            if (Maybe<quota::WriteLease> lease =
+                    self->mQuotaManager->TryAcquireWriteLease(
+                        self->mOriginMetadata)) {
+              self->mBackgroundThreadAccessible.Access()->mOpenWriteLease =
+                  std::move(*lease);
+              return BoolPromise::CreateAndResolve(true, __func__);
+            }
+
+            return self->mQuotaManager->AcquireWriteLease(self->mOriginMetadata)
+                ->Then(GetCurrentSerialEventTarget(), __func__,
+                       [self](quota::QuotaManager::WriteLeasePromise::
+                                  ResolveOrRejectValue&& aValue) {
+                         if (aValue.IsReject()) {
+                           return BoolPromise::CreateAndReject(
+                               aValue.RejectValue(), __func__);
+                         }
+
+                         self->mBackgroundThreadAccessible.Access()
+                             ->mOpenWriteLease =
+                             std::move(aValue.ResolveValue());
+
+                         return BoolPromise::CreateAndResolve(true, __func__);
+                       });
+          })
       ->Then(
           mQuotaManager->IOThread(), __func__,
           [self = RefPtr<FileSystemDataManager>(this)](
@@ -764,6 +789,9 @@ RefPtr<BoolPromise> FileSystemDataManager::BeginOpen() {
       ->Then(GetCurrentSerialEventTarget(), __func__,
              [self = RefPtr<FileSystemDataManager>(this)](
                  const BoolPromise::ResolveOrRejectValue& value) {
+               self->mBackgroundThreadAccessible.Access()->mOpenWriteLease =
+                   quota::WriteLease();
+
                if (value.IsReject()) {
                  self->mState = State::Initial;
 

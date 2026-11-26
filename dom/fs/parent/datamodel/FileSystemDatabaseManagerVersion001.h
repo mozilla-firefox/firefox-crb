@@ -66,7 +66,8 @@ class FileSystemDatabaseManagerVersion001 : public FileSystemDatabaseManager {
   nsresult GetFile(const EntryId& aEntryId, const FileId& aFileId,
                    const FileMode& aMode, ContentType& aType,
                    TimeStamp& lastModifiedMilliSeconds, Path& aPath,
-                   nsCOMPtr<nsIFile>& aFile) const override;
+                   nsCOMPtr<nsIFile>& aFile,
+                   bool aCreate = true) const override;
 
   Result<FileSystemDirectoryListing, QMResult> GetDirectoryEntries(
       const EntryId& aParent, PageNumber aPage) const override;
