@@ -27,6 +27,9 @@ support-files = ["file_beforeunload_stop.html"]
 
 ["browser_closeTabSpecificPanels.js"]
 
+["browser_commonDialog_width.js"]
+support-files = ["auth-route.sjs"]
+
 ["browser_confirmFolderUpload.js"]
 
 ["browser_contentOrigins.js"]
