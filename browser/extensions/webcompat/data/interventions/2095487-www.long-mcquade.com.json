@@ -1,0 +1,17 @@
+{
+  "label": "www.long-mcquade.com",
+  "bugs": {
+    "2095487": {
+      "issue": "broken-interactive-elements",
+      "matches": ["*://www.long-mcquade.com/*"]
+    }
+  },
+  "interventions": [
+    {
+      "platforms": ["all"],
+      "content_scripts": {
+        "js": ["bug2095487-www.long-mcquade.com-fix-bootstrap-jquery-race.js"]
+      }
+    }
+  ]
+}
