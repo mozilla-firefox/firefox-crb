@@ -24,6 +24,10 @@ const { XPCOMUtils } = ChromeUtils.importESModule(
  *   The address bar value to show instead of the browser's URL.
  * @property {boolean} [loadStarted]
  *   Whether a load started after the value was set and hasn't finished yet.
+ * @property {boolean} [valueLoading]
+ *   Whether the value was set for loading it, e.g. when the user presses Enter
+ *   in the address bar or a tab opens with a URL. Any other load that starts
+ *   only sets `loadStarted`.
  * @property {boolean} [typed]
  *   Whether the value comes from the user editing the address bar, e.g. by
  *   typing, pasting or accepting autofill, as opposed to code setting it, e.g.
@@ -856,6 +860,7 @@ export class MozBrowser extends MozElements.MozElementMixin(XULFrameElement) {
       ? {
           value: state.value,
           loadStarted: !!state.loadStarted,
+          valueLoading: !!state.valueLoading,
           typed: !!state.typed,
         }
       : null;
@@ -869,6 +874,7 @@ export class MozBrowser extends MozElements.MozElementMixin(XULFrameElement) {
     return {
       value: this._urlbarOverride.value,
       loadStarted: this.loadStartedSinceUrlbarOverride,
+      valueLoading: this._urlbarOverride.valueLoading,
       typed: this._urlbarOverride.typed,
     };
   }
