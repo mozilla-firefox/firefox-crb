@@ -90,6 +90,14 @@ Row::GetResultByName(const nsACString& aName, nsIVariant** _result) {
   return GetResultByIndex(index, _result);
 }
 
+NS_IMETHODIMP
+Row::GetColumnIndex(const nsACString& aName, uint32_t* _index) {
+  if (!mNameHashtable.Get(aName, _index)) {
+    return NS_ERROR_INVALID_ARG;
+  }
+  return NS_OK;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //// mozIStorageValueArray
 
