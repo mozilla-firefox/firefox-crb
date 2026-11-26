@@ -71,9 +71,6 @@ notes = "Backwards-compatible patching crate for core-graphics-types 0.1."
 audit-as-crates-io = true
 notes = "This is upstream plus a warning fix from bug 1823866."
 
-[policy."crash-context:0.8.0@git:d5ec275ce1276947f09f205a581fe2b3cf90178f"]
-audit-as-crates-io = true
-
 [policy.cssparser]
 audit-as-crates-io = true
 notes = "Upstream not yet published changes"
@@ -242,10 +239,6 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 notes = "This is a pinned version of the upstream code, presumably to get a fix that hadn't been released yet. We should consider switching to the latest official release."
 
-[policy.minidump-writer]
-audit-as-crates-io = true
-notes = "We are letting a pre-release ride the trains to catch any regressions before we cut an actual release."
-
 [policy.mls-rs-provider-sqlite]
 audit-as-crates-io = true
 notes = "This is a pinned version of the upstream code, pending update of the crate."
@@ -304,6 +297,10 @@ notes = "This lives in application-services but was pushed to crates.io a very l
 audit-as-crates-io = false
 notes = "Fetched from mozilla/nss-rs on GitHub. The crates.io name only holds a 0.0.0 placeholder reserved by an nss-rs maintainer."
 
+[policy."num-derive:0.5.999"]
+audit-as-crates-io = false
+notes = "Patching crate implementing num-derive 0.5 in terms of 0.4, to stay on syn 2 (bug 2056545)."
+
 [policy.objc]
 audit-as-crates-io = true
 notes = "This is the upstream code plus a backported fix."
@@ -321,21 +318,6 @@ audit-as-crates-io = false
 
 [policy.peek-poke-derive]
 audit-as-crates-io = false
-
-[policy."process-backend:0.1.0@git:d5ec275ce1276947f09f205a581fe2b3cf90178f"]
-audit-as-crates-io = false
-notes = """
-This was originally intended to be a minidump-writer internal crate (and thus
-audited as part of minidump-writer), however an author accidentally published
-it publicly (so it is on crates.io now).
-"""
-
-[policy."process-reader:0.1.0@git:d5ec275ce1276947f09f205a581fe2b3cf90178f"]
-audit-as-crates-io = false
-
-[policy."procfs-core:0.17.999"]
-audit-as-crates-io = false
-notes = "Backwards-compatible patching crate for procfs-core 0.17."
 
 [policy.pulse]
 audit-as-crates-io = false

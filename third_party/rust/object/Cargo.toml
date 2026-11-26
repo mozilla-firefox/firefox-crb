@@ -10,10 +10,10 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
-edition = "2018"
-rust-version = "1.65"
+edition = "2024"
+rust-version = "1.85"
 name = "object"
-version = "0.36.4"
+version = "0.40.0"
 build = false
 include = [
     "/Cargo.toml",
@@ -24,6 +24,7 @@ include = [
     "/src",
     "/tests",
 ]
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false
@@ -44,65 +45,6 @@ resolver = "2"
 [package.metadata.docs.rs]
 features = ["doc"]
 
-[lib]
-name = "object"
-path = "src/lib.rs"
-
-[[test]]
-name = "integration"
-path = "tests/integration.rs"
-
-[[test]]
-name = "parse_self"
-path = "tests/parse_self.rs"
-
-[dependencies.alloc]
-version = "1.0.0"
-optional = true
-package = "rustc-std-workspace-alloc"
-
-[dependencies.compiler_builtins]
-version = "0.1.2"
-optional = true
-
-[dependencies.core]
-version = "1.0.0"
-optional = true
-package = "rustc-std-workspace-core"
-
-[dependencies.crc32fast]
-version = "1.2"
-optional = true
-default-features = false
-
-[dependencies.flate2]
-version = "1"
-optional = true
-
-[dependencies.hashbrown]
-version = "0.14.0"
-features = ["ahash"]
-optional = true
-default-features = false
-
-[dependencies.indexmap]
-version = "2.0"
-optional = true
-default-features = false
-
-[dependencies.memchr]
-version = "2.4.1"
-default-features = false
-
-[dependencies.ruzstd]
-version = "0.7.0"
-optional = true
-
-[dependencies.wasmparser]
-version = "0.216.0"
-optional = true
-default-features = false
-
 [features]
 all = [
     "read",
@@ -110,6 +52,7 @@ all = [
     "build",
     "std",
     "compression",
+    "names",
     "wasm",
 ]
 archive = []
@@ -133,22 +76,11 @@ default = [
     "read",
     "compression",
 ]
-doc = [
-    "read_core",
-    "write_std",
-    "build_core",
-    "std",
-    "compression",
-    "archive",
-    "coff",
-    "elf",
-    "macho",
-    "pe",
-    "wasm",
-    "xcoff",
-]
+doc = ["all"]
 elf = []
+goff = []
 macho = []
+names = []
 pe = ["coff"]
 read = [
     "read_core",
@@ -158,12 +90,10 @@ read = [
     "macho",
     "pe",
     "xcoff",
-    "unaligned",
 ]
 read_core = []
 rustc-dep-of-std = [
     "core",
-    "compiler_builtins",
     "alloc",
     "memchr/rustc-dep-of-std",
 ]
@@ -173,6 +103,7 @@ unstable = []
 unstable-all = [
     "all",
     "unstable",
+    "goff",
 ]
 wasm = ["dep:wasmparser"]
 write = [
@@ -195,3 +126,73 @@ write_std = [
     "crc32fast?/std",
 ]
 xcoff = []
+
+[lib]
+name = "object"
+path = "src/lib.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "parse_self"
+path = "tests/parse_self.rs"
+
+[dependencies.alloc]
+version = "1.0.0"
+optional = true
+package = "rustc-std-workspace-alloc"
+
+[dependencies.core]
+version = "1.0.0"
+optional = true
+package = "rustc-std-workspace-core"
+
+[dependencies.crc32fast]
+version = "1.2"
+optional = true
+default-features = false
+
+[dependencies.flate2]
+version = "1"
+optional = true
+
+[dependencies.hashbrown]
+version = "0.17.0"
+features = ["default-hasher"]
+optional = true
+default-features = false
+
+[dependencies.indexmap]
+version = "2.14"
+optional = true
+default-features = false
+
+[dependencies.memchr]
+version = "2.4.1"
+default-features = false
+
+[dependencies.ruzstd]
+version = "0.9.0"
+optional = true
+
+[dependencies.wasmparser]
+version = "0.255.0"
+optional = true
+default-features = false
+
+[lints.clippy]
+collapsible_else_if = "allow"
+collapsible_if = "allow"
+collapsible_match = "allow"
+comparison_chain = "allow"
+field_reassign_with_default = "allow"
+manual_flatten = "allow"
+match_like_matches_macro = "allow"
+needless_lifetimes = "allow"
+result_unit_err = "allow"
+should_implement_trait = "allow"
+single_match = "allow"
+type_complexity = "allow"
+uninlined_format_args = "allow"

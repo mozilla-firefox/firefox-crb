@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "framehop"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["Markus Stange <mstange.moz@gmail.com>"]
 build = false
 exclude = [
@@ -37,7 +37,7 @@ keywords = [
     "debug",
 ]
 categories = ["development-tools::debugging"]
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/mstange/framehop/"
 
 [features]
@@ -68,7 +68,7 @@ version = "1.0.0"
 version = "0.3.0"
 
 [dependencies.gimli]
-version = "0.32"
+version = "0.33"
 features = ["read"]
 default-features = false
 
@@ -87,7 +87,7 @@ version = "1.0.28"
 version = "0.14"
 
 [dev-dependencies.object]
-version = "0.37"
+version = "0.39"
 
 [profile.release]
 debug = 2

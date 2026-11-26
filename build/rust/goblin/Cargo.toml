@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 path = "lib.rs"
 
 [dependencies.goblin]
-version = "0.9.0"
+version = "0.10.0"
 
 default-features = false
 

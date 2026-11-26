@@ -114,7 +114,13 @@ if_alloc! {
                 debug!("NoteIterator - {:#x}", self.offset);
                 match self.data.gread_with(&mut self.offset, self.ctx) {
                     Ok(res) => Some(Ok(res)),
-                    Err(e) => Some(Err(e))
+                    Err(e) => {
+                        // Terminate the iterator on parse error; without this,
+                        // offset stays unchanged and the same position is parsed
+                        // again on the next call, causing an infinite loop.
+                        self.offset = self.size;
+                        Some(Err(e))
+                    }
                 }
             }
         }
@@ -188,6 +194,15 @@ if_alloc! {
 
     impl<'a> Note<'a> {
         pub fn type_to_str(&self) -> &'static str {
+            // If the Note is from a coredump, match to different tags
+            if self.name == "CORE" {
+                return match self.n_type {
+                    NT_PRPSINFO => "NT_PRPSINFO",
+                    NT_PRSTATUS => "NT_PRSTATUS",
+                    NT_SIGINFO => "NT_SIGINFO",
+                    _ => "NT_UNKNOWN"
+                };
+            }
             match self.n_type {
                 NT_GNU_ABI_TAG => "NT_GNU_ABI_TAG",
                 NT_GNU_HWCAP => "NT_GNU_HWCAP",
@@ -314,6 +329,24 @@ if_alloc! {
         fn ignore_no_sections() {
             let mut notes = NoteIterator { iters: vec![], index: 0 };
             assert!(notes.next().is_none());
+        }
+
+        #[test]
+        fn error_terminates_iterator() {
+            // Truncated data: only the first note header bytes, so parsing
+            // the name/desc will fail. The iterator must not loop infinitely;
+            // it must return an error once and then None on subsequent calls.
+            let truncated: &[u8] = &NOTE_DATA[..8]; // too short for a complete note
+            let mut iter = NoteDataIterator {
+                data: truncated,
+                size: truncated.len(),
+                offset: 0,
+                ctx: CONTEXT,
+            };
+            // First call: returns Some(Err(...))
+            assert!(iter.next().is_some_and(|r| r.is_err()));
+            // Second call: must return None, not loop
+            assert!(iter.next().is_none());
         }
     }
 }

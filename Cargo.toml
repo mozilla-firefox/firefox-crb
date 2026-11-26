@@ -299,11 +299,11 @@ cc = { path = "third_party/rust/cc" }
 # Patch goblin 0.7.0 to 0.8
 goblin = { path = "build/rust/goblin" }
 
+# Implement num-derive 0.5 in terms of 0.4, to stay on syn 2 (bug 2056545)
+num-derive = { path = "build/rust/num-derive" }
+
 # Implement getrandom 0.2 in terms of 0.3
 getrandom = { path = "build/rust/getrandom" }
-
-# Implement procfs-core 0.17.0 in terms of 0.18.0
-procfs-core = { path = "build/rust/procfs-core" }
 
 # Patch rustc-hash 1.1.0 to 2.1.1
 rustc-hash = { path = "build/rust/rustc-hash" }

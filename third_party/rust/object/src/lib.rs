@@ -46,23 +46,13 @@
 #![deny(missing_debug_implementations)]
 #![no_std]
 #![warn(rust_2018_idioms)]
-// Style.
-#![allow(clippy::collapsible_else_if)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::collapsible_match)]
-#![allow(clippy::comparison_chain)]
-#![allow(clippy::field_reassign_with_default)]
-#![allow(clippy::manual_flatten)]
-#![allow(clippy::match_like_matches_macro)]
-#![allow(clippy::single_match)]
-#![allow(clippy::type_complexity)]
-// Occurs due to fallible iteration.
-#![allow(clippy::should_implement_trait)]
-// Unit errors are converted to other types by callers.
-#![allow(clippy::result_unit_err)]
+#![allow(rustc::default_hash_types)]
 
 #[cfg(feature = "cargo-all")]
 compile_error!("'--all-features' is not supported; use '--features all' instead");
+
+#[cfg(all(feature = "goff", not(feature = "unstable")))]
+compile_error!("'goff' is an unstable feature; enable 'unstable' as well");
 
 #[cfg(any(feature = "read_core", feature = "write_core"))]
 #[allow(unused_imports)]
@@ -76,6 +66,9 @@ extern crate std;
 
 mod common;
 pub use common::*;
+
+mod constants;
+pub use constants::*;
 
 #[macro_use]
 pub mod endian;
@@ -100,6 +93,8 @@ pub mod build;
 pub mod archive;
 #[cfg(feature = "elf")]
 pub mod elf;
+#[cfg(feature = "goff")]
+pub mod goff;
 #[cfg(feature = "macho")]
 pub mod macho;
 #[cfg(any(feature = "coff", feature = "pe"))]
