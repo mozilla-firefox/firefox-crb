@@ -9,6 +9,7 @@
 #include "mozilla/dom/FileSystemTypes.h"
 #include "mozilla/dom/FlippedOnce.h"
 #include "mozilla/dom/PFileSystemWritableFileStreamParent.h"
+#include "mozilla/dom/quota/WriteLease.h"
 
 class nsIInterfaceRequestor;
 
@@ -19,10 +20,13 @@ class FileSystemManagerParent;
 class FileSystemWritableFileStreamParent
     : public PFileSystemWritableFileStreamParent {
  public:
+  // aWriteLease keeps the origin marked dirty on disk while the child writes
+  // to the file; it is released when the stream is closed.
   FileSystemWritableFileStreamParent(RefPtr<FileSystemManagerParent> aManager,
                                      const fs::EntryId& aEntryId,
                                      const fs::FileId& aTemporaryFileId,
-                                     bool aIsExclusive);
+                                     bool aIsExclusive,
+                                     quota::WriteLease aWriteLease);
 
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(FileSystemWritableFileStreamParent,
                                         override)
@@ -49,6 +53,8 @@ class FileSystemWritableFileStreamParent
   const fs::EntryId mEntryId;
 
   const fs::FileId mTemporaryFileId;
+
+  quota::WriteLease mWriteLease;
 
   const bool mIsExclusive;
 

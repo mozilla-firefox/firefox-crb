@@ -32,7 +32,8 @@ class FileSystemDatabaseManagerVersion002
   nsresult GetFile(const EntryId& aEntryId, const FileId& aFileId,
                    const FileMode& aMode, ContentType& aType,
                    TimeStamp& lastModifiedMilliSeconds, Path& aPath,
-                   nsCOMPtr<nsIFile>& aFile) const override;
+                   nsCOMPtr<nsIFile>& aFile,
+                   bool aCreate = true) const override;
 
   Result<EntryId, QMResult> RenameEntry(const FileSystemEntryMetadata& aHandle,
                                         const Name& aNewName) override;

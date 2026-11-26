@@ -334,6 +334,14 @@ TEST_P(TestFileSystemDatabaseManagerVersions, smokeTestCreateRemoveFiles) {
     Path path;
     nsCOMPtr<nsIFile> file;
     rv = dm->GetFile(firstItemRef.entryId(), fileId, FileMode::EXCLUSIVE, type,
+                     lastModifiedMilliSeconds, path, file, /* aCreate */ false);
+    EXPECT_EQ(NS_ERROR_FILE_NOT_FOUND, rv);
+    ASSERT_TRUE(file);
+    bool exists;
+    ASSERT_EQ(NS_OK, file->Exists(&exists));
+    EXPECT_FALSE(exists);
+
+    rv = dm->GetFile(firstItemRef.entryId(), fileId, FileMode::EXCLUSIVE, type,
                      lastModifiedMilliSeconds, path, file);
     ASSERT_NSEQ(NS_OK, rv);
 
@@ -347,6 +355,16 @@ TEST_P(TestFileSystemDatabaseManagerVersions, smokeTestCreateRemoveFiles) {
     ASSERT_STREQ(u"First"_ns, path[0]);
 
     ASSERT_NE(nullptr, file);
+
+    nsCOMPtr<nsIFile> existingFile;
+    rv = dm->GetFile(firstItemRef.entryId(), fileId, FileMode::EXCLUSIVE, type,
+                     lastModifiedMilliSeconds, path, existingFile,
+                     /* aCreate */ false);
+    EXPECT_EQ(NS_OK, rv);
+    ASSERT_TRUE(existingFile);
+    bool sameFile;
+    ASSERT_EQ(NS_OK, file->Equals(existingFile, &sameFile));
+    EXPECT_TRUE(sameFile);
 
     // Getting the file entry as directory fails
     TEST_TRY_UNWRAP_ERR(

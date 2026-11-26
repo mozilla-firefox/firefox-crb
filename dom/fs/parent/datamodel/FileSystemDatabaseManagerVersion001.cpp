@@ -730,7 +730,7 @@ Result<EntryId, QMResult> FileSystemDatabaseManagerVersion001::GetOrCreateFile(
 nsresult FileSystemDatabaseManagerVersion001::GetFile(
     const EntryId& aEntryId, const FileId& aFileId, const FileMode& aMode,
     ContentType& aType, TimeStamp& lastModifiedMilliSeconds,
-    nsTArray<Name>& aPath, nsCOMPtr<nsIFile>& aFile) const {
+    nsTArray<Name>& aPath, nsCOMPtr<nsIFile>& aFile, bool aCreate) const {
   MOZ_ASSERT(!aFileId.IsEmpty());
   MOZ_ASSERT(aMode == FileMode::EXCLUSIVE);
 
@@ -741,7 +741,14 @@ nsresult FileSystemDatabaseManagerVersion001::GetFile(
   }
 
   QM_TRY(MOZ_TO_RESULT(GetFileAttributes(mConnection, aEntryId, aType)));
-  QM_TRY_UNWRAP(aFile, mFileManager->GetOrCreateFile(aFileId));
+  if (aCreate) {
+    QM_TRY_UNWRAP(aFile, mFileManager->GetOrCreateFile(aFileId));
+  } else {
+    const nsresult rv = mFileManager->GetExistingFile(aFileId, aFile);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+  }
 
   PRTime lastModTime = 0;
   QM_TRY(MOZ_TO_RESULT(aFile->GetLastModifiedTime(&lastModTime)));
