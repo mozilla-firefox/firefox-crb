@@ -36,6 +36,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ListsFeed: "resource://newtab/lib/Widgets/ListsFeed.sys.mjs",
   NewTabAttributionFeed: "resource://newtab/lib/NewTabAttributionFeed.sys.mjs",
   NewTabActorRegistry: "resource://newtab/lib/NewTabActorRegistry.sys.mjs",
+  NewTabDevtoolsFeed: "resource://newtab/lib/NewTabDevtoolsFeed.sys.mjs",
   NewTabInit: "resource://newtab/lib/NewTabInit.sys.mjs",
   NewTabMessaging: "resource://newtab/lib/NewTabMessaging.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
@@ -2611,6 +2612,13 @@ const FEEDS_DATA = [
     factory: () => new lazy.PlacesFeed(),
     title: "Listens for and relays various Places-related events",
     value: true,
+  },
+  {
+    name: "newtabdevtools",
+    factory: () => new lazy.NewTabDevtoolsFeed(),
+    title:
+      "Evaluates and applies Nimbus audiences for the newtab devtools, when asrouter.devtoolsEnabled is set",
+    getValue: () => Services.prefs.getBoolPref(PREF_DEVTOOLS_ENABLED, false),
   },
   {
     name: "prefs",
