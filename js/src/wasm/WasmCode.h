@@ -667,29 +667,39 @@ class CodeBlock {
   WASM_DECLARE_FRIEND_SERIALIZE_ARGS(CodeBlock, const wasm::LinkData& data);
 };
 
-// Jump tables that implement function tiering and fast js-to-wasm calls.
+// Jump tables that implement function tiering, table calls, and fast js-to-wasm
+// calls.
 //
-// There is one JumpTable object per Code object, holding two jump tables: the
-// tiering jump table and the jit-entry jump table.  The JumpTable is not
-// serialized with its Code, but is a run-time entity only.  At run-time it is
+// There is one JumpTable object per Code object, holding three jump tables: the
+// tiering, checked-entry and jit-entry jump tables. The JumpTable is not
+// serialized with its Code, but is a run-time entity only. At run-time it is
 // shared across threads with its owning Code (and the Module that owns the
 // Code).  Values in the JumpTable /must/ /always/ be JSContext-agnostic and
 // Instance-agnostic, because of this sharing.
 //
-// Both jump tables have a number of entries equal to the number of functions in
+// The jump tables have a number of entries equal to the number of functions in
 // their Module, including imports.  In the tiering table, the elements
 // corresponding to the Module's imported functions are unused; in the jit-entry
 // table, the elements corresponding to the Module's non-exported functions are
-// unused.  (Functions can be exported explicitly via the exports section or
-// implicitly via a mention of their indices outside function bodies.)  See
-// comments at JumpTables::init() and WasmInstanceObject::getExportedFunction().
-// The entries are void*.  Unused entries are null.
+// unused; in the checked-entry table, the elements corresponding to functions
+// that cannot be referenced are unused.  (Functions can be exported explicitly
+// via the exports section or implicitly via a mention of their indices outside
+// function bodies.)  See comments at JumpTables::init() and
+// WasmInstanceObject::getExportedFunction().  The entries are void*.  Unused
+// entries are null.
 //
 // The tiering jump table.
 //
 // This table holds code pointers that are used by baseline functions to enter
 // optimized code.  See the large comment block in WasmCompile.cpp for
 // information about how tiering works.
+//
+// The checked-entry jump table.
+//
+// This table holds the checked call entry of the best tier of each function
+// that can be referenced.  FunctionTableElem points at these entries so that
+// table calls enter optimized code without going through the baseline tiering
+// jump.
 //
 // The jit-entry jump table.
 //
@@ -705,6 +715,7 @@ class JumpTables {
   CompileMode mode_ = CompileMode::Once;
   TablePointer tiering_;
   TablePointer jit_;
+  TablePointer checked_;
   size_t numFuncs_ = 0;
 
   static_assert(
@@ -754,9 +765,23 @@ class JumpTables {
   }
   void** tiering() const { return tiering_.get(); }
 
+  void setCheckedEntry(size_t i, void* target) const {
+    MOZ_ASSERT(i < numFuncs_);
+    __atomic_store_n(&checked_.get()[i], target, __ATOMIC_RELAXED);
+  }
+  void** getAddressOfCheckedEntry(size_t i) const {
+    MOZ_ASSERT(i < numFuncs_);
+    return &checked_.get()[i];
+  }
+  uint32_t funcIndexFromCheckedEntry(void** entry) const {
+    MOZ_ASSERT(entry >= checked_.get());
+    MOZ_ASSERT(entry < checked_.get() + numFuncs_);
+    return uint32_t(entry - checked_.get());
+  }
+
   size_t sizeOfMiscExcludingThis() const {
-    // 2 words per function for the jit entry table, plus maybe 1 per
-    // function if we're tiering.
+    // One word per function for each of the jit-entry and checked-entry tables,
+    // plus one for the tiering table if present.
     return sizeof(void*) * (2 + (tiering_ ? 1 : 0)) * numFuncs_;
   }
 };
@@ -953,6 +978,13 @@ class Code : public ShareableBase<Code> {
   }
   uint32_t funcIndexFromJitEntry(void** jitEntry) const {
     return jumpTables_.funcIndexFromJitEntry(jitEntry);
+  }
+
+  void** getAddressOfCheckedEntry(size_t i) const {
+    return jumpTables_.getAddressOfCheckedEntry(i);
+  }
+  uint32_t funcIndexFromCheckedEntry(void** entry) const {
+    return jumpTables_.funcIndexFromCheckedEntry(entry);
   }
 
   uint8_t* trapCode() const { return trapCode_; }

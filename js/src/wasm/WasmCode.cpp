@@ -796,6 +796,10 @@ bool Code::finishTier2(UniqueCodeBlock tier2CodeBlock,
     // set*Entry functions.
     if (cr.isFunction()) {
       jumpTables_.setTieringEntry(cr.funcIndex(), base + cr.funcTierEntry());
+      if (codeMeta_->funcs[cr.funcIndex()].canRefFunc()) {
+        jumpTables_.setCheckedEntry(cr.funcIndex(),
+                                    base + cr.funcCheckedCallEntry());
+      }
     } else if (cr.isJitEntry()) {
       jumpTables_.setJitEntry(cr.funcIndex(), base + cr.begin());
     }
@@ -1189,10 +1193,18 @@ bool JumpTables::initialize(CompileMode mode, const CodeMetadata& codeMeta,
     return false;
   }
 
+  checked_ = TablePointer(js_pod_calloc<void*>(numFuncs_));
+  if (!checked_) {
+    return false;
+  }
+
   uint8_t* codeBase = sharedStubs.base();
   for (const CodeRange& cr : sharedStubs.codeRanges) {
     if (cr.isFunction()) {
       setTieringEntry(cr.funcIndex(), codeBase + cr.funcTierEntry());
+      if (codeMeta.funcs[cr.funcIndex()].canRefFunc()) {
+        setCheckedEntry(cr.funcIndex(), codeBase + cr.funcCheckedCallEntry());
+      }
     } else if (cr.isJitEntry()) {
       setJitEntry(cr.funcIndex(), codeBase + cr.begin());
     }
@@ -1202,6 +1214,9 @@ bool JumpTables::initialize(CompileMode mode, const CodeMetadata& codeMeta,
   for (const CodeRange& cr : tier1.codeRanges) {
     if (cr.isFunction()) {
       setTieringEntry(cr.funcIndex(), codeBase + cr.funcTierEntry());
+      if (codeMeta.funcs[cr.funcIndex()].canRefFunc()) {
+        setCheckedEntry(cr.funcIndex(), codeBase + cr.funcCheckedCallEntry());
+      }
     } else if (cr.isJitEntry()) {
       setJitEntry(cr.funcIndex(), codeBase + cr.begin());
     }

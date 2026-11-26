@@ -1028,8 +1028,8 @@ bool Instance::initElems(JSContext* cx, uint32_t tableIndex,
     // Initialize this table of functions without creating any intermediate
     // JSFunctions.
     bool ok = iterElemsFunctions(
-        seg, [&](uint32_t i, void* code, Instance* instance) -> bool {
-          table.setFuncRef(dstOffset + i, code, instance);
+        seg, [&](uint32_t i, uint32_t funcIndex, Instance* instance) -> bool {
+          table.setFuncRef(dstOffset + i, funcIndex, instance);
           return true;
         });
     if (!ok) {
@@ -1051,8 +1051,8 @@ bool Instance::initElems(JSContext* cx, uint32_t tableIndex,
 template <typename F>
 bool Instance::iterElemsFunctions(const ModuleElemSegment& seg,
                                   const F& onFunc) {
-  // In the future, we could theoretically get function data (instance + code
-  // pointer) from segments with the expression encoding without creating
+  // In the future, we could theoretically get function data (instance +
+  // function index) from segments with the expression encoding without creating
   // JSFunctions. But that is not how it works today. We can only bypass the
   // creation of JSFunctions for the index encoding.
   MOZ_ASSERT(seg.encoding == ModuleElemSegment::Encoding::Indices);
@@ -1080,10 +1080,9 @@ bool Instance::iterElemsFunctions(const ModuleElemSegment& seg,
           // This element is a wasm function imported from another
           // instance. To preserve the === function identity required by
           // the JS embedding spec, we must get the imported function's
-          // underlying CodeRange.funcCheckedCallEntry and Instance so that
-          // future Table.get()s produce the same function object as was
-          // imported.
-          if (!onFunc(i, fun->wasmCheckedCallEntry(), &fun->wasmInstance())) {
+          // underlying function index and Instance so that future
+          // Table.get()s produce the same function object as was imported.
+          if (!onFunc(i, fun->wasmFuncIndex(), &fun->wasmInstance())) {
             return false;
           }
           continue;
@@ -1091,10 +1090,7 @@ bool Instance::iterElemsFunctions(const ModuleElemSegment& seg,
       }
     }
 
-    const CodeRange* codeRange;
-    uint8_t* codeBase;
-    code().funcCodeRange(elemFuncIndex, &codeRange, &codeBase);
-    if (!onFunc(i, codeBase + codeRange->funcCheckedCallEntry(), this)) {
+    if (!onFunc(i, elemFuncIndex, this)) {
       return false;
     }
   }

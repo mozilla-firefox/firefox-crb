@@ -497,14 +497,6 @@ void* JSFunction::wasmUncheckedCallEntry() const {
       .toPrivate();
 }
 
-void* JSFunction::wasmCheckedCallEntry() const {
-  uint8_t* codeRangeBase;
-  const wasm::CodeRange* codeRange;
-  wasmInstance().code().funcCodeRange(wasmFuncIndex(), &codeRange,
-                                      &codeRangeBase);
-  return codeRangeBase + codeRange->funcCheckedCallEntry();
-}
-
 static bool fun_mayResolve(const JSAtomState& names, jsid id, JSObject*) {
   if (!id.isAtom()) {
     return false;

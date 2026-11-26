@@ -6849,6 +6849,7 @@ FaultingCodeRange MacroAssembler::wasmCallIndirect(
 
   loadPtr(Address(calleeScratch, offsetof(wasm::FunctionTableElem, code)),
           calleeScratch);
+  loadPtr(Address(calleeScratch, 0), calleeScratch);
 
   *slowCallOffset = wasmMarkedSlowCall(desc, calleeScratch);
 
@@ -6871,6 +6872,7 @@ FaultingCodeRange MacroAssembler::wasmCallIndirect(
 
   loadPtr(Address(calleeScratch, offsetof(wasm::FunctionTableElem, code)),
           calleeScratch);
+  loadPtr(Address(calleeScratch, 0), calleeScratch);
 
   // We use a different type of call site for the fast call since the instance
   // slots in the frame do not have valid values.
@@ -6959,6 +6961,7 @@ FaultingCodeRange MacroAssembler::wasmReturnCallIndirect(
 
   loadPtr(Address(calleeScratch, offsetof(wasm::FunctionTableElem, code)),
           calleeScratch);
+  loadPtr(Address(calleeScratch, 0), calleeScratch);
 
   wasmCrossInstanceReturnCall(desc, calleeScratch, retCallInfo,
                               retCallFallback);
@@ -6969,6 +6972,7 @@ FaultingCodeRange MacroAssembler::wasmReturnCallIndirect(
 
   loadPtr(Address(calleeScratch, offsetof(wasm::FunctionTableElem, code)),
           calleeScratch);
+  loadPtr(Address(calleeScratch, 0), calleeScratch);
 
   wasmCollapseFrameFast(retCallInfo);
   tailJump(calleeScratch);

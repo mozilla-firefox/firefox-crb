@@ -1426,9 +1426,9 @@ CoderResult CodeCodeBlock(Coder<mode>& coder,
 CoderResult CodeSharedCode(Coder<MODE_DECODE>& coder, wasm::SharedCode* item,
                            const wasm::ModuleMetadata& moduleMeta) {
 #ifdef ENABLE_WASM_JSPI
-  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 1016);
+  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 1024);
 #else
-  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 976);
+  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 984);
 #endif
 
   FuncImportVector funcImports;
@@ -1501,9 +1501,9 @@ template <CoderMode mode>
 CoderResult CodeSharedCode(Coder<mode>& coder,
                            CoderArg<mode, wasm::SharedCode> item) {
 #ifdef ENABLE_WASM_JSPI
-  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 1016);
+  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 1024);
 #else
-  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 976);
+  WASM_VERIFY_SERIALIZATION_FOR_SIZE(wasm::Code, 984);
 #endif
   STATIC_ASSERT_ENCODING_OR_SIZING;
   // Don't encode the CodeMetadata or CodeTailMetadata, that is handled by
