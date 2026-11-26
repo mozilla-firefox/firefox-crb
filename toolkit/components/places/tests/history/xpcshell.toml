@@ -34,6 +34,8 @@ head = "head_history.js"
 
 ["test_removeVisitsByFilter.js"]
 
+["test_removeVisitsByFilter_userContextId.js"]
+
 ["test_sameUri_titleChanged.js"]
 
 ["test_update.js"]
