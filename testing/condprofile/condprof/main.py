@@ -59,6 +59,18 @@ def main(args=sys.argv[1:]):
     parser.add_argument(
         "--device-name", help="Name of the device", type=str, default=None
     )
+    parser.add_argument(
+        "--skip-logs",
+        help="Skip saving logs and changelog",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--proxy-dir",
+        help="Directory under which mozproxy keeps its mitmproxy downloads",
+        type=str,
+        default=None,
+    )
 
     args = parser.parse_args(args=args)
     os.environ["CONDPROF_RUNNER"] = "1"
@@ -78,6 +90,8 @@ def main(args=sys.argv[1:]):
             args.strict,
             args.geckodriver,
             args.device_name,
+            skip_logs=args.skip_logs,
+            proxy_dir=args.proxy_dir,
         )
     except Exception:
         print(f"Failed to run condprof: {traceback.format_exc()}")

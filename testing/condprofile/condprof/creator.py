@@ -24,6 +24,8 @@ should work as expected. Each profile tarball comes with a metadata file
 that keep track of the Firefox version that was used and the profile age.
 """
 
+import glob
+import json
 import os
 import tempfile
 import shutil
@@ -34,7 +36,7 @@ from arsenic.browsers import Firefox
 from condprof.util import fresh_profile, logger, obfuscate_file, obfuscate, get_version
 from condprof.helpers import close_extra_windows
 from condprof.scenarii import scenarii
-from condprof.client import get_profile, ProfileNotFoundError
+from condprof.client import get_profile, compute_customization_key, ProfileNotFoundError
 from condprof.archiver import Archiver
 from condprof.customization import get_customization
 from condprof.metadata import Metadata
@@ -54,6 +56,7 @@ class ProfileCreator:
         env,
         skip_logs=False,
         remote_test_root="/sdcard/test_root/",
+        accept_insecure_certs=False,
     ):
         self.env = env
         self.scenario = scenario
@@ -63,7 +66,9 @@ class ProfileCreator:
         self.force_new = force_new
         self.skip_logs = skip_logs
         self.remote_test_root = remote_test_root
-        self.customization_data = get_customization(customization)
+        self.accept_insecure_certs = accept_insecure_certs
+        self.customization_data = get_customization(customization, scenario=scenario)
+        self.customization_key = compute_customization_key(self.customization)
         self.tmp_dir = None
 
         # Make a temporary directory for the logs if an
@@ -78,7 +83,7 @@ class ProfileCreator:
                 self.tmp_dir = tempfile.mkdtemp()
 
     def _log_filename(self, name):
-        filename = f"{name}-{self.scenario}-{self.customization_data['name']}.log"
+        filename = f"{name}-{self.scenario}-{self.customization_key}.log"
         return os.path.join(self.archive or self.tmp_dir, filename)
 
     async def run(self, headless=True):
@@ -109,18 +114,27 @@ class ProfileCreator:
             return
 
         logger.info("Creating generic archive")
-        names = ["profile-%(platform)s-%(name)s-%(customization)s.tgz"]
-        if metadata["name"] == "full" and metadata["customization"] == "default":
+        names = ["profile-%(platform)s-%(name)s-%(customization_key)s.tgz"]
+        if (
+            metadata["name"] == "full"
+            and metadata.get("customization_key") == "default"
+        ):
             names = [
-                "profile-%(platform)s-%(name)s-%(customization)s.tgz",
-                "profile-v%(version)s-%(platform)s-%(name)s-%(customization)s.tgz",
+                "profile-%(platform)s-%(name)s-%(customization_key)s.tgz",
+                "profile-v%(version)s-%(platform)s-%(name)s-%(customization_key)s.tgz",
             ]
 
+        keep_cache = self.customization_data.get("keep_cache", False)
         for name in names:
-            # The following removes files from the profile before archival. An
-            # alternative is to exclude the file in the _filter of create_archive.
-            shutil.rmtree(os.path.join(self.env.profile, "cache"), ignore_errors=True)
-            shutil.rmtree(os.path.join(self.env.profile, "cache2"), ignore_errors=True)
+            if not keep_cache:
+                # The following removes files from the profile before archival. An
+                # alternative is to exclude the file in the _filter of create_archive.
+                shutil.rmtree(
+                    os.path.join(self.env.profile, "cache"), ignore_errors=True
+                )
+                shutil.rmtree(
+                    os.path.join(self.env.profile, "cache2"), ignore_errors=True
+                )
 
             archiver = Archiver(self.scenario, self.env.profile, self.archive)
             # the archive name is of the form
@@ -147,27 +161,47 @@ class ProfileCreator:
         if metadata.get("result", 0) != 0:
             logger.info("The scenario returned a bad exit code")
             raise Exception(metadata.get("result_message", "scenario error"))
-        self.changelog.append("update", **metadata)
+        if not self.skip_logs:
+            self.changelog.append("update", **metadata)
+
+    def _delete_after_build(self, profile, patterns):
+        for pattern in patterns:
+            matches = glob.glob(os.path.join(profile, pattern))
+            for path in matches:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                    logger.info(f"Deleted directory {path}")
+                elif os.path.isfile(path):
+                    os.remove(path)
+                    logger.info(f"Deleted file {path}")
+                else:
+                    logger.warning(f"File not found for deletion: {path}")
+
+    def _apply_step_prefs(self, profile, prefs):
+        user_js = os.path.join(profile, "user.js")
+        with open(user_js, "a") as f:
+            for key, value in prefs.items():
+                f.write(f"user_pref({json.dumps(key)}, {json.dumps(value)});\n")
+        logger.info(f"Applied per-step prefs: {list(prefs.keys())}")
 
     async def build_profile(self, device, headless):
         scenario = self.scenario
         profile = self.env.profile
         customization_data = self.customization_data
 
-        scenario_func = scenarii[scenario]
-        if scenario in customization_data.get("scenario", {}):
-            options = customization_data["scenario"][scenario]
-            logger.info(f"Loaded options for that scenario {options}")
-        else:
-            options = {}
-
-        # Adding general options
-        options["platform"] = self.env.target_platform
+        steps = customization_data["scenario"]
+        if isinstance(steps, dict):
+            steps = [{scenario: steps.get(scenario, {})}]
+        logger.info(f"Loaded steps for scenario {scenario}: {steps}")
 
         if not self.force_new:
             try:
-                custom_name = customization_data["name"]
-                get_profile(profile, self.env.target_platform, scenario, custom_name)
+                get_profile(
+                    profile,
+                    self.env.target_platform,
+                    scenario,
+                    self.customization,
+                )
             except ProfileNotFoundError:
                 # XXX we'll use a fresh profile for now
                 fresh_profile(profile, customization_data)
@@ -182,20 +216,53 @@ class ProfileCreator:
         self.env.prepare(logfile=adb_logs)
         geckodriver_logs = self._log_filename("geckodriver")
         logger.info(f"Writing geckodriver logs in {geckodriver_logs}")
+        delete_after_build = list(customization_data.get("delete_after_build", []))
         step = START
         try:
-            firefox_instance = Firefox(**self.env.get_browser_args(headless))
+            # The intercept proxy presents a self-signed mitmproxy certificate.
+            firefox_instance = Firefox(
+                **self.env.get_browser_args(headless),
+                acceptInsecureCerts=self.accept_insecure_certs,
+            )
             step = INIT_GECKODRIVER
             with open(geckodriver_logs, "w") as glog:
                 geckodriver = self.env.get_geckodriver(log_file=glog)
-                step = START_SESSION
-                async with get_session(geckodriver, firefox_instance) as session:
-                    step = START_SCENARIO
-                    self.env.check_session(session)
-                    logger.info(f"Running the {scenario} scenario")
-                    metadata.update(await scenario_func(session, options))
-                    logger.info(f"{scenario} scenario done.")
-                    await close_extra_windows(session)
+                for scenario_description in steps:
+                    # Copy so repeated runs over the same customization don't
+                    # consume the step's keys.
+                    scenario_description = dict(scenario_description)
+                    step_prefs = scenario_description.pop("prefs", None)
+                    if step_prefs:
+                        self._apply_step_prefs(profile, step_prefs)
+
+                    if not scenario_description:
+                        continue
+
+                    scenario_keys = list(scenario_description.keys())
+                    if len(scenario_keys) != 1:
+                        raise Exception(
+                            f"Scenario step malformed: {scenario_description}"
+                        )
+                    scenario_name = scenario_keys[0]
+                    options = dict(scenario_description[scenario_name])
+                    delete_after_build.extend(options.pop("delete_after_build", []))
+                    # keep_cache is read per-customization at archival time; drop
+                    # it here so it never reaches the scenario function.
+                    options.pop("keep_cache", None)
+                    # Adding general options
+                    options["platform"] = self.env.target_platform
+                    options["app_name"] = getattr(self.env, "firefox", None)
+                    options["profile_dir"] = profile
+                    scenario_func = scenarii[scenario_name]
+
+                    step = START_SESSION
+                    async with get_session(geckodriver, firefox_instance) as session:
+                        step = START_SCENARIO
+                        self.env.check_session(session)
+                        logger.info(f"Running the {scenario_name} scenario")
+                        metadata.update(await scenario_func(session, options))
+                        logger.info(f"{scenario_name} scenario done.")
+                        await close_extra_windows(session)
         except Exception:
             logger.error(f"{scenario} scenario broke!")
             if step == START:
@@ -216,10 +283,13 @@ class ProfileCreator:
                     obfuscate_file(logfile)
         self.env.collect_profile()
 
+        if delete_after_build:
+            self._delete_after_build(profile, delete_after_build)
+
         # writing metadata
         metadata.write(
             name=self.scenario,
-            customization=self.customization_data["name"],
+            customization_key=self.customization_key,
             version=self.env.get_browser_version(),
             platform=self.env.target_platform,
         )

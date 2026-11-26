@@ -108,6 +108,25 @@ def get_logger():
 get_logger()
 
 
+def mozproxy_download_dir(proxy_dir):
+    """The obj_path to give mozproxy, or None to let it derive the directory
+    from MOZ_UPLOAD_DIR as it does in automation.
+
+    mozproxy downloads mitmproxy under <obj_path>/testing/mozproxy, so
+    harnesses pass the directory their own proxy uses and share the binaries.
+    """
+    if proxy_dir is not None:
+        return proxy_dir
+    if "MOZ_UPLOAD_DIR" in os.environ:
+        return None
+    proxy_dir = tempfile.mkdtemp(prefix="condprof-proxy-")
+    logger.warning(
+        "No proxy directory given, mitmproxy will be downloaded again on the "
+        "next run; pass --proxy-dir to keep it in %s" % proxy_dir
+    )
+    return proxy_dir
+
+
 def fresh_profile(profile, customization_data):
     from mozprofile import create_profile  # NOQA
 
@@ -130,7 +149,9 @@ def fresh_profile(profile, customization_data):
         extensions.append(extension)
     logger.info("Installing addons")
     new_profile.addons.install(extensions)
-    shutil.copytree(new_profile.profile, profile)
+    # The directory may already hold the certificate database mozproxy
+    # created for the Android proxy.
+    shutil.copytree(new_profile.profile, profile, dirs_exist_ok=True)
     return profile
 
 
@@ -373,6 +394,8 @@ class BaseEnv:
             self.profile = profile
         self.archive = archive
         self.device_name = device_name
+        # (host, port) of the proxy the runner started, if any
+        self.proxy = None
 
     @property
     def target_platform(self):
