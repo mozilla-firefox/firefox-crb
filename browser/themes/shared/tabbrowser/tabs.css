@@ -1192,7 +1192,7 @@ tab-split-view-wrapper[dragtarget] {
 
 /* Keyboard focus outline */
 
-#TabsToolbar #firefox-view-button:focus-visible > .toolbarbutton-icon,
+#TabsToolbar #firefox-view-button:focus-visible::before,
 #tabbrowser-tabs[tablist-has-focus] .tabbrowser-tab.tablist-keyboard-focus > .tab-stack > .tab-background {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-inset);
@@ -3262,10 +3262,14 @@ tab-group {
 /* Firefox View button and menu item */
 
 #TabsToolbar #firefox-view-button[open] > .toolbarbutton-icon {
+  color: var(--tab-text-color-selected);
+  color-scheme: var(--tab-selected-color-scheme);
+}
+
+#TabsToolbar #firefox-view-button[open]::before {
   background-color: var(--tab-background-color-selected);
   box-shadow: var(--tab-box-shadow-selected);
   outline-color: var(--tab-border-color-selected);
-  color: var(--tab-text-color-selected);
   color-scheme: var(--tab-selected-color-scheme);
 
   /* The below lines are required for dark, light, and

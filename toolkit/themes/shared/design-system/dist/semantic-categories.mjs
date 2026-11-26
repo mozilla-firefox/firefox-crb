@@ -2062,6 +2062,14 @@ export const tokensTable = {
       value: "var(--motion-easing-standard)",
       name: "--sidebar-panel-content-motion-easing-fade",
     },
+    {
+      value: "var(--motion-easing-standard)",
+      name: "--toolbarbutton-motion-easing",
+    },
+    { value: "100ms", name: "--toolbarbutton-motion-duration-hover" },
+    { value: "60ms", name: "--toolbarbutton-motion-duration-press" },
+    { value: "100ms", name: "--toolbarbutton-motion-duration-release" },
+    { value: "0.95", name: "--toolbarbutton-motion-scale" },
   ],
   size: [
     { value: "40px", name: "--size-image-xsmall" },
@@ -5129,6 +5137,11 @@ export const variableLookupTable = {
     forcedColors: "var(--button-border-color-disabled)",
   },
   "toolbarbutton-outline-offset": "calc(-1 * var(--border-width))",
+  "toolbarbutton-motion-easing": "var(--motion-easing-standard)",
+  "toolbarbutton-motion-duration-hover": "100ms",
+  "toolbarbutton-motion-duration-press": "60ms",
+  "toolbarbutton-motion-duration-release": "100ms",
+  "toolbarbutton-motion-scale": "0.95",
   "toolbarseparator-color": "var(--text-color-deemphasized)",
   "toolbox-background-color": {
     light: "rgb(234, 234, 237)",
