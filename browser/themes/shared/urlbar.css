@@ -912,6 +912,130 @@ toolbar[inactive="true"] .urlbar,
   fill: var(--toolbarbutton-icon-fill-attention);
 }
 
+#star-button-box {
+  --bookmark-star-bloom-duration: 260ms;
+  --bookmark-star-bloom-easing: var(--motion-easing-emphasized);
+  --bookmark-star-sweep-duration: 950ms;
+  --bookmark-star-sweep-easing: cubic-bezier(0.5, 1, 0.89, 1);
+
+  position: relative;
+}
+
+#star-button-animatable-box {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin: auto;
+  pointer-events: none;
+  mask-image: url("chrome://browser/skin/bookmark.svg");
+  -moz-context-properties: fill;
+  fill: black;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: var(--toolbarbutton-icon-fill-attention);
+    opacity: 0;
+  }
+
+  #star-button[starred][animating] + & {
+    display: block;
+    animation: bookmark-star-bloom var(--bookmark-star-bloom-duration) var(--bookmark-star-bloom-easing) forwards;
+
+    &::after {
+      animation: bookmark-star-fill var(--bookmark-star-sweep-duration) var(--bookmark-star-sweep-easing) forwards;
+    }
+  }
+}
+
+/* The sweep box is five icons wide, so that translating it by 1.8 icons in
+   each direction moves the gradient stops across the star. */
+#star-button-sweep {
+  position: absolute;
+  top: calc(-2 * var(--icon-size));
+  left: calc(-2 * var(--icon-size));
+  width: calc(5 * var(--icon-size));
+  height: calc(5 * var(--icon-size));
+  background-image: linear-gradient(
+    315deg,
+    var(--toolbarbutton-icon-fill-attention) 24%,
+    var(--toolbarbutton-icon-fill-attention) 28.32%,
+    #f37e49 34.08%,
+    #fc4f43 42%,
+    #fde650 60%
+  );
+
+  @media (prefers-color-scheme: dark) {
+    background-image: linear-gradient(
+      279.203deg,
+      var(--toolbarbutton-icon-fill-attention) 26.1%,
+      var(--toolbarbutton-icon-fill-attention) 32.68%,
+      #ff9565 51.33%
+    );
+  }
+
+  #star-button[starred][animating] + #star-button-animatable-box > & {
+    animation: bookmark-star-sweep var(--bookmark-star-sweep-duration) var(--bookmark-star-sweep-easing) forwards;
+  }
+}
+
+#star-button[starred][animating] {
+  visibility: hidden;
+
+  @media (forced-colors: active) or (prefers-contrast) {
+    visibility: visible;
+    animation: bookmark-star-bloom var(--bookmark-star-bloom-duration) var(--bookmark-star-bloom-easing) forwards;
+
+    + #star-button-animatable-box {
+      visibility: hidden;
+      animation: none;
+    }
+  }
+
+  :root[lwtheme] & {
+    visibility: visible;
+    animation: bookmark-star-bloom var(--bookmark-star-bloom-duration) var(--bookmark-star-bloom-easing) forwards;
+
+    + #star-button-animatable-box {
+      visibility: hidden;
+      animation: none;
+    }
+  }
+}
+
+@keyframes bookmark-star-bloom {
+  0% {
+    transform: scale(1);
+  }
+  37.5% {
+    transform: scale(1.13);
+  }
+  75% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes bookmark-star-sweep {
+  from {
+    transform: translate(calc(-1.8 * var(--icon-size)), calc(-1.8 * var(--icon-size)));
+  }
+  to {
+    transform: translate(calc(1.8 * var(--icon-size)), calc(1.8 * var(--icon-size)));
+  }
+}
+
+@keyframes bookmark-star-fill {
+  to {
+    opacity: 1;
+  }
+}
+
 /* URL bar and page action buttons */
 
 /*

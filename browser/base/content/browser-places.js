@@ -384,6 +384,8 @@ var StarUI = {
   },
 
   showConfirmation() {
+    BookmarkingUI.animateStar();
+
     // Show the "Saved to bookmarks" hint for the first three times
     const HINT_COUNT_PREF =
       "browser.bookmarks.editDialog.confirmationHintShowCount";
@@ -1482,6 +1484,36 @@ var BookmarkingUI = {
     return this.star.hasAttribute("starred")
       ? this.STATUS_STARRED
       : this.STATUS_UNSTARRED;
+  },
+
+  /**
+   * Plays the gradient sweep and bloom animation on the star button.
+   */
+  animateStar() {
+    let star = this.star;
+    if (!star || gReduceMotion || !star.checkVisibility()) {
+      return;
+    }
+    let starBox = star.parentElement;
+    if (star.hasAttribute("animating")) {
+      for (let animation of starBox.getAnimations({ subtree: true })) {
+        animation.currentTime = 0;
+      }
+      return;
+    }
+    let onDone = event => {
+      if (
+        event.type == "animationcancel" ||
+        event.animationName == "bookmark-star-sweep"
+      ) {
+        starBox.removeEventListener("animationend", onDone);
+        starBox.removeEventListener("animationcancel", onDone);
+        star.removeAttribute("animating");
+      }
+    };
+    starBox.addEventListener("animationend", onDone);
+    starBox.addEventListener("animationcancel", onDone);
+    star.setAttribute("animating", "true");
   },
 
   onPopupShowing: function BUI_onPopupShowing(event) {
