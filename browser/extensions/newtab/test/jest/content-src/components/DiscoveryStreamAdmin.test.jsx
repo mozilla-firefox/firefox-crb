@@ -9,10 +9,16 @@ import {
   DiscoveryStreamAdminInner,
   DevtoolsChangesNotice,
   DiscoveryStreamAdminUI,
+  FeatureAvailability,
+  explainWidgetVisibility,
   ToggleStoryButton,
 } from "content-src/components/DiscoveryStreamAdmin/DiscoveryStreamAdmin";
 import { actionCreators as ac, actionTypes as at } from "common/Actions.mjs";
-import { WIDGET_REGISTRY } from "common/WidgetsRegistry.mjs";
+import {
+  WIDGET_REGISTRY,
+  isWidgetEnabled,
+  isWidgetsContainerVisible,
+} from "common/WidgetsRegistry.mjs";
 import React from "react";
 
 const CONTEXTUAL_PREFS = {
@@ -915,6 +921,470 @@ describe("<DiscoveryStreamAdminUI> Layouts", () => {
       },
     }).container;
     expect(working.querySelector(".layout-status")).toBeNull();
+  });
+});
+
+describe("Feature availability section", () => {
+  const AVAILABILITY = {
+    region: "DE",
+    locale: "de",
+    channel: "release",
+    version: "151.0",
+    options: {
+      regions: [
+        { value: "DE", label: "Germany" },
+        { value: "FR", label: "France" },
+      ],
+      locales: [{ value: "de", label: "German" }],
+      presets: [
+        {
+          region: "DE",
+          locale: "de",
+          label: "Germany, German (DE, de): 9 recipes",
+        },
+        {
+          region: "FR",
+          locale: "de",
+          label: "France, German (FR, de): 1 recipe",
+        },
+      ],
+      versions: [
+        { value: "151.0", label: "Release 151", channel: "release" },
+        {
+          value: "150.0",
+          label: "Release 150 (Release -1)",
+          channel: "release",
+        },
+        { value: "140.9.0", label: "ESR 140.9.0", channel: "esr" },
+      ],
+    },
+    originalRegion: undefined,
+    nimbusDebug: true,
+    widgetsInteracted: false,
+    recipes: [
+      {
+        slug: "de-rollout",
+        isRollout: true,
+        featureIds: ["newtabTrainhop"],
+        bucketPercent: 100,
+        targeting: "region in ['DE']",
+        matches: true,
+        enrolledBranch: "control",
+        userFacingDescription: "Widgets for Germany",
+        branches: ["control"],
+        widgets: [{ branch: "control", widgets: ["lists", "crossword"] }],
+        profileTargeting: ["profile age"],
+      },
+      {
+        slug: "fr-rollout",
+        isRollout: true,
+        featureIds: ["newtabTrainhop"],
+        bucketPercent: 100,
+        targeting: "region in ['FR']",
+        matches: false,
+        enrolledBranch: null,
+        branches: ["control"],
+        widgets: [{ branch: "control", widgets: ["privacy"] }],
+        profileTargeting: [],
+      },
+      {
+        slug: "de-experiment",
+        isRollout: false,
+        featureIds: ["newtabTrainhop"],
+        bucketPercent: 25,
+        targeting: "region in ['DE']",
+        matches: true,
+        enrolledBranch: null,
+        branches: ["control", "widgets-only"],
+        widgets: [{ branch: "widgets-only", widgets: ["focusTimer"] }],
+        profileTargeting: [],
+      },
+    ],
+    prefs: [
+      { name: "weather.temperatureUnits", current: "f", simulated: "c" },
+      { name: "showWeather", current: true, simulated: true },
+    ],
+  };
+
+  function renderAvailability(availability = AVAILABILITY) {
+    const dispatch = jest.fn();
+    const utils = render(
+      <FeatureAvailability availability={availability} dispatch={dispatch} />
+    );
+    return { ...utils, dispatch };
+  }
+
+  it("requests availability only once the section is opened", () => {
+    jest.useFakeTimers();
+    let rendered;
+    try {
+      rendered = renderUI();
+      // Not even the retry asks while the section is closed.
+      act(() => jest.advanceTimersByTime(30000));
+    } finally {
+      jest.useRealTimers();
+    }
+    const { container, dispatch } = rendered;
+    const details = [...container.querySelectorAll("details")].find(
+      d => d.querySelector("summary").textContent === "Feature availability"
+    );
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+    ).toBeUndefined();
+
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+    ).toEqual(
+      ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST })
+    );
+  });
+
+  it("renders recipes and highlights prefs that would change", () => {
+    const { container, getByLabelText } = renderAvailability();
+    expect(container.textContent).toContain("de-rollout");
+    expect(container.textContent).toContain("fr-rollout");
+    expect(container.querySelectorAll("tr.changed")).toHaveLength(1);
+
+    fireEvent.click(getByLabelText("Only matching"));
+    expect(container.textContent).not.toContain("fr-rollout");
+  });
+
+  it("shows descriptions, widgets, profile dependencies and the widgets matching recipes enable", () => {
+    const { container } = renderAvailability();
+    expect(container.textContent).toContain("Widgets for Germany");
+    expect(container.textContent).toContain("lists, crossword");
+    expect(container.textContent).toContain(
+      "Also depends on this profile's profile age"
+    );
+    const sources = [
+      ...container.querySelectorAll(".availability-widget-sources li"),
+    ].map(li => li.textContent);
+    expect(sources).toEqual([
+      "lists: de-rollout (rollout, 100% of clients)",
+      "crossword: de-rollout (rollout, 100% of clients)",
+      "focusTimer: de-experiment (experiment, 25% of clients, 1 of 2 branches: widgets-only)",
+    ]);
+  });
+
+  it("sets region and locale from an audience and only shows them for Custom", () => {
+    const { getByLabelText } = renderAvailability();
+    const audience = getByLabelText("Audience");
+    const regionRow = () =>
+      getByLabelText("Region").closest(".availability-row");
+    expect(audience.value).toBe("DE|de");
+    expect(regionRow().hidden).toBe(true);
+
+    fireEvent.change(audience, { target: { value: "FR|de" } });
+    expect(getByLabelText("Region").value).toBe("FR");
+    expect(getByLabelText("Locale").value).toBe("de");
+    expect(regionRow().hidden).toBe(true);
+
+    fireEvent.change(audience, { target: { value: "" } });
+    expect(regionRow().hidden).toBe(false);
+    expect(getByLabelText("Region").value).toBe("FR");
+  });
+
+  it("shows region and locale when the evaluated pair isn't an audience", () => {
+    const { getByLabelText } = renderAvailability({
+      ...AVAILABILITY,
+      region: "JP",
+      locale: "de",
+      options: {
+        ...AVAILABILITY.options,
+        regions: [
+          ...AVAILABILITY.options.regions,
+          { value: "JP", label: "Japan" },
+        ],
+      },
+    });
+    expect(getByLabelText("Audience").value).toBe("");
+    expect(getByLabelText("Region").closest(".availability-row").hidden).toBe(
+      false
+    );
+  });
+
+  it("sends whether widgets were interacted with, checked or not", () => {
+    const { getByLabelText, getByText, dispatch } = renderAvailability({
+      ...AVAILABILITY,
+      widgetsInteracted: true,
+    });
+    const box = getByLabelText("Has interacted with widgets");
+    expect(box.checked).toBe(true);
+
+    fireEvent.click(box);
+    fireEvent.click(getByText("Evaluate"));
+    expect(
+      dispatchedAction(dispatch, at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST)
+        .data.widgetsInteracted
+    ).toBe(false);
+  });
+
+  it("picks the channel that goes with a version", () => {
+    const { getByLabelText } = renderAvailability();
+    fireEvent.change(getByLabelText("Version"), {
+      target: { value: "140.9.0" },
+    });
+    expect(getByLabelText("Channel").value).toBe("esr");
+  });
+
+  it("preselects the evaluated values in the dropdowns", () => {
+    const { getByLabelText } = renderAvailability();
+    expect(getByLabelText("Region").value).toBe("DE");
+    expect(getByLabelText("Locale").value).toBe("de");
+    expect(getByLabelText("Version").value).toBe("151.0");
+  });
+
+  it("disables the buttons until the answer arrives", () => {
+    const dispatch = jest.fn();
+    const { getByText, rerender } = render(
+      <FeatureAvailability availability={AVAILABILITY} dispatch={dispatch} />
+    );
+    fireEvent.click(getByText("Evaluate"));
+    expect(getByText("Evaluate")).toHaveAttribute("aria-disabled", "true");
+    expect(getByText("Working...")).toBeInTheDocument();
+
+    rerender(
+      <FeatureAvailability
+        availability={{ ...AVAILABILITY }}
+        dispatch={dispatch}
+      />
+    );
+    expect(getByText("Evaluate")).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("offers a retry while loading, and asks again on its own", () => {
+    jest.useFakeTimers();
+    try {
+      const dispatch = jest.fn();
+      const { getByText } = render(
+        <FeatureAvailability availability={null} dispatch={dispatch} />
+      );
+      expect(getByText(/Loading/)).toBeInTheDocument();
+      fireEvent.click(getByText("Retry"));
+      // Keeps asking for as long as there's no answer.
+      act(() => jest.advanceTimersByTime(16000));
+      expect(
+        dispatch.mock.calls.filter(
+          ([a]) => a.type === at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST
+        )
+      ).toHaveLength(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps focus on a button while its request is pending, and announces the result", () => {
+    const dispatch = jest.fn();
+    const { getByText, container, rerender } = render(
+      <FeatureAvailability availability={AVAILABILITY} dispatch={dispatch} />
+    );
+    const status = container.querySelector("[role=status]");
+    expect(status).toBeInTheDocument();
+    const evaluate = getByText("Evaluate");
+    evaluate.focus();
+    fireEvent.click(evaluate);
+    expect(evaluate.disabled).toBe(false);
+    expect(evaluate).toHaveAttribute("aria-disabled", "true");
+    expect(document.activeElement).toBe(evaluate);
+    expect(status.textContent).toBe("Working...");
+    // A second click while pending does nothing.
+    fireEvent.click(evaluate);
+    expect(
+      dispatch.mock.calls.filter(
+        ([a]) => a.type === at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST
+      )
+    ).toHaveLength(1);
+
+    rerender(
+      <FeatureAvailability
+        availability={{ ...AVAILABILITY }}
+        dispatch={dispatch}
+      />
+    );
+    expect(container.querySelector("[role=status]")).toBe(status);
+    expect(status.textContent).toBe("Done.");
+  });
+
+  it("names each targeting disclosure after its recipe", () => {
+    const { getByText } = renderAvailability();
+    expect(getByText("Targeting for de-rollout")).toBeInTheDocument();
+  });
+
+  it("doesn't keep asking after an error", () => {
+    jest.useFakeTimers();
+    try {
+      const dispatch = jest.fn();
+      render(
+        <FeatureAvailability
+          availability={{ error: "Error: offline" }}
+          dispatch={dispatch}
+        />
+      );
+      act(() => jest.advanceTimersByTime(30000));
+      expect(dispatch).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("shows why loading failed", () => {
+    const { container } = render(
+      <FeatureAvailability
+        availability={{ error: "Error: no collection" }}
+        dispatch={jest.fn()}
+      />
+    );
+    expect(container.textContent).toContain(
+      "Couldn't load feature availability: Error: no collection"
+    );
+  });
+
+  it("shows each recipe's targeting in its own full-width row", () => {
+    const { container } = renderAvailability();
+    const cell = container.querySelector(
+      "tr.availability-targeting-row td[colspan='7']"
+    );
+    expect(cell.textContent).toContain("region in ['DE']");
+  });
+
+  it("labels the widget visibility columns", () => {
+    const { container } = render(
+      <DiscoveryStreamAdminUI
+        dispatch={jest.fn()}
+        otherPrefs={CONTEXTUAL_PREFS}
+        state={{
+          DiscoveryStream: getDiscoveryStreamState(),
+          Weather: { suggestions: [] },
+          InferredPersonalization: getInferredState(null),
+        }}
+      />
+    );
+    const headers = [
+      ...container.querySelectorAll(".widget-visibility thead th"),
+    ].map(th => th.textContent);
+    expect(headers).toEqual(["Widget", "State", "Reason"]);
+  });
+});
+
+describe("explainWidgetVisibility", () => {
+  it("agrees with isWidgetEnabled on which widgets show", () => {
+    const states = [
+      {},
+      { "widgets.system.enabled": true, "widgets.enabled": true },
+      {
+        "widgets.system.enabled": true,
+        "widgets.enabled": true,
+        trainhopConfig: { widgets: { listsEnabled: true, timerEnabled: true } },
+        "widgets.lists.enabled": true,
+        "widgets.focusTimer.enabled": true,
+      },
+      {
+        trainhopConfig: { widgets: { enabled: true, clocksEnabled: true } },
+        "widgets.enabled": true,
+        "widgets.clocks.enabled": true,
+        recordsHistory: false,
+      },
+    ];
+    for (const prefs of states) {
+      for (const widget of WIDGET_REGISTRY.filter(
+        w => !w.retired && w.id !== "weather"
+      )) {
+        expect([
+          widget.id,
+          explainWidgetVisibility(widget, prefs).shown,
+        ]).toEqual([
+          widget.id,
+          isWidgetsContainerVisible(prefs) &&
+            isWidgetEnabled(widget, prefs, prefs["widgets.enabled"]),
+        ]);
+      }
+    }
+  });
+
+  const lists = WIDGET_REGISTRY.find(w => w.id === "lists");
+  const weather = WIDGET_REGISTRY.find(w => w.id === "weather");
+  const visiblePrefs = {
+    "widgets.system.enabled": true,
+    "widgets.enabled": true,
+    "widgets.system.lists.enabled": true,
+    "widgets.lists.enabled": true,
+  };
+
+  it("says widgets can't mount without the Discovery Stream layout", () => {
+    expect(
+      explainWidgetVisibility(lists, visiblePrefs, {
+        discoveryStreamEnabled: false,
+      }).reason
+    ).toContain("discoverystream.config");
+  });
+
+  it("explains a shown widget by what made it available", () => {
+    expect(explainWidgetVisibility(lists, visiblePrefs)).toEqual({
+      shown: true,
+      reason: "Available via widgets.system.lists.enabled",
+    });
+  });
+
+  it.each([
+    [{ "widgets.system.enabled": false }, "widgets container is off"],
+    [{ "widgets.enabled": false }, "(widgets.enabled)"],
+    [
+      { "widgets.system.lists.enabled": false },
+      "none of widgets.system.lists.enabled, trainhopConfig.widgets.listsEnabled",
+    ],
+    [{ "widgets.lists.enabled": false }, "(widgets.lists.enabled)"],
+  ])("names the first check that hides it for %o", (overrides, reason) => {
+    const result = explainWidgetVisibility(lists, {
+      ...visiblePrefs,
+      ...overrides,
+    });
+    expect(result.shown).toBe(false);
+    expect(result.reason).toContain(reason);
+  });
+
+  it("explains a widget hidden because the profile records no history", () => {
+    const privacy = WIDGET_REGISTRY.find(w => w.id === "privacy");
+    expect(
+      explainWidgetVisibility(privacy, {
+        ...visiblePrefs,
+        [privacy.systemEnabledPref]: true,
+        [privacy.enabledPref]: true,
+        recordsHistory: false,
+      })
+    ).toEqual({
+      shown: false,
+      reason: "Needs browsing history, which this profile doesn't record",
+    });
+  });
+
+  it("checks the weather-only conditions", () => {
+    const prefs = {
+      ...visiblePrefs,
+      "widgets.system.weather.enabled": true,
+      "widgets.weather.enabled": true,
+      showWeather: true,
+    };
+    expect(
+      explainWidgetVisibility(weather, prefs, { weatherInitialized: true })
+        .reason
+    ).toContain("system.showWeather");
+    expect(
+      explainWidgetVisibility(
+        weather,
+        { ...prefs, "system.showWeather": true },
+        { weatherInitialized: false }
+      ).reason
+    ).toBe("Weather data hasn't loaded");
+    expect(
+      explainWidgetVisibility(
+        weather,
+        { ...prefs, "system.showWeather": true },
+        { weatherInitialized: true }
+      ).shown
+    ).toBe(true);
   });
 });
 

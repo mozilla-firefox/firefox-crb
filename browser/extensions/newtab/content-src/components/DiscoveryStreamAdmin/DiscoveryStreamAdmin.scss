@@ -360,6 +360,71 @@
     overflow-y: scroll;
   }
 
+  .feature-availability {
+    form {
+      margin-block: var(--space-small);
+    }
+
+    .availability-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-small) var(--space-large);
+      margin-block: var(--space-small);
+
+      // display: flex would otherwise win over the hidden attribute.
+      &[hidden] {
+        display: none;
+      }
+    }
+
+    .availability-note {
+      color: var(--text-color-deemphasized);
+      font-size: var(--font-size-small);
+    }
+
+    .availability-override {
+      // Background colors are dropped in forced colors, the border isn't.
+      border: var(--border-width) solid transparent;
+      padding: var(--space-small);
+      border-radius: var(--border-radius-medium);
+      background-color: var(--background-color-warning);
+    }
+
+    .availability-description,
+    .availability-profile-targeting {
+      margin: 0;
+      color: var(--text-color-deemphasized);
+      font-size: var(--font-size-small);
+      white-space: normal;
+    }
+  }
+
+  .availability-table {
+    th {
+      text-align: start;
+      padding: var(--space-small);
+    }
+
+    code {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .changed {
+      background-color: var(--background-color-warning);
+    }
+
+    // The targeting row below a recipe carries the border between recipes.
+    .availability-recipe-row td {
+      border-block-end: none;
+    }
+
+    .availability-targeting-row td {
+      padding-block-start: 0;
+    }
+  }
+
   .trainhop-info {
     margin-block-start: var(--space-large);
   }
