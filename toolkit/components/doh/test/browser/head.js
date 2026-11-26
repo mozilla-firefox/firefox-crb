@@ -47,6 +47,7 @@ const prefs = {
   ENABLED_PREF: "doh-rollout.enabled",
   ROLLOUT_TRR_MODE_PREF: "doh-rollout.mode",
   NETWORK_TRR_MODE_PREF: "network.trr.mode",
+  NETWORK_TRR_URI_PREF: "network.trr.uri",
   CONFIRMATION_NS_PREF: "network.trr.confirmationNS",
   BREADCRUMB_PREF: "doh-rollout.self-enabled",
   DOORHANGER_USER_DECISION_PREF: "doh-rollout.doorhanger-decision",
