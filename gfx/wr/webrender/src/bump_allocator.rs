@@ -356,11 +356,15 @@ impl ChunkPool {
             None
         };
 
+        // Inflate size to match the chunk size and alignment, which is an
+        // effective minimum.
+        let inflated_size = std::cmp::max(size, std::cmp::max(CHUNK_ALIGNMENT, std::mem::size_of::<Chunk>()));
+
         let chunk: NonNull<Chunk> = match chunk {
             Some(chunk) => chunk.cast(),
             None => {
                 // Allocate a new one.
-                let layout = match Layout::from_size_align(size, CHUNK_ALIGNMENT) {
+                let layout = match Layout::from_size_align(inflated_size, CHUNK_ALIGNMENT) {
                     Ok(layout) => layout,
                     Err(_) => {
                         return Err(AllocError);
@@ -376,7 +380,7 @@ impl ChunkPool {
         let chunk_start: *mut u8 = chunk.cast().as_ptr();
 
         unsafe {
-            let chunk_end = chunk_start.add(size);
+            let chunk_end = chunk_start.add(inflated_size);
             let cursor = chunk_start.add(CHUNK_ALIGNMENT);
             ptr::write(
                 chunk.as_ptr(),
@@ -384,7 +388,7 @@ impl ChunkPool {
                     previous: None,
                     chunk_end,
                     cursor,
-                    size,
+                    size: inflated_size,
                 },
             );
         }
