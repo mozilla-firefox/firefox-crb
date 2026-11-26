@@ -52,6 +52,14 @@ nsresult ConnectionAttemptPool::StartConnectionEstablishment(
     connAttempt->SetAllow1918(allow1918);
   }
 
+  return AdoptConnectionAttempt(entry, connAttempt, pendingTransInfo);
+}
+
+nsresult ConnectionAttemptPool::AdoptConnectionAttempt(
+    ConnectionEntry* entry, ConnectionAttempt* attempt,
+    PendingTransactionInfo* pendingTransInfo) {
+  RefPtr<ConnectionAttempt> connAttempt(attempt);
+
   nsresult rv = connAttempt->Init(entry);
   if (NS_FAILED(rv)) {
     connAttempt->Abandon();
@@ -61,8 +69,7 @@ nsresult ConnectionAttemptPool::StartConnectionEstablishment(
   InsertIntoConnectionAttempts(connAttempt);
 
   if (pendingTransInfo) {
-    bool claimed = connAttempt->Claim();
-    if (!claimed) {
+    if (!connAttempt->Claim()) {
       // We should always be able to claim this.
       MOZ_ASSERT(false, "Failed to claim a connAttempt");
       return NS_ERROR_UNEXPECTED;

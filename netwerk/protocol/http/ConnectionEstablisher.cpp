@@ -248,12 +248,10 @@ nsresult ConnectionEstablisher::ActivateConnectionWithTransaction(
   mResultConn = aConn;
   mHandle = new ConnectionHandle(aConn);
 
-  // A CONNECT tunnel through a plain-HTTP proxy has no TLS on the first hop, so
-  // there is nothing here for a speculative transaction to establish.
-  if (mConnInfo->UsingConnect() && !mConnInfo->UsingHttpsProxy()) {
+  if (HandsOverBareConnection()) {
     LOG(
-        ("  plain-HTTP CONNECT proxy: handing over the bare connection without "
-         "activating the speculative transaction"));
+        ("  handing over the bare connection without activating the "
+         "speculative transaction"));
     NS_DispatchToCurrentThread(NS_NewRunnableFunction(
         "ConnectionEstablisher::ActivateCallbackNoTunnel",
         [onActivated = std::move(aOnActivated)]() { onActivated(NS_OK); }));
@@ -698,15 +696,14 @@ TCPConnectionEstablisher::OnOutputStreamReady(nsIAsyncOutputStream* aOut) {
     }
   }
 
-  // A plain-HTTP CONNECT proxy connection is handed over without activating a
-  // transaction on it (see ActivateConnectionWithTransaction), so nothing else
-  // would ever probe the socket. Being writable here means the connect either
-  // completed or failed; without this check a refused connect is reported as a
-  // success, Happy Eyeballs never falls back to the next address, and the real
-  // transaction is handed a dead socket. Probe it the same way
-  // nsHttpConnection::Activate does for a not-yet-connected transport.
-  if (mConnInfo->UsingConnect() && !mConnInfo->UsingHttpsProxy() &&
-      !mConnectedOK && mStreamOut) {
+  // A bare-handover connection has no transaction on it (see
+  // ActivateConnectionWithTransaction), so nothing else would ever probe the
+  // socket. Being writable here means the connect either completed or failed;
+  // without this check a refused connect is reported as a success, Happy
+  // Eyeballs never falls back to the next address, and the real transaction is
+  // handed a dead socket. Probe it the same way nsHttpConnection::Activate does
+  // for a not-yet-connected transport.
+  if (HandsOverBareConnection() && !mConnectedOK && mStreamOut) {
     uint32_t count = 0;
     nsresult probe = mStreamOut->Write("", 0, &count);
     if (NS_FAILED(probe) && probe != NS_BASE_STREAM_WOULD_BLOCK) {

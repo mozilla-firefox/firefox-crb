@@ -92,6 +92,14 @@ class ConnectionEstablisher : public nsITransportEventSink,
 
  protected:
   virtual ~ConnectionEstablisher();
+
+  // A CONNECT tunnel through a plain-HTTP proxy has no TLS on the first hop, so
+  // there is nothing for a speculative transaction to establish; hand the
+  // connection over bare instead.
+  bool HandsOverBareConnection() const {
+    return mConnInfo->UsingConnect() && !mConnInfo->UsingHttpsProxy();
+  }
+
   // Refuse a local (RFC1918) peer when !mAllow1918: sets
   // mRefusedForLocalAddress and returns true so Start() bails without a socket.
   bool RefuseIfLocalAddress();
