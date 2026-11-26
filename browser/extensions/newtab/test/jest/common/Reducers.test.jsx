@@ -139,11 +139,32 @@ describe("Wallpapers reducer", () => {
 describe("DiscoveryStream reducer devtools state", () => {
   it("keeps the devtools state when the content feed resets its layout", () => {
     let state = DiscoveryStream(INITIAL_STATE.DiscoveryStream, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { region: "DE", recipes: [] },
+    });
+    state = DiscoveryStream(state, {
       type: at.DISCOVERY_STREAM_DEV_CHANGES,
       data: ["region DE (was US)"],
     });
     // Apply refreshes the content feed, which resets the layout afterwards.
     state = DiscoveryStream(state, { type: at.DISCOVERY_STREAM_LAYOUT_RESET });
+    expect(state.availability).toEqual({ region: "DE", recipes: [] });
     expect(state.devtoolsChanges).toEqual(["region DE (was US)"]);
+  });
+
+  it("keeps the last availability result when a request fails", () => {
+    const loaded = DiscoveryStream(INITIAL_STATE.DiscoveryStream, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { region: "DE", recipes: [] },
+    });
+    const failed = DiscoveryStream(loaded, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { error: "Error: offline" },
+    });
+    expect(failed.availability).toEqual({
+      region: "DE",
+      recipes: [],
+      error: "Error: offline",
+    });
   });
 });
