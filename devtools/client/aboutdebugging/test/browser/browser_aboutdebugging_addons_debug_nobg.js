@@ -76,6 +76,18 @@ add_task(async function testWebExtensionsToolboxNoBackgroundPage() {
     "nodeActor has the expected inlineTextChild value"
   );
 
+  info("Check the fallback document HTML can be fetched despite its CSP");
+  const { resourceCommand } = toolbox.commands;
+  const { source, contentType } =
+    await toolbox.target.getSourceContentForResource(
+      resourceCommand.TYPES.HTML
+    );
+  is(contentType, "text/html", "The fallback document has a text/html type");
+  ok(
+    source.includes("Your addon does not have any document opened yet."),
+    "The fallback document HTML was fetched"
+  );
+
   await closeWebExtAboutDevtoolsToolbox(devtoolsWindow, window);
   await removeTemporaryExtension(ADDON_NOBG_NAME, document);
   await removeTab(tab);

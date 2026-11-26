@@ -394,6 +394,19 @@ class WindowGlobalTargetActor extends BaseTargetActor {
   #isFallbackExtensionDocument = false;
 
   /**
+   * Name of the web extension owning this document, if it is a moz-extension:// page.
+   *
+   * @returns {string|null}
+   */
+  #getExtensionName() {
+    const uri = this.window.document.documentURIObject;
+    if (uri?.scheme !== "moz-extension") {
+      return null;
+    }
+    return WebExtensionPolicy.getByURI(uri)?.name ?? null;
+  }
+
+  /**
    * Define the initial docshell.
    *
    * This is called from the constructor for WindowGlobalTargetActor,
@@ -682,11 +695,15 @@ class WindowGlobalTargetActor extends BaseTargetActor {
         if (this.targetType !== Targets.TYPES.FRAME) {
           return null;
         }
-        const source = await this.sourcesManager.urlContents(
-          this.url,
-          false,
-          true
-        );
+        // The web extension fallback document is a static page shipped with
+        // DevTools. Fetching it on behalf of the document would be blocked by
+        // its own CSP (default-src 'none').
+        const source = this.#isFallbackExtensionDocument
+          ? await DevToolsUtils.fetch(this.url, {
+              principal: Services.scriptSecurityManager.getSystemPrincipal(),
+              loadFromCache: false,
+            })
+          : await this.sourcesManager.urlContents(this.url, false, true);
         return {
           source: new LongStringActor(this.conn, source.content),
           contentType: "text/html",
@@ -781,6 +798,7 @@ class WindowGlobalTargetActor extends BaseTargetActor {
       // Specific to Web Extension documents
       isFallbackExtensionDocument: this.#isFallbackExtensionDocument,
       addonId: lazy.getAddonIdForWindowGlobal(this.window.windowGlobalChild),
+      extensionName: this.#getExtensionName(),
 
       traits: {
         // @backward-compat { version 64 } Exposes a new trait to help identify
