@@ -126,7 +126,7 @@ class EyeDropper extends EventEmitter {
    *                 the eyedropper will use `drawWindow` to get the the screenshot
    *                 (⚠️ but it won't handle remote frames).
    */
-  show(node, options = {}) {
+  async show(node, options = {}) {
     if (this.highlighterEnv.isXUL) {
       return false;
     }
@@ -138,7 +138,7 @@ class EyeDropper extends EventEmitter {
 
     // Take a screenshot of the viewport.
     // Once the screenshot is ready, the magnified area will be drawn.
-    this.updateScreenshot(options.screenshot);
+    const onScreenshotUpdated = this.updateScreenshot(options.screenshot);
 
     // Start listening for user events.
     const { pageListenerTarget } = this.highlighterEnv;
@@ -172,6 +172,7 @@ class EyeDropper extends EventEmitter {
     // in the page.
     this.win.document.setSuppressedEventListener(this);
 
+    await onScreenshotUpdated;
     return true;
   }
 
