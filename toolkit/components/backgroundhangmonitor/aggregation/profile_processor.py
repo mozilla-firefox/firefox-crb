@@ -54,9 +54,6 @@ class UniqueKeyedTable:
         return self.items
 
     def inner_struct_of_arrays(self, items):
-        if len(items) == 0:
-            raise Exception("Need at least one item in array for this to work.")
-
         result = {}
         num_keys = len(self.key_names)
         for i in range(0, num_keys):
