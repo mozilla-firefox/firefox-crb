@@ -928,7 +928,7 @@ def target_tasks_general_perf_testing(full_task_graph, parameters, graph_config)
             return False
 
         # Bug 1867669 - Temporarily disable all live site tests
-        if "live" in try_name and "sheriffed" not in try_name:
+        if "live" in try_name:
             return False
 
         if "network-bench" in try_name:
@@ -937,10 +937,6 @@ def target_tasks_general_perf_testing(full_task_graph, parameters, graph_config)
         # Desktop selection
         if accept_raptor_desktop_build(platform):
             # Select some browsertime tasks as desktop smoke-tests
-            if "responsiveness" in try_name and "chrome" in try_name:
-                # Disabled chrome responsiveness tests temporarily in bug 1898351
-                # due to frequent failures
-                return False
             # Bug 1961141 - Disable unity webgl for chrome windows
             if "chrome-unity-webgl" in try_name and "windows11" in platform:
                 return False

@@ -112,9 +112,6 @@
 ["include:tests/custom/browsertime-welcome.toml"]
 # First-install pageload test
 
-["include:tests/interactive/browsertime-responsiveness.toml"]
-# Interactive raptor-browsertime tests
-
 ["include:tests/scenario/idle.toml"]
 # raptor-browsertime scenario tests
 

@@ -109,7 +109,6 @@
   raptor_try_name:
       - browsertime-benchmark-custom-car-speedometer3
       - browsertime-benchmark-firefox-speedometer3
-      - browsertime-responsiveness-firefox-reddit-billgates-ama
       - browsertime-youtube-playback-firefox-youtube-playback-widevine-h264-sfr
       - browsertime-youtube-playback-firefox-youtube-playback-widevine-hfr
       - browsertime-youtube-playback-firefox-youtube-playback-widevine-vp9-sfr

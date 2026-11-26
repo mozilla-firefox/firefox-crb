@@ -157,37 +157,6 @@ browsertime-tp6:
                     default: 1
             default: 3
 
-browsertime-responsiveness:
-    <<: *tp6-defaults
-    raptor:
-        apps: [firefox, chrome]
-        test: tp6
-        run-visual-metrics: true
-        subtests:
-            - cnn-nav
-            - [reddit-billgates-ama, rdt-ama]
-            - [reddit-billgates-post-1, rdt-post-1]
-            - [reddit-billgates-post-2, rdt-post-2]
-    mozharness:
-        extra-options:
-            by-test-platform:
-                windows.*:
-                    - --cold
-                    - --browsertime-no-ffwindowrecorder
-                    - --conditioned-profile=settled
-                    - --extra-profiler-run
-                default:
-                    - --cold
-                    - --conditioned-profile=settled
-                    - --extra-profiler-run
-    run-on-projects:
-        by-app:
-            firefox:
-                by-test-platform:
-                    .*64(?!.*nightlyasrelease).*shippable.*: [autoland]
-                    default: []
-            default: []
-
 browsertime-tp6-essential:
     <<: *tp6-defaults
     <<: &tp6-essential-defaults
@@ -746,37 +715,6 @@ browsertime-tp6-live:
     run-on-projects: []
     treeherder-symbol: Btime-live(tp6)
     tier: 3
-
-browsertime-tp6-live-sheriffed:
-    <<: *tp6-defaults
-    raptor:
-        apps: [firefox]
-        test: tp6
-        run-visual-metrics: true
-        subtests:
-            - cnn
-    description: Raptor (browsertime) tp6 on live-sites
-    mozharness:
-        extra-options:
-            - --browser-cycles=5
-            - --chimera
-            - --live-sites
-            - --extra-profiler-run
-            - --browsertime-arg=maxLoadTime=240000
-    run-on-projects:
-        by-test-platform:
-            linux.*: []
-            windows.*-64.*: []
-            macosx.*: []
-            default: []
-    tier:
-        by-app:
-            firefox:
-                by-test-platform:
-                    linux.*clang-trunk.*: 2
-                    default: 1
-            default: 2
-    treeherder-symbol: Btime-live(tp6)
 
 browsertime-tp6-profiling:
     <<: *tp6-defaults

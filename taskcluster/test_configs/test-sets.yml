@@ -105,7 +105,6 @@ browsertime:
     - browsertime-tp6-essential
     - browsertime-tp6-bytecode
     - browsertime-tp6-live
-    - browsertime-tp6-live-sheriffed
     - browsertime-tp6-webextensions
     - browsertime-benchmark
     - browsertime-benchmark-wasm
@@ -115,7 +114,6 @@ browsertime:
     - browsertime-media-seek
     - browsertime-custom
     - browsertime-first-install
-    - browsertime-responsiveness
     - browsertime-regression-tests
     - browsertime-upload
     - browsertime-speculation-rules
@@ -137,12 +135,10 @@ browsertime-clang:
     - browsertime-tp6-essential
     - browsertime-tp6-bytecode
     - browsertime-tp6-live
-    - browsertime-tp6-live-sheriffed
     - browsertime-tp6-webextensions
     - browsertime-benchmark
     - browsertime-benchmark-wasm
     - browsertime-youtube-playback
-    - browsertime-responsiveness
 
 browsertime-profiling:
     - browsertime-tp6-profiling
