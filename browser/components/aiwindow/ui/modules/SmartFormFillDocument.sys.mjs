@@ -987,14 +987,15 @@ export class SmartFormFillDocument {
   }
 
   /**
-   * Removes fields that are disconnected or no longer associated with their
-   * tracked form root, and adds changed groups to the affected groups map.
+   * Removes disconnected fields and moves connected fields to their current
+   * form group, recording all affected groups.
    *
    * @param {Map<HTMLElement, FormGroup>} affectedGroups
    *
    * @private
    */
-  #removeStaleFields(affectedGroups) {
+  #removeOrReconcileFieldGroups(affectedGroups) {
+    const fieldsToRegroup = [];
     for (const [rootElement, group] of this.#formRoots) {
       const currentFields = group.fields.filter(
         field =>
@@ -1003,10 +1004,15 @@ export class SmartFormFillDocument {
       );
 
       if (currentFields.length !== group.fields.length) {
-        // Clear IDs for fields no longer in group
         const currentFieldSet = new Set(currentFields);
         for (const field of group.fields) {
           if (currentFieldSet.has(field)) {
+            continue;
+          }
+
+          // regroup fields that might have moved to another form
+          if (field.isConnected) {
+            fieldsToRegroup.push(field);
             continue;
           }
 
@@ -1020,6 +1026,11 @@ export class SmartFormFillDocument {
         group.fields.splice(0, group.fields.length, ...currentFields);
         affectedGroups.set(rootElement, group);
       }
+    }
+
+    for (const field of fieldsToRegroup) {
+      const group = this.#addFieldToGroup(field);
+      affectedGroups.set(group.formLike.rootElement, group);
     }
   }
 
@@ -1171,13 +1182,19 @@ export class SmartFormFillDocument {
   #onMutation(mutations) {
     const affectedGroups = new Map();
 
+    // Inserting or removing a form can change the owner of existing inputs.
     if (
       mutations.some(
         mutation =>
-          mutation.type === "childList" && mutation.removedNodes.length
+          mutation.type === "childList" &&
+          (mutation.removedNodes.length ||
+            Array.from(mutation.addedNodes).some(
+              node =>
+                node.matches?.("form[id]") || node.querySelector?.("form[id]")
+            ))
       )
     ) {
-      this.#removeStaleFields(affectedGroups);
+      this.#removeOrReconcileFieldGroups(affectedGroups);
     }
 
     for (const mutation of mutations) {

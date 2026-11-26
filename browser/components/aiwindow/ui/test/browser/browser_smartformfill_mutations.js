@@ -216,6 +216,72 @@ describe("Smart Form Fill mutations", () => {
     );
   });
 
+  it("regroups existing inputs when a new form owner is added", async () => {
+    await SpecialPowers.spawn(browser, [], () => {
+      const form = content.document.getElementById("profile-form");
+      for (const name of ["firstName", "email", "company", "city"]) {
+        let input = form.querySelector(`input[name="${name}"]`);
+        if (!input) {
+          input = content.document.createElement("input");
+          input.name = name;
+          form.append(input);
+        }
+        input.setAttribute("form", "late-form-owner");
+        Assert.equal(input.form, null, "The explicit form owner is absent");
+      }
+    });
+
+    const before = await waitForFocusedForm(
+      browser,
+      "#email",
+      data => data.fields.length === 4,
+      "Smart Form Fill should initially group all four fields by their ancestor form"
+    );
+    Assert.equal(
+      before.id,
+      initialFormId,
+      "The ancestor's form group is reused"
+    );
+
+    await SpecialPowers.spawn(browser, [], () => {
+      const document = content.document;
+      const email = document.getElementById("email");
+      const wrapper = document.createElement("div");
+      const owner = document.createElement("form");
+      owner.id = "late-form-owner";
+      wrapper.append(owner);
+      document.body.append(wrapper);
+
+      // Inserting a new form changes the input's owner without moving the input in the DOM.
+      Assert.equal(
+        email.form,
+        owner,
+        "The existing input has a new form owner"
+      );
+      Assert.equal(
+        owner.elements.length,
+        4,
+        "The form owner has four controls"
+      );
+      Assert.equal(
+        email.closest("form")?.id,
+        "profile-form",
+        "The original form is still the input's DOM ancestor"
+      );
+    });
+
+    const after = await waitForFocusedForm(
+      browser,
+      "#email",
+      data => data.id !== before.id && data.fields.length === 4,
+      "Smart Form Fill should offer the four inputs in their new form group"
+    );
+    const fieldsAfter = getFieldsByName(after);
+    for (const [name, field] of getFieldsByName(before)) {
+      Assert.equal(fieldsAfter.get(name)?.id, field.id, `${name} keeps its ID`);
+    }
+  });
+
   describe("when the form meets the minimum field requirement", () => {
     beforeEach(async () => {
       const actor = getSmartFormFillActor(browser);
