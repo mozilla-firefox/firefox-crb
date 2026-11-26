@@ -47,7 +47,7 @@ const asyncControlProxies = new WeakSet();
  * @property {PromiseWithResolvers<MethodResult>} callerResultResolvers
  *   The caller's promise and the functions that settle it.
  * @property {() => PromiseLike<MethodResult>} runOriginalMethod
- *   Invokes the original method.
+ *   Invokes the original method and validates its return value.
  * @property {Promise<MethodResult> | null} methodResultPromise
  *   The captured call's outcome once the method starts.
  */
@@ -96,9 +96,9 @@ class AsyncCallController {
   #captureSignal = Promise.withResolvers();
 
   /**
-   * Whether the matching call will run or was canceled by cleanup.
+   * Whether the matching call will run, reject, or was canceled by cleanup.
    *
-   * @type {{ type: "run" } | { type: "abort", reason: DOMException } | null}
+   * @type {{ type: "run" } | { type: "reject", reason: unknown } | { type: "abort", reason: DOMException } | null}
    */
   #branch = null;
 
@@ -166,6 +166,7 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} Rejects if the method throws or rejects,
    *   or cleanup cancels the wait or call.
+   * @throws {Error} If the test chose to reject the call.
    */
   runCapturedCall() {
     if (this.#capturedCall && this.#branch?.type !== "abort") {
@@ -173,9 +174,9 @@ class AsyncCallController {
     }
 
     if (this.#stub) {
-      // We need to choose the run branch before waiting so that cleanup can
-      // deliver the outcome if the call is captured before the wait resumes.
-      this.#branch = { type: "run" };
+      // We need to choose the run branch before waiting for capture so that
+      // another observer cannot reject the call first.
+      this.#selectRunBranch();
     }
 
     let methodResultPromise;
@@ -202,7 +203,8 @@ class AsyncCallController {
    *
    * @returns {Promise<MethodResult>} The same promise the caller received.
    *   Rejects if the method throws or rejects.
-   * @throws {unknown} If no call was captured or cleanup canceled the captured call.
+   * @throws {unknown} If no call was captured, the test rejected the call,
+   *   or cleanup canceled the captured call.
    */
   releaseToCaller() {
     const capturedCall = this.#requireCapturedCall();
@@ -215,10 +217,40 @@ class AsyncCallController {
   }
 
   /**
+   * Rejects the captured call, or the next matching call if still waiting.
+   *
+   * The method does not run.
+   *
+   * @param {unknown} [reason=new Error("Controlled call rejected")]
+   *   The rejection reason to deliver to the caller.
+   * @throws {unknown} If the controller was restored or the test already chose
+   *   to run or reject the call.
+   */
+  rejectCallerPromise(reason = new Error("Controlled call rejected")) {
+    const capturedCall = this.#stub ? null : this.#requireCapturedCall();
+
+    if (this.#branch?.type === "run") {
+      throw new Error(
+        `Cannot reject the call to ${this.#methodName} after choosing to run it`
+      );
+    }
+
+    if (this.#branch?.type === "reject") {
+      throw new Error(
+        `The controller already chose to reject the call to ${this.#methodName}`
+      );
+    }
+
+    this.#branch = { type: "reject", reason };
+    capturedCall?.callerResultResolvers.reject(reason);
+  }
+
+  /**
    * Cancels waits for an uncaptured call with `AbortError`.
    *
-   * After capture, delivers the original outcome if the test chose to run the
-   * method or rejects the caller with `AbortError` without running the method.
+   * After capture, delivers the original outcome if the test chose to run
+   * the method, preserves a test-injected rejection, or rejects the caller
+   * with `AbortError` without running the method.
    *
    * Safe to call more than once.
    */
@@ -355,12 +387,42 @@ class AsyncCallController {
     this.#removeStub();
     this.#capturedCall = {
       callerResultResolvers: Promise.withResolvers(),
-      runOriginalMethod: callOriginalMethod,
+      runOriginalMethod: () => this.#invokeOriginalMethod(callOriginalMethod),
       methodResultPromise: null,
     };
     this.#captureSignal.resolve();
 
+    if (this.#branch?.type === "reject") {
+      this.#capturedCall.callerResultResolvers.reject(this.#branch.reason);
+    }
+
     return this.#capturedCall.callerResultResolvers.promise;
+  }
+
+  /**
+   * Runs the original method and checks that it returns a promise-like value.
+   *
+   * @param {() => PromiseLike<MethodResult>} callOriginalMethod - Runs the original method.
+   * @returns {PromiseLike<MethodResult>}
+   * @throws {TypeError} If the original method returns a non-awaitable value.
+   */
+  #invokeOriginalMethod(callOriginalMethod) {
+    const originalResult = callOriginalMethod();
+    const originalThen = originalResult?.then;
+
+    if (typeof originalThen !== "function") {
+      throw new TypeError(`${this.#methodName} must return a promise`);
+    }
+
+    // The method can return a thenable with a `then` getter instead of a
+    // native promise. Returning `originalResult` directly would make JavaScript
+    // read `then` again when settling the promise, so we need to reuse the
+    // function we already read to ensure the getter runs only once.
+    return {
+      then(resolve, reject) {
+        return Reflect.apply(originalThen, originalResult, [resolve, reject]);
+      },
+    };
   }
 
   /**
@@ -374,6 +436,7 @@ class AsyncCallController {
       throw new Error("Cannot abandon capture after a call was captured");
     }
 
+    // A branch chosen before capture has no call to act on if capture fails.
     this.#branch = null;
 
     // We need to handle the rejection in case the test never awaits capture.
@@ -400,14 +463,30 @@ class AsyncCallController {
   }
 
   /**
+   * Commits the controller to running the matching call.
+   *
+   * @throws {Error} If the test already rejected the call.
+   */
+  #selectRunBranch() {
+    if (this.#branch?.type === "reject") {
+      throw new Error(
+        `The controller already chose to reject the call to ${this.#methodName}`
+      );
+    }
+
+    this.#branch ??= { type: "run" };
+  }
+
+  /**
    * Runs the captured call once and returns its outcome.
    *
    * @param {CapturedCall<MethodResult>} capturedCall
    *   The captured call to run.
    * @returns {Promise<MethodResult>}
+   * @throws {Error} If the test rejected the call.
    */
   #startCapturedCall(capturedCall) {
-    this.#branch = { type: "run" };
+    this.#selectRunBranch();
 
     if (!capturedCall.methodResultPromise) {
       capturedCall.methodResultPromise = Promise.resolve().then(
