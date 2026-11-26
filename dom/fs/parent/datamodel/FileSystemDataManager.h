@@ -150,7 +150,8 @@ class FileSystemDataManager
 
   Result<FileId, QMResult> LockShared(const EntryId& aEntryId);
 
-  void UnlockShared(const EntryId& aEntryId, const FileId& aFileId,
+  // Returns true if abort cleanup discarded the temporary file's accounting.
+  bool UnlockShared(const EntryId& aEntryId, const FileId& aFileId,
                     bool aAbort);
 
   void DeprecateSharedLocks(const EntryId& aEntryId, const FileId& aFileId);

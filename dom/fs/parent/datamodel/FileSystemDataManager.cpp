@@ -510,7 +510,7 @@ Result<FileId, QMResult> FileSystemDataManager::LockShared(
 }
 
 // TODO: Improve reporting of failures, see bug 1840811.
-void FileSystemDataManager::UnlockShared(const EntryId& aEntryId,
+bool FileSystemDataManager::UnlockShared(const EntryId& aEntryId,
                                          const FileId& aFileId, bool aAbort) {
   const bool wasDeprecated = [&]() {
     // Someone recreated the file and put an exclusive lock on it
@@ -546,7 +546,7 @@ void FileSystemDataManager::UnlockShared(const EntryId& aEntryId,
 
     auto entry = mSharedLocks.Lookup(aEntryId);
     if (!entry) {
-      return;
+      return false;
     }
 
     MOZ_ASSERT(entry.Data() > 0);
@@ -571,11 +571,12 @@ void FileSystemDataManager::UnlockShared(const EntryId& aEntryId,
 
   // On error, usage tracking remains on to prevent writes until usage is
   // updated successfully.
-  QM_TRY(MOZ_TO_RESULT(mDatabaseManager->UpdateUsage(aFileId)), QM_VOID);
-  QM_TRY(MOZ_TO_RESULT(mDatabaseManager->EndUsageTracking(aFileId)), QM_VOID);
+  QM_TRY(MOZ_TO_RESULT(mDatabaseManager->UpdateUsage(aFileId)), false);
+  QM_TRY(MOZ_TO_RESULT(mDatabaseManager->EndUsageTracking(aFileId)), false);
   QM_TRY(
       MOZ_TO_RESULT(mDatabaseManager->MergeFileId(aEntryId, aFileId, aAbort)),
-      QM_VOID);
+      false);
+  return aAbort;
 }
 
 void FileSystemDataManager::DeprecateSharedLocks(const EntryId& aEntryId,
