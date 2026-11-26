@@ -429,7 +429,7 @@ trivial_to_animated_value!(u16);
 trivial_to_animated_value!(u32);
 trivial_to_animated_value!(usize);
 trivial_to_animated_value!(AbsoluteColor);
-trivial_to_animated_value!(crate::values::generics::color::ColorMixFlags);
+trivial_to_animated_value!(crate::values::generics::color::ColorMixKind);
 // Note: This implementation is for ToAnimatedValue of ShapeSource.
 //
 // SVGPathData uses Box<[T]>. If we want to derive ToAnimatedValue for all the

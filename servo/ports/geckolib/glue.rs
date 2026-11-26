@@ -152,7 +152,7 @@ use style::values::computed::position::{AnchorFunction, PositionArea};
 use style::values::computed::{self, ContentVisibility, Context, ToComputedValue};
 use style::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use style::values::generics::Optional;
-use style::values::generics::color::ColorMixFlags;
+use style::values::generics::color::ColorMixKind;
 use style::values::generics::easing::BeforeFlag;
 use style::values::generics::font::{FeatureTagValue, VariationValue};
 use style::values::generics::length::GenericAnchorSizeFunction;
@@ -10526,7 +10526,7 @@ pub extern "C" fn Servo_InterpolateColor(
             mix::ColorMixItem::new(*start_color, 1.0 - progress),
             mix::ColorMixItem::new(*end_color, progress),
         ],
-        ColorMixFlags::empty(),
+        ColorMixKind::Weighted,
     )
 }
 
