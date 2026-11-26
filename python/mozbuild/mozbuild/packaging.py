@@ -235,8 +235,8 @@ def files_to_upload(
         ]
     else:
         candidates += [
-            mozpath.join(installer_objdir, "l10ngen", "setup.exe"),
-            mozpath.join(installer_objdir, "l10ngen", "setup-stub.exe"),
+            mozpath.join(installer_objdir, "l10ngen", ab_cd, "setup.exe"),
+            mozpath.join(installer_objdir, "l10ngen", ab_cd, "setup-stub.exe"),
         ]
 
     if substs.get("MOZ_CODE_COVERAGE"):
