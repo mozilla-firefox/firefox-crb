@@ -170,11 +170,11 @@ def main():
     )
     parser.add_argument(
         "--output-tag",
-        default=os.environ.get("BHR_AGGREGATE_OUTPUT_TAG", "main"),
+        default=os.environ.get("BHR_AGGREGATE_OUTPUT_TAG"),
     )
     parser.add_argument(
         "--thread-filter",
-        default=os.environ.get("BHR_AGGREGATE_THREAD_FILTER", "Gecko"),
+        default=os.environ.get("BHR_AGGREGATE_THREAD_FILTER"),
     )
     parser.add_argument(
         "--credentials-file",
@@ -264,7 +264,7 @@ def main():
         f"at sample-size {args.sample_size}",
         flush=True,
     )
-    bhr_collection.aggregate(
+    tags = bhr_collection.aggregate(
         date=build_date,
         end_date=end_date,
         sample_size=args.sample_size,
@@ -282,43 +282,44 @@ def main():
 
     import bhr_timeseries
 
-    state_name = f"hangs_timeseries_{args.output_tag}_state.json.gz"
-    _fetch_previous_state(
-        args.timeseries_state_index,
-        state_name,
-        os.path.join(args.output_dir, state_name),
-    )
-
-    # Days being recomputed need their artifacts alongside today's, since the
-    # roll-up reads them from disk. Anything that cannot be fetched is dropped
-    # rather than failing the run: its state entry then simply stays as it was.
     refill_dates = [
         d.strip() for d in args.timeseries_refill_dates.split(",") if d.strip()
     ]
-    fetched = []
-    for date in refill_dates:
-        name = f"hangs_{args.output_tag}_{date}.json"
-        if _fetch_indexed_artifact(date, name, os.path.join(args.output_dir, name)):
-            fetched.append(date)
-        else:
-            print(f"No published artifact for {date}; leaving its state", flush=True)
+    for tag in tags:
+        state_name = f"hangs_timeseries_{tag}_state.json.gz"
+        _fetch_previous_state(
+            args.timeseries_state_index,
+            state_name,
+            os.path.join(args.output_dir, state_name),
+        )
 
-    # Beyond those, the day just written is the only new input; every earlier
-    # day in the window is already summarized in the state fetched above.
-    print(
-        f"Rolling up the last {args.timeseries_window_days} days"
-        + (f", recomputing {len(fetched)} of them" if fetched else ""),
-        flush=True,
-    )
-    bhr_timeseries.build_timeseries(
-        input_dir=args.output_dir,
-        output_dir=args.output_dir,
-        output_tag=args.output_tag,
-        end_date=end_date,
-        window_days=args.timeseries_window_days,
-        top_count=args.timeseries_top_count,
-        refill_dates=fetched,
-    )
+        # Days being recomputed need their artifacts alongside today's, since the
+        # roll-up reads them from disk. Anything that cannot be fetched is dropped
+        # rather than failing the run: its state entry then simply stays as it was.
+        fetched = []
+        for date in refill_dates:
+            name = f"hangs_{tag}_{date}.json"
+            if _fetch_indexed_artifact(date, name, os.path.join(args.output_dir, name)):
+                fetched.append(date)
+            else:
+                print(f"No published artifact for {date}; leaving its state", flush=True)
+
+        # Beyond those, the day just written is the only new input; every earlier
+        # day in the window is already summarized in the state fetched above.
+        print(
+            f"Rolling up the last {args.timeseries_window_days} days"
+            + (f", recomputing {len(fetched)} of them" if fetched else ""),
+            flush=True,
+        )
+        bhr_timeseries.build_timeseries(
+            input_dir=args.output_dir,
+            output_dir=args.output_dir,
+            output_tag=tag,
+            end_date=end_date,
+            window_days=args.timeseries_window_days,
+            top_count=args.timeseries_top_count,
+            refill_dates=fetched,
+        )
 
 
 if __name__ == "__main__":

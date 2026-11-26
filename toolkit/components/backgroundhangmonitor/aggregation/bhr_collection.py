@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import resource
+import shutil
 import sys
 import time
 import uuid
@@ -70,8 +71,10 @@ _PROGRESS_EVERY_ROWS = 10000
 # Pipeline defaults. The production CLI in python_mozetl overrode the stale
 # 16000 upper bound with 65536, so we use that here for parity. uuid is added
 # fresh per run in aggregate().
+_DEFAULT_THREADS = {"Gecko": "main", "Gecko_Child": "child"}
+_THREAD_INDEX = 2
+
 DEFAULT_CONFIG = {
-    "thread_filter": "Gecko",
     "hang_lower_bound": 128,
     "hang_upper_bound": 65536,
     "stack_acceptance_threshold": 0.0,
@@ -150,6 +153,7 @@ def _compute_affected_clients(symbolicated):
 # same shape. exclude_modules drops the hangs_modules column for the cases
 # where module info isn't needed downstream.
 _BASE_PROPERTIES = (
+    "sample_slice",
     "client_info/os",
     "client_info/os_version",
     "client_info/architecture",
@@ -255,8 +259,10 @@ def build_query_sql(date, end_date, sample_slices, client_metrics=False):
     client_id_field = (
         ",\n        client_info.client_id AS client_id" if client_metrics else ""
     )
+    sample_slice = f"ABS(MOD(FARM_FINGERPRINT(document_id), {_MAX_SAMPLE_SLICES}))"
     return f"""
     SELECT
+      {sample_slice} AS sample_slice,
       SUBSTR(client_info.app_build, 1, 8) AS build_date,
       STRUCT(
         client_info.os AS os,
@@ -274,7 +280,7 @@ def build_query_sql(date, end_date, sample_slices, client_metrics=False):
       `{_BQ_TABLE}`
     WHERE
       -- Use document_id to sample
-      ABS(MOD(FARM_FINGERPRINT(document_id), {_MAX_SAMPLE_SLICES})) < {sample_slices}
+      {sample_slice} < {sample_slices}
       AND submission_timestamp BETWEEN '{submission_start}' AND '{submission_end}'
       -- Keep only pings whose build date is in the requested window. app_build
       -- starts with YYYYMMDD; compare those first 8 characters.
@@ -532,7 +538,7 @@ def process_frame(frame, modules):
     return (("pseudo", None), frame)
 
 
-def filter_hang(hang, config):
+def filter_hang(hang, threads):
     """Keep only hangs on the thread we care about with a sane stack length.
 
     Uses .get() rather than indexing because some Glean hang records arrive
@@ -541,7 +547,8 @@ def filter_hang(hang, config):
     """
     stack = hang.get("stack")
     return (
-        hang.get("thread") == config["thread_filter"]
+        hang.get("thread") in threads
+        and (hang["thread"] != "Gecko_Child" or hang.get("process") == "tab")
         and isinstance(stack, list)
         and len(stack) > 0
         and len(stack) < 300
@@ -559,7 +566,7 @@ def process_hang(hang):
     return hang
 
 
-def process_hangs(ping, config):
+def process_hangs(ping, config, threads):
     """Expand one ping into a list of per-hang tuples.
 
     Each returned tuple is:
@@ -578,11 +585,10 @@ def process_hangs(ping, config):
     if isinstance(raw_hangs, str):
         raw_hangs = json.loads(raw_hangs)
 
-    hangs = [process_hang(h) for h in raw_hangs]
-
     result = []
-    for h in hangs:
-        if not filter_hang(h, config):
+    for raw_hang in raw_hangs:
+        h = process_hang(raw_hang)
+        if not filter_hang(h, threads):
             continue
         stack = [
             process_frame(frame, modules)
@@ -590,6 +596,12 @@ def process_hangs(ping, config):
             if not isinstance(frame, list) or len(frame) == 2
         ]
         annotations = h.get("annotations") or []
+        remote_type = h.get("remoteType")
+        if h["thread"] == "Gecko_Child" and isinstance(remote_type, str) and remote_type:
+            annotations = [
+                *annotations,
+                ("RemoteType", remote_type.partition("=")[0]),
+            ]
         row = (
             stack,
             h["duration"],
@@ -755,42 +767,35 @@ def aggregate(
     sample_size,
     billing_project,
     output_dir="output",
-    output_tag="main",
+    output_tag=None,
     end_date=None,
     config_overrides=None,
     reuse=False,
 ):
     """Run the full BHR aggregation for one build-date window.
 
-    Wires together the whole pipeline:
-        get_data         -> stream pings from BigQuery
-        process_hangs    -> expand each ping into hang tuples
-        collect_offsets_by_module + symbolicate_modules -> symbol lookup table
-        symbolicate_hang -> symbolicate + trim each hang's stack
-        group_hangs      -> aggregate by signature, per build date
-        ProfileProcessor -> build the columnar output, per build date
-        write_file       -> hangs_<tag>_<date>.json per day, plus
-                            hangs_<tag>_current.json for the newest
-
-    `date` through `end_date` is the build-date window to process, inclusive,
-    defaulting to the single day `date`. A window costs one BigQuery scan
-    instead of one per day, which is what makes a long backfill affordable, but
-    it still writes each day as its own artifact: both the timeseries roll-up
-    and the dashboard address one file per build date. A day in the window with
-    no hangs gets an empty one. Each day is read, symbolicated and written
-    before the next is read, so memory holds one day's hangs and a crash keeps
-    the days already written. Streaming a day back still takes a while, so a
-    window spans at most _MAX_WINDOW_DAYS days, and at most _MAX_SAMPLED_DAYS
-    once multiplied by the sample size the query reads.
-
-    usageHoursByDate is set to a dummy 1.0 because Glean doesn't provide usage
-    hours in the legacy shape (the frontend only needs a non-null value here).
-
-    Returns the profile dict for the newest day written.
+    One BigQuery scan covers the build-date window. Each day is streamed and
+    processed before the next day is read. Each configured thread gets a daily
+    artifact, even on days without hangs, and a current artifact for the end
+    date. Returns the output tags for the timeseries roll-up.
     """
     config = dict(DEFAULT_CONFIG)
     if config_overrides:
         config.update(config_overrides)
+
+    query_slices = compute_sample_slices(sample_size)
+    thread_filter = config.get("thread_filter")
+    if thread_filter or output_tag:
+        thread = thread_filter or "Gecko"
+        threads = {thread: output_tag or _DEFAULT_THREADS.get(thread, "main")}
+        thread_slices = {thread: query_slices}
+    else:
+        threads = _DEFAULT_THREADS
+        # Keep 12% of the queried pings for children, capped at 6% overall.
+        thread_slices = {
+            "Gecko": query_slices,
+            "Gecko_Child": min(600, query_slices * 12 // 100),
+        }
 
     end_date = end_date or date
     assert end_date >= date, f"end_date {end_date} is before date {date}"
@@ -802,7 +807,7 @@ def aggregate(
             f"Build dates {date_str}..{end_date_str} span more than "
             f"{_MAX_WINDOW_DAYS} days"
         )
-    sampled_days = days * compute_sample_slices(sample_size) / _MAX_SAMPLE_SLICES
+    sampled_days = days * query_slices / _MAX_SAMPLE_SLICES
     if sampled_days > _MAX_SAMPLED_DAYS:
         raise ValueError(
             f"Build dates {date_str}..{end_date_str} at sample size "
@@ -820,7 +825,6 @@ def aggregate(
 
     window = date_str if end_date_str == date_str else f"{date_str}..{end_date_str}"
     _phase(f"Fetching pings from BigQuery for build date {window}...")
-    base = "hangs_" + output_tag
     for build_date_str, pings in get_data_by_day(
         date,
         sample_size,
@@ -830,61 +834,83 @@ def aggregate(
         client_metrics=config["client_metrics"],
         reuse=reuse,
     ):
-        # Expand each valid ping into hang tuples. The pings themselves are not
-        # retained; only the (much smaller) hang set is, for this day alone.
-        hangs = []
+        hangs = {thread: [] for thread in threads}
         for ping in pings:
             if not ping_is_valid(ping):
                 continue
-            hangs.extend(process_hangs(ping, config))
-        _phase(f"{build_date_str}: collected {len(hangs)} hangs.")
+            eligible_threads = {
+                thread
+                for thread, slices in thread_slices.items()
+                if ping["sample_slice"] < slices
+            }
+            for hang in process_hangs(ping, config, eligible_threads):
+                hangs[hang[_THREAD_INDEX]].append(hang)
+        _phase(f"{build_date_str}: collected {sum(map(len, hangs.values()))} hangs.")
 
-        # Symbolicate: one symbol-server fetch per unique module, then resolve
-        # every hang's stack and apply the signature heuristics.
-        frames_by_module = collect_offsets_by_module(hangs)
+        frames_by_module = collect_offsets_by_module(
+            hang for partition in hangs.values() for hang in partition
+        )
         _phase(
             f"{build_date_str}: symbolicating {len(frames_by_module)} unique modules..."
         )
         symbol_map = symbolicate_modules(frames_by_module, config)
+        del frames_by_module
         _phase(f"{build_date_str}: resolved {len(symbol_map)} (module, offset) frames.")
-        day_hangs = [symbolicate_hang(hang, symbol_map) for hang in hangs]
 
-        # Affected-client counts, computed before the client_id is stripped off
-        # (group_hangs and ProfileProcessor consume the 8-element row).
-        affected_clients = None
-        if config["client_metrics"]:
-            affected_clients = _compute_affected_clients(day_hangs)
-            _phase(
-                f"{build_date_str}: affected clients (distinct HLL): "
-                f"{affected_clients['totalDistinct']}"
+        for thread, tag in threads.items():
+            name = f"hangs_{tag}_{build_date_str}"
+            written = _write_daily_profile(
+                hangs.pop(thread),
+                symbol_map,
+                config,
+                build_date_str,
+                thread_slices[thread],
+                name,
+                output_dir,
+                _phase,
             )
-            day_hangs = [hang[:8] for hang in day_hangs]
+            if build_date_str == end_date_str:
+                current = os.path.join(output_dir, f"hangs_{tag}_current.json")
+                shutil.copyfile(written, current)
+        del symbol_map
 
-        grouped = group_hangs(day_hangs, config)
-        _phase(f"{build_date_str}: aggregated into {len(grouped)} hang signatures.")
-        # Each day is its own document, so it gets its own uuid.
-        day_config = dict(config)
-        day_config["uuid"] = uuid.uuid4().hex
-        processor = ProfileProcessor(day_config)
-        processor.ingest(grouped, {build_date_str: 1.0})
-        profile = processor.process_into_profile()
+    return tuple(threads.values())
 
-        if affected_clients is not None:
-            profile["affectedClients"] = affected_clients
 
-        # Skipped in split-thread mode (a list of per-thread payloads), which the
-        # daily job does not use.
-        if config["leaf_grouping"] and not config["split_threads_in_out_file"]:
+def _symbolicate_partition(hangs, symbol_map):
+    hangs.reverse()
+    while hangs:
+        yield symbolicate_hang(hangs.pop(), symbol_map)
+
+
+def _write_daily_profile(
+    hangs, symbol_map, config, build_date, sample_slices, name, output_dir, phase
+):
+    day_hangs = _symbolicate_partition(hangs, symbol_map)
+    affected_clients = None
+    if config["client_metrics"]:
+        day_hangs = list(day_hangs)
+        affected_clients = _compute_affected_clients(day_hangs)
+        day_hangs = (hang[:8] for hang in day_hangs)
+
+    grouped = group_hangs(day_hangs, config)
+    phase(f"{name}: aggregated into {len(grouped)} hang signatures.")
+    day_config = dict(config, uuid=uuid.uuid4().hex)
+    processor = ProfileProcessor(day_config)
+    processor.ingest(grouped, {build_date: 1.0})
+    del grouped
+    profile = processor.process_into_profile()
+    del processor
+
+    if affected_clients is not None:
+        profile["affectedClients"] = affected_clients
+    if not config["split_threads_in_out_file"]:
+        profile["sampleRate"] = sample_slices / _MAX_SAMPLE_SLICES
+        if config["leaf_grouping"]:
             profile["leafGroups"] = compute_leaf_groups(profile)
             group_count = sum(len(groups) for groups in profile["leafGroups"].values())
-            _phase(
-                f"{build_date_str}: grouped near-duplicates into {group_count} groups."
-            )
+            phase(f"{name}: grouped near-duplicates into {group_count} groups.")
 
-        written = write_file(f"{base}_{build_date_str}", profile, output_dir)
-        _phase(f"Wrote {written}")
-
-    # `current` is the newest day produced, which for the daily cron is the
-    # only one.
-    write_file(f"{base}_current", profile, output_dir)
-    return profile
+    written = write_file(name, profile, output_dir)
+    phase(f"Wrote {written}")
+    return written
