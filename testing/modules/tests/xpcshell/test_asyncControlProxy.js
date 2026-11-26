@@ -116,6 +116,115 @@ add_task(async function test_controller_uses_a_private_sandbox() {
 });
 
 /**
+ * This test case ensures that a reusable proxy can control multiple methods and
+ * that a class's static method takes precedence over an instance method.
+ */
+add_task(async function test_proxy_creates_multiple_controllers() {
+  class Operation extends TestOperation {
+    static async run() {
+      return "static";
+    }
+
+    static async prepare() {
+      return "prepared";
+    }
+  }
+  const original = Operation.run;
+  const operationProxy = TestUtils.asyncControlProxy(Operation);
+
+  Assert.strictEqual(
+    await Promise.resolve(operationProxy),
+    operationProxy,
+    "The proxy should be an ordinary value in async code"
+  );
+  Assert.strictEqual(
+    Operation.run,
+    original,
+    "Creating a proxy installs no stub"
+  );
+
+  using runController = operationProxy.run();
+  using prepareController = operationProxy.prepare();
+  using instanceRunController = TestUtils.asyncControlProxy(
+    Operation.prototype
+  ).run();
+  const staticResult = Operation.run();
+  const prepareResult = Operation.prepare();
+  const instanceResult = new Operation("instance").run();
+
+  runController.releaseToCaller();
+  prepareController.releaseToCaller();
+  instanceRunController.releaseToCaller();
+
+  Assert.equal(
+    await staticResult,
+    "static",
+    "The class selects the static method"
+  );
+  Assert.equal(
+    await prepareResult,
+    "prepared",
+    "The proxy can control another method"
+  );
+  Assert.equal(
+    await instanceResult,
+    "instance",
+    "Passing the prototype selects the instance method"
+  );
+});
+
+/**
+ * This test case ensures that inherited static methods take precedence,
+ * while built-in function methods leave instance methods selectable.
+ */
+add_task(async function test_proxy_selects_methods_declared_on_the_class() {
+  class Operation {
+    async call() {
+      return "instance call";
+    }
+
+    async bind() {
+      return "instance bind";
+    }
+
+    static async bind() {
+      return "static bind";
+    }
+  }
+  class DerivedOperation extends Operation {}
+  const operationProxy = TestUtils.asyncControlProxy(DerivedOperation);
+  using callController = operationProxy.call();
+  using bindController = operationProxy.bind();
+  const operation = new DerivedOperation();
+
+  Assert.strictEqual(
+    DerivedOperation.call,
+    Function.prototype.call,
+    "Creating the instance controller leaves the built-in unchanged"
+  );
+  const callResult = operation.call();
+  const bindResult = DerivedOperation.bind();
+  callController.releaseToCaller();
+  bindController.releaseToCaller();
+
+  Assert.equal(
+    await callResult,
+    "instance call",
+    "The instance call is captured"
+  );
+  Assert.equal(
+    await bindResult,
+    "static bind",
+    "The inherited static call is captured"
+  );
+  Assert.equal(
+    await operation.bind(),
+    "instance bind",
+    "The instance bind is unaffected"
+  );
+});
+
+/**
  * This test case ensures that a base class controller captures inherited
  * calls and calls through super, while overrides that run independently
  * leave the controller waiting for a match.
@@ -178,6 +287,86 @@ add_task(async function test_base_class_proxy_captures_inherited_calls() {
       "The base method gets its input"
     );
   }
+});
+
+/**
+ * This test case ensures that noncallable class properties leave same-named
+ * instance methods selectable through the class proxy.
+ */
+add_task(async function test_proxy_skips_noncallable_class_properties() {
+  class Operation {
+    static label = "static label";
+
+    async name() {
+      return "instance name";
+    }
+
+    async length() {
+      return "instance length";
+    }
+
+    async label() {
+      return "instance label";
+    }
+  }
+
+  const operationProxy = TestUtils.asyncControlProxy(Operation);
+  const operation = new Operation();
+  for (const method of ["name", "length", "label"]) {
+    using controller = operationProxy[method]();
+    const result = operation[method]();
+    controller.releaseToCaller();
+    Assert.equal(
+      await result,
+      `instance ${method}`,
+      "The controller captures the instance method call"
+    );
+  }
+});
+
+/**
+ * This test case ensures that a static accessor cannot silently select a
+ * same-named instance method through the class proxy.
+ */
+add_task(async function test_proxy_rejects_static_accessors() {
+  let getterReads = 0;
+  class Operation extends TestOperation {
+    static get run() {
+      getterReads++;
+
+      return async () => 42;
+    }
+  }
+  class DerivedOperation extends Operation {}
+
+  for (const owner of [Operation, DerivedOperation]) {
+    Assert.throws(
+      () => TestUtils.asyncControlProxy(owner).run().restore(),
+      /Cannot control accessor run/,
+      "A static accessor should prevent creating a controller through the class"
+    );
+  }
+
+  const operation = new DerivedOperation();
+  using runController = TestUtils.asyncControlProxy(
+    DerivedOperation.prototype
+  ).run();
+  const result = operation.run("target");
+
+  await runController.waitForCapture();
+  Assert.equal(operation.lastInput, null, "The instance call was captured");
+
+  runController.releaseToCaller();
+  Assert.equal(
+    await result,
+    "value",
+    "The instance method remains controllable"
+  );
+  Assert.equal(
+    getterReads,
+    0,
+    "Creating a controller should leave the static getter unread"
+  );
 });
 
 /**
