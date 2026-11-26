@@ -176,3 +176,7 @@ skip-if = [
 prefs = ["security.storage.encryption.sqlite.enabled=false"]
 
 ["test_wasm_put_get_values.js"]
+
+["test_writeLease.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+prefs = ["dom.simpleDB.enabled=true"]

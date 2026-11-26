@@ -106,7 +106,9 @@ class IDBEncryptionPBM(QuotaTestCase):
         self.validateBlob(validator)
 
     def validateBlob(self, validator):
-        self.ensureInvariantHolds(lambda _: self.sqliteWALReleased())
+        self.assertTrue(
+            self.resetStoragesForClient(self.persistenceType, self.origin, "idb")
+        )
         self.ensureInvariantHolds(
             lambda _: (
                 self.findDirObj(self.getIDBStoragePath(), ".files", False) is not None
@@ -116,8 +118,8 @@ class IDBEncryptionPBM(QuotaTestCase):
         idbBlobDir = self.findDirObj(self.getIDBStoragePath(), ".files", False)
 
         # seems like there's a timing issue here. There are sometimes no blob file
-        # even after WAL is released. Allowing some buffer time and ensuring blob file
-        # exists before validating it's contents
+        # even after the database is closed. Allowing some buffer time and ensuring
+        # the blob file exists before validating its contents
         idbBlobPath = os.path.join(idbBlobDir, "1")
         self.ensureInvariantHolds(lambda _: os.path.exists(idbBlobPath))
 
@@ -130,7 +132,9 @@ class IDBEncryptionPBM(QuotaTestCase):
         validator(foundRawValue)
 
     def validateSqlite(self, validator):
-        self.ensureInvariantHolds(lambda _: self.sqliteWALReleased())
+        self.assertTrue(
+            self.resetStoragesForClient(self.persistenceType, self.origin, "idb")
+        )
         self.ensureInvariantHolds(
             lambda _: (
                 self.findDirObj(self.getIDBStoragePath(), ".sqlite", True) is not None
@@ -160,13 +164,3 @@ class IDBEncryptionPBM(QuotaTestCase):
 
         print("idb origin directory = " + self.idbStoragePath)
         return self.idbStoragePath
-
-    def sqliteWALReleased(self):
-        """
-        checks if .sqlite-wal has been cleared or not.
-        returns False if idbStoragePath does not exist
-        """
-        if not os.path.exists(self.getIDBStoragePath()):
-            return False
-        walPath = self.findDirObj(self.idbStoragePath, ".sqlite-wal", True)
-        return walPath is None or os.stat(walPath).st_size == 0
