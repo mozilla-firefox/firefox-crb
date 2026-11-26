@@ -1,7 +1,8 @@
 # Releasing mozbase packages
 
 Mozbase packages are released to [PyPI] manually. To release a package, bump
-its `PACKAGE_VERSION` in `setup.py` and land the change before uploading it.
+its `PACKAGE_VERSION` in `setup.py`, land the change, and run the release
+script once the change is on `main`.
 
 ## Checking version bumps
 
@@ -65,6 +66,32 @@ reason = "Only used internally by mozharness, see bug NNNNNN."
 `kind` and `path` are optional. Use the kind shown in brackets in the check's
 output, and `path` supports wildcards.
 
+## Uploading packages
+
+`testing/mozbase/release.py` releases all packages whose in-tree version is not
+on PyPI yet:
+
+- Packages are uploaded in dependency order, and a package whose dependencies
+  can't be satisfied by PyPI gets skipped.
+- Each package is built from the commit that bumped its version, so changes
+  that landed afterwards are not shipped. The script lists those changes, and
+  they need another version bump.
+- The version bump of each package is verified with `semver_check.py` before
+  the upload.
+
+PyPI is the only state, so after a failure the script can simply be run again.
+Without `--upload` it only shows what it would do:
+
+```shell
+./mach python --virtualenv python-test testing/mozbase/release.py
+./mach python --virtualenv python-test testing/mozbase/release.py --upload
+```
+
+Uploading needs [uv] and [twine] in the `PATH`, and an API token for PyPI in
+`~/.pypirc`.
+
 [griffe]: https://mkdocstrings.github.io/griffe/
 [pypi]: https://pypi.org/
 [semantic versioning]: https://semver.org/
+[twine]: https://twine.readthedocs.io/
+[uv]: https://docs.astral.sh/uv/
