@@ -165,6 +165,18 @@ driver.
 tracks work to make it impossible to modify the DOM within a
 *promiseDocumentFlushed* callback.
 
+### Avoid `:has()` selectors
+
+A `:has()` selector makes the style of an element depend on its subtree.
+Matching it scales with the size of that subtree, and mutations inside the
+subtree invalidate the element's style, which makes every style flush more
+expensive. This matters most in the browser window, where the DOM grows
+with the number of open tabs. Set an attribute or class from script
+instead, and select on that. The
+[no-has-selector](../code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-has-selector.md)
+stylelint rule flags `:has()`; see the
+{doc}`CSS guidelines </code-quality/coding-style/css_guidelines>` for details.
+
 ### Writing tests to ensure you don’t add more synchronous style flushes
 
 Unlike reflow, there isn’t a “observer” mechanism for style
