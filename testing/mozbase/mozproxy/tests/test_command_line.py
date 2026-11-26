@@ -240,6 +240,42 @@ def test_run_playback(tmp_path):
     assert output_handler.port is not None
 
 
+def test_run_intercept(tmp_path):
+    output_handler = OutputHandler()
+    p = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "mozproxy",
+            "--local",
+            "--mode=intercept",
+            "--binary=" + firefox_binary(str(tmp_path)),
+            "--topsrcdir=" + topsrcdir,
+            "--objdir=" + topobjdir,
+            os.path.join(here, "intercept_addon.py"),
+        ],
+        creationflags=PROCESS_CREATION_FLAGS,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=False,
+    )
+
+    for line in p.stdout:
+        output_handler(line)
+        if output_handler.port_event.is_set():
+            break
+    output_handler.finished()
+    try:
+        assert output_handler.port_event.wait(120) is True
+        time.sleep(5)
+        _kill_mozproxy(p.pid)
+
+        assert p.wait(10) == 0
+        assert output_handler.port is not None
+    finally:
+        p.kill()
+
+
 def test_failure():
     output_handler = OutputHandler()
     p = subprocess.Popen(

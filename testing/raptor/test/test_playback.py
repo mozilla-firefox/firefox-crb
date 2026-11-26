@@ -12,7 +12,7 @@ set_default_logger(StructuredLogger("test_playback"))
 
 
 from mozproxy import get_playback
-from mozproxy.backends.mitm.desktop import MitmproxyDesktop
+from mozproxy.backends.mitm.mitm import Mitmproxy
 
 config = {}
 
@@ -45,7 +45,7 @@ def test_get_playback(get_binary):
     config["host"] = "127.0.0.1"
 
     playback = get_playback(config)
-    assert isinstance(playback, MitmproxyDesktop)
+    assert isinstance(playback, Mitmproxy)
     playback.start()
     time.sleep(1)
     playback.stop()
