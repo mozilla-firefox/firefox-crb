@@ -5,7 +5,8 @@
 import { INITIAL_STATE, reducers } from "common/Reducers.sys.mjs";
 import { actionTypes as at } from "common/Actions.mjs";
 
-const { PrivacyWidget, RecentSearches, Travel, Wallpapers } = reducers;
+const { DiscoveryStream, PrivacyWidget, RecentSearches, Travel, Wallpapers } =
+  reducers;
 
 describe("PrivacyWidget reducer", () => {
   it("defaults to an uninitialized state", () => {
@@ -132,5 +133,38 @@ describe("Wallpapers reducer", () => {
   it("returns the prior wallpaper state for unrelated actions", () => {
     const prev = INITIAL_STATE.Wallpapers;
     expect(Wallpapers(prev, { type: "SOME_OTHER_ACTION" })).toBe(prev);
+  });
+});
+
+describe("DiscoveryStream reducer devtools availability", () => {
+  it("keeps the devtools state when the content feed resets its layout", () => {
+    let state = DiscoveryStream(INITIAL_STATE.DiscoveryStream, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { region: "DE", recipes: [] },
+    });
+    state = DiscoveryStream(state, {
+      type: at.DISCOVERY_STREAM_DEV_CHANGES,
+      data: ["region DE (was US)"],
+    });
+    // Apply refreshes the content feed, which resets the layout afterwards.
+    state = DiscoveryStream(state, { type: at.DISCOVERY_STREAM_LAYOUT_RESET });
+    expect(state.availability).toEqual({ region: "DE", recipes: [] });
+    expect(state.devtoolsChanges).toEqual(["region DE (was US)"]);
+  });
+
+  it("keeps the last result when a request fails", () => {
+    const loaded = DiscoveryStream(INITIAL_STATE.DiscoveryStream, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { region: "DE", recipes: [] },
+    });
+    const failed = DiscoveryStream(loaded, {
+      type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_UPDATE,
+      data: { error: "Error: offline" },
+    });
+    expect(failed.availability).toEqual({
+      region: "DE",
+      recipes: [],
+      error: "Error: offline",
+    });
   });
 });
