@@ -6,10 +6,18 @@
 #define DOM_FS_PARENT_FILESYSTEMMANAGERPARENT_H_
 
 #include "ErrorList.h"
+#include "mozilla/Maybe.h"
+#include "mozilla/MoveOnlyFunction.h"
+#include "mozilla/Result.h"
+#include "mozilla/dom/FileSystemParentTypes.h"
 #include "mozilla/dom/FlippedOnce.h"
 #include "mozilla/dom/PFileSystemManagerParent.h"
 #include "mozilla/dom/quota/ConditionalCompilation.h"
+#include "mozilla/dom/quota/WriteLease.h"
+#include "nsCOMPtr.h"
 #include "nsISupports.h"
+
+class nsIFile;
 
 namespace mozilla::dom {
 
@@ -75,6 +83,21 @@ class FileSystemManagerParent : public PFileSystemManagerParent {
   virtual ~FileSystemManagerParent();
 
  private:
+  // Runs aBody holding a quota write lease for the origin: synchronously if
+  // the lease is available right away, otherwise once it has been granted.
+  void WithWriteLease(
+      MoveOnlyFunction<void(mozilla::Result<quota::WriteLease, nsresult>)>
+          aBody);
+
+  void FinishGetWritable(
+      const FileSystemGetWritableRequest& aRequest,
+      GetWritableResolver& aResolver, fs::FileMode aMode,
+      mozilla::Result<quota::WriteLease, nsresult> aWriteLease);
+
+  // Nothing means an existing entry needs its file id or backing file created.
+  mozilla::Result<Maybe<FileSystemFileProperties>, nsresult> GetFileProperties(
+      const fs::EntryId& aEntryId, bool aCreate);
+
   RefPtr<fs::data::FileSystemDataManager> mDataManager;
 
   FileSystemGetHandleResponse mRootResponse;

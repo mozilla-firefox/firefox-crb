@@ -12,6 +12,7 @@
 #include "mozilla/RefPtr.h"
 #include "mozilla/dom/FileSystemTypes.h"
 #include "mozilla/dom/quota/ForwardDecls.h"
+#include "mozilla/dom/quota/WriteLease.h"
 #include "nsISupportsImpl.h"
 #include "nsString.h"
 
@@ -89,9 +90,15 @@ class FileSystemAccessHandle : public FileSystemStreamCallbacks {
                  /* IsExclusive */ true>;
   RefPtr<InitPromise> BeginInit();
 
+  RefPtr<InitPromise> FinishInit();
+
   const fs::EntryId mEntryId;
   RefPtr<fs::data::FileSystemDataManager> mDataManager;
   const NotNull<RefPtr<TaskQueue>> mIOTaskQueue;
+  // Acquired on the data manager's IO task queue before locking. Released on
+  // that queue after the handle's IO queue has shut down and the entry is
+  // unlocked, covering usage updates and direct writes from the child.
+  quota::WriteLease mWriteLease;
   FileSystemAccessHandleParent* mActor;
   FileSystemAccessHandleControlParent* mControlActor;
   Atomic<uint32_t, ReleaseAcquire> mRegCount;

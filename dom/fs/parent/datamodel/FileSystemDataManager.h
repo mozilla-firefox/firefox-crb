@@ -18,6 +18,7 @@
 #include "mozilla/dom/quota/ClientDirectoryLockHandle.h"
 #include "mozilla/dom/quota/CommonMetadata.h"
 #include "mozilla/dom/quota/ForwardDecls.h"
+#include "mozilla/dom/quota/WriteLease.h"
 #include "nsCOMPtr.h"
 #include "nsISupportsUtils.h"
 #include "nsString.h"
@@ -178,6 +179,8 @@ class FileSystemDataManager
   struct BackgroundThreadAccessible {
     nsTHashSet<FileSystemManagerParent*> mActors;
     nsTHashSet<FileSystemAccessHandle*> mAccessHandles;
+    // Held while BeginOpen initializes the database, which may write to it.
+    quota::WriteLease mOpenWriteLease;
   };
   ThreadBound<BackgroundThreadAccessible> mBackgroundThreadAccessible;
 
