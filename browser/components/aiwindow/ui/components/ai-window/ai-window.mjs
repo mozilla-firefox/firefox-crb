@@ -3454,6 +3454,7 @@ export class AIWindow extends MozLitElement {
     if (
       newMessage.role !== lazy.MESSAGE_ROLE.ASSISTANT ||
       !newMessage.memoriesApplied?.length ||
+      this.#conversation?.lastSubmitType === "resume" ||
       Services.prefs.getBoolPref(PREF_MEMORIES_HAS_SEEN_MEMORIES, false)
     ) {
       return;

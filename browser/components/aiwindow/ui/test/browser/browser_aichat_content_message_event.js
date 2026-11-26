@@ -487,3 +487,58 @@ add_task(async function test_messageEvent_user_no_context_mentions() {
 
   await SpecialPowers.popPrefEnv();
 });
+
+add_task(
+  async function test_memories_callout_flag_persists_across_dispatches() {
+    await SpecialPowers.pushPrefEnv({
+      set: [["browser.smartwindow.enabled", true]],
+    });
+
+    await BrowserTestUtils.withNewTab("about:aichatcontent", async browser => {
+      const actor =
+        browser.browsingContext.currentWindowGlobal.getActor("AIChatContent");
+      const assistantMessage = (id, extra = {}) => ({
+        role: "assistant",
+        convId: "conv1",
+        ordinal: 1,
+        id,
+        content: { body: "Hello" },
+        memoriesApplied: [{ id: "memory1", memory_summary: "A memory" }],
+        ...extra,
+      });
+
+      await actor.dispatchMessageToChatContent({
+        role: "user",
+        convId: "conv1",
+        ordinal: 0,
+        content: { body: "Hi" },
+      });
+      await actor.dispatchMessageToChatContent(
+        assistantMessage("msg1", { showMemoriesCallout: true })
+      );
+      await actor.dispatchMessageToChatContent(assistantMessage("msg1"));
+
+      await SpecialPowers.spawn(browser, [], async () => {
+        const chatContent =
+          content.document.querySelector("ai-chat-content").wrappedJSObject;
+        Assert.ok(
+          chatContent.conversationState[1].showCallout,
+          "Callout flag survives a later dispatch of the same message"
+        );
+      });
+
+      await actor.dispatchMessageToChatContent(assistantMessage("msg2"));
+
+      await SpecialPowers.spawn(browser, [], async () => {
+        const chatContent =
+          content.document.querySelector("ai-chat-content").wrappedJSObject;
+        Assert.ok(
+          !chatContent.conversationState[1].showCallout,
+          "Callout flag does not carry over to a different message"
+        );
+      });
+    });
+
+    await SpecialPowers.popPrefEnv();
+  }
+);

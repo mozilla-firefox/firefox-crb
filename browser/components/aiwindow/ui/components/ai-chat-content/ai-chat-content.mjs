@@ -1128,6 +1128,12 @@ export class AIChatContent extends MozLitElement {
       ? new Map(historyResults.map(record => [record.url, record]))
       : undefined;
 
+    // Later updates to the same message omit the callout flag because the
+    // parent has already marked it as seen. Preserve the flag set earlier.
+    const previous = this.conversationState[ordinal];
+    const keepCallout =
+      previous?.messageId === messageId && !!previous.showCallout;
+
     this.conversationState[ordinal] = {
       role: "assistant",
       convId,
@@ -1138,7 +1144,7 @@ export class AIChatContent extends MozLitElement {
         ? { id: content.l10nId, args: content.l10nArgs, link: content.link }
         : null,
       appliedMemories: memoriesApplied ?? [],
-      showCallout: showMemoriesCallout ?? false,
+      showCallout: !!showMemoriesCallout || keepCallout,
       isLastChunk,
       toolUIData,
       toolUIDraft,
