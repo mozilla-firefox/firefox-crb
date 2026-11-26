@@ -1,0 +1,20 @@
+{
+  "name": "test_base",
+  "addons": {},
+  "prefs": {
+    "some.pref.enabled": true,
+    "some.pref.timeout": 42
+  },
+  "keep_cache": false,
+  "delete_after_build": [],
+  "scenario": [
+    {
+      "full": {
+        "max_urls": 50,
+        "max_tabs": 10,
+        "flag_a": false,
+        "delete_after_build": []
+      }
+    }
+  ]
+}

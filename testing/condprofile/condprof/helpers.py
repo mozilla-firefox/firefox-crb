@@ -21,7 +21,7 @@ class TabSwitcher:
         self.session = session
         self._max = options.get("max_urls", 10)
         self.platform = options.get("platform", "")
-        self.num_tabs = self._max >= 100 and 100 or self._max
+        self.num_tabs = min(self._max, options.get("max_tabs", 100))
         self._mobile = is_mobile(self.platform)
 
     async def create_windows(self):

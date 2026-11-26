@@ -97,9 +97,25 @@ def fetch(
     default=sys.platform.startswith("win") and "geckodriver.exe" or "geckodriver",
 )
 @CommandArgument("--device-name", help="Name of the device", type=str, default=None)
+@CommandArgument(
+    "--skip-logs",
+    help="Skip saving logs and changelog",
+    action="store_true",
+    default=False,
+)
+@CommandArgument(
+    "--proxy-dir",
+    help="Directory under which mozproxy keeps its mitmproxy downloads "
+    "(default: the objdir, shared with `mach raptor`)",
+    type=str,
+    default=None,
+)
 def run(command_context, **kw):
     os.environ["MANUAL_MACH_RUN"] = "1"
     _init(command_context)
+
+    if kw["proxy_dir"] is None:
+        kw["proxy_dir"] = command_context.topobjdir
 
     if kw["firefox"] is None:
         try:
