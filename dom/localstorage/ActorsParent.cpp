@@ -695,12 +695,12 @@ Result<nsCOMPtr<mozIStorageConnection>, nsresult> CreateStorageConnection(
   return connection;
 }
 
-template <typename CorruptedFileHandler>
+template <typename CorruptedFileHandler, typename BeforeRecovery>
 Result<nsCOMPtr<mozIStorageConnection>, nsresult>
 CreateStorageConnectionWithRecovery(
     nsIFile& aDBFile, nsIFile& aUsageFile, const nsACString& aOrigin,
     CorruptedFileHandler&& aCorruptedFileHandler,
-    const Maybe<CipherKey>& aMaybeCipherKey) {
+    const Maybe<CipherKey>& aMaybeCipherKey, BeforeRecovery&& aBeforeRecovery) {
   QM_TRY_RETURN(QM_OR_ELSE_WARN_IF(
       // Expression.
       CreateStorageConnection(aDBFile, aUsageFile, aOrigin, aMaybeCipherKey),
@@ -708,8 +708,9 @@ CreateStorageConnectionWithRecovery(
       IsDatabaseCorruptionError,
       // Fallback.
       ([&aDBFile, &aUsageFile, &aOrigin, &aMaybeCipherKey,
-        &aCorruptedFileHandler](const nsresult rv)
+        &aCorruptedFileHandler, &aBeforeRecovery](const nsresult rv)
            -> Result<nsCOMPtr<mozIStorageConnection>, nsresult> {
+        QM_TRY(aBeforeRecovery());
         // Remove the usage file first (it might not exist at all due
         // to corrupted state, which is ignored here).
 
@@ -4083,7 +4084,8 @@ nsresult Connection::EnsureStorageConnection() {
   QM_TRY_UNWRAP(storageConnection,
                 CreateStorageConnectionWithRecovery(
                     *directoryEntry, *usageFile, Origin(),
-                    [] { MOZ_ASSERT_UNREACHABLE(); }, mMaybeCipherKey));
+                    [] { MOZ_ASSERT_UNREACHABLE(); }, mMaybeCipherKey,
+                    []() -> Result<Ok, nsresult> { return Ok{}; }));
 
   MOZ_ASSERT(mQuotaClient);
 
@@ -7010,6 +7012,19 @@ nsresult PrepareDatastoreOp::DatabaseWork() {
       return DatabaseNotAvailable();
     }
 
+    Maybe<quota::WriteLease> writeLease;
+    const auto ensureWriteLease = [&]() -> mozilla::Result<Ok, nsresult> {
+      if (!writeLease) {
+        QM_TRY_UNWRAP(auto lease, quotaManager->AcquireWriteLeaseOnIOThread(
+                                      mOriginMetadata));
+        writeLease.emplace(std::move(lease));
+      }
+      return Ok{};
+    };
+    if (hasDataForMigration) {
+      QM_TRY(ensureWriteLease());
+    }
+
     // The origin directory doesn't need to be created when we don't have data
     // for migration. It will be created on the connection thread in
     // Connection::EnsureStorageConnection.
@@ -7098,7 +7113,7 @@ nsresult PrepareDatastoreOp::DatabaseWork() {
 
                          mUsage = 0;
                        },
-                       mMaybeCipherKey)));
+                       mMaybeCipherKey, ensureWriteLease)));
 
     QM_TRY(MOZ_TO_RESULT(VerifyDatabaseInformation(connection)));
 
@@ -8505,10 +8520,12 @@ Result<UsageInfo, nsresult> QuotaClient::InitOrigin(
               ([&file, &usageFile, &usageJournalFile, &aOriginMetadata,
                 &maybeCipherKey](
                    const nsresult) -> Result<UsageInfo, nsresult> {
-                QM_TRY_INSPECT(const auto& connection,
-                               CreateStorageConnectionWithRecovery(
-                                   *file, *usageFile, aOriginMetadata.mOrigin,
-                                   [] {}, maybeCipherKey));
+                QM_TRY_INSPECT(
+                    const auto& connection,
+                    CreateStorageConnectionWithRecovery(
+                        *file, *usageFile, aOriginMetadata.mOrigin, [] {},
+                        maybeCipherKey,
+                        []() -> Result<Ok, nsresult> { return Ok{}; }));
 
                 // The usage file is missing or corrupted (which includes a
                 // negative value persisted by a drifted running counter), so
