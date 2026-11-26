@@ -69,6 +69,11 @@
             "type": "integer",
             "optional": true,
             "description": "The number of times the user has navigated to this page by typing in the address."
+          },
+          "cookieStoreId": {
+            "type": "string",
+            "optional": true,
+            "description": "The cookie store ID of the visit. Only set by history.onVisited."
           }
         }
       },
@@ -97,6 +102,11 @@
           "transition": {
             "$ref": "TransitionType",
             "description": "The $(topic:transition-types)[transition type] for this visit from its referrer."
+          },
+          "cookieStoreId": {
+            "type": "string",
+            "optional": true,
+            "description": "The cookie store ID of the visit."
           }
         }
       }
@@ -208,6 +218,11 @@
                 "$ref": "extensionTypes.Date",
                 "optional": true,
                 "description": "The date when this visit occurred."
+              },
+              "cookieStoreId": {
+                "type": "string",
+                "optional": true,
+                "description": "The cookie store ID of the visit. Defaults to the default cookie store."
               }
             }
           },
@@ -232,6 +247,11 @@
               "url": {
                 "type": "string",
                 "description": "The URL to remove."
+              },
+              "cookieStoreId": {
+                "type": "string",
+                "optional": true,
+                "description": "Only remove the visits made with this cookie store ID."
               }
             }
           },
@@ -260,6 +280,11 @@
               "endTime": {
                 "$ref": "extensionTypes.Date",
                 "description": "Items added to history before this date."
+              },
+              "cookieStoreId": {
+                "type": "string",
+                "optional": true,
+                "description": "Only remove the visits made with this cookie store ID."
               }
             }
           },
