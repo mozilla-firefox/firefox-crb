@@ -30,6 +30,7 @@ from mozbuild.action import (
     locale_manifest,
     make_sourcestamp_file,
     nsis_build,
+    package_install,
     package_langpack,
     package_prepare,
 )
@@ -42,6 +43,8 @@ from mozbuild.packaging import (
     multilocale_content,
 )
 from mozbuild.util import FileAvoidWrite
+
+MODES = ("package", "stage", "install")
 
 
 def _step(name: str) -> None:
@@ -231,9 +234,11 @@ def _langpack(*, paths: PackagePaths, ab_cd: str) -> int:
 
 def package_application(
     *,
+    mode: str = "package",
     ab_cd: str = "en-US",
     pkg_dir: Optional[str] = None,
     pkg_path: str = "",
+    simple_package_name: Optional[str] = None,
     locales: Sequence[str] = (),
     locale_entries: Sequence[str] = (),
     defines: Sequence[str] = (),
@@ -265,7 +270,14 @@ def package_application(
     langpack: bool = False,
     source_repo_header: Optional[str] = None,
     package_extra_args: Sequence[str] = (),
+    destdir: str = "",
+    installdir: Optional[str] = None,
+    bindir: Optional[str] = None,
 ) -> int:
+    if mode not in MODES:
+        raise ValueError(f"unknown mode {mode}, expected one of {', '.join(MODES)}")
+    if mode == "install" and (rc := package_install.check_supported()):
+        return rc
     substs = buildconfig.substs
     topsrcdir = buildconfig.topsrcdir
     topobjdir = buildconfig.topobjdir
@@ -277,6 +289,7 @@ def package_application(
         ab_cd=ab_cd,
         pkg_dir=pkg_dir,
         pkg_path=pkg_path,
+        simple_name=simple_package_name,
     )
     staged = mozpath.join(dist, paths.pkg_dir)
     binpath = substs["MOZ_PKG_BINPATH"]
@@ -343,7 +356,7 @@ def package_application(
         ignore_errors=ignore_errors,
         ignore_broken_symlinks=ignore_broken_symlinks,
     )
-    if rc:
+    if rc or mode == "stage":
         return rc
 
     archives = []
@@ -456,6 +469,14 @@ def package_application(
     if rc:
         return rc
 
+    if mode == "install":
+        return package_install.package_install(
+            destdir=destdir,
+            installdir=installdir,
+            bindir=bindir,
+            pkg_dir=pkg_dir,
+        )
+
     sourcestamp_argv = [
         "--output",
         paths.sourcestamp_file,
@@ -540,9 +561,22 @@ def _parser() -> argparse.ArgumentParser:
         "write its metadata. Arguments after `--` are passed to the archive step.",
         allow_abbrev=False,
     )
+    parser.add_argument(
+        "--mode",
+        default="package",
+        choices=MODES,
+        help="How far to take the package. `stage` stops after the staged tree, "
+        "`install` installs it under a prefix, and `package` writes the archive "
+        "and its metadata.",
+    )
     parser.add_argument("--ab-cd", default="en-US", help="The locale being packaged")
     parser.add_argument("--pkg-dir", help="Staged package directory name")
     parser.add_argument("--pkg-path", default="", help="Prefix inside the dist folder")
+    parser.add_argument(
+        "--simple-package-name",
+        metavar="NAME",
+        help="Package basename to use in place of the configured one",
+    )
     parser.add_argument(
         "--locale",
         action="append",
@@ -667,6 +701,18 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-repo-header", metavar="PATH", help="Generated source-repo.h"
+    )
+    parser.add_argument(
+        "--destdir",
+        default="",
+        metavar="DIR",
+        help="Prefix every installed path with this staging directory",
+    )
+    parser.add_argument(
+        "--installdir", metavar="DIR", help="Directory the application is installed in"
+    )
+    parser.add_argument(
+        "--bindir", metavar="DIR", help="Directory the launcher symlink is created in"
     )
     return parser
 
