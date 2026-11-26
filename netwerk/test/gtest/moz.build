@@ -65,6 +65,7 @@ SOURCES += [
     "TestCacheEntryWriterHang.cpp",
     "TestHappyEyeballsConnectionAttempt.cpp",
     "TestHappyEyeballsNetAddrArray.cpp",
+    "TestHttp2StreamTunnel.cpp",
     "TestHttpAtom.cpp",
     "TestLinkServiceCommon.cpp",
     "TestSOCKSProxyLookup.cpp",
