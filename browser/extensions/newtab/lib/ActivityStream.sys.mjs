@@ -84,6 +84,7 @@ import {
   DEVTOOLS_OVERRIDE_PREFS,
   PREF_DEVTOOLS_ENABLED,
   buildChannel,
+  hasDevtoolsState,
   newtabChannel,
   newtabLocale,
 } from "resource://newtab/lib/NewtabAudience.sys.mjs";
@@ -2618,7 +2619,9 @@ const FEEDS_DATA = [
     factory: () => new lazy.NewTabDevtoolsFeed(),
     title:
       "Evaluates and applies Nimbus audiences for the newtab devtools, when asrouter.devtoolsEnabled is set",
-    getValue: () => Services.prefs.getBoolPref(PREF_DEVTOOLS_ENABLED, false),
+    getValue: () =>
+      Services.prefs.getBoolPref(PREF_DEVTOOLS_ENABLED, false) ||
+      hasDevtoolsState(),
   },
   {
     name: "prefs",

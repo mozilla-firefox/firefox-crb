@@ -2870,6 +2870,36 @@ describe("DiscoveryStreamFeed", () => {
     });
   });
 
+  describe("#onAction: DISCOVERY_STREAM_DEV_REFETCH_CONTENT", () => {
+    it("should ignore it from content", async () => {
+      jest.spyOn(feed, "refetchContent").mockResolvedValue();
+      await feed.onAction(
+        ac.OnlyToMain(
+          { type: at.DISCOVERY_STREAM_DEV_REFETCH_CONTENT },
+          "tab-1"
+        )
+      );
+      expect(feed.refetchContent).not.toHaveBeenCalled();
+    });
+
+    it("should refetch content but keep the user's blocks and impressions", async () => {
+      jest.spyOn(feed.cache, "set").mockResolvedValue();
+      jest.spyOn(feed, "resetDataPrefs");
+      jest.spyOn(feed, "resetState").mockImplementation(() => {});
+      jest.spyOn(feed, "enable").mockResolvedValue();
+      setPref(CONFIG_PREF_NAME, { enabled: true });
+
+      await feed.onAction({ type: at.DISCOVERY_STREAM_DEV_REFETCH_CONTENT });
+
+      expect(feed.resetDataPrefs).not.toHaveBeenCalled();
+      expect(feed.cache.set).toHaveBeenCalledWith("feeds", {});
+      expect(feed.cache.set).toHaveBeenCalledWith("spocs", {});
+      expect(feed.cache.set).not.toHaveBeenCalledWith("recsImpressions", {});
+      expect(feed.resetState).toHaveBeenCalled();
+      expect(feed.enable).toHaveBeenCalledWith({ updateOpenTabs: true });
+    });
+  });
+
   describe("#onAction: DISCOVERY_STREAM_DEV_SYSTEM_TICK", () => {
     it("should refresh if DiscoveryStream has been loaded at least once and a cache has expired", async () => {
       expectConsoleError();

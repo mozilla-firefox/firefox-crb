@@ -76,6 +76,7 @@ const SERVICE_STUBS = {
     getIntPref: jest.fn((_pref, defaultValue) => defaultValue),
     getStringPref: jest.fn((_pref, defaultValue) => defaultValue),
     getPrefType: jest.fn(() => 0),
+    getChildList: jest.fn(() => []),
     prefHasUserValue: jest.fn(() => false),
     setBoolPref: jest.fn(),
     setCharPref: jest.fn(),
