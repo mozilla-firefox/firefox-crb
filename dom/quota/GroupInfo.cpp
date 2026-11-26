@@ -59,6 +59,8 @@ void GroupInfo::LockedAddOriginInfo(NotNull<RefPtr<OriginInfo>>&& aOriginInfo) {
     QM_ASSERT_NOT_NEGATIVE(quotaManager->mTemporaryStorageUsage);
     quotaManager->LockedMaybeRecordTemporaryStorageUsageUnderflow(__func__);
 
+    LockedAdjustReservedUsageForRemovedOriginInfo(*oldOriginInfo);
+
     oldOriginInfo->mGroupInfo = nullptr;
 
     *foundIt = std::move(aOriginInfo);
@@ -90,6 +92,24 @@ void GroupInfo::LockedAdjustUsageForRemovedOriginInfo(
   quotaManager->mTemporaryStorageUsage -= usage;
   QM_ASSERT_NOT_NEGATIVE(quotaManager->mTemporaryStorageUsage);
   quotaManager->LockedMaybeRecordTemporaryStorageUsageUnderflow(__func__);
+
+  LockedAdjustReservedUsageForRemovedOriginInfo(aOriginInfo);
+}
+
+void GroupInfo::LockedAdjustReservedUsageForRemovedOriginInfo(
+    const OriginInfo& aOriginInfo) {
+  const int64_t reservedUsage = aOriginInfo.mReservedUsage;
+
+  if (!aOriginInfo.LockedPersisted()) {
+    mReservedUsage -= reservedUsage;
+    QM_ASSERT_NOT_NEGATIVE(mReservedUsage);
+  }
+
+  QuotaManager* const quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  quotaManager->mTemporaryStorageReservedUsage -= reservedUsage;
+  QM_ASSERT_NOT_NEGATIVE(quotaManager->mTemporaryStorageReservedUsage);
 }
 
 void GroupInfo::LockedRemoveOriginInfo(const nsACString& aOrigin) {

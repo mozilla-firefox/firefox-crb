@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include "mozilla/AlreadyAddRefed.h"
+#include "mozilla/FunctionRef.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/ThreadSafeWeakPtr.h"
 #include "mozilla/dom/quota/Assertions.h"
@@ -25,6 +26,10 @@
 
 namespace mozilla::dom::quota {
 
+namespace test {
+class TestQuotaReservations;
+}
+
 class DirtyTrackingAutoLock;
 
 class OriginInfo;
@@ -33,6 +38,7 @@ class QuotaManager;
 class CanonicalQuotaObject final : public QuotaObject {
   friend class OriginInfo;
   friend class QuotaManager;
+  friend class test::TestQuotaReservations;
 
   class StoragePressureRunnable;
 
@@ -46,6 +52,11 @@ class CanonicalQuotaObject final : public QuotaObject {
   [[nodiscard]] bool MaybeUpdateSize(int64_t aSize, bool aTruncate) override;
 
   bool IncreaseSize(int64_t aDelta) override;
+
+  [[nodiscard]] bool MaybeSetReservation(int64_t aSize) override;
+
+  void CommitReservation(int64_t aDelta,
+                         int64_t aRemainingReservation) override;
 
   void DisableQuotaCheck() override;
 
@@ -70,11 +81,20 @@ class CanonicalQuotaObject final : public QuotaObject {
   bool LockedMaybeUpdateSize(int64_t aSize, bool aTruncate,
                              DirtyTrackingAutoLock& aProofOfLock);
 
+  // Evicts origins to make room for aDelta bytes and then calls aRetry, which
+  // must recheck the group limit and apply the change. Drops and reacquires
+  // the quota mutex several times.
+  bool LockedEvictAndRetry(OriginInfo& aOriginInfo, uint64_t aDelta,
+                           DirtyTrackingAutoLock& aProofOfLock,
+                           FunctionRef<bool()> aRetry);
+
   mozilla::ThreadSafeAutoRefCnt mRefCnt;
 
   ThreadSafeWeakPtr<OriginInfo> mOriginInfo;
   nsString mPath;
   int64_t mSize;
+  // Space reserved for uncommitted writes. Always nonnegative.
+  int64_t mReservedSize = 0;
   Client::Type mClientType;
   bool mQuotaCheckDisabled;
   bool mWritingDone;
