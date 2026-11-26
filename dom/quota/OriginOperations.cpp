@@ -3784,8 +3784,9 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
           *directory, fullOriginMetadata)));
 
       // Directory metadata has been successfully updated.
-      // Update OriginInfo too if temporary storage was already initialized.
-      if (aQuotaManager.IsTemporaryStorageInitializedInternal()) {
+      // Update OriginInfo too if the temporary origin was already initialized.
+      if (aQuotaManager.IsTemporaryStorageInitializedInternal() &&
+          aQuotaManager.IsTemporaryOriginInitializedInternal(originMetadata)) {
         aQuotaManager.PersistOrigin(originMetadata);
       }
     }

@@ -3928,6 +3928,10 @@ bool QuotaManager::IsOriginEncrypted(const OriginMetadata& aOriginMetadata) {
 void QuotaManager::PersistOrigin(const OriginMetadata& aOriginMetadata) {
   AssertIsOnIOThread();
 
+  // Callers only persist origins that are initialized in memory and hold a
+  // directory lock on the origin, so the OriginInfo is found here. The lock
+  // can still end up invalid if the origin is removed while the lock records
+  // the dirty flag, in which case there is nothing left to update.
   DirtyTrackingAutoLock lock(mQuotaMutex, mGroupInfoPairs, aOriginMetadata);
   if (!lock.IsValid()) {
     return;
