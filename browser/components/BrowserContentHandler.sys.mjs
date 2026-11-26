@@ -1619,6 +1619,32 @@ nsDefaultCommandLineHandler.prototype = {
         appStateBeforeClick
       );
 
+      if (action == "settings") {
+        Cc[
+          originPrincipal.privateBrowsingId
+            ? "@mozilla.org/memoryNotificationStorage;1"
+            : "@mozilla.org/notificationStorage;1"
+        ]
+          .getService(Ci.nsINotificationStorage)
+          .delete(originPrincipal.origin, notificationId);
+        if (
+          !lazy.BrowserWindowTracker.getTopWindow({
+            allowFromInactiveWorkspace: true,
+          })
+        ) {
+          let win = openBrowserWindow(cmdLine, lazy.gSystemPrincipal);
+          await lazy.BrowserUtils.promiseObserved(
+            "browser-delayed-startup-finished",
+            subject => subject == win
+          );
+        }
+        Services.obs.notifyObservers(
+          originPrincipal,
+          "notifications-open-settings"
+        );
+        return;
+      }
+
       const handler = Cc["@mozilla.org/notification-handler;1"].getService(
         Ci.nsINotificationHandler
       );
