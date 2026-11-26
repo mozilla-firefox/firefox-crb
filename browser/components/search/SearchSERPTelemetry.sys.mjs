@@ -2240,7 +2240,12 @@ class ContentHandler {
       ) {
         this._recordUncategorizedAdImpression(telemetryState);
       }
-      Services.obs.notifyObservers(null, "reported-page-with-impression");
+      // The searchRefinement messaging trigger depends on this notification
+      // and on the impressionInfo's source, tagged, searchMode and isPrivate.
+      Services.obs.notifyObservers(
+        { wrappedJSObject: { browser, impressionInfo } },
+        "reported-page-with-impression"
+      );
     } else if (telemetryState.impressionRecorded) {
       lazy.logConsole.debug("Impression already recorded for browser.");
     } else {

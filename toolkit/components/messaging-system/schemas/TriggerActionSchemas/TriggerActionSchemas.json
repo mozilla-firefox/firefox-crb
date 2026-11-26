@@ -377,6 +377,27 @@
           "properties": {
             "id": {
               "type": "string",
+              "enum": ["searchRefinement"]
+            },
+            "context": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The search provider of the results page"
+                }
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": ["id"],
+          "description": "Happens after the user refines an organic search from the search box on a search results page, once the new results have loaded and the search terms are shown in the address bar"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
               "enum": ["tabGroupCreated"]
             },
             "context": {

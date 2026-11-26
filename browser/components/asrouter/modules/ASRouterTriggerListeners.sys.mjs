@@ -17,6 +17,8 @@ const lazy = XPCOMUtils.declareLazy({
     "resource:///modules/asrouter/FeatureCalloutBroker.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  SearchSERPTelemetryUtils:
+    "moz-src:///browser/components/search/SearchSERPTelemetry.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   clearTimeout: "resource://gre/modules/Timer.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
@@ -2250,6 +2252,89 @@ export const ASRouterTriggerListeners = new Map([
           // count since no new Split View was created.
           this._clearVisit(win);
         }
+      },
+    },
+  ],
+  [
+    "searchRefinement",
+    {
+      /**
+       * Fires when the user refines an organic search from the search box on
+       * a search engine results page, once the results have loaded and the
+       * new search terms are shown in the address bar.
+       */
+      id: "searchRefinement",
+      _initialized: false,
+      _triggerHandler: null,
+      // WeakMap<browser, string> of the search terms of the last results page
+      // loaded in each browser.
+      _lastSearchTerms: null,
+
+      init(triggerHandler) {
+        this._triggerHandler = triggerHandler;
+        if (!this._initialized) {
+          this._lastSearchTerms = new WeakMap();
+          Services.obs.addObserver(this, "reported-page-with-impression");
+          this._initialized = true;
+        }
+      },
+
+      uninit() {
+        if (this._initialized) {
+          Services.obs.removeObserver(this, "reported-page-with-impression");
+          this._initialized = false;
+          this._triggerHandler = null;
+          this._lastSearchTerms = null;
+        }
+      },
+
+      observe(subject) {
+        const data = subject?.wrappedJSObject;
+        if (!data?.browser) {
+          return;
+        }
+        const { browser, impressionInfo } = data;
+        const win = browser.documentGlobal;
+        const { persist } = win.gURLBar.getBrowserState(browser);
+        const searchTerms = persist?.searchTerms;
+        const previousSearchTerms = this._lastSearchTerms.get(browser);
+        this._lastSearchTerms.set(browser, searchTerms);
+
+        if (
+          impressionInfo.source !==
+            lazy.SearchSERPTelemetryUtils.INCONTENT_SOURCES.SEARCHBOX ||
+          !searchTerms ||
+          searchTerms === previousSearchTerms ||
+          // The search box source stays stored until the next SERP load, so
+          // it can be reported on a history navigation or reload instead.
+          browser.webProgress.loadType &
+            (Ci.nsIDocShell.LOAD_CMD_HISTORY |
+              Ci.nsIDocShell.LOAD_CMD_RELOAD) ||
+          impressionInfo.searchMode ||
+          impressionInfo.tagged ||
+          impressionInfo.isPrivate
+        ) {
+          return;
+        }
+
+        if (
+          isPrivateWindow(win) ||
+          win.gBrowser.selectedBrowser !== browser ||
+          Services.focus.activeWindow !== win ||
+          win.fullScreen ||
+          win.gURLBar.focused ||
+          win.PopupNotifications.isPanelOpen ||
+          !persist.shouldPersist
+        ) {
+          return;
+        }
+
+        this._triggerHandler(browser, {
+          id: this.id,
+          context: {
+            provider: impressionInfo.provider,
+          },
+        });
       },
     },
   ],
