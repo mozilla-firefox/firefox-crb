@@ -14,6 +14,7 @@
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/dom/quota/Client.h"
 #include "mozilla/dom/quota/ClientDirectoryLock.h"
 #include "mozilla/dom/quota/ClientDirectoryLockHandle.h"
@@ -23,6 +24,7 @@
 #include "mozilla/dom/quota/OriginScope.h"
 #include "mozilla/dom/quota/PersistenceScope.h"
 #include "mozilla/dom/quota/QuotaManager.h"
+#include "mozilla/dom/quota/QuotaObject.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
 #include "mozilla/dom/quota/UniversalDirectoryLock.h"
 #include "mozilla/gtest/MozAssertions.h"
@@ -31,7 +33,9 @@
 #include "nsIFile.h"
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
+#include "nsIQuotaArtificialFailure.h"
 #include "nsThreadUtils.h"
+#include "prtime.h"
 
 namespace mozilla::dom::quota::test {
 
@@ -552,6 +556,462 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Simple) {
   ASSERT_NO_FATAL_FAILURE(AssertStorageInitialized());
 
   ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+}
+
+namespace {
+
+constexpr const char* kQuiescentThresholdPref =
+    "dom.quotaManager.originWriteQuiescentThresholdMs";
+
+// Makes every call in the given artificial failure category fail with
+// NS_ERROR_FAILURE while alive.
+struct MOZ_RAII AutoArtificialFailure {
+  explicit AutoArtificialFailure(uint32_t aCategory) {
+    Preferences::SetUint("dom.quotaManager.artificialFailure.categories",
+                         aCategory);
+    Preferences::SetUint("dom.quotaManager.artificialFailure.probability", 100);
+    Preferences::SetUint("dom.quotaManager.artificialFailure.errorCode",
+                         static_cast<uint32_t>(NS_ERROR_FAILURE));
+  }
+
+  ~AutoArtificialFailure() {
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.categories");
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.probability");
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.errorCode");
+  }
+};
+
+}  // namespace
+
+class TestQuotaManagerDirtyTracking : public TestQuotaManager {
+ protected:
+  void SetUp() override {
+    Preferences::SetUint(kQuiescentThresholdPref, 100);
+    ASSERT_NO_FATAL_FAILURE(ClearStorage());
+    ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+    ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+    mQuotaManager = QuotaManager::Get();
+    ASSERT_TRUE(mQuotaManager);
+  }
+
+  void TearDown() override {
+    EXPECT_NO_FATAL_FAILURE(ShutdownStorage());
+    Preferences::ClearUser(kQuiescentThresholdPref);
+    TestQuotaManager::TearDown();
+  }
+
+  void InitializeOrigin(const OriginMetadata& aOriginMetadata,
+                        bool aCreateIfNonExistent = true) {
+    ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+    ASSERT_NO_FATAL_FAILURE(
+        InitializeTemporaryOrigin(aOriginMetadata, aCreateIfNonExistent));
+    if (aCreateIfNonExistent) {
+      // Record an access to initialize the write-quiescence timestamp; like
+      // any IO thread mutation it runs under a lease.
+      PerformOnIOThread([this, aOriginMetadata]() {
+        auto writeLease =
+            mQuotaManager->AcquireWriteLeaseOnIOThread(aOriginMetadata);
+        ASSERT_TRUE(writeLease.isOk());
+
+        mQuotaManager->UpdateOriginAccessTime(aOriginMetadata, PR_Now());
+      });
+    }
+  }
+
+  Maybe<WriteLease> AcquireWriteLease(const OriginMetadata& aOriginMetadata) {
+    auto value = Await(mQuotaManager->AcquireWriteLease(aOriginMetadata));
+    if (value.IsReject()) {
+      return Nothing();
+    }
+    return Some(std::move(value.ResolveValue()));
+  }
+
+  bool HasWriteLease(const OriginMetadata& aOriginMetadata) {
+    return mQuotaManager->WithOriginInfo(
+        aOriginMetadata, [](const auto& aOriginInfo) {
+          return aOriginInfo->LockedHasWriteLease();
+        });
+  }
+
+  bool IsDirtyInMemory(const OriginMetadata& aOriginMetadata) {
+    return mQuotaManager->WithOriginInfo(
+        aOriginMetadata,
+        [](const auto& aOriginInfo) { return aOriginInfo->LockedDirty(); });
+  }
+
+  bool DirectoryExistsInMemory(const OriginMetadata& aOriginMetadata) {
+    return mQuotaManager->WithOriginInfo(
+        aOriginMetadata, [](const auto& aOriginInfo) {
+          return aOriginInfo->LockedDirectoryExists();
+        });
+  }
+
+  // Returns the dirty flag of the origin's row in the storage database.
+  Maybe<bool> IsDirtyOnDisk(const OriginMetadata& aOriginMetadata) {
+    auto metadata = GetCachedOriginStateMetadataForTesting(aOriginMetadata);
+    if (!metadata) {
+      return Nothing();
+    }
+
+    return Some(metadata->mDirty);
+  }
+
+  void FlushDirtyOriginInfos(bool aExpectDirty = false) {
+    const auto observationEnd =
+        TimeStamp::Now() + TimeDuration::FromMilliseconds(200);
+    ASSERT_NO_FATAL_FAILURE(WaitForCondition([&] {
+      PerformOnIOThread([&] { mQuotaManager->FlushDirtyOriginInfos(); });
+      if (aExpectDirty) {
+        EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+        return !IsDirtyInMemory(mOriginMetadata) ||
+               TimeStamp::Now() >= observationEnd;
+      }
+      return !IsDirtyInMemory(mOriginMetadata);
+    }));
+  }
+
+  OriginMetadata mOriginMetadata = GetTestOriginMetadata();
+  QuotaManager* mQuotaManager = nullptr;
+};
+
+// The testing flush request runs one settle round like the periodic flush.
+TEST_F(TestQuotaManagerDirtyTracking,
+       FlushDirtyOriginInfosForTesting_SettlesOrigin) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+  ASSERT_NO_FATAL_FAILURE(WaitForCondition([&] {
+    PerformOnBackgroundThread([this]() {
+      auto value = Await(mQuotaManager->FlushDirtyOriginInfosForTesting());
+      ASSERT_TRUE(value.IsResolve());
+      EXPECT_TRUE(value.ResolveValue());
+    });
+    return !IsDirtyInMemory(mOriginMetadata);
+  }));
+
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+}
+
+class TestQuotaManagerWriteLeaseFailure
+    : public TestQuotaManagerDirtyTracking,
+      public testing::WithParamInterface<uint32_t> {};
+
+// When dispatching or recording the dirty flag fails, no lease is left behind
+// and the origin is not claimed to be dirty on disk, so the next attempt
+// retries.
+TEST_P(TestQuotaManagerWriteLeaseFailure,
+       AcquireWriteLease_RejectedReleasesLease) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+
+  {
+    // Prefs can only be set on the main thread.
+    AutoArtificialFailure artificialFailure(GetParam());
+
+    PerformOnBackgroundThread([this]() {
+      auto value = Await(mQuotaManager->AcquireWriteLease(mOriginMetadata));
+      ASSERT_TRUE(value.IsReject());
+      EXPECT_EQ(value.RejectValue(), NS_ERROR_FAILURE);
+    });
+  }
+
+  EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+  EXPECT_TRUE(mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isNothing());
+
+  PerformOnBackgroundThread([this]() {
+    auto lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+  });
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    , TestQuotaManagerWriteLeaseFailure,
+    testing::Values(
+        nsIQuotaArtificialFailure::CATEGORY_FLAG_ORIGIN_INFO_AS_DIRTY,
+        nsIQuotaArtificialFailure::CATEGORY_ACQUIRE_WRITE_LEASE_DISPATCH),
+    [](const testing::TestParamInfo<uint32_t>& aInfo) {
+      return aInfo.param == nsIQuotaArtificialFailure::
+                                CATEGORY_FLAG_ORIGIN_INFO_AS_DIRTY
+                 ? "DirtyFlagWrite"
+                 : "Dispatch";
+    });
+
+// A write lease records the dirty flag on disk before it is handed out, and
+// the flush must not clear it until the last lease is gone.
+TEST_F(TestQuotaManagerDirtyTracking, AcquireWriteLease_KeepsOriginDirty) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+
+  PerformOnBackgroundThread([this]() {
+    // The flag is not recorded, so the fast path is not available.
+    EXPECT_TRUE(
+        mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isNothing());
+    EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+
+    auto lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    // A second lease can now be taken synchronously.
+    Maybe<WriteLease> lease2 =
+        mQuotaManager->TryAcquireWriteLease(mOriginMetadata);
+    EXPECT_TRUE(lease2.isSome());
+
+    ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    lease2.reset();
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+
+    ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    lease.reset();
+
+    EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    // Released but not yet settled: still no IO needed.
+    EXPECT_TRUE(mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isSome());
+  });
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+
+  PerformOnBackgroundThread([this]() {
+    EXPECT_TRUE(
+        mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isNothing());
+  });
+}
+
+// A lease still held at shutdown means a write may be in flight, so
+// UnloadQuota must leave the dirty flag on disk for the next startup to
+// rescan the origin.
+TEST_F(TestQuotaManagerDirtyTracking, UnloadQuota_DoesNotSettleLeasedOrigin) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+
+  Maybe<WriteLease> lease;
+  PerformOnBackgroundThread([this, &lease]() {
+    lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+  });
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+  lease.reset();
+
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+}
+
+// Client directory locks are held for as long as a client is open, so they
+// must not hold a write lease; otherwise idle origins would never settle.
+TEST_F(TestQuotaManagerDirtyTracking,
+       OpenClientDirectory_DoesNotHoldWriteLease) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  PerformOnBackgroundThread([this]() {
+    auto value =
+        Await(mQuotaManager->OpenClientDirectory(GetTestClientMetadata()));
+    ASSERT_TRUE(value.IsResolve());
+
+    ClientDirectoryLockHandle directoryLockHandle =
+        std::move(value.ResolveValue());
+
+    EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+
+    // The access time update made the origin dirty; without a lease the
+    // flush settles it while the directory is still open.
+    mQuotaManager->ProcessPendingNormalOriginOperations();
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+
+    FlushDirtyOriginInfos();
+    EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+
+    {
+      auto destroyingDirectoryLockHandle = std::move(directoryLockHandle);
+    }
+  });
+
+  ProcessPendingNormalOriginOperations();
+}
+
+// Quota manager operations on the IO thread take a lease with
+// AcquireWriteLeaseOnIOThread, which records the dirty flag before the
+// DirtyTrackingAutoLock for the mutation is constructed.
+TEST_F(TestQuotaManagerDirtyTracking,
+       AcquireWriteLeaseOnIOThread_RecordsDirtyFlag) {
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+
+  PerformOnIOThread([this]() {
+    auto writeLease =
+        mQuotaManager->AcquireWriteLeaseOnIOThread(mOriginMetadata);
+    ASSERT_TRUE(writeLease.isOk());
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+
+    mQuotaManager->UpdateOriginAccessTime(mOriginMetadata, PR_Now());
+
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+
+    auto metadata =
+        mQuotaManager->GetCachedOriginStateMetadataForTesting(mOriginMetadata);
+    ASSERT_TRUE(metadata);
+    EXPECT_TRUE(metadata->mDirty);
+  });
+
+  EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+}
+
+// Private origins have no row in the storage database and are never flushed;
+// a write lease must not try to record or flush anything for them.
+TEST_F(TestQuotaManagerDirtyTracking, AcquireWriteLease_PrivateOrigin) {
+  mOriginMetadata = {
+      GetPrincipalMetadata("^privateBrowsingId=1"_ns, "example.com"_ns,
+                           "http://example.com"_ns, /* aIsPrivate */ true),
+      PERSISTENCE_TYPE_PRIVATE};
+  mOriginMetadata.mStorageOrigin.Insert("uuid://"_ns, 0);
+
+  ASSERT_NO_FATAL_FAILURE(InitializeOrigin(mOriginMetadata));
+
+  PerformOnBackgroundThread([this]() {
+    auto lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Nothing());
+
+    ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+    lease.reset();
+
+    EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+  });
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+}
+
+// An origin initialized without its directory has no row yet. The lease must
+// not queue it for flushing, and the row must be created dirty once the
+// directory appears while the lease is held.
+TEST_F(TestQuotaManagerDirtyTracking,
+       AcquireWriteLease_WithoutOriginDirectory) {
+  ASSERT_NO_FATAL_FAILURE(ClearStoragesForOrigin(mOriginMetadata));
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeOrigin(mOriginMetadata, /* aCreateIfNonExistent */ false));
+
+  EXPECT_FALSE(DirectoryExistsInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Nothing());
+
+  PerformOnBackgroundThread([this]() {
+    auto lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+    EXPECT_FALSE(DirectoryExistsInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Nothing());
+
+    ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+    EXPECT_TRUE(IsDirtyInMemory(mOriginMetadata));
+
+    PerformOnIOThread([this]() {
+      auto directory =
+          mQuotaManager->GetOrCreateTemporaryOriginDirectory(mOriginMetadata);
+      EXPECT_TRUE(directory.isOk());
+    });
+
+    EXPECT_TRUE(DirectoryExistsInMemory(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos(/* aExpectDirty */ true));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+
+    lease.reset();
+  });
+
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_FALSE(IsDirtyInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+}
+
+TEST_F(TestQuotaManagerDirtyTracking,
+       AcquireWriteLease_DirectoryMetadataFailure) {
+  ASSERT_NO_FATAL_FAILURE(ClearStoragesForOrigin(mOriginMetadata));
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeOrigin(mOriginMetadata, /* aCreateIfNonExistent */ false));
+
+  EXPECT_FALSE(DirectoryExistsInMemory(mOriginMetadata));
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Nothing());
+
+  {
+    AutoArtificialFailure artificialFailure(
+        nsIQuotaArtificialFailure::CATEGORY_CREATE_DIRECTORY_METADATA2);
+
+    PerformOnBackgroundThread([this]() {
+      auto lease = AcquireWriteLease(mOriginMetadata);
+      ASSERT_TRUE(lease);
+
+      PerformOnIOThread([this]() {
+        auto directory =
+            mQuotaManager->GetOrCreateTemporaryOriginDirectory(mOriginMetadata);
+        ASSERT_TRUE(directory.isErr());
+        EXPECT_EQ(directory.unwrapErr(), NS_ERROR_FAILURE);
+      });
+
+      EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+      EXPECT_TRUE(DirectoryExistsInMemory(mOriginMetadata));
+      EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Nothing());
+      EXPECT_TRUE(
+          mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isNothing());
+    });
+  }
+
+  EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+
+  PerformOnBackgroundThread([this]() {
+    auto lease = AcquireWriteLease(mOriginMetadata);
+    ASSERT_TRUE(lease);
+    EXPECT_TRUE(HasWriteLease(mOriginMetadata));
+    EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(true));
+    EXPECT_TRUE(mQuotaManager->TryAcquireWriteLease(mOriginMetadata).isSome());
+  });
+
+  EXPECT_FALSE(HasWriteLease(mOriginMetadata));
+  ASSERT_NO_FATAL_FAILURE(FlushDirtyOriginInfos());
+  EXPECT_EQ(IsDirtyOnDisk(mOriginMetadata), Some(false));
+  ASSERT_NO_FATAL_FAILURE(ClearStoragesForOrigin(mOriginMetadata));
 }
 
 class TestQuotaManagerWriteLease

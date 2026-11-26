@@ -81,6 +81,9 @@ class QuotaManagerDependencyFixture : public testing::Test {
 
   static void ProcessPendingNormalOriginOperations();
 
+  static Maybe<OriginStateMetadata> GetCachedOriginStateMetadataForTesting(
+      const OriginMetadata& aOriginMetadata);
+
   static Maybe<OriginStateMetadata> GetOriginStateMetadata(
       const OriginMetadata& aOriginMetadata);
 

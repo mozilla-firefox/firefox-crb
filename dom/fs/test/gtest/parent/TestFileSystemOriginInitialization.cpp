@@ -7,11 +7,12 @@
 #include "FileSystemParentTypes.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "mozilla/Maybe.h"
+#include "mozilla/Preferences.h"
+#include "mozilla/ScopeExit.h"
 #include "mozilla/dom/FileSystemQuotaClient.h"
 #include "mozilla/dom/FileSystemQuotaClientFactory.h"
 #include "mozilla/dom/quota/UsageInfo.h"
-#include "nsIPrefBranch.h"
-#include "nsIPrefService.h"
 
 // This file is intended for integration tests which verify origin
 // initialization.
@@ -89,8 +90,12 @@ class TestFileSystemQuotaClientFactory final
 class TestFileSystemOriginInitialization : public FileSystemParentTest {
  protected:
   static void SetUpTestCase() {
-    nsCOMPtr<nsIPrefBranch> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID);
-    prefs->SetBoolPref("dom.quotaManager.loadQuotaFromCache", false);
+    if (Preferences::HasUserValue("dom.quotaManager.loadQuotaFromCache")) {
+      sLoadQuotaFromCache =
+          Some(Preferences::GetBool("dom.quotaManager.loadQuotaFromCache"));
+    }
+    ASSERT_EQ(NS_OK, Preferences::SetBool("dom.quotaManager.loadQuotaFromCache",
+                                          false));
 
     auto factory = MakeRefPtr<TestFileSystemQuotaClientFactory>();
 
@@ -102,6 +107,18 @@ class TestFileSystemOriginInitialization : public FileSystemParentTest {
   }
 
   static void TearDownTestCase() {
+    auto restorePref = MakeScopeExit([] {
+      if (sLoadQuotaFromCache) {
+        EXPECT_EQ(NS_OK,
+                  Preferences::SetBool("dom.quotaManager.loadQuotaFromCache",
+                                       *sLoadQuotaFromCache));
+      } else {
+        EXPECT_EQ(NS_OK, Preferences::ClearUser(
+                             "dom.quotaManager.loadQuotaFromCache"));
+      }
+      sLoadQuotaFromCache.reset();
+    });
+
     sQuotaClient = nullptr;
 
     ASSERT_NO_FATAL_FAILURE(FileSystemParentTest::TearDownTestCase());
@@ -110,7 +127,10 @@ class TestFileSystemOriginInitialization : public FileSystemParentTest {
   }
 
   static RefPtr<MockFileSystemQuotaClient> sQuotaClient;
+  static Maybe<bool> sLoadQuotaFromCache;
 };
+
+constinit Maybe<bool> TestFileSystemOriginInitialization::sLoadQuotaFromCache;
 
 constinit RefPtr<MockFileSystemQuotaClient>
     TestFileSystemOriginInitialization::sQuotaClient;

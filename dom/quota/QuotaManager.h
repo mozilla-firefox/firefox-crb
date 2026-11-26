@@ -781,6 +781,10 @@ class QuotaManager final : public BackgroundThreadObject {
   Maybe<OriginStateMetadata> GetOriginStateMetadata(
       const OriginMetadata& aOriginMetadata);
 
+  // Reads the origin's row from the storage database. IO thread only.
+  Maybe<OriginStateMetadata> GetCachedOriginStateMetadataForTesting(
+      const OriginMetadata& aOriginMetadata);
+
   std::pair<uint64_t, uint64_t> GetUsageAndLimitForEstimate(
       const OriginMetadata& aOriginMetadata);
 
