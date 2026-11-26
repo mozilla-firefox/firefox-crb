@@ -2835,6 +2835,13 @@ export class DiscoveryStreamFeed {
           await this.refetchContent();
         }
         break;
+      case at.DISCOVERY_STREAM_DEV_REFETCH_CONTENT:
+        // Only NewTabDevtoolsFeed asks for this; a tab could otherwise make
+        // the feed refetch content and ads in a loop.
+        if (!action.meta?.fromTarget) {
+          await this.refetchContent();
+        }
+        break;
       case at.DISCOVERY_STREAM_IMPRESSION_STATS:
         if (
           action.data.tiles &&
