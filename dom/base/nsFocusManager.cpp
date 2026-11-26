@@ -2201,6 +2201,37 @@ mozilla::dom::BrowsingContext* nsFocusManager::GetCommonAncestor(
   return parent;
 }
 
+static bool IsWindowFrozen(nsPIDOMWindowOuter* aWindow) {
+  if (!aWindow || nsGlobalWindowOuter::Cast(aWindow)->IsFrozen()) {
+    return true;
+  }
+
+  // Check if the inner window is frozen as well. This can happen when a focus
+  // change occurs while restoring a previous page.
+  auto* innerWindow =
+      nsGlobalWindowInner::Cast(aWindow->GetCurrentInnerWindow());
+  return !innerWindow || innerWindow->IsFrozen();
+}
+
+// Like other browsers, the document of an iframe in a content document can get
+// focus while the iframe is hidden or not laid out yet, though none of its
+// elements can. Hidden chrome panels and browsers still can't, so that they
+// don't take focus away from the visible UI.
+static bool CanFocusUnderHiddenEmbedder(nsPIDOMWindowOuter* aWindow) {
+  if (IsWindowFrozen(aWindow)) {
+    return false;
+  }
+  PresShell* presShell =
+      aWindow->GetDocShell() ? aWindow->GetDocShell()->GetPresShell() : nullptr;
+  if (!presShell || !presShell->IsUnderHiddenEmbedderElement()) {
+    return false;
+  }
+  BrowsingContext* bc = aWindow->GetBrowsingContext();
+  const Maybe<nsString>& embedderType = bc->GetEmbedderElementType();
+  return bc->IsContent() && !bc->IsTop() && embedderType &&
+         embedderType->EqualsLiteral("iframe");
+}
+
 bool nsFocusManager::AdjustInProcessWindowFocus(
     BrowsingContext* aBrowsingContext, bool aCheckPermission, bool aIsVisible,
     uint64_t aActionId, bool aShouldClearAncestorFocus,
@@ -2244,7 +2275,9 @@ bool nsFocusManager::AdjustInProcessWindowFocus(
     // if the parent window is visible but the original window was not, then we
     // have likely moved up and out from a hidden tab to the browser window, or
     // a similar such arrangement. Stop adjusting the current nodes.
-    if (IsWindowVisible(window) != aIsVisible) {
+    const bool isVisible = IsWindowVisible(window) ||
+                           (aIsVisible && CanFocusUnderHiddenEmbedder(window));
+    if (isVisible != aIsVisible) {
       break;
     }
 
@@ -2302,15 +2335,7 @@ void nsFocusManager::AdjustWindowFocus(
 }
 
 bool nsFocusManager::IsWindowVisible(nsPIDOMWindowOuter* aWindow) {
-  if (!aWindow || nsGlobalWindowOuter::Cast(aWindow)->IsFrozen()) {
-    return false;
-  }
-
-  // Check if the inner window is frozen as well. This can happen when a focus
-  // change occurs while restoring a previous page.
-  auto* innerWindow =
-      nsGlobalWindowInner::Cast(aWindow->GetCurrentInnerWindow());
-  if (!innerWindow || innerWindow->IsFrozen()) {
+  if (IsWindowFrozen(aWindow)) {
     return false;
   }
 
@@ -2806,7 +2831,8 @@ void nsFocusManager::Focus(
                              : aWindow->GetFocusMethod() |
                                    (aFlags & (FLAG_SHOWRING | FLAG_NOSHOWRING));
 
-  if (!IsWindowVisible(aWindow)) {
+  if (!IsWindowVisible(aWindow) &&
+      (aElement || !CanFocusUnderHiddenEmbedder(aWindow))) {
     // if the window isn't visible, for instance because it is a hidden tab,
     // update the current focus and scroll it into view but don't do anything
     // else
@@ -2837,7 +2863,7 @@ void nsFocusManager::Focus(
     // focus can be traversed from the top level down to the newly focused
     // window.
     RefPtr<BrowsingContext> bc = aWindow->GetBrowsingContext();
-    AdjustWindowFocus(bc, false, IsWindowVisible(aWindow), aActionId,
+    AdjustWindowFocus(bc, false, true /* aIsVisible */, aActionId,
                       false /* aShouldClearAncestorFocus */,
                       nullptr /* aAncestorBrowsingContextToFocus */);
   }

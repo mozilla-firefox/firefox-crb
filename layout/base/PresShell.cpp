@@ -111,6 +111,7 @@
 #include "mozilla/dom/FontFaceSet.h"
 #include "mozilla/dom/FragmentDirective.h"
 #include "mozilla/dom/HTMLAreaElement.h"
+#include "mozilla/dom/HTMLIFrameElement.h"
 #include "mozilla/dom/HighlightRegistry.h"
 #include "mozilla/dom/LargestContentfulPaint.h"
 #include "mozilla/dom/MouseEventBinding.h"
@@ -1396,6 +1397,15 @@ bool PresShell::NeedsFocusFixUp() const {
   // focusable areas.
   if (auto* area = HTMLAreaElement::FromNode(currentFocus)) {
     if (nsFocusManager::IsAreaElementFocusable(*area)) {
+      return false;
+    }
+  }
+
+  // Like other browsers, a focused iframe in a content document keeps focus
+  // when it stops being rendered. Chrome documents keep the fixup, so that
+  // keyboard input doesn't go to hidden chrome panels.
+  if (auto* iframe = HTMLIFrameElement::FromNode(currentFocus)) {
+    if (!iframe->GetPrimaryFrame() && !nsContentUtils::IsChromeDoc(mDocument)) {
       return false;
     }
   }

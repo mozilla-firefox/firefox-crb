@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<iframe src="https://example.com/tests/dom/base/test/file_focus_display_none_xorigin_iframe_inner.html"></iframe>
+<script>
+let iframe = document.querySelector("iframe");
+window.onmessage = function(e) {
+  if (e.source === iframe.contentWindow) {
+    window.parent.postMessage(e.data, "*");
+  } else if (e.data === "getactiveelement") {
+    window.parent.postMessage(document.activeElement.tagName, "*");
+  } else {
+    iframe.contentWindow.postMessage(e.data, "*");
+  }
+};
+</script>
