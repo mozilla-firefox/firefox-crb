@@ -55,5 +55,3 @@ vendoring:
       script: '{yaml_dir}/generate_sources_mozbuild.sh'
       cwd: '{yaml_dir}'
 
-  patches:
-    - mmloadusi64.patch
