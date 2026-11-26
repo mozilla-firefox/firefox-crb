@@ -1557,6 +1557,25 @@ auto nsWindow::Bounds::ComputeX11(const nsWindow* aWindow) -> Bounds {
   const auto toplevelBounds = GetBounds(toplevel);
   LOG_WIN(aWindow, "  toplevelBounds %s", ToString(toplevelBounds).c_str());
 
+  // While the window manager reparents a newly mapped window, the frame can
+  // still be at its initial position with a placeholder size, smaller than the
+  // window it contains. The position read from it then is bogus (e.g. 0,0), so
+  // keep the previous position until the configure event that follows. The
+  // window itself has its real size already, and without a frame there is no
+  // margin, so the client area is the whole toplevel.
+  if (aWindow->mClientMargin == DesktopIntMargin() &&
+      (toplevelBoundsWithTitlebar.width < toplevelBounds.width ||
+       toplevelBoundsWithTitlebar.height < toplevelBounds.height)) {
+    LOG_WIN(aWindow, "  frame smaller than toplevel, not framed yet");
+    PROFILER_MARKER_FMT("Window bounds from X11", GRAPHICS, {},
+                        "{} frame {} smaller than toplevel {}, position kept",
+                        fmt::ptr(aWindow), ToString(toplevelBoundsWithTitlebar),
+                        ToString(toplevelBounds));
+    return {.mClientArea = DesktopIntRect(aWindow->mClientArea.TopLeft(),
+                                          toplevelBounds.Size()),
+            .mClientMargin = {}};
+  }
+
   // Offset from system decoration to gtk decoration.
   const auto systemDecorationOffset = [&] {
     auto offset =
