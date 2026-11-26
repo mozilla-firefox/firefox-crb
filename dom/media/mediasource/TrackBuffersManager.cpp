@@ -501,6 +501,7 @@ void TrackBuffersManager::CompleteResetParserState() {
     // if we have been aborted, we may have pending frames that we are going
     // to discard now.
     track->mQueuedSamples.Clear();
+    track->mPrerollSample = nullptr;
   }
 
   // 7. Remove all bytes from the input buffer.
@@ -2025,8 +2026,11 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
   // This sample will be set with a duration of only 1us which will cause it to
   // be dropped once returned by the decoder.
   // This sample is required to "prime" the decoder so that the following frame
-  // can be fully decoded.
-  RefPtr<MediaRawData> previouslyDroppedSample;
+  // can be fully decoded. Only an audio track keeps it across calls.
+  RefPtr<MediaRawData> videoPrerollSample;
+  RefPtr<MediaRawData>& previouslyDroppedSample =
+      &aTrackData == &mAudioTracks ? aTrackData.mPrerollSample
+                                   : videoPrerollSample;
   for (auto& sample : aSamples) {
     const TimeUnit sampleEndTime = sample->GetEndTime();
     if (sampleEndTime > aTrackData.mLastParsedEndTime) {
@@ -2263,6 +2267,7 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
       } else {
         sample->mOriginalPresentationWindow = Some(sampleInterval);
         sample->mTimecode = decodeTimestamp;
+        sample->mTrackInfo = trackBuffer.mLastInfo;
         previouslyDroppedSample = sample;
         MSE_DEBUGV(
             "frame [{}{},{}{}] outside appendWindow [{}.6{},{}.6{}] "
@@ -2287,6 +2292,15 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
         needDiscontinuityCheck = true;
         continue;
       }
+    }
+    if (previouslyDroppedSample &&
+        (previouslyDroppedSample->mTrackInfo->GetID() !=
+             trackBuffer.mLastInfo->GetID() ||
+         previouslyDroppedSample->mOriginalPresentationWindow->mEnd !=
+             sample->mOriginalPresentationWindow.valueOr(sampleInterval)
+                 .mStart)) {
+      MSE_DEBUGV("Discarding a preroll frame not adjacent to the next frame");
+      previouslyDroppedSample = nullptr;
     }
     if (previouslyDroppedSample) {
       MSE_DEBUGV("Adding silent frame");

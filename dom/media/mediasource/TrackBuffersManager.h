@@ -351,6 +351,10 @@ class TrackBuffersManager final
     MozPromiseRequestHolder<MediaTrackDemuxer::SamplesPromise> mDemuxRequest;
     // Highest end timestamp of the last media segment demuxed.
     media::TimeUnit mLastParsedEndTime;
+    // The last audio frame dropped for being outside the append window, kept
+    // until the next frame added to the track buffer so that it primes the
+    // decoder for that frame, if they are adjacent.
+    RefPtr<MediaRawData> mPrerollSample;
 
     // If set, position where the next contiguous frame will be inserted.
     // If a discontinuity is detected, it will be unset and recalculated upon
@@ -420,6 +424,7 @@ class TrackBuffersManager final
 
     void Reset() {
       ResetAppendState();
+      mPrerollSample = nullptr;
       mEvictionIndex.Reset();
       for (auto& buffer : mBuffers) {
         buffer.Clear();
