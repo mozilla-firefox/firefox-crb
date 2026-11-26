@@ -2959,6 +2959,7 @@ network:
       - waf_blocked
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2097922
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
     data_sensitivity:
@@ -2966,7 +2967,7 @@ network:
     notification_emails:
       - necko@mozilla.com
       - vgosu@mozilla.com
-    expires: 165
+    expires: 176
 
   akamai_waf_blocked:
     type: boolean
@@ -2978,6 +2979,7 @@ network:
       permit_non_commutative_operations_over_ipc: true
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2097922
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
     data_sensitivity:
@@ -2985,7 +2987,7 @@ network:
     notification_emails:
       - necko@mozilla.com
       - vgosu@mozilla.com
-    expires: 165
+    expires: 176
 
   akamai_waf_blocked_subresource:
     type: boolean
@@ -2997,6 +2999,7 @@ network:
       permit_non_commutative_operations_over_ipc: true
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2097922
     data_reviews:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=2025212
     data_sensitivity:
@@ -3004,7 +3007,7 @@ network:
     notification_emails:
       - necko@mozilla.com
       - vgosu@mozilla.com
-    expires: 165
+    expires: 176
 
   id:
     type: custom_distribution
