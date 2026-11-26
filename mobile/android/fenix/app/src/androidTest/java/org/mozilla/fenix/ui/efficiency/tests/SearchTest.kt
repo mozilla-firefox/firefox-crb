@@ -545,16 +545,7 @@ class SearchTest : BaseTest(LaunchConfig(isPocketEnabled = false)) {
     fun verifyTheUIOfTheAddressBarInFocusModeTest() {
         val searchTerm = "android"
         val searchEngineName = "TestSearchEngine"
-        composeRule.activityRule.applySettingsExceptions {
-            it.showAddressBarInFocusMode = true
-        }
 
-        // Trending suggestions are fetched live from the engine, so real Google returns non-deterministic
-        // content (and an empty list on any fetch miss). Point a custom engine's trending endpoint at the
-        // mock server, which returns a fixed set, so the rows can actually be asserted. isGeneral = true so
-        // the engine stands in for the general default (Google): it keeps the unified URL-bar placeholder
-        // and the recent-search suggestions a specific engine would otherwise suppress.
-        appContext.components.settings.trendingSearchSuggestionsEnabled = true
         val trendingUrl =
             "http://localhost:${searchMockServerRule.server.port}/${SearchDispatcher.TRENDING_SEARCHES_PATH}"
         MockBrowserDataHelper.setCustomSearchEngine(
@@ -563,6 +554,11 @@ class SearchTest : BaseTest(LaunchConfig(isPocketEnabled = false)) {
             trendingUrl = trendingUrl,
             isGeneral = true,
         )
+
+        composeRule.activityRule.applySettingsExceptions {
+            it.showAddressBarInFocusMode = true
+            it.isTrendingSearchSuggestionsEnabled = true
+        }
 
         // Seed the recent search directly: a live search only registers as "recent" once its tab accrues view
         // time (recorded when the tab is backgrounded), so driving it through navigateToPage races the moment
@@ -579,5 +575,67 @@ class SearchTest : BaseTest(LaunchConfig(isPocketEnabled = false)) {
             .mozVerify(SearchBarSelectors.TRENDING_SEARCHES_HEADER(searchEngineName))
             .mozVerifyAnyContainsText(SearchBarSelectors.SEARCH_SUGGESTION, SearchDispatcher.TRENDING_SEARCHES.first())
             .mozVerifyAnyContainsText(SearchBarSelectors.SEARCH_SUGGESTION, SearchDispatcher.TRENDING_SEARCHES.last())
+    }
+
+    // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/4349538
+    @Critical
+    @Test
+    fun verifyHomepageItemSelectionFromTrendingViewTest() {
+        val searchEngineName = "TestSearchEngine"
+        val trendingSearch = SearchDispatcher.TRENDING_SEARCHES.first()
+
+        val trendingUrl =
+            "http://localhost:${searchMockServerRule.server.port}/${SearchDispatcher.TRENDING_SEARCHES_PATH}"
+        MockBrowserDataHelper.setCustomSearchEngine(
+            searchMockServerRule.server,
+            searchEngineName,
+            trendingUrl = trendingUrl,
+            isGeneral = true,
+        )
+
+        composeRule.activityRule.applySettingsExceptions {
+            it.isTrendingSearchSuggestionsEnabled = true
+            it.isHomepageTrendingRecentSearchEnabled = true
+        }
+
+        on.searchBar
+            .navigateToPage()
+            .mozVerify(SearchBarSelectors.TRENDING_SEARCHES_HEADER(searchEngineName))
+            .mozVerifyAnyContainsText(SearchBarSelectors.SEARCH_SUGGESTION, trendingSearch)
+            .mozClick(SearchBarSelectors.SEARCH_SUGGESTION_WITH_TEXT(trendingSearch))
+        on.browserPage.verifyPageContent("Page content: 4")
+    }
+
+    // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/4349552
+    @Critical
+    @Test
+    fun verifyHomepageItemSelectionFromTrendingViewInPrivateModeTest() {
+        val searchEngineName = "TestSearchEngine"
+        val trendingSearch = SearchDispatcher.TRENDING_SEARCHES.first()
+
+        val trendingUrl =
+            "http://localhost:${searchMockServerRule.server.port}/${SearchDispatcher.TRENDING_SEARCHES_PATH}"
+        MockBrowserDataHelper.setCustomSearchEngine(
+            searchMockServerRule.server,
+            searchEngineName,
+            trendingUrl = trendingUrl,
+            isGeneral = true,
+        )
+
+        composeRule.activityRule.applySettingsExceptions {
+            it.isTrendingSearchSuggestionsEnabled = true
+            it.shouldShowSearchSuggestionsInPrivate = true
+            it.isHomepageTrendingRecentSearchEnabled = true
+        }
+
+        on.home.navigateToPage()
+        on.home.mozClick(HomeSelectors.PRIVATE_BROWSING_BUTTON)
+
+        on.searchBar
+            .navigateToPage()
+            .mozVerify(SearchBarSelectors.TRENDING_SEARCHES_HEADER(searchEngineName))
+            .mozVerifyAnyContainsText(SearchBarSelectors.SEARCH_SUGGESTION, trendingSearch)
+            .mozClick(SearchBarSelectors.SEARCH_SUGGESTION_WITH_TEXT(trendingSearch))
+        on.browserPage.verifyPageContent("Page content: 4")
     }
 }
