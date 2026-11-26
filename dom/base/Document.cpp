@@ -16349,39 +16349,6 @@ static CallState ResetFullscreen(Document& aDocument,
   return CallState::Continue;
 }
 
-// Since Document::ExitFullscreenInDocTree() could be called from
-// Element::UnbindFromTree() where it is not safe to synchronously run
-// script. This runnable is the script part of that function.
-class ExitFullscreenScriptRunnable : public Runnable {
- public:
-  explicit ExitFullscreenScriptRunnable(Document* aRoot, Document* aLeaf)
-      : mozilla::Runnable("ExitFullscreenScriptRunnable"),
-        mRoot(aRoot),
-        mLeaf(aLeaf) {}
-
-  MOZ_CAN_RUN_SCRIPT_BOUNDARY NS_IMETHOD Run() override {
-    // Dispatch MozDOMFullscreen:Exited to the original fullscreen leaf
-    // document since we want this event to follow the same path that
-    // MozDOMFullscreen:Entered was dispatched.
-    nsContentUtils::DispatchEventOnlyToChrome(
-        mLeaf, mLeaf, u"MozDOMFullscreen:Exited"_ns, CanBubble::eYes,
-        Cancelable::eNo, /* DefaultAction */ nullptr);
-    // Ensure the window exits fullscreen, as long as we don't have
-    // pending fullscreen requests.
-    if (const RefPtr<nsPIDOMWindowOuter> win = mRoot->GetWindow()) {
-      if (!mRoot->HasPendingFullscreenRequests()) {
-        win->SetFullscreenInternal(FullscreenReason::ForForceExitFullscreen,
-                                   false);
-      }
-    }
-    return NS_OK;
-  }
-
- private:
-  MOZ_KNOWN_LIVE const nsCOMPtr<Document> mRoot;
-  MOZ_KNOWN_LIVE const nsCOMPtr<Document> mLeaf;
-};
-
 /* static */
 void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   MOZ_ASSERT(aMaybeNotARootDoc);
@@ -16397,7 +16364,7 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
     exit->MayResolvePromise();
   }
 
-  nsCOMPtr<Document> root = aMaybeNotARootDoc->GetFullscreenRoot();
+  RefPtr<Document> root = aMaybeNotARootDoc->GetFullscreenRoot();
   if (!root || !root->Fullscreen()) {
     // If a document was detached before exiting from fullscreen, it is
     // possible that the root had left fullscreen state. In this case,
@@ -16418,7 +16385,7 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   // See ExitFullscreenScriptRunnable::Run for details. We have to
   // record it here because we don't have such information after we
   // reset the fullscreen state below.
-  Document* fullscreenLeaf = GetFullscreenLeaf(root);
+  RefPtr<Document> fullscreenLeaf = GetFullscreenLeaf(root);
 
   // Walk the tree of fullscreen documents, and reset their fullscreen state.
   ResetFullscreen(*root, DispatchFullscreenChangeEvent::Yes);
@@ -16441,8 +16408,20 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   // Move the top-level window out of fullscreen mode.
   FullscreenRoots::Remove(root);
 
-  nsContentUtils::AddScriptRunner(
-      MakeAndAddRef<ExitFullscreenScriptRunnable>(root, fullscreenLeaf));
+  // Dispatch MozDOMFullscreen:Exited to the original fullscreen leaf
+  // document since we want this event to follow the same path that
+  // MozDOMFullscreen:Entered was dispatched.
+  nsContentUtils::DispatchEventOnlyToChrome(
+      fullscreenLeaf, root, u"MozDOMFullscreen:Exited"_ns, CanBubble::eYes,
+      Cancelable::eNo, /* DefaultAction */ nullptr);
+  // Ensure the window exits fullscreen, as long as we don't have
+  // pending fullscreen requests.
+  if (const RefPtr<nsPIDOMWindowOuter> win = root->GetWindow()) {
+    if (!root->HasPendingFullscreenRequests()) {
+      win->SetFullscreenInternal(FullscreenReason::ForForceExitFullscreen,
+                                 false);
+    }
+  }
 }
 
 static void DispatchFullscreenNewOriginEvent(Document* aDoc) {
@@ -17924,6 +17903,14 @@ void Document::ScheduleViewTransitionUpdateCallback(ViewTransition* aVt) {
         "Document::FlushViewTransitionUpdateCallbackQueue", this,
         &Document::FlushViewTransitionUpdateCallbackQueue));
   }
+}
+
+void Document::FullscreenElementRemoved() {
+  nsContentUtils::ReportToConsole(nsIScriptError::warningFlag, "DOM"_ns, this,
+                                  PropertiesFile::DOM_PROPERTIES,
+                                  "RemovedFullscreenElement");
+  // Fully exit fullscreen.
+  ExitFullscreenInDocTree(this);
 }
 
 // https://drafts.csswg.org/css-view-transitions-1/#flush-the-update-callback-queue
