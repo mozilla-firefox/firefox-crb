@@ -11,6 +11,8 @@ import sys
 
 import mozpack.path as mozpath
 
+from mozbuild.packaging import echo_command
+
 _TAR_FLAGS = (
     "--owner=0",
     "--group=0",
@@ -36,9 +38,11 @@ def is_gnu_tar(tar_bin):
 def _run_tar_pipeline(tar_bin, cwd, tar_args, output_path, compress_argv):
     mode = ("--mode=go-w",) if is_gnu_tar(tar_bin) else ()
     tar_argv = [tar_bin, "-c", *_TAR_FLAGS, *mode, "-f", "-", *tar_args]
+    echo_command(tar_argv)
     if compress_argv is None:
         with open(output_path, "wb") as out:
             return subprocess.call(tar_argv, cwd=cwd, stdout=out)
+    echo_command(compress_argv)
     tar = subprocess.Popen(tar_argv, cwd=cwd, stdout=subprocess.PIPE)
     with open(output_path, "wb") as out:
         comp = subprocess.Popen(compress_argv, stdin=tar.stdout, stdout=out)
@@ -52,6 +56,7 @@ def _zip_package(cwd, pkg_dir, output_path):
     from mozbuild.action import zip as zip_action
 
     args = ["-C", cwd, "-x", "**/.mkdir.done", output_path, pkg_dir]
+    echo_command(["zip", *args])
     return zip_action.main(args) or 0
 
 
@@ -68,6 +73,7 @@ def _make_dmg(cwd, pkg_dir, output_path, dsstore, background, icon, volume_name)
     if volume_name:
         args += ["--volume-name", volume_name]
     args += [pkg_dir, output_path]
+    echo_command(["make_dmg", *args])
     prev = os.getcwd()
     try:
         os.chdir(cwd)
