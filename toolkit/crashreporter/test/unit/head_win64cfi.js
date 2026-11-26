@@ -52,9 +52,8 @@ function findNearestTestCrasherSymbol(addr) {
 function initTestCrasherSymbols() {
   gTestCrasherSyms = {};
   for (let k in CrashTestUtils) {
-    // Not all keys here are valid symbol names. getWin64CFITestFnAddrOffset
-    // will return 0 in those cases, no need to filter here.
-    if (Number.isInteger(CrashTestUtils[k])) {
+    // Other constants may share values with these crash IDs.
+    if (k.startsWith("CRASH_X64CFI_")) {
       let t = CrashTestUtils.getWin64CFITestFnAddrOffset(CrashTestUtils[k]);
       if (t > 0) {
         gTestCrasherSyms[k] = t;
