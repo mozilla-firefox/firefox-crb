@@ -4346,7 +4346,11 @@ TEST_F(TestQuotaManagerAndClearStorage,
     QuotaManager* quotaManager = QuotaManager::Get();
     ASSERT_TRUE(quotaManager);
 
-    quotaManager->UpdateOriginAccessTime(originMetadata, accessTime);
+    {
+      auto lease = quotaManager->AcquireWriteLeaseOnIOThread(originMetadata);
+      ASSERT_TRUE(lease.isOk());
+      quotaManager->UpdateOriginAccessTime(originMetadata, accessTime);
+    }
     quotaManager->FlushDirtyOriginInfos();
     quotaManager->FlushDirtyOriginInfos();
   });
@@ -4360,22 +4364,11 @@ TEST_F(TestQuotaManagerAndClearStorage,
             originalMetadata->mLastAccessTime);
 
   ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(originMetadata));
-  bool quiescentIntervalElapsed = false;
-  RefPtr<CancelableRunnable> timer = NS_NewCancelableRunnableFunction(
-      "QuotaManager origin write quiescent interval elapsed",
-      [&] { quiescentIntervalElapsed = true; });
-  ASSERT_NS_SUCCEEDED(NS_DelayedDispatchToCurrentThread(
-      do_AddRef(timer), 2 * kWriteQuiescentThresholdMs));
-  SpinEventLoopUntil("Waiting for origin write quiescent interval"_ns,
-                     [&] { return quiescentIntervalElapsed; });
-  timer->Cancel();
-
-  PerformOnIOThread([] {
-    QuotaManager* quotaManager = QuotaManager::Get();
-    ASSERT_TRUE(quotaManager);
-
-    quotaManager->FlushDirtyOriginInfos();
-  });
+  ASSERT_NO_FATAL_FAILURE(WaitForCondition([&] {
+    PerformOnIOThread([] { QuotaManager::Get()->FlushDirtyOriginInfos(); });
+    const auto state = GetOriginStateMetadata(originMetadata);
+    return state && !state->mDirty;
+  }));
 
   const auto flushedMetadata = GetOriginStateMetadata(originMetadata);
   ASSERT_TRUE(flushedMetadata);
