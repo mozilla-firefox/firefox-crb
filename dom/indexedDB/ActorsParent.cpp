@@ -1586,12 +1586,16 @@ class ConnectionPool::ConnectionRunnable : public Runnable {
 };
 
 class ConnectionPool::IdleConnectionRunnable final : public ConnectionRunnable {
+  quota::WriteLease mWriteLease;
   const bool mNeedsCheckpoint;
   Atomic<bool> mInterrupted;
 
  public:
-  IdleConnectionRunnable(DatabaseInfo& aDatabaseInfo, bool aNeedsCheckpoint)
-      : ConnectionRunnable(aDatabaseInfo), mNeedsCheckpoint(aNeedsCheckpoint) {}
+  IdleConnectionRunnable(DatabaseInfo& aDatabaseInfo, bool aNeedsCheckpoint,
+                         quota::WriteLease aWriteLease)
+      : ConnectionRunnable(aDatabaseInfo),
+        mWriteLease(std::move(aWriteLease)),
+        mNeedsCheckpoint(aNeedsCheckpoint) {}
 
   NS_INLINE_DECL_REFCOUNTING_INHERITED(IdleConnectionRunnable,
                                        ConnectionRunnable)
@@ -5178,10 +5182,13 @@ class Maintenance final : public Runnable {
     InitializedOnce<const OriginMetadata> mOriginMetadata;
     InitializedOnce<const nsTArray<nsString>> mDatabasePaths;
     const PersistenceType mPersistenceType;
+    // Keeps the origin dirty while leases are acquired for the database tasks.
+    quota::WriteLease mWriteLease;
 
     DirectoryInfo(PersistenceType aPersistenceType,
                   OriginMetadata aOriginMetadata,
-                  nsTArray<nsString>&& aDatabasePaths);
+                  nsTArray<nsString>&& aDatabasePaths,
+                  quota::WriteLease aWriteLease);
 
     DirectoryInfo(const DirectoryInfo& aOther) = delete;
     DirectoryInfo(DirectoryInfo&& aOther) = delete;
@@ -5352,10 +5359,12 @@ class Maintenance final : public Runnable {
 
 Maintenance::DirectoryInfo::DirectoryInfo(PersistenceType aPersistenceType,
                                           OriginMetadata aOriginMetadata,
-                                          nsTArray<nsString>&& aDatabasePaths)
+                                          nsTArray<nsString>&& aDatabasePaths,
+                                          quota::WriteLease aWriteLease)
     : mOriginMetadata(std::move(aOriginMetadata)),
       mDatabasePaths(std::move(aDatabasePaths)),
-      mPersistenceType(aPersistenceType) {
+      mPersistenceType(aPersistenceType),
+      mWriteLease(std::move(aWriteLease)) {
   MOZ_ASSERT(aPersistenceType != PERSISTENCE_TYPE_INVALID);
   MOZ_ASSERT(!mOriginMetadata->mGroup.IsEmpty());
   MOZ_ASSERT(!mOriginMetadata->mOrigin.IsEmpty());
@@ -5403,6 +5412,9 @@ class DatabaseMaintenance final : public Runnable {
   nsCOMPtr<nsIRunnable> mCompleteCallback;
   const PersistenceType mPersistenceType;
   const Maybe<CipherKey> mMaybeKey;
+  // Quota write lease released in RunOnOwningThread, before the directory
+  // lock is dropped.
+  quota::WriteLease mWriteLease;
   Atomic<bool> mAborted;
   DataMutex<nsCOMPtr<mozIStorageConnection>> mSharedStorageConnection;
 
@@ -5412,7 +5424,8 @@ class DatabaseMaintenance final : public Runnable {
                       PersistenceType aPersistenceType,
                       const OriginMetadata& aOriginMetadata,
                       const nsAString& aDatabasePath,
-                      const Maybe<CipherKey>& aMaybeKey)
+                      const Maybe<CipherKey>& aMaybeKey,
+                      quota::WriteLease aWriteLease)
       : Runnable("dom::indexedDB::DatabaseMaintenance"),
         mMaintenance(aMaintenance),
         mDirectoryLock(std::move(aDirectoryLock)),
@@ -5420,6 +5433,7 @@ class DatabaseMaintenance final : public Runnable {
         mDatabasePath(aDatabasePath),
         mPersistenceType(aPersistenceType),
         mMaybeKey{aMaybeKey},
+        mWriteLease(std::move(aWriteLease)),
         mAborted(false),
         mSharedStorageConnection("sharedStorageConnection") {
     MOZ_ASSERT(mDirectoryLock);
@@ -8643,13 +8657,28 @@ void ConnectionPool::PerformIdleDatabaseMaintenance(
   MOZ_ASSERT(mIdleDatabases.Contains(&aDatabaseInfo));
   MOZ_ASSERT(!mDatabasesPerformingIdleMaintenance.Contains(&aDatabaseInfo));
 
+  NotifyIdleMaintenanceStarted();
+
+  QuotaManager* const quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  auto writeLease =
+      quotaManager->TryAcquireWriteLease(aDatabaseInfo.mOriginMetadata);
+  if (!writeLease) {
+    // CloseDatabase acquires a lease only if a checkpoint is pending, and
+    // skips the checkpoint if acquisition fails. An already-checkpointed
+    // database closes without dirtying the origin again.
+    CloseDatabase(aDatabaseInfo);
+    return;
+  }
+
   const bool neededCheckpoint = aDatabaseInfo.mNeedsCheckpoint;
 
   aDatabaseInfo.mNeedsCheckpoint = false;
   aDatabaseInfo.mIdle = false;
 
-  auto idleConnectionRunnable =
-      MakeRefPtr<IdleConnectionRunnable>(aDatabaseInfo, neededCheckpoint);
+  auto idleConnectionRunnable = MakeRefPtr<IdleConnectionRunnable>(
+      aDatabaseInfo, neededCheckpoint, std::move(*writeLease));
 
   mDatabasesPerformingIdleMaintenance.AppendElement(
       PerformingIdleMaintenanceDatabaseInfo{aDatabaseInfo,
@@ -8763,6 +8792,8 @@ ConnectionPool::IdleConnectionRunnable::Run() {
   }
 
   AssertIsOnBackgroundThread();
+
+  mWriteLease = quota::WriteLease();
 
   RefPtr<ConnectionPool> connectionPool = mDatabaseInfo.mConnectionPool;
   MOZ_ASSERT(connectionPool);
@@ -13917,6 +13948,8 @@ nsresult Maintenance::DirectoryWork() {
                   }));
 
               if (!databasePaths.IsEmpty()) {
+                quota::WriteLease writeLease;
+
                 if (!persistent) {
                   auto maybeFullOriginMetadata =
                       quotaManager->GetFullOriginMetadata(metadata);
@@ -13939,6 +13972,14 @@ nsresult Maintenance::DirectoryWork() {
                     return Ok{};
                   }
 
+                  QM_TRY_UNWRAP(
+                      writeLease,
+                      quotaManager->AcquireWriteLeaseOnIOThread(metadata),
+                      Ok{});
+
+                  // Preserve the lease's dirty flag in
+                  // CreateDirectoryMetadata2.
+                  fullOriginMetadata.mDirty = true;
                   fullOriginMetadata.mLastMaintenanceDate =
                       Date::Today().ToDays();
                   fullOriginMetadata.mAccessed = true;
@@ -13952,7 +13993,8 @@ nsresult Maintenance::DirectoryWork() {
                 }
 
                 mDirectoryInfos.EmplaceBack(persistenceType, metadata,
-                                            std::move(databasePaths));
+                                            std::move(databasePaths),
+                                            std::move(writeLease));
               }
 
               break;
@@ -14026,6 +14068,9 @@ nsresult Maintenance::BeginDatabaseMaintenance() {
     return NS_ERROR_ABORT;
   }
 
+  QuotaManager* const quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
   RefPtr<nsThreadPool> threadPool;
 
   for (DirectoryInfo& directoryInfo : mDirectoryInfos) {
@@ -14037,12 +14082,19 @@ nsresult Maintenance::BeginDatabaseMaintenance() {
                                                 Client::IDB);
         MOZ_ASSERT(directoryLock);
 
+        auto writeLease =
+            quotaManager->TryAcquireWriteLease(*directoryInfo.mOriginMetadata);
+        if (!writeLease) {
+          continue;
+        }
+
         // No key needs to be passed here, because we skip encrypted databases
         // in DoDirectoryWork as long as they are only used in private browsing
         // mode.
         const auto databaseMaintenance = MakeRefPtr<DatabaseMaintenance>(
             this, std::move(directoryLock), directoryInfo.mPersistenceType,
-            *directoryInfo.mOriginMetadata, databasePath, Nothing{});
+            *directoryInfo.mOriginMetadata, databasePath, Nothing{},
+            std::move(*writeLease));
 
         if (!threadPool) {
           threadPool = mQuotaClient->GetOrCreateThreadPool();
@@ -14091,6 +14143,8 @@ void Maintenance::Finish() {
 
     IDB_WARNING("Maintenance finished with error: %s", errorName.get());
   }
+
+  mDirectoryInfos.Clear();
 
   SafeDropDirectoryLock(mDirectoryLock);
 
@@ -14251,6 +14305,11 @@ void DatabaseMaintenance::PerformMaintenanceOnDatabase() {
       QM_VOID);
 
   auto autoClearConnection = MakeScopeExit([&]() {
+    if (!IsAborted()) {
+      QM_WARNONLY_TRY(MOZ_TO_RESULT(
+          connection->ExecuteSimpleSQL("PRAGMA wal_checkpoint(TRUNCATE);"_ns)));
+    }
+
     auto sharedStorageConnectionLocked = mSharedStorageConnection.Lock();
     sharedStorageConnectionLocked.ref() = nullptr;
     connection->Close();
@@ -14548,6 +14607,8 @@ void DatabaseMaintenance::FullVacuum(mozIStorageConnection& aConnection,
 
 void DatabaseMaintenance::RunOnOwningThread() {
   AssertIsOnBackgroundThread();
+
+  mWriteLease = quota::WriteLease();
 
   DropDirectoryLock(mDirectoryLock);
 
