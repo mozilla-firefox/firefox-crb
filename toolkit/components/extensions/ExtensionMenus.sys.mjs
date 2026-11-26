@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { ExtensionTaskScheduler } from "resource://gre/modules/ExtensionTaskScheduler.sys.mjs";
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
@@ -43,6 +44,9 @@ const KVSTORE_DIRNAME = "extension-store-menus";
 class ExtensionMenusStore {
   #store = null;
   #initPromise = null;
+  // Orders, per extension, the reads and uninstall clearing of the store after
+  // the flush of the menus of an extension instance being shut down.
+  #taskQueues = new ExtensionTaskScheduler();
 
   /**
    * Determine if the menus created by the given extension should
@@ -81,6 +85,19 @@ class ExtensionMenusStore {
     return this.#initPromise;
   }
 
+  /**
+   * Flush the menus of an extension instance being shut down, so that the
+   * store isn't read or cleared for that extension until it is done.
+   *
+   * @param {string} extensionId An extension ID
+   * @param {Function} flushFn Returns a promise resolved once the flush is
+   * complete.
+   * @returns {Promise<void>}
+   */
+  flushOnShutdown(extensionId, flushFn) {
+    return this.#taskQueues.runWriteTask(extensionId, flushFn);
+  }
+
   #notifyPersistedMenusUpdatedForTesting(extensionId) {
     Services.obs.notifyObservers(
       null,
@@ -96,9 +113,11 @@ class ExtensionMenusStore {
    * @returns {Promise<boolean>} true if the store includes data for the given
    * extension, false otherwise.
    */
-  async hasExtensionData(extensionId) {
-    await this.#lazyInit();
-    return this.#store.has(extensionId);
+  hasExtensionData(extensionId) {
+    return this.#taskQueues.runReadTask(extensionId, async () => {
+      await this.#lazyInit();
+      return this.#store.has(extensionId);
+    });
   }
 
   /**
@@ -109,7 +128,13 @@ class ExtensionMenusStore {
    * @param {string} currentExtensionVersion The current extension version
    * @returns {Promise<Map>} A map of persisted menu details.
    */
-  async getPersistedMenus(extensionId, currentExtensionVersion) {
+  getPersistedMenus(extensionId, currentExtensionVersion) {
+    return this.#taskQueues.runReadTask(extensionId, () =>
+      this.#getPersistedMenus(extensionId, currentExtensionVersion)
+    );
+  }
+
+  async #getPersistedMenus(extensionId, currentExtensionVersion) {
     await this.#lazyInit();
 
     let value;
@@ -185,7 +210,13 @@ class ExtensionMenusStore {
    *
    * @param {string} extensionId An extension ID
    */
-  async clearPersistedMenusOnUninstall(extensionId) {
+  clearPersistedMenusOnUninstall(extensionId) {
+    return this.#taskQueues.runWriteTask(extensionId, () =>
+      this.#clearPersistedMenus(extensionId)
+    );
+  }
+
+  async #clearPersistedMenus(extensionId) {
     const { storePath } = this;
     const kvstoreDirExists = await IOUtils.exists(storePath);
     if (!kvstoreDirExists) {
@@ -243,7 +274,7 @@ class ExtensionMenusManager {
     }
 
     const shutdownBlockerFn = this.#shutdownBlockerFn;
-    shutdownBlockerFn().then(() => {
+    store.flushOnShutdown(this.extensionId, shutdownBlockerFn).then(() => {
       lazy.AsyncShutdown.profileBeforeChange.removeBlocker(shutdownBlockerFn);
     });
   }
