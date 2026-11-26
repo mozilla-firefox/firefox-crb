@@ -109,6 +109,14 @@ function withServer(serverOptions, task) {
   return AIWindowTestUtils.withServer(serverOptions, task);
 }
 
+function typeInSmartbar(browser, text) {
+  return AIWindowTestUtils.typeInSmartbar(browser, text);
+}
+
+function submitSmartbar(browser, options) {
+  return AIWindowTestUtils.submitSmartbar(browser, options);
+}
+
 let gIntentEngineStub;
 
 // Minimal RS records returned by the global getRemoteClient stub.
@@ -1027,40 +1035,6 @@ async function getSmartbarContextChipLabels(browser, expectedUrl) {
 }
 
 /**
- * Submits the current smartbar input.
- *
- * @param {MozBrowser} browser - The browser element
- * @param {object} [options] - Options for submission
- * @param {boolean} [options.useButton=false] - If true, submit via CTA button
- */
-async function submitSmartbar(browser, { useButton = false } = {}) {
-  await SpecialPowers.spawn(browser, [useButton], async clickButton => {
-    const aiWindow = content.document.querySelector("ai-window");
-    await ContentTaskUtils.waitForMutationCondition(
-      aiWindow.shadowRoot,
-      { childList: true, subtree: true },
-      () => aiWindow.shadowRoot.querySelector("#ai-window-smartbar")
-    );
-    const smartbar = aiWindow.shadowRoot.querySelector("#ai-window-smartbar");
-    if (clickButton) {
-      const inputCta = smartbar.querySelector("input-cta");
-      const mozButton = inputCta.shadowRoot.querySelector("moz-button");
-      const button = mozButton.shadowRoot.querySelector("button");
-      button.click();
-    } else {
-      const inputCta = smartbar.querySelector("input-cta");
-      await ContentTaskUtils.waitForCondition(
-        () => inputCta.getAttribute("action") !== "stop",
-        "Wait for generation to complete before submitting via Enter"
-      );
-      const inputField = smartbar.inputField;
-      inputField.focus();
-      EventUtils.synthesizeKey("KEY_Enter", {}, content);
-    }
-  });
-}
-
-/**
  * Chat turn that includes a get_open_tabs tool call:
  * Returns the tool result message.
  *
@@ -1237,41 +1211,6 @@ async function assertSmartbarValue(browser, expectedValue, message) {
       Assert.equal(smartbar.value, val, msg);
     }
   );
-}
-
-/**
- * Type text into the smartbar and wait for a pending query to complete.
- *
- * @param {MozBrowser} browser - The browser element
- * @param {string} text - Text to type
- */
-async function typeInSmartbar(browser, text) {
-  await SpecialPowers.spawn(browser, [text], async searchText => {
-    const aiWindowElement = content.document.querySelector("ai-window");
-    const smartbar = await ContentTaskUtils.waitForCondition(
-      () => aiWindowElement.shadowRoot?.querySelector("#ai-window-smartbar"),
-      "Wait for Smartbar to be rendered"
-    );
-    info("typeInSmartbar: smartbar found, calling focus()");
-    smartbar.inputField.focus();
-    await ContentTaskUtils.waitForCondition(
-      () => smartbar.matches(":focus-within"),
-      "Wait for smartbar to receive focus"
-    );
-    info("typeInSmartbar: focus received, sending string");
-    // The editor applies typed text from a mutation observer after sendString
-    // returns, so wait for its input event before reading
-    // lastQueryContextPromise.
-    const textApplied = ContentTaskUtils.waitForEvent(
-      smartbar.inputField,
-      "input"
-    );
-    EventUtils.sendString(searchText, content);
-    await textApplied;
-    info("typeInSmartbar: string sent, awaiting lastQueryContextPromise");
-    await smartbar.lastQueryContextPromise;
-    info("typeInSmartbar: query complete");
-  });
 }
 
 /**

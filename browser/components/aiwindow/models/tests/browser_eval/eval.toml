@@ -16,3 +16,5 @@ support-files = [
 ["browser_eval_basic_quality_gptoss120b.js"]
 
 ["browser_eval_basic_quality_qwen3_235b_a22b_instruct2507.js"]
+
+["browser_eval_two_turn_sidebar_qwen3_235b_a22b_instruct2507.js"]

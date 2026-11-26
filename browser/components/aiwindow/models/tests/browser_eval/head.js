@@ -3,7 +3,12 @@
 
 "use strict";
 
-async function setupEvaluation({ url, waitForLoad = true }) {
+/**
+ * Points Remote Settings at a dummy server and disables signature validation.
+ *
+ * @returns {Promise<() => Promise<void>>} Restores the original behavior.
+ */
+async function stubRemoteSettings() {
   await SpecialPowers.pushPrefEnv({
     set: [["services.settings.server", "data:,#remote-settings-dummy/v1"]],
   });
@@ -14,6 +19,16 @@ async function setupEvaluation({ url, waitForLoad = true }) {
   const originalValidateCollectionSignature =
     RemoteSettingsClient.prototype.validateCollectionSignature;
   RemoteSettingsClient.prototype.validateCollectionSignature = async () => {};
+
+  return async () => {
+    RemoteSettingsClient.prototype.validateCollectionSignature =
+      originalValidateCollectionSignature;
+    await SpecialPowers.popPrefEnv();
+  };
+}
+
+async function setupEvaluation({ url, waitForLoad = true }) {
+  const restoreRemoteSettings = await stubRemoteSettings();
 
   const tab = await BrowserTestUtils.openNewForegroundTab(
     gBrowser,
@@ -26,10 +41,8 @@ async function setupEvaluation({ url, waitForLoad = true }) {
 
     async cleanup() {
       info("Cleaning up");
-      RemoteSettingsClient.prototype.validateCollectionSignature =
-        originalValidateCollectionSignature;
       await BrowserTestUtils.removeTab(tab);
-      await SpecialPowers.popPrefEnv();
+      await restoreRemoteSettings();
     },
   };
 }
