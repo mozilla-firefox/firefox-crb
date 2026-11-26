@@ -906,7 +906,7 @@ async function findAnimationItemByIndex(panel, index) {
 
   await waitUntil(
     () =>
-      itemEl.querySelector(".animation-target .attrName") &&
+      itemEl.querySelector(".animation-target :is(.attrName, .tag-name)") &&
       itemEl.querySelector(".animation-computed-timing-path")
   );
 
@@ -931,13 +931,15 @@ async function findAnimationItemByTargetSelector(panel, selector) {
 
     await waitUntil(
       () =>
-        itemEl.querySelector(".animation-target .attrName") &&
+        itemEl.querySelector(".animation-target :is(.attrName, .tag-name)") &&
         itemEl.querySelector(".animation-computed-timing-path")
     );
 
-    const attrNameEl = itemEl.querySelector(".animation-target .attrName");
+    const targetNameEl = itemEl.querySelector(
+      ".animation-target :is(.attrName, .tag-name)"
+    );
     const regexp = new RegExp(`\\${selector}(\\.|$)`, "gi");
-    if (regexp.exec(attrNameEl.textContent)) {
+    if (regexp.exec(targetNameEl.textContent)) {
       return itemEl;
     }
   }
@@ -961,12 +963,14 @@ async function findAnimationItemByTargetText(panel, targetText) {
 
     await waitUntil(
       () =>
-        itemEl.querySelector(".animation-target .attrName") &&
+        itemEl.querySelector(".animation-target :is(.attrName, .tag-name)") &&
         itemEl.querySelector(".animation-computed-timing-path")
     );
 
-    const attrNameEl = itemEl.querySelector(".animation-target .attrName");
-    if (attrNameEl.textContent.trim() === targetText) {
+    const targetNameEl = itemEl.querySelector(
+      ".animation-target :is(.attrName, .tag-name)"
+    );
+    if (targetNameEl.textContent.trim() === targetText) {
       return itemEl;
     }
   }
