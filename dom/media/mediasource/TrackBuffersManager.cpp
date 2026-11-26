@@ -2042,11 +2042,19 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
     // the interval to present in mTime and mDuration, and its original
     // interval in mOriginalPresentationWindow. Process the frame with its
     // original interval, and trim what precedes the interval to present as if
-    // it preceded appendWindowStart. Trimming at the end of the frame is
-    // ignored, as each fragment can carry a duration that cuts its last frame
-    // short.
+    // it preceded appendWindowStart. Trim what follows it after decoding in
+    // WebM, which signals it with DiscardPadding, but not in MP4, where each
+    // fragment can carry a duration that cuts its last frame short.
     const TimeInterval codedFrameInterval = CodedFrameInterval(sample);
     const TimeUnit leadingTrim = sample->mTime - codedFrameInterval.mStart;
+    const TimeUnit trailingTrim =
+        sample->mOriginalPresentationWindow &&
+                (mType.Type() == MEDIAMIMETYPE(AUDIO_WEBM) ||
+                 mType.Type() == MEDIAMIMETYPE(VIDEO_WEBM))
+            ? std::max(TimeUnit::Zero(sample->mTime),
+                       sample->mOriginalPresentationWindow->mEnd -
+                           codedFrameInterval.mEnd)
+            : TimeUnit::Zero(sample->mTime);
     sample->mOriginalPresentationWindow.reset();
     sample->mTime = codedFrameInterval.mStart;
     sample->mDuration = codedFrameInterval.Length();
@@ -2313,6 +2321,11 @@ void TrackBuffersManager::ProcessFrames(TrackBuffer& aSamples,
       addToSamples(previouslyDroppedSample, previouslyDroppedSampleInterval);
       previouslyDroppedSample = nullptr;
       sampleInterval.mStart += previouslyDroppedSampleInterval.Length();
+    }
+
+    if (trailingTrim.IsPositive() && !sample->mOriginalPresentationWindow) {
+      sample->mOriginalPresentationWindow = Some(TimeInterval(
+          sampleInterval.mStart, sampleInterval.mEnd + trailingTrim));
     }
 
     sample->mTimecode = decodeTimestamp;

@@ -1,0 +1,107 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>MSE: what WebM CodecDelay and DiscardPadding discard isn't played</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <script type="text/javascript" src="mediasource.js"></script>
+  <script type="text/javascript" src="audio_timeline.js"></script>
+  <link rel="stylesheet" type="text/css" href="/tests/SimpleTest/test.css" />
+</head>
+<body>
+<pre id="test">
+<script class="testbody" type="text/javascript">
+
+// The files in opus-padding/ hold 23500 frames of silence at 48 kHz with a
+// single sample click. Their CodecDelay discards the 312 frames of Opus
+// pre-skip at their start, and the DiscardPadding of their last block the last
+// 188 frames it decodes to. flac_click_48k.mp4 holds 24576 frames with a
+// click at frame 21600, and no codec delay. Each clip is appended with a
+// timestampOffset that places it right after the previous clip.
+const kFLAC = {
+  file: "aac-priming/flac_click_48k.mp4",
+  type: 'audio/mp4; codecs="flac"',
+  frames: 24576,
+  click: 21600,
+};
+const kOpusType = 'audio/webm; codecs="opus"';
+const kOpusStart = {
+  file: "opus-padding/opus_click_start.webm",
+  type: kOpusType,
+  frames: 23500,
+  click: 500,
+};
+const kOpusMiddle = {
+  file: "opus-padding/opus_click_middle.webm",
+  type: kOpusType,
+  frames: 23500,
+  click: 12000,
+};
+const kOpusEnd = {
+  file: "opus-padding/opus_click_end.webm",
+  type: kOpusType,
+  frames: 23500,
+  click: 23400,
+};
+
+const kCases = [
+  {
+    name: "Opus clip with a click in its last packet",
+    clips: [kOpusEnd, kFLAC],
+  },
+  {
+    name: "Opus clip with a click in its first packet",
+    clips: [kOpusStart, kFLAC],
+  },
+  {
+    name: "Opus clip with a click after its first packet",
+    clips: [kOpusMiddle, kFLAC],
+  },
+  {
+    name: "Opus clips",
+    clips: [kOpusStart, kOpusEnd, kFLAC],
+  },
+];
+
+function placeClips(aClips) {
+  const placed = [];
+  let end = 0;
+  for (const clip of [kFLAC, ...aClips]) {
+    placed.push({ ...clip, start: end });
+    end += clip.frames;
+  }
+  return placed;
+}
+
+SimpleTest.waitForExplicitFinish();
+SimpleTest.requestFlakyTimeout("Waits for the AudioSink to stop writing");
+
+runWithMSE(async () => {
+  const files = await fetchClips([kFLAC, kOpusStart, kOpusMiddle, kOpusEnd].map(c => c.file));
+  for (const c of kCases) {
+    const clips = placeClips(c.clips);
+    const last = clips[clips.length - 1];
+    // The AudioSink must write as many frames as the timeline holds, or the
+    // audio clock drifts from the timeline. timestampOffset is kept to the
+    // microsecond, as are WebM timestamps, which can each cut a frame where
+    // a clip overlaps the next.
+    isfuzzy(
+      await measureWrittenFrames(files, "segments", clips),
+      last.start + last.frames,
+      2,
+      `${c.name}: the AudioSink writes the frames of the timeline`
+    );
+    await checkClicks(
+      c.name,
+      files,
+      "segments",
+      clips,
+      clips.slice(1).map(clip => clip.start + clip.click - kFLAC.click)
+    );
+  }
+  SimpleTest.finish();
+});
+
+</script>
+</pre>
+</body>
+</html>
