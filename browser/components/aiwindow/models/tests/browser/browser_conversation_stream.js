@@ -283,6 +283,98 @@ add_task(async function test_chat_tool_call_search_browsing_history() {
   }
 });
 
+/**
+ * Runs one chat turn in which the model calls search_browsing_history with
+ * smartPagesOnly, and returns the tool definition the model was sent and the
+ * tool result.
+ *
+ * @returns {Promise<{properties: object, results: object[]}>}
+ */
+async function searchSmartPagesInChat() {
+  let historyTool;
+  let results;
+  await withServer(
+    {
+      toolCall: {
+        name: "search_browsing_history",
+        args: JSON.stringify({ smartPagesOnly: true }),
+      },
+      followupChunks: ["History ready."],
+      onRequest: body => {
+        historyTool = body.tools.find(
+          tool => tool.function.name === "search_browsing_history"
+        );
+      },
+    },
+    async () => {
+      const conversation = new ChatConversation({
+        title: "chat title",
+        description: "chat desc",
+        pageUrl: new URL("https://example.com"),
+        pageMeta: {},
+      });
+      conversation.addUserMessage("Smart pages", "https://example.com", 0);
+      conversation.addAssistantMessage("text", "");
+      conversation.engine = await openAIEngine.build({
+        model: TEST_MODEL,
+        serviceType: SERVICE_TYPES.AI,
+        purpose: PURPOSES.CHAT,
+        flowId: null,
+        feature: MODEL_FEATURES.CHAT,
+      });
+      await Chat.fetchWithHistory({ conversation });
+
+      results = conversation.messages.find(
+        message => message.role === MESSAGE_ROLE.TOOL
+      ).content.body.results;
+    }
+  );
+  return { properties: historyTool.function.parameters.properties, results };
+}
+
+add_task(async function test_chat_tool_call_search_smart_pages() {
+  const AITAB_PREF = "browser.smartwindow.aitab.enabled";
+  const smartPageUrl = "about:smartpage?page=moth-defences-against-bats";
+  const webUrl = "https://example.com/smart-pages-help";
+
+  // History refuses the generated page URL while the pref is off.
+  await SpecialPowers.pushPrefEnv({ set: [[AITAB_PREF, true]] });
+  await PlacesUtils.history.clear();
+  await PlacesTestUtils.addVisits([
+    { uri: smartPageUrl, title: "Moth Defences Against Bats" },
+    { uri: webUrl, title: "Smart pages help" },
+  ]);
+
+  try {
+    let { properties, results } = await searchSmartPagesInChat();
+    Assert.ok(
+      properties.smartPagesOnly,
+      "smartPagesOnly is offered while the AITab pref is on"
+    );
+    Assert.deepEqual(
+      results.map(result => result.url),
+      [smartPageUrl],
+      "Only the generated page is returned"
+    );
+
+    await SpecialPowers.pushPrefEnv({ set: [[AITAB_PREF, false]] });
+    ({ properties, results } = await searchSmartPagesInChat());
+    Assert.ok(
+      !properties.smartPagesOnly,
+      "smartPagesOnly is not offered while the AITab pref is off"
+    );
+    Assert.ok(properties.searchTerm, "The other parameters are still offered");
+    Assert.ok(
+      results.some(result => result.url === webUrl),
+      "smartPagesOnly is ignored while the AITab pref is off"
+    );
+    await SpecialPowers.popPrefEnv();
+  } finally {
+    await SpecialPowers.popPrefEnv();
+    await PlacesUtils.history.clear();
+  }
+});
+
 add_task(async function test_chat_tool_call_get_page_content() {
   const html = `<!DOCTYPE html><html><body><article><h1>Headline</h1><p>Body text.</p></article></body></html>`;
   const { url, server: pageServer } = serveHTML(html);

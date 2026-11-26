@@ -329,24 +329,41 @@ function filterFeatureGatedTools(tools, conversation) {
   }
   if (!Services.prefs.getBoolPref(AITAB_PREF, false)) {
     filtered = filtered.filter(t => !AITAB_TOOLS.has(t.function?.name));
+    filtered = withoutToolParam(
+      filtered,
+      SEARCH_BROWSING_HISTORY,
+      "smartPagesOnly"
+    );
   }
   if (!Services.prefs.getBoolPref(INCLUDE_CHAT_TAB_PREF, false)) {
-    filtered = filtered.map(t => {
-      if (t.function.name !== MANAGE_TABS) {
-        return t;
-      }
-      const properties = { ...t.function.parameters.properties };
-      delete properties.include_chat_tab;
-      return {
-        ...t,
-        function: {
-          ...t.function,
-          parameters: { ...t.function.parameters, properties },
-        },
-      };
-    });
+    filtered = withoutToolParam(filtered, MANAGE_TABS, "include_chat_tab");
   }
   return filtered;
+}
+
+/**
+ * Removes one parameter from one tool's definition.
+ *
+ * @param {object[]} tools
+ * @param {string} toolName
+ * @param {string} param
+ * @returns {object[]}
+ */
+function withoutToolParam(tools, toolName, param) {
+  return tools.map(t => {
+    if (t.function.name !== toolName) {
+      return t;
+    }
+    const properties = { ...t.function.parameters.properties };
+    delete properties[param];
+    return {
+      ...t,
+      function: {
+        ...t.function,
+        parameters: { ...t.function.parameters, properties },
+      },
+    };
+  });
 }
 
 const lazy = XPCOMUtils.declareLazy({

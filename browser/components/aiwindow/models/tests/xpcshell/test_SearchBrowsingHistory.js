@@ -902,3 +902,144 @@ add_task(async function test_hybrid_keyword_only_row_has_thumbnail() {
     "Keyword-only hybrid result should have a preview image URL"
   );
 });
+
+const AITAB_PREF = "browser.smartwindow.aitab.enabled";
+const SMART_PAGE_PREFIX = "about:smartpage?page=";
+
+/**
+ * Seeds two generated pages and one web page. The generated pages need the
+ * AITab pref, because history refuses every other about: URL.
+ *
+ * @param {number} now
+ * @returns {Promise<{moths: string, sushi: string, web: string}>} The URLs.
+ */
+async function seedSmartPages(now) {
+  await PlacesUtils.history.clear();
+  Services.prefs.setBoolPref(AITAB_PREF, true);
+  registerCleanupFunction(() => Services.prefs.clearUserPref(AITAB_PREF));
+
+  const urls = {
+    moths: `${SMART_PAGE_PREFIX}moth-defences-against-bats`,
+    sushi: `${SMART_PAGE_PREFIX}sushi-guide`,
+    web: "https://example.com/smart-pages-help",
+  };
+  await PlacesUtils.history.insertMany([
+    {
+      url: urls.moths,
+      title: "Moth Defences Against Bats",
+      visits: [{ date: new Date(now - 60 * 60 * 1000) }], // 1h ago
+    },
+    {
+      url: urls.sushi,
+      title: "Sushi Guide",
+      visits: [{ date: new Date(now - 10 * 60 * 1000) }], // 10 min ago
+    },
+    {
+      url: urls.web,
+      title: "Smart pages help",
+      visits: [{ date: new Date(now - 5 * 60 * 1000) }], // 5 min ago
+    },
+  ]);
+  return urls;
+}
+
+// test: urlPrefix keeps only the URLs with that prefix, most recent first
+add_task(async function test_url_prefix_returns_only_matching_urls() {
+  const urls = await seedSmartPages(Date.now());
+
+  const result = await searchBrowsingHistory({
+    searchTerm: "",
+    urlPrefix: SMART_PAGE_PREFIX,
+    historyLimit: 15,
+  });
+
+  Assert.deepEqual(
+    result.results.map(r => r.url),
+    [urls.sushi, urls.moths],
+    "Only the prefixed URLs are returned, most recent first"
+  );
+  Assert.equal(result.count, 2, "count matches the prefixed URLs");
+  Assert.equal(
+    result.results[1].title,
+    "Moth Defences Against Bats",
+    "The row keeps its title"
+  );
+});
+
+// test: urlPrefix with a time range
+add_task(async function test_url_prefix_respects_time_range() {
+  const now = Date.now();
+  const urls = await seedSmartPages(now);
+
+  const result = await searchBrowsingHistory({
+    searchTerm: "",
+    urlPrefix: SMART_PAGE_PREFIX,
+    startTs: new Date(now - 30 * 60 * 1000).toISOString(),
+    endTs: new Date(now).toISOString(),
+    historyLimit: 15,
+  });
+
+  Assert.deepEqual(
+    result.results.map(r => r.url),
+    [urls.sushi],
+    "Only the prefixed URL in the time range is returned"
+  );
+});
+
+// test: urlPrefix with a search term that names the kind of page or a topic
+add_task(async function test_url_prefix_search_term_orders_results() {
+  const urls = await seedSmartPages(Date.now());
+
+  let result = await searchBrowsingHistory({
+    searchTerm: "smart pages",
+    urlPrefix: SMART_PAGE_PREFIX,
+    historyLimit: 15,
+  });
+  Assert.deepEqual(
+    result.results.map(r => r.url),
+    [urls.sushi, urls.moths],
+    "A term that matches no title removes no row"
+  );
+
+  result = await searchBrowsingHistory({
+    searchTerm: "moths and bats",
+    urlPrefix: SMART_PAGE_PREFIX,
+    historyLimit: 15,
+  });
+  Assert.deepEqual(
+    result.results.map(r => r.url),
+    [urls.moths, urls.sushi],
+    "The title with more words of the term comes first"
+  );
+
+  result = await searchBrowsingHistory({
+    searchTerm: "moths and bats",
+    urlPrefix: SMART_PAGE_PREFIX,
+    historyLimit: 1,
+  });
+  Assert.deepEqual(
+    result.results.map(r => r.url),
+    [urls.moths],
+    "The limit applies after the term orders the rows"
+  );
+});
+
+// test: urlPrefix with no matching URL
+add_task(async function test_url_prefix_no_results() {
+  await PlacesUtils.history.clear();
+  await PlacesUtils.history.insertMany([
+    {
+      url: "https://example.com/",
+      title: "Example",
+      visits: [{ date: new Date() }],
+    },
+  ]);
+
+  const result = await searchBrowsingHistory({
+    searchTerm: "",
+    urlPrefix: SMART_PAGE_PREFIX,
+    historyLimit: 15,
+  });
+  Assert.equal(result.count, 0, "No URL has the prefix");
+  Assert.ok(result.message, "The empty result has a message");
+});

@@ -419,6 +419,15 @@ export const toolsConfig = [
               "Inclusive end of the time range as a local ISO 8601 datetime " +
               "('YYYY-MM-DDTHH:mm:ss', no timezone).",
           },
+          // Removed from the model's tool list in Chat.sys.mjs when AITAB_PREF
+          // is off.
+          smartPagesOnly: {
+            type: "boolean",
+            description:
+              "Set to true when the user asks for their Smart Pages: the pages " +
+              "that you created with generate_page. Returns only Smart Pages, " +
+              "most recent first. Leave searchTerm empty to list all of them.",
+          },
         },
       },
     },
@@ -829,6 +838,7 @@ export async function getOpenTabs({ topic = "" } = {}, conversation) {
  * - searchTerm: ""        - string used for search
  * - startTs: null         - local ISO timestamp lower bound, or null
  * - endTs: null           - local ISO timestamp upper bound, or null
+ * - smartPagesOnly: false - return only generated pages (needs AITAB_PREF)
  * Detailed behavior and implementation are in SearchBrowsingHistory.sys.mjs.
  *
  * @param {object} toolParams
@@ -842,6 +852,10 @@ export async function getOpenTabs({ topic = "" } = {}, conversation) {
  *  Optional local ISO-8601 end timestamp (e.g. "2025-11-07T09:00:00").
  * @param {number} toolParams.historyLimit
  *  Maximum number of history results to return.
+ * @param {boolean} [toolParams.smartPagesOnly]
+ *  Return only generated pages. A generated page has the topic as its title
+ *  and an about:smartpage URL, so a search term such as "smart pages" matches
+ *  none of them.
  * @param {ChatConversation} conversation
  * @returns {Promise<object>}
  *  A promise resolving to an object with the search term and history results.
@@ -853,13 +867,20 @@ export async function searchBrowsingHistory(toolParams, conversation) {
   const params = toolParams && typeof toolParams === "object" ? toolParams : {};
 
   const { searchTerm = "", startTs = null, endTs = null } = params;
+  const smartPagesOnly =
+    params.smartPagesOnly === true &&
+    Services.prefs.getBoolPref(AITAB_PREF, false);
 
   const result = await implSearchBrowsingHistory({
     searchTerm,
     startTs,
     endTs,
     historyLimit: MAX_HISTORY_RESULTS,
+    urlPrefix: smartPagesOnly ? lazy.AITab.buildViewerURL("") : null,
   });
+  if (smartPagesOnly && !result.results.length && !result.error) {
+    result.message = "No Smart Pages found in the browser history.";
+  }
 
   conversation.addSeenUrls(result.results.map(({ url }) => url));
   // Set history result on convsersation so it can be
