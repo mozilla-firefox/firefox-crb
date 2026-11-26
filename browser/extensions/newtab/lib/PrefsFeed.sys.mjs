@@ -75,6 +75,23 @@ const RECORDS_HISTORY_PREFS = [
   "browser.privatebrowsing.autostart",
 ];
 
+// Content can't write these: they open the newtab devtools' parent actions
+// (see NewTabDevtoolsFeed), and Reset trusts what they hold.
+const DEVTOOLS_PROTECTED_PREFS = /^(asrouter\.devtoolsEnabled$|devtools\.)/;
+
+/**
+ * Splits a newtabTrainhop feature value into its {type, payload} parts.
+ *
+ * @param {object} value
+ * @returns {Array<{type: string, payload: object}>}
+ */
+export function trainhopPayloads(value) {
+  if (value?.type === "multi-payload" && Array.isArray(value.payload)) {
+    return value.payload.filter(item => item?.type && item?.payload);
+  }
+  return value?.type ? [value] : [];
+}
+
 function recordsHistory() {
   return (
     !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing &&
@@ -317,20 +334,12 @@ export class PrefsFeed {
     let enrollmentsToProcess = [];
 
     allEnrollments.forEach(enrollment => {
-      if (
-        enrollment?.value?.type === "multi-payload" &&
-        Array.isArray(enrollment?.value?.payload)
-      ) {
-        enrollment.value.payload.forEach(item => {
-          if (item?.type && item?.payload) {
-            enrollmentsToProcess.push({
-              value: {
-                type: item.type,
-                payload: item.payload,
-              },
-              meta: enrollment.meta,
-            });
-          }
+      if (enrollment?.value?.type === "multi-payload") {
+        trainhopPayloads(enrollment.value).forEach(({ type, payload }) => {
+          enrollmentsToProcess.push({
+            value: { type, payload },
+            meta: enrollment.meta,
+          });
         });
       } else if (enrollment?.value?.type) {
         enrollmentsToProcess.push(enrollment);
@@ -1197,6 +1206,24 @@ export class PrefsFeed {
     }
   }
 
+  /**
+   * Whether the sender of an action may write a pref. Content may not write
+   * the devtools gate or bookkeeping, so that only about:config opens the
+   * devtools' parent actions.
+   *
+   * @param {object} action
+   * @param {string} name
+   * @returns {boolean}
+   */
+  _isWritableBy(action, name) {
+    // A string only: Preferences.set treats an object as a map of names to
+    // values, which would get past the check below.
+    if (typeof name !== "string") {
+      return false;
+    }
+    return !(action.meta?.fromTarget && DEVTOOLS_PROTECTED_PREFS.test(name));
+  }
+
   onAction(action) {
     switch (action.type) {
       case at.INIT:
@@ -1206,13 +1233,20 @@ export class PrefsFeed {
         this.uninit();
         break;
       case at.CLEAR_PREF:
-        Services.prefs.clearUserPref(this._prefs._branchStr + action.data.name);
+        if (this._isWritableBy(action, action.data.name)) {
+          Services.prefs.clearUserPref(
+            this._prefs._branchStr + action.data.name
+          );
+        }
         break;
       case at.SET_PREF:
         // From the intent, not from an observed change: a control that reads an
         // override shows a space as on while its pref is already off, so
         // switching it off writes the value the pref already holds, no observer
         // fires and the opt-out never gets recorded. See bug 2068165.
+        if (!this._isWritableBy(action, action.data.name)) {
+          break;
+        }
         this._mirrorSpaceOptOut(action.data.name, action.data.value);
         this._prefs.set(action.data.name, action.data.value);
         break;
@@ -1223,6 +1257,9 @@ export class PrefsFeed {
           for (const [name, value] of Object.entries(
             action.data.values ?? {}
           )) {
+            if (!this._isWritableBy(action, name)) {
+              continue;
+            }
             this._mirrorSpaceOptOut(name, value);
             this._prefs.set(name, value);
           }
