@@ -320,6 +320,8 @@ function App(prevState = INITIAL_STATE.App, action) {
       return Object.assign({}, prevState, action.data || {}, {
         initialized: true,
       });
+    case at.LOCALE_UPDATED:
+      return { ...prevState, locale: action.data.locale };
     case at.TOP_SITES_UPDATED:
       // Toggle `isForStartupCache.TopSites` when receiving the `TOP_SITES_UPDATE` action
       // so that sponsored tiles can be rendered as usual. See Bug 1826360.

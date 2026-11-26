@@ -56,6 +56,14 @@ describe("Reducers", () => {
 
       expect(nextState.initialized).toBe(true);
     });
+    it("should update the locale on LOCALE_UPDATED", () => {
+      const nextState = App(
+        { initialized: true, locale: "en-US" },
+        { type: at.LOCALE_UPDATED, data: { locale: "pl" } }
+      );
+
+      expect(nextState).toEqual({ initialized: true, locale: "pl" });
+    });
     it("should show the customize panel on SHOW_PERSONALIZE", () => {
       const nextState = App(undefined, { type: at.SHOW_PERSONALIZE });
 

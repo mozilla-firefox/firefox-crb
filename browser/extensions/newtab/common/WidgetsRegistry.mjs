@@ -821,6 +821,48 @@ export function resolveWidgetFrame(widget, prefs, framedWidgets) {
 }
 
 /**
+ * Returns the names of the prefs and trainhopConfig keys that currently make
+ * the widget addable (see isWidgetAddable), so the devtools can explain why a
+ * widget is or isn't available.
+ *
+ * @param {object} widget - a WIDGET_REGISTRY entry
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {string[]}
+ */
+export function getWidgetAddableSources(widget, prefs) {
+  // Nimbus values only count once the region is known; see isRegionResolved.
+  const trainhopConfig = isRegionResolved(prefs) ? prefs.trainhopConfig : null;
+  return [
+    widget.trainhopNamespace &&
+      trainhopConfig?.[widget.trainhopNamespace]?.visible &&
+      `trainhopConfig.${widget.trainhopNamespace}.visible`,
+    trainhopConfig?.widgets?.[widget.trainhopEnabledKey] &&
+      `trainhopConfig.widgets.${widget.trainhopEnabledKey}`,
+    trainhopConfig?.widgetsSettings?.[widget.widgetsSettingsVisibleKey] &&
+      `trainhopConfig.widgetsSettings.${widget.widgetsSettingsVisibleKey}`,
+    prefs[widget.systemEnabledPref] && widget.systemEnabledPref,
+  ].filter(Boolean);
+}
+
+/**
+ * Returns the names of the prefs and Nimbus values that currently make the
+ * Widgets container visible (see isWidgetsContainerVisible).
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {string[]}
+ */
+export function getWidgetsContainerSources(prefs) {
+  const trainhopConfig = isRegionResolved(prefs) ? prefs.trainhopConfig : null;
+  return [
+    prefs["widgets.system.enabled"] && "widgets.system.enabled",
+    prefs.widgetsConfig?.enabled && "widgetsConfig.enabled",
+    trainhopConfig?.widgets?.enabled && "trainhopConfig.widgets.enabled",
+    trainhopConfig?.widgetsSettings?.enabled &&
+      "trainhopConfig.widgetsSettings.enabled",
+  ].filter(Boolean);
+}
+
+/**
  * Returns true if the widget is available to the user, based on the
  * system pref, the trainhopConfig.widgets addable key, or a
  * widgetsSettings.*Visible override (revealing a toggle also makes the widget
@@ -838,18 +880,7 @@ export function isWidgetAddable(widget, prefs) {
   if (widget.retired || isWidgetDataUnavailable(widget, prefs)) {
     return false;
   }
-  if (prefs[widget.systemEnabledPref]) {
-    return true;
-  }
-  if (!isRegionResolved(prefs)) {
-    return false;
-  }
-  return Boolean(
-    (widget.trainhopNamespace &&
-      prefs.trainhopConfig?.[widget.trainhopNamespace]?.visible) ||
-    prefs.trainhopConfig?.widgets?.[widget.trainhopEnabledKey] ||
-    prefs.trainhopConfig?.widgetsSettings?.[widget.widgetsSettingsVisibleKey]
-  );
+  return !!getWidgetAddableSources(widget, prefs).length;
 }
 
 /**
@@ -908,16 +939,7 @@ export function isWeatherAvailable(prefs) {
  * @returns {boolean}
  */
 export function isWidgetsContainerVisible(prefs) {
-  if (prefs["widgets.system.enabled"] || prefs.widgetsConfig?.enabled) {
-    return true;
-  }
-  if (!isRegionResolved(prefs)) {
-    return false;
-  }
-  return Boolean(
-    prefs.trainhopConfig?.widgets?.enabled ||
-    prefs.trainhopConfig?.widgetsSettings?.enabled
-  );
+  return !!getWidgetsContainerSources(prefs).length;
 }
 
 /**
