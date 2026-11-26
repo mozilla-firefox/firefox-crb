@@ -9,7 +9,9 @@ use {
     crash_helper_common::{crash_annotations::CrashAnnotation, ExtraCrashData},
     libc::{pid_t, SI_TKILL, SI_USER},
     minidump_writer::{
-        minidump_writer::{DirectAuxvDumpInfo as InternalDumpInfo, MinidumpWriterConfig},
+        minidump_writer::{
+            DirectAuxvDumpInfo as InternalDumpInfo, MinidumpWriterConfig, ModuleListSource,
+        },
         remote_process_inspection::{
             executor,
             io::{Error as IoError, Io, UnixStream},
@@ -144,7 +146,14 @@ pub unsafe extern "C" fn minidump_writer_create(
             .open(dump_path)
             .context("failed to open minidump file")?;
 
-        let writer_config = MinidumpWriterConfig::new(child, child_blamed_thread);
+        let mut writer_config = MinidumpWriterConfig::new(child, child_blamed_thread);
+        writer_config.set_module_list_source(
+            match std::env::var("MOZ_CRASHREPORTER_MODULE_LIST_SOURCE").as_deref() {
+                Ok("procmaps") => ModuleListSource::ProcMaps,
+                Ok("rendezvous") => ModuleListSource::DebuggerRendezvous,
+                _ => ModuleListSource::ProcMaps,
+            },
+        );
 
         Ok(Box::new(MinidumpWriterContext {
             dump_file,

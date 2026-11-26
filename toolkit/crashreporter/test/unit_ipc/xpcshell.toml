@@ -20,6 +20,14 @@ skip-if = [
   "os != 'win'",
 ]
 
+["test_content_module_list_procmaps.js"]
+run-if = ["os == 'linux'"]
+environment = ["MOZ_CRASHREPORTER_MODULE_LIST_SOURCE=procmaps"]
+
+["test_content_module_list_rendezvous.js"]
+run-if = ["os == 'linux'"]
+environment = ["MOZ_CRASHREPORTER_MODULE_LIST_SOURCE=rendezvous"]
+
 ["test_content_oom_annotation.js"]
 
 ["test_content_remote_executor.js"]
