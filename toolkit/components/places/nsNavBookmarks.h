@@ -114,12 +114,6 @@ class nsNavBookmarks final : public nsINavBookmarksService,
    */
   void NotifyItemVisited(const ItemVisitData& aData);
 
-  static const int32_t kGetChildrenIndex_Guid;
-  static const int32_t kGetChildrenIndex_Position;
-  static const int32_t kGetChildrenIndex_Type;
-  static const int32_t kGetChildrenIndex_PlaceID;
-  static const int32_t kGetChildrenIndex_SyncStatus;
-
   static mozilla::Atomic<int64_t> sLastInsertedItemId;
   static void StoreLastInsertedId(const nsACString& aTable,
                                   const int64_t aLastInsertedId);

@@ -415,4 +415,73 @@ already_AddRefed<nsIURI> GetExposableURI(nsIURI* aURI) {
   return uri.forget();
 }
 
+ResultRowReader::ResultRowReader(mozIStorageStatement* aStatement)
+    : mStatement(aStatement), mRow(do_QueryInterface(aStatement)) {
+  MOZ_ASSERT(mRow);
+}
+
+void ResultRowReader::SetRow(mozIStorageRow* aRow) {
+  MOZ_ASSERT(!mStatement);
+  mAsyncRow = aRow;
+  mRow = aRow;
+}
+
+void ResultRowReader::Reset() {
+  MOZ_ASSERT(!mStatement);
+  mAsyncRow = nullptr;
+  mRow = nullptr;
+  mColumns.Clear();
+}
+
+Maybe<uint32_t> ResultRowReader::ColumnIndex(const nsLiteralCString& aName) {
+  for (const CachedColumn& column : mColumns) {
+    if (column.mName == aName.get()) {
+      return column.mIndex;
+    }
+  }
+
+  MOZ_ASSERT(mStatement || mAsyncRow);
+  uint32_t index;
+  nsresult rv = mStatement ? mStatement->GetColumnIndex(aName, &index)
+                           : mAsyncRow->GetColumnIndex(aName, &index);
+  Maybe<uint32_t> result = NS_SUCCEEDED(rv) ? Some(index) : Nothing();
+  mColumns.AppendElement(CachedColumn{aName.get(), result});
+  return result;
+}
+
+bool ResultRowReader::IsNull(const nsLiteralCString& aName) {
+  Maybe<uint32_t> index = ColumnIndex(aName);
+  return index.isNothing() || mRow->IsNull(*index);
+}
+
+int32_t ResultRowReader::AsInt32(const nsLiteralCString& aName) {
+  Maybe<uint32_t> index = ColumnIndex(aName);
+  return index ? mRow->AsInt32(*index) : 0;
+}
+
+int64_t ResultRowReader::AsInt64(const nsLiteralCString& aName) {
+  Maybe<uint32_t> index = ColumnIndex(aName);
+  return index ? mRow->AsInt64(*index) : 0;
+}
+
+nsresult ResultRowReader::GetUTF8String(const nsLiteralCString& aName,
+                                        nsACString& aResult) {
+  Maybe<uint32_t> index = ColumnIndex(aName);
+  if (index.isNothing()) {
+    aResult.SetIsVoid(true);
+    return NS_OK;
+  }
+  return mRow->GetUTF8String(*index, aResult);
+}
+
+nsresult ResultRowReader::GetString(const nsLiteralCString& aName,
+                                    nsAString& aResult) {
+  Maybe<uint32_t> index = ColumnIndex(aName);
+  if (index.isNothing()) {
+    aResult.SetIsVoid(true);
+    return NS_OK;
+  }
+  return mRow->GetString(*index, aResult);
+}
+
 }  // namespace mozilla::places

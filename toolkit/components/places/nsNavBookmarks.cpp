@@ -30,13 +30,6 @@
 
 using namespace mozilla;
 
-// These columns sit to the right of the kGetInfoIndex_* columns.
-const int32_t nsNavBookmarks::kGetChildrenIndex_Guid = 18;
-const int32_t nsNavBookmarks::kGetChildrenIndex_Position = 19;
-const int32_t nsNavBookmarks::kGetChildrenIndex_Type = 20;
-const int32_t nsNavBookmarks::kGetChildrenIndex_PlaceID = 21;
-const int32_t nsNavBookmarks::kGetChildrenIndex_SyncStatus = 22;
-
 using namespace mozilla::dom;
 using namespace mozilla::places;
 

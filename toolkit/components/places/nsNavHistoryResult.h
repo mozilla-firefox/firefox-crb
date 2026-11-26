@@ -812,17 +812,20 @@ class nsNavHistoryFolderResultNode final
    * appropriate to do so.
    *
    * @param aRow
-   *        A Storage statement (in the case of synchronous execution) or row of
-   *        a result set (in the case of asynchronous execution).
+   *        A reader positioned on the current row of a Storage statement (in
+   *        the case of synchronous execution) or of a result set (in the case
+   *        of asynchronous execution).
    * @param aCurrentIndex
    *        The index of aRow within the results.  When called on the first row,
    *        this should be set to -1.
    */
-  nsresult AppendRowAsChild(mozIStorageValueArray* aRow,
+  nsresult AppendRowAsChild(mozilla::places::ResultRowReader& aRow,
                             int32_t& aCurrentIndex);
 
   bool mIsRegisteredFolderObserver;
   int32_t mAsyncBookmarkIndex;
+  // Reads the rows of the pending asynchronous statement.
+  mozilla::places::ResultRowReader mAsyncRowReader;
 };
 
 // nsNavHistorySeparatorResultNode

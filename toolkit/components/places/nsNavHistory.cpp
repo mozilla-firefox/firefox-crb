@@ -155,36 +155,6 @@ nsresult FetchInfo(const RefPtr<mozilla::places::Database>& aDB,
 
 }  // namespace
 
-// Queries rows indexes to bind or get values, if adding a new one, be sure to
-// update nsNavBookmarks statements and its kGetChildrenIndex_* constants
-const int32_t nsNavHistory::kGetInfoIndex_PageID = 0;
-const int32_t nsNavHistory::kGetInfoIndex_URL = 1;
-const int32_t nsNavHistory::kGetInfoIndex_Title = 2;
-const int32_t nsNavHistory::kGetInfoIndex_RevHost = 3;
-const int32_t nsNavHistory::kGetInfoIndex_VisitCount = 4;
-const int32_t nsNavHistory::kGetInfoIndex_VisitDate = 5;
-const int32_t nsNavHistory::kGetInfoIndex_FaviconURL = 6;
-const int32_t nsNavHistory::kGetInfoIndex_ItemId = 7;
-const int32_t nsNavHistory::kGetInfoIndex_ItemDateAdded = 8;
-const int32_t nsNavHistory::kGetInfoIndex_ItemLastModified = 9;
-const int32_t nsNavHistory::kGetInfoIndex_ItemParentId = 10;
-const int32_t nsNavHistory::kGetInfoIndex_ItemTags = 11;
-const int32_t nsNavHistory::kGetInfoIndex_Frecency = 12;
-const int32_t nsNavHistory::kGetInfoIndex_Hidden = 13;
-const int32_t nsNavHistory::kGetInfoIndex_Guid = 14;
-const int32_t nsNavHistory::kGetInfoIndex_VisitId = 15;
-const int32_t nsNavHistory::kGetInfoIndex_FromVisitId = 16;
-const int32_t nsNavHistory::kGetInfoIndex_VisitType = 17;
-// These columns are followed by corresponding constants in nsNavBookmarks.cpp,
-// which must be kept in sync:
-// nsNavBookmarks::kGetChildrenIndex_Guid = 18;
-// nsNavBookmarks::kGetChildrenIndex_Position = 19;
-// nsNavBookmarks::kGetChildrenIndex_Type = 20;
-// nsNavBookmarks::kGetChildrenIndex_PlaceID = 21;
-const int32_t nsNavHistory::kGetTargetFolder_Guid = 22;
-const int32_t nsNavHistory::kGetTargetFolder_ItemId = 23;
-const int32_t nsNavHistory::kGetTargetFolder_Title = 24;
-
 PLACES_FACTORY_SINGLETON_IMPLEMENTATION(nsNavHistory, gHistoryService)
 
 nsNavHistory::nsNavHistory()
@@ -759,11 +729,11 @@ class PlacesSQLQueryBuilder {
   nsresult OrderBy();
   nsresult Limit();
 
-  void OrderByColumnIndexAsc(int32_t aIndex);
-  void OrderByColumnIndexDesc(int32_t aIndex);
+  void OrderByColumnAsc(const nsLiteralCString& aColumn);
+  void OrderByColumnDesc(const nsLiteralCString& aColumn);
   // Use these if you want a case insensitive sorting.
-  void OrderByTextColumnIndexAsc(int32_t aIndex);
-  void OrderByTextColumnIndexDesc(int32_t aIndex);
+  void OrderByTextColumnAsc(const nsLiteralCString& aColumn);
+  void OrderByTextColumnDesc(const nsLiteralCString& aColumn);
 
   const nsCString& mConditions;
   bool mUseLimit;
@@ -893,11 +863,13 @@ nsresult PlacesSQLQueryBuilder::SelectAsURI() {
       mQueryString =
           nsNavHistory::GetTagsSqlFragment(mQueryType, mExcludeItems) +
           "SELECT b.fk, h.url, b.title AS page_title, "
-          "  h.rev_host, h.visit_count, h.last_visit_date, null, b.id, "
-          "  b.dateAdded, b.lastModified, b.parent, "
+          "  h.rev_host, h.visit_count, h.last_visit_date, null, "
+          "  b.id AS item_id, b.dateAdded AS dateAdded, "
+          "  b.lastModified AS lastModified, b.parent, "
           "  (SELECT tags FROM tagged WHERE place_id = h.id) AS tags, "
-          "  h.frecency, h.hidden, h.guid, null, null, null, b.guid, "
-          "  b.position, b.type, b.fk, t.guid, t.id, t.title "
+          "  h.frecency, h.hidden, h.guid, null, null, null, "
+          "  b.guid AS bm_guid, b.position, b.type, b.fk, "
+          "  t.guid AS target_guid, t.id AS target_id, t.title AS target_title "
           "FROM moz_bookmarks b "
           "JOIN moz_places h ON b.fk = h.id "
           "LEFT JOIN moz_bookmarks t ON t.guid = target_folder_guid(h.url) "
@@ -921,8 +893,8 @@ nsresult PlacesSQLQueryBuilder::SelectAsURI() {
 nsresult PlacesSQLQueryBuilder::SelectAsVisit() {
   mQueryString =
       nsNavHistory::GetTagsSqlFragment(mQueryType, mExcludeItems) +
-      "SELECT h.id, h.url, h.title AS page_title, h.rev_host, h.visit_count, "
-      "  v.visit_date, null, null, null, null, null, "
+      "SELECT h.id AS place_id, h.url, h.title AS page_title, h.rev_host, "
+      "  h.visit_count, v.visit_date, null, null, null, null, null, "
       "  (SELECT tags FROM tagged WHERE place_id = h.id) AS tags, "
       "  h.frecency, h.hidden, h.guid, v.id, v.from_visit, v.visit_type, "
       "  null, null, null, null, null, null, null "
@@ -956,8 +928,9 @@ nsresult PlacesSQLQueryBuilder::SelectAsDay() {
   // insert position in a result.
   mQueryString = nsPrintfCString(
       "SELECT null, "
-      "'place:type=%d&sort=%d&beginTime='||beginTime||'&endTime='||endTime, "
-      "dayTitle, null, null, beginTime, null, null, null, null, null, null, "
+      "'place:type=%d&sort=%d&beginTime='||beginTime||'&endTime='||endTime "
+      "AS url, dayTitle AS page_title, null, null, beginTime AS visit_date, "
+      "null, null, null, null, null, null, "
       "null, null, null, null, null, null, null, null, null, null, "
       "null, null, null "
       "FROM (",  // TOUTER BEGIN
@@ -1157,10 +1130,12 @@ nsresult PlacesSQLQueryBuilder::SelectAsSite() {
   }
 
   mQueryString = nsPrintfCString(
-      "SELECT null, 'place:type=%d&sort=%d&domain=&domainIsHost=true'%s, "
-      ":localhost, :localhost, null, null, null, null, null, null, null, "
-      "null, null, null, null, null, null, null, null, null, null, "
-      "null, null, null, null "
+      "SELECT null, "
+      "'place:type=%d&sort=%d&domain=&domainIsHost=true'%s AS url, "
+      ":localhost AS page_title, :localhost, null AS visit_count, "
+      "null AS last_visit_date, null, null, null AS dateAdded, "
+      "null AS lastModified, null, null, null AS frecency, null, null, null, "
+      "null, null, null, null, null, null, null, null, null "
       "WHERE EXISTS ( "
       "SELECT h.id FROM moz_places h "
       "%s "
@@ -1208,9 +1183,9 @@ nsresult PlacesSQLQueryBuilder::SelectAsTag() {
   // probably be urlencoded, and we have no util for that in SQL, yet.
   // We could encode the tag when the user sets it though.
   mQueryString = nsPrintfCString(
-      "SELECT null, 'place:tag=' || title, "
-      "title, null, null, null, null, null, dateAdded, "
-      "lastModified, null, null, null, null, null, null, "
+      "SELECT null, 'place:tag=' || title AS url, title AS page_title, null, "
+      "null AS visit_count, null AS last_visit_date, null, null, dateAdded, "
+      "lastModified, null, null, null AS frecency, null, null, null, "
       "null, null, null, null, null, null, null, null, null "
       "FROM moz_bookmarks "
       "WHERE parent = %" PRId64,
@@ -1255,12 +1230,15 @@ nsresult PlacesSQLQueryBuilder::SelectAsRoots() {
   mQueryString =
       nsLiteralCString(
           "SELECT * FROM ("
-          "VALUES(null, 'place:parent=" TOOLBAR_ROOT_GUID
-          "', :BookmarksToolbarFolderTitle, null, null, null, "
-          "null, null, 0, 0, null, null, null, null, 'toolbar____v', null, "
-          "null, null, null, null, null, null, " SQL_QUOTE(TOOLBAR_ROOT_GUID) ", "
-          "(SELECT id FROM moz_bookmarks WHERE guid = " SQL_QUOTE(TOOLBAR_ROOT_GUID) "), "
-          ":BookmarksToolbarFolderTitle), "
+          "SELECT null, 'place:parent=" TOOLBAR_ROOT_GUID "' AS url, "
+          ":BookmarksToolbarFolderTitle AS page_title, null, "
+          "null AS visit_count, null AS last_visit_date, null, null, "
+          "0 AS dateAdded, 0 AS lastModified, null, null, null AS frecency, "
+          "null, 'toolbar____v' AS guid, null, null, null, null, null, null, "
+          "null, " SQL_QUOTE(TOOLBAR_ROOT_GUID) " AS target_guid, "
+          "(SELECT id FROM moz_bookmarks WHERE guid = " SQL_QUOTE(TOOLBAR_ROOT_GUID) ") AS target_id, "
+          ":BookmarksToolbarFolderTitle AS target_title "
+          "UNION ALL VALUES"
           "(null, 'place:parent=" MENU_ROOT_GUID
           "', :BookmarksMenuFolderTitle, null, null, null, "
           "null, null, 0, 0, null, null, null, null, 'menu_______v', null, "
@@ -1298,11 +1276,13 @@ nsresult PlacesSQLQueryBuilder::SelectAsLeftPane() {
 
   mQueryString = nsPrintfCString(
       "SELECT * FROM ("
-      "VALUES"
-      "(null, 'place:type=%d&sort=%d', :OrganizerQueryHistory, null, null, "
-      "null, "
-      "null, null, 0, 0, null, null, null, null, 'history____v', null, "
-      "null, null, null, null, null, null, null), "
+      "SELECT null, 'place:type=%d&sort=%d' AS url, "
+      ":OrganizerQueryHistory AS page_title, null, null AS visit_count, "
+      "null AS last_visit_date, null, null, 0 AS dateAdded, "
+      "0 AS lastModified, null, null, null AS frecency, null, "
+      "'history____v' AS guid, null, null, null, null, null, null, null, "
+      "null "
+      "UNION ALL VALUES"
       "(null, 'place:transition=%d&sort=%d', :OrganizerQueryDownloads, null, "
       "null, null, "
       "null, null, 0, 0, null, null, null, null, 'downloads__v', null, "
@@ -1382,6 +1362,11 @@ nsresult PlacesSQLQueryBuilder::GroupBy() {
 nsresult PlacesSQLQueryBuilder::OrderBy() {
   if (mSkipOrderBy) return NS_OK;
 
+  const nsLiteralCString visitDateColumn =
+      mResultType == nsINavHistoryQueryOptions::RESULTS_AS_VISIT
+          ? "visit_date"_ns
+          : "last_visit_date"_ns;
+
   // Sort clause: we will sort later, but if it comes out of the DB sorted,
   // our later sort will be basically free. The DB can sort these for free
   // most of the time anyway, because it has indices over these items.
@@ -1403,56 +1388,53 @@ nsresult PlacesSQLQueryBuilder::OrderBy() {
       // to special sort for some locale we will repeat a second sorting at the
       // end in nsNavHistoryResult, that should be faster since the list will be
       // almost ordered.
-      if (mMaxResults > 0)
-        OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_VisitDate);
-      else if (mSortingMode ==
-               nsINavHistoryQueryOptions::SORT_BY_TITLE_ASCENDING)
-        OrderByTextColumnIndexAsc(nsNavHistory::kGetInfoIndex_Title);
-      else
-        OrderByTextColumnIndexDesc(nsNavHistory::kGetInfoIndex_Title);
+      if (mMaxResults > 0) {
+        OrderByColumnDesc(visitDateColumn);
+      } else if (mSortingMode ==
+                 nsINavHistoryQueryOptions::SORT_BY_TITLE_ASCENDING) {
+        OrderByTextColumnAsc("page_title"_ns);
+      } else {
+        OrderByTextColumnDesc("page_title"_ns);
+      }
       break;
     case nsINavHistoryQueryOptions::SORT_BY_DATE_ASCENDING:
-      OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_VisitDate);
+      OrderByColumnAsc(visitDateColumn);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_DATE_DESCENDING:
-      OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_VisitDate);
+      OrderByColumnDesc(visitDateColumn);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_URI_ASCENDING:
-      OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_URL);
+      OrderByColumnAsc("url"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_URI_DESCENDING:
-      OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_URL);
+      OrderByColumnDesc("url"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_VISITCOUNT_ASCENDING:
-      OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_VisitCount);
+      OrderByColumnAsc("visit_count"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_VISITCOUNT_DESCENDING:
-      OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_VisitCount);
+      OrderByColumnDesc("visit_count"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_DATEADDED_ASCENDING:
-      if (mHasDateColumns)
-        OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_ItemDateAdded);
+      if (mHasDateColumns) OrderByColumnAsc("dateAdded"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_DATEADDED_DESCENDING:
-      if (mHasDateColumns)
-        OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_ItemDateAdded);
+      if (mHasDateColumns) OrderByColumnDesc("dateAdded"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_LASTMODIFIED_ASCENDING:
-      if (mHasDateColumns)
-        OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_ItemLastModified);
+      if (mHasDateColumns) OrderByColumnAsc("lastModified"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_LASTMODIFIED_DESCENDING:
-      if (mHasDateColumns)
-        OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_ItemLastModified);
+      if (mHasDateColumns) OrderByColumnDesc("lastModified"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_TAGS_ASCENDING:
     case nsINavHistoryQueryOptions::SORT_BY_TAGS_DESCENDING:
       break;  // Sort later in nsNavHistoryQueryResultNode::FillChildren()
     case nsINavHistoryQueryOptions::SORT_BY_FRECENCY_ASCENDING:
-      OrderByColumnIndexAsc(nsNavHistory::kGetInfoIndex_Frecency);
+      OrderByColumnAsc("frecency"_ns);
       break;
     case nsINavHistoryQueryOptions::SORT_BY_FRECENCY_DESCENDING:
-      OrderByColumnIndexDesc(nsNavHistory::kGetInfoIndex_Frecency);
+      OrderByColumnDesc("frecency"_ns);
       break;
     default:
       MOZ_ASSERT_UNREACHABLE("Invalid sorting mode");
@@ -1460,22 +1442,22 @@ nsresult PlacesSQLQueryBuilder::OrderBy() {
   return NS_OK;
 }
 
-void PlacesSQLQueryBuilder::OrderByColumnIndexAsc(int32_t aIndex) {
-  mQueryString += nsPrintfCString(" ORDER BY %d ASC", aIndex + 1);
+void PlacesSQLQueryBuilder::OrderByColumnAsc(const nsLiteralCString& aColumn) {
+  mQueryString += " ORDER BY "_ns + aColumn + " ASC"_ns;
 }
 
-void PlacesSQLQueryBuilder::OrderByColumnIndexDesc(int32_t aIndex) {
-  mQueryString += nsPrintfCString(" ORDER BY %d DESC", aIndex + 1);
+void PlacesSQLQueryBuilder::OrderByColumnDesc(const nsLiteralCString& aColumn) {
+  mQueryString += " ORDER BY "_ns + aColumn + " DESC"_ns;
 }
 
-void PlacesSQLQueryBuilder::OrderByTextColumnIndexAsc(int32_t aIndex) {
-  mQueryString +=
-      nsPrintfCString(" ORDER BY %d COLLATE NOCASE ASC", aIndex + 1);
+void PlacesSQLQueryBuilder::OrderByTextColumnAsc(
+    const nsLiteralCString& aColumn) {
+  mQueryString += " ORDER BY "_ns + aColumn + " COLLATE NOCASE ASC"_ns;
 }
 
-void PlacesSQLQueryBuilder::OrderByTextColumnIndexDesc(int32_t aIndex) {
-  mQueryString +=
-      nsPrintfCString(" ORDER BY %d COLLATE NOCASE DESC", aIndex + 1);
+void PlacesSQLQueryBuilder::OrderByTextColumnDesc(
+    const nsLiteralCString& aColumn) {
+  mQueryString += " ORDER BY "_ns + aColumn + " COLLATE NOCASE DESC"_ns;
 }
 
 nsresult PlacesSQLQueryBuilder::Limit() {
@@ -2276,8 +2258,7 @@ nsresult nsNavHistory::ResultsAsList(
     mozIStorageStatement* statement, nsNavHistoryQueryOptions* aOptions,
     nsCOMArray<nsNavHistoryResultNode>* aResults) {
   nsresult rv;
-  nsCOMPtr<mozIStorageValueArray> row = do_QueryInterface(statement, &rv);
-  NS_ENSURE_SUCCESS(rv, rv);
+  ResultRowReader row(statement);
 
   bool hasMore = false;
   while (NS_SUCCEEDED(statement->ExecuteStep(&hasMore)) && hasMore) {
@@ -2426,14 +2407,14 @@ void nsNavHistory::ExpireNonrecentEvents(RecentEventHash* hashTable) {
 //    Here, we just have a generic row. It could be a query, URL, visit,
 //    or full visit.
 
-nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
+nsresult nsNavHistory::RowToResult(ResultRowReader& row,
                                    nsNavHistoryQueryOptions* aOptions,
                                    nsNavHistoryResultNode** aResult) {
-  NS_ASSERTION(aRow && aOptions && aResult, "Null pointer in RowToResult");
+  NS_ASSERTION(aOptions && aResult, "Null pointer in RowToResult");
 
   // URL
   nsAutoCString url;
-  nsresult rv = aRow->GetUTF8String(kGetInfoIndex_URL, url);
+  nsresult rv = row.GetUTF8String("url"_ns, url);
   NS_ENSURE_SUCCESS(rv, rv);
   // In case of data corruption URL may be null, but our UI code prefers an
   // empty string.
@@ -2444,19 +2425,19 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
 
   // title
   nsAutoCString title;
-  bool isNull;
-  rv = aRow->GetIsNull(kGetInfoIndex_Title, &isNull);
-  NS_ENSURE_SUCCESS(rv, rv);
-  if (!isNull) {
-    rv = aRow->GetUTF8String(kGetInfoIndex_Title, title);
+  if (!row.IsNull("page_title"_ns)) {
+    rv = row.GetUTF8String("page_title"_ns, title);
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  uint32_t accessCount = aRow->AsInt32(kGetInfoIndex_VisitCount);
-  PRTime time = aRow->AsInt64(kGetInfoIndex_VisitDate);
+  uint32_t accessCount = row.AsInt32("visit_count"_ns);
+  // Visit queries return the visit date and the other queries the last visit
+  // date, or the container's start time, in the same position.
+  PRTime time = row.IsNull("visit_date"_ns) ? row.AsInt64("last_visit_date"_ns)
+                                            : row.AsInt64("visit_date"_ns);
 
   // itemId
-  int64_t itemId = aRow->AsInt64(kGetInfoIndex_ItemId);
+  int64_t itemId = row.AsInt64("item_id"_ns);
   if (itemId == 0) {
     // This is not a bookmark.  For non-bookmarks we use a -1 itemId value.
     // Notice ids in sqlite tables start from 1, so itemId cannot ever be 0.
@@ -2467,7 +2448,7 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
     // Special case "place:" URIs: turn them into containers.
     nsAutoCString guid;
     if (itemId != -1) {
-      rv = aRow->GetUTF8String(nsNavBookmarks::kGetChildrenIndex_Guid, guid);
+      rv = row.GetUTF8String("bm_guid"_ns, guid);
       NS_ENSURE_SUCCESS(rv, rv);
     }
 
@@ -2475,20 +2456,18 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
             nsNavHistoryQueryOptions::RESULTS_AS_ROOTS_QUERY ||
         aOptions->ResultType() ==
             nsNavHistoryQueryOptions::RESULTS_AS_LEFT_PANE_QUERY) {
-      rv = aRow->GetUTF8String(kGetInfoIndex_Guid, guid);
+      rv = row.GetUTF8String("guid"_ns, guid);
       NS_ENSURE_SUCCESS(rv, rv);
     }
 
     int64_t targetFolderItemId = -1;
     nsAutoCString targetFolderGuid;
     nsAutoCString targetFolderTitle;
-    rv = aRow->GetIsNull(kGetTargetFolder_Guid, &isNull);
-    NS_ENSURE_SUCCESS(rv, rv);
-    if (!isNull) {
-      targetFolderItemId = aRow->AsInt64(kGetTargetFolder_ItemId);
-      rv = aRow->GetUTF8String(kGetTargetFolder_Guid, targetFolderGuid);
+    if (!row.IsNull("target_guid"_ns)) {
+      targetFolderItemId = row.AsInt64("target_id"_ns);
+      rv = row.GetUTF8String("target_guid"_ns, targetFolderGuid);
       NS_ENSURE_SUCCESS(rv, rv);
-      rv = aRow->GetUTF8String(kGetTargetFolder_Title, targetFolderTitle);
+      rv = row.GetUTF8String("target_title"_ns, targetFolderTitle);
       NS_ENSURE_SUCCESS(rv, rv);
     }
 
@@ -2501,8 +2480,8 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
     if (itemId != -1 || aOptions->ResultType() ==
                             nsNavHistoryQueryOptions::RESULTS_AS_TAGS_ROOT) {
       // RESULTS_AS_TAGS_ROOT has date columns
-      resultNode->mDateAdded = aRow->AsInt64(kGetInfoIndex_ItemDateAdded);
-      resultNode->mLastModified = aRow->AsInt64(kGetInfoIndex_ItemLastModified);
+      resultNode->mDateAdded = row.AsInt64("dateAdded"_ns);
+      resultNode->mLastModified = row.AsInt64("lastModified"_ns);
       if (resultNode->IsFolderOrShortcut()) {
         // If it's a simple folder node (i.e. a shortcut to another folder),
         // apply our options for it. However, if the parent type was tag query,
@@ -2520,23 +2499,22 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
 
     if (itemId != -1) {
       resultNode->mItemId = itemId;
-      resultNode->mDateAdded = aRow->AsInt64(kGetInfoIndex_ItemDateAdded);
-      resultNode->mLastModified = aRow->AsInt64(kGetInfoIndex_ItemLastModified);
+      resultNode->mDateAdded = row.AsInt64("dateAdded"_ns);
+      resultNode->mLastModified = row.AsInt64("lastModified"_ns);
 
-      rv = aRow->GetUTF8String(nsNavBookmarks::kGetChildrenIndex_Guid,
-                               resultNode->mBookmarkGuid);
+      rv = row.GetUTF8String("bm_guid"_ns, resultNode->mBookmarkGuid);
       NS_ENSURE_SUCCESS(rv, rv);
     }
 
-    resultNode->mFrecency = aRow->AsInt32(kGetInfoIndex_Frecency);
-    resultNode->mHidden = !!aRow->AsInt32(kGetInfoIndex_Hidden);
+    resultNode->mFrecency = row.AsInt32("frecency"_ns);
+    resultNode->mHidden = !!row.AsInt32("hidden"_ns);
 
     nsAutoString tags;
-    rv = aRow->GetString(kGetInfoIndex_ItemTags, tags);
+    rv = row.GetString("tags"_ns, tags);
     NS_ENSURE_SUCCESS(rv, rv);
     resultNode->SetTags(tags);
 
-    rv = aRow->GetUTF8String(kGetInfoIndex_Guid, resultNode->mPageGuid);
+    rv = row.GetUTF8String("guid"_ns, resultNode->mPageGuid);
     NS_ENSURE_SUCCESS(rv, rv);
 
     resultNode.forget(aResult);
@@ -2548,15 +2526,13 @@ nsresult nsNavHistory::RowToResult(mozIStorageValueArray* aRow,
         new nsNavHistoryResultNode(url, title, accessCount, time);
 
     nsAutoString tags;
-    rv = aRow->GetString(kGetInfoIndex_ItemTags, tags);
+    rv = row.GetString("tags"_ns, tags);
     resultNode->SetTags(tags);
-    rv = aRow->GetUTF8String(kGetInfoIndex_Guid, resultNode->mPageGuid);
+    rv = row.GetUTF8String("guid"_ns, resultNode->mPageGuid);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    rv = aRow->GetInt64(kGetInfoIndex_VisitId, &resultNode->mVisitId);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    resultNode->mTransitionType = aRow->AsInt32(kGetInfoIndex_VisitType);
+    resultNode->mVisitId = row.AsInt64("id"_ns);
+    resultNode->mTransitionType = row.AsInt32("visit_type"_ns);
 
     resultNode.forget(aResult);
     return NS_OK;
