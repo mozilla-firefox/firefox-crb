@@ -569,30 +569,43 @@ class ScreenshotsHelper {
     await contentResized;
   }
 
-  waitForContentMousePosition(left, top) {
-    return SpecialPowers.spawn(this.browser, [left, top], async (x, y) => {
-      function isCloseEnough(a, b, diff) {
-        return Math.abs(a - b) <= diff;
-      }
-
-      let cursorX = {};
-      let cursorY = {};
-
-      await ContentTaskUtils.waitForCondition(() => {
-        content.window.windowUtils.getLastOverWindowPointerLocationInCSSPixels(
-          cursorX,
-          cursorY
-        );
-        if (
-          isCloseEnough(cursorX.value, x, 1) &&
-          isCloseEnough(cursorY.value, y, 1)
-        ) {
-          return true;
+  /**
+   * Wait for the content's last known pointer location to be within
+   * `tolerance` CSS pixels of (left, top).
+   *
+   * @param {number} left
+   * @param {number} top
+   * @param {number} [tolerance] Callers waiting for a 1px keyboard step need
+   *   less than 1, otherwise the position from before the step is accepted.
+   */
+  waitForContentMousePosition(left, top, tolerance = 1) {
+    return SpecialPowers.spawn(
+      this.browser,
+      [left, top, tolerance],
+      async (x, y, maxDiff) => {
+        function isCloseEnough(a, b, diff) {
+          return Math.abs(a - b) <= diff;
         }
-        info(`Got: ${JSON.stringify({ cursorX, cursorY, x, y })}`);
-        return false;
-      }, `Wait for cursor to be ${x}, ${y}`);
-    });
+
+        let cursorX = {};
+        let cursorY = {};
+
+        await ContentTaskUtils.waitForCondition(() => {
+          content.window.windowUtils.getLastOverWindowPointerLocationInCSSPixels(
+            cursorX,
+            cursorY
+          );
+          if (
+            isCloseEnough(cursorX.value, x, maxDiff) &&
+            isCloseEnough(cursorY.value, y, maxDiff)
+          ) {
+            return true;
+          }
+          info(`Got: ${JSON.stringify({ cursorX, cursorY, x, y })}`);
+          return false;
+        }, `Wait for cursor to be ${x}, ${y}`);
+      }
+    );
   }
 
   async clickDownloadButton() {
