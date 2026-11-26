@@ -2815,6 +2815,8 @@
     <string name="saved_logins_menu_dropdown_chevron_icon_content_description_2">Sort passwords menu</string>
     <!-- Label for button to import passwords from file. -->
     <string name="passwords_import_menu_button">Import from file</string>
+    <!-- Snackbar message shown when password import finished successfully -->
+    <string name="passwords_import_snackbar_success">Import successful</string>
     <!-- Snackbar message shown when password import finished with a general failure -->
     <string name="passwords_import_snackbar_failure_general">Couldn’t import passwords. Try again.</string>
     <!-- Snackbar message shown when password import finished with a failure because of the unsupported file type.-->
