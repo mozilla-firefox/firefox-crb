@@ -404,7 +404,7 @@ add_task(async function test_createRegionWithKeyboard() {
           lastY = expectedDimensions.top;
         }
         await TestUtils.waitForTick();
-        await helper.waitForContentMousePosition(lastX, lastY);
+        await helper.waitForContentMousePosition(lastX, lastY, 0.5);
         let actualDimensions = await helper.getSelectionRegionDimensions();
         info(`Key: ${key}`);
         info(`Actual dimensions: ${JSON.stringify(actualDimensions, null, 2)}`);
@@ -416,7 +416,7 @@ add_task(async function test_createRegionWithKeyboard() {
 
       await doKeyPress("ArrowRight", { repeat: 10 }, window);
       await doKeyPress("ArrowDown", { repeat: 10 }, window);
-      await helper.waitForContentMousePosition(110, 110);
+      await helper.waitForContentMousePosition(110, 110, 0.5);
 
       EventUtils.synthesizeKey(" ");
       await helper.waitForStateChange(["selected"]);
