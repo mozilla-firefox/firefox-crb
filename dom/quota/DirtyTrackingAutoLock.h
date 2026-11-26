@@ -74,10 +74,10 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
  private:
   template <bool IsFinal>
   void Unlock() MOZ_CAPABILITY_RELEASE() {
-    MOZ_ASSERT(mLock);
-    if (mLock) {
-      mLock->Unlock();
+    if (!mLock) {
+      return;
     }
+    mLock->Unlock();
 
     if constexpr (IsFinal) {
       mLock = nullptr;
