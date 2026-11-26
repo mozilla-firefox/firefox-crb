@@ -1,0 +1,9 @@
+<html class="reftest-wait">
+<audio id=a src=webm-opus-huge-codecdelay.webm controls></audio>
+<script>
+  a.play();
+  a.onerror = a.onended = () => {
+    document.documentElement.removeAttribute("class")
+  }
+</script>
+</html>

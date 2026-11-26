@@ -229,6 +229,10 @@ class WebMDemuxer : public MediaDataDemuxer,
   // Nanoseconds to discard after seeking.
   uint64_t mSeekPreroll;
 
+  // The audio track's CodecDelay, by which its block timestamps exceed its
+  // presentation timestamps.
+  media::TimeUnit mAudioCodecDelay;
+
   // Calculate the frame duration from the last decodeable frame using the
   // previous frame's timestamp.  In microseconds.
   Maybe<int64_t> mLastAudioFrameTime;

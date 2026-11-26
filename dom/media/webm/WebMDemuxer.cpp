@@ -21,6 +21,7 @@
 #include "gfx2DGlue.h"
 #include "gfxUtils.h"
 #include "mozilla/CheckedInt.h"
+#include "mozilla/EndianUtils.h"
 #include "mozilla/IntegerPrintfMacros.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/SharedThreadPool.h"
@@ -324,6 +325,13 @@ nsresult WebMDemuxer::SetVideoCodecInfo(nestegg* aContext, int aTrackId) {
   return NS_OK;
 }
 
+// Returns the CodecDelay of an Opus track in nanoseconds, or 0 if it is longer
+// than the pre-skip of an Opus header can be: 65535 frames at 48 kHz.
+static uint64_t OpusCodecDelay(uint64_t aCodecDelay) {
+  constexpr uint64_t kMaxOpusCodecDelay = UINT16_MAX * NSECS_PER_S / 48000;
+  return aCodecDelay <= kMaxOpusCodecDelay ? aCodecDelay : 0;
+}
+
 nsresult WebMDemuxer::SetContainerAudioCodecInfo(
     nestegg* aContext, const nestegg_audio_params& aParams) {
   switch (mAudioCodec) {
@@ -334,11 +342,16 @@ nsresult WebMDemuxer::SetContainerAudioCodecInfo(
       break;
     }
     case NESTEGG_CODEC_OPUS: {
-      uint64_t codecDelayUs = aParams.codec_delay / NSECS_PER_USEC;
       mInfo.mAudio.mMimeType = "audio/opus";
       OpusCodecSpecificData opusCodecSpecificData;
+      const uint64_t codecDelay = OpusCodecDelay(aParams.codec_delay);
+      if (codecDelay != aParams.codec_delay) {
+        WEBM_DEBUG("Ignoring a CodecDelay of {} ns", aParams.codec_delay);
+      }
+      const CheckedInt64 codecDelayFrames =
+          CheckedInt64(codecDelay) * 48000 / NSECS_PER_S;
       opusCodecSpecificData.mContainerCodecDelayFrames =
-          AssertedCast<int64_t>(USECS_PER_S * codecDelayUs / 48000);
+          codecDelayFrames.isValid() ? codecDelayFrames.value() : 0;
       WEBM_DEBUG("Preroll for Opus: {} frames",
                  opusCodecSpecificData.mContainerCodecDelayFrames);
       mInfo.mAudio.mCodecSpecificConfig =
@@ -389,6 +402,16 @@ nsresult WebMDemuxer::SetAudioCodecInfo(nestegg* aContext, int aTrackId,
     }
   } else {
     audioCodecSpecificBlob->AppendElements(headers[0], headerLens[0]);
+  }
+
+  // The demuxer discards the CodecDelay, so the decoder must not discard the
+  // pre-skip of the Opus header as well.
+  constexpr size_t kOpusHeadPreSkipOffset = 10;
+  if (mAudioCodec == NESTEGG_CODEC_OPUS &&
+      OpusCodecDelay(aParams.codec_delay) &&
+      audioCodecSpecificBlob->Length() >= kOpusHeadPreSkipOffset + 2) {
+    LittleEndian::writeUint16(
+        audioCodecSpecificBlob->Elements() + kOpusHeadPreSkipOffset, 0);
   }
 
   return NS_OK;
@@ -626,6 +649,12 @@ nsresult WebMDemuxer::ReadMetadata() {
       mAudioDefaultDuration =
           FloorDefaultDurationToTimecodeScale(context, track);
       mSeekPreroll = params.seek_preroll;
+      // Only Opus has its CodecDelay discarded so far: the decoders of AAC and
+      // MP3 in Matroska aren't told about the discarded frames.
+      if (mAudioCodec == NESTEGG_CODEC_OPUS) {
+        mAudioCodecDelay = TimeUnit::FromMicroseconds(AssertedCast<int64_t>(
+            OpusCodecDelay(params.codec_delay) / NSECS_PER_USEC));
+      }
       mInfo.mAudio.mRate = rate;
       mInfo.mAudio.mChannels = params.channels;
       SetOpusOutputChannels(mInfo.mAudio);
@@ -911,6 +940,10 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
     } else {
       WEBM_DEBUG("tstamp >= next_tstamp");
     }
+    if (aType == TrackInfo::kAudioTrack) {
+      sample->mTimecode -= mAudioCodecDelay;
+      sample->mTime -= mAudioCodecDelay;
+    }
     sample->mOffset = holder->Offset();
     // Determine if the sample should be a key frame
     if (aType == TrackInfo::kAudioTrack) {
@@ -964,6 +997,8 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
                 mProcessedDiscardPadding ? "true" : "false");
             sample->mDuration = TimeUnit::Invalid();
           } else {
+            sample->mOriginalPresentationWindow = Some(media::TimeInterval{
+                sample->mTime, sample->mTime + packetDuration});
             sample->mDuration = packetDuration - padding;
           }
         }
@@ -981,6 +1016,18 @@ nsresult WebMDemuxer::GetNextPacket(TrackInfo::TrackType aType,
         }
       }
       mProcessedDiscardPadding = true;
+    }
+
+    // What precedes the start of the stream is the codec delay, to discard.
+    if (aType == TrackInfo::kAudioTrack && mAudioCodecDelay.IsPositive() &&
+        sample->mTime.IsNegative() && sample->mDuration.IsValid()) {
+      if (!sample->mOriginalPresentationWindow) {
+        sample->mOriginalPresentationWindow =
+            Some(media::TimeInterval{sample->mTime, sample->GetEndTime()});
+      }
+      sample->mDuration =
+          std::max(TimeUnit::Zero(sample->mTime), sample->GetEndTime());
+      sample->mTime = TimeUnit::Zero(sample->mTime);
     }
 
     if (packetEncryption == NESTEGG_PACKET_HAS_SIGNAL_BYTE_ENCRYPTED ||
