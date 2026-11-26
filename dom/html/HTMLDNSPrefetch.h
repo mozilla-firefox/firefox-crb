@@ -33,6 +33,12 @@ class HTMLDNSPrefetch {
   // with the context the prefetch will not be performed.
   static bool IsAllowed(Document* aDocument);
 
+  // Whether the Connection Allowlists of aDocument block a lookup of aHost.
+  // Violations are only reported if aReport.
+  static bool IsBlockedByConnectionAllowlists(Document* aDocument,
+                                              const nsACString& aHost,
+                                              bool aReport);
+
   static nsresult Initialize();
   static nsresult Shutdown();
 

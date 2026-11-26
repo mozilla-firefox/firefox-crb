@@ -308,6 +308,92 @@ bool ConnectionAllowlists::ShouldBlockURL(nsIURI* aURI, uint64_t aInnerWindowID,
   return false;
 }
 
+// https://w3c.github.io/connection-allowlists/#abstract-opdef-match-a-host-to-a-connection-allowlist
+bool ConnectionAllowlists::MatchHost(nsIURI* aSyntheticURI,
+                                     const Allowlist& aAllowlist) const {
+  // The `response-origin` token stands for a pattern of the response URL's
+  // origin, whose hostname component is the response URL's host.
+  if (aAllowlist.mMatchesResponseOrigin && mResponseURI) {
+    nsAutoCString responseHost;
+    nsAutoCString host;
+    if (NS_SUCCEEDED(mResponseURI->GetAsciiHost(responseHost)) &&
+        NS_SUCCEEDED(aSyntheticURI->GetAsciiHost(host)) && !host.IsEmpty() &&
+        host.Equals(responseHost)) {
+      return true;
+    }
+  }
+
+  nsAutoCString spec;
+  if (NS_WARN_IF(NS_FAILED(aSyntheticURI->GetSpec(spec)))) {
+    return false;
+  }
+
+  // 1. For each pattern in connection allowlist’s allowlist:
+  for (const auto& pattern : aAllowlist.mPatterns) {
+    // 1.4. If URL pattern matching given host-only pattern and synthetic url
+    // does not return null, return success.
+    if (net::UrlPatternTestHostname(pattern.get(), spec)) {
+      return true;
+    }
+  }
+
+  // 2. Return failure.
+  return false;
+}
+
+// https://w3c.github.io/connection-allowlists/#abstract-opdef-should-host-be-blocked-by-connection-allowlists
+bool ConnectionAllowlists::ShouldBlockHost(const nsACString& aHost,
+                                           uint64_t aInnerWindowID,
+                                           bool aReport) const {
+  // Step 1.3 of
+  // https://w3c.github.io/connection-allowlists/#abstract-opdef-match-a-host-to-a-connection-allowlist:
+  // Let synthetic url be the result of parsing the concatenation of "https://"
+  // and host as a URL.
+  nsAutoCString syntheticSpec("https://"_ns);
+  if (aHost.Contains(':') && !StringBeginsWith(aHost, "["_ns)) {
+    syntheticSpec.Append('[');
+    syntheticSpec.Append(aHost);
+    syntheticSpec.Append(']');
+  } else {
+    syntheticSpec.Append(aHost);
+  }
+  nsCOMPtr<nsIURI> syntheticURI;
+  const bool validHost =
+      NS_SUCCEEDED(NS_NewURI(getter_AddRefs(syntheticURI), syntheticSpec));
+
+  // 1. For each connection allowlist in connection allowlists:
+  for (const Maybe<Allowlist>& allowlist :
+       {std::cref(mEnforcement), std::cref(mReportOnly)}) {
+    if (allowlist.isNothing()) {
+      continue;
+    }
+
+    // 1.1. If host host-matches connection allowlist, continue.
+    if (validHost && MatchHost(syntheticURI, *allowlist)) {
+      continue;
+    }
+
+    // 1.2. Report a violation given host, environment, and connection
+    // allowlist.
+    if (aReport) {
+      Resource resource{nsCString(aHost)};
+      ReportToConsole(resource, aInnerWindowID, *allowlist);
+      nsCOMPtr<nsPIDOMWindowInner> window =
+          nsGlobalWindowInner::GetInnerWindowWithId(aInnerWindowID);
+      ReportViolation(resource, window, *allowlist);
+    }
+
+    // 1.3. If connection allowlist’s disposition is enforce, return blocked.
+    if (allowlist->mDisposition == Disposition::Enforce) {
+      LOG("Blocking host: {}", aHost);
+      return true;
+    }
+  }
+
+  // 2. Return allowed.
+  return false;
+}
+
 // The redirect steps of
 // https://w3c.github.io/connection-allowlists/#abstract-opdef-should-request-be-blocked-by-connection-allowlists
 bool ConnectionAllowlists::ShouldBlockRedirect(nsIURI* aOriginalURI,

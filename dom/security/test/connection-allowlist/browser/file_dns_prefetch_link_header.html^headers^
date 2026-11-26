@@ -1,0 +1,2 @@
+Connection-Allowlist: (response-origin "https://127.0.0.1/some/path" "http://127.0.0.5:8080/")
+Link: <https://127.0.0.1/>; rel=dns-prefetch, <https://127.0.0.4/>; rel=dns-prefetch, <https://127.0.0.5/>; rel=dns-prefetch

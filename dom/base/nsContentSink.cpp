@@ -538,7 +538,9 @@ void nsContentSink::PrefetchDNS(const nsAString& aHref) {
     isHttps = uri->SchemeIs("https");
   }
 
-  if (!hostname.IsEmpty() && HTMLDNSPrefetch::IsAllowed(mDocument)) {
+  if (!hostname.IsEmpty() && HTMLDNSPrefetch::IsAllowed(mDocument) &&
+      !HTMLDNSPrefetch::IsBlockedByConnectionAllowlists(
+          mDocument, NS_ConvertUTF16toUTF8(hostname), /* aReport */ true)) {
     OriginAttributes oa;
     StoragePrincipalHelper::GetOriginAttributesForNetworkState(mDocument, oa);
 

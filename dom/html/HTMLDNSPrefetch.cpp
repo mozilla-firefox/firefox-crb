@@ -10,10 +10,12 @@
 #include "mozilla/Preferences.h"
 #include "mozilla/StaticPrefs_network.h"
 #include "mozilla/StoragePrincipalHelper.h"
+#include "mozilla/dom/ConnectionAllowlists.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/HTMLAnchorElement.h"
 #include "mozilla/dom/HTMLLinkElement.h"
+#include "mozilla/dom/PolicyContainer.h"
 #include "mozilla/net/NeckoChild.h"
 #include "mozilla/net/NeckoCommon.h"
 #include "nsCOMPtr.h"
@@ -182,6 +184,16 @@ bool HTMLDNSPrefetch::IsAllowed(Document* aDocument) {
 
   // There is no need to do prefetch on non UI scenarios such as XMLHttpRequest.
   return aDocument->IsDNSPrefetchAllowed() && aDocument->GetWindow();
+}
+
+// https://w3c.github.io/connection-allowlists/#html-dns-prefetch
+bool HTMLDNSPrefetch::IsBlockedByConnectionAllowlists(Document* aDocument,
+                                                      const nsACString& aHost,
+                                                      bool aReport) {
+  RefPtr<ConnectionAllowlists> allowlists =
+      PolicyContainer::GetConnectionAllowlists(aDocument->GetPolicyContainer());
+  return allowlists && allowlists->ShouldBlockHost(
+                           aHost, aDocument->InnerWindowID(), aReport);
 }
 
 static nsIDNSService::DNSFlags GetDNSFlagsFromElement(Element& aElement) {
@@ -427,6 +439,14 @@ void HTMLDNSPrefetch::SendRequest(Element& aElement,
     return;
   }
 
+  // Only report for <link rel=dns-prefetch>, as the speculative prefetches for
+  // anchors are an implementation detail.
+  if (IsBlockedByConnectionAllowlists(
+          aElement.OwnerDoc(), hostName,
+          /* aReport */ aElement.IsHTMLElement(nsGkAtoms::link))) {
+    return;
+  }
+
   OriginAttributes oa;
   StoragePrincipalHelper::GetOriginAttributesForNetworkState(
       aElement.OwnerDoc(), oa);
@@ -567,6 +587,11 @@ static bool BuildPrefetchArgs(SupportsDNSPrefetch& aSupports, Element& aElement,
   nsresult rv = NS_URIChainHasFlags(
       uri, nsIProtocolHandler::URI_IS_LOCAL_RESOURCE, &isLocalResource);
   if (NS_FAILED(rv) || isLocalResource) {
+    return false;
+  }
+  if (HTMLDNSPrefetch::IsBlockedByConnectionAllowlists(
+          aElement.OwnerDoc(), hostName,
+          /* aReport */ aElement.IsHTMLElement(nsGkAtoms::link))) {
     return false;
   }
   OriginAttributes oa;

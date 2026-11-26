@@ -56,6 +56,10 @@ class ConnectionAllowlists final {
   bool ShouldLoad(nsIURI* aURI, nsILoadInfo* aLoadInfo) const;
 
   bool ShouldBlockConnection(nsIURI* aURI, uint64_t aInnerWindowID) const;
+  // Whether a DNS lookup of |aHost| should be blocked. Violations are only
+  // reported to the console and the reporting endpoint if |aReport|.
+  bool ShouldBlockHost(const nsACString& aHost, uint64_t aInnerWindowID,
+                       bool aReport) const;
   bool ShouldBlockRedirect(nsIURI* aOriginalURI, nsILoadInfo* aLoadInfo) const;
   bool ShouldBlockWebRTC(nsPIDOMWindowInner* aWindow) const;
 
@@ -135,6 +139,7 @@ class ConnectionAllowlists final {
       const nsACString& aHeader, Disposition aDisposition);
 
   bool MatchURL(nsIURI* aURI, const Allowlist& aAllowlist) const;
+  bool MatchHost(nsIURI* aSyntheticURI, const Allowlist& aAllowlist) const;
 
   Maybe<Allowlist> mEnforcement;
   Maybe<Allowlist> mReportOnly;
