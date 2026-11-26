@@ -133,15 +133,10 @@ TEST_F(TestQuotaManagerWithShortOriginFlushIntervals,
   ASSERT_TRUE(originStateMetadataAfterImmediateFlush);
   EXPECT_TRUE(originStateMetadataAfterImmediateFlush->mDirty);
 
-  bool flushIntervalsElapsed = false;
-  RefPtr<CancelableRunnable> timer = NS_NewCancelableRunnableFunction(
-      "QuotaManager origin flush intervals elapsed",
-      [&] { flushIntervalsElapsed = true; });
-  ASSERT_NS_SUCCEEDED(NS_DelayedDispatchToCurrentThread(
-      do_AddRef(timer), 3 * kOriginFlushIntervalMs));
-  SpinEventLoopUntil("Waiting for origin flush intervals"_ns,
-                     [&] { return flushIntervalsElapsed; });
-  timer->Cancel();
+  ASSERT_NO_FATAL_FAILURE(WaitForCondition([&] {
+    const auto state = GetOriginStateMetadata(originMetadata);
+    return state && !state->mDirty;
+  }));
 
   const auto originStateMetadataAfter = GetOriginStateMetadata(originMetadata);
   ASSERT_TRUE(originStateMetadataAfter);
