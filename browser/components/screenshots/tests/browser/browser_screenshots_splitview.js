@@ -80,13 +80,15 @@ add_task(async function test_buttonsPanelWithSplitView() {
   await tab2closed;
   await exitObserved;
 
+  // Select tab3 before removing tab1: removing the selected tab1 would
+  // select tab3 itself, leaving no tab switch for switchTab to wait for.
+  await BrowserTestUtils.switchTab(gBrowser, tab3);
+
   // Remove tab1 now so tab3 is standalone with no splitview context.
   // Without this, tab1 remains as the left side of the dissolved splitview;
   // pressing Escape on tab3's panel would see the left-side already closed
   // and skip emitting screenshots-exit, causing cancelPanel to hang.
   BrowserTestUtils.removeTab(tab1);
-
-  await BrowserTestUtils.switchTab(gBrowser, tab3);
 
   // Verify screenshots can be re-opened after being implicitly closed by the
   // removal of the other splitview tab — this is the crux of the bug fix.
