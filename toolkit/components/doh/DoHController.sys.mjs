@@ -151,6 +151,7 @@ export const DoHController = {
     Services.obs.addObserver(this, lazy.DoHConfigController.kConfigUpdateTopic);
     Services.prefs.addObserver(NETWORK_TRR_MODE_PREF, this);
     Services.prefs.addObserver(NETWORK_TRR_URI_PREF, this);
+    Services.prefs.addObserver(DISABLED_PREF, this);
 
     if (lazy.DoHConfigController.currentConfig.enabled) {
       // At init time set these heuristics to false if we may run heuristics
@@ -192,6 +193,7 @@ export const DoHController = {
     );
     Services.prefs.removeObserver(NETWORK_TRR_MODE_PREF, this);
     Services.prefs.removeObserver(NETWORK_TRR_URI_PREF, this);
+    Services.prefs.removeObserver(DISABLED_PREF, this);
     lazy.AsyncShutdown.profileBeforeChange.removeBlocker(
       this._asyncShutdownBlocker
     );
@@ -668,6 +670,15 @@ export const DoHController = {
       case NETWORK_TRR_MODE_PREF:
         Services.prefs.setBoolPref(DISABLED_PREF, true);
         await this.disableHeuristics("manuallyDisabled");
+        break;
+      case DISABLED_PREF:
+        if (
+          !Services.prefs.getBoolPref(DISABLED_PREF, false) &&
+          !this._heuristicsAreEnabled &&
+          lazy.DoHConfigController.currentConfig.enabled
+        ) {
+          await this.maybeEnableHeuristics();
+        }
         break;
     }
   },
