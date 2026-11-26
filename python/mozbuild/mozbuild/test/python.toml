@@ -122,6 +122,8 @@ skip-if = ["os == 'win'"] # The action and its tests create symlinks, which Wind
 
 ["configure/test_util.py"]
 
+["controller/test_build_environment.py"]
+
 ["controller/test_build_output.py"]
 
 ["controller/test_build_times.py"]
