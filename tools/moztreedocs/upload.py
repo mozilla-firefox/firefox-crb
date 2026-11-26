@@ -99,9 +99,18 @@ def get_s3_keys(s3, bucket, include_prefix=None, exclude_prefix=None):
 
 
 def s3_set_redirects(redirects):
+    """Configure the bucket website redirects.
+
+    ``redirects`` maps old key prefixes to new ones. Missing keys are served
+    the root 404.html, which moves the pre-/docs/ URLs under /docs/.
+    """
     s3, bucket = create_aws_session()
 
-    configuration = {"IndexDocument": {"Suffix": "index.html"}, "RoutingRules": []}
+    configuration = {
+        "IndexDocument": {"Suffix": "index.html"},
+        "ErrorDocument": {"Key": "404.html"},
+        "RoutingRules": [],
+    }
 
     for path, redirect in redirects.items():
         rule = {
