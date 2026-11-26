@@ -15,7 +15,7 @@ import buildconfig
 import mozpack.path as mozpath
 
 from mozbuild.action import symbols_archive
-from mozbuild.packaging import PackagePaths
+from mozbuild.packaging import configured_package_paths
 
 _UPLOAD_SYMBOLS = "toolkit/crashreporter/tools/upload_symbols.py"
 
@@ -28,12 +28,7 @@ def _archive(path: str, symbols: str, *extra: str) -> None:
 
 def package_symbols(*, upload: bool = False) -> int:
     substs = buildconfig.substs
-    dist = mozpath.join(buildconfig.topobjdir, "dist")
-    paths = PackagePaths(
-        substs=substs,
-        dist_dir=dist,
-        ab_cd=substs.get("MOZ_UI_LOCALE") or "en-US",
-    )
+    paths = configured_package_paths(substs=substs, topobjdir=buildconfig.topobjdir)
     full = bool(os.environ.get("MOZ_ENABLE_FULL_SYMBOLS"))
     full_archive = mozpath.join(
         paths.pkg_output_dir, f"{paths.symbol_full_archive_basename}.tar.zst"
@@ -55,8 +50,10 @@ def package_symbols(*, upload: bool = False) -> int:
 
     print("packing symbols")
     os.makedirs(paths.pkg_output_dir, exist_ok=True)
-    symbols = mozpath.abspath(mozpath.join(dist, "crashreporter-symbols"))
-    gtest_symbols = mozpath.abspath(mozpath.join(dist, "crashreporter-symbols-gtest"))
+    symbols = mozpath.abspath(mozpath.join(paths.dist_dir, "crashreporter-symbols"))
+    gtest_symbols = mozpath.abspath(
+        mozpath.join(paths.dist_dir, "crashreporter-symbols-gtest")
+    )
     # Set MOZ_ENABLE_FULL_SYMBOLS to enable generation and upload of the full
     # crashreporter symbols archives
     if full:
