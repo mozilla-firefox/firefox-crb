@@ -22,6 +22,8 @@ DirtyTrackingAutoLock::DirtyTrackingAutoLock(Mutex& aLock,
     Unlock<true>();
     return;
   }
+
+  AssertDirtyOnDisk();
 }
 
 DirtyTrackingAutoLock::DirtyTrackingAutoLock(
@@ -35,6 +37,33 @@ DirtyTrackingAutoLock::DirtyTrackingAutoLock(
     Unlock<true>();
     return;
   }
+
+  AssertDirtyOnDisk();
+}
+
+void DirtyTrackingAutoLock::AssertDirtyOnDisk() const {
+  MOZ_ASSERT(IsValid());
+
+  // An OriginInfo detached from its GroupInfo has been removed; there is
+  // nothing on disk left to protect.
+  if (mOriginInfo->LockedDirtyOnDisk() || !mOriginInfo->GetGroupInfo()) {
+    return;
+  }
+
+  // Private origins have no row in the storage database. Origins without a
+  // directory have no row yet; the row is created with the dirty flag taken
+  // from the OriginInfo once the directory is created.
+  if (mOriginInfo->IsPrivate() || !mOriginInfo->LockedDirectoryExists()) {
+    return;
+  }
+
+  // Recording the flag is IO and must not happen under the quota mutex, so
+  // the lock never records it itself. Every caller holds a write lease
+  // (QuotaManager::AcquireWriteLease on client threads,
+  // AcquireWriteLeaseOnIOThread on the IO thread), which recorded the flag
+  // before the mutation could start.
+  MOZ_DIAGNOSTIC_ASSERT(false,
+                        "OriginInfo mutation without dirty flag on disk");
 }
 
 DirtyTrackingAutoLock::~DirtyTrackingAutoLock() { Unlock<true>(); }
