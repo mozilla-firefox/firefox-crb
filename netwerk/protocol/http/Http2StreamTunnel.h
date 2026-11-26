@@ -93,10 +93,20 @@ class OutputStreamTunnel : public nsIAsyncOutputStream {
 
   nsresult GetStream(Http2StreamTunnel** aStream);
   nsresult GetSession(Http2Session** aSession);
+  nsresult FlushHeldOver();
+  // Asks the session for another pull window for aTunnel.
+  nsresult SignalDataToWrite(Http2StreamTunnel* aTunnel);
 
   WeakPtr<Http2StreamTunnel> mWeakStream;
   nsCOMPtr<nsIOutputStreamCallback> mCallback;
   nsresult mCondition{NS_OK};
+  // The stream can only put bytes on the wire while the session is pulling
+  // from it (Http2StreamBase::ReadSegments holds the segment reader for the
+  // duration of the OnSocketReady callback). A consumer is allowed to write
+  // outside that window, so hold one chunk over until the next one; see
+  // OutputStreamTunnel::Write.
+  bool mInReadWindow{false};
+  nsTArray<uint8_t> mHeldOver;
 };
 
 class InputStreamTunnel : public nsIAsyncInputStream {
@@ -115,10 +125,17 @@ class InputStreamTunnel : public nsIAsyncInputStream {
 
   nsresult GetStream(Http2StreamTunnel** aStream);
   nsresult GetSession(Http2Session** aSession);
+  void FillHeldOver();
 
   WeakPtr<Http2StreamTunnel> mWeakStream;
   nsCOMPtr<nsIInputStreamCallback> mCallback;
   nsresult mCondition{NS_OK};
+  // Mirror of OutputStreamTunnel: the session only lets the stream pull from
+  // the network while it is writing to it, so hold a chunk for a consumer that
+  // reads after the callback has returned. See InputStreamTunnel::Read.
+  bool mInWriteWindow{false};
+  bool mReadInWindow{false};
+  nsTArray<uint8_t> mHeldOver;
 };
 
 class Http2StreamWebSocket : public Http2StreamTunnel {
