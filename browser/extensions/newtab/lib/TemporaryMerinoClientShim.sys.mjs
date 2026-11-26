@@ -7,6 +7,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { newtabLocale } from "resource://newtab/lib/NewtabAudience.sys.mjs";
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
@@ -545,7 +546,7 @@ export class TemporaryMerinoClientShim {
       otherParams,
       timeoutMs,
       endpointUrl,
-      acceptLanguage: Services.locale.appLocaleAsBCP47,
+      acceptLanguage: newtabLocale(),
     });
     return response?.[0] ?? null;
   }
@@ -642,7 +643,7 @@ export class TemporaryMerinoClientShim {
 
     try {
       const response = await fetch(url, {
-        headers: { "Accept-Language": Services.locale.appLocaleAsBCP47 },
+        headers: { "Accept-Language": newtabLocale() },
       });
       /**
        * @type {Array<{
