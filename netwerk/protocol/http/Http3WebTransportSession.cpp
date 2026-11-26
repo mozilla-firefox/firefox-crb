@@ -172,12 +172,24 @@ nsresult Http3TunnelStreamBase::WriteSegments() {
   do {
     mSocketInCondition = NS_OK;
     countWrittenSingle = 0;
-    rv = mTransaction->WriteSegmentsAgain(
-        this, nsIOService::gDefaultSegmentSize, &countWrittenSingle, &again);
+    // Delivering a CONNECT response can close this stream from inside the
+    // call: a refused CONNECT-UDP closes the inner connection and with it
+    // this stream, dropping mTransaction. Keep the transaction alive across
+    // the call and stop once the stream has been closed under us.
+    RefPtr<nsAHttpTransaction> transaction = mTransaction;
+    rv = transaction->WriteSegmentsAgain(this, nsIOService::gDefaultSegmentSize,
+                                         &countWrittenSingle, &again);
     LOG(("Http3TunnelStreamBase::WriteSegments rv=0x%" PRIx32
          " countWrittenSingle=%" PRIu32 " socketin=%" PRIx32 " [this=%p]",
          static_cast<uint32_t>(rv), countWrittenSingle,
          static_cast<uint32_t>(mSocketInCondition), this));
+    if (!mTransaction) {
+      LOG(
+          ("Http3TunnelStreamBase::WriteSegments closed during delivery "
+           "[this=%p]",
+           this));
+      return NS_OK;
+    }
     if (mTransaction->IsDone()) {
       // An HTTP transaction used for setting up a  WebTransport session will
       // receive only response headers and afterward, it will be marked as
@@ -319,6 +331,10 @@ nsresult Http3TunnelStreamBase::OnReadSegment(const char* buf, uint32_t count,
 }
 
 void Http3TunnelStreamBase::TransactionIsDone(nsresult aResult) {
+  // Already closed, possibly from inside WriteSegments (see there).
+  if (!mTransaction) {
+    return;
+  }
   mTransaction->Close(aResult);
   mTransaction = nullptr;
 }
