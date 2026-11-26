@@ -46,6 +46,7 @@ class AndroidDevice:
         self.log_file = None
         self.remote_test_root = remote_test_root
         self._adb_fh = None
+        self._proxy_port = None
 
     def _set_adb_logger(self, log_file):
         self.log_file = log_file
@@ -82,7 +83,7 @@ class AndroidDevice:
         finally:
             self.device._verbose = old_verbose
 
-    def prepare(self, profile, logfile):
+    def prepare(self, profile, logfile, proxy=None):
         self._set_adb_logger(logfile)
         try:
             # See android_emulator_pgo.py run_tests for more
@@ -205,10 +206,27 @@ class AndroidDevice:
         self.profile = profile
         self.remote_profile = remote_profile
 
+        prefs = dict(DEFAULT_PREFS)
+        if proxy is not None:
+            # The proxy listens on the host; the reverse makes the same port on
+            # the device reach it, as raptor does for its own proxy.
+            host, port = proxy
+            logger.info("Creating reverse socket connection on port %d" % port)
+            device.reverse(local="tcp:%d" % port, remote="tcp:%d" % port)
+            self._proxy_port = port
+            prefs.update({
+                "network.proxy.type": 1,
+                "network.proxy.http": host,
+                "network.proxy.http_port": port,
+                "network.proxy.ssl": host,
+                "network.proxy.ssl_port": port,
+                "network.proxy.no_proxies_on": host,
+            })
+
         # creating the yml file
         yml_data = {
             "args": ["-marionette", "-profile", self.remote_profile],
-            "prefs": DEFAULT_PREFS,
+            "prefs": prefs,
             "env": {"LOG_VERBOSE": 1, "R_LOG_LEVEL": 6, "MOZ_LOG": ""},
         }
 
@@ -280,6 +298,13 @@ class AndroidDevice:
             self.device.remove_forwards(f"tcp:{self.marionette_port}")
         except ADBError:
             logger.warning("Could not remove forward port")
+        if self._proxy_port is not None:
+            try:
+                self.device.remove_socket_connections(
+                    "reverse", local="tcp:%d" % self._proxy_port
+                )
+            except ADBError:
+                logger.warning("Could not remove reverse port")
 
 
 # XXX redundant, remove
@@ -362,7 +387,7 @@ class AndroidEnv(BaseEnv):
         return {"moz:firefoxOptions": {"args": options, "prefs": prefs}}
 
     def prepare(self, logfile):
-        self.device.prepare(self.profile, logfile)
+        self.device.prepare(self.profile, logfile, proxy=self.proxy)
 
     def get_browser_version(self):
         return self.target_platform + "-XXXneedtograbversion"
