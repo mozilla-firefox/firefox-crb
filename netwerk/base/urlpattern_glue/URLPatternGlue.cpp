@@ -264,6 +264,18 @@ bool UrlPatternTest(UrlPatternGlue aPattern, const UrlPatternInput& aInput,
   return !res.isNothing();
 }
 
+bool UrlPatternTestHostname(UrlPatternGlue aPattern, const nsACString& aUrl) {
+  UrlPatternMatchInputAndInputs matchInputAndInputs;
+  if (!urlpattern_process_match_input_from_string(&aUrl, nullptr,
+                                                  &matchInputAndInputs)) {
+    return false;
+  }
+  return ComponentMatches(urlpattern_get_hostname_component(aPattern),
+                          matchInputAndInputs.input.hostname,
+                          /* aMatchOnly */ true)
+      .isSome();
+}
+
 // Implementation for the same object represented in rust as RegExpObjWrapper
 // we are using this class to root the spidermonkey regexp object returned
 // from parsing so that we can hold onto it longer without it getting cleaned up

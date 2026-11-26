@@ -68,6 +68,10 @@ bool UrlPatternTest(UrlPatternGlue aPattern, const UrlPatternInput& aInput,
                     Maybe<nsAutoCString> aMaybeBaseUrl,
                     bool aIgnoreCase = false);
 
+// Like UrlPatternTest, but only matches the hostname component of |aPattern|
+// against the hostname of the URL string |aUrl|.
+bool UrlPatternTestHostname(UrlPatternGlue aPattern, const nsACString& aUrl);
+
 nsAutoCString UrlPatternGetProtocol(const UrlPatternGlue aPattern);
 nsAutoCString UrlPatternGetUsername(const UrlPatternGlue aPattern);
 nsAutoCString UrlPatternGetPassword(const UrlPatternGlue aPattern);

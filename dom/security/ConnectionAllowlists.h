@@ -56,6 +56,10 @@ class ConnectionAllowlists final {
   bool ShouldLoad(nsIURI* aURI, nsILoadInfo* aLoadInfo) const;
 
   bool ShouldBlockConnection(nsIURI* aURI, uint64_t aInnerWindowID) const;
+  // Whether a DNS lookup of |aHost| should be blocked. Violations are only
+  // reported to the console if |aReportToConsole|.
+  bool ShouldBlockHost(const nsACString& aHost, uint64_t aInnerWindowID,
+                       bool aReportToConsole) const;
   bool ShouldBlockRedirect(nsIURI* aOriginalURI, nsILoadInfo* aLoadInfo) const;
   bool ShouldBlockWebRTC(nsPIDOMWindowInner* aWindow) const;
 
@@ -114,11 +118,12 @@ class ConnectionAllowlists final {
 
   using Resource = Variant<nsIURI*, nsCString>;
 
-  // Reports a violation of |aAllowlist| by the connection to |aURI| to the
+  // Reports a violation of |aAllowlist| by the connection to |aResource| to the
   // reporting endpoint, and to the console if |aReportToConsole|.
   // |aIsRedirect| is whether the request violated the allowlist by being
   // redirected.
-  static void ReportBlockedRequest(nsIURI* aURI, uint64_t aInnerWindowID,
+  static void ReportBlockedRequest(const Resource& aResource,
+                                   uint64_t aInnerWindowID,
                                    const Allowlist& aAllowlist,
                                    bool aReportToConsole, bool aIsRedirect);
 
@@ -135,6 +140,7 @@ class ConnectionAllowlists final {
       const nsACString& aHeader, Disposition aDisposition);
 
   bool MatchURL(nsIURI* aURI, const Allowlist& aAllowlist) const;
+  bool MatchHost(nsIURI* aSyntheticURI, const Allowlist& aAllowlist) const;
 
   Maybe<Allowlist> mEnforcement;
   Maybe<Allowlist> mReportOnly;
