@@ -33,6 +33,7 @@ setuprunning
 servingcontent
 loggingreporting
 devicemanagement
+releasing
 ```
 
 [mochitest]: https://developer.mozilla.org/en-US/docs/Mochitest

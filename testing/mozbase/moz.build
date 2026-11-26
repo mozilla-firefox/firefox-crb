@@ -24,6 +24,7 @@ PYTHON_UNITTEST_MANIFESTS += [
     "mozsystemmonitor/tests/manifest.toml",
     "moztest/tests/manifest.toml",
     "mozversion/tests/manifest.toml",
+    "tests/manifest.toml",
 ]
 
 python_modules = [
