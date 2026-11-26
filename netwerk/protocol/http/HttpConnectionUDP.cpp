@@ -742,8 +742,8 @@ void HttpConnectionUDP::Close(nsresult reason, bool aIsShutdown) {
   }
 
   // A closed connection never completes a handshake; dropping the callback
-  // also releases whatever it captured (the owner of this connection, which
-  // would otherwise keep it alive in a cycle).
+  // also releases whatever it captured (the InnerConnectionEstablisher that
+  // owns this connection, which would otherwise keep it alive in a cycle).
   mHandshakeDoneCallback = nullptr;
 
   nsCOMPtr<nsIUDPSocket> socket = std::move(mSocket);
