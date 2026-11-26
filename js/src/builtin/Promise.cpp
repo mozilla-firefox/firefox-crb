@@ -1953,6 +1953,16 @@ static bool CanResolveWithBuiltinThenableJob(JSContext* cx, JSObject* promise,
          thenVal.toObject().as<JSFunction>().realm() == cx->realm();
 }
 
+// Like CanResolveWithBuiltinThenableJob, but decided without looking up the
+// "then" property: for a promise with the default properties, the lookup is
+// unobservable and finds the original Promise.prototype.then of the current
+// realm.
+static bool CanResolveWithBuiltinThenableJobWithoutLookup(
+    JSContext* cx, JSObject* promise, JSObject* resolution) {
+  return resolution->is<PromiseObject>() && promise->is<PromiseObject>() &&
+         IsPromiseWithDefaultProperties(&resolution->as<PromiseObject>(), cx);
+}
+
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -1991,6 +2001,11 @@ static bool CanResolveWithBuiltinThenableJob(JSContext* cx, JSObject* promise,
 
     // Step 7.b. Return RejectPromise(promise, selfResolutionError).
     return RejectMaybeWrappedPromise(cx, promise, selfResolutionError, stack);
+  }
+
+  // Steps 9-15 for a resolution whose "then" property needn't be looked up.
+  if (CanResolveWithBuiltinThenableJobWithoutLookup(cx, promise, resolution)) {
+    return EnqueuePromiseResolveThenableBuiltinJob(cx, promise, resolution);
   }
 
   // Step 9. Let then be Get(resolution, "then").
