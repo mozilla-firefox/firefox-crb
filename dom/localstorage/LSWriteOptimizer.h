@@ -55,6 +55,12 @@ class LSWriteOptimizerBase {
     return mTruncateInfo || !mWriteInfos.IsEmpty();
   }
 
+  int64_t TotalDelta() const {
+    AssertIsOnOwningThread();
+
+    return mTotalDelta;
+  }
+
   void Reset();
 
  protected:

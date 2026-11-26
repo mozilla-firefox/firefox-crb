@@ -41,6 +41,12 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
 
   int64_t LockedUsage() const;
 
+  int64_t LockedReservedUsage() const {
+    AssertCurrentThreadOwnsQuotaMutex();
+
+    return mReservedUsage;
+  }
+
   int64_t LockedAccessTime() const {
     AssertCurrentThreadOwnsQuotaMutex();
 
@@ -182,6 +188,20 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   bool LockedUpdateUsagesForEviction(Client::Type aClientType, int64_t aDelta,
                                      DirtyTrackingAutoLock& aProofOfLock);
 
+  // Reservations count against the group and global limits like usage does,
+  // but they are not part of the persisted metadata and do not dirty it.
+  // Same return value convention as LockedUpdateUsages.
+  Maybe<bool> LockedReserve(uint64_t aDelta);
+
+  bool LockedReserveForEviction(uint64_t aDelta);
+
+  void LockedUnreserve(int64_t aDelta);
+
+  // Applies a committed usage delta and adjusts the reservation atomically.
+  void LockedCommitReservation(Client::Type aClientType, int64_t aDelta,
+                               int64_t aReservationDelta,
+                               DirtyTrackingAutoLock& aProofOfLock);
+
   constexpr TimeStamp GetLastModifiedTime() const { return mLastModifiedTime; }
 
   bool CheckIfUsageIsConsistent(const nsACString& context) const;
@@ -233,6 +253,12 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
 
   void LockedReleaseWriteLease();
 
+  void LockedAdjustReservedUsage(int64_t aDelta);
+
+  // Group usage including reservations, across complementary persistence
+  // types, as used by the group limit check.
+  int64_t LockedGroupUsageWithReservations() const;
+
   ClientUsageArray mClientUsages;
   // Per client, how many times a negative usage was seen for this OriginInfo.
   // Used to throttle usage_underflow telemetry events.
@@ -244,6 +270,8 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   // number, making all integers comparisons to become buggy. See bug 2066923
   // and bug 1585978 for details.
   int64_t mUsage;
+  // Nonnegative space reserved for uncommitted writes. Not persisted.
+  int64_t mReservedUsage = 0;
   TimeStamp mLastModifiedTime;
   bool mMetadataDirty = false;
   // Whether this origin's row in the storage database is missing or does not

@@ -4,6 +4,7 @@
 
 UNIFIED_SOURCES = [
     "TestLocalStorage.cpp",
+    "TestLSQuotaAccounting.cpp",
     "TestLSWriteOptimizer.cpp",
 ]
 
