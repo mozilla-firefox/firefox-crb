@@ -1,0 +1,10 @@
+{
+    "parameters": {
+        "base_rev": "51ca2019688a9d6fe4a4e87d374079756ff0266c",
+        "enable_always_target": false,
+        "optimize_target_tasks": true,
+        "phabricator_diff": "PHID-HMBT-lyph6oo3qhgu4h3pw2n6",
+        "target_tasks_method": "codereview"
+    },
+    "version": 2
+}
