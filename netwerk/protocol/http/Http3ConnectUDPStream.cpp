@@ -218,10 +218,16 @@ NS_IMETHODIMP Http3ConnectUDPStream::SendWithAddress(
     uint32_t* _retval) {
   LOG(("Http3ConnectUDPStream::SendWithAddress %p mSendState=%d length=%d",
        this, static_cast<uint32_t>(mSendState), length));
-  if (mSendState != PROCESSING_DATAGRAM) {
+  if (mSendState == SEND_DONE) {
+    // The tunnel is gone, so nothing can carry the datagram.
     return NS_ERROR_NOT_AVAILABLE;
   }
 
+  // Before activation the datagram cannot go out yet, but refusing it tears
+  // down the connection that produced it: the inner session's first Initial is
+  // generated while the outer one may still be negotiating, and
+  // Http3Session::ProcessOutput treats a send failure as fatal. Queue it
+  // instead; OnProcessDatagram flushes once the stream is activated.
   nsTArray<uint8_t> datagram;
   datagram.AppendElements(data, length);
   mOutputData.Push(std::make_unique<UDPPayload>(std::move(datagram)));
