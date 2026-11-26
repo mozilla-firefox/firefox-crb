@@ -59,7 +59,7 @@ See [here for more information](https://github.com/prettier/eslint-config-pretti
 
 ## Documentation
 
-For details about the rules, please see the [firefox documentation page](http://firefox-source-docs.mozilla.org/tools/lint/linters/eslint-plugin-mozilla.html).
+For details about the rules, please see the [firefox documentation page](https://source.firefox.com/docs/tools/lint/linters/eslint-plugin-mozilla.html).
 
 ## Source Code
 

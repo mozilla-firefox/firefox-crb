@@ -36,7 +36,7 @@ const {
   l10n,
 } = require("resource://devtools/client/webconsole/utils/messages.js");
 
-const LEARN_MORE_URL = `https://firefox-source-docs.mozilla.org/devtools-user/web_console/invoke_getters_from_autocomplete/`;
+const LEARN_MORE_URL = `https://source.firefox.com/docs/devtools-user/web_console/invoke_getters_from_autocomplete/`;
 
 class ConfirmDialog extends Component {
   static get propTypes() {

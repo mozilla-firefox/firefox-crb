@@ -1345,7 +1345,7 @@ export var PanelMultiView = class extends AssociatedToNode {
     this.#cleanupTransitionPhase();
     // Ensure the newly-visible view has been through a layout flush before we
     // attempt to focus anything in it.
-    // See https://firefox-source-docs.mozilla.org/performance/bestpractices.html#detecting-and-avoiding-synchronous-reflow
+    // See https://source.firefox.com/docs/performance/bestpractices.html#detecting-and-avoiding-synchronous-reflow
     // for more information.
     await this.window.promiseDocumentFlushed(() => {});
     nextPanelView.focusSelectedElement();

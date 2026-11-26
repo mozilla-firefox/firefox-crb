@@ -1,5 +1,5 @@
 // This JS file allows to emulate reftest-zoom.
-// See https://firefox-source-docs.mozilla.org/layout/Reftest.html#zoom-tests-reftest-zoom-float
+// See https://source.firefox.com/docs/layout/Reftest.html#zoom-tests-reftest-zoom-float
 
 // Retrieve reftest-zoom attribute.
 const reftestZoom = "reftest-zoom";

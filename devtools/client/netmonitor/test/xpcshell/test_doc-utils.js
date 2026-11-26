@@ -16,7 +16,7 @@ function run_test() {
   const MDN_URL = "https://developer.mozilla.org/docs/";
   const GTM_PARAMS_NM = `?${getMdnLinkParams("devtools-netmonitor")}`;
   const GTM_PARAMS_WC = `?${getMdnLinkParams("devtools-webconsole")}`;
-  const USER_DOC_URL = "https://firefox-source-docs.mozilla.org/devtools-user/";
+  const USER_DOC_URL = "https://source.firefox.com/docs/devtools-user/";
 
   const {
     getHeadersURL,

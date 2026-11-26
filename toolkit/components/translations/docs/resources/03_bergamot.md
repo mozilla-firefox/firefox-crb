@@ -102,7 +102,7 @@ no issues. We can roll back the release if any unexpected issues are found.
 
 The plan for this release is available:
 
-https://firefox-source-docs.mozilla.org/toolkit/components/translations/resources/03_bergamot.html#releasing
+https://source.firefox.com/docs/toolkit/components/translations/resources/03_bergamot.html#releasing
 
 Thank you,
 [NAME]
@@ -119,7 +119,7 @@ found. We can roll back the release if any unexpected issues are found.
 
 The plan for this release is available:
 
-https://firefox-source-docs.mozilla.org/toolkit/components/translations/resources/03_bergamot.html#releasing
+https://source.firefox.com/docs/toolkit/components/translations/resources/03_bergamot.html#releasing
 
 Thank you,
 [NAME]

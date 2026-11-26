@@ -36,7 +36,7 @@ class nsSplittableFrame : public nsIFrame {
    * A "flow" is a chain of fluid continuations.
    *
    * For more information, see
-   * https://firefox-source-docs.mozilla.org/layout/LayoutOverview.html#fragmentation
+   * https://source.firefox.com/docs/layout/LayoutOverview.html#fragmentation
    */
 
   // Get the previous/next continuation, regardless of its type (fluid or

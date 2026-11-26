@@ -79,7 +79,7 @@ interface nsITelemetry : nsISupports
    *                   Defaults to "main".
    *                   Custom stores are available when probes have them defined.
    *                   See the `record_into_store` attribute on histograms.
-   *                   @see https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/collection/histograms.html#record-into-store
+   *                   @see https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/collection/histograms.html#record-into-store
    * @param aClearStore Whether to clear out the histograms in the named store after snapshotting.
    *                    Defaults to false.
    * @param aFilterTest If true, `TELEMETRY_TEST_` histograms will be filtered out.
@@ -98,7 +98,7 @@ interface nsITelemetry : nsISupports
    *                   Defaults to "main".
    *                   Custom stores are available when probes have them defined.
    *                   See the `record_into_store` attribute on histograms.
-   *                   @see https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/collection/histograms.html#record-into-store
+   *                   @see https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/collection/histograms.html#record-into-store
    * @param aClearStore Whether to clear out the keyed histograms in the named store after snapshotting.
    *                    Defaults to false.
    * @param aFilterTest If true, `TELEMETRY_TEST_` histograms will be filtered out.
@@ -117,7 +117,7 @@ interface nsITelemetry : nsISupports
    *                   Defaults to "main".
    *                   Custom stores are available when probes have them defined.
    *                   See the `record_into_store` attribute on scalars.
-   *                   @see https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/collection/scalars.html#optional-fields
+   *                   @see https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/collection/scalars.html#optional-fields
    * @param aClearStore Whether to clear out the scalars in the named store after snapshotting.
    *                    Defaults to false.
    * @param aFilterTest If true, `telemetry.test` scalars will be filtered out.
@@ -136,7 +136,7 @@ interface nsITelemetry : nsISupports
    *                   Defaults to "main".
    *                   Custom stores are available when probes have them defined.
    *                   See the `record_into_store` attribute on scalars.
-   *                   @see https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/collection/scalars.html#optional-fields
+   *                   @see https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/collection/scalars.html#optional-fields
    * @param aClearStore Whether to clear out the keyed scalars in the named store after snapshotting.
    *                    Defaults to false.
    * @param aFilterTest If true, `telemetry.test` scalars will be filtered out.

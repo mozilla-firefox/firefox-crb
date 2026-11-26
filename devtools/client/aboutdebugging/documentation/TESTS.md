@@ -2,7 +2,7 @@
 
 ## Tests overview
 
-Tests are located in `devtools/client/aboutdebugging/test`. There are two subfolders, `browser` and `xpcshell`. `browser` contains our [browser chrome mochitests](https://firefox-source-docs.mozilla.org/testing/browser-chrome/). Most of our tests are browser mochitests. `xpcshell` contains our [xpc-shell unit tests](https://firefox-source-docs.mozilla.org/testing/xpcshell/). At the moment of writing we only have one.
+Tests are located in `devtools/client/aboutdebugging/test`. There are two subfolders, `browser` and `xpcshell`. `browser` contains our [browser chrome mochitests](https://source.firefox.com/docs/testing/browser-chrome/). Most of our tests are browser mochitests. `xpcshell` contains our [xpc-shell unit tests](https://source.firefox.com/docs/testing/xpcshell/). At the moment of writing we only have one.
 
 ## Test coverage
 
@@ -108,10 +108,10 @@ The test-verify mode - shortened as "TV" on our continuous integration platforms
 You can push your local changesets to our remote continuous integration server, try. This is useful if you made some significant changes and you would like to make sure nothing is broken in the whole DevTools tests suite, on any platform.
 
 There are many topics to cover here, but none are specific to about:debugging. Here are a few pointers:
-- [Try overview](https://firefox-source-docs.mozilla.org/tools/try/index.html)
-- [Selectors integrated with ./mach](https://firefox-source-docs.mozilla.org/tools/try/selectors/index.html)
-- [Try syntax selector](https://firefox-source-docs.mozilla.org/tools/try/selectors/syntax.html)
-- [Try fuzzy selector](https://firefox-source-docs.mozilla.org/tools/try/selectors/fuzzy.html)
+- [Try overview](https://source.firefox.com/docs/tools/try/index.html)
+- [Selectors integrated with ./mach](https://source.firefox.com/docs/tools/try/selectors/index.html)
+- [Try syntax selector](https://source.firefox.com/docs/tools/try/selectors/syntax.html)
+- [Try fuzzy selector](https://source.firefox.com/docs/tools/try/selectors/fuzzy.html)
 
 Below is an example of pushing to try using the try syntax selector. As the documentation says, this syntax is obscure and can be difficult to remember, but it is still widely used by Firefox developers.
 
@@ -119,6 +119,6 @@ Below is an example of pushing to try using the try syntax selector. As the docu
 ./mach try -b do -p linux64 -u xpcshell,mochitest-dt,mochitest-chrome --artifact
 ```
 
-Refer to the [try syntax documentation](https://firefox-source-docs.mozilla.org/tools/try/selectors/syntax.html) to learn what the various parameters mean.
+Refer to the [try syntax documentation](https://source.firefox.com/docs/tools/try/selectors/syntax.html) to learn what the various parameters mean.
 
 Note that you need committer access level 1 in order to push to try.

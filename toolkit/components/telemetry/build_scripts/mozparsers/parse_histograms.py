@@ -38,9 +38,7 @@ ALWAYS_ALLOWED_KEYS = [
     "products",
 ]
 
-BASE_DOC_URL = (
-    "https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/"
-)
+BASE_DOC_URL = "https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/"
 HISTOGRAMS_DOC_URL = BASE_DOC_URL + "collection/histograms.html"
 SCALARS_DOC_URL = BASE_DOC_URL + "collection/scalars.html"
 

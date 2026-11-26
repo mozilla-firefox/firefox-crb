@@ -5,7 +5,7 @@
 "use strict";
 
 const MDN_BASE_URL =
-  "https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/";
+  "https://source.firefox.com/docs/devtools-user/storage_inspector/";
 
 /**
  * Get the MDN URL for the specified storage type.

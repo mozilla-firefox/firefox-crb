@@ -12,7 +12,7 @@ Available and supported protocols are:
 * WebDriver classic (aka Marionette)
 * WebDriver BiDi
 
-See <https://firefox-source-docs.mozilla.org/remote/> for the full documentation.
+See <https://source.firefox.com/docs/remote/> for the full documentation.
 
 ## Puppeteer
 

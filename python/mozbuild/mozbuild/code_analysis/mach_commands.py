@@ -189,7 +189,7 @@ TOOLS_GRADLE_FAILED = 10
 def clang_tidy(command_context):
     # If no arguments are provided, just print a help message.
     """Detailed documentation:
-    https://firefox-source-docs.mozilla.org/code-quality/static-analysis/index.html
+    https://source.firefox.com/docs/code-quality/static-analysis/index.html
     """
     mach = Mach(os.getcwd())
 
@@ -209,7 +209,7 @@ def clang_tidy(command_context):
 def static_analysis(command_context):
     # If no arguments are provided, just print a help message.
     """Detailed documentation:
-    https://firefox-source-docs.mozilla.org/code-quality/static-analysis/index.html
+    https://source.firefox.com/docs/code-quality/static-analysis/index.html
     """
     mach = Mach(os.getcwd())
 

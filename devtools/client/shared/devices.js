@@ -46,7 +46,7 @@ const LOCAL_DEVICES = "devtools.devices.local";
  *   ["phones", "tablets", "laptops", "televisions", "consoles", "watches"].
  *
  * To propose new devices for the shared catalog, see
- * https://firefox-source-docs.mozilla.org/devtools/responsive/devices.html#adding-and-removing-devices.
+ * https://source.firefox.com/docs/devtools/responsive/devices.html#adding-and-removing-devices.
  *
  * You can easily add more devices to this catalog from your own code (e.g. an
  * addon) like so:

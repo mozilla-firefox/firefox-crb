@@ -186,7 +186,7 @@ public class WebExtension {
    * WebExtensions/Native_messaging</a>.
    *
    * <p>For the GeckoView API side, see <a
-   * href="https://firefox-source-docs.mozilla.org/mobile/android/geckoview/consumer/web-extensions.html">
+   * href="https://source.firefox.com/docs/mobile/android/geckoview/consumer/web-extensions.html">
    * Using GeckoView: Interacting with Web content and WebExtensions</a>.
    *
    * @param messageDelegate handles messaging between the WebExtension and the app. To send a
@@ -916,7 +916,7 @@ public class WebExtension {
      * it in {@link WebExtension#WebExtension} by setting {@link Flags#ALLOW_CONTENT_MESSAGING}.
      *
      * <p>For more information, see <a
-     * href="https://firefox-source-docs.mozilla.org/mobile/android/geckoview/consumer/web-extensions.html">
+     * href="https://source.firefox.com/docs/mobile/android/geckoview/consumer/web-extensions.html">
      * Using GeckoView: Interacting with Web content and WebExtensions</a>.
      *
      * @param webExtension {@link WebExtension} that this delegate receives messages from.

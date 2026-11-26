@@ -4,7 +4,7 @@
 
 /*
  * This file contains common code that is loaded before each test file(s).
- * See https://firefox-source-docs.mozilla.org/testing/xpcshell/index.html
+ * See https://source.firefox.com/docs/testing/xpcshell/index.html
  * for more information.
  */
 

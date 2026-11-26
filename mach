@@ -92,7 +92,7 @@ def main(args):
             print(
                 dedent(
                     """
-            See https://firefox-source-docs.mozilla.org/setup/linux_build.html#install-python
+            See https://source.firefox.com/docs/setup/linux_build.html#install-python
             for guidance on how to install Python on your system.
             """
                 ).strip()
@@ -101,7 +101,7 @@ def main(args):
             print(
                 dedent(
                     """
-            See https://firefox-source-docs.mozilla.org/setup/macos_build.html#install-python-macos
+            See https://source.firefox.com/docs/setup/macos_build.html#install-python-macos
             for guidance on how to install a compatible Python on your system.
             """
                 ).strip()
@@ -111,7 +111,7 @@ def main(args):
                 dedent(
                     """
             Python is provided by MozillaBuild; ensure your MozillaBuild installation is
-            up to date. See https://firefox-source-docs.mozilla.org/setup/windows_build.html#install-mozillabuild
+            up to date. See https://source.firefox.com/docs/setup/windows_build.html#install-mozillabuild
             for details.
             """
                 ).strip()
@@ -121,10 +121,10 @@ def main(args):
                 dedent(
                     """
             You probably want to be interacting with Mach from within MozillaBuild, see
-            https://firefox-source-docs.mozilla.org/setup/windows_build.html for details.
+            https://source.firefox.com/docs/setup/windows_build.html for details.
             
             If you are deliberately using Mach from outside MozillaBuild, then see
-            https://firefox-source-docs.mozilla.org/mach/windows-usage-outside-mozillabuild.html#install-python
+            https://source.firefox.com/docs/mach/windows-usage-outside-mozillabuild.html#install-python
             for guidance on installing native Python on your system.
             """
                 ).strip()

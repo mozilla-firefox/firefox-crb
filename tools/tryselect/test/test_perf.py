@@ -1656,7 +1656,7 @@ def test_save_revision_treeherder(args, call_counts, exists_cache_file):
             [9, 0, 0, 8],
             (
                 "For more information on the performance tests, see our "
-                "PerfDocs here:\nhttps://firefox-source-docs.mozilla.org/testing/perfdocs/"
+                "PerfDocs here:\nhttps://source.firefox.com/docs/testing/perfdocs/"
             ),
             False,
         ),

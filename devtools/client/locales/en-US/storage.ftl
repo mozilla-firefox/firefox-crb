@@ -11,27 +11,27 @@ storage-filter-key = CmdOrCtrl+F
 storage-table-empty-text = No data present for selected host
 
 # Hint shown when the cookies storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/cookies/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/cookies/
 storage-table-type-cookies-hint = View and edit cookies by selecting a host. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Hint shown when the local storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/local_storage_session_storage/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/local_storage_session_storage/
 storage-table-type-localstorage-hint = View and edit the local storage by selecting a host. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Hint shown when the session storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/local_storage_session_storage/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/local_storage_session_storage/
 storage-table-type-sessionstorage-hint = View and edit the session storage by selecting a host. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Hint shown when the IndexedDB storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/indexeddb/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/indexeddb/
 storage-table-type-indexeddb-hint = View and delete IndexedDB entries by selecting a database. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Hint shown when the cache storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/cache_storage/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/cache_storage/
 storage-table-type-cache-hint = View and delete the cache storage entries by selecting a storage. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Hint shown when the extension storage type is selected. Clicking the link will open
-# https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/extension_storage/
+# https://source.firefox.com/docs/devtools-user/storage_inspector/extension_storage/
 storage-table-type-extensionstorage-hint = View and edit the extension storage by selecting a host. <a data-l10n-name="learn-more-link">Learn more</a>
 
 # Placeholder for the searchbox that allows you to filter the table items

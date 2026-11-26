@@ -714,7 +714,7 @@ export class TranslationsParent extends JSWindowActorParent {
    * as "2.0", "2.1", etc will not be downloaded.
    *
    * Release docs:
-   * https://firefox-source-docs.mozilla.org/toolkit/components/translations/resources/03_bergamot.html
+   * https://source.firefox.com/docs/toolkit/components/translations/resources/03_bergamot.html
    *
    * Release History:
    *

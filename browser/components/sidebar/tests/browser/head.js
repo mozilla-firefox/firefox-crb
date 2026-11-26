@@ -243,7 +243,7 @@ function isActiveElement(el) {
  * Wait until Style and Layout information have been calculated and the paint
  * has occurred.
  *
- * @see https://firefox-source-docs.mozilla.org/performance/bestpractices.html
+ * @see https://source.firefox.com/docs/performance/bestpractices.html
  */
 async function waitForRepaint() {
   await SidebarController.waitUntilStable();

@@ -26,7 +26,7 @@ var FunctionFlowGraph = class FunctionFlowGraph {
         // body at the end of the list, and additional bodies for all the loops.
         // (It's not a simple 1-1 relationship; there could be nested loops and
         // artificial loops created to produce a reducible control flow graph.)
-        // https://firefox-source-docs.mozilla.org/js/HazardAnalysis/CFG.html
+        // https://source.firefox.com/docs/js/HazardAnalysis/CFG.html
         assert(bodies);
         this.bodies = bodies;
 
@@ -873,7 +873,7 @@ function edgeStartsValueLiveRange(ffg, edge, decl)
 // arguments, and if the result of the call is assigned to a variable,
 // the expression representing that variable(the lhs).
 //
-// https://firefox-source-docs.mozilla.org/js/HazardAnalysis/CFG.html for
+// https://source.firefox.com/docs/js/HazardAnalysis/CFG.html for
 // documentation of the data structure used here.
 function matchEdgeCall(edge, matcher) {
     if (edge.Kind != "Call") {

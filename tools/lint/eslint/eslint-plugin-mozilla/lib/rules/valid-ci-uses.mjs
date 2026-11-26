@@ -101,7 +101,7 @@ function interfaceHasProperty(interfaceName, propertyName) {
 export default {
   meta: {
     docs: {
-      url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint-plugin-mozilla/rules/valid-ci-uses.html",
+      url: "https://source.firefox.com/docs/code-quality/lint/linters/eslint-plugin-mozilla/rules/valid-ci-uses.html",
     },
     messages: {
       missingInterface:

@@ -39,7 +39,7 @@
  *  The name of the site, if any.
  * @property {number} [frecency]
  *  The frecency of the page, if any.
- *  See https://firefox-source-docs.mozilla.org/browser/urlbar/ranking.html.
+ *  See https://source.firefox.com/docs/browser/urlbar/ranking.html.
  *  Note that this property may not be used to change the actual frecency
  *  score of a page, only to retrieve it. In other words, any `frecency` field
  *  passed as argument to a function of this API will be ignored.

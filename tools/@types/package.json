@@ -19,6 +19,6 @@
   "bugs": {
     "url": "https://bugzilla.mozilla.org/enter_bug.cgi?product=Developer+Infrastructure&component=Lint+and+Formatting"
   },
-  "homepage": "https://firefox-source-docs.mozilla.org/code-quality/",
+  "homepage": "https://source.firefox.com/docs/code-quality/",
   "private": true
 }

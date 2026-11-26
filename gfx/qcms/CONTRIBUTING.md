@@ -1,5 +1,5 @@
 qcms is mirrored to https://github.com/FirefoxGraphics/qcms but all development
-happens via the regular [Firefox contribution process](https://firefox-source-docs.mozilla.org/setup/contributing_code.html).
+happens via the regular [Firefox contribution process](https://source.firefox.com/docs/setup/contributing_code.html).
 
 Bug should be filed under the 'Core' product in the 'Graphics: Color Management' component.
 

@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Adding a new metric? We have docs for that!
-# https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/new_definitions_file.html
+# https://source.firefox.com/docs/toolkit/components/glean/user/new_definitions_file.html
 
 ---
 $schema: moz://mozilla.org/schemas/glean/metrics/2-0-0
@@ -791,7 +791,7 @@ browser.ui:
       What widgets are in which toolbars.
       Not dissimilar from Telemetry's `browser.ui.toolbar_widgets`,
       but in a friendlier format.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       for how widget ids and positions are determined.
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=1913362
@@ -820,7 +820,7 @@ browser.ui:
     type: labeled_boolean
     description: >
       The widgets in the toolbars. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.toolbar_widgets.
     bugs:
@@ -837,7 +837,7 @@ browser.ui:
     type: labeled_counter
     description: >
       Records when widgets are added, removed or moved in the UI. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.customized_widgets.
     bugs:
@@ -984,7 +984,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the menu bar. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.menu_bar.
     bugs:
@@ -1001,7 +1001,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the tab bar. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.tabs_bar.
     bugs:
@@ -1018,7 +1018,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the vertical tab bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.vertical_tabs_container.
     bugs:
@@ -1034,7 +1034,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the nav bar. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.nav_bar.
     bugs:
@@ -1051,7 +1051,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the bookmarks bar. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.bookmarks_bar.
     bugs:
@@ -1068,7 +1068,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the app menu. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.app_menu.
     bugs:
@@ -1085,7 +1085,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the tab context menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.tabs_context.
     bugs:
@@ -1110,7 +1110,7 @@ browser.ui.interaction:
     description: >
       Records a count for each entrypoint (the container of the trigger
       node) when an item from the tabs context menu is selected. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.tabs_context_entrypoint.
     bugs:
@@ -1127,7 +1127,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the content context
-      menu. See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      menu. See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.content_context.
     bugs:
@@ -1144,7 +1144,7 @@ browser.ui.interaction:
     type: labeled_counter
     description: >
       Records a count of interactions with items in the overflow menu. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.overflow_menu.
     bugs:
@@ -1162,7 +1162,7 @@ browser.ui.interaction:
     description: >
       Records a count of interactions with items in the Unified Extensions
       area. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.unified_extensions_area.
     bugs:
@@ -1181,7 +1181,7 @@ browser.ui.interaction:
     description: >
       Records a count of interactions with items in the pinned area of the
       overflow menu. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.pinned_overflow_menu.
     bugs:
@@ -1199,7 +1199,7 @@ browser.ui.interaction:
     description: >
       Records a count of interactions with page action items in the url
       bar. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.pageaction_urlbar.
     bugs:
@@ -1217,7 +1217,7 @@ browser.ui.interaction:
     description: >
       Records a count of interactions with page action items in the panel.
       See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.pageaction_panel.
     bugs:
@@ -1235,7 +1235,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Home section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneHome.
     bugs:
@@ -1253,7 +1253,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the General section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneGeneral.
     bugs:
@@ -1271,7 +1271,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Privacy section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_panePrivacy.
     bugs:
@@ -1289,7 +1289,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Search section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneSearch.
     bugs:
@@ -1307,7 +1307,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Search results section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneSearchResults.
     bugs:
@@ -1325,7 +1325,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Sync section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneSync.
     bugs:
@@ -1343,7 +1343,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Containers section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneContainers.
     bugs:
@@ -1361,7 +1361,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the AI Controls section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/2012800
     data_reviews:
@@ -1376,7 +1376,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the About Firefox section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1990885
     data_reviews:
@@ -1391,7 +1391,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Downloads section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/2001154
     data_reviews:
@@ -1406,7 +1406,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Accessibility section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1968116
     data_reviews:
@@ -1421,7 +1421,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Appearance section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1968113
     data_reviews:
@@ -1436,7 +1436,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Languages section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1972081
     data_reviews:
@@ -1450,7 +1450,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Tabs and browsing section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1968114
     data_reviews:
@@ -1464,7 +1464,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Permissions and data section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/1968118
     data_reviews:
@@ -1478,7 +1478,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Passwords and autofill section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     bugs:
       - https://bugzil.la/2041430
     data_reviews:
@@ -1492,7 +1492,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Experimental section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneExperimental.
     bugs:
@@ -1512,7 +1512,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the More From Mozilla section
       of preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneMoreFromMozilla.
     bugs:
@@ -1530,7 +1530,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in any other section of
       preferences. See
-      https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
       This metric was generated to correspond to the Legacy Telemetry
       scalar browser.ui.interaction.preferences_paneUnknown.
     bugs:

@@ -9,7 +9,7 @@ class Logger:
     """
     ManifestParser needs to ensure a singleton for mozlog as documented here:
 
-    https://firefox-source-docs.mozilla.org/mozbase/mozlog.html#mozlog-structured-logging-for-test-output
+    https://source.firefox.com/docs/mozbase/mozlog.html#mozlog-structured-logging-for-test-output
 
     Logging is threadsafe, with access to handlers protected by a
     threading.Lock. However it is not process-safe. This means that

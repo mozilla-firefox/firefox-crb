@@ -510,7 +510,7 @@ export class DebugSession {
   }
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onExceptionUnwind = (frame, value) => {
     // Don't pause for exceptions thrown by code evaluated during a pause.
@@ -528,14 +528,14 @@ export class DebugSession {
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onDebuggerStatement = frame => {
     return this.#pauseAtFrame(frame);
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onFrameEnter = (frame, params, newFrame) => {
     // Clear the global onEnterFrame hook since we've entered a frame
@@ -560,7 +560,7 @@ export class DebugSession {
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onFramePop = (frame, params) => {
     // If there's no older frame, execution will complete naturally
@@ -599,7 +599,7 @@ export class DebugSession {
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onFrameStep = (frame, params) => {
     const { startFrame } = params;
@@ -610,7 +610,7 @@ export class DebugSession {
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #onNewScript = script => {
     // onNewScript only delivers top-level scripts, expand the tree to reach
@@ -624,7 +624,7 @@ export class DebugSession {
   };
 
   // Debugger handler function.
-  // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
+  // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger/index.html#debugger-handler-functions
   // for signature and return value.
   #pauseAtFrame = (frame, details = {}) => {
     const { url, line, column } = this.#getFrameLocation(frame);

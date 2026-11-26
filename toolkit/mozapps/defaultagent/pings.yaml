@@ -28,7 +28,7 @@ default-agent:
     installing user will have a scheduled task and ping.
 
     Additional information for the Default Agent can be found in the
-    [Default Browser Agent docs](https://firefox-source-docs.mozilla.org/toolkit/mozapps/defaultagent/default-browser-agent/index.html).
+    [Default Browser Agent docs](https://source.firefox.com/docs/toolkit/mozapps/defaultagent/default-browser-agent/index.html).
   include_client_id: false
   send_if_empty: false
   reasons:

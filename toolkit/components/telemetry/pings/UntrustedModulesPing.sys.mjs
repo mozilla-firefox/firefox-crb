@@ -6,7 +6,7 @@
  * This module periodically sends a Telemetry ping containing information
  * about untrusted module loads on Windows.
  *
- * https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/data/third-party-modules-ping.html
+ * https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/data/third-party-modules-ping.html
  */
 
 import { Log } from "resource://gre/modules/Log.sys.mjs";

@@ -3,7 +3,7 @@
 The Windows Default Browser Agent (or WDBA) is responsible for regaining default browser status when Firefox loses it and providing telemetry for browser defaults without requiring the browser to open in a privacy preserving manner. WDBA runs once every 24 hours as a background task. It reports the user's default browser and, if Firefox has lost default status, can show a toast asking the user to switch back.
 
 ## Documentation
-Source documentation: https://firefox-source-docs.mozilla.org/toolkit/mozapps/defaultagent/default-browser-agent/index.html
+Source documentation: https://source.firefox.com/docs/toolkit/mozapps/defaultagent/default-browser-agent/index.html
 Telemetry: https://dictionary.telemetry.mozilla.org/apps/firefox_desktop_background_defaultagent/pings/default-agent
 
 ## File Structure

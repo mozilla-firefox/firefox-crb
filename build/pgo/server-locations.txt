@@ -8,7 +8,7 @@
 # It is referred to by the following page, so if this file moves, that page must
 # be modified accordingly:
 #
-# https://firefox-source-docs.mozilla.org/testing/mochitest-plain/faq.html
+# https://source.firefox.com/docs/testing/mochitest-plain/faq.html
 #
 # Empty lines and lines which begin with "#" are ignored and may be used for
 # storing comments.  All other lines consist of an origin followed by whitespace
@@ -47,7 +47,7 @@
 # must be built then. This is only necessary for cases where we really do
 # want specific certs.
 # You can find instructions on how to add or modify certificates at:
-# https://firefox-source-docs.mozilla.org/build/buildsystem/test_certificates.html
+# https://source.firefox.com/docs/build/buildsystem/test_certificates.html
 #
 # "redir=hostname" tells the pgo server is only used for https://
 # hosts while processing the CONNECT tunnel request. It responds

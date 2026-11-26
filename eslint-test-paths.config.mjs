@@ -17,7 +17,7 @@
 // to be defined in the scope, causing false positives when checking for no
 // undefined variables.
 
-// See https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint.html#i-m-adding-tests-how-do-i-set-up-the-right-configuration
+// See https://source.firefox.com/docs/code-quality/lint/linters/eslint.html#i-m-adding-tests-how-do-i-set-up-the-right-configuration
 // for more information.
 
 const browserTestPaths = ["**/test*/**/browser*/"];

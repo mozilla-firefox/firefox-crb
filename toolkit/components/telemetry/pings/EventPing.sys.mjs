@@ -4,7 +4,7 @@
 
 /*
  * This module sends Telemetry Events periodically:
- * https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/data/event-ping.html
+ * https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/data/event-ping.html
  */
 
 import { TelemetryUtils } from "resource://gre/modules/TelemetryUtils.sys.mjs";

@@ -19,7 +19,7 @@ StaticPrefList.yaml. If a new feature code is added to firefox.js,
 it will appear as "UNKNOWN" in the output until FEATURES is updated.
 
 Output is published to:
-https://firefox-source-docs.mozilla.org/toolkit/components/antitracking/anti-tracking/etp-matrix/
+https://source.firefox.com/docs/toolkit/components/antitracking/anti-tracking/etp-matrix/
 """
 
 import re

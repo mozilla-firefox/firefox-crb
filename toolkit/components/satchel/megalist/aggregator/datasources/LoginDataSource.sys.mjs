@@ -678,7 +678,7 @@ export class LoginDataSource extends DataSourceBase {
     }
 
     // For more context on what these flags mean:
-    // https://firefox-source-docs.mozilla.org/toolkit/components/prompts/prompts/nsIPromptService-reference.html#Prompter.confirmEx
+    // https://source.firefox.com/docs/toolkit/components/prompts/prompts/nsIPromptService-reference.html#Prompter.confirmEx
     const flags =
       Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_0 +
       Services.prompt.BUTTON_TITLE_CANCEL * Services.prompt.BUTTON_POS_1;

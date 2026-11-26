@@ -891,7 +891,7 @@ browser.ui:
       - 1620358
     description: >
       The widgets in the toolbars.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: boolean
     keyed: true
@@ -909,7 +909,7 @@ browser.ui:
       - 1620358
     description: >
       Records when widgets are added, removed or moved in the UI.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -928,7 +928,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with keyboard shortcuts.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -946,7 +946,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the menu bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -964,7 +964,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the tab bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -982,7 +982,7 @@ browser.ui.interaction:
       - 1921789
     description: >
       Records a count of interactions with items in the vertical tab bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -999,7 +999,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the nav bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1017,7 +1017,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the bookmarks bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1035,7 +1035,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the app menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1054,7 +1054,7 @@ browser.ui.interaction:
       - 2020865
     description: >
       Records a count of interactions with items in the tab context menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1073,7 +1073,7 @@ browser.ui.interaction:
     description: >
       Records a count for each entrypoint (the container of the trigger node) when an
       item from the tabs context menu is selected.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1091,7 +1091,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the content context menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1109,7 +1109,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with items in the overflow menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1127,7 +1127,7 @@ browser.ui.interaction:
       - 1800114
     description: >
       Records a count of interactions with items in the Unified Extensions area.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1147,7 +1147,7 @@ browser.ui.interaction:
     description: >
       Records a count of interactions with items in the pinned area of the
       overflow menu.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1165,7 +1165,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with page action items in the url bar.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1183,7 +1183,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records a count of interactions with page action items in the panel.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1201,7 +1201,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records the items interacted with in the Home section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1219,7 +1219,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records the items interacted with in the General section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1237,7 +1237,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records the items interacted with in the Privacy section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1255,7 +1255,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records the items interacted with in the Search section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1274,7 +1274,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Search results section of
       preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1292,7 +1292,7 @@ browser.ui.interaction:
       - 1620358
     description: >
       Records the items interacted with in the Sync section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1311,7 +1311,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Containers section of
       preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1331,7 +1331,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the Experimental section of
       preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1350,7 +1350,7 @@ browser.ui.interaction:
     description: >
       Records the items interacted with in the More From Mozilla section of
       preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -1369,7 +1369,7 @@ browser.ui.interaction:
       - 1651986
     description: >
       Records the items interacted with in any other section of preferences.
-      See https://firefox-source-docs.mozilla.org/browser/BrowserUsageTelemetry.html
+      See https://source.firefox.com/docs/browser/BrowserUsageTelemetry.html
     expires: never
     kind: uint
     keyed: true
@@ -2471,7 +2471,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the urlbar. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2507,7 +2507,7 @@ browser.search.content:
       - 1779471
     description: >
       Records counts for in-content searches where the search was most likely started from the urlbar after the search term was shown in the urlbar. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     kind: uint
     keyed: true
@@ -2529,7 +2529,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the urlbar in search mode. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2551,7 +2551,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the search bar. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2573,7 +2573,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the about:home. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2595,7 +2595,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the about:newtab. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2617,7 +2617,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the context menu. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2639,7 +2639,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from a webextension. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2661,7 +2661,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was most likely started from the system, e.g. command line. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2679,7 +2679,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was loaded from the tab history. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2697,7 +2697,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was loaded by reloading the page. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2719,7 +2719,7 @@ browser.search.content:
       - 1634564
     description: >
       Records counts for in-content searches where the search was started from a place that could not be determined or not categorized by the other scalars. The key format is <provider>:[tagged|tagged-follow-on|organic]:[code|other|none]
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2738,7 +2738,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the urlbar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2774,7 +2774,7 @@ browser.search.withads:
       - 1779471
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the urlbar after the search term was shown in the urlbar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     kind: uint
     keyed: true
@@ -2792,7 +2792,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the urlbar in search mode. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2810,7 +2810,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the search bar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2828,7 +2828,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from about:home. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2846,7 +2846,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from about:newtab. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2864,7 +2864,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the context menu. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2882,7 +2882,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from a webextension. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2900,7 +2900,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from the system, e.g. command line. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2918,7 +2918,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was loaded from the tab history. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2936,7 +2936,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was loaded by reloading the page. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2954,7 +2954,7 @@ browser.search.withads:
       - 1664847
     description: >
       Records counts of SERP pages with adverts displayed where the search was started from a place not categorized by the other scalars. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -2973,7 +2973,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from the urlbar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3009,7 +3009,7 @@ browser.search.adclicks:
       - 1779471
     description: >
       Records clicks of adverts on SERP pages where the search was started from the urlbar after the search term was shown in the urlbar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     kind: uint
     keyed: true
@@ -3027,7 +3027,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from the urlbar in search mode. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3045,7 +3045,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from the search bar. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3063,7 +3063,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from about:home. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3081,7 +3081,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from about:newtab. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3099,7 +3099,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from the context menu. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3117,7 +3117,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from a webextension. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3135,7 +3135,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from the system, e.g. command line. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3153,7 +3153,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was loaded from the tab history. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3171,7 +3171,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was loaded by reloading the page. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint
@@ -3189,7 +3189,7 @@ browser.search.adclicks:
       - 1664847
     description: >
       Records clicks of adverts on SERP pages where the search was started from a place not categorized by the other scalars. The key format is ‘<provider>:<tagged|organic>’
-      See https://firefox-source-docs.mozilla.org/browser/search/telemetry.html#browser-search-content
+      See https://source.firefox.com/docs/browser/search/telemetry.html#browser-search-content
     expires: never
     keyed: true
     kind: uint

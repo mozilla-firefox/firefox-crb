@@ -79,7 +79,7 @@ struct ZoomTarget;
  *
  * Please see the "Threading / Locking Overview" section of
  * gfx/docs/AsyncPanZoom.rst (hosted in rendered form at
- * https://firefox-source-docs.mozilla.org/gfx/gfx/AsyncPanZoom.html#threading-locking-overview)
+ * https://source.firefox.com/docs/gfx/gfx/AsyncPanZoom.html#threading-locking-overview)
  * for what the ordering is, and what are the rules for respecting it.
  * **************************************************************************
  */

@@ -654,9 +654,9 @@ class RemoteAgentParentProcess {
                      which is a low-level remote debugging interface used for WebDriver
                      BiDi. Defaults to port 9222.
   --remote-allow-hosts <hosts> Values of the Host header to allow for incoming requests.
-                     Please read security guidelines at https://firefox-source-docs.mozilla.org/remote/Security.html
+                     Please read security guidelines at https://source.firefox.com/docs/remote/Security.html
   --remote-allow-origins <origins> Values of the Origin header to allow for incoming requests.
-                     Please read security guidelines at https://firefox-source-docs.mozilla.org/remote/Security.html\n`;
+                     Please read security guidelines at https://source.firefox.com/docs/remote/Security.html\n`;
 
   QueryInterface = ChromeUtils.generateQI([
     "nsICommandLineHandler",

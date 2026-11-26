@@ -199,7 +199,7 @@ Will look like this in our JSON:
 
 ### High Contrast Mode (HCM) media queries
 
-We need to be able to change our token values to support both the `prefers-contrast` and `forced-colors` [media queries](https://firefox-source-docs.mozilla.org/accessible/HCMMediaQueries.html). We employ `prefersContrast` and `forcedColors` keys nested in a token's `value` key to indicate that we need to generate a media query entry for that token. For example this JSON:
+We need to be able to change our token values to support both the `prefers-contrast` and `forced-colors` [media queries](https://source.firefox.com/docs/accessible/HCMMediaQueries.html). We employ `prefersContrast` and `forcedColors` keys nested in a token's `value` key to indicate that we need to generate a media query entry for that token. For example this JSON:
 
 ```json
 "border": {
@@ -238,7 +238,7 @@ results in the following CSS:
 }
 ```
 
-The layers and media queries are nested inside a single `:root, :host(.anonymous-content-host)` selector, as recommended by the [HCM media query guidelines](https://firefox-source-docs.mozilla.org/accessible/HCMMediaQueries.html#writing-maintainable-frontend-code).
+The layers and media queries are nested inside a single `:root, :host(.anonymous-content-host)` selector, as recommended by the [HCM media query guidelines](https://source.firefox.com/docs/accessible/HCMMediaQueries.html#writing-maintainable-frontend-code).
 
 ### Theming
 
@@ -451,7 +451,7 @@ Our build process provides a mechanism to override design tokens behind a pref. 
 
 Then you can create new JSON files in `src/tokens` that end with a suffix using the `id` (e.g. `*.nova.tokens.json`) and follow the JSON format to define the tokens that are different from the design system defaults. They should follow the same structure as the defaults so the tokens end up with the same names.
 
-The high contrast overrides are emitted into cascade layers. A single `@layer` statement at the top of `dist/tokens-shared.css` and of every component `*.tokens.css` declares all of them in precedence order, ending `tokens-prefers-contrast`, `tokens-prefers-contrast-nova`, `tokens-forced-colors`, `tokens-forced-colors-nova`, so that forced colors wins when a surface is in both regimes at once. `getLayerString` in [`get-layer-string.mjs`](https://searchfox.org/firefox-main/source/toolkit/themes/shared/design-system/config/helpers/desktop-format/get-layer-string.mjs) generates the statement: the three theme layers (`tokens-foundation`, `tokens-browser-theme`, `tokens-foundation-brand`), then those three again with each override `id` as a suffix, then each of the two accessibility layers followed by its override twins. Each document or shadow tree orders layers by the first appearance of their names, and a later statement cannot reorder a name already registered. A layer name missing from the statement is therefore ordered after every layer registered before its first use, which normally includes the forced colors and prefers-contrast layers, so its values beat them; add a new layer to `getLayerString` rather than naming it only in a sheet. Anything a consumer declares outside a layer beats all of them, whatever the specificity - see the [CSS guidelines](https://firefox-source-docs.mozilla.org/code-quality/coding-style/css_guidelines.html#an-unlayered-declaration-outranks-every-cascade-layer).
+The high contrast overrides are emitted into cascade layers. A single `@layer` statement at the top of `dist/tokens-shared.css` and of every component `*.tokens.css` declares all of them in precedence order, ending `tokens-prefers-contrast`, `tokens-prefers-contrast-nova`, `tokens-forced-colors`, `tokens-forced-colors-nova`, so that forced colors wins when a surface is in both regimes at once. `getLayerString` in [`get-layer-string.mjs`](https://searchfox.org/firefox-main/source/toolkit/themes/shared/design-system/config/helpers/desktop-format/get-layer-string.mjs) generates the statement: the three theme layers (`tokens-foundation`, `tokens-browser-theme`, `tokens-foundation-brand`), then those three again with each override `id` as a suffix, then each of the two accessibility layers followed by its override twins. Each document or shadow tree orders layers by the first appearance of their names, and a later statement cannot reorder a name already registered. A layer name missing from the statement is therefore ordered after every layer registered before its first use, which normally includes the forced colors and prefers-contrast layers, so its values beat them; add a new layer to `getLayerString` rather than naming it only in a sheet. Anything a consumer declares outside a layer beats all of them, whatever the specificity - see the [CSS guidelines](https://source.firefox.com/docs/code-quality/coding-style/css_guidelines.html#an-unlayered-declaration-outranks-every-cascade-layer).
 
 When you run `./mach buildtokens`, the CSS output will include the new tokens under a media query using the `pref` that you defined. For example:
 

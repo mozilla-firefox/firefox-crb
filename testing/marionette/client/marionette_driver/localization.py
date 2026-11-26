@@ -6,7 +6,7 @@
 class L10n:
     """An API which allows Marionette to handle localized content.
 
-    The `localization <https://firefox-source-docs.mozilla.org/l10n/>`_ of UI
+    The `localization <https://source.firefox.com/docs/l10n/>`_ of UI
     elements in Gecko based
     applications is done via entities and properties. For static values entities
     are used, which are located in .dtd files. Whereby for dynamically updated

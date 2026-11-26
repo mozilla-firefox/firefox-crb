@@ -32,7 +32,7 @@
         "parameters": [
           {
             "name": "progressData",
-            "description": "Object containing the data, see https://firefox-source-docs.mozilla.org/toolkit/components/ml/notifications.html",
+            "description": "Object containing the data, see https://source.firefox.com/docs/toolkit/components/ml/notifications.html",
             "type": "object"
           }
         ]

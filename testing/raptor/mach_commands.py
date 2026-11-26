@@ -43,7 +43,7 @@ class RaptorRunner(MozbuildObject):
                     f"versions greater than {max_py_major}.{max_py_minor}."
                     f"\n\tYou seem to currently be using Python {sys_maj}.{sys_min}."
                     f"\n\tSee here for a possible solution in debugging your python environment: "
-                    f"https://firefox-source-docs.mozilla.org/testing/perfdocs/"
+                    f"https://source.firefox.com/docs/testing/perfdocs/"
                     f"debugging.html#debugging-local-python-environment"
                 )
             )

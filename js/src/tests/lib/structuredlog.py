@@ -1,5 +1,5 @@
 # produce mozlog-compatible log messages, following the spec at
-# https://firefox-source-docs.mozilla.org/mozbase/mozlog.html
+# https://source.firefox.com/docs/mozbase/mozlog.html
 
 import json
 import os

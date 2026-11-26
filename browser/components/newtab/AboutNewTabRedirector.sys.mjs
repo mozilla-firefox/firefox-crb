@@ -69,7 +69,7 @@ const PREF_NEWTAB_REMOTE_RENDERER_ENABLED =
  * process" first launches, so subsequent loads of about:home do not read
  * from this cache.
  *
- * See https://firefox-source-docs.mozilla.org/browser/extensions/newtab/docs/v2-system-addon/about_home_startup_cache.html
+ * See https://source.firefox.com/docs/browser/extensions/newtab/docs/v2-system-addon/about_home_startup_cache.html
  * for further details.
  */
 export const AboutHomeStartupCacheChild = {

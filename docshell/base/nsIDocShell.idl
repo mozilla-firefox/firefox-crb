@@ -81,8 +81,8 @@ webidl Document;
  * at:
  *
  * https://html.spec.whatwg.org/multipage/document-sequences.html#browsing-context
- * https://firefox-source-docs.mozilla.org/dom/navigation/embedding.html
- * https://firefox-source-docs.mozilla.org/dom/navigation/nav_replace.html
+ * https://source.firefox.com/docs/dom/navigation/embedding.html
+ * https://source.firefox.com/docs/dom/navigation/nav_replace.html
  */
 [scriptable, builtinclass, uuid(049234fe-da10-478b-bc5d-bc6f9a1ba63d)]
 interface nsIDocShell : nsIDocShellTreeItem

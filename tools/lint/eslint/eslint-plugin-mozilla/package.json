@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://bugzilla.mozilla.org/enter_bug.cgi?component=Lint%20and%20Formatting&product=Developer%20Infrastructure"
   },
-  "homepage": "http://firefox-source-docs.mozilla.org/tools/lint/linters/eslint-plugin-mozilla.html",
+  "homepage": "https://source.firefox.com/docs/tools/lint/linters/eslint-plugin-mozilla.html",
   "repository": {
     "type": "git",
     "url": "https://github.com/mozilla-firefox/firefox.git",

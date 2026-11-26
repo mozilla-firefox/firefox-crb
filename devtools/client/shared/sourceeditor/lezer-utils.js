@@ -189,7 +189,7 @@ function getEnclosingFunction(
  *
  * @param {object} node
  * @param {string} scopeType - The scope type specifies what kind of scope node to look for.
- * The types are defined by the platform. See https://firefox-source-docs.mozilla.org/js/Debugger/Debugger.Environment.html#type
+ * The types are defined by the platform. See https://source.firefox.com/docs/js/Debugger/Debugger.Environment.html#type
  * @returns {object | null} scope node or null if none is found
  */
 function getParentScopeOfType(node, scopeType) {

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* For documentation of the accessibility architecture,
- * see https://firefox-source-docs.mozilla.org/accessible/index.html
+ * see https://source.firefox.com/docs/accessible/index.html
  */
 
 #ifndef mozilla_a11y_DocAccessibleWrap_h_

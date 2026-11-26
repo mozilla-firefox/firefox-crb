@@ -257,7 +257,7 @@ Code Coverage
 
 Source Docs
 
-: Open the rendered view of the current file on `https://firefox-source-docs.mozilla.org/`.
+: Open the rendered view of the current file on `https://source.firefox.com/docs/`.
 
   This item is shown when the current file is a document file (`.md` or `.rst`) for Firefox Source Docs.
 

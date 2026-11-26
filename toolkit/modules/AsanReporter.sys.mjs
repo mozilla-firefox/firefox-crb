@@ -83,7 +83,7 @@ export const AsanReporter = {
         [
           {
             label: "Learn more\u2026",
-            link: "https://firefox-source-docs.mozilla.org/tools/sanitizer/asan_nightly.html#deprecation-faq",
+            link: "https://source.firefox.com/docs/tools/sanitizer/asan_nightly.html#deprecation-faq",
           },
         ],
         false,

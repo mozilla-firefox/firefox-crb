@@ -3638,7 +3638,7 @@ class Toolbox extends EventEmitter {
   }
 
   /**
-   * See: https://firefox-source-docs.mozilla.org/l10n/fluent/tutorial.html#manually-testing-ui-with-pseudolocalization
+   * See: https://source.firefox.com/docs/l10n/fluent/tutorial.html#manually-testing-ui-with-pseudolocalization
    *
    * @param {"bidi" | "accented" | "none"} pseudoLocale
    */

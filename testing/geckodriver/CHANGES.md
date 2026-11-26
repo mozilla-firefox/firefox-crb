@@ -1236,7 +1236,7 @@ to the standard.
   [Jeremy Lempereur].
 
 - Many documentation improvements, now published on
-  <https://firefox-source-docs.mozilla.org/testing/geckodriver/>.
+  <https://source.firefox.com/docs/testing/geckodriver/>.
 
 ## 0.21.0 (2018-06-15)
 
@@ -2074,22 +2074,22 @@ and greater.
 - Squash compile warnings
 
 [README]: https://github.com/mozilla/geckodriver/blob/master/README.md
-[crash reports]: <https://firefox-source-docs.mozilla.org/testing/geckodriver/CrashReports.html>
-[usage documentation]: <https://firefox-source-docs.mozilla.org/testing/geckodriver/Usage.html#running-firefox-in-a-container-based-package>
+[crash reports]: <https://source.firefox.com/docs/testing/geckodriver/CrashReports.html>
+[usage documentation]: <https://source.firefox.com/docs/testing/geckodriver/Usage.html#running-firefox-in-a-container-based-package>
 [Browser Toolbox]: https://developer.mozilla.org/en-US/docs/Tools/Browser_Toolbox
 [WebDriver conformance]: https://wpt.fyi/results/webdriver/tests?label=experimental
 [`webSocketUrl`]: https://developer.mozilla.org/en-US/docs/Web/WebDriver/Capabilities/webSocketUrl
 [`moz:firefoxOptions`]: https://developer.mozilla.org/en-US/docs/Web/WebDriver/Capabilities/firefoxOptions
-[`moz:debuggerAddress`]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Capabilities.html#moz-debuggeraddress
+[`moz:debuggerAddress`]: https://source.firefox.com/docs/testing/geckodriver/Capabilities.html#moz-debuggeraddress
 [Microsoft Visual Studio redistributable runtime]: https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads
 [GeckoView]: https://wiki.mozilla.org/Mobile/GeckoView
 [Fission]: https://wiki.mozilla.org/Project_Fission
-[Flags]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Flags.html
-[`--allow-hosts`]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Flags.html#allow-hosts-allow-hosts
-[`--allow-origins`]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Flags.html#allow-origins-allow-origins
-[`--allow-system-access`]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Flags.html#allow-system-access
+[Flags]: https://source.firefox.com/docs/testing/geckodriver/Flags.html
+[`--allow-hosts`]: https://source.firefox.com/docs/testing/geckodriver/Flags.html#allow-hosts-allow-hosts
+[`--allow-origins`]: https://source.firefox.com/docs/testing/geckodriver/Flags.html#allow-origins-allow-origins
+[`--allow-system-access`]: https://source.firefox.com/docs/testing/geckodriver/Flags.html#allow-system-access
 [enable remote debugging on the Android device]: https://developers.google.com/web/tools/chrome-devtools/remote-debugging
-[macOS notarization]: https://firefox-source-docs.mozilla.org/testing/geckodriver/Notarization.html
+[macOS notarization]: https://source.firefox.com/docs/testing/geckodriver/Notarization.html
 [Rust]: https://rustup.rs/
 [mozilla.org]: https://www.mozilla.org/firefox/
 

@@ -52,7 +52,7 @@ const messages = ruleMessages(ruleName, {
 });
 
 const meta = {
-  url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-design-tokens.html",
+  url: "https://source.firefox.com/docs/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-design-tokens.html",
   fixable: true,
 };
 

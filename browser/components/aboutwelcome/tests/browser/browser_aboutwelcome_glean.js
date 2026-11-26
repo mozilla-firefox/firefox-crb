@@ -80,7 +80,7 @@ add_task(async function test_welcome_telemetry() {
   // Setup testBeforeNextSubmit. We do this first, progress onboarding, submit
   // and then check submission. We put the asserts inside testBeforeNextSubmit
   // because metric lifetimes are 'ping' and are cleared after submission.
-  // See: https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/instrumentation_tests.html#xpcshell-tests
+  // See: https://source.firefox.com/docs/toolkit/components/glean/user/instrumentation_tests.html#xpcshell-tests
   let pingSubmitted = false;
   GleanPings.messagingSystem.testBeforeNextSubmit(() => {
     pingSubmitted = true;

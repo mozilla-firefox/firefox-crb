@@ -12,9 +12,9 @@ import sdl from "eslint-plugin-sdl";
  *
  * New exclusions SHOULD NOT be added to this list, unless they are part of a
  * rollout for a new rule, or otherwise agreed with the JavaScript usage, tools,
- * and style team: https://firefox-source-docs.mozilla.org/mots/index.html#javascript-usage-tools-and-style
+ * and style team: https://source.firefox.com/docs/mots/index.html#javascript-usage-tools-and-style
  *
- * See https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint/enabling-rules.html#enabling-a-new-rule
+ * See https://source.firefox.com/docs/code-quality/lint/linters/eslint/enabling-rules.html#enabling-a-new-rule
  * for more information about roll-outs.
  */
 export default [

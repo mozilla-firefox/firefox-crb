@@ -4,7 +4,7 @@ A component that gathers tab data from the various places it is produced and exp
 single location, so that consumers do not have to know which source a given piece of data came
 from.
 
-For the complete documentation of this module, please refer to [the source docs](https://firefox-source-docs.mozilla.org/mobile/android/fenix/tab-data-coordinator.html).
+For the complete documentation of this module, please refer to [the source docs](https://source.firefox.com/docs/mobile/android/fenix/tab-data-coordinator.html).
 
 ### Setting up the dependency
 

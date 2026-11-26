@@ -93,7 +93,7 @@ class MozillaBuildBootstrapper(BaseBootstrapper):
                 "Windows Defender exclusion list. This can cause the build process "
                 "to be dramatically slowed or broken. To resolve this, follow the "
                 "directions here: "
-                "https://firefox-source-docs.mozilla.org/setup/windows_build.html"
+                "https://source.firefox.com/docs/setup/windows_build.html"
                 "#antivirus-performance",
                 file=sys.stderr,
             )

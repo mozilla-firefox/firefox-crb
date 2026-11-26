@@ -24,7 +24,7 @@ Caveat:
 * The dummy server doesn't throw any error on an invalid VAPID.
 * It assumes that Firefox will use websocket to connect to the push server, which is
   not true on Firefox for Android as it uses Google FCM.
-  (See https://firefox-source-docs.mozilla.org/mobile/android/fenix/Firebase-Cloud-Messaging-for-WebPush.html)
+  (See https://source.firefox.com/docs/mobile/android/fenix/Firebase-Cloud-Messaging-for-WebPush.html)
 """
 
 import base64

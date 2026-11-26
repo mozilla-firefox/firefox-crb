@@ -57,7 +57,7 @@ async function assertNotDecrypts(test, headers) {
 }
 
 add_setup(async function () {
-  // Per https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/instrumentation_tests.html#xpcshell-tests
+  // Per https://source.firefox.com/docs/toolkit/components/glean/user/instrumentation_tests.html#xpcshell-tests
   do_get_profile();
   Services.fog.initializeFOG();
 });

@@ -17,7 +17,7 @@ implementation "org.mozilla.components:browser-engine-gecko:{latest-version}"
 #### Before using this component
 Products sending telemetry and using this component *must request* a data-review following [this process](https://wiki.mozilla.org/Firefox/Data_Collection).
 
-The [Glean SDK](../../../components/service/glean/README.md) can be used to collect [Gecko Telemetry](https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/index.html).
+The [Glean SDK](../../../components/service/glean/README.md) can be used to collect [Gecko Telemetry](https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/index.html).
 Applications using both this component and the Glean SDK should setup the Gecko Telemetry delegate
 as shown below:
 
@@ -32,7 +32,7 @@ as shown below:
 
 #### Adding new metrics
 
-New Gecko metrics can be added as described [in the Firefox Telemetry docs](https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/start/adding-a-new-probe.html).
+New Gecko metrics can be added as described [in the Firefox Telemetry docs](https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/start/adding-a-new-probe.html).
 
 ## License
 

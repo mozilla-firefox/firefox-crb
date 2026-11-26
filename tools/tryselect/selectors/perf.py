@@ -1656,5 +1656,5 @@ def run(**kwargs):
     )
     print(
         "For more information on the performance tests, see our PerfDocs here:\n"
-        "https://firefox-source-docs.mozilla.org/testing/perfdocs/"
+        "https://source.firefox.com/docs/testing/perfdocs/"
     )

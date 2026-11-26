@@ -118,13 +118,13 @@ exports.ACCESSIBLE_EVENTS = [
 
 // URL constants
 exports.A11Y_LEARN_MORE_LINK =
-  "https://firefox-source-docs.mozilla.org/devtools-user/accessibility_inspector/";
+  "https://source.firefox.com/docs/devtools-user/accessibility_inspector/";
 exports.A11Y_CONTRAST_LEARN_MORE_LINK =
   "https://developer.mozilla.org/docs/Web/Accessibility/Guides/Understanding_WCAG/Perceivable/" +
   "Color_contrast?" +
   getMdnLinkParams("a11y-panel-checks-color-contrast");
 exports.A11Y_SIMULATION_DOCUMENTATION_LINK =
-  "https://firefox-source-docs.mozilla.org/devtools-user/accessibility_inspector/simulation/";
+  "https://source.firefox.com/docs/devtools-user/accessibility_inspector/simulation/";
 
 const A11Y_TEXT_LABEL_LINK_BASE =
   "https://developer.mozilla.org/docs/Web/Accessibility/Guides/Understanding_WCAG/Text_labels_and_names?" +

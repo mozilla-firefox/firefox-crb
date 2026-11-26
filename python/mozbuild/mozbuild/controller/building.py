@@ -1895,7 +1895,7 @@ class BuildDriver(MozbuildObject):
                     {},
                     "If you are building Firefox often, SCCache can save you a lot "
                     "of time. You can learn more here: "
-                    "https://firefox-source-docs.mozilla.org/setup/"
+                    "https://source.firefox.com/docs/setup/"
                     "configuring_build_options.html#sccache",
                 )
         else:
@@ -1921,7 +1921,7 @@ class BuildDriver(MozbuildObject):
                         "build_output",
                         {},
                         "For more information on what to do now, see "
-                        "https://firefox-source-docs.mozilla.org/setup/contributing_code.html",
+                        "https://source.firefox.com/docs/setup/contributing_code.html",
                     )
             except Exception:
                 # Ignore Exceptions in case we can't find config.status (such

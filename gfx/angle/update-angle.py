@@ -85,7 +85,7 @@ def apply_patches(angle_src_dir: Path, patch_dir: Path) -> None:
         if result.returncode != 0:
             print(f"""Could not apply {patch}.
 
-    Please follow the instructions at https://firefox-source-docs.mozilla.org/gfx/VendoringANGLE.html to resolve.
+    Please follow the instructions at https://source.firefox.com/docs/gfx/VendoringANGLE.html to resolve.
 
     Patch rejection details:\n{reject_content}""")
             sys.exit(1)

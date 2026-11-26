@@ -134,7 +134,7 @@ const STRICT_TRANSPORT_SECURITY_LEARN_MORE =
 const MIME_TYPE_MISMATCH_LEARN_MORE =
   "https://developer.mozilla.org/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options";
 const SOURCE_MAP_LEARN_MORE =
-  "https://firefox-source-docs.mozilla.org/devtools-user/debugger/source_map_errors/";
+  "https://source.firefox.com/docs/devtools-user/debugger/source_map_errors/";
 const TLS_LEARN_MORE =
   "https://blog.mozilla.org/security/2018/10/15/removing-old-versions-of-tls/";
 const X_FRAME_OPTIONS_LEARN_MORE =
@@ -144,9 +144,9 @@ const REQUEST_STORAGE_ACCESS_LEARN_MORE =
 const DOCTYPE_MODES_LEARN_MORE =
   "https://developer.mozilla.org/docs/Web/HTML/Guides/Quirks_Mode_and_Standards_Mode";
 const BOUNCE_TRACKING_PROTECTION_LEARN_MORE =
-  "https://firefox-source-docs.mozilla.org/toolkit/components/antitracking/anti-tracking/bounce-tracking-protection/index.html";
+  "https://source.firefox.com/docs/toolkit/components/antitracking/anti-tracking/bounce-tracking-protection/index.html";
 const SAFE_PROMISE_RESOLVE_LEARN_MORE =
-  "https://firefox-source-docs.mozilla.org/dom/promise/safe-promise-resolve.html";
+  "https://source.firefox.com/docs/dom/promise/safe-promise-resolve.html";
 
 const ErrorCategories = {
   "X-Frame-Options": X_FRAME_OPTIONS_LEARN_MORE,

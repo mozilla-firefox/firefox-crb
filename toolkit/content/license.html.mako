@@ -41,7 +41,7 @@ ${app_license_block}\
        <a href="https://www.opensource.org/docs/definition.php">open source</a>.
        A URL identifying the specific source code used to create this copy can be found
        on the <a href="about:buildconfig">build configuration page</a>, and you can read
-       <a href="https://firefox-source-docs.mozilla.org/contributing/contribution_quickref.html">instructions
+       <a href="https://source.firefox.com/docs/contributing/contribution_quickref.html">instructions
        on how to download and build the code for yourself</a>.
     </p>
 

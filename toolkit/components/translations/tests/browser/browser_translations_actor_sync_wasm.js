@@ -7,7 +7,7 @@
  * An actor unit test for testing RemoteSettings update behavior. This uses the
  * recommendations from:
  *
- * https://firefox-source-docs.mozilla.org/services/settings/index.html#unit-tests
+ * https://source.firefox.com/docs/services/settings/index.html#unit-tests
  */
 add_task(async function test_translations_actor_sync_update_wasm() {
   const { remoteClients, cleanup } = await setupActorTest({

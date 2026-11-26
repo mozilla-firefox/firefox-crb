@@ -452,7 +452,7 @@ def artifact_build(
                 "\n\nIf you want these changes to be realized, you should re-run './mach "
                 'bootstrap` and select a build that does not state "Artifact Mode".'
                 "\nFor additional information on Artifact Builds see: "
-                "https://firefox-source-docs.mozilla.org/contributing/build/"
+                "https://source.firefox.com/docs/contributing/build/"
                 "artifact_builds.html"
             ],
         )

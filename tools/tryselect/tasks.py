@@ -96,7 +96,7 @@ already watching this checkout, enable it with:
 
     {command}
 
-See https://firefox-source-docs.mozilla.org/tools/try/tasks.html for details.
+See https://source.firefox.com/docs/tools/try/tasks.html for details.
 """
 
 

@@ -7,7 +7,7 @@
  * communications. The lifetime of a JSWindowActor{Child, Parent} is the `WindowGlobalParent`
  * (for the parent-side) / `WindowGlobalChild` (for the child-side).
  *
- * See https://firefox-source-docs.mozilla.org/dom/ipc/jsactors.html for
+ * See https://source.firefox.com/docs/dom/ipc/jsactors.html for
  * more details on how to use this architecture.
  */
 

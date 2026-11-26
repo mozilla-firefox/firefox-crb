@@ -50,7 +50,7 @@ The source for `moz-button` can be found under [toolkit/content/widgets/moz-butt
 ### Importing the element
 
 Like other custom elements, you should usually be able to rely on `moz-button` getting lazy loaded at the time of first use.
-See [this documentation](https://firefox-source-docs.mozilla.org/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
+See [this documentation](https://source.firefox.com/docs/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
 
 ### Setting the `type`
 

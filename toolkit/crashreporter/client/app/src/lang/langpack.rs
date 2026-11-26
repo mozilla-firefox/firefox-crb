@@ -91,7 +91,7 @@ impl Langpack {
 }
 
 fn locales_from_prefs(prefs: &Prefs) -> anyhow::Result<Option<Vec<String>>> {
-    // Logic dictated by https://firefox-source-docs.mozilla.org/intl/locale.html#requested-locales
+    // Logic dictated by https://source.firefox.com/docs/intl/locale.html#requested-locales
 
     let Some(langs) = prefs.requested_locales() else {
         // If the pref is unset, the installation locale should be used.

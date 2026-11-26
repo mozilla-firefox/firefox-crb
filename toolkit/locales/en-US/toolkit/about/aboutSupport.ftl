@@ -238,7 +238,7 @@ intl-regional-prefs = Regional Preferences
 ## browser instrumentation, user interaction simulation,
 ## and for subscribing to browser-internal events.
 ##
-## See also https://firefox-source-docs.mozilla.org/remote/
+## See also https://source.firefox.com/docs/remote/
 
 remote-debugging-title = Remote Debugging (Chromium Protocol)
 remote-debugging-accepting-connections = Accepting Connections

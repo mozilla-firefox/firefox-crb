@@ -736,7 +736,7 @@ class ObjectActor extends Actor {
    * Converts a Debugger API completion value record into an equivalent
    * object grip for use by the API.
    *
-   * See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/
+   * See https://source.firefox.com/docs/devtools-user/debugger-api/
    * for more specifics on the expected behavior.
    */
   _buildCompletion(value) {

@@ -243,7 +243,7 @@ const HEADERS_TO_FETCH = Object.values(HEADERS_CONFIG).map(
  * Lists basic information about the request
  *
  * In http/2 all response headers are in small case.
- * See: https://firefox-source-docs.mozilla.org/devtools-user/network_monitor/request_details/index.html#response-headers
+ * See: https://source.firefox.com/docs/devtools-user/network_monitor/request_details/index.html#response-headers
  * RFC: https://tools.ietf.org/html/rfc7540#section-8.1.2
  */
 class HeadersPanel extends Component {

@@ -85,7 +85,7 @@ parent:
 
   // Tells the RDD process to flush any pending telemetry.
   // Used in tests and ping assembly. Buffer contains bincoded Rust structs.
-  // https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/ipc.html
+  // https://source.firefox.com/docs/toolkit/components/glean/dev/ipc.html
   async FlushFOGData() returns (ByteBuf buf);
 
   // Test-only method.
@@ -120,7 +120,7 @@ child:
 
   // Sent from time-to-time to limit the amount of telemetry vulnerable to loss
   // Buffer contains bincoded Rust structs.
-  // https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/ipc.html
+  // https://source.firefox.com/docs/toolkit/components/glean/dev/ipc.html
   async FOGData(ByteBuf buf);
 };
 

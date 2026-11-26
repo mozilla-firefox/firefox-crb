@@ -50,7 +50,7 @@ class WidgetTouchEvent;
 //
 // Please see the in-tree document for state transition diagram and more
 // information.
-// HTML: https://firefox-source-docs.mozilla.org/layout/AccessibleCaret.html
+// HTML: https://source.firefox.com/docs/layout/AccessibleCaret.html
 // Source rst: layout/docs/AccessibleCaret.rst
 //
 class AccessibleCaretEventHub : public nsIScrollObserver,

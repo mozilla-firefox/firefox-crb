@@ -19,7 +19,7 @@ You can find an examples of `moz-input-color` used in the [Theme selection in Fi
 
 ## Importing the component
 
-Like other custom elements, you should usually be able to rely on `moz-input-color` getting lazy loaded at the time of first use. See [this documentation](https://firefox-source-docs.mozilla.org/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
+Like other custom elements, you should usually be able to rely on `moz-input-color` getting lazy loaded at the time of first use. See [this documentation](https://source.firefox.com/docs/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
 
 `moz-input-color` can be used as follows:
 

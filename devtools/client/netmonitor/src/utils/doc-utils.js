@@ -135,7 +135,7 @@ const getGAParams = (panelId = "netmonitor") => {
 };
 
 // Base URL to DevTools user docs
-const USER_DOC_URL = "https://firefox-source-docs.mozilla.org/devtools-user/";
+const USER_DOC_URL = "https://source.firefox.com/docs/devtools-user/";
 
 /**
  * Get the MDN URL for the specified header.

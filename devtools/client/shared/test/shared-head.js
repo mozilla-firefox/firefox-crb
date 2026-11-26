@@ -163,7 +163,7 @@ if (DEBUG_TRACE_LINE) {
  * Test helper to start a JavaScript tracer which would trace DevTools modules.
  *
  * @param {object} options
- *        See https://firefox-source-docs.mozilla.org/devtools/tests/mochitest-devtools.html#tracing-javascript
+ *        See https://source.firefox.com/docs/devtools/tests/mochitest-devtools.html#tracing-javascript
  *        for a list of handy additional options.
  * @return {function}
  *         Callback to stop the tracing.

@@ -10,7 +10,7 @@ setup(
     name="mozperfcommon",
     version=PACKAGE_VERSION,
     description="Code shared between the Mozilla performance test harnesses",
-    long_description="see https://firefox-source-docs.mozilla.org/testing/perfdocs/mozperfcommon.html",
+    long_description="see https://source.firefox.com/docs/testing/perfdocs/mozperfcommon.html",
     keywords="mozilla",
     author="Mozilla Performance Test Engineering Team",
     author_email="perftest@mozilla.com",

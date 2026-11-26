@@ -215,7 +215,7 @@ interface ActionHandler {
  *
  * See the documentation for the GeckoView API (that this API wraps) for more information on usage of the extension API
  * and its requirements, at
- * https://firefox-source-docs.mozilla.org/mobile/android/geckoview/consumer/web-extensions.html
+ * https://source.firefox.com/docs/mobile/android/geckoview/consumer/web-extensions.html
  *
  * [Port]s are exposed to consumers (higher level components) because how ports are used, how many there are and how
  * messages map to it is feature-specific and depends on the design of the web extension. Therefore it makes most sense

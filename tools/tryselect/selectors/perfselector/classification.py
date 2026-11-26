@@ -488,7 +488,7 @@ class ClassificationProvider:
                 "tasks": [],
                 "description": "A group of tests that measures various important pageload metrics. More information "
                 "can about what is exactly measured can found here:"
-                " https://firefox-source-docs.mozilla.org/testing/perfdocs/raptor.html#desktop",
+                " https://source.firefox.com/docs/testing/perfdocs/raptor.html#desktop",
             },
             "Speedometer 3": {
                 "query": {
@@ -573,7 +573,7 @@ class ClassificationProvider:
                 "tasks": [],
                 "description": "A group of tests that benchmark how the browser performs in various categories. "
                 "More information about what exact benchmarks we run can be found here: "
-                "https://firefox-source-docs.mozilla.org/testing/perfdocs/raptor.html#benchmarks",
+                "https://source.firefox.com/docs/testing/perfdocs/raptor.html#benchmarks",
             },
             "DAMP (Devtools)": {
                 "query": {
@@ -586,7 +586,7 @@ class ClassificationProvider:
                 "tasks": [],
                 "description": "The DAMP tests are a group of tests that measure the performance of the browsers "
                 "devtools under certain conditiones. More information on the DAMP tests can be found"
-                " here: https://firefox-source-docs.mozilla.org/devtools/tests/performance-tests"
+                " here: https://source.firefox.com/docs/devtools/tests/performance-tests"
                 "-damp.html#what-does-it-do",
             },
             "Talos PerfTests": {
@@ -603,7 +603,7 @@ class ClassificationProvider:
                 },
                 "tasks": [],
                 "description": "This selects all of the talos performance tests. More information can be found here: "
-                "https://firefox-source-docs.mozilla.org/testing/perfdocs/talos.html#test-types",
+                "https://source.firefox.com/docs/testing/perfdocs/talos.html#test-types",
             },
             "Resource Usage": {
                 "query": {

@@ -10,7 +10,7 @@ let attributionActorUnregister = null;
 /**
  * Fission-compatible JSWindowActor implementations.
  * Detailed documentation of these options is in dom/docs/ipc/jsactors.rst,
- * available at https://firefox-source-docs.mozilla.org/dom/ipc/jsactors.html
+ * available at https://source.firefox.com/docs/dom/ipc/jsactors.html
  */
 const JSWINDOWACTORS = {
   Attribution: {

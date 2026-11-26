@@ -37,7 +37,7 @@ The panel is registered along the rest of the Developer Tools panels, in `devtoo
 
 The panel uses the [fluent-react](https://github.com/projectfluent/fluent.js/wiki/React-Bindings) library. The localization file is located at `devtools/client/locales/en-US/application.ftl` and it follows [Fluent syntax](https://projectfluent.org/fluent/guide/).
 
-You should read the [Fluent for Firefox developers](https://firefox-source-docs.mozilla.org/l10n/fluent/tutorial.html) and [Guidelines for Fluent Reviewers](https://firefox-source-docs.mozilla.org/l10n/fluent/review.html) guides.
+You should read the [Fluent for Firefox developers](https://source.firefox.com/docs/l10n/fluent/tutorial.html) and [Guidelines for Fluent Reviewers](https://source.firefox.com/docs/l10n/fluent/review.html) guides.
 
 #### Adding a new string
 
@@ -143,7 +143,7 @@ We are sharing some constants / enum-like constants across the source. They are 
 
 ## Tests
 
-You should read DevTools' general [guidelines for automated tests](https://firefox-source-docs.mozilla.org/devtools/tests/README.html).
+You should read DevTools' general [guidelines for automated tests](https://source.firefox.com/docs/devtools/tests/README.html).
 
 ### Mochitests (e2e / integration)
 

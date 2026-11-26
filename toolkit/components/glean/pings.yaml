@@ -8,7 +8,7 @@
 
 # This file is for Internal FOG Use Only.
 # You probably don't want to add pings here. For more information consult:
-# https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/new_definitions_file.html
+# https://source.firefox.com/docs/toolkit/components/glean/user/new_definitions_file.html
 
 ---
 $schema: moz://mozilla.org/schemas/glean/pings/2-0-0

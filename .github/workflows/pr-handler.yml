@@ -56,7 +56,7 @@ jobs:
       - name: Close PR
         if: steps.team.outputs.is_member != 'true'
         run: |
-          gh pr close "${PR}" --comment "(Automated Close) Please do not file pull requests here, see https://firefox-source-docs.mozilla.org/contributing/how_to_submit_a_patch.html"
+          gh pr close "${PR}" --comment "(Automated Close) Please do not file pull requests here, see https://source.firefox.com/docs/contributing/how_to_submit_a_patch.html"
           gh pr lock "${PR}"
 
       - name: Check PR target

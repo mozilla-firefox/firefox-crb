@@ -2025,7 +2025,7 @@ modules:
     meta:
       components:
         - Developer Infrastructure::Source Documentation
-      url: <https://firefox-source-docs.mozilla.org/>
+      url: <https://source.firefox.com/docs/>
       review_group: firefox-source-docs-reviewers
   - name: 'Core: Gecko Profiler'
     description: Gecko's built-in profiler
@@ -2045,7 +2045,7 @@ modules:
         - Beth Rennie
         - Greg Tatum
       group: dev-platform
-      url: <https://firefox-source-docs.mozilla.org/tools/profiler/>
+      url: <https://source.firefox.com/docs/tools/profiler/>
       components:
         - Core::Gecko Profiler
       review_group: profiler-reviewers
@@ -3157,7 +3157,7 @@ modules:
       - toolkit/modules/Sqlite.sys.mjs
     meta:
       group: dev-platform
-      url: <https://firefox-source-docs.mozilla.org/storage/index.html>
+      url: <https://source.firefox.com/docs/storage/index.html>
       components:
         - Core::SQLite and Embedded Database Bindings
       owners_emeritus:
@@ -4032,7 +4032,7 @@ modules:
         meta:
           components:
             - Firefox::IP Protection
-          url: <https://firefox-source-docs.mozilla.org/toolkit/ipprotection/>
+          url: <https://source.firefox.com/docs/toolkit/ipprotection/>
           review_group: ip-protection-reviewers
         owners:
           - *fchasen
@@ -4063,7 +4063,7 @@ modules:
           components:
             - Firefox::Messaging System
             - Firefox::Tours
-          url: <https://firefox-source-docs.mozilla.org/browser/components/asrouter/docs/>
+          url: <https://source.firefox.com/docs/browser/components/asrouter/docs/>
           review_group: omc-reviewers
           owners_emeritus:
             - *Mardak
@@ -4695,7 +4695,7 @@ modules:
     meta:
       components:
         - Remote Protocol
-      url: <https://firefox-source-docs.mozilla.org/remote/>
+      url: <https://source.firefox.com/docs/remote/>
       review_group: webdriver-reviewers
     owners:
       - *whimboo
@@ -4808,7 +4808,7 @@ modules:
     peers: []
     meta:
       owners_emeritus: []
-      url: https://firefox-source-docs.mozilla.org/services/settings/
+      url: https://source.firefox.com/docs/services/settings/
       components:
         - 'Firefox :: Remote Settings Client'
       review_group: remote-settings-reviewers

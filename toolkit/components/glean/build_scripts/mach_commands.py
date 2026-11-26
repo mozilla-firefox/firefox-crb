@@ -43,8 +43,8 @@ curious), you can invoke glean_parser directly:
 
 ./mach python -m glean_parser data-review
 
-[1]: https://firefox-source-docs.mozilla.org/contributing/index.html
-[2]: https://firefox-source-docs.mozilla.org/contributing/data-review.html
+[1]: https://source.firefox.com/docs/contributing/index.html
+[2]: https://source.firefox.com/docs/contributing/data-review.html
 [3]: https://wiki.mozilla.org/Data_Collection
 """
 
@@ -195,7 +195,7 @@ def update_glean(command_context, version):
 
     `./mach vendor rust` may identify version mismatches.
     Please consult the Updating the Glean SDK docs for assistance:
-    https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/updating_sdk.html
+    https://source.firefox.com/docs/toolkit/components/glean/dev/updating_sdk.html
 
     The Glean SDK is already vetted and no additional vetting for it is necessary.
     To prune the configuration file after vendoring run:
@@ -209,7 +209,7 @@ def update_glean(command_context, version):
 
     Then, to ensure all is well, build Firefox and run the FOG tests.
     Instructions can be found here:
-    https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/testing.html
+    https://source.firefox.com/docs/toolkit/components/glean/dev/testing.html
     """
 
     print(textwrap.dedent(instructions))

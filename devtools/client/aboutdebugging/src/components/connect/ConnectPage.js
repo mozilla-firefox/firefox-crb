@@ -55,9 +55,9 @@ const GLOBE_ICON_SRC =
   "chrome://devtools/skin/images/aboutdebugging-globe-icon.svg";
 
 const TROUBLESHOOT_USB_URL =
-  "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/index.html#connecting-to-a-remote-device";
+  "https://source.firefox.com/docs/devtools-user/about_colon_debugging/index.html#connecting-to-a-remote-device";
 const TROUBLESHOOT_NETWORK_URL =
-  "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/index.html#connecting-over-the-network";
+  "https://source.firefox.com/docs/devtools-user/about_colon_debugging/index.html#connecting-over-the-network";
 
 class ConnectPage extends PureComponent {
   static get propTypes() {

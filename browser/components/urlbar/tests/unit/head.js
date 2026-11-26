@@ -753,7 +753,7 @@ function makeRemoteTabResult(
  *   The suggestion offered by the search engine.
  * @param {string} [options.tailPrefix]
  *   The characters placed at the end of a Google "tail" suggestion. See
- *   {@link https://firefox-source-docs.mozilla.org/browser/urlbar/nontechnical-overview.html#search-suggestions}
+ *   {@link https://source.firefox.com/docs/browser/urlbar/nontechnical-overview.html#search-suggestions}
  * @param {*} [options.tail]
  *   The details of the URL bar tail
  * @param {number} [options.tailOffsetIndex]

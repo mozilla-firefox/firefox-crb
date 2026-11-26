@@ -2387,7 +2387,7 @@ void MediaFormatReader::DrainDecoder(TrackType aTrack) {
   LOG("Requesting {} decoder to drain", TrackTypeToStr(aTrack));
 }
 
-// See https://firefox-source-docs.mozilla.org/media/MediaFormatReader.html
+// See https://source.firefox.com/docs/media/MediaFormatReader.html
 // for a state diagram overview.
 void MediaFormatReader::Update(TrackType aTrack) {
   AUTO_PROFILER_LABEL("MediaFormatReader::Update", MEDIA_PLAYBACK);

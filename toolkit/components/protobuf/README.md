@@ -24,7 +24,7 @@ the vendored content carefully.
 2. From the Gecko top source directory, use the standard moz.yaml vendoring workflow
    to re-vendor protobuf. Options are documented in `toolkit/components/protobuf/moz.yaml`.
    See also the Firefox build docs for common vendoring operations: [Common vendoring operations]
-   (https://firefox-source-docs.mozilla.org/mozbuild/vendor/index.html#common-vendoring-operations)
+   (https://source.firefox.com/docs/mozbuild/vendor/index.html#common-vendoring-operations)
 
    Run:
 

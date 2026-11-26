@@ -846,7 +846,7 @@ export var BrowserUtils = {
    * instead of using XPCOM services.
    *
    * More context is available in
-   * https://firefox-source-docs.mozilla.org/browser/CategoryManagerIndirection.html
+   * https://source.firefox.com/docs/browser/CategoryManagerIndirection.html
    *
    * @param {object} options
    * @param {string} options.categoryName

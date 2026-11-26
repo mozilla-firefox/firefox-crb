@@ -167,7 +167,7 @@ Link to the **source file**, not to the generated URL:
 -   Good: `[mots](/mots/index.md)`, `[Coding style](/code-quality/coding-style/index.md)`
 -   Bad: `[mots](/mots/index.html)` -- produces
     `WARNING: 'myst' cross-reference target not found: '/mots/index.html' [myst.xref_missing]`
--   Bad: a full `https://firefox-source-docs.mozilla.org/...` URL for in-tree
+-   Bad: a full `https://source.firefox.com/docs/...` URL for in-tree
     documentation -- it bypasses link validation and breaks when pages move.
 
 The path is rooted at the documentation tree (leading `/`), which is the built

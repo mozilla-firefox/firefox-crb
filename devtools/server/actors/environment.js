@@ -102,7 +102,7 @@ class EnvironmentActor extends Actor {
     }
     for (const name of parameterNames) {
       // The names of destructuring parameters will be `undefined`.
-      // See https://firefox-source-docs.mozilla.org/js/Debugger/Debugger.Script.html#parameternames
+      // See https://source.firefox.com/docs/js/Debugger/Debugger.Script.html#parameternames
       if (name == undefined) {
         continue;
       }

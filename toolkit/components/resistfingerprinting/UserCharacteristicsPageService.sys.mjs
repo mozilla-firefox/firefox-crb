@@ -1437,7 +1437,7 @@ function timeoutPromise(promise, ms) {
 
 // Remote type may include current site url, which is not needed.
 // We only need the remote type.
-// See https://firefox-source-docs.mozilla.org/dom/ipc/process_model.html
+// See https://source.firefox.com/docs/dom/ipc/process_model.html
 // and search for $SITE for processes that have site information.
 // We return unknown if it isn't one of the known types.
 function sanitizeRemoteType(remoteTypeStr) {

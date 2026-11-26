@@ -7,7 +7,7 @@ failing as well as file the corresponding bugs for the failures. This
 is particularly useful when “greening up” a new platform.
 
 The user documentation for skip-fails is here:
-https://firefox-source-docs.mozilla.org/mozbase/manifestparser.html#using-mach-manifest-skip-fails
+https://source.firefox.com/docs/mozbase/manifestparser.html#using-mach-manifest-skip-fails
 
 The skip-fails command knows how to manage failures for TOML, WPT
 and REFTEST manifests. Additional developer design notes are included here.
@@ -17,8 +17,8 @@ Running skip-fails for TOML
 ---------------------------
 
 The user documentation for TOML manifests is:
-https://firefox-source-docs.mozilla.org/mozbase/manifestparser.html
-https://firefox-source-docs.mozilla.org/testing/tests-for-new-config/index.html#run-skip-fails
+https://source.firefox.com/docs/mozbase/manifestparser.html
+https://source.firefox.com/docs/testing/tests-for-new-config/index.html#run-skip-fails
 
 Usage
 -----
@@ -240,7 +240,7 @@ Running skip-fails for WPT
 ---------------------------
 
 The user documentation for WPT manifests is:
-https://firefox-source-docs.mozilla.org/web-platform/index.html
+https://source.firefox.com/docs/web-platform/index.html
 
 1. Classify the failure based on the following:
    a. If less than 3 runs, classify "unknown"
@@ -256,7 +256,7 @@ Running skip-fails for REFTEST
 ------------------------------
 
 The user documentation for REFTEST manifests is:
-https://firefox-source-docs.mozilla.org/layout/Reftest.html
+https://source.firefox.com/docs/layout/Reftest.html
 
 Current Design notes for skip-fails / REFTEST:
 
@@ -341,7 +341,7 @@ description="Update manifests to remove skip-if conditions for a specific platfo
              Only works for TOML manifests.",
 
 The user documentation is:
-https://firefox-source-docs.mozilla.org/...
+https://source.firefox.com/docs/...
 
 Usage
 -----
@@ -363,7 +363,7 @@ The purpose / rationale for this command is to-be-documented.
 description="Update manifests to skip failing tests",
 
 The user documentation is:
-https://firefox-source-docs.mozilla.org/...
+https://source.firefox.com/docs/...
 
 Usage
 -----

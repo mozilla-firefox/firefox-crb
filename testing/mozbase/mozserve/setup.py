@@ -10,7 +10,7 @@ setup(
     name="mozserve",
     version=PACKAGE_VERSION,
     description="Python test server launcher intended for use with Mozilla testing",
-    long_description="see https://firefox-source-docs.mozilla.org/mozbase/index.html",
+    long_description="see https://source.firefox.com/docs/mozbase/index.html",
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3 :: Only",

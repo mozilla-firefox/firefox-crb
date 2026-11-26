@@ -18,7 +18,7 @@ browser_utils:
       counts the consumers that returned or threw per category. The
       categories dispatched this way, and the startup or window teardown
       phase each one runs in, are listed in
-      https://firefox-source-docs.mozilla.org/browser/BrowserStartup.html
+      https://source.firefox.com/docs/browser/BrowserStartup.html
 
       A consumer that hangs, that is dropped because its window closed, or
       that throws from work it left unawaited is not reported, so the absence
@@ -207,7 +207,7 @@ region:
       If a machine moves location, there is a minimum 2-week delay before this
       will be updated.
 
-      See the [Region documentation](https://firefox-source-docs.mozilla.org/toolkit/modules/toolkit_modules/Region.html)
+      See the [Region documentation](https://source.firefox.com/docs/toolkit/modules/toolkit_modules/Region.html)
       for more information about updates.
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=1419788

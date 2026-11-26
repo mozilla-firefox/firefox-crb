@@ -163,12 +163,12 @@ class TaskgraphConfig(Schema, kw_only=True):
 
 class GraphConfigSchema(Schema, kw_only=True):
     # The trust-domain for this graph.
-    # (See https://firefox-source-docs.mozilla.org/taskcluster/taskcluster/taskgraph.html#taskgraph-trust-domain)  # noqa
+    # (See https://source.firefox.com/docs/taskcluster/taskcluster/taskgraph.html#taskgraph-trust-domain)  # noqa
     trust_domain: str
     # This specifes the prefix for repo parameters that refer to the project being built.
     # This selects between `head_rev` and `comm_head_rev` and related paramters.
-    # (See http://firefox-source-docs.mozilla.org/taskcluster/taskcluster/parameters.html#push-information  # noqa
-    # and http://firefox-source-docs.mozilla.org/taskcluster/taskcluster/parameters.html#comm-push-information)  # noqa
+    # (See https://source.firefox.com/docs/taskcluster/taskcluster/parameters.html#push-information  # noqa
+    # and https://source.firefox.com/docs/taskcluster/taskcluster/parameters.html#comm-push-information)  # noqa
     project_repo_param_prefix: str
     # This specifies the top level directory of the application being built.
     # ie. "browser/" for Firefox, "comm/mail/" for Thunderbird.

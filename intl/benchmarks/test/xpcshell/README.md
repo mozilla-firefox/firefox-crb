@@ -2,7 +2,7 @@
 
 This folder contains micro benchmarks using the [mozperftest][] suite.
 
-[mozperftest](https://firefox-source-docs.mozilla.org/testing/perfdocs/mozperftest.html)
+[mozperftest](https://source.firefox.com/docs/testing/perfdocs/mozperftest.html)
 
 ## Recording profiles for the Firefox Profiler
 

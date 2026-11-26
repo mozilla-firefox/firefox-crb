@@ -3,7 +3,7 @@
 
 /**
  * Tests retrieving remote LoginRecipes in the parent process.
- * See https://firefox-source-docs.mozilla.org/services/settings/#unit-tests for explanation of db.importChanges({}, Date.now());
+ * See https://source.firefox.com/docs/services/settings/#unit-tests for explanation of db.importChanges({}, Date.now());
  */
 
 "use strict";

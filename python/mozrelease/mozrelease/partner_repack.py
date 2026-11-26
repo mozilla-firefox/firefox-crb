@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Documentation: https://firefox-source-docs.mozilla.org/taskcluster/partner-repacks.html
+# Documentation: https://source.firefox.com/docs/taskcluster/partner-repacks.html
 
 import logging
 import os

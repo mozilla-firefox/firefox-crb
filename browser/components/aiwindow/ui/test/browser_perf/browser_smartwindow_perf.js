@@ -35,7 +35,7 @@
  * `--gecko-profile` still yields a usable one. See harnessWantsProfile.
  *
  * To run locally, serve the models from a local hub like the ML perftests do
- * (https://firefox-source-docs.mozilla.org/toolkit/components/ml/perf.html):
+ * (https://source.firefox.com/docs/toolkit/components/ml/perf.html):
  *
  *   ./mach python toolkit/components/ml/tests/tools/create_local_hub.py \
  *     --fetches-dir ~/ml-fetches \

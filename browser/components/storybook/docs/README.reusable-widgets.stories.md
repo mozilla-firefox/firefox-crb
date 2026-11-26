@@ -35,7 +35,7 @@ Here are some questions you can use to help include all users: how will people p
 ### Supporting widget use in different processes
 
 A newly designed widget may need to work in the parent process, the content process, or both depending on your use case.
-[See the Process Model document for more information about these different processes](https://firefox-source-docs.mozilla.org/dom/ipc/process_model.html).
+[See the Process Model document for more information about these different processes](https://source.firefox.com/docs/dom/ipc/process_model.html).
 You will likely be using your widget in a privileged process (such as the parent or privileged content) with access to `Services`, `XPCOMUtils`, and other globals.
 Storybook and other web content do not have access to these privileged globals, so you will need to write workarounds for `Services`, `XPCOMUtils`, chrome URIs for CSS files and assets, etc.
 [Check out moz-support-link.mjs and moz-support-link.stories.mjs for an example of a widget being used in the parent/chrome and needing to handle `XPCOMUtils` in Storybook](https://searchfox.org/mozilla-central/search?q=moz-support-link&path=&case=false&regexp=false).

@@ -9,7 +9,7 @@
 //! [`add_text_marker`] and [`add_marker`]. They are similar to what we have on
 //! the C++ side. Please take a look at the marker documentation in the Firefox
 //! source docs to learn more about them:
-//! https://firefox-source-docs.mozilla.org/tools/profiler/markers-guide.html
+//! https://source.firefox.com/docs/tools/profiler/markers-guide.html
 //!
 //! ### Simple marker without any additional data
 //!
@@ -262,7 +262,7 @@ macro_rules! auto_profiler_marker_text {
 /// This will tell the profiler back-end how to serialize it as json and
 /// the front-end how to display the marker.
 /// Please also see the documentation here:
-/// https://firefox-source-docs.mozilla.org/tools/profiler/markers-guide.html#how-to-define-new-marker-types
+/// https://source.firefox.com/docs/tools/profiler/markers-guide.html#how-to-define-new-marker-types
 ///
 /// - `marker_type_name`: Returns a static string as the marker type name. This
 ///   should be unique and it is used to keep track of the type of markers in the

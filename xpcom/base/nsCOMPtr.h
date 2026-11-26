@@ -9,7 +9,7 @@
  * Having problems?
  *
  * See the documentation at:
- *   https://firefox-source-docs.mozilla.org/xpcom/refptr.html
+ *   https://source.firefox.com/docs/xpcom/refptr.html
  *
  *
  * nsCOMPtr

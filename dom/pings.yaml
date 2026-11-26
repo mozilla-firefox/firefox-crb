@@ -46,7 +46,7 @@ pageload-base-domain:
 use-counters:
   description: |
     Collects counts of uses of web platform features.
-    See [Use Counters Documentation](https://firefox-source-docs.mozilla.org/dom/use-counters.html)
+    See [Use Counters Documentation](https://source.firefox.com/docs/dom/use-counters.html)
     for more information.
   reasons:
     app_shutdown_confirmed: |

@@ -6825,7 +6825,7 @@ function asHTMLElement(node) {
   // contexts. The TranslationsDocument could be used in non-chrome contexts in the
   // future, so ensure that this doesn't break future implementations.
   //
-  // See - https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint-plugin-mozilla/rules/use-isInstance.html
+  // See - https://source.firefox.com/docs/code-quality/lint/linters/eslint-plugin-mozilla/rules/use-isInstance.html
   if (HTMLElement.isInstance) {
     if (HTMLElement.isInstance(node)) {
       return /** @type {HTMLElement} */ (node);

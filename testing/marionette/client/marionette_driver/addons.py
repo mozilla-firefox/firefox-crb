@@ -17,7 +17,7 @@ class Addons:
     """An API for installing and inspecting addons during Gecko
     runtime. This is a partially implemented wrapper around Gecko's
     `AddonManager API
-    <https://firefox-source-docs.mozilla.org/toolkit/mozapps/extensions/addon-manager/AddonManager.html>`_.
+    <https://source.firefox.com/docs/toolkit/mozapps/extensions/addon-manager/AddonManager.html>`_.
 
     For example::
 

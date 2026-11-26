@@ -30,7 +30,7 @@ The source for `moz-segmented-control` and `moz-segmented-control-item` can be f
 
 ### Importing the element
 
-Like other custom elements, `moz-segmented-control` and `moz-segmented-control-item` are usually lazy loaded when first used. See [Using new design system components](https://firefox-source-docs.mozilla.org/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information.
+Like other custom elements, `moz-segmented-control` and `moz-segmented-control-item` are usually lazy loaded when first used. See [Using new design system components](https://source.firefox.com/docs/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information.
 
 ### Combining `moz-segmented-control-item` and `moz-segmented-control`
 

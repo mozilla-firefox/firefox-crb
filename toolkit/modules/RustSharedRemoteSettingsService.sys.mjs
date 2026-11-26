@@ -22,7 +22,7 @@ import { Utils } from "resource://services-settings/Utils.sys.mjs";
  * This is only intended to be passed to Rust code. If you want a
  * general-purpose Remote settings client, use the JS one:
  *
- * - https://firefox-source-docs.mozilla.org/services/settings/index.html
+ * - https://source.firefox.com/docs/services/settings/index.html
  * - https://searchfox.org/firefox-main/source/services/settings/remote-settings.sys.mjs
  */
 class _SharedRemoteSettingsService {

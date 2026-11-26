@@ -30,7 +30,7 @@ let messages = ruleMessages(ruleName, {
     `"${background}" and "${text}" are not a semantic pair; use "${expected}" for the text color, or a background color that pairs with "${text}".`,
 });
 let meta = {
-  url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-paired-color-tokens.html",
+  url: "https://source.firefox.com/docs/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-paired-color-tokens.html",
   fixable: true,
 };
 

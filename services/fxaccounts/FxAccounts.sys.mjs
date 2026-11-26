@@ -334,7 +334,7 @@ function copyObjectProperties(from, to, thisObj, keys) {
  * The public API.
  *
  * TODO - *all* non-underscore stuff here should have sphinx docstrings so
- * that docs magically appear on https://firefox-source-docs.mozilla.org/
+ * that docs magically appear on https://source.firefox.com/docs/
  * (although |./mach doc| is broken on windows (bug 1232403) and on Linux for
  * markh (some obscure npm issue he gave up on) - so later...)
  */

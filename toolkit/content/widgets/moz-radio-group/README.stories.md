@@ -30,7 +30,7 @@ The source for `moz-radio-group` and `moz-radio` can be found under [toolkit/con
 
 ### Importing the element
 
-Like other custom elements, you should usually be able to rely on `moz-radio` and `moz-radio-group` getting lazy loaded at the time of first use. See [this documentation](https://firefox-source-docs.mozilla.org/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
+Like other custom elements, you should usually be able to rely on `moz-radio` and `moz-radio-group` getting lazy loaded at the time of first use. See [this documentation](https://source.firefox.com/docs/browser/components/storybook/docs/README.reusable-widgets.stories.html#using-new-design-system-components) for more information on using design system custom elements.
 
 ### Combining `moz-radio` and `moz-radio-group`
 

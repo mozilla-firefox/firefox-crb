@@ -18,7 +18,7 @@ const messages = ruleMessages(ruleName, {
 });
 
 const meta = {
-  url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-browser-refs-in-toolkit.html",
+  url: "https://source.firefox.com/docs/code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-browser-refs-in-toolkit.html",
   fixable: false,
 };
 

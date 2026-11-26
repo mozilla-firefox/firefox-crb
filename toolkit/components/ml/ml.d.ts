@@ -7,7 +7,7 @@
  * use is for defining types to be used in JSDoc. They are used in a form that the
  * TypeScript language server can read them, and provide code hints.
  *
- * @see https://firefox-source-docs.mozilla.org/code-quality/typescript/
+ * @see https://source.firefox.com/docs/code-quality/typescript/
  */
 
 import { type PipelineOptions } from "chrome://global/content/ml/EngineProcess.sys.mjs";

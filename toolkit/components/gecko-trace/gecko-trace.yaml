@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Adding a new event? We have docs for that!
-# https://firefox-source-docs.mozilla.org/toolkit/components/gecko-trace/user/new_definitions_file.html
+# https://source.firefox.com/docs/toolkit/components/gecko-trace/user/new_definitions_file.html
 
 ---
 events:

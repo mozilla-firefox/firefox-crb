@@ -2221,7 +2221,7 @@ interface nsIDOMWindowUtils : nsISupports {
   // meaningful after the script in question tried to mutate something in a
   // scroll event callback until the next refresh driver tick happens.
   //
-  // See https://firefox-source-docs.mozilla.org/performance/scroll-linked_effects.html
+  // See https://source.firefox.com/docs/performance/scroll-linked_effects.html
   // about scroll-linked effects.
   readonly attribute boolean hasScrollLinkedEffect;
 

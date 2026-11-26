@@ -15,7 +15,7 @@ let messages = ruleMessages(ruleName, {
     `Avoid using the base color variable "${token}" directly; use an existing semantic token or map it to a new semantic variable instead.`,
 });
 let meta = {
-  url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-base-design-tokens.html",
+  url: "https://source.firefox.com/docs/code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-base-design-tokens.html",
 };
 
 let colorTokenRegex = /var\((?<token>--color-[a-zA-Z]+-\d+)\)/g;

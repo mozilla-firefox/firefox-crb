@@ -55,7 +55,7 @@ def create_legacy_mirror_def(category_name: str, metric_name: str, event_objects
     print(
         f"""The Glean event {category_name}.{metric_name} has generated the {event_cpp_enum} Legacy Telemetry event. To link Glean to Legacy, please include in {category_name}.{metric_name}'s definition the following property:
 telemetry_mirror: {event_cpp_enum}
-See https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/gifft.html#the-telemetry-mirror-property-in-metrics-yaml
+See https://source.firefox.com/docs/toolkit/components/glean/user/gifft.html#the-telemetry-mirror-property-in-metrics-yaml
 for more information.
 """
     )

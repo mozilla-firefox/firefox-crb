@@ -15,7 +15,7 @@
 //! [glean-sdk]: https://github.com/mozilla/glean/
 //! [book-of-glean]: https://mozilla.github.io/glean/book/index.html
 //! [privacy-policy]: https://www.mozilla.org/privacy/
-//! [docs]: https://firefox-source-docs.mozilla.org/toolkit/components/glean/
+//! [docs]: https://source.firefox.com/docs/toolkit/components/glean/
 
 #[cfg(target_os = "android")]
 use firefox_on_glean::pings;

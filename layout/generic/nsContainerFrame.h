@@ -326,7 +326,7 @@ class nsContainerFrame : public nsSplittableFrame {
    * See nsBlockFrame::Reflow for a sample implementation.
    *
    * For more information, see
-   * https://firefox-source-docs.mozilla.org/layout/LayoutOverview.html#fragmentation
+   * https://source.firefox.com/docs/layout/LayoutOverview.html#fragmentation
    *
    * Note that Flex/GridContainerFrame doesn't use nsOverflowContinuationTracker
    * so the above doesn't apply.  Flex/Grid containers may have items that

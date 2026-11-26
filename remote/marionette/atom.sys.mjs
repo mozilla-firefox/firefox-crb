@@ -23,7 +23,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 export const atom = {};
 
 // Follow the instructions to export all the atoms:
-// https://firefox-source-docs.mozilla.org/testing/marionette/SeleniumAtoms.html
+// https://source.firefox.com/docs/testing/marionette/SeleniumAtoms.html
 //
 // Built from SHA1: 33c6b7841a59aaaad55744909c0600f066fd5593
 const ATOMS = {

@@ -216,7 +216,7 @@ const historyCommands = {
 const urls = {
   // URL opened when executing `:help` command in the input
   HELP_URL:
-    "https://firefox-source-docs.mozilla.org/devtools-user/web_console/helpers/",
+    "https://source.firefox.com/docs/devtools-user/web_console/helpers/",
 };
 
 const evaluationNotifications = {

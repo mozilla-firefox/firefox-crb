@@ -174,7 +174,7 @@ ENUMERATION_FLAGS = [
     "android",
     "gradle-dependencies",
     """Collect Android Gradle dependencies.
-    See http://firefox-source-docs.mozilla.org/build/buildsystem/toolchains.html#firefox-for-android-with-gradle""",  # NOQA: E501
+    See https://source.firefox.com/docs/build/buildsystem/toolchains.html#firefox-for-android-with-gradle""",  # NOQA: E501
 )
 @CommandArgument("args", nargs=argparse.REMAINDER)
 def android_gradle_dependencies(command_context, args):
@@ -252,7 +252,7 @@ def create_maven_archive(topobjdir):
     "android",
     "archive-geckoview",
     """Create GeckoView archives.
-    See http://firefox-source-docs.mozilla.org/build/buildsystem/toolchains.html#firefox-for-android-with-gradle""",  # NOQA: E501
+    See https://source.firefox.com/docs/build/buildsystem/toolchains.html#firefox-for-android-with-gradle""",  # NOQA: E501
 )
 @CommandArgument("args", nargs=argparse.REMAINDER)
 def android_archive_geckoview(command_context, args):

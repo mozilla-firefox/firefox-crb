@@ -47,7 +47,7 @@ them locally. Artifact builds are faster!
 Artifact builds are recommended for people working on Firefox or
 Firefox for Android frontends, or the GeckoView Java API. They are unsuitable
 for those working on C++ code. For more information see:
-https://firefox-source-docs.mozilla.org/contributing/build/artifact_builds.html.
+https://source.firefox.com/docs/contributing/build/artifact_builds.html.
 
 Please choose the version of Firefox you want to build (see note above):
 %s
@@ -67,7 +67,7 @@ Your system should be ready to build %s!
 
 CONTRIBUTING_CODE = """
 New to Firefox? Please ensure you’ve read the contributor guidelines before submitting a patch:
-https://firefox-source-docs.mozilla.org/setup/contributing_code.html
+https://source.firefox.com/docs/setup/contributing_code.html
 """
 
 MOZCONFIG_SUGGESTION_TEMPLATE = """

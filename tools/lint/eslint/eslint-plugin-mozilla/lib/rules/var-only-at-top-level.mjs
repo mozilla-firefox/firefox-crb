@@ -12,7 +12,7 @@ import helpers from "../helpers.mjs";
 export default {
   meta: {
     docs: {
-      url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint-plugin-mozilla/rules/var-only-at-top-level.html",
+      url: "https://source.firefox.com/docs/code-quality/lint/linters/eslint-plugin-mozilla/rules/var-only-at-top-level.html",
     },
     messages: {
       unexpectedVar: "Unexpected var, use let or const instead.",

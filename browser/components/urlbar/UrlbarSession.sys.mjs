@@ -182,7 +182,7 @@ export class UrlbarSession {
    *        session, used in preference to one derived from the event. The view
    *        passes this when reopening a prior search ("returned").
    * @throws This should never throw, or it may break the urlbar.
-   * @see {@link https://firefox-source-docs.mozilla.org/browser/urlbar/telemetry.html}
+   * @see {@link https://source.firefox.com/docs/browser/urlbar/telemetry.html}
    */
   start(event, queryContext, searchString = null, interactionType = null) {
     if (this._startEventInfo) {

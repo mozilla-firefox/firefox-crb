@@ -43,7 +43,7 @@ expand() {
 
 if [ ! -d "$SPELLER" ]; then
   echo "The 'scowl' folder is missing. Check the documentation at"
-  echo "https://firefox-source-docs.mozilla.org/extensions/spellcheck/index.html"
+  echo "https://source.firefox.com/docs/extensions/spellcheck/index.html"
   exit 1
 fi
 

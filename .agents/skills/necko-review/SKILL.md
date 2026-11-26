@@ -5,7 +5,7 @@ description: Use this skill when reviewing or writing patches to networking code
 
 # Guidelines for netwerk/ (Necko) patches
 
-These guidelines assume the general Firefox C++ rules, which they do not repeat. Follow the [Mozilla C++ coding style](https://firefox-source-docs.mozilla.org/code-quality/coding-style/coding_style_cpp.html) (naming prefixes, string argument types, error checking, include rules, `static` linkage, clang-format) and [Using C++ in Mozilla code](https://firefox-source-docs.mozilla.org/code-quality/coding-style/using_cxx_in_firefox_code.html) (permitted language features, and Mozilla data structures such as `nsTArray`, `nsTHashMap` and `Maybe` in place of their `std::` equivalents). The guidelines below cover what reviewers repeatedly asked for beyond those documents.
+These guidelines assume the general Firefox C++ rules, which they do not repeat. Follow the [Mozilla C++ coding style](https://source.firefox.com/docs/code-quality/coding-style/coding_style_cpp.html) (naming prefixes, string argument types, error checking, include rules, `static` linkage, clang-format) and [Using C++ in Mozilla code](https://source.firefox.com/docs/code-quality/coding-style/using_cxx_in_firefox_code.html) (permitted language features, and Mozilla data structures such as `nsTArray`, `nsTHashMap` and `Maybe` in place of their `std::` equivalents). The guidelines below cover what reviewers repeatedly asked for beyond those documents.
 
 ## 1. Explain the non-obvious in comments and interface docs
 
@@ -34,7 +34,7 @@ Maintain test coverage:
 - If the logic runs in a child process, add a `netwerk/test/unit_ipc` variant.
 - Extend `http3server` when HTTP/3 behaviour needs a server.
 - Prefer `NodeServer.sys.mjs` to `httpd.sys.mjs`.
-- See [Network Testing Guidelines](https://firefox-source-docs.mozilla.org/networking/network_test_guidelines.html) for examples.
+- See [Network Testing Guidelines](https://source.firefox.com/docs/networking/network_test_guidelines.html) for examples.
 
 Good test hygiene:
 

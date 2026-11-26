@@ -94,7 +94,7 @@ add_task(async function test_checkOptInRegion() {
 
   // First case: If home region is in the opt-in list, showWeatherOptIn should be true
   // Region._setHomeRegion() is the supported way to control region in tests:
-  // https://firefox-source-docs.mozilla.org/toolkit/modules/toolkit_modules/Region.html#testing
+  // https://source.firefox.com/docs/toolkit/modules/toolkit_modules/Region.html#testing
   // We used false here because that second argument is a change observer that will fire an event.
   // So keeping it false silently sets the region for our test
   Region._setHomeRegion("FR", false);

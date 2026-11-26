@@ -45,7 +45,7 @@ diff = repo.diff_stream().read()
 # Revert all the changes created by `node bin/bundle.js`.
 repo.clean_directory(Path(repo.path) / "devtools")
 
-doc = "https://firefox-source-docs.mozilla.org/devtools/tests/node-tests.html#devtools-bundle"
+doc = "https://source.firefox.com/docs/devtools/tests/node-tests.html#devtools-bundle"
 
 failures = {}
 for path in changed:

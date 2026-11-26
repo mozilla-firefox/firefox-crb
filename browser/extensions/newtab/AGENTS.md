@@ -1,7 +1,7 @@
 # Newtab Development
 
 ## Documentation
-- Newtab source docs: https://firefox-source-docs.mozilla.org/browser/extensions/newtab/docs/index.html
+- Newtab source docs: https://source.firefox.com/docs/browser/extensions/newtab/docs/index.html
 - Design system tokens: https://firefoxux.github.io/firefox-desktop-components/ (visual reference), or locally: `toolkit/themes/shared/design-system/dist/tokens-shared.css`
 
 ## File Locations

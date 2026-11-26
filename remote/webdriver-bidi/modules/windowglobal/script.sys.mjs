@@ -211,7 +211,7 @@ class ScriptModule extends WindowGlobalBiDiModule {
   #toRawObject(maybeDebuggerObject) {
     if (maybeDebuggerObject instanceof Debugger.Object) {
       // Retrieve the referent for the provided Debugger.object.
-      // See https://firefox-source-docs.mozilla.org/devtools-user/debugger-api/debugger.object/index.html
+      // See https://source.firefox.com/docs/devtools-user/debugger-api/debugger.object/index.html
       const rawObject = maybeDebuggerObject.unsafeDereference();
 
       // TODO: Getters for Maps and Sets iterators return "Opaque" objects and

@@ -41,7 +41,7 @@ const EVENTS = [
  * Registers with the category manager in order to initialize on Firefox
  * startup and be notified when windows are opened/closed.
  *
- * @see https://firefox-source-docs.mozilla.org/browser/CategoryManagerIndirection.html
+ * @see https://source.firefox.com/docs/browser/CategoryManagerIndirection.html
  *
  * Expected life cycle from Firefox startup:
  * - One call to `browserWindowDelayedStartup` from the first browser window created. Since

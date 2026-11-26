@@ -41,7 +41,7 @@ parent:
 
   // Sent from time-to-time to limit the amount of telemetry vulnerable to loss
   // Buffer contains bincoded Rust structs.
-  // https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/ipc.html
+  // https://source.firefox.com/docs/toolkit/components/glean/dev/ipc.html
   async FOGData(ByteBuf buf);
 
 #if defined(XP_WIN)
@@ -64,7 +64,7 @@ child:
 
   // Tells the GMP process to flush any pending telemetry.
   // Used in tests and ping assembly. Buffer contains bincoded Rust structs.
-  // https://firefox-source-docs.mozilla.org/toolkit/components/glean/dev/ipc.html
+  // https://source.firefox.com/docs/toolkit/components/glean/dev/ipc.html
   async FlushFOGData() returns (ByteBuf buf);
 
 #if defined(XP_WIN)

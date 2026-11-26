@@ -1,6 +1,6 @@
 # Other types of UI Widgets
 
-In addition to the [new reusable UI widgets](https://firefox-source-docs.mozilla.org/browser/components/storybook/docs/README.reusable-widgets.stories.html) there are existing elements that serve a similar role.
+In addition to the [new reusable UI widgets](https://source.firefox.com/docs/browser/components/storybook/docs/README.reusable-widgets.stories.html) there are existing elements that serve a similar role.
 These older elements are broken down into two groups: Mozilla Custom Elements and User Agent (UA) Widgets.
 Additionally, we also have domain-specific widgets that are similar to the reusable widgets but are created to serve a specific need and may or may not adhere to the Design Systems specifications.
 
@@ -25,7 +25,7 @@ There are a much smaller number of these widgets compared to the Mozilla Custom 
 - [marquee.js](https://searchfox.org/firefox-main/source/toolkit/content/widgets/marquee.js)
 - [videocontrols.js](https://searchfox.org/firefox-main/source/toolkit/content/widgets/videocontrols.js)
 
-Please refer to the existing [UA widgets documentation](https://firefox-source-docs.mozilla.org/toolkit/content/toolkit_widgets/ua_widget.html) for more details.
+Please refer to the existing [UA widgets documentation](https://source.firefox.com/docs/toolkit/content/toolkit_widgets/ua_widget.html) for more details.
 
 ### How to use existing Mozilla Custom Elements
 
@@ -38,7 +38,7 @@ You can see the checkbox widget in use in about:preferences.
 
 ### How to use existing UA Widgets
 
-Please refer to the [existing UA widgets documentation](https://firefox-source-docs.mozilla.org/toolkit/content/toolkit_widgets/ua_widget.html) for more details on how to use these widgets.
+Please refer to the [existing UA widgets documentation](https://source.firefox.com/docs/toolkit/content/toolkit_widgets/ua_widget.html) for more details on how to use these widgets.
 
 ### How these widgets behave in chrome versus in-content
 

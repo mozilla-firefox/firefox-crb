@@ -34,7 +34,7 @@ add_task(
   },
   function test_jog_object_does_not_validate_schema() {
     // Bug 2050219: document the limitation until runtime schema validation exists.
-    // See https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/instrumentation_tests.html#tests-and-artifact-builds
+    // See https://source.firefox.com/docs/toolkit/components/glean/user/instrumentation_tests.html#tests-and-artifact-builds
     const balloons = [{ colour: "red", diameter: 5 }];
     Glean.testOnly.balloons.set(balloons);
     Assert.deepEqual(balloons, Glean.testOnly.balloons.testGetValue());

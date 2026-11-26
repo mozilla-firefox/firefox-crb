@@ -215,7 +215,7 @@ const PERMS_NOT_IN_MV2 = new Set([
 ]);
 
 // Message included in warnings and errors related to privileged permissions and
-// privileged manifest properties. Provides a link to the firefox-source-docs.mozilla.org
+// privileged manifest properties. Provides a link to the https://source.firefox.com/docs/
 // section related to developing and sign Privileged Add-ons.
 const PRIVILEGED_ADDONS_DEVDOCS_MESSAGE =
   "See https://mzl.la/3NS9KJd for more details about how to develop a privileged add-on.";

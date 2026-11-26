@@ -395,7 +395,7 @@ const promise = (async function parseJSON() {
         "%c$json.text%c - The original JSON text\n" +
         "%c$json.headers%c - HTTP request and response headers\n\n" +
         "The JSON Viewer is documented here:\n" +
-        "https://firefox-source-docs.mozilla.org/devtools-user/json_viewer/",
+        "https://source.firefox.com/docs/devtools-user/json_viewer/",
       intro,
       reset,
       bold,

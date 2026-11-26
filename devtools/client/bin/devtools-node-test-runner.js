@@ -302,7 +302,7 @@ function runTests() {
     );
     console.log(
       "TEST-UNEXPECTED-FAIL | mach devtools-node-test failed. Documentation " +
-        "at https://firefox-source-docs.mozilla.org/devtools/tests/node-tests.html"
+        "at https://source.firefox.com/docs/devtools/tests/node-tests.html"
     );
   }
   return success;

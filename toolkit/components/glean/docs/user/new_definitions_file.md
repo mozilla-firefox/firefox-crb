@@ -51,7 +51,7 @@ substituting your component's `product :: component` tag from
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Adding a new metric? We have docs for that!
-# https://firefox-source-docs.mozilla.org/toolkit/components/glean/user/new_definitions_file.html
+# https://source.firefox.com/docs/toolkit/components/glean/user/new_definitions_file.html
 
 ---
 $schema: moz://mozilla.org/schemas/glean/metrics/2-0-0

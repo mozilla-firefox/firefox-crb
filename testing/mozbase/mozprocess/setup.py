@@ -10,7 +10,7 @@ setup(
     name="mozprocess",
     version=PACKAGE_VERSION,
     description="Mozilla-authored process handling",
-    long_description="see https://firefox-source-docs.mozilla.org/mozbase/index.html",
+    long_description="see https://source.firefox.com/docs/mozbase/index.html",
     classifiers=[
         "Environment :: Console",
         "Intended Audience :: Developers",

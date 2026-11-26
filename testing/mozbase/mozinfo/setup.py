@@ -16,7 +16,7 @@ setup(
     name="mozinfo",
     version=PACKAGE_VERSION,
     description="Library to get system information for use in Mozilla testing",
-    long_description="see https://firefox-source-docs.mozilla.org/mozbase/index.html",
+    long_description="see https://source.firefox.com/docs/mozbase/index.html",
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3 :: Only",

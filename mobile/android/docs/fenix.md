@@ -125,8 +125,8 @@ This will try to reuse a GeckoView build from a previous CI job, and thus reduce
 ```{toctree}
 :maxdepth: 1
 
-Understanding Artifact Builds <https://firefox-source-docs.mozilla.org/contributing/build/artifact_builds.html>
-Pushing to Try <https://firefox-source-docs.mozilla.org/tools/try/index.html>
-Submitting a Patch <https://firefox-source-docs.mozilla.org/contributing/how_to_submit_a_patch.html>
+Understanding Artifact Builds <https://source.firefox.com/docs/contributing/build/artifact_builds.html>
+Pushing to Try <https://source.firefox.com/docs/tools/try/index.html>
+Submitting a Patch <https://source.firefox.com/docs/contributing/how_to_submit_a_patch.html>
 Landing a Patch <https://moz-conduit.readthedocs.io/en/latest/lando-user.html>
 ```

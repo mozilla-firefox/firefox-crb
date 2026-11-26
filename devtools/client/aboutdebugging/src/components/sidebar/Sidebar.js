@@ -246,7 +246,7 @@ class Sidebar extends PureComponent {
         "data-l10n-id": "about-debugging-sidebar-support",
         slot: "secondary-nav",
         iconSrc: HELP_ICON,
-        href: "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/",
+        href: "https://source.firefox.com/docs/devtools-user/about_colon_debugging/",
       })
     );
   }

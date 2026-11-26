@@ -452,7 +452,7 @@ export class _DSCard extends React.PureComponent {
   // This enables Firefox to load resources over Oblivious HTTP (OHTTP),
   // providing privacy-preserving resource loading.
   // Applied only when inferred personalization is enabled.
-  // See: https://firefox-source-docs.mozilla.org/browser/components/mozcachedohttp/docs/index.html
+  // See: https://source.firefox.com/docs/browser/components/mozcachedohttp/docs/index.html
   secureImageURL(url) {
     return `moz-cached-ohttp://newtab-image/?url=${encodeURIComponent(url)}`;
   }

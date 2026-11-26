@@ -16,7 +16,7 @@
 // thread-safety analysis, allowing compile-time validation of the correct use
 // of the combined capability.
 //
-// See https://firefox-source-docs.mozilla.org/xpcom/thread-safety.html for
+// See https://source.firefox.com/docs/xpcom/thread-safety.html for
 // additional high-level documentation on the thread-safety analysis.
 
 namespace mozilla {

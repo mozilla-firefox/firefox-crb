@@ -9,7 +9,7 @@ translates calls into the [Marionette remote protocol] by acting
 as a proxy between the local- and remote ends.
 
 [WebDriver protocol]: https://w3c.github.io/webdriver/#protocol
-[Marionette remote protocol]: https://firefox-source-docs.mozilla.org/remote/marionette/
+[Marionette remote protocol]: https://source.firefox.com/docs/remote/marionette/
 [WebDriver]: https://developer.mozilla.org/en-US/docs/Web/WebDriver
 
 ## Installation
@@ -43,18 +43,18 @@ For a detailed list of changes included in each release, please refer to the [ch
   * [Python API](https://seleniumhq.github.io/selenium/docs/api/py/)
   * [Ruby API](https://seleniumhq.github.io/selenium/docs/api/rb/)
 
-* [geckodriver usage](https://firefox-source-docs.mozilla.org/testing/geckodriver/Usage.html)
-  * [Supported platforms](https://firefox-source-docs.mozilla.org/testing/geckodriver/Support.html)
-  * [Firefox capabilities](https://firefox-source-docs.mozilla.org/testing/geckodriver/Capabilities.html)
+* [geckodriver usage](https://source.firefox.com/docs/testing/geckodriver/Usage.html)
+  * [Supported platforms](https://source.firefox.com/docs/testing/geckodriver/Support.html)
+  * [Firefox capabilities](https://source.firefox.com/docs/testing/geckodriver/Capabilities.html)
   * [Capabilities example](https://developer.mozilla.org/en-US/docs/Web/WebDriver/Capabilities/firefoxOptions#example)
-  * [Enabling trace logs](https://firefox-source-docs.mozilla.org/testing/geckodriver/TraceLogs.html)
-  * [Analyzing crash data from Firefox](https://firefox-source-docs.mozilla.org/testing/geckodriver/CrashReports.html)
+  * [Enabling trace logs](https://source.firefox.com/docs/testing/geckodriver/TraceLogs.html)
+  * [Analyzing crash data from Firefox](https://source.firefox.com/docs/testing/geckodriver/CrashReports.html)
 
-* [Contributing](https://firefox-source-docs.mozilla.org/testing/geckodriver/#for-developers)
-  * [Building](https://firefox-source-docs.mozilla.org/testing/geckodriver/Building.html)
-  * [Testing](https://firefox-source-docs.mozilla.org/testing/geckodriver/Testing.html)
-  * [Releasing](https://firefox-source-docs.mozilla.org/testing/geckodriver/Releasing.html)
-  * [Self-serving an ARM build](https://firefox-source-docs.mozilla.org/testing/geckodriver/ARM.html)
+* [Contributing](https://source.firefox.com/docs/testing/geckodriver/#for-developers)
+  * [Building](https://source.firefox.com/docs/testing/geckodriver/Building.html)
+  * [Testing](https://source.firefox.com/docs/testing/geckodriver/Testing.html)
+  * [Releasing](https://source.firefox.com/docs/testing/geckodriver/Releasing.html)
+  * [Self-serving an ARM build](https://source.firefox.com/docs/testing/geckodriver/ARM.html)
 
 ## Source code
 

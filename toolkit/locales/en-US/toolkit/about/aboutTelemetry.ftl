@@ -75,7 +75,7 @@ about-telemetry-ping-details = Each piece of information is sent bundled into �
 about-telemetry-data-details-current = Each piece of information is sent bundled into “<a data-l10n-name="ping-link">pings</a>“. You are looking at the current data.
 # string used as a placeholder for the search field
 # More info about it can be found here:
-# https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/data/main-ping.html
+# https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/data/main-ping.html
 # Variables:
 #   $selectedTitle (string) - The section name from the structure of the ping.
 about-telemetry-filter-placeholder =
@@ -85,7 +85,7 @@ about-telemetry-filter-all-placeholder =
 # Variables:
 #   $searchTerms (string) - The searched terms
 about-telemetry-results-for-search = Results for “{ $searchTerms }”
-# More info about it can be found here: https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/telemetry/data/main-ping.html
+# More info about it can be found here: https://source.firefox.com/docs/toolkit/components/telemetry/telemetry/data/main-ping.html
 # Variables:
 #   $sectionName (string) - The section name from the structure of the ping.
 #   $currentSearchText (string) - The current text in the search input

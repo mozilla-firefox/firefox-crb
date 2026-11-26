@@ -27,7 +27,7 @@ setup(
     description="Marionette Driver",
     long_description="""Note marionette_driver is no longer supported.
 
-For more information see https://firefox-source-docs.mozilla.org/python/marionette_driver.html""",
+For more information see https://source.firefox.com/docs/python/marionette_driver.html""",
     # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
         "Development Status :: 7 - Inactive",

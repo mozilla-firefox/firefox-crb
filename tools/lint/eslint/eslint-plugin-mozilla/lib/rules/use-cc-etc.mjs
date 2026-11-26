@@ -16,7 +16,7 @@ const componentsMap = {
 export default {
   meta: {
     docs: {
-      url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint-plugin-mozilla/rules/use-cc-etc.html",
+      url: "https://source.firefox.com/docs/code-quality/lint/linters/eslint-plugin-mozilla/rules/use-cc-etc.html",
     },
     fixable: "code",
     messages: {

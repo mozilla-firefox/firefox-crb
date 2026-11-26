@@ -15,7 +15,7 @@ add_setup(async function () {
  * Instead of adding reflows to the list, you should be modifying your code to
  * avoid the reflow.
  *
- * See https://firefox-source-docs.mozilla.org/performance/bestpractices.html
+ * See https://source.firefox.com/docs/performance/bestpractices.html
  * for tips on how to do that.
  */
 const EXPECTED_REFLOWS = [

@@ -25,9 +25,9 @@ const {
 } = require("resource://devtools/client/shared/remote-debugging/version-checker.js");
 
 const TROUBLESHOOTING_URL =
-  "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/";
+  "https://source.firefox.com/docs/devtools-user/about_colon_debugging/";
 const FENNEC_TROUBLESHOOTING_URL =
-  "https://firefox-source-docs.mozilla.org/devtools-user/about_colon_debugging/index.html#connection-to-firefox-for-android-68";
+  "https://source.firefox.com/docs/devtools-user/about_colon_debugging/index.html#connection-to-firefox-for-android-68";
 
 const Types = require("resource://devtools/client/aboutdebugging/src/types/index.js");
 

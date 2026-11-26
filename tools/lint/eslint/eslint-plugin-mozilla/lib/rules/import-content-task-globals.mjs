@@ -18,7 +18,7 @@ export default {
   // eslint-disable-next-line eslint-plugin/prefer-message-ids
   meta: {
     docs: {
-      url: "https://firefox-source-docs.mozilla.org/code-quality/lint/linters/eslint-plugin-mozilla/rules/import-content-task-globals.html",
+      url: "https://source.firefox.com/docs/code-quality/lint/linters/eslint-plugin-mozilla/rules/import-content-task-globals.html",
     },
     schema: [],
     type: "problem",

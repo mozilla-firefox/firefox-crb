@@ -7,7 +7,7 @@
 /**
  * This module handles the generation of embeddings using a dedicated
  * machine learning (ML) engine.
- * reference -> https://firefox-source-docs.mozilla.org/toolkit/components/ml/
+ * reference -> https://source.firefox.com/docs/toolkit/components/ml/
  *
  * An embedding is a n-dimensional numerical representation of text
  * (e.g., mdn documentation). The embedding generation involves converting

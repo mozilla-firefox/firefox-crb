@@ -4,7 +4,7 @@ For clients that have "send anonymous usage data" enabled Focus sends a "core" p
 
 ## Core ping
 
-Focus for Android creates and tries to send a "core" ping whenever the app goes to the background. This core ping uses the same format as Firefox for Android and is [documented on firefox-source-docs.mozilla.org](https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/obsolete/core-ping.html).
+Focus for Android creates and tries to send a "core" ping whenever the app goes to the background. This core ping uses the same format as Firefox for Android and is [documented on source.firefox.com/docs](https://source.firefox.com/docs/toolkit/components/telemetry/obsolete/core-ping.html).
 
 ## Event ping
 

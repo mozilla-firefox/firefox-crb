@@ -104,8 +104,8 @@ To verify the fix:
 <optional: brief note about why the change is desired>
 
 Tutorial to contribute:
-https://firefox-source-docs.mozilla.org/contributing/contribution_quickref.html
-https://firefox-source-docs.mozilla.org/contributing/stack_quickref.html
+https://source.firefox.com/docs/contributing/contribution_quickref.html
+https://source.firefox.com/docs/contributing/stack_quickref.html
 
 Please don't ask for the bug to be assigned. It will be automatically assigned to the first patch.
 ```
