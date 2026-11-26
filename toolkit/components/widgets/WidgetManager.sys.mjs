@@ -122,6 +122,9 @@ const REQUIRED_OPTIONS = ["id", "src", "name", "sizes"];
  * Emits "change" with a widget's id when the widget registers, unregisters,
  * or one of its prefs changes after init, and at init for each widget
  * registered before it.
+ *
+ * Emits "uninstall" with an extension's id when the extension is
+ * uninstalled, after its widget prefs are cleared.
  */
 export class _WidgetManager {
   /** @type {Map<string, Widget>} registered widgets keyed by widget id */
@@ -129,6 +132,9 @@ export class _WidgetManager {
 
   /** @type {Map<string, string>} widget ids keyed by pref name */
   #prefHolders = new Map();
+
+  /** @type {Map<string, string>} pref branches keyed by widget id */
+  #prefBranches = new Map();
 
   /** @type {boolean} whether init has run */
   #isReady = false;
@@ -227,6 +233,7 @@ export class _WidgetManager {
     }
     const widget = new Widget(properties);
     this.#widgets.set(id, widget);
+    this.#prefBranches.set(id, prefBranch);
     for (const pref of prefs) {
       this.#prefHolders.set(pref, id);
       Services.prefs.addObserver(pref, this.#onPrefChanged);
@@ -251,6 +258,21 @@ export class _WidgetManager {
       }
     }
     this.#emitChange(id);
+  }
+
+  /**
+   * Clear the prefs of a widget whose extension was uninstalled. A widget
+   * that has not registered since startup uses the default pref branch.
+   *
+   * @param {string} id - a widget id
+   */
+  uninstall(id) {
+    const branch =
+      this.#prefBranches.get(id) ?? `${PREF_ROOT}${prefKeyFor(id)}`;
+    Services.prefs.clearUserPref(`${branch}.enabled`);
+    Services.prefs.clearUserPref(`${branch}.size`);
+    this.#prefBranches.delete(id);
+    this.emit("uninstall", id);
   }
 
   /**

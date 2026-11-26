@@ -206,3 +206,34 @@ add_task(async function test_pref_branch() {
     "Default pref unused"
   );
 });
+
+add_task(async function test_uninstall_deletes_prefs() {
+  const manager = createManager();
+  const uninstalled = [];
+  manager.on("uninstall", (event, id) => uninstalled.push(id));
+  const cases = [
+    [EXTENSION_ID, undefined, "extensions.widgets.extension."],
+    ["custom@mozilla.org", "test.uninstall", "test.uninstall."],
+  ];
+  for (const [id, prefBranch, branch] of cases) {
+    const widget = manager.register(
+      makeOptions({ id, prefBranch, sizes: ["small", "medium"] })
+    );
+    widget.enabled = true;
+    widget.size = "small";
+    manager.unregister(id);
+    manager.uninstall(id);
+    Assert.deepEqual(Services.prefs.getChildList(branch), [], "Prefs cleared");
+    Assert.deepEqual(uninstalled.splice(0), [id], "Uninstall emitted");
+  }
+
+  Services.prefs.setBoolPref("extensions.widgets.unregistered.enabled", true);
+  Services.prefs.setBoolPref("extensions.widgets.unregistered.other", true);
+  manager.uninstall("unregistered@mozilla.org");
+  Assert.deepEqual(
+    Services.prefs.getChildList("extensions.widgets.unregistered."),
+    ["extensions.widgets.unregistered.other"],
+    "Unregistered widget prefs cleared"
+  );
+  Assert.deepEqual(uninstalled, ["unregistered@mozilla.org"], "Emitted");
+});

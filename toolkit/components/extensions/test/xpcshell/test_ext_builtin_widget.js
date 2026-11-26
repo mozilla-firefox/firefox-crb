@@ -80,6 +80,24 @@ add_task(async function test_extension_registers_widget() {
   Assert.equal(WidgetManager.getWidgetByID(EXTENSION_ID), null, "Unregistered");
 });
 
+add_task(async function test_uninstall_deletes_prefs() {
+  const extension = loadWidgetExtension();
+  await extension.startup();
+  const widget = WidgetManager.getWidgetByID(EXTENSION_ID);
+  widget.enabled = true;
+  widget.size = "small";
+  await extension.unload();
+
+  const uninstalled = WidgetManager.once("uninstall");
+  Extension.getBootstrapScope().uninstall({ id: EXTENSION_ID });
+  Assert.equal(await uninstalled, EXTENSION_ID, "Uninstall emitted");
+  Assert.deepEqual(
+    Services.prefs.getChildList("test.widget."),
+    [],
+    "Prefs cleared"
+  );
+});
+
 add_task(async function test_unprivileged_extension_is_ignored() {
   ExtensionTestUtils.failOnSchemaWarnings(false);
   const extension = loadWidgetExtension({ isPrivileged: false });
