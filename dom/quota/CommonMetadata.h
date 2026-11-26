@@ -113,11 +113,11 @@ struct OriginMetadata : public PrincipalMetadata {
 };
 
 struct OriginStateMetadata {
-  int64_t mLastAccessTime;
-  int32_t mLastMaintenanceDate;
-  bool mAccessed;
-  bool mPersisted;
-  bool mDirty;
+  int64_t mLastAccessTime = 0;
+  int32_t mLastMaintenanceDate = 0;
+  bool mAccessed = false;
+  bool mPersisted = false;
+  bool mDirty = false;
 
   OriginStateMetadata() = default;
 
