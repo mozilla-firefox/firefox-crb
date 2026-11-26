@@ -1162,6 +1162,53 @@ describe("<BaseContent> Nova layout variant class", () => {
   });
 });
 
+describe("<BaseContent> devtools changes notice", () => {
+  const props = ({ devtoolsChanges, ...values }) => ({
+    store: { getState: () => {} },
+    App: { initialized: true },
+    Prefs: { values },
+    Sections: [],
+    DiscoveryStream: { config: { enabled: false }, spocs: {}, devtoolsChanges },
+    dispatch: () => {},
+    document: {
+      visibilityState: "visible",
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    },
+  });
+  const renderNotice = values =>
+    render(
+      <Provider store={makeStore(values)}>
+        <BaseContent Wallpapers={MOUNT_WALLPAPERS} {...props(values)} />
+      </Provider>
+    ).container.querySelector(".devtools-changes-notice");
+
+  it("shows devtools changes across the page in both layouts", () => {
+    const notice = nova =>
+      renderNotice({
+        "nova.enabled": nova,
+        "asrouter.devtoolsEnabled": true,
+        devtoolsChanges: ["region DE (was US)"],
+      });
+    // Above the page in Nova, whose container is a grid.
+    expect(notice(true).parentElement).toHaveClass("nova-outer-wrapper");
+    // In the classic layout's main column, not beside it in the flex row.
+    expect(notice(false).parentElement).toHaveClass("newtab-main");
+  });
+
+  it("stays hidden without the devtools or without changes", () => {
+    expect(
+      renderNotice({
+        "asrouter.devtoolsEnabled": false,
+        devtoolsChanges: ["region DE (was US)"],
+      })
+    ).toBeNull();
+    expect(
+      renderNotice({ "asrouter.devtoolsEnabled": true, devtoolsChanges: [] })
+    ).toBeNull();
+  });
+});
+
 describe("<BaseContent> non-Nova classic layout ASRouterNewTabMessage positions", () => {
   const DOCUMENT_STUB = {
     visibilityState: "visible",
