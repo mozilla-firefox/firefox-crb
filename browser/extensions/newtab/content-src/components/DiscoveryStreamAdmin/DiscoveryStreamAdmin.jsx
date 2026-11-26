@@ -409,8 +409,11 @@ export class TogglePrefCheckbox extends React.PureComponent {
 
 const AVAILABILITY_CHANNELS = ["release", "beta", "nightly", "esr"];
 const AVAILABILITY_FORM_ID = "feature-availability-form";
-const AVAILABILITY_RECIPE_COLUMNS = 7;
+const AVAILABILITY_RECIPE_COLUMNS = 8;
 const AVAILABILITY_RETRY_MS = 8000;
+const AVAILABILITY_CHANGES_DEBOUNCE_MS = 250;
+const DEVTOOLS_ENABLED_PREF = "asrouter.devtoolsEnabled";
+const ENROLL_FIELD_PREFIX = "enroll:";
 
 /**
  * Lists, per widget, the matching recipe branches that make it available.
@@ -454,12 +457,14 @@ function formatPrefValue(value) {
 
 /**
  * Shows which newtab Nimbus recipes and region/locale dependent default prefs
- * apply to a given region, locale, channel and version.
+ * apply to a given region, locale, channel and version, and lets the browser's
+ * home region be switched for real.
  */
 // Memoized: the pane re-renders on every feed and pref update, and this
 // renders a row pair per recipe.
 export const FeatureAvailability = React.memo(function FeatureAvailability({
   availability,
+  devtoolsChanges: currentChanges = [],
   dispatch,
 }) {
   const [onlyMatching, setOnlyMatching] = React.useState(false);
@@ -467,8 +472,8 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
   // The audience picked since the last result, keyed by that result so a new
   // one starts from its own region and locale.
   const [audienceChoice, setAudienceChoice] = React.useState(null);
-  // Set while a request is in flight, so Evaluate can't be clicked again
-  // before the last one finished.
+  // Set while a request is in flight, so Apply can't be clicked again before
+  // the last one finished.
   const [pending, setPending] = React.useState(false);
   const pendingRef = React.useRef(false);
   pendingRef.current = pending;
@@ -477,7 +482,9 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
   React.useEffect(() => {
     if (pendingRef.current) {
       setStatusText(
-        availability?.error ? `Failed: ${availability.error}` : "Done."
+        availability?.error
+          ? `Failed: ${availability.error}`
+          : ["Done.", ...(availability?.messages ?? [])].join(" ")
       );
     }
     setPending(false);
@@ -502,6 +509,27 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
     return () => clearInterval(timer);
   }, [waiting, requestAvailability]);
 
+  // What's applied changed since this result: another tab's Apply or Reset,
+  // the notice's Reset, or a pref changed in the pane. This tab's own
+  // requests are answered directly. Starts from the result's own list, so a
+  // result older than the reopened section is refreshed too.
+  const changesKey = currentChanges.join("\n");
+  const seenChangesKey = React.useRef(
+    (availability?.devtoolsChanges ?? currentChanges).join("\n")
+  );
+  React.useEffect(() => {
+    if (seenChangesKey.current === changesKey) {
+      return undefined;
+    }
+    seenChangesKey.current = changesKey;
+    // Coalesces the several broadcasts one change can cause.
+    const timer = setTimeout(() => {
+      if (loaded && !pendingRef.current) {
+        requestAvailability();
+      }
+    }, AVAILABILITY_CHANGES_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [changesKey, loaded, requestAvailability]);
   const sourcesByWidget = React.useMemo(
     () => widgetSources(availability?.recipes ?? []),
     [availability?.recipes]
@@ -527,6 +555,10 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
     version,
     widgetsInteracted,
     options,
+    nimbusDebug,
+    studiesEnabled,
+    changedPrefs = [],
+    messages = [],
     error,
   } = availability;
 
@@ -535,9 +567,24 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
     if (pending) {
       return;
     }
-    const data = Object.fromEntries(new FormData(formRef.current));
+    const data = { enrollments: {} };
+    for (const [field, value] of new FormData(formRef.current)) {
+      if (field.startsWith(ENROLL_FIELD_PREFIX)) {
+        data.enrollments[field.slice(ENROLL_FIELD_PREFIX.length)] = value;
+      } else {
+        data[field] = value;
+      }
+    }
     // Sent either way, since an unchecked box is missing from FormData.
     data.widgetsInteracted = formRef.current.elements.widgetsInteracted.checked;
+    data.defaultPrefs = formRef.current.elements.defaultPrefs.checked;
+    // The Branch column belongs to the last result. If the values changed
+    // since, let Apply pick the default branches for the new ones.
+    const evaluated = { region, locale, channel, version, widgetsInteracted };
+    if (Object.keys(evaluated).some(key => data[key] !== evaluated[key])) {
+      data.useDefaultEnrollments = true;
+      data.enrollments = {};
+    }
     setPending(true);
     dispatch(ac.OnlyToMain({ type, data }));
   };
@@ -545,6 +592,14 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
     e.preventDefault();
     send(at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST);
   };
+  const clearPref = prefName => {
+    if (pending) {
+      return;
+    }
+    dispatch(ac.OnlyToMain({ type: at.CLEAR_PREF, data: { name: prefName } }));
+    send(at.DISCOVERY_STREAM_DEV_AVAILABILITY_REQUEST);
+  };
+  const devtoolsChanges = availability.devtoolsChanges ?? [];
   const audienceFor = (audienceRegion, audienceLocale) =>
     options.presets.some(
       p => p.region === audienceRegion && p.locale === audienceLocale
@@ -672,6 +727,45 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
           >
             Evaluate
           </button>
+          <button
+            type="button"
+            className="button"
+            aria-disabled={pending ? "true" : undefined}
+            onClick={() => send(at.DISCOVERY_STREAM_DEV_AVAILABILITY_APPLY)}
+          >
+            Apply
+          </button>
+          <label>
+            <input
+              type="checkbox"
+              name="defaultPrefs"
+              // Keyed on what it defaults from, since the form isn't
+              // remounted when only what's applied changes.
+              key={`${availability.defaultPrefsApplied}-${!devtoolsChanges.length}`}
+              defaultChecked={
+                availability.defaultPrefsApplied || !devtoolsChanges.length
+              }
+            />{" "}
+            Start from default New Tab prefs
+          </label>
+          <button
+            type="button"
+            className="button"
+            aria-disabled={pending ? "true" : undefined}
+            onClick={() => {
+              if (pending) {
+                return;
+              }
+              setPending(true);
+              dispatch(
+                ac.OnlyToMain({
+                  type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_RESET,
+                })
+              );
+            }}
+          >
+            Reset
+          </button>
           <span role="status" className="availability-status">
             {pending ? "Working..." : statusText}
           </span>
@@ -685,15 +779,66 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
       </p>
       <p id="availability-interaction-note" className="availability-note">
         Some rollouts only target users who have used a widget, read from the
-        widgets.*.interaction prefs. The box starts from this profile, and
-        Evaluate uses it in place of those prefs.
+        widgets.*.interaction prefs. The box starts from this profile; Evaluate
+        uses it in place of those prefs, and Apply sets or clears them all.
       </p>
       <p className="availability-note">
         Evaluate only simulates targeting, as a client that isn&apos;t enrolled
-        in anything. It doesn&apos;t change this profile.
+        in anything. Apply makes this profile as close as it can to a user with
+        these values, and what this profile sends to Mozilla follows: it changes
+        the home region for real (including browser.search.region, search
+        defaults and partner codes, and the region in telemetry), uses the
+        locale and channel for New Tab&apos;s own region, locale and channel
+        dependent defaults, optionally clears your New Tab prefs (keeping ones
+        Nimbus manages), and force-enrolls the branches chosen in the Branch
+        column. Rollouts that reach every client are chosen by default; partial
+        rollouts and experiments aren&apos;t, as for most users. The UI switches
+        to the closest langpack for the locale, installing it if needed, and the
+        code that runs is this build&apos;s whatever version you pick. Nimbus
+        isn&apos;t re-evaluated for the applied region, so this profile
+        isn&apos;t enrolled in live recipes for an audience it isn&apos;t in;
+        the forced branches stand in for them. Forcing a branch permanently
+        replaces this profile&apos;s own enrollment on the same feature, so use
+        a profile you don&apos;t mind changing. Reload the tab to see the
+        result. Reset puts back the region, locale, channel, prefs and widget
+        interaction, removes the forced enrollments, turns nimbus.debug off if
+        this pane turned it on, and re-evaluates Nimbus. It can&apos;t bring
+        back enrollments a forced branch replaced, and installed langpacks stay
+        installed.
       </p>
+      {studiesEnabled === false ? (
+        <p className="availability-override">
+          Apply can&apos;t force-enroll because Nimbus studies are off on this
+          profile. They need datareporting.healthreport.uploadEnabled and
+          app.shield.optoutstudies.enabled, and no policy disabling studies.
+        </p>
+      ) : null}
+      {nimbusDebug ? null : (
+        <p className="availability-override">
+          Apply can&apos;t force-enroll while nimbus.debug is off.{" "}
+          <button
+            type="button"
+            className="button"
+            onClick={() => send(at.DISCOVERY_STREAM_DEV_ENABLE_NIMBUS_DEBUG)}
+          >
+            Enable nimbus.debug
+          </button>
+        </p>
+      )}
+      {messages.length ? (
+        <ul className="availability-override">
+          {messages.map(message => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
       {error ? (
         <p className="availability-override">Last request failed: {error}</p>
+      ) : null}
+      {devtoolsChanges.length ? (
+        <p className="availability-override">
+          Applied: {devtoolsChanges.join("; ")}.
+        </p>
       ) : null}
       <h3>Nimbus recipes ({recipes.length})</h3>
       <h4>Widgets made available by matching recipes</h4>
@@ -726,9 +871,18 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
             <th>Bucket</th>
             <th>Matches</th>
             <th>Enrolled</th>
+            <th>Branch</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody
+          key={[
+            region,
+            locale,
+            channel,
+            version,
+            ...(availability.forcedEnrollments ?? []),
+          ].join()}
+        >
           {recipes.map(r => (
             <React.Fragment key={r.slug}>
               <Row className="message-item availability-recipe-row">
@@ -766,7 +920,34 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
                     </div>
                   ) : null}
                 </td>
-                <td className="min">{r.enrolledBranch ?? ""}</td>
+                <td className="min">
+                  {r.enrolledBranch ?? ""}
+                  {r.forcedBranch ? `forced: ${r.forcedBranch}` : ""}
+                </td>
+                <td className="min">
+                  {r.matches ? (
+                    <select
+                      form={AVAILABILITY_FORM_ID}
+                      name={`${ENROLL_FIELD_PREFIX}${r.slug}`}
+                      aria-label={`Branch to enroll in for ${r.slug}`}
+                      defaultValue={
+                        r.forcedBranch ??
+                        // Most clients are only in rollouts that reach all of
+                        // them; Nimbus buckets them out of partial ones.
+                        (r.isRollout && r.bucketPercent === 100
+                          ? r.branches[0]
+                          : "")
+                      }
+                    >
+                      <option value="">Don&apos;t enroll</option>
+                      {r.branches.map(branch => (
+                        <option key={branch} value={branch}>
+                          {branch}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                </td>
               </Row>
               <Row className="message-item availability-targeting-row">
                 <td colSpan={AVAILABILITY_RECIPE_COLUMNS}>
@@ -802,6 +983,59 @@ export const FeatureAvailability = React.memo(function FeatureAvailability({
               <td>{p.name}</td>
               <td>{formatPrefValue(p.current)}</td>
               <td>{formatPrefValue(p.simulated)}</td>
+            </Row>
+          ))}
+        </tbody>
+      </table>
+      <h3>Prefs changed from their defaults ({changedPrefs.length})</h3>
+      <p className="availability-note">
+        Every browser.newtabpage.activity-stream pref with a user value. Ones
+        marked devtools were changed in this pane, and Reset clears them; Clear
+        resets a single pref.
+      </p>
+      <table className="availability-table">
+        <thead>
+          <tr>
+            <th>Pref</th>
+            <th>Default</th>
+            <th>Current</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {changedPrefs.map(p => (
+            <Row
+              key={p.name}
+              className={p.touched ? "message-item changed" : "message-item"}
+            >
+              <td>
+                {p.name}
+                {p.touched ? " (devtools)" : ""}
+              </td>
+              <td>
+                <code>
+                  {p.defaultValue === undefined
+                    ? "none"
+                    : formatPrefValue(p.defaultValue)}
+                </code>
+              </td>
+              <td>
+                <code>{formatPrefValue(p.value)}</code>
+              </td>
+              <td className="min">
+                {/* The parent ignores content clearing the devtools gate. */}
+                {p.name === DEVTOOLS_ENABLED_PREF ? null : (
+                  <button
+                    type="button"
+                    className="button"
+                    aria-disabled={pending ? "true" : undefined}
+                    aria-label={`Clear ${p.name}`}
+                    onClick={() => clearPref(p.name)}
+                  >
+                    Clear
+                  </button>
+                )}
+              </td>
             </Row>
           ))}
         </tbody>
@@ -2006,6 +2240,7 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
           {this.state.availabilityOpen ? (
             <FeatureAvailability
               availability={this.props.state.DiscoveryStream.availability}
+              devtoolsChanges={this.props.state.DiscoveryStream.devtoolsChanges}
               dispatch={this.props.dispatch}
             />
           ) : null}
@@ -2112,6 +2347,31 @@ export class DiscoveryStreamAdminInner extends React.PureComponent {
     this.setState = this.setState.bind(this);
     this.dismiss = this.dismiss.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.trackingDispatch = this.trackingDispatch.bind(this);
+  }
+
+  /**
+   * Dispatches like the store, and records which prefs the pane writes so
+   * that its changes can be listed and reset later.
+   *
+   * @param {object} action
+   */
+  trackingDispatch(action) {
+    this.props.dispatch(action);
+    let names;
+    if (action.type === at.SET_PREF) {
+      names = [action.data.name];
+    } else if (action.type === at.SET_MULTIPLE_PREFS) {
+      names = Object.keys(action.data.values ?? {});
+    }
+    if (names?.length) {
+      this.props.dispatch(
+        ac.OnlyToMain({
+          type: at.DISCOVERY_STREAM_DEV_TRACK_PREFS,
+          data: { names },
+        })
+      );
+    }
   }
 
   componentDidMount() {
@@ -2174,7 +2434,7 @@ export class DiscoveryStreamAdminInner extends React.PureComponent {
                 InferredPersonalization: this.props.InferredPersonalization,
               }}
               otherPrefs={this.props.Prefs.values}
-              dispatch={this.props.dispatch}
+              dispatch={this.trackingDispatch}
             />
           </React.Fragment>
         </main>
