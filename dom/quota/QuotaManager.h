@@ -450,6 +450,9 @@ class QuotaManager final : public BackgroundThreadObject {
 
   RefPtr<BoolPromise> TemporaryStorageInitialized();
 
+  // Runs one FlushDirtyOriginInfos round on the IO thread. Testing only.
+  RefPtr<BoolPromise> FlushDirtyOriginInfosForTesting();
+
   using WriteLeasePromise = MozPromise<WriteLease, nsresult, true>;
 
   // Acquires a write lease on the origin and makes sure its dirty flag is

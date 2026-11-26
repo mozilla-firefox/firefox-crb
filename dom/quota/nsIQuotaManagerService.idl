@@ -50,6 +50,17 @@ interface nsIQuotaManagerService : nsISupports
   temporaryStorageInitialized();
 
   /**
+   * Run one round of writing back dirty origin metadata, as the periodic
+   * flush would. Origins with an active write lease or modified more recently
+   * than dom.quotaManager.originWriteQuiescentThresholdMs are left dirty.
+   *
+   * If the dom.quotaManager.testing preference is not true the call will be
+   * a no-op.
+   */
+  [must_use] nsIQuotaRequest
+  flushDirtyOriginInfos();
+
+  /**
    * Check if temporary group is initialized.
    *
    * If the dom.quotaManager.testing preference is not true the call will be
