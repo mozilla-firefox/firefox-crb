@@ -90,9 +90,9 @@ import org.mozilla.fenix.components.menu.middleware.ToolbarMenuHighlightMiddlewa
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.isToolbarAtBottom
 import org.mozilla.fenix.ext.nav
-import org.mozilla.fenix.ext.openSetDefaultBrowserOption
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ipprotection.ui.IPProtectionSnackbarBinding
+import org.mozilla.fenix.messaging.DefaultMessageController
 import org.mozilla.fenix.snackbar.FenixSnackbarDelegate
 import org.mozilla.fenix.theme.FirefoxTheme
 import org.mozilla.fenix.translations.TranslationsEnabledSettings
@@ -379,7 +379,12 @@ class MenuFragment : BottomSheetDialogFragment() {
             translationsSettings = TranslationsEnabledSettings.dataStore(context),
             isAndroidAutomotiveAvailable = context.isAndroidAutomotiveAvailable(),
             quitApplicationDelegate = activity::finishAndRemoveTask,
-            setAsDefaultBrowserDelegate = activity::openSetDefaultBrowserOption,
+            messageController =
+                DefaultMessageController(
+                    appStore = components.appStore,
+                    messagingController = components.nimbus.messaging,
+                    processIntent = { intent -> intent?.let { startActivity(it) } },
+                ),
             menuViewScope = viewLifecycleOwner.lifecycle.coroutineScope,
             tabDataCoordinator = components.tabDataCoordinator,
             applicationScope = components.applicationScope,

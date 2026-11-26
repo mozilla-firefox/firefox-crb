@@ -33,9 +33,9 @@ import org.mozilla.fenix.components.menu.middleware.CustomizeMenuNavigationMiddl
 import org.mozilla.fenix.components.menu.middleware.CustomizeMenuTelemetryMiddleware
 import org.mozilla.fenix.e2e.SystemInsetsPaddedFragment
 import org.mozilla.fenix.ext.isToolbarAtBottom
-import org.mozilla.fenix.ext.openSetDefaultBrowserOption
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.showToolbar
+import org.mozilla.fenix.messaging.DefaultMessageController
 import org.mozilla.fenix.snackbar.FenixSnackbarDelegate
 import org.mozilla.fenix.snackbar.SnackbarBinding
 import org.mozilla.fenix.theme.FirefoxTheme
@@ -146,7 +146,12 @@ class CustomizeMenuFragment : Fragment(), UserInteractionHandler, SystemInsetsPa
             translationsSettings = TranslationsEnabledSettings.dataStore(context),
             isAndroidAutomotiveAvailable = context.isAndroidAutomotiveAvailable(),
             quitApplicationDelegate = activity::finishAndRemoveTask,
-            setAsDefaultBrowserDelegate = activity::openSetDefaultBrowserOption,
+            messageController =
+                DefaultMessageController(
+                    appStore = components.appStore,
+                    messagingController = components.nimbus.messaging,
+                    processIntent = { intent -> intent?.let { startActivity(it) } },
+                ),
             tabDataCoordinator = components.tabDataCoordinator,
             menuViewScope = viewLifecycleOwner.lifecycle.coroutineScope,
             applicationScope = components.applicationScope,

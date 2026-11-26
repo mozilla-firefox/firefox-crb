@@ -4,6 +4,8 @@
 
 package org.mozilla.fenix.messaging
 
+import android.content.Intent
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.assertEquals
@@ -22,7 +24,9 @@ import mozilla.components.compose.menu.ui.MenuItemIconRes
 import mozilla.components.service.nimbus.messaging.MenuBannerMessageConfig
 import mozilla.components.service.nimbus.messaging.Message
 import mozilla.components.service.nimbus.messaging.MessageData
+import mozilla.components.service.nimbus.messaging.NimbusMessagingControllerInterface
 import mozilla.components.service.nimbus.messaging.StyleData
+import mozilla.components.support.test.middleware.CaptureActionsMiddleware
 import mozilla.components.support.test.robolectric.testContext
 import mozilla.components.ui.icons.R as iconsR
 import org.junit.Before
@@ -32,7 +36,9 @@ import org.mozilla.experiments.nimbus.NullVariables
 import org.mozilla.experiments.nimbus.StringHolder
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.AppStore
+import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.ConsumeMessageToShow
+import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MessageClicked
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.UpdateMessageToShow
 import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.menu.fake.FakeMenuHost
@@ -45,7 +51,15 @@ import org.robolectric.RobolectricTestRunner
 class BannerMenuItemProviderTest {
     private val settings: Settings = mockk(relaxed = true)
     private val menu = FakeMenuHost()
-    private var setAsDefaultBrowserCount = 0
+    private val pressedMessages = mutableListOf<Message>()
+    private val messageController =
+        object : MessageController {
+            override fun onMessagePressed(message: Message) {
+                pressedMessages.add(message)
+            }
+
+            override fun onMessageDismissed(message: Message) = Unit
+        }
 
     @Before
     fun setup() {
@@ -127,15 +141,56 @@ class BannerMenuItemProviderTest {
     }
 
     @Test
-    fun `WHEN clicking the item THEN ask to set this as the default browser and keep the menu open`() = runTest {
-        val provider = createProvider(message = createMessage())
+    fun `WHEN clicking the item THEN report the message as pressed and keep the menu open`() = runTest {
+        val message = createMessage()
+        val provider = createProvider(message = message)
 
         provider.onEvent(MenuAction.DefaultBrowserMenuBannerClicked, menu)
 
-        assertEquals(1, setAsDefaultBrowserCount)
+        assertEquals(listOf(message), pressedMessages)
         assertFalse(menu.isUsed)
         assertEquals(listOf(MESSAGE_TITLE), provider.itemsFlow.value.map { it.title.text })
     }
+
+    @Test
+    fun `WHEN clicking the item with the default message controller THEN process the message intent and dispatch the message as clicked`() =
+        runTest {
+            val message = createMessage()
+            val intent = Intent("action")
+            val processedIntents = mutableListOf<Intent?>()
+            val messagingController: NimbusMessagingControllerInterface = mockk {
+                every { getIntentForMessage(message) } returns intent
+            }
+            val captureMiddleware = CaptureActionsMiddleware<AppState, AppAction>()
+            val appStore =
+                AppStore(
+                    initialState =
+                        AppState(
+                            messaging =
+                                MessagingState(messageToShow = mapOf(FenixMessageSurfaceId.MENU_BANNER to message))
+                        ),
+                    middlewares = listOf(captureMiddleware),
+                )
+            val provider =
+                BannerMenuItemProvider(
+                    appStore = appStore,
+                    settings = settings,
+                    appName = APP_NAME,
+                    messageController =
+                        DefaultMessageController(
+                            appStore = appStore,
+                            messagingController = messagingController,
+                            processIntent = { processedIntents.add(it) },
+                        ),
+                    scope = backgroundScope,
+                )
+
+            provider.onEvent(MenuAction.DefaultBrowserMenuBannerClicked, menu)
+
+            assertEquals(listOf<Intent?>(intent), processedIntents)
+            captureMiddleware.assertLastAction(MessageClicked::class) { assertEquals(MessageClicked(message), it) }
+            assertFalse(menu.isUsed)
+        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
@@ -147,7 +202,7 @@ class BannerMenuItemProviderTest {
 
         verify { settings.shouldShowMenuBanner = false }
         assertEquals(emptyList(), provider.itemsFlow.value)
-        assertEquals(0, setAsDefaultBrowserCount)
+        assertEquals(emptyList(), pressedMessages)
         assertFalse(menu.isUsed)
     }
 
@@ -172,7 +227,7 @@ class BannerMenuItemProviderTest {
             appStore = appStore,
             settings = settings,
             appName = APP_NAME,
-            setAsDefaultBrowser = { setAsDefaultBrowserCount++ },
+            messageController = messageController,
             scope = backgroundScope,
         )
 

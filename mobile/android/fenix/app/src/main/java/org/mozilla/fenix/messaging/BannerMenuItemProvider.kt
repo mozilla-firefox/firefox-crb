@@ -38,14 +38,14 @@ import org.mozilla.fenix.utils.Settings
  * @param appStore [AppStore] from which to read the message to show.
  * @param settings [Settings] application settings to update when the banner is dismissed.
  * @param appName The name of this application, shown in the banner in place of the `%1$s` placeholder.
- * @param setAsDefaultBrowser delegate for setting the current browser as the default.
+ * @param messageController [MessageController] to which the message is reported as pressed when the banner is clicked.
  * @param scope [CoroutineScope] used to keep the banner up to date for as long as it can be shown.
  */
 class BannerMenuItemProvider(
     private val appStore: AppStore,
     private val settings: Settings,
     private val appName: String,
-    private val setAsDefaultBrowser: () -> Unit,
+    private val messageController: MessageController,
     scope: CoroutineScope,
 ) : MenuItemProvider {
     private val isDismissed = MutableStateFlow(false)
@@ -67,7 +67,7 @@ class BannerMenuItemProvider(
 
     override fun onEvent(event: MenuEvent, menu: MenuHost) {
         if (event == DefaultBrowserMenuBannerClicked) {
-            setAsDefaultBrowser()
+            appStore.state.menuBannerMessage()?.let { messageController.onMessagePressed(it) }
         } else {
             settings.shouldShowMenuBanner = false
             isDismissed.value = true
