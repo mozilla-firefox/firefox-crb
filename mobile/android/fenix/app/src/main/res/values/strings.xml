@@ -2859,6 +2859,10 @@
     <!-- Data usage shown on the browser VPN settings screen.
          %1$.1f is the data remaining in GB (for example "8.3").
          %2$.1f is the total monthly allowance in GB (for example "50.0"). -->
+    <string name="ip_protection_data_limit_value_styled"><![CDATA[<b>%1$.1f GB</b> of %2$.1f GB left]]></string>
+    <!-- Data usage shown on the browser VPN settings screen.
+         %1$.1f is the data remaining in GB (for example "8.3").
+         %2$.1f is the total monthly allowance in GB (for example "50.0"). -->
     <string name="ip_protection_data_limit_value">%1$.1f GB of %2$.1f GB left</string>
     <!-- Text shown below the data usage bar describing when the monthly allowance resets.
          %1$.0f is the total monthly data allowance in GB (for example "50"). -->
