@@ -2,8 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// HttpLog.h should generally be included first
 #include "ConnectionAttempt.h"
 
+#include "HttpLog.h"
+#include "mozilla/DebugOnly.h"
+#include "mozilla/TimeStamp.h"
 #include "nsHttpConnectionInfo.h"
 #include "nsHttpTransaction.h"
 
@@ -42,6 +46,37 @@ uint32_t ConnectionAttempt::UnconnectedUDPConnsLength() const {
   }
 
   return 0;
+}
+
+void ConnectionAttempt::SetupAttemptTimer(uint64_t aTimeoutUs,
+                                          nsITimerCallback* aCallback) {
+  if (!aTimeoutUs) {
+    MOZ_ASSERT(false, "aTimeoutUs should not be 0");
+    return;
+  }
+
+  LOG(("ConnectionAttempt::SetupAttemptTimer %p to %" PRIu64 "us", this,
+       aTimeoutUs));
+
+  if (!mTimer) {
+    // This can only fail on OOM and we'd crash.
+    mTimer = NS_NewTimer();
+  }
+
+  // Only possible if the timer thread already shut down, and there is nothing
+  // meaningful to do about that.
+  DebugOnly<nsresult> rv = mTimer->InitHighResolutionWithCallback(
+      aCallback,
+      TimeDuration::FromMicroseconds(static_cast<double>(aTimeoutUs)),
+      nsITimer::TYPE_ONE_SHOT);
+  MOZ_ASSERT(NS_SUCCEEDED(rv));
+}
+
+void ConnectionAttempt::CancelAttemptTimer() {
+  if (mTimer) {
+    mTimer->Cancel();
+    mTimer = nullptr;
+  }
 }
 
 }  // namespace mozilla::net
