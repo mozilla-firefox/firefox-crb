@@ -169,6 +169,18 @@ topic.
 
 : The test manifest loader to use as defined in `taskgraph.util.chunking.manifest_loaders`.
 
+`bugbug_confidence_threshold`
+
+: The confidence threshold (`very_low`, `low`, `medium` or `high`) at which the
+  `bugbug` manifest loader, and the bugbug optimization strategies selecting
+  manifests that don't have a threshold of their own, use bugbug's results.
+
+`bugbug_num_pushes`
+
+: The number of pushes, up to the current one, whose bugbug results the `bugbug`
+  manifest loader, and the bugbug optimization strategies selecting manifests
+  that don't have a threshold of their own, use.
+
 ## Target Set
 
 The "target set" is the set of task labels which must be included in a task

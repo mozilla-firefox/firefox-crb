@@ -13,11 +13,11 @@ from gecko_taskgraph.util.bugbug import (
     CT_HIGH,
     CT_LOW,
     CT_MEDIUM,
-    CT_VERY_LOW,
     BugbugTimeoutException,
     PushDataUnavailable,
     get_confidence_threshold,
     get_push_schedules,
+    get_selection_parameters,
 )
 
 FALLBACK = "skip-unless-has-relevant-tests"
@@ -44,22 +44,19 @@ FALLBACK = "skip-unless-has-relevant-tests"
     "bugbug-reduced-manifests-config-selection-high",
     args=(CT_HIGH, False, True, None, 1, True),
 )
+# Uses the confidence threshold and number of pushes in the parameters, like the
+# manifest loader, so that the manifests it selects are in the tasks.
 @register_strategy(
-    "bugbug-reduced-manifests-fallback-low", args=(CT_LOW, False, True, FALLBACK)
-)
-@register_strategy(
-    "bugbug-reduced-manifests-fallback", args=(CT_MEDIUM, False, True, FALLBACK)
-)
-@register_strategy(
-    "bugbug-reduced-manifests-fallback-last-10-pushes",
-    args=(CT_VERY_LOW, False, True, FALLBACK, 10),
+    "bugbug-reduced-manifests-fallback", args=(None, False, True, FALLBACK)
 )
 class BugBugPushSchedules(OptimizationStrategy):
     """Query the 'bugbug' service to retrieve relevant tasks and manifests.
 
     Args:
         confidence_threshold (float): The minimum confidence threshold (in
-            range [0, 1]) needed for a task to be scheduled.
+            range [0, 1]) needed for a task to be scheduled, or None to use the
+            ones of the `bugbug_confidence_threshold` and `bugbug_num_pushes`
+            parameters (instead of `num_pushes`).
         tasks_only (bool): Whether or not to only use tasks and no groups
             (default: False)
         use_reduced_tasks (bool): Whether or not to use the reduced set of tasks
@@ -98,8 +95,14 @@ class BugBugPushSchedules(OptimizationStrategy):
         if self.timedout:
             return registry[self.fallback].should_remove_task(task, params, importance)
 
+        if self.confidence_threshold is None:
+            confidence_threshold, num_pushes = get_selection_parameters(params)
+        else:
+            confidence_threshold = self.confidence_threshold
+            num_pushes = self.num_pushes
+
         try:
-            data = get_push_schedules(params, self.num_pushes)
+            data = get_push_schedules(params, num_pushes)
         except (BugbugTimeoutException, RetryError, PushDataUnavailable):
             if not self.fallback:
                 raise
@@ -108,9 +111,7 @@ class BugBugPushSchedules(OptimizationStrategy):
             return self.should_remove_task(task, params, importance)
 
         key = "reduced_tasks" if self.use_reduced_tasks else "tasks"
-        tasks_threshold = get_confidence_threshold(
-            data, "tasks", self.confidence_threshold
-        )
+        tasks_threshold = get_confidence_threshold(data, "tasks", confidence_threshold)
         tasks = {
             task
             for task, confidence in data.get(key, {}).items()
@@ -130,7 +131,7 @@ class BugBugPushSchedules(OptimizationStrategy):
         # If a task contains more than one group, use the max confidence.
         groups = data.get("groups", {})
         groups_threshold = get_confidence_threshold(
-            data, "groups", self.confidence_threshold
+            data, "groups", confidence_threshold
         )
         confidences = [c for g, c in groups.items() if g in test_manifests]
         if not confidences or max(confidences) < groups_threshold:
@@ -164,10 +165,12 @@ class BugBugPushSchedules(OptimizationStrategy):
             ):
                 return True
 
-        # Store group importance so future optimizers can access it.
+        # Store group importance so future optimizers can access it. Manifests
+        # selected at a threshold lower than the low one are at least of low
+        # importance, so that they run on some configuration.
         ct_high, ct_medium, ct_low = (
             get_confidence_threshold(data, "groups", ct)
-            for ct in (CT_HIGH, CT_MEDIUM, CT_LOW)
+            for ct in (CT_HIGH, CT_MEDIUM, min(CT_LOW, confidence_threshold))
         )
         for manifest in test_manifests:
             if manifest not in groups:

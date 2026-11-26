@@ -23,10 +23,11 @@ from taskgraph.util.yaml import load_yaml
 
 from gecko_taskgraph import TEST_CONFIGS
 from gecko_taskgraph.util.bugbug import (
-    CT_LOW,
     BugbugTimeoutException,
+    PushDataUnavailable,
     get_confidence_threshold,
-    push_schedules,
+    get_push_schedules,
+    get_selection_parameters,
 )
 
 logger = logging.getLogger(__name__)
@@ -535,9 +536,8 @@ class DefaultLoader(BaseManifestLoader):
 
 class BugbugLoader(DefaultLoader):
     """Load manifests using metadata from the TestResolver, and then
-    filter them based on a query to bugbug."""
-
-    CONFIDENCE_THRESHOLD = CT_LOW
+    filter them based on a query to bugbug, like the bugbug strategies selecting
+    manifests do."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -551,15 +551,18 @@ class BugbugLoader(DefaultLoader):
         if self.params["backstop"] or self.timedout:
             return manifests
 
+        confidence_threshold, num_pushes = get_selection_parameters(self.params)
         try:
-            data = push_schedules(self.params["project"], self.params["head_rev"])
-        except (BugbugTimeoutException, RetryError):
+            data = get_push_schedules(self.params, num_pushes)
+        except (BugbugTimeoutException, RetryError, PushDataUnavailable):
             traceback.print_exc()
-            logger.warning("Timed out waiting for bugbug, loading all test manifests.")
+            logger.warning(
+                "Failed to get the bugbug results, loading all test manifests."
+            )
             self.timedout = True
             return self.get_manifests(suite, mozinfo)
 
-        threshold = get_confidence_threshold(data, "groups", self.CONFIDENCE_THRESHOLD)
+        threshold = get_confidence_threshold(data, "groups", confidence_threshold)
         bugbug_manifests = {
             m for m, c in data.get("groups", {}).items() if c >= threshold
         }

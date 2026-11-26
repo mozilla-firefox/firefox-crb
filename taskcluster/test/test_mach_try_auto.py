@@ -2,8 +2,11 @@
 # http://creativecommons.org/publicdomain/zero/1.0/
 
 import pytest
-from gecko_taskgraph.util.bugbug import push_schedules
-from gecko_taskgraph.util.chunking import BugbugLoader
+from gecko_taskgraph.util.bugbug import (
+    get_confidence_threshold,
+    get_selection_parameters,
+    push_schedules,
+)
 from mozunit import main
 from tryselect.selectors.auto import TRY_AUTO_PARAMETERS
 
@@ -30,10 +33,10 @@ def test_generate_graph(optimized_task_graph):
 
 def test_only_important_manifests(params, full_task_graph, filter_tasks):
     data = push_schedules(params["project"], params["head_rev"])
+    confidence_threshold, _ = get_selection_parameters(params)
+    threshold = get_confidence_threshold(data, "groups", confidence_threshold)
     important_manifests = {
-        m
-        for m, c in data.get("groups", {}).items()
-        if c >= BugbugLoader.CONFIDENCE_THRESHOLD
+        m for m, c in data.get("groups", {}).items() if c >= threshold
     }
 
     # Ensure we don't schedule unimportant manifests.

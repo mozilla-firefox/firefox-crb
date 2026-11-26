@@ -65,6 +65,18 @@ def translate_group(group):
     return group
 
 
+def get_selection_parameters(params):
+    """Return the confidence threshold and number of pushes, as a tuple, with which
+    the manifest loader and the strategies selecting manifests use bugbug's results,
+    from the `bugbug_confidence_threshold` and `bugbug_num_pushes` parameters."""
+    confidence_threshold = next(
+        ct
+        for ct, level in CT_LEVELS.items()
+        if level == params["bugbug_confidence_threshold"]
+    )
+    return confidence_threshold, params["bugbug_num_pushes"]
+
+
 def get_confidence_threshold(data, kind, confidence_threshold):
     """Return the threshold to use for the "tasks" or "groups" (`kind`) of a bugbug reply.
 
@@ -415,7 +427,7 @@ def merge_bugbug_replies(data, new_data):
                 continue
 
             dict_value = next(iter(value.values()))
-            if isinstance(dict_value, list):
+            if isinstance(dict_value, (list, set)):
                 for name, configs in value.items():
                     if name not in data[key]:
                         data[key][name] = set()
@@ -425,7 +437,7 @@ def merge_bugbug_replies(data, new_data):
                 for name, confidence in value.items():
                     if name not in data[key] or data[key][name] < confidence:
                         data[key][name] = confidence
-        elif isinstance(value, list):
+        elif isinstance(value, (list, set)):
             if key not in data:
                 data[key] = set()
 
@@ -433,8 +445,70 @@ def merge_bugbug_replies(data, new_data):
 
 
 class PushDataUnavailable(Exception):
-    """The pushlog entries of the pushes before the current one couldn't be
-    retrieved."""
+    """The pushlog entries of the pushes before the current one, or bugbug's
+    results for them, couldn't be retrieved."""
+
+
+_previous_push_schedules_results = {}
+
+
+def previous_push_schedules(repository, branch, push_id, num_pushes):
+    """Return bugbug's replies for the `num_pushes - 1` pushes before `push_id`,
+    merged.
+
+    The result, or the failure, is cached, so that the decision task can fetch
+    them before forking the processes that load the kinds, which then share it.
+    They are not recorded in the perfherder data, which is about the query for
+    the current push.
+
+    Raises PushDataUnavailable if the pushes, or bugbug's results for them,
+    couldn't be retrieved.
+    """
+    key = (repository, branch, push_id, num_pushes)
+    if key not in _previous_push_schedules_results:
+        try:
+            _previous_push_schedules_results[key] = _fetch_previous_push_schedules(*key)
+        except PushDataUnavailable as e:
+            _previous_push_schedules_results[key] = e
+        except (BugbugTimeoutException, requests.RequestException) as e:
+            error = PushDataUnavailable(
+                f"Failed to get bugbug's results for the pushes before {push_id}"
+            )
+            error.__cause__ = e
+            _previous_push_schedules_results[key] = error
+
+    result = _previous_push_schedules_results[key]
+    if isinstance(result, Exception):
+        raise result
+    return result
+
+
+previous_push_schedules.cache_clear = _previous_push_schedules_results.clear
+
+
+def _fetch_previous_push_schedules(repository, branch, push_id, num_pushes):
+    start_push_id = push_id - num_pushes + 1
+    # The pushlog can fail, or miss some of the pushes.
+    try:
+        push_data = get_push_data(repository, branch, start_push_id, push_id - 1)
+        revs = [
+            push_data[previous_push_id]["changesets"][-1]
+            for previous_push_id in range(start_push_id, push_id)
+        ]
+    except (TypeError, KeyError, IndexError) as e:
+        raise PushDataUnavailable(
+            f"Failed to retrieve pushes {start_push_id}-{push_id - 1}"
+        ) from e
+
+    data = {}
+    for rev in revs:
+        merge_bugbug_replies(
+            data,
+            _fetch_push_schedules(
+                branch, rev, get_session(), write_perfherder_data=False
+            ),
+        )
+    return data
 
 
 def get_push_schedules(params, num_pushes=1):
@@ -443,29 +517,18 @@ def get_push_schedules(params, num_pushes=1):
 
     Raises PushDataUnavailable if the pushes before it couldn't be retrieved.
     """
-    current_push_id = int(params["pushlog_id"])
-    start_push_id = current_push_id - num_pushes + 1
-    if num_pushes != 1:
-        push_data = get_push_data(
-            params["head_repository"],
-            params["project"],
-            start_push_id,
-            current_push_id - 1,
-        )
-        if push_data is None:
-            raise PushDataUnavailable(
-                f"Failed to retrieve pushes {start_push_id}-{current_push_id - 1}"
-            )
-
     data = {}
-    for push_id in range(start_push_id, current_push_id + 1):
-        if push_id == current_push_id:
-            rev = params["head_rev"]
-        else:
-            rev = push_data[push_id]["changesets"][-1]
-
-        merge_bugbug_replies(data, push_schedules(params["project"], rev))
-
+    if num_pushes != 1:
+        merge_bugbug_replies(
+            data,
+            previous_push_schedules(
+                params["head_repository"],
+                params["project"],
+                int(params["pushlog_id"]),
+                num_pushes,
+            ),
+        )
+    merge_bugbug_replies(data, push_schedules(params["project"], params["head_rev"]))
     return data
 
 
