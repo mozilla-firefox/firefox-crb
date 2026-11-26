@@ -48,6 +48,23 @@ class TabsTrayStoreReducerTest {
     }
 
     @Test
+    fun `WHEN UpdateIsSignedIn THEN isSignedIn is updated`() {
+        val signedInState =
+            TabsTrayReducer.reduce(
+                TabsTrayState(sync = TabsTrayState.SyncState(isSignedIn = false)),
+                TabsTrayAction.UpdateIsSignedIn(isSignedIn = true),
+            )
+        assertTrue(signedInState.sync.isSignedIn)
+
+        val signedOutState =
+            TabsTrayReducer.reduce(
+                signedInState,
+                TabsTrayAction.UpdateIsSignedIn(isSignedIn = false),
+            )
+        assertFalse(signedOutState.sync.isSignedIn)
+    }
+
+    @Test
     fun `WHEN PageSelected THEN the selected page is updated`() {
         val resultState =
             TabsTrayReducer.reduce(

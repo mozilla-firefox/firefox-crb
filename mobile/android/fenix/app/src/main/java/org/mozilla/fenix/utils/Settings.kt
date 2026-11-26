@@ -2387,6 +2387,20 @@ class Settings(
             default = false,
         )
 
+    /** [signedInFxaAccount], emitting its current value and then every change. */
+    val signedInFxaAccountFlow: Flow<Boolean> = callbackFlow {
+        val key = appContext.getPreferenceKey(R.string.pref_key_fxa_signed_in)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == null || changedKey == key) {
+                trySend(signedInFxaAccount)
+            }
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        send(signedInFxaAccount)
+        awaitClose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+        .distinctUntilChanged()
+
     /**
      * Storing the user choice from the "Payment methods" settings for whether save and autofill cards should be enabled
      * or not. If set to `true` when the user focuses on credit card fields in the webpage an Android prompt letting her
