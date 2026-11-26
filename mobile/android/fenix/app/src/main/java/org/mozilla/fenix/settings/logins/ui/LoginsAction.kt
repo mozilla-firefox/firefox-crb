@@ -45,6 +45,12 @@ internal sealed class ImportAction : LoginsAction {
     internal data object ImportCancelled : ImportAction()
 }
 
+/** [LoginsAction]s related to the snackbar. */
+internal sealed class SnackbarAction : LoginsAction {
+    /** [LoginsAction] dispatched when the snackbar was dismissed. */
+    data object Dismissed : SnackbarAction()
+}
+
 internal data object LearnMoreAboutSync : LoginsAction
 
 internal data class LoginClicked(val item: LoginItem) : LoginsAction

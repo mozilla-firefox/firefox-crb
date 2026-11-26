@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.settings.logins.ui
 
+import mozilla.components.concept.fileimporter.FileImporterError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -599,5 +600,42 @@ class LoginsReducerTest {
         val state = LoginsState.default.copy(importPasswordsMenuShown = true)
         val result = loginsReducer(state, ImportPasswordsOverflowMenuDismissed)
         assertFalse(result.importPasswordsMenuShown)
+    }
+
+    @Test
+    fun `WHEN import fails THEN login snackbar state is failed import as well`() {
+        val result = loginsReducer(LoginsState.default, ImportAction.ImportFailed(FileImporterError.ReadError))
+
+        assertEquals(LoginsSnackbarState.ImportFailed(FileImporterError.ReadError), result.loginsSnackbarState)
+    }
+
+    @Test
+    fun `WHEN import succeeds THEN login snackbar state is succeeded as well`() {
+        val result = loginsReducer(LoginsState.default, ImportAction.ImportSucceeded(count = 3))
+
+        assertEquals(LoginsSnackbarState.ImportSucceeded, result.loginsSnackbarState)
+    }
+
+    @Test
+    fun `WHEN snackbar is dismissed THEN login snackbar state is reset`() {
+        val state =
+            LoginsState.default.copy(
+                loginsSnackbarState = LoginsSnackbarState.ImportFailed(FileImporterError.ReadError)
+            )
+
+        val result = loginsReducer(state, SnackbarAction.Dismissed)
+
+        assertEquals(LoginsSnackbarState.None, result.loginsSnackbarState)
+    }
+
+    @Test
+    fun `WHEN import starts or is cancelled THEN the snackbar state is unchanged`() {
+        val state =
+            LoginsState.default.copy(
+                loginsSnackbarState = LoginsSnackbarState.ImportFailed(FileImporterError.ReadError)
+            )
+
+        assertEquals(state, loginsReducer(state, ImportAction.ImportStarted))
+        assertEquals(state, loginsReducer(state, ImportAction.ImportCancelled))
     }
 }
