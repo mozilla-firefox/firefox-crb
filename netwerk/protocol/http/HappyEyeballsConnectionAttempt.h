@@ -301,9 +301,6 @@ class HappyEyeballsConnectionAttempt final : public ConnectionAttempt,
   nsresult CheckLNA(nsISocketTransport* aTransport);
   nsresult CheckLNAForAddr(const NetAddr& aAddr);
 
-  // Timer
-  void SetupTimer(uint64_t aTimeoutUs);
-
   // Entry actions for the terminal states; each ends by Transitioning to Done.
   void EnterSucceeded();
   void EnterFailed(happy_eyeballs::FailureReason aReason);
@@ -352,7 +349,6 @@ class HappyEyeballsConnectionAttempt final : public ConnectionAttempt,
   // prevents that fallback attempt from triggering a second retry.
   bool mRetryWithoutTRR = false;
 
-  nsCOMPtr<nsITimer> mTimer;
   WeakPtr<ConnectionEntry> mEntry;
   State mState{State::Init};
   nsresult mLastConnectionError = NS_OK;
