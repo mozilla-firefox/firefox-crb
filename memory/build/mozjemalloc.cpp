@@ -293,7 +293,7 @@ class ArenaCollection {
   }
 
   // The requested arena must exist.
-  inline arena_t* GetPrivateArena(arena_id_t aArenaId) MOZ_EXCLUDES(mLock);
+  inline arena_t* GetPrivateArena(arena_id_t aArenaId);
 
   arena_t* CreateArena(bool aIsPrivate, arena_params_t* aParams)
       MOZ_EXCLUDES(mLock);
