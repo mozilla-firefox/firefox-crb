@@ -24,6 +24,12 @@ class RemoteQuotaObjectParent : public PRemoteQuotaObjectParent {
 
   void ActorDestroy(ActorDestroyReason aWhy) override;
 
+  // Stops remote updates and reconciles usage without closing the actor.
+  nsresult FinishUsageAccounting();
+
+  // Stops all accounting after the owner has discarded the file's usage.
+  void AbandonUsageAccounting();
+
  private:
   virtual ~RemoteQuotaObjectParent();
 
@@ -32,6 +38,9 @@ class RemoteQuotaObjectParent : public PRemoteQuotaObjectParent {
   RefPtr<CanonicalQuotaObject> mCanonicalQuotaObject;
 
   nsCOMPtr<RemoteQuotaObjectParentTracker> mTracker;
+
+  bool mAcceptSizeUpdates = true;
+  bool mUsageAccountingFinished = false;
 };
 
 }  // namespace mozilla::dom::quota

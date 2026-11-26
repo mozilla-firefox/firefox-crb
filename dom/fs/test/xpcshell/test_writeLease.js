@@ -76,6 +76,12 @@ add_task(async function testSteps() {
 
   await settle();
 
+  await Assert.rejects(
+    writable.close(),
+    /TypeError/,
+    "Closing an already closed stream is rejected"
+  );
+
   const readBack = await (await file.getFile()).text();
   Assert.equal(readBack, "hello world", "Data written");
 

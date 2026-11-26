@@ -9,12 +9,25 @@
 #include "mozilla/dom/FileSystemLog.h"
 #include "mozilla/dom/FileSystemManagerParent.h"
 #include "mozilla/dom/quota/RemoteQuotaObjectParent.h"
+#include "mozilla/dom/quota/ResultExtensions.h"
 
 namespace mozilla::dom {
 
 class FileSystemWritableFileStreamParent::FileSystemWritableFileStreamCallbacks
     : public FileSystemStreamCallbacks {
  public:
+  nsresult FinishUsageAccounting() {
+    return mRemoteQuotaObjectParent
+               ? mRemoteQuotaObjectParent->FinishUsageAccounting()
+               : NS_OK;
+  }
+
+  void AbandonUsageAccounting() {
+    if (mRemoteQuotaObjectParent) {
+      mRemoteQuotaObjectParent->AbandonUsageAccounting();
+    }
+  }
+
   void CloseRemoteQuotaObjectParent() {
     if (mRemoteQuotaObjectParent) {
       mRemoteQuotaObjectParent->Close();
@@ -54,6 +67,8 @@ void FileSystemWritableFileStreamParent::ActorDestroy(ActorDestroyReason aWhy) {
   if (!IsClosed()) {
     Close(/* aAbort */ true);
   }
+
+  mWriteLease = quota::WriteLease();
 }
 
 nsIInterfaceRequestor*
@@ -74,15 +89,37 @@ void FileSystemWritableFileStreamParent::Close(bool aAbort) {
 
   mClosed.Flip();
 
+  // Reconcile even on abort. CanonicalQuotaObject charges OriginInfo for the
+  // child's last reported size. UnlockShared records the actual size in Usages
+  // through UpdateUsageInDatabase, which does not update the quota object.
+  // MergeFileId then subtracts that size via DecreaseUsageForClient.
+  // Reconciling with CheckFileAfterClose first makes the amounts agree, so
+  // abort removes the temporary file's charge without leaving a size mismatch.
+  const nsresult rv =
+      mStreamCallbacks ? mStreamCallbacks->FinishUsageAccounting() : NS_OK;
+  QM_WARNONLY_TRY(MOZ_TO_RESULT(rv));
+
+  bool discarded = false;
   if (mIsExclusive) {
     mManager->DataManagerStrongRef()->UnlockExclusive(mEntryId);
   } else {
-    mManager->DataManagerStrongRef()->UnlockShared(mEntryId, mTemporaryFileId,
-                                                   aAbort);
+    discarded = mManager->DataManagerStrongRef()->UnlockShared(
+        mEntryId, mTemporaryFileId, aAbort);
   }
 
-  // Unlocking has updated the usage, nothing is written anymore.
-  mWriteLease = quota::WriteLease();
+  if (discarded && mStreamCallbacks) {
+    // TODO: Bug 2092188 - If the temporary file was already gone, the quota
+    // object still holds the child's last reported size and the abort cleanup
+    // subtracted nothing, so the origin stays over-counted until the next
+    // rescan. Reconciling the quota object to the tracked usage, without
+    // reading the file, would close that gap.
+    mStreamCallbacks->AbandonUsageAccounting();
+  }
+
+  // Retry failed reconciliation under this lease unless abort discarded usage.
+  if (NS_SUCCEEDED(rv) || discarded) {
+    mWriteLease = quota::WriteLease();
+  }
 }
 
 }  // namespace mozilla::dom
