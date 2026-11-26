@@ -531,13 +531,12 @@ void nsContentSink::PrefetchDNS(const nsAString& aHref) {
 
   nsAutoCString hostname;
   uri->GetAsciiHost(hostname);
-  bool isHttps = uri->SchemeIs("https");
 
   if (!hostname.IsEmpty() && HTMLDNSPrefetch::IsAllowed(mDocument)) {
     OriginAttributes oa;
     StoragePrincipalHelper::GetOriginAttributesForNetworkState(mDocument, oa);
 
-    HTMLDNSPrefetch::Prefetch(hostname, isHttps, oa,
+    HTMLDNSPrefetch::Prefetch(hostname, oa,
                               mDocument->GetChannel()->GetTRRMode(),
                               HTMLDNSPrefetch::Priority::Low);
   }
