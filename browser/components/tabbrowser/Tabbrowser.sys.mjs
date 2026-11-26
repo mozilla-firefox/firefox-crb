@@ -4281,6 +4281,23 @@ export class Tabbrowser {
     }
   }
 
+  /**
+   * Shows or hides the footer with the page address in the corner of a tab's
+   * panel, for when the address bar doesn't show the page address, e.g. when a
+   * page loads while the user is editing the address bar value.
+   *
+   * @param {MozTabbrowserTab} tab
+   * @param {boolean} show
+   */
+  toggleAddressFooter(tab, show) {
+    if (show) {
+      this.#insertAddressFooter(tab);
+    }
+    this.document
+      .getElementById(tab.linkedPanel)
+      ?.toggleAttribute("addressfooter", show);
+  }
+
   openSplitViewMenu(anchorElement) {
     const menu = this.document.getElementById("split-view-menu");
     const isFromFooter =
