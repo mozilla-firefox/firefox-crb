@@ -392,6 +392,15 @@ class ScriptLoader final : public JS::loader::ScriptLoaderInterface {
   MOZ_CAN_RUN_SCRIPT void ParsingComplete(bool aTerminated);
 
   /**
+   * Set while the parser is terminated because a navigation is about to
+   * replace the document. Only the scripts owned by the parser are cancelled
+   * then; the others keep loading until the document goes away.
+   */
+  void SetKeepScriptsNotOwnedByParser(bool aKeep) {
+    mKeepScriptsNotOwnedByParser = aKeep;
+  }
+
+  /**
    * Notifies the script loader that the checkpoint to begin execution of defer
    * scripts has been reached. This is either the end of of the document parse
    * or the end of loading of parser-inserted stylesheets, whatever happens
@@ -923,6 +932,12 @@ class ScriptLoader final : public JS::loader::ScriptLoaderInterface {
    */
   void CancelAndClearScriptLoadRequests();
 
+  /**
+   * Cancel and remove the requests that only the parser would have run: the
+   * parser-blocking script, deferred and XSLT scripts, and preloads.
+   */
+  void CancelAndClearParserOwnedScriptLoadRequests();
+
   Document* mDocument;  // [WEAK]
   nsCOMArray<nsIScriptLoaderObserver> mObservers;
 
@@ -1057,6 +1072,7 @@ class ScriptLoader final : public JS::loader::ScriptLoaderInterface {
   bool mGiveUpDiskCaching = false;
   bool mContinueParsingDocumentAfterCurrentScript = false;
   bool mHadFCPDoNotUseDirectly = false;
+  bool mKeepScriptsNotOwnedByParser = false;
 
   TimeDuration mMainThreadParseTime;
 
