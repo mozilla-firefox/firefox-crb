@@ -82,15 +82,6 @@ http://creativecommons.org/licenses/publicdomain/
       await setPushPermission(test.action);
       var state = await registration.pushManager.permissionState();
       is(state, test.state, JSON.stringify(test));
-      try {
-        await SpecialPowers.pushPrefEnv({ set: [
-          ["dom.push.testing.ignorePermission", true]] });
-        state = await registration.pushManager.permissionState();
-        is(state, "granted", `Should ignore ${
-          test.action} if the override pref is set`);
-      } finally {
-        await SpecialPowers.flushPrefEnv();
-      }
     }
   });
 

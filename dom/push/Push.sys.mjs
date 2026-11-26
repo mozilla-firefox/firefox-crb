@@ -99,13 +99,6 @@ export class Push {
         );
       };
 
-      if (
-        Services.prefs.getBoolPref("dom.push.testing.ignorePermission", false)
-      ) {
-        resolve();
-        return;
-      }
-
       this.#requestPermission(
         hasValidTransientUserGestureActivation,
         resolve,
@@ -209,11 +202,6 @@ export class Push {
     if (permission == Ci.nsIPermissionManager.ALLOW_ACTION) {
       return permission;
     }
-    try {
-      if (Services.prefs.getBoolPref("dom.push.testing.ignorePermission")) {
-        permission = Ci.nsIPermissionManager.ALLOW_ACTION;
-      }
-    } catch (e) {}
     return permission;
   }
 

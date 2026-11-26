@@ -1569,8 +1569,7 @@ export var PushService = {
       }
       if (record.hasPermission()) {
         // "Clear Recent History" and the Forget button remove permissions
-        // before clearing registrations, but it's possible for the worker to
-        // resubscribe if the "dom.push.testing.ignorePermission" pref is set.
+        // before clearing registrations.
         this._notifySubscriptionChangeObservers(record);
       }
       if (!record.isExpired()) {

@@ -6,7 +6,6 @@
 
 #include "mozilla/Base64.h"
 #include "mozilla/Components.h"
-#include "mozilla/Preferences.h"
 #include "mozilla/dom/PermissionStatusBinding.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/PromiseWorkerProxy.h"
@@ -75,8 +74,7 @@ nsresult GetPermissionState(nsIPrincipal* aPrincipal, PermissionState& aState) {
     return rv;
   }
 
-  if (permission == nsIPermissionManager::ALLOW_ACTION ||
-      Preferences::GetBool("dom.push.testing.ignorePermission", false)) {
+  if (permission == nsIPermissionManager::ALLOW_ACTION) {
     aState = PermissionState::Granted;
   } else if (permission == nsIPermissionManager::DENY_ACTION) {
     aState = PermissionState::Denied;
