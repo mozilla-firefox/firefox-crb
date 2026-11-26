@@ -78,7 +78,7 @@ export function showEditorEditBreakpointContextMenu(event, breakpoint) {
     );
     items.push(logPointItem(breakpoint, selectedLocation, dispatch));
 
-    showMenu(event, items, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, items);
   };
 }
 
@@ -90,7 +90,7 @@ export function showEditorCreateBreakpointContextMenu(
   return async ({ dispatch }) => {
     const items = createBreakpointItems(location, lineText, dispatch);
 
-    showMenu(event, items, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, items);
   };
 }
 
@@ -112,8 +112,7 @@ export function createBreakpointItems(location, lineText, dispatch) {
 
 const addBreakpointItem = (location, dispatch) => ({
   id: "node-menu-add-breakpoint",
-  label: L10N.getStr("editor.addBreakpoint"),
-  accesskey: L10N.getStr("shortcuts.toggleBreakpoint.accesskey"),
+  l10nID: "debugger-editor-add-breakpoint",
   disabled: false,
   click: () => dispatch(addBreakpoint(location)),
   accelerator: stringifyFromElectronKey(L10N.getStr("toggleBreakpoint.key")),
@@ -121,8 +120,7 @@ const addBreakpointItem = (location, dispatch) => ({
 
 const removeBreakpointItem = (breakpoint, dispatch) => ({
   id: "node-menu-remove-breakpoint",
-  label: L10N.getStr("editor.removeBreakpoint"),
-  accesskey: L10N.getStr("shortcuts.toggleBreakpoint.accesskey"),
+  l10nID: "debugger-editor-remove-breakpoint",
   disabled: false,
   click: () => dispatch(removeBreakpoint(breakpoint)),
   accelerator: stringifyFromElectronKey(L10N.getStr("toggleBreakpoint.key")),
@@ -130,22 +128,20 @@ const removeBreakpointItem = (breakpoint, dispatch) => ({
 
 const addConditionalBreakpointItem = (location, dispatch) => ({
   id: "node-menu-add-conditional-breakpoint",
-  label: L10N.getStr("editor.addConditionBreakpoint"),
+  l10nID: "debugger-editor-add-condition",
   accelerator: stringifyFromElectronKey(
     L10N.getStr("toggleCondPanel.breakpoint.key")
   ),
-  accesskey: L10N.getStr("editor.addConditionBreakpoint.accesskey"),
   disabled: false,
   click: () => dispatch(openConditionalPanel(location)),
 });
 
 const editConditionalBreakpointItem = (location, dispatch) => ({
   id: "node-menu-edit-conditional-breakpoint",
-  label: L10N.getStr("editor.editConditionBreakpoint"),
+  l10nID: "debugger-editor-edit-condition",
   accelerator: stringifyFromElectronKey(
     L10N.getStr("toggleCondPanel.breakpoint.key")
   ),
-  accesskey: L10N.getStr("editor.addConditionBreakpoint.accesskey"),
   disabled: false,
   click: () => dispatch(openConditionalPanel(location)),
 });
@@ -161,8 +157,7 @@ const conditionalBreakpointItem = (breakpoint, location, dispatch) => {
 
 const addLogPointItem = (location, dispatch) => ({
   id: "node-menu-add-log-point",
-  label: L10N.getStr("editor.addLogPoint"),
-  accesskey: L10N.getStr("editor.addLogPoint.accesskey"),
+  l10nID: "debugger-add-log-point",
   disabled: false,
   click: () => dispatch(openConditionalPanel(location, true)),
   accelerator: stringifyFromElectronKey(
@@ -172,8 +167,7 @@ const addLogPointItem = (location, dispatch) => ({
 
 const editLogPointItem = (location, dispatch) => ({
   id: "node-menu-edit-log-point",
-  label: L10N.getStr("editor.editLogPoint"),
-  accesskey: L10N.getStr("editor.editLogPoint.accesskey"),
+  l10nID: "debugger-edit-log-point",
   disabled: false,
   click: () => dispatch(openConditionalPanel(location, true)),
   accelerator: stringifyFromElectronKey(
@@ -197,7 +191,6 @@ const toggleDisabledBreakpointItem = (
   dispatch
 ) => {
   return {
-    accesskey: L10N.getStr("editor.disableBreakpoint.accesskey"),
     disabled: isLineBlackboxed(
       blackboxedRangesForSelectedSource,
       breakpoint.location.line,
@@ -207,11 +200,11 @@ const toggleDisabledBreakpointItem = (
     ...(breakpoint.disabled
       ? {
           id: "node-menu-enable-breakpoint",
-          label: L10N.getStr("editor.enableBreakpoint"),
+          l10nID: "debugger-editor-enable-breakpoint",
         }
       : {
           id: "node-menu-disable-breakpoint",
-          label: L10N.getStr("editor.disableBreakpoint"),
+          l10nID: "debugger-editor-disable-breakpoint",
         }),
   };
 };
@@ -221,7 +214,7 @@ const toggleDbgStatementItem = (location, breakpoint, dispatch) => {
     return {
       disabled: false,
       id: "node-menu-enable-dbgStatement",
-      label: L10N.getStr("breakpointMenuItem.enabledbg.label"),
+      l10nID: "debugger-pause-here",
       click: () =>
         dispatch(
           setBreakpointOptions(location, {
@@ -235,7 +228,7 @@ const toggleDbgStatementItem = (location, breakpoint, dispatch) => {
   return {
     disabled: false,
     id: "node-menu-disable-dbgStatement",
-    label: L10N.getStr("breakpointMenuItem.disabledbg.label"),
+    l10nID: "debugger-never-pause-here",
     click: () =>
       dispatch(
         setBreakpointOptions(location, {
@@ -248,8 +241,7 @@ const toggleDbgStatementItem = (location, breakpoint, dispatch) => {
 // ToDo: Only enable if there are more than one breakpoints on a line?
 const removeBreakpointsOnLineItem = (location, dispatch) => ({
   id: "node-menu-remove-breakpoints-on-line",
-  label: L10N.getStr("breakpointMenuItem.removeAllAtLine.label"),
-  accesskey: L10N.getStr("breakpointMenuItem.removeAllAtLine.accesskey"),
+  l10nID: "debugger-editor-remove-breakpoints-on-line",
   disabled: false,
   click: () =>
     dispatch(removeBreakpointsAtLine(location.source, location.line)),
@@ -262,8 +254,7 @@ const enableBreakpointsOnLineItem = (
   dispatch
 ) => ({
   id: "node-menu-remove-breakpoints-on-line",
-  label: L10N.getStr("breakpointMenuItem.enableAllAtLine.label"),
-  accesskey: L10N.getStr("breakpointMenuItem.enableAllAtLine.accesskey"),
+  l10nID: "debugger-editor-enable-breakpoints-on-line",
   disabled: isLineBlackboxed(
     blackboxedRangesForSelectedSource,
     location.line,
@@ -275,8 +266,7 @@ const enableBreakpointsOnLineItem = (
 
 const disableBreakpointsOnLineItem = (location, dispatch) => ({
   id: "node-menu-remove-breakpoints-on-line",
-  label: L10N.getStr("breakpointMenuItem.disableAllAtLine.label"),
-  accesskey: L10N.getStr("breakpointMenuItem.disableAllAtLine.accesskey"),
+  l10nID: "debugger-editor-disable-breakpoints-on-line",
   disabled: false,
   click: () =>
     dispatch(disableBreakpointsAtLine(location.source, location.line)),

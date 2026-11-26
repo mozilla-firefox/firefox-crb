@@ -2196,9 +2196,12 @@ async function openContextMenuSubmenu(dbg, selector) {
 }
 
 async function assertContextMenuLabel(dbg, selector, expectedLabel) {
-  const item = await waitFor(() => findContextMenu(dbg, selector));
+  const item = await waitFor(() => {
+    const el = findContextMenu(dbg, selector);
+    return el?.label == expectedLabel ? el : null;
+  });
   is(
-    item.label,
+    item?.label,
     expectedLabel,
     "The label of the context menu item shown to the user"
   );

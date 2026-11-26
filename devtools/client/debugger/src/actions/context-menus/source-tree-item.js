@@ -45,12 +45,6 @@ export function showSourceTreeItemContextMenu(
   isOverridden
 ) {
   return async ({ dispatch, getState, panel }) => {
-    const copySourceUri2Label = L10N.getStr("copySourceUri2");
-    const copySourceUri2Key = L10N.getStr("copySourceUri2.accesskey");
-    const setDirectoryRootLabel = L10N.getStr("setDirectoryRoot.label");
-    const setDirectoryRootKey = L10N.getStr("setDirectoryRoot.accesskey");
-    const removeDirectoryRootLabel = L10N.getStr("removeDirectoryRoot.label");
-
     const menuOptions = [];
 
     const state = getState();
@@ -63,33 +57,31 @@ export function showSourceTreeItemContextMenu(
       const { source } = item;
       const copySourceUri2 = {
         id: "node-menu-copy-source",
-        label: copySourceUri2Label,
-        accesskey: copySourceUri2Key,
+        l10nID: "debugger-copy-source-uri",
         disabled: false,
         click: () => copyToTheClipboard(source.url),
       };
 
-      const ignoreStr = item.isBlackBoxed ? "unignore" : "ignore";
       const blackBoxMenuItem = {
         id: "node-menu-blackbox",
-        label: L10N.getStr(`ignoreContextItem.${ignoreStr}`),
-        accesskey: L10N.getStr(`ignoreContextItem.${ignoreStr}.accesskey`),
+        l10nID: item.isBlackBoxed
+          ? "debugger-unignore-source"
+          : "debugger-ignore-source",
         disabled: isSourceOnIgnoreList || !shouldBlackbox(source),
         click: () => dispatch(toggleBlackBox(source)),
       };
       const downloadFileItem = {
         id: "node-menu-download-file",
-        label: L10N.getStr("downloadFile.label"),
-        accesskey: L10N.getStr("downloadFile.accesskey"),
+        l10nID: "debugger-download-file",
         disabled: false,
         click: () => saveLocalFile(dispatch, source),
       };
 
-      const overrideStr = !isOverridden ? "override" : "removeOverride";
       const overridesItem = {
         id: "node-menu-overrides",
-        label: L10N.getStr(`overridesContextItem.${overrideStr}`),
-        accesskey: L10N.getStr(`overridesContextItem.${overrideStr}.accesskey`),
+        l10nID: isOverridden
+          ? "debugger-source-tree-remove-override"
+          : "debugger-source-tree-add-override",
         // Network overrides are disabled for original files.
         disabled: source.isOriginal,
         // Network overrides are disabled for remote debugging (bug 1881441).
@@ -113,15 +105,14 @@ export function showSourceTreeItemContextMenu(
       if (projectRoot == item.uniquePath) {
         menuOptions.push({
           id: "node-remove-directory-root",
-          label: removeDirectoryRootLabel,
+          l10nID: "debugger-source-tree-remove-directory-root",
           disabled: false,
           click: () => dispatch(clearProjectDirectoryRoot()),
         });
       } else {
         menuOptions.push({
           id: "node-set-directory-root",
-          label: setDirectoryRootLabel,
-          accesskey: setDirectoryRootKey,
+          l10nID: "debugger-source-tree-set-directory-root",
           disabled: false,
           click: () =>
             dispatch(
@@ -137,7 +128,7 @@ export function showSourceTreeItemContextMenu(
       addBlackboxAllOption(dispatch, state, menuOptions, item, depth);
     }
 
-    showMenu(event, menuOptions, { accesskeyConflictsBug: 2073896 });
+    showMenu(event, menuOptions);
   };
 }
 
@@ -208,25 +199,25 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
   } = getBlackBoxSourcesGroups(state, item);
   const projectRoot = getProjectDirectoryRoot(state);
 
-  let blackBoxInsideMenuItemLabel;
-  let blackBoxOutsideMenuItemLabel;
+  let blackBoxInsideMenuItemL10nID;
+  let blackBoxOutsideMenuItemL10nID;
   if (depth === 0 || (depth === 1 && projectRoot === "")) {
-    blackBoxInsideMenuItemLabel = allInsideBlackBoxed
-      ? L10N.getStr("unignoreAllInGroup.label")
-      : L10N.getStr("ignoreAllInGroup.label");
+    blackBoxInsideMenuItemL10nID = allInsideBlackBoxed
+      ? "debugger-source-tree-unignore-in-group"
+      : "debugger-source-tree-ignore-in-group";
     if (sourcesOutside.length) {
-      blackBoxOutsideMenuItemLabel = allOutsideBlackBoxed
-        ? L10N.getStr("unignoreAllOutsideGroup.label")
-        : L10N.getStr("ignoreAllOutsideGroup.label");
+      blackBoxOutsideMenuItemL10nID = allOutsideBlackBoxed
+        ? "debugger-source-tree-unignore-outside-group"
+        : "debugger-source-tree-ignore-outside-group";
     }
   } else {
-    blackBoxInsideMenuItemLabel = allInsideBlackBoxed
-      ? L10N.getStr("unignoreAllInDir.label")
-      : L10N.getStr("ignoreAllInDir.label");
+    blackBoxInsideMenuItemL10nID = allInsideBlackBoxed
+      ? "debugger-source-tree-unignore-in-directory"
+      : "debugger-source-tree-ignore-in-directory";
     if (sourcesOutside.length) {
-      blackBoxOutsideMenuItemLabel = allOutsideBlackBoxed
-        ? L10N.getStr("unignoreAllOutsideDir.label")
-        : L10N.getStr("ignoreAllOutsideDir.label");
+      blackBoxOutsideMenuItemL10nID = allOutsideBlackBoxed
+        ? "debugger-source-tree-unignore-outside-directory"
+        : "debugger-source-tree-ignore-outside-directory";
     }
   }
 
@@ -234,7 +225,7 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
     id: allInsideBlackBoxed
       ? "node-unblackbox-all-inside"
       : "node-blackbox-all-inside",
-    label: blackBoxInsideMenuItemLabel,
+    l10nID: blackBoxInsideMenuItemL10nID,
     disabled: false,
     click: () => dispatch(blackBoxSources(sourcesInside, !allInsideBlackBoxed)),
   };
@@ -242,14 +233,14 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
   if (sourcesOutside.length) {
     menuOptions.push({
       id: "node-blackbox-all",
-      label: L10N.getStr("ignoreAll.label"),
+      l10nID: "debugger-source-tree-ignore",
       submenu: [
         blackBoxInsideMenuItem,
         {
           id: allOutsideBlackBoxed
             ? "node-unblackbox-all-outside"
             : "node-blackbox-all-outside",
-          label: blackBoxOutsideMenuItemLabel,
+          l10nID: blackBoxOutsideMenuItemL10nID,
           disabled: false,
           click: () =>
             dispatch(blackBoxSources(sourcesOutside, !allOutsideBlackBoxed)),
@@ -264,14 +255,14 @@ function addBlackboxAllOption(dispatch, state, menuOptions, item, depth) {
 function addCollapseExpandAllOptions(menuOptions, item, setExpanded) {
   menuOptions.push({
     id: "node-menu-collapse-all",
-    label: L10N.getStr("collapseAll.label"),
+    l10nID: "debugger-source-tree-collapse-all",
     disabled: false,
     click: () => setExpanded(item, false, true),
   });
 
   menuOptions.push({
     id: "node-menu-expand-all",
-    label: L10N.getStr("expandAll.label"),
+    l10nID: "debugger-source-tree-expand-all",
     disabled: false,
     click: () => setExpanded(item, true, true),
   });

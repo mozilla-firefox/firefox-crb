@@ -4,6 +4,7 @@
 
 const Menu = require("resource://devtools/client/framework/menu.js");
 const MenuItem = require("resource://devtools/client/framework/menu-item.js");
+const DevToolsUtils = require("resource://devtools/shared/DevToolsUtils.js");
 
 export function showMenu(evt, items, { accesskeyConflictsBug } = {}) {
   if (items.length === 0) {
@@ -19,6 +20,9 @@ export function showMenu(evt, items, { accesskeyConflictsBug } = {}) {
       menu.append(menuItem);
     });
 
+  DevToolsUtils.getTopWindow(window.parent).MozXULElement.insertFTLIfNeeded(
+    "devtools/client/debugger.ftl"
+  );
   menu.popup(evt.screenX, evt.screenY, window.parent.document);
 }
 

@@ -109,9 +109,9 @@ export function showTabContextMenu(event, source) {
       {
         item: {
           ...tabMenuItems.toggleBlackBox,
-          label: isBlackBoxed
-            ? L10N.getStr("ignoreContextItem.unignore")
-            : L10N.getStr("ignoreContextItem.ignore"),
+          l10nID: isBlackBoxed
+            ? "debugger-tab-unignore-source"
+            : "debugger-ignore-source",
           disabled: isSourceOnIgnoreList || !shouldBlackbox(source),
           click: () => dispatch(toggleBlackBox(source)),
         },
@@ -125,6 +125,6 @@ export function showTabContextMenu(event, source) {
       },
     ];
 
-    showMenu(event, buildMenu(items), { accesskeyConflictsBug: 2073896 });
+    showMenu(event, buildMenu(items));
   };
 }
