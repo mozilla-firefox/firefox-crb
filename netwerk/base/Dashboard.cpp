@@ -35,6 +35,8 @@
 #include "nsSocketTransportService2.h"
 #include "nsThreadUtils.h"
 #include "nsURLHelper.h"
+#include "ssl.h"
+#include "sslexp.h"
 
 using mozilla::AutoSafeJSContext;
 using mozilla::dom::Sequence;
@@ -1308,6 +1310,18 @@ static nsresult SetCertDERChain(
   return NS_OK;
 }
 
+// QUIC peer IDs come from CommonSocketControl::GetPeerId; only
+// NSSSocketControl::GetPeerId adds "tlsflags0x...:" after its flag prefixes.
+static bool IsQuicPeerId(const nsACString& aPeerId) {
+  size_t start = 0;
+  for (const auto& prefix : {"anon:"_ns, "private:"_ns, "beConservative:"_ns}) {
+    if (StringBeginsWith(Substring(aPeerId, start), prefix)) {
+      start += prefix.Length();
+    }
+  }
+  return !StringBeginsWith(Substring(aPeerId, start), "tlsflags0x"_ns);
+}
+
 nsresult Dashboard::GetSSLTokensCache(SSLTokensCacheData* aData) {
   RefPtr<SSLTokensCacheData> data = aData;
   AutoSafeJSContext cx;
@@ -1348,6 +1362,19 @@ nsresult Dashboard::GetSSLTokensCache(SSLTokensCacheData* aData) {
 
     entry->mTokenLength = token.Length();
     entry->mDecompressedLength = decompressedLength;
+    if (IsQuicPeerId(rec.key)) {
+      // neqo_glue only negotiates "h3".
+      entry->mAlpn.AssignLiteral(u"h3");
+    } else if (SSLResumptionTokenInfo tokenInfo;
+               SSL_GetResumptionTokenInfoWithFlags(
+                   token.Elements(), token.Length(), &tokenInfo,
+                   sizeof(tokenInfo),
+                   SSL_RESUMPTION_TOKEN_INFO_NO_PEER_CERT) == SECSuccess) {
+      CopyUTF8toUTF16(
+          AsChars(Span(tokenInfo.alpnSelection, tokenInfo.alpnSelectionLen)),
+          entry->mAlpn);
+      SSL_DestroyResumptionTokenInfo(&tokenInfo);
+    }
     entry->mEvStatus = info.mEVStatus == psm::EVStatus::EV;
     entry->mCertificateTransparencyStatus = info.mCertificateTransparencyStatus;
     entry->mBuiltInRoot =

@@ -20,46 +20,119 @@ about-networking-alt-svc-validated = Validated
 about-networking-alt-svc-ttl = TTL
 about-networking-alt-svc-origin-attributes-suffix = Isolation Key
 about-networking-ssl-tokens = TLS Tokens
-# $count (Number) - Number of cached TLS resumption tokens
-about-networking-ssl-tokens-summary-count = { $count ->
-    [one] { $count } token
-   *[other] { $count } tokens
-}
+
+## Summary above the TLS tokens table: each "-term" message labels the
+## messages that follow it.
+
+about-networking-ssl-tokens-summary-tokens-term = Tokens
 # $count (Number) - Number of cached tokens that have already expired
-about-networking-ssl-tokens-summary-expired = { $count ->
-    [one] ({ $count } expired)
-   *[other] ({ $count } expired)
+about-networking-ssl-tokens-summary-tokens-expired = { $count ->
+    [one] { $count } expired
+   *[other] { $count } expired
 }
+about-networking-ssl-tokens-summary-compression-term = Compressed
 # $decompressedLength (Number) - Total uncompressed size in bytes across all tokens
 # $compressedLength (Number) - Total compressed size in bytes across all tokens
+about-networking-ssl-tokens-summary-compression-sizes = { $decompressedLength } → { $compressedLength } B
 # $saved (Number) - Percentage of space saved by compression
-about-networking-ssl-tokens-summary-compression = { $decompressedLength } → { $compressedLength } B ({ $saved }% saved)
-# $used (Number) - Cache size currently in use, in kilobytes
-# $capacity (Number) - Total cache capacity, in kilobytes
-# $percent (Number) - Percentage of the cache capacity currently in use
-about-networking-ssl-tokens-summary-capacity = { $used } / { $capacity } KB ({ $percent }%)
+about-networking-ssl-tokens-summary-compression-saved = { $saved }% saved
+about-networking-ssl-tokens-summary-certs-term = Certs
 # Certificates are stored inside every cached token, so the same certificate is
 # held many times over.
 # $references (Number) - Total number of stored certificate copies
 # $totalBytes (Number) - Uncompressed size of all stored copies, in bytes
+about-networking-ssl-tokens-summary-certs-stored = { $references } stored ({ $totalBytes } B)
 # $distinct (Number) - Number of unique certificates across all tokens
 # $distinctBytes (Number) - Uncompressed size of the unique certificates, in bytes
-about-networking-ssl-tokens-summary-certs = Stored certs: { $references } ({ $totalBytes } B), distinct: { $distinct } ({ $distinctBytes } B)
+about-networking-ssl-tokens-summary-certs-distinct = { $distinct } distinct ({ $distinctBytes } B)
+about-networking-ssl-tokens-summary-capacity-term = Cache
+# $used (Number) - Cache size currently in use, in kilobytes
+# $capacity (Number) - Total cache capacity, in kilobytes
+about-networking-ssl-tokens-summary-capacity-used = { $used } / { $capacity } KB
+# $percent (Number) - Percentage of the cache capacity currently in use
+about-networking-ssl-tokens-summary-capacity-percent = { $percent }% used
+
+## Each cached token is compressed together with its certificates, so the cache
+## space taken by unexpired tokens and by their certificates is estimated.
+
+# $protocol (String) - Application protocol (ALPN) of the tokens' connections, such as h2 or h3
+# $size (Number) - Estimated cache space taken by unexpired tokens of that protocol, excluding their certificates, in kilobytes
+about-networking-ssl-tokens-capacity-protocol = { $protocol }: ~{ $size } KB
+# $size (Number) - Estimated cache space taken by unexpired tokens of any other or no protocol, excluding their certificates, in kilobytes
+about-networking-ssl-tokens-capacity-other = Other tokens: ~{ $size } KB
+# $size (Number) - Estimated cache space taken by the certificates of unexpired tokens, in kilobytes
+about-networking-ssl-tokens-capacity-certs = Certs: ~{ $size } KB
+# $size (Number) - Cache space taken by expired tokens, including their certificates, in kilobytes
+about-networking-ssl-tokens-capacity-expired = Expired: { $size } KB
+# Tooltip on the cache capacity bar's segment for the unexpired tokens of one protocol.
+# $protocol (String) - Application protocol (ALPN) of the tokens' connections, such as h2 or h3
+# $count (Number) - Number of unexpired tokens of that protocol
+# $bytes (Number) - Estimated compressed cache space taken by those tokens, excluding their certificates, in bytes
+# $percent (Number) - Percentage of the cache capacity taken by this segment
+about-networking-ssl-tokens-capacity-protocol-details =
+  .title = Unexpired { $protocol } tokens: { $count }, ~{ $bytes } B compressed, excluding certs ({ $percent }% of capacity)
+# Tooltip on the cache capacity bar's segment for the unexpired tokens of any other or no protocol.
+# $count (Number) - Number of those unexpired tokens
+# $bytes (Number) - Estimated compressed cache space taken by those tokens, excluding their certificates, in bytes
+# $percent (Number) - Percentage of the cache capacity taken by this segment
+about-networking-ssl-tokens-capacity-other-details =
+  .title = Other unexpired tokens: { $count }, ~{ $bytes } B compressed, excluding certs ({ $percent }% of capacity)
+# Tooltip on the cache capacity bar's certificates segment.
+# $count (Number) - Number of certificates stored in unexpired tokens
+# $bytes (Number) - Estimated compressed cache space taken by those certificates, in bytes
+# $percent (Number) - Percentage of the cache capacity taken by this segment
+about-networking-ssl-tokens-capacity-certs-details =
+  .title = Certs in unexpired tokens: { $count }, ~{ $bytes } B compressed ({ $percent }% of capacity)
+# Tooltip on the cache capacity bar's expired tokens segment.
+# $count (Number) - Number of expired tokens
+# $bytes (Number) - Compressed cache space taken by expired tokens, including their certificates, in bytes
+# $percent (Number) - Percentage of the cache capacity taken by this segment
+about-networking-ssl-tokens-capacity-expired-details =
+  .title = Expired tokens: { $count }, { $bytes } B compressed, including certs ({ $percent }% of capacity)
+
+##
+
+about-networking-ssl-tokens-show-expired = Show expired tokens
+about-networking-ssl-tokens-expand-tokens = Expand all tokens
 about-networking-ssl-tokens-partition-key = Partition Key
-about-networking-ssl-tokens-tokens-column = Tokens
 about-networking-ssl-tokens-expires = Expires
 about-networking-ssl-tokens-certificate = Cert
-# $count (Number) - Number of tokens sharing this row's host and certificate
-about-networking-ssl-tokens-token-list = { $count ->
+# $count (Number) - Number of unexpired tokens sharing this row's host and certificate
+about-networking-ssl-tokens-unexpired-count = { $count ->
     [one] { $count } token
    *[other] { $count } tokens
 }
+# $count (Number) - Number of expired tokens sharing this row's host and certificate
+about-networking-ssl-tokens-expired-count = { $count ->
+    [one] { $count } expired
+   *[other] { $count } expired
+}
+# $count (Number) - Number of this row's tokens that were restored from storage at startup
+about-networking-ssl-tokens-restored-count = { $count ->
+    [one] { $count } restored
+   *[other] { $count } restored
+}
+# $tokenLength (Number) - Total size in bytes of this row's raw TLS resumption tokens
+# $decompressedLength (Number) - Total size in bytes of this row's tokens before compression
+# $compressedLength (Number) - Total size in bytes of this row's tokens after compression
+# $saved (Number) - Percentage of space saved by compression
+about-networking-ssl-tokens-tokens-size = { $compressedLength } B ({ $saved }% saved)
+    .title = Tokens: { $tokenLength } B. Encoded: { $decompressedLength } → { $compressedLength } B.
+
+## Headers of the per-row table listing each token.
+
+about-networking-ssl-tokens-token-column = Token
+# Header of the column with the application protocol (such as h2 or h3) of the
+# connection each token is from
+about-networking-ssl-tokens-protocol-column = Protocol
+# Header of the column with the space saved by compressing each token
+about-networking-ssl-tokens-compression-column = Compression
+
+##
+
 about-networking-ssl-tokens-restored =
   .alt = Restored from storage
   .title = Restored from storage
-about-networking-ssl-tokens-new =
-  .alt = New this session
-  .title = New this session
 about-networking-ssl-tokens-expired =
   .alt = Expired
   .title = Expired
