@@ -86,12 +86,17 @@ add_task(async function test_sw_notification_allowed_for_normal_site() {
         );
         const reg = await content.navigator.serviceWorker.ready;
 
-        return new Promise(resolve => {
+        const data = await new Promise(resolve => {
           content.navigator.serviceWorker.onmessage = event => {
             resolve(event.data);
           };
           reg.active.postMessage("show-notification");
         });
+
+        for (const notification of await reg.getNotifications()) {
+          notification.close();
+        }
+        return data;
       });
 
       ok(result.success, "Service worker notification should succeed");

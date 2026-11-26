@@ -103,10 +103,14 @@ add_task(async function no_tag_collision_between_containers() {
 
   // The notifications should not interfere across containers
 
-  is(mockAlertsService.history.length, 2, "Should observe two alert topics");
-  for (const entry of mockAlertsService.history) {
-    is(entry.prop, "onAlertShow", "Should only observe alertshow");
-  }
+  const countOf = prop =>
+    mockAlertsService.history.filter(entry => entry.prop == prop).length;
+  is(countOf("onAlertShow"), 2, "Both notifications should be shown");
+  is(
+    countOf("onAlertFinished"),
+    0,
+    "No notification should be replaced by the other"
+  );
 
   // Closing the tab leaves the system notification in the Windows Action
   // Center, and the next run's notifications with the same tag then report
