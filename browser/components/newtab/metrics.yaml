@@ -1644,6 +1644,74 @@ newtab:
     send_in_pings:
       - newtab
 
+  widgets_merino_result:
+    type: dual_labeled_counter
+    description: >
+      How each Merino request from a New Tab widget turned out. A request is
+      counted when it ends, and the count goes out in the next `newtab` ping,
+      so it isn't tied to a particular visit. Requests that are never sent
+      aren't counted, such as when the widget uses its cache or has no
+      endpoint configured. Neither is a request the widget cancels by starting
+      a newer one. The weather widget's location lookup isn't counted when it
+      reuses a result that another part of Firefox, like the address bar,
+      already fetched. Clients whose requests fail retry sooner, so compare
+      the share of clients that see errors rather than raw request counts.
+    dual_labels:
+      key:
+        description: >
+          Which request it was. `weather_location_search` is sent as the user
+          types a city, from the third character on, so one search can add
+          several counts, while `stocks_search` is sent once each time the
+          user submits a search. `weather_geolocation` is the weather widget
+          looking up where the user is, either because no location is set or
+          because the user asked it to detect their location. In the second
+          case, `weather_location_detect` follows it, turning that location
+          into a city the widget can show. `weather_forecast` isn't requested
+          for the small widget size. `stocks_watchlist` is one lookup per
+          symbol on the user's watchlist.
+        labels:
+          - weather_report
+          - weather_forecast
+          - weather_location_search
+          - weather_location_detect
+          - weather_geolocation
+          - stocks_quotes
+          - stocks_watchlist
+          - stocks_search
+          - picture_of_the_day
+          - framed_widgets
+      category:
+        description: >
+          How the request ended. `success` means the widget got something it
+          could use, and `no_suggestion` means the response didn't have that:
+          it was empty, unreadable, or missing what the widget needs. For
+          `weather_location_search`, `stocks_search` and `stocks_watchlist`,
+          `no_suggestion` also covers nothing matching, which isn't an error.
+          `timeout` means no response within 7 seconds (5 for stocks and
+          `weather_geolocation`). `http_4xx` and `http_5xx` are error
+          responses with those status codes, and `network_error` is any other
+          failure, usually no response at all, as when the user is offline.
+        labels:
+          - success
+          - no_suggestion
+          - timeout
+          - network_error
+          - http_4xx
+          - http_5xx
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093851
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093851
+    data_sensitivity:
+      - technical
+      - interaction
+    notification_emails:
+      - jbrown@mozilla.com
+      - sdowne@mozilla.com
+    expires: never
+    send_in_pings:
+      - newtab
+
   widgets_ready:
     type: event
     description: >
