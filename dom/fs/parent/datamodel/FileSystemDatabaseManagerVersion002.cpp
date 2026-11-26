@@ -526,7 +526,7 @@ Result<Usage, QMResult> FileSystemDatabaseManagerVersion002::GetFileUsage(
 nsresult FileSystemDatabaseManagerVersion002::GetFile(
     const EntryId& aEntryId, const FileId& aFileId, const FileMode& aMode,
     ContentType& aType, TimeStamp& lastModifiedMilliSeconds,
-    nsTArray<Name>& aPath, nsCOMPtr<nsIFile>& aFile) const {
+    nsTArray<Name>& aPath, nsCOMPtr<nsIFile>& aFile, bool aCreate) const {
   MOZ_ASSERT(!aFileId.IsEmpty());
 
   const FileSystemEntryPair endPoints(mRootEntry, aEntryId);
@@ -537,7 +537,13 @@ nsresult FileSystemDatabaseManagerVersion002::GetFile(
 
   QM_TRY(MOZ_TO_RESULT(GetFileAttributes(mConnection, aEntryId, aType)));
 
-  if (aMode == FileMode::SHARED_FROM_COPY) {
+  if (!aCreate) {
+    MOZ_ASSERT(aMode == FileMode::EXCLUSIVE);
+    const nsresult rv = mFileManager->GetExistingFile(aFileId, aFile);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+  } else if (aMode == FileMode::SHARED_FROM_COPY) {
     QM_WARNONLY_TRY_UNWRAP(Maybe<FileId> mainFileId, GetFileId(aEntryId));
     if (mainFileId && mDataManager->OriginMetadataRef().mIsPrivate) {
       const RefPtr<FileSystemCipherKeyManager> cipherKeyManager =
