@@ -125,6 +125,9 @@ objects:
       microsurvey-config:
         type: Option<MicrosurveyConfig>
         description: Optional configuration data for a microsurvey.
+      menu-banner-config:
+        type: Option<MenuBannerMessageConfig>
+        description: Optional configuration data for a message shown as a banner in the menu.
       is-control:
         type: Boolean
         description: Indicates if this message is the control message, if true shouldn't be displayed
@@ -213,6 +216,18 @@ objects:
         description: The way answers are ordered.
         type: MicrosurveyOrdering
         default: randomized
+  MenuBannerMessageConfig:
+    description: Attributes relating to menu banner message content.
+    fields:
+      icon:
+        type: Option<Image>
+        description: The icon shown in the message.
+        default: null # If null, a default will be provided.
+      menu-notification:
+        type: Boolean
+        description: >
+          If true, the menu button is highlighted while this message is to be shown, to draw the user to the menu.
+        default: false
   MicrosurveyAnswer:
     description: Attributes relating to microsurvey content.
     fields:

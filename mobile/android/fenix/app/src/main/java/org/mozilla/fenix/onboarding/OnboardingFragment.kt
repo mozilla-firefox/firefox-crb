@@ -35,8 +35,6 @@ import mozilla.components.support.utils.Browsers
 import org.mozilla.fenix.GleanMetrics.Pings
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.accounts.FenixFxAEntryPoint
-import org.mozilla.fenix.components.appstate.AppAction
-import org.mozilla.fenix.components.appstate.SupportedMenuNotifications
 import org.mozilla.fenix.components.initializeGlean
 import org.mozilla.fenix.components.metrics.InstallReferrerHandlingService
 import org.mozilla.fenix.components.metrics.RtamoAttributionHandler
@@ -429,8 +427,6 @@ class OnboardingFragment : Fragment() {
         settings.rtamoAddonName = ""
         settings.rtamoAddonImageUrl = ""
 
-        maybeAddMenuNotification()
-
         // Skip when an add-on install prompt is about to show so the two prompts don't compete.
         if (!hasPendingAddonInstall) {
             maybeRequestNotificationPermission()
@@ -481,17 +477,4 @@ class OnboardingFragment : Fragment() {
     private fun showPrivacyPreferencesDialog() {
         ManagePrivacyPreferencesDialogFragment().show(parentFragmentManager, ManagePrivacyPreferencesDialogFragment.TAG)
     }
-
-    private fun maybeAddMenuNotification() {
-        with(requireContext()) {
-            if (shouldAddMenuNotification()) {
-                requireComponents.appStore.dispatch(
-                    AppAction.MenuNotification.AddMenuNotification(SupportedMenuNotifications.NotDefaultBrowser)
-                )
-            }
-        }
-    }
-
-    private fun shouldAddMenuNotification() =
-        with(requireComponents) { !settings.isDefaultBrowser && settings.shouldShowMenuBanner }
 }
