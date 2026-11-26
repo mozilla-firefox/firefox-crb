@@ -2695,6 +2695,10 @@ bool FFmpegVideoDecoder<LIBAV_VER>::MediaCodecSupportsColorDepth(
               .isEmpty();
 }
 
+bool FFmpegVideoDecoder<LIBAV_VER>::SupportDecoderRecycling() const {
+  return mMediaCodecDeviceContext && mMediaCodecAdaptivePlayback;
+}
+
 /* static */ bool FFmpegVideoDecoder<LIBAV_VER>::ShouldDecodeInGPUProcess() {
   return XRE_IsRDDProcess() && StaticPrefs::media_gpu_process_decoder() &&
          gfx::gfxVars::GPUProcessEnabled();
@@ -3301,6 +3305,7 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitMediaCodecDecoder() {
   mCodecContext->opaque = this;
   InitHWCodecContext(ContextType::MediaCodec);
 
+  bool adaptivePlayback = false;
 #  ifdef USING_MOZFFVPX
   const gfx::IntSize maxSize =
       media::MCSInfo::GetMediaCodecAdaptivePlaybackMaxSize(
@@ -3313,6 +3318,7 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitMediaCodecDecoder() {
                          0);
     mLib->av_opt_set_int(mCodecContext->priv_data, "max_height", maxSize.height,
                          0);
+    adaptivePlayback = true;
   }
 #  endif
 
@@ -3413,6 +3419,7 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitMediaCodecDecoder() {
   }
 
   FFMPEG_LOG("  MediaCodec FFmpeg init successful");
+  mMediaCodecAdaptivePlayback = adaptivePlayback;
   releaseResources.release();
   return NS_OK;
 }

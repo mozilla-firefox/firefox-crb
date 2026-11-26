@@ -129,6 +129,7 @@ class FFmpegVideoDecoder<LIBAV_VER>
 #ifdef MOZ_WIDGET_ANDROID
   Maybe<MediaDataDecoder::PropertyValue> GetDecodeProperty(
       MediaDataDecoder::PropertyName aName) const override;
+  bool SupportDecoderRecycling() const override;
 #endif
   void SetSeekThreshold(const media::TimeUnit& aTime) override;
 
@@ -267,6 +268,9 @@ class FFmpegVideoDecoder<LIBAV_VER>
   void ReleaseSurfaceMediaCodec();
   int32_t mTextureAlignment;
   AVBufferRef* mMediaCodecDeviceContext = nullptr;
+  // True if MediaCodec was configured for adaptive playback, so it can change
+  // resolution without being recreated. Only written during initialization.
+  bool mMediaCodecAdaptivePlayback = false;
   // Only used for the SurfaceTexture case
   java::GeckoSurface::GlobalRef mSurfaceTextureSurface;
   // Only used for the ImageReader case
