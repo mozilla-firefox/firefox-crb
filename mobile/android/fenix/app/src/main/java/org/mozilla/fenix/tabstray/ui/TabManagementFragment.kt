@@ -830,6 +830,8 @@ class TabManagementFragment : Fragment() {
                     store = tabsTrayStore,
                     context = requireContext(),
                     navController = findNavController(),
+                    scope = lifecycleScope,
+                    settings = requireComponents.settings,
                     storage = requireComponents.backgroundServices.syncedTabsStorage,
                     commands = requireComponents.backgroundServices.syncedTabsCommands,
                     accountManager = requireComponents.backgroundServices.accountManager,

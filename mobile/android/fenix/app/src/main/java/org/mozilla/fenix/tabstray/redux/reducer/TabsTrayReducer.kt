@@ -44,10 +44,11 @@ internal object TabsTrayReducer {
                 is TabsTrayAction.DismissInactiveTabsAutoCloseDialog -> handleInactiveTabsActions(state, action)
 
                 // Sync Actions
-                is TabsTrayAction.SyncNow -> state.copy(sync = state.sync.copy(isSyncing = true))
-                is TabsTrayAction.SyncCompleted -> state.copy(sync = state.sync.copy(isSyncing = false))
-                is TabsTrayAction.UpdateSyncedTabs -> handleSyncedTabUpdate(state, action)
-                is TabsTrayAction.SyncedTabsHeaderToggled -> handleSyncedTabHeaderToggle(state, action)
+                is TabsTrayAction.SyncNow,
+                is TabsTrayAction.SyncCompleted,
+                is TabsTrayAction.UpdateSyncedTabs,
+                is TabsTrayAction.SyncedTabsHeaderToggled,
+                is TabsTrayAction.UpdateIsSignedIn -> handleSyncActions(state, action)
 
                 // Navigation Actions
                 is TabsTrayAction.TabSearchClicked -> {
@@ -259,6 +260,17 @@ internal object TabsTrayReducer {
             is TabsTrayAction.DismissInactiveTabsAutoCloseDialog ->
                 state.copy(inactiveTabs = state.inactiveTabs.copy(showAutoCloseDialog = false))
 
+            else -> state
+        }
+    }
+
+    private fun handleSyncActions(state: TabsTrayState, action: TabsTrayAction): TabsTrayState {
+        return when (action) {
+            is TabsTrayAction.SyncNow -> state.copy(sync = state.sync.copy(isSyncing = true))
+            is TabsTrayAction.SyncCompleted -> state.copy(sync = state.sync.copy(isSyncing = false))
+            is TabsTrayAction.UpdateSyncedTabs -> handleSyncedTabUpdate(state, action)
+            is TabsTrayAction.SyncedTabsHeaderToggled -> handleSyncedTabHeaderToggle(state, action)
+            is TabsTrayAction.UpdateIsSignedIn -> state.copy(sync = state.sync.copy(isSignedIn = action.isSignedIn))
             else -> state
         }
     }

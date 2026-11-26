@@ -5,8 +5,11 @@
 package org.mozilla.fenix.tabstray.syncedtabs
 
 import android.content.Context
+import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import mozilla.components.browser.storage.sync.SyncedDeviceTabs
 import mozilla.components.feature.syncedtabs.SyncedTabsFeature
 import mozilla.components.feature.syncedtabs.commands.SyncedTabsCommands
@@ -21,6 +24,7 @@ import org.mozilla.fenix.tabstray.ext.toComposeList
 import org.mozilla.fenix.tabstray.ext.toSyncedTabsListItem
 import org.mozilla.fenix.tabstray.redux.action.TabsTrayAction
 import org.mozilla.fenix.tabstray.redux.store.TabsTrayStore
+import org.mozilla.fenix.utils.Settings
 
 /**
  * TabsTrayFragment delegate to handle all layout updates needed to display synced tabs and any errors.
@@ -28,6 +32,8 @@ import org.mozilla.fenix.tabstray.redux.store.TabsTrayStore
  * @param store An instance of [TabsTrayStore] used to manage the tabs tray state.
  * @param context Fragment context.
  * @param navController The controller used to handle any navigation necessary for error scenarios.
+ * @param scope [LifecycleCoroutineScope] used to observe changes to the signed in state.
+ * @param settings An instance of [Settings] used to observe whether the user is signed into a Firefox account.
  * @param storage An instance of [SyncedTabsStorage] used for retrieving synced tabs.
  * @param commands An instance of [SyncedTabsCommands] used to send synced tabs commands to other devices.
  * @param accountManager An instance of [FxaAccountManager] used for synced tabs authentication.
@@ -37,6 +43,8 @@ class SyncedTabsIntegration(
     private val store: TabsTrayStore,
     private val context: Context,
     private val navController: NavController,
+    private val scope: LifecycleCoroutineScope,
+    private val settings: Settings,
     storage: SyncedTabsStorage,
     commands: SyncedTabsCommands,
     accountManager: FxaAccountManager,
@@ -64,14 +72,22 @@ class SyncedTabsIntegration(
 
     override var listener: SyncedTabsView.Listener? = null
 
+    private var signedInJob: Job? = null
+
     override fun start() {
         syncedTabsFeature.start()
         syncButtonBinding.start()
+        signedInJob = scope.launch {
+            settings.signedInFxaAccountFlow.collect { isSignedIn ->
+                store.dispatch(TabsTrayAction.UpdateIsSignedIn(isSignedIn))
+            }
+        }
     }
 
     override fun stop() {
         syncedTabsFeature.stop()
         syncButtonBinding.stop()
+        signedInJob?.cancel()
     }
 
     override fun onError(error: SyncedTabsView.ErrorType) {

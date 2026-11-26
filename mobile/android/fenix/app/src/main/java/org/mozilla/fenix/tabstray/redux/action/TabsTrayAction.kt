@@ -70,6 +70,13 @@ sealed interface TabsTrayAction : Action {
     data class UpdateSyncedTabs(val tabs: List<SyncedTabsListItem>) : TabsTrayAction
 
     /**
+     * Updates [org.mozilla.fenix.tabstray.redux.state.TabsTrayState.SyncState.isSignedIn].
+     *
+     * @property isSignedIn Whether the user is currently signed in to a Firefox account.
+     */
+    data class UpdateIsSignedIn(val isSignedIn: Boolean) : TabsTrayAction
+
+    /**
      * Updates the selected tab id.
      *
      * @property tabId The ID of the tab that is currently selected.

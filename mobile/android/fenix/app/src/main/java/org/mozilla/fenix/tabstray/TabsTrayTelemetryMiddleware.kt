@@ -138,6 +138,7 @@ class TabsTrayTelemetryMiddleware(private val nimbusEventStore: NimbusEventStore
             TabsTrayAction.SyncCompleted,
             is TabsTrayAction.UpdateInactiveExpanded,
             is TabsTrayAction.UpdateSyncedTabs,
+            is TabsTrayAction.UpdateIsSignedIn,
             is TabsTrayAction.UpdateSelectedTabId,
             is TabsTrayAction.SyncedTabsHeaderToggled,
             TabsTrayAction.NavigateBackInvoked,
