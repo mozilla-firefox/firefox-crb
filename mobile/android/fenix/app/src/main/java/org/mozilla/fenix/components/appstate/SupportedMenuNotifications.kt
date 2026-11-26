@@ -17,9 +17,9 @@ sealed class SupportedMenuNotifications {
 
     /**
      * Represents a notification related to the main menu button (the hamburger menu). The menu button is highlighted
-     * after onboarding when the app is not the default browser.
+     * while the message shown in the menu banner asks for it.
      */
-    object NotDefaultBrowser : SupportedMenuNotifications()
+    object BannerMenuItem : SupportedMenuNotifications()
 
     /**
      * Represents a notification related to Page summarization.
