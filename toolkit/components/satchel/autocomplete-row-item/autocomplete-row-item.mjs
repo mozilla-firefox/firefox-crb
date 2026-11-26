@@ -92,6 +92,11 @@ class AutocompleteRowItem extends MozLitElement {
     }
   }
 
+  get secondaryActionButton() {
+    return this.shadowRoot?.querySelector("moz-button.secondary-action")
+      ?.buttonEl;
+  }
+
   activateSecondaryAction() {
     const { action, actions } = this.actions?.secondary ?? {};
     if (action) {

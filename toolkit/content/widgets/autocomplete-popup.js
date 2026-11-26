@@ -646,6 +646,7 @@
     }
 
     _setSecondaryActionFocused(focused) {
+      const wasFocused = this._secondaryActionFocused;
       this._secondaryActionFocused = focused;
       const rowItem = this._selectedRowItem;
       if (focused) {
@@ -659,12 +660,21 @@
           item.subfocused = false;
         }
       }
-      if (focused && this.mPopupOpen && this.richlistbox.selectedItem) {
-        this.richlistbox.ensureElementIsVisible(this.richlistbox.selectedItem);
-        const label = rowItem?.actions?.secondary?.label;
-        if (label) {
-          window.A11yUtils?.announce({ raw: label });
-        }
+      const selectedItem = this.richlistbox.selectedItem;
+      if (!this.mPopupOpen || !selectedItem) {
+        return;
+      }
+      if (focused) {
+        this.richlistbox.ensureElementIsVisible(selectedItem);
+        // Move a11y focus to the button.
+        rowItem?.secondaryActionButton?.dispatchEvent(
+          new Event("DOMMenuItemActive", { bubbles: true, composed: true })
+        );
+      } else if (wasFocused) {
+        // Move a11y focus back to the row.
+        selectedItem.dispatchEvent(
+          new Event("DOMMenuItemActive", { bubbles: true })
+        );
       }
     }
 

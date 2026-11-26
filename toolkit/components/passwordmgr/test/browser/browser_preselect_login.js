@@ -1,3 +1,7 @@
+const { sinon } = ChromeUtils.importESModule(
+  "resource://testing-common/Sinon.sys.mjs"
+);
+
 const TEST_ORIGIN = "https://example.org";
 const ABOUT_LOGINS_ORIGIN = "about:logins";
 const TEST_URL_PATH = `${TEST_ORIGIN}${DIRECTORY_PATH}form_basic_login.html`;
@@ -265,7 +269,7 @@ add_task(async function test_edit_button_subfocus_cleared_by_navigation() {
   );
 });
 
-add_task(async function test_edit_button_subfocus_announced_to_a11y() {
+add_task(async function test_edit_button_subfocus_moves_a11y_focus() {
   await BrowserTestUtils.withNewTab(
     {
       gBrowser,
@@ -281,34 +285,42 @@ add_task(async function test_edit_button_subfocus_announced_to_a11y() {
         "autocomplete-row-item"
       );
 
-      const announced = [];
-      const originalAnnounce = window.A11yUtils.announce;
-      window.A11yUtils.announce = args => {
-        announced.push(args);
-        return originalAnnounce.call(window.A11yUtils, args);
-      };
+      await EventUtils.synthesizeKey("KEY_ArrowDown");
+      await EventUtils.synthesizeKey("KEY_ArrowDown");
+      await TestUtils.waitForCondition(
+        () => secondLoginItem.hasAttribute("selected"),
+        "Wait for second login to become active"
+      );
 
+      const announceStub = sinon.stub(window.A11yUtils, "announce");
       try {
-        await EventUtils.synthesizeKey("KEY_ArrowDown");
-        await EventUtils.synthesizeKey("KEY_ArrowDown");
-        await TestUtils.waitForCondition(
-          () => secondLoginItem.hasAttribute("selected"),
-          "Wait for second login to become active"
+        let activePromise = BrowserTestUtils.waitForEvent(
+          popup,
+          "DOMMenuItemActive"
         );
-
         await EventUtils.synthesizeKey("KEY_Tab");
-        await TestUtils.waitForCondition(
-          () => secondLoginRowItem.hasAttribute("subfocused"),
-          "Wait for edit button to become sub-focused via Tab"
+        let event = await activePromise;
+        Assert.equal(
+          event.originalTarget,
+          secondLoginRowItem.secondaryActionButton,
+          "Tab moves a11y focus to the edit button"
         );
 
-        const label = secondLoginRowItem.actions.secondary.label;
-        Assert.ok(
-          announced.some(args => args?.raw === label),
-          "Sub-focusing the edit button announces its label to assistive technology"
+        activePromise = BrowserTestUtils.waitForEvent(
+          popup,
+          "DOMMenuItemActive"
         );
+        await EventUtils.synthesizeKey("KEY_Tab", { shiftKey: true });
+        event = await activePromise;
+        Assert.equal(
+          event.originalTarget,
+          secondLoginItem,
+          "Shift+Tab moves a11y focus back to the row"
+        );
+
+        Assert.ok(announceStub.notCalled, "Nothing is announced");
       } finally {
-        window.A11yUtils.announce = originalAnnounce;
+        announceStub.restore();
       }
 
       await closePopup(popup);
