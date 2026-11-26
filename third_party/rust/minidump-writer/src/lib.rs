@@ -12,6 +12,8 @@ cfg_if::cfg_if! {
                 StackPointerMapping,
                 ThreadStackCopy,
                 CrashingThreadIpCopy,
+                EnumerateMappingsFromProc,
+                DebuggerRendezvousNotConsistent,
             }
         }
 
@@ -35,6 +37,7 @@ pub mod module_reader;
 pub mod process_reader;
 
 mod serializers;
+mod vec_extension;
 
 /// Re-export of crash-context
 pub use ::crash_context;

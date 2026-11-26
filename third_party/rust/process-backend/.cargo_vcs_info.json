@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "4eb2a74202895adffdcdf1842a9bbffb2a436098"
+  },
+  "path_in_vcs": "crates/linux/process-backend"
+}

@@ -3280,6 +3280,12 @@ criteria = "safe-to-deploy"
 delta = "0.30.0 -> 0.29.0"
 notes = "No unsafe code, mostly algorithms and parsing. Very unlikely to cause security issues."
 
+[[audits.gimli]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.32.3 -> 0.33.0"
+notes = "New parsing code uses safe primitives and is well-covered by tests. Single unsafe block has a documented invariant that seems correct."
+
 [[audits.gl_generator]]
 who = "Jamie Nicol <jnicol@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -3374,6 +3380,12 @@ who = "Chris Martin <cmartin@mozilla.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.2 -> 0.9.2"
 notes = "Doesn't use any unsafe code, mostly parsing and arithmetic."
+
+[[audits.goblin]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.2 -> 0.10.7"
+notes = "Only true new unsafe block is in test code, other blocks were due to the 2024 edition change of unsafe blocks within unsafe functions."
 
 [[audits.gpu-alloc]]
 who = "Teodor Tanasoaia <ttanasoaia@mozilla.com>"
@@ -4801,9 +4813,8 @@ notes = "This crate is mostly maintained by Mozilla staff"
 [[audits.minidump-writer]]
 who = "Simon Chopin <schopin@mozilla.com>"
 criteria = "safe-to-deploy"
-delta = "0.13.0 -> 0.13.0@git:d5ec275ce1276947f09f205a581fe2b3cf90178f"
-importable = false
-notes = "Crate maintained by Mozilla staff."
+delta = "0.13.0 -> 0.14.0"
+notes = "Code either written or reviewed and merged by Mozilla staff."
 
 [[audits.miniz_oxide]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -5497,6 +5508,12 @@ criteria = "safe-to-deploy"
 delta = "0.33.0 -> 0.36.4"
 notes = "Hardly any new unsafe code, no new dependencies nor side-effectful std functions. Plenty of new tests."
 
+[[audits.object]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.36.4 -> 0.40.0"
+notes = "Audited all 28 new Pod implementation for soundness."
+
 [[audits.ohttp]]
 who = "Mark Hammond <mhammond@skippinet.com.au>"
 criteria = "safe-to-deploy"
@@ -5900,6 +5917,18 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.49 -> 1.0.51"
 
+[[audits.process-backend]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+notes = "Authored by Mozilla staff."
+
+[[audits.process-reader]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "Authored by Mozilla staff."
+
 [[audits.procfs-core]]
 who = "Gabriele Svelto <gsvelto@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -5947,6 +5976,12 @@ This is mostly a reorganization of code (splitting one big file into many),
 with some minor changes to improve safety and readability.
 """
 
+[[audits.prost]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.13.5 -> 0.14.6"
+notes = "MSRV bump, doc, API work around error handling, new tests. No new unsafe code or imports."
+
 [[audits.prost-derive]]
 who = "Jan-Erik Rediger <jrediger@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -5973,6 +6008,12 @@ This is mostly code cleanup and using higher-level functions from
 itertools/std. There were also a few tests added, which is an improvement over
 having none at all.
 """
+
+[[audits.prost-derive]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.13.5 -> 0.14.6"
+notes = "Most of the diff is noise due to namespace path resolution consolidation work. Little change to generated code beyond complying with the new prost error API."
 
 [[audits.qlog]]
 who = "Kershaw Chang <kershaw@mozilla.com>"
@@ -6536,6 +6577,12 @@ criteria = "safe-to-deploy"
 delta = "0.10.2 -> 0.11.0"
 notes = "Small changes to exposed traits, that look reasonable and have additional buffer boundary checks. No unsafe code touched."
 
+[[audits.scroll]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.0 -> 0.13.0"
+notes = "Mostly mechanical changes due to edition change, and removal of hand-rolled unsafe code in favor of library functions."
+
 [[audits.scroll_derive]]
 who = "Jan-Erik Rediger <jrediger@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -6546,6 +6593,12 @@ notes = "No code changes. Tagged together with its parent crate scroll."
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.11.0 -> 0.11.1"
+
+[[audits.scroll_derive]]
+who = "Simon Chopin <schopin@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.0 -> 0.13.1"
+notes = "Generates a new unsafe block, soundness held by ensuring the relevant enum has defined repr. Covered by tests."
 
 [[audits.seahash]]
 who = "Benjamin VanderSloot <bvandersloot@mozilla.com>"

@@ -1,4 +1,5 @@
-use crate::error;
+use crate::error::{self};
+use crate::options::Permissive;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use scroll::Pread;
@@ -50,9 +51,17 @@ fn section_read_size(section: &section_table::SectionTable, file_alignment: u32)
     // {
     //     readsize = min(readsize, (virtsize + 0xfff) & ~0xfff);
     // }
+    //
+    // Only bytes that are actually backed by the file may be mapped into offsets.
+    // Sections with `SizeOfRawData == 0` are virtual-only when parsing an on-disk PE,
+    // even if they have a non-zero `VirtualSize`.
+
+    let size_of_raw_data = section.size_of_raw_data as usize;
+    if size_of_raw_data == 0 {
+        return 0;
+    }
 
     let file_alignment = file_alignment as usize;
-    let size_of_raw_data = section.size_of_raw_data as usize;
     let virtual_size = section.virtual_size as usize;
     let read_size = {
         let read_size =
@@ -64,16 +73,13 @@ fn section_read_size(section: &section_table::SectionTable, file_alignment: u32)
 
     if virtual_size == 0 {
         read_size
-    } else if read_size == 0 {
-        virtual_size
     } else {
         cmp::min(read_size, round_size(virtual_size))
     }
 }
 
 fn rva2offset(rva: usize, section: &section_table::SectionTable) -> usize {
-    (rva - section.virtual_address as usize)
-        + aligned_pointer_to_raw_data(section.pointer_to_raw_data as usize)
+    (section.pointer_to_raw_data as usize) + (rva - section.virtual_address as usize)
 }
 
 fn is_in_section(rva: usize, section: &section_table::SectionTable, file_alignment: u32) -> bool {
@@ -147,6 +153,56 @@ pub fn try_name<'a>(
     }
 }
 
+/// Safe version of try_name that handles packed binaries gracefully
+pub(crate) fn safe_try_name<'a>(
+    bytes: &'a [u8],
+    rva: usize,
+    sections: &[section_table::SectionTable],
+    file_alignment: u32,
+    opts: &options::ParseOptions,
+) -> error::Result<Option<&'a str>> {
+    match find_offset(rva, sections, file_alignment, opts) {
+        Some(offset) => {
+            if offset >= bytes.len() {
+                Err(error::Error::Malformed(format!(
+                    "Name RVA {:#x} maps to offset {:#x} beyond file bounds (file size: {:#x}). \
+                    This may indicate a packed binary.",
+                    rva,
+                    offset,
+                    bytes.len()
+                )))
+                .or_permissive_and_default(
+                    opts.parse_mode.is_permissive(),
+                    "Name RVA maps beyond file bounds; treating as missing",
+                )
+            } else {
+                // Try to read the string, but handle potential scroll errors gracefully
+                match bytes.pread::<&str>(offset) {
+                    Ok(name) => Ok(Some(name)),
+                    Err(e) => Err(error::Error::Malformed(format!(
+                        "Failed to read name at offset {:#x} (RVA {:#x}): {}. \
+                        This may indicate a packed binary.",
+                        offset, rva, e
+                    )))
+                    .or_permissive_and_default(
+                        opts.parse_mode.is_permissive(),
+                        "Failed to read name; treating as missing",
+                    ),
+                }
+            }
+        }
+        None => Err(error::Error::Malformed(format!(
+            "Cannot find name from rva {:#x} in sections: {:?}. \
+                This may be a packed binary or malformed sections.",
+            rva, sections
+        )))
+        .or_permissive_and_default(
+            opts.parse_mode.is_permissive(),
+            "Cannot map RVA to name; treating as missing",
+        ),
+    }
+}
+
 pub fn get_data<'a, T>(
     bytes: &'a [u8],
     sections: &[section_table::SectionTable],
@@ -194,5 +250,63 @@ pub(crate) fn pad(length: usize, alignment: Option<usize>) -> Option<Vec<u8>> {
             }
         }
         None => None,
+    }
+}
+
+/// Performs arbitrary alignment of values based on homogeneous numerical types.
+#[inline]
+pub(crate) fn align_up<N>(value: N, align: N) -> N
+where
+    N: core::ops::Add<Output = N>
+        + core::ops::Not<Output = N>
+        + core::ops::BitAnd<Output = N>
+        + core::ops::Sub<Output = N>
+        + core::cmp::PartialEq
+        + core::marker::Copy,
+    u8: Into<N>,
+{
+    debug_assert!(align != 0u8.into(), "Align must be non-zero");
+    (value + align - 1u8.into()) & !(align - 1u8.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_offset, section_read_size};
+    use crate::pe::options::ParseOptions;
+    use crate::pe::section_table::SectionTable;
+
+    fn section(
+        virtual_address: u32,
+        virtual_size: u32,
+        size_of_raw_data: u32,
+        pointer_to_raw_data: u32,
+    ) -> SectionTable {
+        SectionTable {
+            virtual_address,
+            virtual_size,
+            size_of_raw_data,
+            pointer_to_raw_data,
+            ..SectionTable::default()
+        }
+    }
+
+    #[test]
+    fn virtual_only_sections_are_not_file_backed() {
+        let section = section(0x1fb000, 0x28590, 0, 0);
+        assert_eq!(section_read_size(&section, 0x200), 0);
+        assert_eq!(
+            find_offset(0x215580, &[section], 0x200, &ParseOptions::default()),
+            None,
+        );
+    }
+
+    #[test]
+    fn file_backed_sections_still_map_rvas() {
+        let section = section(0x1000, 0x600, 0x400, 0x200);
+        assert_eq!(section_read_size(&section, 0x200), 0x400);
+        assert_eq!(
+            find_offset(0x1123, &[section], 0x200, &ParseOptions::default()),
+            Some(0x323),
+        );
     }
 }
