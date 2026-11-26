@@ -1001,11 +1001,11 @@ class FxaWebChannelFeatureTest {
             messageHandler.value.onPortConnected(port)
 
             // Action: signin
-            verifyOauthLogin("signin", AuthType.Signin, "fffs", "fsdf32", null, messageHandler.value, accountManager)
+            verifyOauthLogin("signin", AuthType.Signin(), "fffs", "fsdf32", null, messageHandler.value, accountManager)
             // Signup.
             verifyOauthLogin(
                 "signup",
-                AuthType.Signup,
+                AuthType.Signup(),
                 "anotherCode1",
                 "anotherState2",
                 setOf(SyncEngine.Passwords),
@@ -1015,7 +1015,7 @@ class FxaWebChannelFeatureTest {
             // Pairing.
             verifyOauthLogin(
                 "pairing",
-                AuthType.Pairing,
+                AuthType.Pairing(),
                 "anotherCode2",
                 "anotherState3",
                 null,
@@ -1033,6 +1033,111 @@ class FxaWebChannelFeatureTest {
                 accountManager,
             )
         }
+
+    @Test
+    fun `COMMAND_OAUTH_LOGIN web-channel correctly extracts the service`() = runTest {
+        val accountManager: FxaAccountManager = mock()
+        val engineSession: EngineSession = mock()
+        val ext: WebExtension = mock()
+        val port: Port = mock()
+        val messageHandler = argumentCaptor<MessageHandler>()
+
+        BuiltInWebExtensionController.installedBuiltInExtensions[FxaWebChannelFeature.WEB_CHANNEL_EXTENSION_ID] = ext
+
+        val webchannelFeature = prepareFeatureForTest(ext, port, engineSession, null, emptySet(), accountManager)
+        webchannelFeature.start()
+        shadowOf(getMainLooper()).idle()
+
+        verify(ext)
+            .registerContentMessageHandler(
+                eq(engineSession),
+                eq(FxaWebChannelFeature.WEB_CHANNEL_MESSAGING_ID),
+                messageHandler.capture(),
+            )
+        messageHandler.value.onPortConnected(port)
+
+        // Action: signin
+        verifyOauthLogin(
+            action = "signin",
+            expectedAuthType = AuthType.Signin(FxaService.IpProtection),
+            code = "fffs",
+            state = "fsdf32",
+            declined = setOf(SyncEngine.Passwords, SyncEngine.Bookmarks),
+            messageHandler = messageHandler.value,
+            accountManager = accountManager,
+            service = FxaService.IpProtection.identifier,
+        )
+
+        // Action: signup
+        verifyOauthLogin(
+            action = "signup",
+            expectedAuthType = AuthType.Signup(FxaService.Relay),
+            code = "fffs",
+            state = "fsdf32",
+            declined = setOf(SyncEngine.Passwords, SyncEngine.Bookmarks),
+            messageHandler = messageHandler.value,
+            accountManager = accountManager,
+            service = FxaService.Relay.identifier,
+        )
+
+        // Action: pairing
+        verifyOauthLogin(
+            action = "pairing",
+            expectedAuthType = AuthType.Pairing(FxaService.Sync),
+            code = "fffs",
+            state = "fsdf32",
+            declined = setOf(SyncEngine.Passwords, SyncEngine.Bookmarks),
+            messageHandler = messageHandler.value,
+            accountManager = accountManager,
+            service = FxaService.Sync.identifier,
+        )
+        // Some other action.
+        verifyOauthLogin(
+            action = "newAction",
+            expectedAuthType = AuthType.OtherExternal("newAction", FxaService.IpProtection),
+            code = "anotherCode3",
+            state = "anotherState4",
+            declined = null,
+            messageHandler = messageHandler.value,
+            accountManager = accountManager,
+            service = FxaService.IpProtection.identifier,
+        )
+    }
+
+    @Test
+    fun `COMMAND_OAUTH_LOGIN web-channel with unknown service is handled as null`() = runTest {
+        val accountManager: FxaAccountManager = mock()
+        val engineSession: EngineSession = mock()
+        val ext: WebExtension = mock()
+        val port: Port = mock()
+        val messageHandler = argumentCaptor<MessageHandler>()
+
+        BuiltInWebExtensionController.installedBuiltInExtensions[FxaWebChannelFeature.WEB_CHANNEL_EXTENSION_ID] = ext
+
+        val webchannelFeature = prepareFeatureForTest(ext, port, engineSession, null, emptySet(), accountManager)
+        webchannelFeature.start()
+        shadowOf(getMainLooper()).idle()
+
+        verify(ext)
+            .registerContentMessageHandler(
+                eq(engineSession),
+                eq(FxaWebChannelFeature.WEB_CHANNEL_MESSAGING_ID),
+                messageHandler.capture(),
+            )
+        messageHandler.value.onPortConnected(port)
+
+        // Service: unknown is mapped to null in the auth type
+        verifyOauthLogin(
+            action = "signin",
+            expectedAuthType = AuthType.Signin(service = null),
+            code = "fffs",
+            state = "fsdf32",
+            declined = setOf(SyncEngine.Passwords, SyncEngine.Bookmarks),
+            messageHandler = messageHandler.value,
+            accountManager = accountManager,
+            service = "new-service",
+        )
+    }
 
     // Receiving an oauth-login message account manager refuses the request
     @Test
@@ -1060,7 +1165,7 @@ class FxaWebChannelFeatureTest {
         // Action: signin
         verifyOauthLogin(
             "signin",
-            AuthType.Signin,
+            AuthType.Signin(),
             "fffs",
             "fsdf32",
             setOf(SyncEngine.Passwords, SyncEngine.Bookmarks),
@@ -1070,7 +1175,7 @@ class FxaWebChannelFeatureTest {
         // Signup.
         verifyOauthLogin(
             "signup",
-            AuthType.Signup,
+            AuthType.Signup(),
             "anotherCode1",
             "anotherState2",
             null,
@@ -1080,7 +1185,7 @@ class FxaWebChannelFeatureTest {
         // Pairing.
         verifyOauthLogin(
             "pairing",
-            AuthType.Pairing,
+            AuthType.Pairing(),
             "anotherCode2",
             "anotherState3",
             null,
@@ -1532,8 +1637,9 @@ class FxaWebChannelFeatureTest {
         declined: Set<SyncEngine>?,
         messageHandler: MessageHandler,
         accountManager: FxaAccountManager,
+        service: String? = null,
     ) {
-        val jsonToWebChannel = jsonOauthLogin(action, code, state, declined ?: emptySet())
+        val jsonToWebChannel = jsonOauthLogin(action, code, state, declined ?: emptySet(), service)
         val port = mock<Port>()
         whenever(port.senderUrl()).thenReturn("https://foo.bar/email")
         messageHandler.onPortMessage(jsonToWebChannel, port)
@@ -1550,9 +1656,15 @@ class FxaWebChannelFeatureTest {
         verify(accountManager).finishAuthentication(expectedAuthData)
     }
 
-    private fun jsonOauthLogin(action: String, code: String, state: String, declined: Set<SyncEngine>): JSONObject {
+    private fun jsonOauthLogin(
+        action: String,
+        code: String,
+        state: String,
+        declined: Set<SyncEngine>,
+        service: String? = null,
+    ): JSONObject {
         return JSONObject(
-            """{
+                """{
              "message":{
                 "command": "fxaccounts:oauth_login",
                 "messageId":123,
@@ -1566,8 +1678,23 @@ class FxaWebChannelFeatureTest {
              }
             }
             """
-                .trimIndent()
-        )
+                    .trimIndent()
+            )
+            .apply {
+                if (service != null) {
+                    getJSONObject("message")
+                        .getJSONObject("data")
+                        .put(
+                            "services",
+                            JSONObject(
+                                """
+                            { "$service" : {} }
+                            """
+                                    .trimIndent()
+                            ),
+                        )
+                }
+            }
     }
 
     private suspend fun verifyLogin(

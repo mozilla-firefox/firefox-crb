@@ -576,7 +576,9 @@ open class FxaAccountManager(
                 when (via) {
                     is Event.Account.Start -> {
                         if (authenticationSideEffects()) {
-                            notifyObservers { onAuthenticated(account, AuthType.Existing) }
+                            notifyObservers {
+                                onAuthenticated(account = account, authType = AuthType.Existing)
+                            }
                             refreshProfile(ignoreCache = false)
                         } else {
                             throw AccountManagerException.AuthenticationSideEffectsFailed()
@@ -584,7 +586,9 @@ open class FxaAccountManager(
                     }
                     is Event.Progress.AuthData -> {
                         if (authenticationSideEffects()) {
-                            notifyObservers { onAuthenticated(account, via.authData.authType) }
+                            notifyObservers {
+                                onAuthenticated(account = account, authType = via.authData.authType)
+                            }
                             ensureCapabilities()
                             refreshProfile(ignoreCache = false)
                         } else {
@@ -595,7 +599,9 @@ open class FxaAccountManager(
                     Event.Account.AccessTokenKeyError -> {
                         // Should we also call authenticationSideEffects here?
                         // (https://bugzilla.mozilla.org/show_bug.cgi?id=1865086)
-                        notifyObservers { onAuthenticated(account, AuthType.Recovered) }
+                        notifyObservers {
+                            onAuthenticated(account = account, authType = AuthType.Recovered)
+                        }
                         ensureCapabilities()
                         refreshProfile(ignoreCache = true)
                     }
@@ -701,11 +707,11 @@ open class FxaAccountManager(
             val reason =
                 when (authType) {
                     is AuthType.OtherExternal,
-                    AuthType.Signin,
-                    AuthType.Signup,
+                    is AuthType.Signin,
+                    is AuthType.Signup,
                     AuthType.MigratedReuse,
                     AuthType.MigratedCopy,
-                    AuthType.Pairing -> SyncReason.FirstSync
+                    is AuthType.Pairing -> SyncReason.FirstSync
                     AuthType.Existing,
                     AuthType.Recovered -> SyncReason.Startup
                 }
