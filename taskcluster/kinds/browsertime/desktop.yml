@@ -1474,6 +1474,26 @@ browsertime-indexeddb:
                 default:
                     - --extra-profiler-run
 
+browsertime-quota-usage:
+    description: Raptor (browsertime) quota usage assertion tests
+    max-run-time: 2700
+    treeherder-symbol: Btime(qu)
+    raptor:
+        apps: [firefox]
+        run-visual-metrics: false
+        subtests:
+            - [quota-usage-ls, qu-ls]
+            - [quota-usage-idb-v, qu-idb-v]
+            - [quota-usage-idb-eb, qu-idb-eb]
+            - [quota-usage-cache, qu-cache]
+            - [quota-usage-fs, qu-fs]
+            - [quota-usage-all, qu-all]
+    run-on-projects:
+        by-test-platform:
+            .*64.*shippable.*: [autoland, mozilla-central]
+            default: []
+    tier: 2
+
 browsertime-trr-performance:
     raptor:
         apps: [firefox]

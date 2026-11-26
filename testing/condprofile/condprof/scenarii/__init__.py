@@ -5,12 +5,14 @@
 import sys
 
 from condprof.scenarii.full import full
+from condprof.scenarii.quota_usage import quota_usage
 from condprof.scenarii.settled import settled
 from condprof.scenarii.settled2 import settled2
 from condprof.scenarii.settled_youtube import settled_youtube
 
 scenarii = {
     "full": full,
+    "qm_use": quota_usage,
     "settled": settled,
     "settled-youtube": settled_youtube,
     "settled2": settled2,

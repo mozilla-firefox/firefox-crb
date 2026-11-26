@@ -125,6 +125,7 @@ browsertime:
     - browsertime-nav-bench
     - browsertime-nav-bench-a11y
     - browsertime-indexeddb
+    - browsertime-quota-usage
     - browsertime-video-playback-latency
     - browsertime-network-bench
     - browsertime-webcodecs
@@ -657,6 +658,7 @@ android-hw-browsertime:
     - browsertime-benchmark-jetstream3
     - browsertime-video-playback-latency-mobile
     - browsertime-youtube-playback-power-mobile
+    - browsertime-quota-usage-mobile
     - browsertime-trr-performance-m
     - browsertime-hev3-connection-m
     - browsertime-doh-busy-site-m

@@ -700,3 +700,25 @@ browsertime-nav-bench-m-a11y:
             # Bug 2011884 - annotate the videos.
             - --browsertime-arg=videoParams.convert=true
             - --browsertime-arg=videoParams.addTimer=true
+
+browsertime-quota-usage-mobile:
+    description: Raptor (browsertime) quota usage assertion tests
+    max-run-time: 2700
+    treeherder-symbol: Btime(qu)
+    limit-platforms:
+        - android-hw-a55.*shippable.*
+    raptor:
+        apps: [fenix]
+        run-visual-metrics: false
+        subtests:
+            - [quota-usage-ls, qu-ls]
+            - [quota-usage-idb-v, qu-idb-v]
+            - [quota-usage-idb-eb, qu-idb-eb]
+            - [quota-usage-cache, qu-cache]
+            - [quota-usage-fs, qu-fs]
+            - [quota-usage-all, qu-all]
+    run-on-projects:
+        by-test-platform:
+            .*shippable.*: [autoland, mozilla-central]
+            default: []
+    tier: 2
