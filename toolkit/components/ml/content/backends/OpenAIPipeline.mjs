@@ -447,7 +447,7 @@ export class OpenAIPipeline {
         defaultHeaders: {
           "user-agent": userAgent,
           ...extraHeaders,
-          "service-type": serviceType || "ai",
+          "service-type": extraHeaders?.["service-type"] || serviceType || "ai",
           // Omitted when unset rather than defaulted to "chat": a service that
           // enumerates the purposes it accepts rejects the ones it does not
           // know, and every feature with a purpose passes one explicitly.

@@ -3,11 +3,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import getpass
-import importlib.util
 import json
 import os
+import shlex
 import subprocess
+import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
@@ -18,14 +20,11 @@ try:
 except ImportError:
     import tomli as tomllib
 from mach.decorators import Command, CommandArgument, SubCommand
+from mach.util import get_state_dir
 from mozbuild.base import MachCommandBase
 
-# Firefox Account OAuth configuration
-FXA_SCOPES = ("profile",)
-FXA_CLIENT_ID = "5882386c6d801776"
-FXA_ACCOUNT_SERVER_URL = "https://api.accounts.firefox.com"
-FXA_OAUTH_SERVER_URL = "https://oauth.accounts.firefox.com"
 ON_TRY = "MOZ_AUTOMATION" in os.environ
+IS_WINDOWS = sys.platform == "win32"
 
 
 def _dispatch_perftest(mach_context, test_path: str, extra_args: Optional[list] = None):
@@ -96,87 +95,272 @@ class EvalCommand(MachCommandBase):
         return _dispatch_perftest(self._mach_context, test_path, extra_args)
 
 
-def _get_fxa_token(mach_cmd):
-    mach_cmd.activate_virtualenv()
-    if importlib.util.find_spec("fxa") is None:
+MARIONETTE_STARTUP_TIMEOUT = 60
+FXA_TOKEN_TIMEOUT = 60
+FIREFOX_QUIT_TIMEOUT = 30
+
+# Matches the client and scope the load tests use, which MLPA accepts.
+FXA_CLIENT_ID = "5882386c6d801776"
+FXA_SCOPE = "profile"
+FXA_OAUTH_TOKEN_URL = "https://oauth.accounts.firefox.com/v1/token"
+
+# Runs in the browser's privileged scope and trades the signed-in session for a
+# long-lived refresh token through an offline OAuth grant with PKCE.
+FXA_REFRESH_TOKEN_SCRIPT = """
+const [clientId, scope, resolve] = arguments;
+(async () => {
+  const { FxAccounts, getFxAccountsSingleton } = ChromeUtils.importESModule(
+    "resource://gre/modules/FxAccounts.sys.mjs"
+  );
+  const fxAccounts = getFxAccountsSingleton();
+  const user = await fxAccounts.getSignedInUser();
+  if (!user || !user.verified) {
+    // The Smart Window sign-in flow, which doesn't turn on Sync.
+    const signInUrl = await FxAccounts.config.promiseConnectAccountURI(
+      "smartwindow",
+      "smartwindow"
+    );
+    return { error: user ? "unverified" : "not-signed-in", signInUrl };
+  }
+  const base64Url = bytes =>
+    btoa(String.fromCharCode(...bytes))
+      .replace(/\\+/g, "-")
+      .replace(/\\//g, "_")
+      .replace(/=+$/, "");
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = base64Url(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
+    )
+  );
+  return fxAccounts._withSessionToken(async sessionToken => {
+    const client = fxAccounts._internal.fxAccountsClient;
+    const { code } = await client.oauthAuthorize(sessionToken, {
+      client_id: clientId,
+      state: base64Url(crypto.getRandomValues(new Uint8Array(16))),
+      scope,
+      access_type: "offline",
+      code_challenge_method: "S256",
+      code_challenge: challenge,
+    });
+    const { refresh_token } = await client.oauthToken(
+      sessionToken,
+      code,
+      verifier,
+      clientId
+    );
+    return { refreshToken: refresh_token };
+  });
+})().then(resolve, e => resolve({ error: String(e.message || e) }));
+"""
+
+
+def _eval_tools_profile_dir():
+    profile = Path(get_state_dir()) / "eval-tools" / "profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    return profile
+
+
+def _firefox_command(binary, profile, *args):
+    command = [binary, "-no-remote", "-profile", str(profile)]
+    if IS_WINDOWS:
+        # firefox.exe is a launcher process that exits once the browser starts.
+        command.append("--wait-for-browser")
+    return [*command, *args]
+
+
+def _sign_in_with_firefox(binary, profile, sign_in_url):
+    print(
+        "\nA Firefox window will open. Sign in to your Mozilla account there, "
+        "complete any email or two-factor confirmation, then quit Firefox."
+    )
+    subprocess.run(_firefox_command(binary, profile, sign_in_url), check=False)
+
+
+def _profile_in_use(profile):
+    if IS_WINDOWS:
+        # Firefox holds parent.lock open without sharing while it runs.
+        lock_path = profile / "parent.lock"
+        if not lock_path.exists():
+            return False
         try:
-            mach_cmd.virtualenv_manager.install_pip_package("PyFxA==0.8.1")
-        except Exception as exception:
-            print(f"Failed to install 'fxa' package: {exception}")
-            raise exception
+            with open(lock_path, "a"):
+                return False
+        except PermissionError:
+            return True
 
-    from fxa import core, oauth
-    from fxa.errors import ClientError
-    from fxa.tools.bearer import get_bearer_token
-    from fxa.tools.unblock import send_unblock_code
+    import fcntl
 
-    print("Login to your Firefox Account (accounts.firefox.com)")
-    email = input("Email: ").strip()
-    password = getpass.getpass("Password: ").strip()
+    lock_path = profile / ".parentlock"
+    if not lock_path.exists():
+        return False
+    with open(lock_path, "a") as lock_file:
+        try:
+            fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.lockf(lock_file, fcntl.LOCK_UN)
+    return False
 
+
+def _wait_for_profile_unlock(profile):
+    # On macOS a restarting Firefox detaches from the process we launched, so
+    # the profile can still be open after that process exits.
+    if not _profile_in_use(profile):
+        return
+    print(f"\nFirefox is still running on {profile}. Quit Firefox to continue.")
+    while _profile_in_use(profile):
+        time.sleep(1)
+
+
+def _wait_for_marionette_port(proc, port_file):
+    deadline = time.monotonic() + MARIONETTE_STARTUP_TIMEOUT
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError("Firefox exited before Marionette started.")
+        try:
+            return int(port_file.read_text())
+        except (FileNotFoundError, ValueError):
+            time.sleep(0.5)
+    raise RuntimeError("Timed out waiting for Marionette to start.")
+
+
+def _query_fxa_refresh_token(binary, profile):
+    """Returns a dict with a "refreshToken", or an "error" plus a "signInUrl"
+    when sign-in is needed.
+    """
+    from marionette_driver.marionette import Marionette
+
+    _wait_for_profile_unlock(profile)
+    port_file = profile / "MarionetteActivePort"
+    port_file.unlink(missing_ok=True)
+    # WebDriver's recommended prefs point FxA at a dummy server.
+    (profile / "user.js").write_text(
+        'user_pref("marionette.port", 0);\n'
+        'user_pref("remote.prefs.recommended", false);\n'
+    )
+
+    env = dict(os.environ, MOZ_HEADLESS="1", MOZ_REMOTE_ALLOW_SYSTEM_ACCESS="1")
+    proc = subprocess.Popen(
+        _firefox_command(binary, profile, "-marionette"),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    quit_requested = False
     try:
-        token = get_bearer_token(
-            email,
-            password,
-            scopes=FXA_SCOPES,
-            client_id=FXA_CLIENT_ID,
-            account_server_url=FXA_ACCOUNT_SERVER_URL,
-            oauth_server_url=FXA_OAUTH_SERVER_URL,
+        port = _wait_for_marionette_port(proc, port_file)
+        client = Marionette(host="127.0.0.1", port=port)
+        client.start_session()
+        client.set_context(client.CONTEXT_CHROME)
+        client.timeout.script = FXA_TOKEN_TIMEOUT
+        result = client.execute_async_script(
+            FXA_REFRESH_TOKEN_SCRIPT, script_args=[FXA_CLIENT_ID, FXA_SCOPE]
         )
-    except ClientError as exception:
         try:
-            if "Unconfirmed session" not in str(exception):
-                raise
-
+            client.execute_script(
+                "Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);"
+            )
+            quit_requested = True
+        except Exception:
+            pass
+        return result
+    finally:
+        try:
+            proc.wait(timeout=FIREFOX_QUIT_TIMEOUT if quit_requested else 0)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
             try:
-                send_unblock_code(email, FXA_ACCOUNT_SERVER_URL)
-            except ClientError:
-                print("Login failed: unable to send unblock code.")
-                raise exception
+                proc.wait(timeout=FIREFOX_QUIT_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
-            print("\nAn authorization code was sent to your email, enter it here.")
-            unblock_code = input("Code: ").strip()
 
-            try:
-                # Attempt to login without 2 factor authentication.
-                session = core.Client(server_url=FXA_ACCOUNT_SERVER_URL).login(
-                    email,
-                    password,
-                    unblock_code=unblock_code,
-                )
-                token = oauth.Client(
-                    client_id=FXA_CLIENT_ID,
-                    server_url=FXA_OAUTH_SERVER_URL,
-                ).authorize_token(session, " ".join(FXA_SCOPES))
-            except ClientError:
-                # Two factor is required, try again.
-                session = core.Client(server_url=FXA_ACCOUNT_SERVER_URL).login(
-                    email,
-                    password,
-                    unblock_code=unblock_code,
-                    verification_method="totp-2fa",
-                )
+def _refresh_token_path():
+    return Path(get_state_dir()) / "eval-tools" / "fxa_refresh_token"
 
-                print(
-                    "\nTwo-factor authorization is enabled, open your app and enter the code:"
-                )
-                totp_code = input("Code: ").strip()
-                if not session.totp_verify(totp_code):
-                    print("Login failed: invalid two-factor code.")
-                    raise ClientError("Invalid two-factor code.")
 
-                token = oauth.Client(
-                    client_id=FXA_CLIENT_ID,
-                    server_url=FXA_OAUTH_SERVER_URL,
-                ).authorize_token(session, " ".join(FXA_SCOPES))
+def _write_private_file(path, text):
+    path = Path(path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags, 0o600)
+    if hasattr(os, "fchmod"):
+        os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    return path
 
-        except Exception as retry_exception:
-            print(f"Login failed: {retry_exception}")
-            raise retry_exception
+
+def _bootstrap_refresh_token(mach_cmd):
+    """Signs in with a local Firefox build, saves a refresh token, and returns
+    the path it was saved to.
+    """
+    try:
+        binary = mach_cmd.get_binary_path()
     except Exception as exception:
-        print(f"Login failed: {exception}")
-        raise exception
-    return token
+        raise RuntimeError(
+            f"Could not find a Firefox build ({exception}). Run ./mach build first."
+        ) from exception
+
+    profile = _eval_tools_profile_dir()
+    result = _query_fxa_refresh_token(binary, profile)
+    if result.get("signInUrl"):
+        _sign_in_with_firefox(binary, profile, result["signInUrl"])
+        result = _query_fxa_refresh_token(binary, profile)
+
+    if not result.get("refreshToken"):
+        raise RuntimeError(
+            f"Could not get a Mozilla account refresh token: {result.get('error')}. "
+            f"If the account session has expired, delete {profile} and run this "
+            "command again."
+        )
+    return _write_private_file(_refresh_token_path(), result["refreshToken"])
+
+
+def _read_refresh_token():
+    if os.environ.get("MOZ_FXA_REFRESH_TOKEN"):
+        return os.environ["MOZ_FXA_REFRESH_TOKEN"].strip()
+    path = _refresh_token_path()
+    if path.exists():
+        return path.read_text().strip()
+    return None
+
+
+def _get_fxa_access_token(refresh_token):
+    request = urllib.request.Request(
+        FXA_OAUTH_TOKEN_URL,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({
+            "client_id": FXA_CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "scope": FXA_SCOPE,
+        }).encode(),
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read())["access_token"]
+    except urllib.error.HTTPError as exception:
+        try:
+            message = json.loads(exception.read()).get("message", "")
+        except ValueError:
+            message = ""
+        raise RuntimeError(
+            f"The FxA OAuth server rejected the refresh token "
+            f"(HTTP {exception.code}: {message}). Run ./mach eval-tools login "
+            "--bootstrap to get a new one."
+        ) from None
+
+
+def _write_env_file(path, tokens):
+    return _write_private_file(
+        path,
+        "".join(
+            f"export {name}={shlex.quote(value)}\n" for name, value in tokens.items()
+        ),
+    )
 
 
 def _get_mlpa_token():
@@ -217,41 +401,79 @@ class EvalToolsCommand(MachCommandBase):
     @SubCommand(
         "eval-tools",
         "login",
-        description="Login helper to fetch a bearer token (interactive).",
+        description="Fetch the eval tokens, using a saved Mozilla account "
+        "refresh token.",
     )
-    def eval_tools_login(self):
+    @CommandArgument(
+        "--bootstrap",
+        action="store_true",
+        help="Sign in to the eval test account with a local Firefox build and "
+        "save a refresh token. Only needed once.",
+    )
+    @CommandArgument(
+        "--write-env-file",
+        metavar="PATH",
+        help="Write the tokens as shell exports to PATH (mode 0600) instead of "
+        "printing them. Load them with `source PATH`.",
+    )
+    def eval_tools_login(
+        self, bootstrap: bool = False, write_env_file: Optional[str] = None
+    ):
         if ON_TRY:
             print("This command is not intended to be run in try/CI environments.")
             return 1
-        if os.environ.get("MOZ_FXA_BEARER_TOKEN"):
+
+        tokens = {}
+        if os.environ.get("MOZ_FXA_BEARER_TOKEN") and not bootstrap:
             print("MOZ_FXA_BEARER_TOKEN already set; skipping login.")
             print("Unset with:\nunset MOZ_FXA_BEARER_TOKEN")
-            fxa_token = os.environ.get("MOZ_FXA_BEARER_TOKEN")
+            tokens["MOZ_FXA_BEARER_TOKEN"] = os.environ["MOZ_FXA_BEARER_TOKEN"]
         else:
             try:
-                fxa_token = _get_fxa_token(self)
+                if bootstrap:
+                    path = _bootstrap_refresh_token(self)
+                    print(f"Saved the refresh token to {path}.")
+                refresh_token = _read_refresh_token()
+                if not refresh_token:
+                    print(
+                        "No Mozilla account refresh token. Run ./mach eval-tools "
+                        "login --bootstrap once, or set MOZ_FXA_REFRESH_TOKEN."
+                    )
+                    return 1
+                tokens["MOZ_FXA_BEARER_TOKEN"] = _get_fxa_access_token(refresh_token)
             except Exception as exception:
                 print(f"Error during FXA login: {exception}")
                 return 1
 
+        mlpa_failed = False
         if os.environ.get("MOZ_MLPA_AUTHORIZATION_TOKEN"):
             print(
                 "MOZ_MLPA_AUTHORIZATION_TOKEN already set; skipping MLPA token fetch."
             )
             print("Unset with:\nunset MOZ_MLPA_AUTHORIZATION_TOKEN")
-            mlpa_token = os.environ.get("MOZ_MLPA_AUTHORIZATION_TOKEN")
+            tokens["MOZ_MLPA_AUTHORIZATION_TOKEN"] = os.environ[
+                "MOZ_MLPA_AUTHORIZATION_TOKEN"
+            ]
         else:
             try:
-                mlpa_token = _get_mlpa_token()
+                tokens["MOZ_MLPA_AUTHORIZATION_TOKEN"] = _get_mlpa_token()
             except Exception as exception:
                 print(f"Error fetching MLPA token: {exception}")
-                return 1
+                mlpa_failed = True
 
-        # don't print tokens in CI/try to avoid leaking secrets in logs
-        if not ON_TRY:
+        if os.environ.get("MOZ_MLPA_FASTLY_TOKEN"):
+            tokens["MOZ_MLPA_FASTLY_TOKEN"] = os.environ["MOZ_MLPA_FASTLY_TOKEN"]
+        else:
+            print("MOZ_MLPA_FASTLY_TOKEN is not set; the evals require it.")
+
+        if write_env_file:
+            env_path = _write_env_file(write_env_file, tokens)
+            print(f"\nWrote {', '.join(tokens)} to {env_path}. Load with:\n")
+            print(f" source {shlex.quote(str(env_path))}")
+        else:
             print(
                 "\nCopy and paste the following in your terminal to persist your login:\n"
             )
-            print(f" export MOZ_FXA_BEARER_TOKEN='{fxa_token}'")
-            print(f" export MOZ_MLPA_AUTHORIZATION_TOKEN='{mlpa_token}'")
-        return 0
+            for name, value in tokens.items():
+                print(f" export {name}={shlex.quote(value)}")
+        return 1 if mlpa_failed else 0

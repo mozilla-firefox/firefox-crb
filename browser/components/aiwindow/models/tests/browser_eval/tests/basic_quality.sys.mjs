@@ -14,6 +14,7 @@ import {
 } from "chrome://mochitests/content/browser/browser/components/aiwindow/models/tests/browser_eval/prompts/basic_quality.sys.mjs";
 
 import { MLTestUtils } from "resource://testing-common/MLTestUtils.sys.mjs";
+import { getMlpaStageConfig } from "chrome://mochitests/content/browser/browser/components/aiwindow/models/tests/browser_eval/tests/mlpa_stage.sys.mjs";
 
 const TEST_CASES = [
   ["Hello there, how are you?", "about:newtab", "about:newtab"],
@@ -33,15 +34,11 @@ export async function runChatEvalForModel(
   model,
   { Assert, SpecialPowers, setupEvaluation, collectChatResponse, renderPrompt }
 ) {
-  const token = Services.env.get("MOZ_FXA_BEARER_TOKEN");
-  Assert.ok(
-    token,
-    "MOZ_FXA_BEARER_TOKEN must be set in the environment. Please run ./mach eval-tools login."
-  );
+  const { fxaToken: token, prefs: mlpaStagePrefs } = getMlpaStageConfig();
 
   await SpecialPowers.pushPrefEnv({
     set: [
-      ["browser.smartwindow.apiKey", token],
+      ...mlpaStagePrefs,
       ["sidebar.notification.badge.aichat", false],
       ["browser.smartwindow.model", model],
     ],
