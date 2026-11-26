@@ -6472,6 +6472,19 @@ RefPtr<BoolPromise> QuotaManager::TemporaryStorageInitialized() {
   return temporaryStorageInitializedOp->OnResults();
 }
 
+RefPtr<BoolPromise> QuotaManager::FlushDirtyOriginInfosForTesting() {
+  AssertIsOnOwningThread();
+
+  auto flushDirtyOriginInfosOp =
+      CreateFlushDirtyOriginInfosOp(WrapMovingNotNullUnchecked(this));
+
+  RegisterNormalOriginOp(*flushDirtyOriginInfosOp);
+
+  flushDirtyOriginInfosOp->RunImmediately();
+
+  return flushDirtyOriginInfosOp->OnResults();
+}
+
 void QuotaManager::FlushDirtyOriginInfos() {
   AssertIsOnIOThread();
   MOZ_ASSERT(mStorageConnection);
@@ -8128,6 +8141,9 @@ Result<bool, nsresult> QuotaManager::FlagOriginInfoAsDirtyOnDisk(
     return Err(NS_ERROR_NOT_INITIALIZED);
   }
 
+  QM_TRY(ArtificialFailure(
+      nsIQuotaArtificialFailure::CATEGORY_FLAG_ORIGIN_INFO_AS_DIRTY));
+
   MOZ_ASSERT(mStorageConnection);
 
 #ifdef DEBUG
@@ -8313,7 +8329,11 @@ RefPtr<QuotaManager::WriteLeasePromise> QuotaManager::AcquireWriteLease(
 
         promise->Resolve(true, __func__);
       });
-  nsresult rv = mIOThread->get()->Dispatch(runnable.forget());
+  nsresult rv = [&]() -> nsresult {
+    QM_TRY(ArtificialFailure(
+        nsIQuotaArtificialFailure::CATEGORY_ACQUIRE_WRITE_LEASE_DISPATCH));
+    return mIOThread->get()->Dispatch(runnable.forget());
+  }();
   if (NS_FAILED(rv)) {
     promise->Reject(rv, __func__);
   }

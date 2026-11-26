@@ -138,6 +138,9 @@ parent:
   async TemporaryStorageInitialized()
       returns(BoolResponse response);
 
+  async FlushDirtyOriginInfos()
+      returns(BoolResponse response);
+
   async TemporaryGroupInitialized(PrincipalInfo principalInfo)
       returns(BoolResponse response);
 
