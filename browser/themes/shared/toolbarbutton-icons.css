@@ -168,7 +168,18 @@ toolbar .toolbarbutton-1 {
 }
 
 #PanelUI-menu-button {
+  --menu-button-mask: url("chrome://browser/skin/menu.svg#mask");
+  --menu-button-gradient-start: light-dark(var(--color-red-60), var(--color-red-30));
+  --menu-button-gradient-end: light-dark(var(--color-blue-70), var(--color-blue-30));
   list-style-image: url("chrome://browser/skin/menu.svg");
+
+  @media not ((forced-colors) or (prefers-contrast)) {
+    > .toolbarbutton-badge-stack > .toolbarbutton-icon {
+      fill: transparent;
+      background-image: linear-gradient(45deg, var(--menu-button-gradient-start), var(--menu-button-gradient-end));
+      mask: var(--menu-button-mask) center / 16px no-repeat content-box;
+    }
+  }
 }
 
 #PanelUI-menu-button[badge-status="update-available"],
@@ -180,6 +191,7 @@ toolbar .toolbarbutton-1 {
 #PanelUI-menu-button[badge-status="addon-alert"],
 #PanelUI-menu-button[badge-status="fxa-needs-authentication"] {
   list-style-image: url("chrome://browser/skin/menu-badged.svg");
+  --menu-button-mask: url("chrome://browser/skin/menu-badged.svg#mask");
 }
 
 #cut-button {
