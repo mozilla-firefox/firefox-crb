@@ -13136,6 +13136,33 @@ void DeleteFilesRunnable::DoDatabaseWork() {
   MOZ_ASSERT(mState == State_DatabaseWorkOpen);
 
   if (!mFileManager->Invalidated()) {
+    // Deleting stored files lowers the origin usage, so the dirty flag has to
+    // be on disk first.
+    quota::WriteLease writeLease;
+    if (mFileManager->EnforcingQuota()) {
+      QuotaManager* const quotaManager = QuotaManager::Get();
+      MOZ_ASSERT(quotaManager);
+
+      auto leaseOrErr = quotaManager->AcquireWriteLeaseOnIOThread(
+          mFileManager->OriginMetadata());
+      if (leaseOrErr.isErr()) {
+        leaseOrErr = quotaManager->AcquireWriteLeaseOnIOThread(
+            mFileManager->OriginMetadata());
+      }
+      if (leaseOrErr.isErr()) {
+        // The database no longer references these files, so skipping the
+        // deletion leaves them orphaned on disk. Usage stays consistent since
+        // nothing was decremented, and the next origin initialization reclaims
+        // them through the journal entries that are left behind. Unlike
+        // ClearClientOp, which is a user request and propagates the failure,
+        // there is no caller to report the failure to here.
+        NS_WARNING("Failed to acquire a write lease, not deleting files!");
+        Finish();
+        return;
+      }
+      writeLease = leaseOrErr.unwrap();
+    }
+
     for (int64_t fileId : mFileIds) {
       if (NS_FAILED(mFileManager->SyncDeleteFile(fileId))) {
         NS_WARNING("Failed to delete file!");
@@ -15673,6 +15700,12 @@ nsresult OpenDatabaseOp::DoDatabaseWork() {
     // Delete the database and directroy since they should be deleted in
     // previous operation.
     // Note: only update usage to the QuotaManager when mEnforcingQuota == true
+    quota::WriteLease writeLease;
+    if (mEnforcingQuota) {
+      QM_TRY_UNWRAP(writeLease,
+                    quotaManager->AcquireWriteLeaseOnIOThread(mOriginMetadata));
+    }
+
     QM_TRY(MOZ_TO_RESULT(RemoveDatabaseFilesAndDirectory(
         *dbDirectory, *mDatabaseFilenameBase,
         mEnforcingQuota ? quotaManager : nullptr, persistenceType,
@@ -17048,6 +17081,14 @@ nsresult DeleteDatabaseOp::VersionChangeOp::RunOnIOThread() {
   if (NS_WARN_IF(!directory)) {
     IDB_REPORT_INTERNAL_ERR();
     return NS_ERROR_DOM_INDEXEDDB_UNKNOWN_ERR;
+  }
+
+  // Removing the database lowers the origin usage, so the dirty flag has to be
+  // on disk first.
+  quota::WriteLease writeLease;
+  if (quotaManager) {
+    QM_TRY_UNWRAP(writeLease, quotaManager->AcquireWriteLeaseOnIOThread(
+                                  mDeleteDatabaseOp->mOriginMetadata));
   }
 
   nsresult rv = RemoveDatabaseFilesAndDirectory(

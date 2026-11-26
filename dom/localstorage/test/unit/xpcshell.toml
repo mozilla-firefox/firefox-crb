@@ -132,6 +132,14 @@ skip-if = [
 
 ["test_preloading.js"]
 
+["test_prepareDatastoreWriteLease.js"]
+requesttimeoutfactor = 4 # One-minute polling budget plus setup and cleanup.
+prefs = [
+  "dom.storage.enable_migration_from_unsupported_legacy_implementation=true",
+  "security.storage.encryption.sqlite.enabled=false",
+]
+skip-if = ["privateBrowsing"]
+
 ["test_requestFinalizationStarted.js"]
 prefs = ["security.storage.encryption.sqlite.enabled=false"]
 # Installs a packaged unencrypted SQLite profile; the PB cipher key can't

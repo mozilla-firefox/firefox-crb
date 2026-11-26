@@ -20,10 +20,12 @@ struct OriginMetadata;
 class GroupInfoPair;
 class OriginInfo;
 
-// RAII lock for quota operations that mutate origin metadata. Like
-// MutexAutoLock, it acquires the quota mutex on construction and releases it
-// on destruction. Construction requires the origin to have been marked dirty
-// on disk before the operation starts.
+// RAII lock for quota operations that mutate origin metadata. Acquires the
+// quota mutex on construction and releases it on destruction. The origin's
+// dirty flag must already be recorded on disk when a mutation starts; callers
+// guarantee this by holding a write lease (QuotaManager::AcquireWriteLease on
+// client threads, AcquireWriteLeaseOnIOThread on the IO thread). The lock only
+// verifies it and never does IO itself.
 class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
     DirtyTrackingAutoLock {
  public:
@@ -92,6 +94,8 @@ class MOZ_RAII MOZ_SCOPED_CAPABILITY MOZ_CAPABILITY("dirty_tracking_autolock")
 
   DirtyTrackingAutoLock(DirtyTrackingAutoLock&&) = default;
   DirtyTrackingAutoLock& operator=(DirtyTrackingAutoLock&&) = default;
+
+  void AssertDirtyOnDisk() const;
 
   static void* operator new(size_t) noexcept(true);
 
