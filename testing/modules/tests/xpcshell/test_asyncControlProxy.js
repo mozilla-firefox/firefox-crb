@@ -403,6 +403,27 @@ add_task(async function test_controls_global_method() {
 });
 
 /**
+ * This test case ensures that an invalid predicate leaves the original method
+ * callable without an interceptor.
+ */
+add_task(async function test_invalid_predicate_leaves_method_untouched() {
+  const operation = new TestOperation();
+  const original = operation.run;
+
+  Assert.throws(
+    () => TestUtils.asyncControlProxy(operation).run(null),
+    /The call predicate must be a function/,
+    "Creating a controller with an invalid predicate should throw"
+  );
+  Assert.strictEqual(operation.run, original, "The method should be unchanged");
+  Assert.equal(
+    await operation.run(),
+    "value",
+    "The original method should run"
+  );
+});
+
+/**
  * This test case ensures that creating a controller for a non-function
  * property fails and leaves the target unchanged.
  */
@@ -474,6 +495,377 @@ add_task(function test_callable_accessor_cannot_be_controlled() {
     original,
     "The accessor should be unchanged"
   );
+});
+
+/**
+ * This test case ensures that a control pauses the first matching invocation
+ * and leaves calls with other arguments or receivers unaffected.
+ */
+add_task(async function test_pauses_only_the_first_matching_call() {
+  const selectedOperation = new TestOperation("selected");
+  const otherOperation = new TestOperation("other");
+  using runController = TestUtils.asyncControlProxy(TestOperation).run(
+    (receiver, [input]) => receiver === selectedOperation && input === "target"
+  );
+  let intercepted = false;
+  runController.waitForInterception().then(() => {
+    intercepted = true;
+  });
+
+  Assert.equal(
+    await otherOperation.run("target"),
+    "other",
+    "A call on another receiver should proceed"
+  );
+  const skippedResult = selectedOperation.run("other");
+  Assert.equal(
+    selectedOperation.lastInput,
+    "other",
+    "A nonmatching call should run without waiting"
+  );
+  Assert.equal(
+    await skippedResult,
+    "selected",
+    "A call with different arguments should proceed"
+  );
+  Assert.ok(
+    !intercepted,
+    "Non-matching calls should leave the interception signal pending"
+  );
+
+  const result = selectedOperation.run("target");
+  let delivered = false;
+  const delivery = result.then(value => {
+    delivered = true;
+
+    return value;
+  });
+
+  await runController.waitForInterception();
+  Assert.equal(
+    selectedOperation.lastInput,
+    "other",
+    "The matching call should pause before running the method"
+  );
+  Assert.equal(
+    await runController.waitForResult(),
+    "selected",
+    "The test should see the original result before release"
+  );
+  Assert.equal(
+    selectedOperation.lastInput,
+    "target",
+    "Waiting for the result runs the method"
+  );
+  Assert.equal(
+    await selectedOperation.run("target"),
+    "selected",
+    "A second matching call should proceed while the first result is held"
+  );
+  await TestUtils.waitForTick();
+  Assert.ok(!delivered, "The first result should remain held");
+
+  runController.releaseResult();
+  Assert.equal(
+    await delivery,
+    "selected",
+    "The original result should reach the caller after release"
+  );
+});
+
+/**
+ * This test case ensures that a queued rejection stays pending through
+ * skipped calls and is delivered only to the first matching caller.
+ */
+add_task(async function test_queued_rejection_skips_nonmatching_call() {
+  const operation = new TestOperation();
+  using runController = TestUtils.asyncControlProxy(operation).run(
+    (_, [input]) => input === "match"
+  );
+  const reason = new Error("Matching call rejected");
+  runController.rejectResult(reason);
+
+  Assert.equal(
+    await operation.run("skip", "skipped result"),
+    "skipped result",
+    "The skipped call gets its original result"
+  );
+  await Assert.rejects(
+    operation.run("match"),
+    error => error === reason,
+    "The matching caller gets the queued rejection"
+  );
+  Assert.equal(operation.lastInput, "skip", "Only the skipped call ran");
+  Assert.equal(operation.callCount, 1, "The matching method was never invoked");
+});
+
+/**
+ * This test case ensures that a predicate failure ends a queued rejection
+ * and is reported to the caller and subsequent waiters.
+ */
+add_task(async function test_predicate_failure_discards_queued_rejection() {
+  const operation = new TestOperation();
+  const failure = new Error("Predicate failed");
+  using runController = TestUtils.asyncControlProxy(operation).run(() => {
+    throw failure;
+  });
+  runController.rejectResult(new Error("Queued failure"));
+
+  await Assert.rejects(
+    operation.run("target"),
+    error => error === failure,
+    "The caller gets the predicate failure"
+  );
+  await Assert.rejects(
+    runController.waitForResult(),
+    error => error === failure,
+    "Later waits get the predicate failure"
+  );
+  Assert.equal(operation.callCount, 0, "The original method never ran");
+});
+
+/**
+ * This test case ensures that a predicate can change its argument array
+ * without changing the arguments the original method receives.
+ */
+add_task(async function test_predicate_cannot_rewrite_call_arguments() {
+  const operation = new TestOperation();
+  using runController = TestUtils.asyncControlProxy(operation).run(
+    (_, args) => {
+      const [input] = args;
+      args[0] = "changed by predicate";
+      return input === "match";
+    }
+  );
+
+  const methodResult = runController.waitForResult();
+  const skippedResult = operation.run("skip", "skipped result");
+  Assert.equal(
+    operation.lastInput,
+    "skip",
+    "The skipped call receives its original input"
+  );
+  Assert.equal(
+    await skippedResult,
+    "skipped result",
+    "The skipped call gets its result"
+  );
+
+  const matchedResult = operation.run("match", "matching result");
+  Assert.equal(
+    await methodResult,
+    "matching result",
+    "The test receives a result after the matching call runs"
+  );
+  Assert.equal(
+    operation.lastInput,
+    "match",
+    "The original method receives the matching call's input"
+  );
+
+  runController.releaseResult();
+  Assert.equal(
+    await matchedResult,
+    "matching result",
+    "The matched call gets its result"
+  );
+});
+
+/**
+ * This test case ensures that a throwing predicate fails the caller and
+ * every control operation with the same reason.
+ */
+add_task(async function test_predicate_failure_reaches_caller_and_control() {
+  const reason = new Error("Predicate failed");
+  const operation = new TestOperation();
+  const original = operation.run;
+  const isPredicateFailure = error => error === reason;
+
+  {
+    using runController = TestUtils.asyncControlProxy(operation).run(() => {
+      throw reason;
+    });
+    const methodResult = runController.waitForResult();
+    await Assert.rejects(
+      operation.run("failed"),
+      isPredicateFailure,
+      "The caller gets the failure"
+    );
+    await Assert.rejects(
+      runController.waitForInterception(),
+      isPredicateFailure,
+      "The interception signal gets the failure"
+    );
+    await Assert.rejects(
+      methodResult,
+      isPredicateFailure,
+      "The result wait gets the predicate failure"
+    );
+    await Assert.rejects(
+      runController.waitForResult(),
+      isPredicateFailure,
+      "A later result wait gets the same failure"
+    );
+    for (const method of ["start", "releaseResult", "rejectResult"]) {
+      Assert.throws(
+        () => runController[method](),
+        isPredicateFailure,
+        `${method} reports the predicate failure`
+      );
+    }
+    runController.restore();
+    runController.restore();
+    await Assert.rejects(
+      runController.waitForInterception(),
+      isPredicateFailure,
+      "Restoring preserves the predicate failure"
+    );
+  }
+
+  Assert.equal(operation.callCount, 0, "The failed call never ran");
+  Assert.strictEqual(
+    operation.run,
+    original,
+    "Predicate failure restores the method"
+  );
+  using nextRunController = TestUtils.asyncControlProxy(operation).run();
+  const nextResult = operation.run();
+  nextRunController.releaseResult();
+  Assert.equal(await nextResult, "value", "The method can be controlled again");
+});
+
+/**
+ * This test case ensures that an invalid predicate result fails
+ * the control before another call can match.
+ */
+add_task(async function test_invalid_predicate_result_removes_stub() {
+  const thenable = {
+    get then() {
+      Assert.ok(false, "The controller should never read then on a thenable");
+      return undefined;
+    },
+  };
+  for (const invalidResult of ["yes", null, undefined, thenable]) {
+    const operation = new TestOperation();
+    using runController = TestUtils.asyncControlProxy(operation).run(
+      (_, [input]) => (input === "invalid" ? invalidResult : true)
+    );
+    const invalidDecision = /The call predicate for run must return a boolean/;
+
+    const invalidCall = operation.run("invalid");
+    const followingCall = operation.run("following");
+
+    await Assert.rejects(
+      invalidCall,
+      invalidDecision,
+      "The invalid call should reject"
+    );
+    await Assert.rejects(
+      runController.waitForInterception(),
+      invalidDecision,
+      "The following call should leave the interception failure intact"
+    );
+    Assert.equal(await followingCall, "value", "The following call should run");
+    Assert.equal(
+      operation.lastInput,
+      "following",
+      "The method should run normally"
+    );
+  }
+});
+
+/**
+ * This test case ensures that a rejected promise returned by a predicate
+ * fails the call without leaving an unhandled rejection.
+ */
+add_task(async function test_rejected_predicate_promise_is_invalid() {
+  const operation = new TestOperation();
+  using runController = TestUtils.asyncControlProxy(operation).run(() =>
+    Promise.reject(new Error("Unexpected predicate rejection"))
+  );
+  const invalidDecision = /The call predicate for run must return a boolean/;
+
+  await Assert.rejects(
+    operation.run(),
+    invalidDecision,
+    "The caller gets the predicate contract error"
+  );
+  await Assert.rejects(
+    runController.waitForInterception(),
+    invalidDecision,
+    "The controller gets the predicate contract error"
+  );
+  Assert.equal(operation.callCount, 0, "The failed call never ran");
+});
+
+/**
+ * This test case ensures that a failure while observing an invalid predicate
+ * promise still disarms the controller and reports the predicate error.
+ */
+add_task(async function test_predicate_promise_observation_failure() {
+  class PredicatePromise extends Promise {
+    static get [Symbol.species]() {
+      throw new Error("The predicate promise cannot be observed");
+    }
+  }
+
+  const operation = new TestOperation();
+  const originalRun = operation.run;
+  using runController = TestUtils.asyncControlProxy(operation).run(() =>
+    PredicatePromise.resolve(true)
+  );
+
+  const callerPromise = operation.run();
+  const [callerResult, interceptionResult] = await Promise.allSettled([
+    callerPromise,
+    runController.waitForInterception(),
+  ]);
+
+  Assert.equal(
+    callerResult.reason?.name,
+    "TypeError",
+    "The caller gets a TypeError"
+  );
+  Assert.equal(
+    callerResult.reason.message,
+    "The call predicate for run must return a boolean",
+    "The caller gets the predicate contract error"
+  );
+  Assert.strictEqual(
+    interceptionResult.reason,
+    callerResult.reason,
+    "The controller reports the same failure"
+  );
+  Assert.strictEqual(operation.run, originalRun, "The method was restored");
+  Assert.equal(operation.callCount, 0, "The failed call never ran");
+});
+
+/**
+ * This test case ensures that an undefined predicate failure is preserved
+ * after restoring the controller.
+ */
+add_task(async function test_undefined_predicate_failure_survives_restore() {
+  const operation = new TestOperation();
+  using runController = TestUtils.asyncControlProxy(operation).run(() => {
+    // eslint-disable-next-line no-throw-literal -- Exercise an undefined rejection reason.
+    throw undefined;
+  });
+
+  const callerPromise = operation.run();
+  runController.restore();
+
+  // Assert.rejects() cannot match an undefined reason.
+  const expectedRejection = { status: "rejected", reason: undefined };
+  Assert.deepEqual(
+    await Promise.allSettled([
+      callerPromise,
+      runController.waitForResult(),
+      Promise.resolve().then(() => runController.start()),
+    ]),
+    [expectedRejection, expectedRejection, expectedRejection],
+    "The caller and the controller operations report the original reason"
+  );
+  Assert.equal(operation.callCount, 0, "The failed call never ran");
 });
 
 /**
@@ -698,21 +1090,27 @@ add_task(
 
 /**
  * This test case ensures that a prototype controller waiting for a call
- * blocks instance controllers
- * until it intercepts a call.
+ * blocks instance controllers even when its predicate excludes those instances.
  */
 add_task(async function test_prototype_control_blocks_instance_controls() {
   const firstOperation = new TestOperation("first");
   const secondOperation = new TestOperation("second");
   const selectedOperation = new TestOperation("selected");
-  using prototypeRunController =
-    TestUtils.asyncControlProxy(TestOperation).run();
+  using prototypeRunController = TestUtils.asyncControlProxy(TestOperation).run(
+    receiver => receiver === selectedOperation
+  );
 
   for (const operation of [firstOperation, secondOperation]) {
     Assert.throws(
       () => TestUtils.asyncControlProxy(operation).run().restore(),
       /A controller for run is already waiting on an overlapping target/,
-      "The prototype controller blocks creation of an instance controller"
+      "The prototype controller blocks creation of a controller on an excluded instance"
+    );
+    await operation.run("unmatched");
+    Assert.equal(
+      operation.lastInput,
+      "unmatched",
+      "An excluded call runs normally"
     );
   }
 
@@ -877,6 +1275,35 @@ add_task(async function test_stale_wrapper_preserves_new_control() {
     "value",
     "The new control can release its call"
   );
+});
+
+/**
+ * This test case ensures that a reentrant predicate cannot replace a call
+ * already intercepted by the same control.
+ */
+add_task(async function test_reentrant_predicate_keeps_first_capture() {
+  const operation = new TestOperation();
+  let innerResult;
+  using runController = TestUtils.asyncControlProxy(operation).run(
+    (receiver, [input]) => {
+      if (input === "outer") {
+        innerResult = receiver.run("inner");
+      }
+      return true;
+    }
+  );
+
+  const outerResult = operation.run("outer");
+  Assert.equal(operation.lastInput, "outer", "The outer call runs normally");
+  Assert.equal(
+    await runController.waitForResult(),
+    "value",
+    "The inner call can run"
+  );
+  Assert.equal(operation.lastInput, "inner", "The inner call was intercepted");
+  runController.releaseResult();
+  Assert.equal(await innerResult, "value", "The inner caller gets its result");
+  Assert.equal(await outerResult, "value", "The outer caller gets its result");
 });
 
 /**
