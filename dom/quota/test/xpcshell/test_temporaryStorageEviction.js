@@ -317,7 +317,6 @@ async function testSteps() {
   add_task(
     {
       pref_set: [
-        ["dom.quotaManager.loadQuotaFromCache", false],
         ["dom.quotaManager.temporaryStorage.fixedLimit", storageSizeKB],
         ["dom.quotaManager.temporaryStorage.updateOriginAccessTime", true],
       ],

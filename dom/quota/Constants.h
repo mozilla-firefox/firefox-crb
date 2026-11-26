@@ -30,6 +30,8 @@ constexpr int64_t kSecPerWeek = 7 * kSecPerDay;
 // clearing non persisted zero usage origins.
 constexpr int64_t aDefaultCutoffAccessTime = kSecPerWeek * PR_USEC_PER_SEC;
 
+constexpr int64_t kDefaultLastAccessTime = 0;
+
 const char kChromeOrigin[] = "chrome";
 
 constexpr auto kSQLiteSuffix = u".sqlite"_ns;
@@ -48,42 +50,36 @@ constexpr nsLiteralCString kUUIDOriginScheme = "uuid"_ns;
 // be trusted.
 const uint32_t kNoQuotaVersion = 0;
 
-// Current version of the quota management.
+// Version of the .metadata-v2 file format written by this build.
 //
-// This value is written to disk when a metadata file is created for a new
-// (empty) origin directory or after performing a full origin directory scan.
-// It represents the version of quota tracking logic used to generate the
-// originUsage and clientUsages values.
+// The file is written together with the storage database row by
+// QuotaManager::CreateDirectoryMetadata2, which is reached from:
+// - QuotaManager::GetOrCreateTemporaryOriginDirectory and
+//   QuotaManager::EnsurePersistentOriginIsInitializedInternal when an origin
+//   directory is created
+// - QuotaManager::EnsureTemporaryOriginIsInitializedInternal when an existing
+//   directory is initialized for the first time in a session
+// - PersistOp when the persisted flag changes
+// - indexedDB::Maintenance after maintenance updates the accessed flag and
+//   the maintenance date
+// The storage upgrade and RestoreDirectoryMetadata2Helper paths write the
+// legacy layout without a version field, which reads back as
+// kNoQuotaVersion.
 //
-// The version must be incremented whenever the quota management logic changes
-// in a way that could invalidate existing cached usage data. This includes:
-// - Adding a new quota client
-// - Removing an existing quota client
-// - Changing how usage is calculated or stored
-// - Any other change that could cause a mismatch between actual on-disk usage
-//   and the cached originUsage/clientUsages values
+// Since version 3 the file is a recovery-only identity store. Origin usage
+// and client usages are written as zero and are never read back; the storage
+// database is the source of truth and a full directory scan recomputes usage
+// when the database can't be used.
 //
-// At present, it is the responsibility of patch authors and reviewers to
-// decide when a bump is required. However, in the future, a test will verify
-// the correctness of cached usage data by comparing it against real usage,
-// using a pre-packaged or conditioned profile.
-//
-// If you're unsure whether a bump is needed, it's safer to do one. However,
-// keep in mind that increasing this version will invalidate the L2 quota info
-// cache. When the L1 quota info cache can't be used, such as when the build ID
-// changes, after a crash, or on Android in general, and the L2 quota info
-// cache is also unavailable due to the version bump, storage initialization
-// will have to fall back to the slowest path: a full storage scan.
-const uint32_t kCurrentQuotaVersion = 2;
-
-// Minimum quota version whose .metadata-v2 files carry valid usage data.
-// Origins at or above this version can be initialized from cached metadata
-// without a full directory scan.
-const uint32_t kMinUsableQuotaVersion = 1;
-
-constexpr bool IsInitializableQuotaVersion(uint32_t aVersion) {
-  return aVersion >= kMinUsableQuotaVersion && aVersion <= kCurrentQuotaVersion;
-}
+// The bump to 3 exists for older builds. A build whose current version is 2
+// accepts a file at or below its own version and, when the file's accessed
+// flag is clear, seeds its in-memory quota from the usage fields without
+// scanning. With this build's files that would mean zero usage for every
+// such origin after a profile downgrade. Version 3 is above what those builds
+// accept, so they fall back to a full directory scan instead. Files written
+// before this build keep version 2 and their old usage values, so older
+// builds handle them as before.
+const uint32_t kCurrentQuotaVersion = 3;
 
 }  // namespace mozilla::dom::quota
 
