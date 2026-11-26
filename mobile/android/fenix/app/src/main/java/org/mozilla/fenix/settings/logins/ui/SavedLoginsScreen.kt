@@ -89,12 +89,14 @@ import org.mozilla.fenix.theme.FirefoxTheme
  *   graph for the Logins view hierarchy.
  * @param exitLogins A callback invoked when the user indicates to exit the secure screen.
  * @param startDestination the screen on which to initialize [SavedLoginsScreen] with.
+ * @param shouldSuppressAuthPrompt Invoked when the screen is resumed, returns true to skip the authentication prompt.
  */
 @Composable
 internal fun SavedLoginsScreen(
     buildStore: (NavHostController) -> LoginsStore,
     exitLogins: () -> Unit = {},
     startDestination: String = LoginsDestinations.LIST,
+    shouldSuppressAuthPrompt: () -> Boolean = { false },
 ) {
     val navController = rememberNavController()
     val store = remember { buildStore(navController) }
@@ -116,6 +118,7 @@ internal fun SavedLoginsScreen(
     SecureScreen(
         title = stringResource(R.string.logins_biometric_prompt_message_2),
         onExit = exitLogins,
+        shouldSuppressPrompt = shouldSuppressAuthPrompt,
     ) {
         NavHost(
             navController = navController,

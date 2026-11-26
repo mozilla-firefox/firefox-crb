@@ -35,6 +35,7 @@ import org.mozilla.fenix.settings.logins.ui.BiometricAuthenticationDialog
  * @param store The [SecureScreenStore] that manages the state for this screen.
  * @param title The title to be displayed on the authentication prompt.
  * @param onExit A callback invoked when the user indicates to exit the secure screen.
+ * @param shouldSuppressPrompt Invoked when the screen is resumed, returns true to skip the authentication prompt.
  * @param content The composable content to display after successful authentication.
  */
 @Composable
@@ -42,6 +43,7 @@ fun SecureScreen(
     store: SecureScreenStore = provideStore(),
     title: String,
     onExit: () -> Unit = {},
+    shouldSuppressPrompt: () -> Boolean = { false },
     content: @Composable () -> Unit,
 ) {
     val state by store.stateFlow.collectAsState()
@@ -55,8 +57,12 @@ fun SecureScreen(
     SecureScreenImpl(
         title = title,
         state = state.authenticationState,
-        handleAction = {
-            store.dispatch(it)
+        handleAction = { action ->
+            if (action == LifecycleAction.OnResume && shouldSuppressPrompt()) {
+                store.dispatch(LifecycleAction.OnResumeWithPromptSuppressed)
+            } else {
+                store.dispatch(action)
+            }
         },
         content = content,
     )

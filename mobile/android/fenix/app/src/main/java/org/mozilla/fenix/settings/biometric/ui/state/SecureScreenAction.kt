@@ -20,6 +20,9 @@ sealed interface SecureScreenAction : Action {
         /** Dispatched when the component is resumed. */
         data object OnResume : LifecycleAction
 
+        /** Dispatched when the component is resumed and the authentication prompt should be skipped. */
+        data object OnResumeWithPromptSuppressed : LifecycleAction
+
         /** Dispatched when the component is disposed or destroyed. */
         data object OnDispose : LifecycleAction
     }
