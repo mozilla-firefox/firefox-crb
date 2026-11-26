@@ -20,13 +20,13 @@ https://docs.rs/goblin/
 
 ### Usage
 
-Goblin requires `rustc` 1.63.0 (Rust 2021 edition).
+Goblin requires `rustc` 1.85.0 (Rust 2024 edition).
 
 Add to your `Cargo.toml`
 
 ```toml
 [dependencies]
-goblin = "0.9"
+goblin = "0.10"
 ```
 
 ### Features
@@ -102,12 +102,27 @@ Here are some things you could do with this crate (or help to implement so they 
 * endian_fd - parses according to the endianness in the binary
 * std - to allow `no_std` environments
 
+# Maintainers
+
+1. PE: [@kkent030315]
+2. Elf: [@m4b], open for applications
+3. Mach-o: [@m4b], open for applications
+
+Maintainers are first contact reviewers for that particular backend. They are chosen based on prior contributions, activity, base knowledge, and amicable and gregarious behavior :D
+
+Currently, I ([@m4b]) only have merge rights for all PRs. In the future it is likely, that the maintainer(s) for that given backend will also have merge rights as well.
+
+Lastly, I will still likely give cursory reviews to all PRs, but will mostly/entirely default to the maintainer for that backend.
+
+And always remember the wisdom of Bill and Ted: "Be excellent to each other!"
+
 # Contributors
 
 Thank you all :heart: !
 
 In lexicographic order:
 
+- [@000lbh]
 - [@2vg]
 - [@5225225]
 - [@alessandrod]
@@ -115,17 +130,27 @@ In lexicographic order:
 - [@anfedotoff]
 - [@apalm]
 - [@baloo]
+- [@BinFlip]
 - [@burjui]
+- [@CalebFenton]
+- [@chf0x]
 - [@connorkuehl]
 - [@dancrossnyc]
+- [@DreydenGys]
 - [@dureuill]
 - [@Evian-Zhang]
 - [@ExPixel]
 - [@flanfly]
 - [@glandium]
+- [@glslang]
+- [@Gelbpunkt]
+- [@gunbux]
 - [@h33p]
+- [@hannahfluch]
+- [@Hexorg]
 - [@ibabushkin]
 - [@ideeockus]
+- [@ivlzme]
 - [@jackcmay]
 - [@jan-auer]
 - [@Javagedes]
@@ -137,6 +162,7 @@ In lexicographic order:
 - [@joschock]
 - [@jrmuizel]
 - [@jsgf]
+- [@Jvlegod]
 - [@keith]
 - [@kjempelodott]
 - [@kkent030315]
@@ -150,6 +176,7 @@ In lexicographic order:
 - [@lzutao]
 - [@lzybkr]
 - [@m-hilgendorf]
+- [@makubacki]
 - [@mmaekr]
 - [@m4b]
 - [@messense]
@@ -164,14 +191,19 @@ In lexicographic order:
 - [@npmccallum]
 - [@pchickey]
 - [@philipc]
+- [@PJB3005]
+- [@prettyroseslover]
 - [@Pzixel]
 - [@quake]
 - [@raindev]
 - [@RaitoBezarius]
+- [@ReturnRei]
 - [@rocallahan]
 - [@sanxiyn]
+- [@SAY-5]
 - [@skdltmxn]
 - [@sollyucko]
+- [@supervacuus]
 - [@Swatinem]
 - [@SweetVishnya]
 - [@SquareMan]
@@ -188,10 +220,12 @@ In lexicographic order:
 - [@woodruffw]
 - [@wyxloading]
 - [@xcoldhandsx]
+- [@x0rb3l]
 - [@x64k]
 
 <!-- Contributors -->
 
+[@000lbh]: https://github.com/000lbh
 [@2vg]: https://github.com/2vg
 [@5225225]: https://github.com/5225225
 [@alessandrod]: https://github.com/alessandrod
@@ -199,18 +233,28 @@ In lexicographic order:
 [@anfedotoff]: https://github.com/anfedotoff
 [@apalm]: https://github.com/apalm
 [@baloo]: https://github.com/baloo
+[@BinFlip]: https://github.com/BinFlip
 [@burjui]: https://github.com/burjui
+[@CalebFenton]: https://github.com/CalebFenton
+[@chf0x]: https://github.com/chf0x
 [@connorkuehl]: https://github.com/connorkuehl
 [@crzysdrs]: https://github.com/crzysdrs
 [@dancrossnyc]: https://github.com/dancrossnyc
+[@DreydenGys]: https://github.com/DreydenGys
 [@dureuill]: https://github.com/dureuill
 [@Evian-Zhang]: https://github.com/Evian-Zhang
 [@ExPixel]: https://github.com/ExPixel
 [@flanfly]: https://github.com/flanfly
 [@glandium]: https://github.com/glandium
+[@glslang]: https://github.com/glslang
+[@Gelbpunkt]: https://github.com/Gelbpunkt
+[@gunbux]: https://github.com/gunbux
 [@h33p]: https://github.com/h33p
+[@hannahfluch]: https://github.com/hannahfluch
+[@Hexorg]: https://github.com/Hexorg
 [@ibabushkin]: https://github.com/ibabushkin
 [@ideeockus]: https://github.com/ideeockus
+[@ivlzme]: https://github.com/ivlzme
 [@jackcmay]: https://github.com/jackcmay
 [@jan-auer]: https://github.com/jan-auer
 [@Javagedes]: https://github.com/Javagedes
@@ -222,10 +266,12 @@ In lexicographic order:
 [@jdub]: https://github.com/jdub
 [@jrmuizel]: https://github.com/jrmuizel
 [@jsgf]: https://github.com/jsgf
+[@Jvlegod]: https://github.com/Jvlegod
 [@keith]: https://github.com/keith
 [@kjempelodott]: https://github.com/kjempelodott
 [@kkent030315]: https://github.com/kkent030315
 [@ko1N]: https://github.com/ko1N
+[@koutheir]: https://github.com/koutheir
 [@le-jzr]: https://github.com/le-jzr
 [@Lichtso]: https://github.com/Lichtso
 [@lion128]: https://github.com/lion128
@@ -235,6 +281,7 @@ In lexicographic order:
 [@lzutao]: https://github.com/lzutao
 [@lzybkr]: https://github.com/lzybkr
 [@m-hilgendorf]: https://github.com/m-hilgendorf
+[@makubacki]: https://github.com/makubacki
 [@mmaekr]: https://github.com/mmaekr
 [@m4b]: https://github.com/m4b
 [@messense]: https://github.com/messense
@@ -249,14 +296,19 @@ In lexicographic order:
 [@npmccallum]: https://github.com/npmccallum
 [@pchickey]: https://github.com/pchickey
 [@philipc]: https://github.com/philipc
+[@PJB3005]: https://github.com/PJB3005
+[@prettyroseslover]: https://github.com/prettyroseslover
 [@Pzixel]: https://github.com/Pzixel
 [@quake]: https://github.com/quake
 [@raindev]: https://github.com/raindev
 [@RaitoBezarius]: https://github.com/RaitoBezarius
+[@ReturnRei]: https://github.com/ReturnRei
 [@rocallahan]: https://github.com/rocallahan
 [@sanxiyn]: https://github.com/sanxiyn
+[@SAY-5]: https://github.com/SAY-5
 [@skdltmxn]: https://github.com/skdltmxn
 [@sollyucko]: https://github.com/sollyucko
+[@supervacuus]: https://github.com/supervacuus
 [@suttonbradley]: https://github.com/suttonbradley
 [@Swatinem]: https://github.com/Swatinem
 [@SweetVishnya]: https://github.com/SweetVishnya
@@ -275,6 +327,7 @@ In lexicographic order:
 [@woodruffw]: https://github.com/woodruffw
 [@wyxloading]: https://github.com/wyxloading
 [@xcoldhandsx]: https://github.com/xcoldhandsx
+[@x0rb3l]: https://github.com/x0rb3l
 [@x64k]: https://github.com/x64k
 
 ## Contributing
@@ -288,8 +341,8 @@ Unless explicitly stated otherwise, you agree that your contributions are licens
 1. If you are making a large change to a module, please raise an issue first and lets discuss;
    I don't want to waste your time if its not a good technical direction, or etc.
 1. If your PR is not getting attention, please respond to all relevant comments raised on the PR,
-   and if still no response, ping [@m4b], [@philipc], or [@willglynn] in github and also feel free
+   and if still no response, ping [@m4b] in github and also feel free
    to email [@m4b].
 1. Please add tests if you are adding a new feature. Feel free to add tests even if you are not,
    tests are awesome and easy in rust.
-1. Once cargo format is officially released, please format your _patch_ using the default settings.
+

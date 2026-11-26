@@ -4,7 +4,7 @@ use core::convert::TryInto;
 use core::ops::Range;
 use core::{mem, result};
 
-use crate::pod::{from_bytes, slice_from_bytes, Pod};
+use crate::pod::{Pod, from_bytes, slice_from_bytes};
 
 type Result<T> = result::Result<T, ()>;
 
@@ -80,7 +80,8 @@ pub trait ReadRef<'a>: Clone + Copy {
     /// `read_bytes` does not return bytes with the correct alignment for `T`.
     /// Implementors may want to provide their own implementation that ensures
     /// the alignment can be satisfied. Alternatively, only use this method with
-    /// types that do not need alignment (see the `unaligned` feature of this crate).
+    /// types that do not need alignment. The types provided by this crate do not
+    /// need alignment.
     fn read<T: Pod>(self, offset: &mut u64) -> Result<&'a T> {
         let size = mem::size_of::<T>().try_into().map_err(|_| ())?;
         let bytes = self.read_bytes(offset, size)?;
@@ -129,6 +130,10 @@ impl<'a> ReadRef<'a> for &'a [u8] {
     }
 
     fn read_bytes_at(self, offset: u64, size: u64) -> Result<&'a [u8]> {
+        if size == 0 {
+            return Ok(&[]);
+        }
+
         let offset: usize = offset.try_into().map_err(|_| ())?;
         let size: usize = size.try_into().map_err(|_| ())?;
         self.get(offset..).ok_or(())?.get(..size).ok_or(())

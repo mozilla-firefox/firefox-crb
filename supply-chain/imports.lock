@@ -37,8 +37,8 @@ user-login = "martinthomson"
 user-name = "Martin Thomson"
 
 [[publisher.breakpad-symbols]]
-version = "0.26.1"
-when = "2025-11-03"
+version = "0.27.0"
+when = "2026-08-11"
 user-id = 72814
 user-login = "gabrielesvelto"
 user-name = "Gabriele Svelto"
@@ -247,8 +247,8 @@ user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
 [[publisher.framehop]]
-version = "0.15.0"
-when = "2025-08-05"
+version = "0.16.0"
+when = "2026-04-17"
 user-id = 20227
 user-login = "mstange"
 user-name = "Markus Stange"
@@ -446,22 +446,22 @@ user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
 [[publisher.minidump]]
-version = "0.26.1"
-when = "2025-11-03"
+version = "0.27.0"
+when = "2026-08-11"
 user-id = 72814
 user-login = "gabrielesvelto"
 user-name = "Gabriele Svelto"
 
 [[publisher.minidump-common]]
-version = "0.26.1"
-when = "2025-11-03"
+version = "0.27.0"
+when = "2026-08-11"
 user-id = 72814
 user-login = "gabrielesvelto"
 user-name = "Gabriele Svelto"
 
 [[publisher.minidump-unwind]]
-version = "0.26.1"
-when = "2025-11-03"
+version = "0.27.0"
+when = "2026-08-11"
 user-id = 72814
 user-login = "gabrielesvelto"
 user-name = "Gabriele Svelto"
