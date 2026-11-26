@@ -64,83 +64,6 @@ NS_INTERFACE_MAP_BEGIN(HappyEyeballsConnectionAttempt)
   NS_INTERFACE_MAP_ENTRY_CONCRETE(HappyEyeballsConnectionAttempt)
 NS_INTERFACE_MAP_END
 
-// Production delegate: forwards verbatim to the connection manager / entry.
-// Friended by nsHttpConnectionMgr to reach its private dispatch helpers.
-class DefaultHappyEyeballsConnMgrDelegate final
-    : public HappyEyeballsConnMgrDelegate {
- public:
-  already_AddRefed<PendingTransactionInfo> FindTransaction(
-      bool aRemoveWhenFound, ConnectionEntry* aEntry,
-      nsAHttpTransaction* aTrans) override {
-    return gHttpHandler->ConnMgr()->FindTransactionHelper(aRemoveWhenFound,
-                                                          aEntry, aTrans);
-  }
-  nsresult DispatchTransaction(ConnectionEntry* aEntry,
-                               nsHttpTransaction* aTrans,
-                               HttpConnectionBase* aConn) override {
-    return gHttpHandler->ConnMgr()->DispatchTransaction(aEntry, aTrans, aConn);
-  }
-  void AddTransaction(nsHttpTransaction* aTrans, int32_t aPriority) override {
-    gHttpHandler->ConnMgr()->AddTransaction(aTrans, aPriority);
-  }
-  void ReportSpdyConnection(HttpConnectionBase* aConn, bool aUsingSpdy,
-                            bool aDisallowHttp3,
-                            ConnectionEntry* aEntry) override {
-    if (RefPtr<nsHttpConnection> h1 = do_QueryObject(aConn)) {
-      gHttpHandler->ConnMgr()->ReportSpdyConnection(h1, aUsingSpdy,
-                                                    aDisallowHttp3, aEntry);
-    }
-  }
-  void ReportHttp3Connection(HttpConnectionBase* aConn,
-                             ConnectionEntry* aEntry) override {
-    gHttpHandler->ConnMgr()->ReportHttp3Connection(aConn, aEntry);
-  }
-  void ReclaimConnection(HttpConnectionBase* aConn) override {
-    gHttpHandler->ConnMgr()->OnMsgReclaimConnection(aConn);
-  }
-  void ProcessSpdyPendingQ(ConnectionEntry* aEntry) override {
-    gHttpHandler->ConnMgr()->ProcessSpdyPendingQ(aEntry);
-  }
-  already_AddRefed<ConnectionEntry> HandOffHttp3OnlyConnection(
-      HttpConnectionBase* aConn, ConnectionEntry* aFromEnt) override {
-    return gHttpHandler->ConnMgr()->HandOffHttp3OnlyConnection(aConn, aFromEnt);
-  }
-  void InsertIntoActiveConns(ConnectionEntry* aEntry,
-                             HttpConnectionBase* aConn) override {
-    aEntry->InsertIntoActiveConns(aConn);
-  }
-  void RemoveConnectionAttempt(ConnectionEntry* aEntry,
-                               ConnectionAttempt* aAttempt,
-                               bool aAbandon) override {
-    aEntry->RemoveConnectionAttempt(aAttempt, aAbandon);
-  }
-  void RecordIPFamilyPreference(ConnectionEntry* aEntry,
-                                uint16_t aFamily) override {
-    aEntry->RecordIPFamilyPreference(aFamily);
-  }
-  void ResetIPFamilyPreference(ConnectionEntry* aEntry) override {
-    aEntry->ResetIPFamilyPreference();
-  }
-  bool MaybeProcessCoalescingKeys(ConnectionEntry* aEntry,
-                                  const nsTArray<NetAddr>& aAddresses,
-                                  bool aIsHttp3) override {
-    return aEntry->MaybeProcessCoalescingKeys(aAddresses, aIsHttp3);
-  }
-  bool RemoveTransFromPendingQ(ConnectionEntry* aEntry,
-                               nsHttpTransaction* aTrans) override {
-    return aEntry->RemoveTransFromPendingQ(aTrans);
-  }
-  nsresult StartRetry(ConnectionEntry* aEntry, nsHttpTransaction* aTrans,
-                      uint32_t aCaps, bool aSpeculative, bool aUrgentStart,
-                      bool aAllow1918, bool aRetryWithoutTRR) override {
-    RefPtr<PendingTransactionInfo> pendingTransInfo =
-        new PendingTransactionInfo(aTrans);
-    return aEntry->CreateDnsAndConnectSocket(
-        aTrans, aCaps, aSpeculative, aUrgentStart, aAllow1918, pendingTransInfo,
-        aRetryWithoutTRR);
-  }
-};
-
 HappyEyeballsConnectionAttempt::HappyEyeballsConnectionAttempt(
     nsHttpConnectionInfo* ci, nsAHttpTransaction* trans, uint32_t caps,
     bool speculative, bool urgentStart, bool retryWithoutTRR)
@@ -654,7 +577,7 @@ nsresult HappyEyeballsConnectionAttempt::ProcessHappyEyeballsOutput() {
       }
 
       case happy_eyeballs::Output::Tag::Timer: {
-        SetupTimer(event.timer.duration_us);
+        SetupAttemptTimer(event.timer.duration_us, this);
         return NS_OK;
       }
 
@@ -2542,28 +2465,6 @@ NS_IMETHODIMP  // method for nsINamed
 HappyEyeballsConnectionAttempt::GetName(nsACString& aName) {
   aName.AssignLiteral("HappyEyeballsConnectionAttempt");
   return NS_OK;
-}
-
-void HappyEyeballsConnectionAttempt::SetupTimer(uint64_t aTimeoutUs) {
-  if (!aTimeoutUs) {
-    MOZ_ASSERT(false, "aTimeoutUs should not be 0");
-    return;
-  }
-
-  LOG(("HappyEyeballsConnectionAttempt::SetupTimer to %" PRIu64 "us [this=%p].",
-       aTimeoutUs, this));
-
-  if (!mTimer) {
-    // This can only fail on OOM and we'd crash.
-    mTimer = NS_NewTimer();
-  }
-
-  DebugOnly<nsresult> rv = mTimer->InitHighResolutionWithCallback(
-      this, TimeDuration::FromMicroseconds(static_cast<double>(aTimeoutUs)),
-      nsITimer::TYPE_ONE_SHOT);
-  // There is no meaningful error handling we can do here. But an error here
-  // should only be possible if the timer thread did already shut down.
-  MOZ_ASSERT(NS_SUCCEEDED(rv));
 }
 
 }  // namespace mozilla::net
