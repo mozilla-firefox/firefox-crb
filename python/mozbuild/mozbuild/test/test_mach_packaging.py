@@ -266,6 +266,14 @@ class TestSingleLocaleUpload(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(
+            [call.args[0][3:] for call in context.run_process.call_args_list],
+            [
+                ["build", "export"],
+                ["build", "installers-de"],
+                ["build", "installers-fr"],
+            ],
+        )
+        self.assertEqual(
             [call.kwargs for call in upload.call_args_list],
             [
                 {
