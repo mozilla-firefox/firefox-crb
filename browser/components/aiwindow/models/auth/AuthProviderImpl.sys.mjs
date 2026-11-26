@@ -50,8 +50,11 @@ export class AuthProviderImpl extends EventTarget {
    * fresh one.
    *
    * @param {string} _token
+   * @param {object} _options
+   * @param {boolean} _options.isRetry Whether the token was obtained after an
+   *   earlier invalidation for the same request, and was rejected too.
    */
-  async invalidateToken(_token) {
+  async invalidateToken(_token, { isRetry: _isRetry }) {
     throw new Error("Not implemented");
   }
 

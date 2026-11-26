@@ -350,7 +350,7 @@ export class openAIEngine {
         "LLM request returned a 401 - revoking our token and retrying"
       );
 
-      await AuthProvider.invalidateToken(content.token);
+      await AuthProvider.invalidateToken(content.token, { isRetry: false });
 
       await this._recreateEngine();
 
@@ -368,7 +368,7 @@ export class openAIEngine {
           "Retry LLM request still returned a 401 - revoking our token and failing"
         );
 
-        await AuthProvider.invalidateToken(newToken);
+        await AuthProvider.invalidateToken(newToken, { isRetry: true });
 
         throw retryEx;
       }
@@ -439,7 +439,7 @@ export class openAIEngine {
         "LLM streaming request returned a 401 - revoking our token and retrying"
       );
 
-      await AuthProvider.invalidateToken(options.token);
+      await AuthProvider.invalidateToken(options.token, { isRetry: false });
 
       await this._recreateEngine();
 
@@ -460,7 +460,7 @@ export class openAIEngine {
           "Retry LLM streaming request still returned a 401 - revoking our token and failing"
         );
 
-        await AuthProvider.invalidateToken(newToken);
+        await AuthProvider.invalidateToken(newToken, { isRetry: true });
 
         throw retryEx;
       }

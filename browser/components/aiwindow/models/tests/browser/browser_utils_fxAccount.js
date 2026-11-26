@@ -87,7 +87,7 @@ add_task(async function test_invalidateToken_removes_cached_token() {
     .resolves();
 
   try {
-    await AuthProvider.invalidateToken("stale-token");
+    await AuthProvider.invalidateToken("stale-token", { isRetry: false });
     Assert.ok(
       removeCachedOAuthTokenStub.calledOnce,
       "removeCachedOAuthToken should be called once"
@@ -98,7 +98,7 @@ add_task(async function test_invalidateToken_removes_cached_token() {
       "removeCachedOAuthToken should be called with the token"
     );
 
-    await AuthProvider.invalidateToken(null);
+    await AuthProvider.invalidateToken(null, { isRetry: false });
     Assert.ok(
       removeCachedOAuthTokenStub.calledOnce,
       "removeCachedOAuthToken should not be called without a token"
@@ -184,6 +184,11 @@ add_task(async function test_runWithAuth_retry_on_401_error() {
       oldToken,
       "invalidateToken should be called with old token"
     );
+    Assert.deepEqual(
+      invalidateTokenStub.getCall(0).args[1],
+      { isRetry: false },
+      "The old token is invalidated as a first attempt"
+    );
     Assert.ok(getTokenStub.calledOnce, "getToken should be called once");
 
     const secondCallArgs = runStub.getCall(1).args[0];
@@ -249,9 +254,19 @@ add_task(async function test_runWithAuth_fails_after_retry_401() {
       "First invalidateToken call should be for old token"
     );
     Assert.deepEqual(
+      invalidateTokenStub.getCall(0).args[1],
+      { isRetry: false },
+      "The old token is invalidated as a first attempt"
+    );
+    Assert.deepEqual(
       invalidateTokenStub.getCall(1).args[0],
       newToken,
       "Second invalidateToken call should be for new token"
+    );
+    Assert.deepEqual(
+      invalidateTokenStub.getCall(1).args[1],
+      { isRetry: true },
+      "The new token is invalidated as a retry"
     );
   } finally {
     runStub.restore();
@@ -453,6 +468,11 @@ add_task(async function test_runWithGeneratorAuth_retry_on_401_error() {
       oldToken,
       "invalidateToken should be called with old token"
     );
+    Assert.deepEqual(
+      invalidateTokenStub.getCall(0).args[1],
+      { isRetry: false },
+      "The old token is invalidated as a first attempt"
+    );
     Assert.ok(getTokenStub.calledOnce, "getToken should be called once");
 
     const secondCallArgs = runWithGeneratorStub.getCall(1).args[0];
@@ -543,9 +563,19 @@ add_task(async function test_runWithGeneratorAuth_fails_after_retry_401() {
       "First invalidateToken call should be for old token"
     );
     Assert.deepEqual(
+      invalidateTokenStub.getCall(0).args[1],
+      { isRetry: false },
+      "The old token is invalidated as a first attempt"
+    );
+    Assert.deepEqual(
       invalidateTokenStub.getCall(1).args[0],
       newToken,
       "Second invalidateToken call should be for new token"
+    );
+    Assert.deepEqual(
+      invalidateTokenStub.getCall(1).args[1],
+      { isRetry: true },
+      "The new token is invalidated as a retry"
     );
   } finally {
     runWithGeneratorStub.restore();

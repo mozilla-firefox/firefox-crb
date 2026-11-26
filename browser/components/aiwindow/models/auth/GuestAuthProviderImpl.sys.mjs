@@ -11,6 +11,7 @@ const PREF_TOKEN = "browser.smartwindow.auth.guest.token";
 const PREF_MODE = "browser.smartwindow.auth.guest.mode";
 const VERIFY_PATH = "/verify/v1/guest";
 const SUCCESS_PATH = "/verify/v1/guest/success";
+const REFRESH_PATH = "/verify/v1/guest/refresh";
 
 const lazy = XPCOMUtils.declareLazy({
   AuthProvider:
@@ -31,6 +32,9 @@ const lazy = XPCOMUtils.declareLazy({
  * AuthProviderImpl that obtains a guest token from MLPA, without an account.
  */
 export class GuestAuthProviderImpl extends AuthProviderImpl {
+  /** @type {Promise<boolean>|null} */
+  #refreshPromise = null;
+
   static cleanup() {
     Services.prefs.clearUserPref(PREF_TOKEN);
   }
@@ -43,7 +47,20 @@ export class GuestAuthProviderImpl extends AuthProviderImpl {
     return lazy.token || null;
   }
 
-  async invalidateToken(token) {
+  async invalidateToken(token, { isRetry }) {
+    if (token !== lazy.token) {
+      return;
+    }
+
+    if (!isRetry) {
+      this.#refreshPromise ??= this.#refreshToken(token).finally(() => {
+        this.#refreshPromise = null;
+      });
+      if (await this.#refreshPromise) {
+        return;
+      }
+    }
+
     if (token === lazy.token) {
       Services.prefs.clearUserPref(PREF_TOKEN);
       this.dispatchEvent(
@@ -52,6 +69,48 @@ export class GuestAuthProviderImpl extends AuthProviderImpl {
         })
       );
     }
+  }
+
+  /**
+   * Exchanges a rejected token for a new one.
+   *
+   * @param {string} token
+   * @returns {Promise<boolean>} Whether a new token was stored
+   */
+  async #refreshToken(token) {
+    try {
+      const origin = new URL(lazy.openAIEngine.endpoint).origin;
+      const response = await fetch(`${origin}${REFRESH_PATH}`, {
+        method: "POST",
+        credentials: "omit",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Guest token refresh failed: ${response.status}`);
+      }
+
+      const newToken = GuestAuthProviderImpl.#parseTokenResponse(
+        await response.json()
+      );
+      if (token !== lazy.token) {
+        return false;
+      }
+      Services.prefs.setStringPref(PREF_TOKEN, newToken);
+      return true;
+    } catch (error) {
+      console.error("Error refreshing the guest token:", error);
+      return false;
+    }
+  }
+
+  static #parseTokenResponse({ access_token: token, token_type: tokenType }) {
+    if (typeof token !== "string" || !token || tokenType !== "Bearer") {
+      throw new Error("Invalid guest token response");
+    }
+    return token;
   }
 
   async isSignedIn() {
@@ -96,12 +155,9 @@ export class GuestAuthProviderImpl extends AuthProviderImpl {
       throw new Error(`Guest token request failed: ${response.status}`);
     }
 
-    const { access_token: token, token_type: tokenType } =
-      await response.json();
-    if (typeof token !== "string" || !token || tokenType !== "Bearer") {
-      throw new Error("Invalid guest token response");
-    }
-
+    const token = GuestAuthProviderImpl.#parseTokenResponse(
+      await response.json()
+    );
     Services.prefs.setStringPref(PREF_TOKEN, token);
     return true;
   }

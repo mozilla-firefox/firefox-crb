@@ -25,28 +25,41 @@ const PREF_AUTH_IMPL = "browser.smartwindow.auth.impl";
 const PREF_FIRSTRUN_COMPLETED = "browser.smartwindow.firstrun.hasCompleted";
 const PREF_TOU_CONSENT_TIME = "browser.smartwindow.tos.consentTime";
 const SUCCESS_PATH = "/verify/v1/guest/success";
+const REFRESH_PATH = "/verify/v1/guest/refresh";
 
 /**
  * Runs a task against a mock MLPA server set as the Smart Window endpoint.
  *
  * @param {string} mode Value of the guest sign-in mode pref.
- * @param {Function} onVerify Called with the state and origin of each
- *   /verify/v1/guest request. Returns the URL to redirect to, an object to
- *   serve as JSON, an HTTP error status, or null to serve a plain page.
+ * @param {Function|object} handlers Either the verify handler, or an object
+ *   with verify and refresh handlers. The verify handler is called with the
+ *   state and origin of each /verify/v1/guest request and returns the URL to
+ *   redirect to, an object to serve as JSON, an HTTP error status, or null to
+ *   serve a plain page. The refresh handler is called with the Authorization
+ *   header of each /verify/v1/guest/refresh request and returns an object to
+ *   serve as JSON or an HTTP error status. It defaults to a 401.
  * @param {Function} task Called with the origin of the mock server.
  */
-async function withMockMLPA(mode, onVerify, task) {
+async function withMockMLPA(mode, handlers, task) {
+  const { verify: onVerify = () => null, refresh: onRefresh = () => 401 } =
+    typeof handlers === "function" ? { verify: handlers } : handlers;
   const server = new HttpServer();
+  const writeResult = (request, response, result) => {
+    if (typeof result === "number") {
+      response.setStatusLine(request.httpVersion, result, "Error");
+      return true;
+    }
+    if (result && typeof result === "object") {
+      response.setHeader("Content-Type", "application/json", false);
+      response.write(JSON.stringify(result));
+      return true;
+    }
+    return false;
+  };
   server.registerPathHandler("/verify/v1/guest", (request, response) => {
     const state = new URLSearchParams(request.queryString).get("state");
     const location = onVerify(state, origin);
-    if (typeof location === "number") {
-      response.setStatusLine(request.httpVersion, location, "Error");
-      return;
-    }
-    if (location && typeof location === "object") {
-      response.setHeader("Content-Type", "application/json", false);
-      response.write(JSON.stringify(location));
+    if (writeResult(request, response, location)) {
       return;
     }
     if (location) {
@@ -56,6 +69,18 @@ async function withMockMLPA(mode, onVerify, task) {
     }
     response.setHeader("Content-Type", "text/html", false);
     response.write("<!doctype html><title>verify</title>");
+  });
+  server.registerPathHandler(REFRESH_PATH, (request, response) => {
+    if (request.method !== "POST") {
+      response.setStatusLine(request.httpVersion, 405, "Method Not Allowed");
+      return;
+    }
+    const authorization = request.hasHeader("Authorization")
+      ? request.getHeader("Authorization")
+      : null;
+    if (!writeResult(request, response, onRefresh(authorization))) {
+      response.setStatusLine(request.httpVersion, 500, "Error");
+    }
   });
   server.registerPathHandler(SUCCESS_PATH, (_request, response) => {
     response.setHeader("Content-Type", "text/html", false);
@@ -368,28 +393,117 @@ add_task(async function test_signIn_tab_closed() {
 });
 
 add_task(async function test_invalidateToken() {
-  const impl = new GuestAuthProviderImpl();
-  let fallbacks = 0;
-  impl.addEventListener("AuthProviderImpl:FallbackNeeded", () => fallbacks++);
-  Services.prefs.setStringPref(PREF_TOKEN, "guest-token");
+  await withMockMLPA("fetch", {}, async () => {
+    const impl = new GuestAuthProviderImpl();
+    let fallbacks = 0;
+    impl.addEventListener("AuthProviderImpl:FallbackNeeded", () => fallbacks++);
+    Services.prefs.setStringPref(PREF_TOKEN, "guest-token");
 
-  await impl.invalidateToken("other-token");
-  Assert.equal(
-    await impl.getToken(),
-    "guest-token",
-    "A different token does not clear the cached one"
+    await impl.invalidateToken("other-token", { isRetry: false });
+    Assert.equal(
+      await impl.getToken(),
+      "guest-token",
+      "A different token does not clear the cached one"
+    );
+    Assert.equal(fallbacks, 0, "A different token does not need a fallback");
+
+    await impl.invalidateToken("guest-token", { isRetry: false });
+    Assert.equal(await impl.getToken(), null, "The cached token is cleared");
+    Assert.ok(!(await impl.isSignedIn()), "Not signed in after invalidation");
+    Assert.equal(fallbacks, 1, "A fallback is requested");
+
+    await impl.invalidateToken("guest-token", { isRetry: false });
+    Assert.equal(fallbacks, 1, "The fallback is requested only once");
+  });
+});
+
+add_task(async function test_invalidateToken_refreshes_token() {
+  const authorizations = [];
+  await withMockMLPA(
+    "fetch",
+    {
+      refresh: authorization => {
+        authorizations.push(authorization);
+        return { access_token: "refreshed-token", token_type: "Bearer" };
+      },
+    },
+    async () => {
+      const impl = new GuestAuthProviderImpl();
+      let fallbacks = 0;
+      impl.addEventListener(
+        "AuthProviderImpl:FallbackNeeded",
+        () => fallbacks++
+      );
+      Services.prefs.setStringPref(PREF_TOKEN, "guest-token");
+
+      await Promise.all([
+        impl.invalidateToken("guest-token", { isRetry: false }),
+        impl.invalidateToken("guest-token", { isRetry: false }),
+      ]);
+
+      Assert.deepEqual(
+        authorizations,
+        ["Bearer guest-token"],
+        "One refresh request is sent with the rejected token"
+      );
+      Assert.equal(
+        await impl.getToken(),
+        "refreshed-token",
+        "The refreshed token is cached"
+      );
+      Assert.ok(await impl.isSignedIn(), "Still signed in after the refresh");
+      Assert.equal(fallbacks, 0, "No fallback is requested");
+    }
   );
-  Assert.equal(fallbacks, 0, "A different token does not need a fallback");
+});
 
-  await impl.invalidateToken("guest-token");
-  Assert.equal(await impl.getToken(), null, "The cached token is cleared");
-  Assert.ok(!(await impl.isSignedIn()), "Not signed in after invalidation");
-  Assert.equal(fallbacks, 1, "A fallback is requested");
+add_task(async function test_invalidateToken_retry_skips_refresh() {
+  let refreshRequests = 0;
+  await withMockMLPA(
+    "fetch",
+    {
+      refresh: () => {
+        refreshRequests++;
+        return { access_token: "refreshed-token", token_type: "Bearer" };
+      },
+    },
+    async () => {
+      const impl = new GuestAuthProviderImpl();
+      let fallbacks = 0;
+      impl.addEventListener(
+        "AuthProviderImpl:FallbackNeeded",
+        () => fallbacks++
+      );
+      Services.prefs.setStringPref(PREF_TOKEN, "guest-token");
 
-  await impl.invalidateToken("guest-token");
-  Assert.equal(fallbacks, 1, "The fallback is requested only once");
+      await impl.invalidateToken("guest-token", { isRetry: true });
 
-  Services.prefs.clearUserPref(PREF_TOKEN);
+      Assert.equal(refreshRequests, 0, "No refresh request is sent");
+      Assert.equal(await impl.getToken(), null, "The cached token is cleared");
+      Assert.equal(fallbacks, 1, "A fallback is requested");
+    }
+  );
+});
+
+add_task(async function test_invalidateToken_refresh_invalid_response() {
+  await withMockMLPA(
+    "fetch",
+    { refresh: () => ({ token_type: "Bearer" }) },
+    async () => {
+      const impl = new GuestAuthProviderImpl();
+      let fallbacks = 0;
+      impl.addEventListener(
+        "AuthProviderImpl:FallbackNeeded",
+        () => fallbacks++
+      );
+      Services.prefs.setStringPref(PREF_TOKEN, "guest-token");
+
+      await impl.invalidateToken("guest-token", { isRetry: false });
+
+      Assert.equal(await impl.getToken(), null, "The cached token is cleared");
+      Assert.equal(fallbacks, 1, "A fallback is requested");
+    }
+  );
 });
 
 add_task(async function test_auth_impl_set_on_setImpl() {
@@ -456,7 +570,9 @@ add_task(async function test_rejected_token_switches_to_fxa() {
   try {
     Assert.equal(await AuthProvider.getToken(), "guest-token", "Guest token");
 
-    await AuthProvider.invalidateToken("guest-token");
+    await withMockMLPA("fetch", {}, () =>
+      AuthProvider.invalidateToken("guest-token", { isRetry: false })
+    );
 
     Assert.equal(
       Services.prefs.getStringPref(PREF_AUTH_IMPL),
@@ -516,7 +632,9 @@ add_task(async function test_rejected_token_with_guest_disabled() {
   AuthProvider.setImpl(new GuestAuthProviderImpl());
 
   try {
-    await AuthProvider.invalidateToken("guest-token");
+    await withMockMLPA("fetch", {}, () =>
+      AuthProvider.invalidateToken("guest-token", { isRetry: false })
+    );
 
     Assert.equal(
       await AuthProvider.getToken(),

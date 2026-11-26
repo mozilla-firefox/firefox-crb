@@ -110,13 +110,15 @@ class AuthProviderSingleton extends EventTarget {
    * fresh one.
    *
    * @param {string|null} token
+   * @param {object} options See AuthProviderImpl.invalidateToken
+   * @param {boolean} options.isRetry
    */
-  async invalidateToken(token) {
+  async invalidateToken(token, { isRetry }) {
     if (!token) {
       return;
     }
     const impl = await this.#selector.getImpl();
-    await impl.invalidateToken(token);
+    await impl.invalidateToken(token, { isRetry });
   }
 
   /**
