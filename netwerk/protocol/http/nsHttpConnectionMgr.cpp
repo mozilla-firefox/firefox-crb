@@ -1565,13 +1565,13 @@ nsresult nsHttpConnectionMgr::MakeNewConnection(
 }
 
 // Whether to use InnerConnectionAttempt to establish the inner connection.
-// A WebSocket or WebTransport upgrade stays on the legacy path for now: it
-// needs an extended CONNECT stream when the connection carrying it is HTTP/2.
+// TODO: WebTransport needs the extended-CONNECT dispatch Succeeded() does for
+// WebSocket.
 static bool ShouldUseInnerConnectionAttempt(nsHttpConnectionInfo* aCi,
                                             nsHttpTransaction* aTrans) {
   return StaticPrefs::network_http_happy_eyeballs_tunnel_enabled() &&
          aCi->UsingHttpsProxy() && aCi->UsingConnect() &&
-         !aTrans->IsWebsocketUpgrade() && !aTrans->IsForWebTransport();
+         !aTrans->IsForWebTransport();
 }
 
 nsresult nsHttpConnectionMgr::TryStartInnerConnection(
