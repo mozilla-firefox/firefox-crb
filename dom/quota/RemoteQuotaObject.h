@@ -30,6 +30,14 @@ class RemoteQuotaObject final : public QuotaObject {
 
   bool IncreaseSize(int64_t aDelta) override { return false; }
 
+  // Reservations are only supported in the parent process.
+  [[nodiscard]] bool MaybeSetReservation(int64_t aSize) override {
+    return false;
+  }
+
+  void CommitReservation(int64_t aDelta,
+                         int64_t aRemainingReservation) override {}
+
   void DisableQuotaCheck() override {}
 
   void EnableQuotaCheck() override {}
