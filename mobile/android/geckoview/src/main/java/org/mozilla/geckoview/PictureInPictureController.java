@@ -130,10 +130,15 @@ public class PictureInPictureController {
        *     opens a single session and is only good until this request is answered or superseded.
        *     Might be empty if Gecko failed to generate one, in which case no window should be
        *     opened.
+       * @param videoWidth Width of the video in CSS pixels, or 0 if unknown.
+       * @param videoHeight Height of the video in CSS pixels, or 0 if unknown.
        */
       @UiThread
       default void onEnterPictureInPicture(
-          final @NonNull GeckoSession session, final @NonNull String placementToken) {}
+          final @NonNull GeckoSession session,
+          final @NonNull String placementToken,
+          final int videoWidth,
+          final int videoHeight) {}
 
       /**
        * Called when the picture-in-picture window created for {@code session} should be closed.
@@ -160,7 +165,11 @@ public class PictureInPictureController {
           final GeckoBundle message,
           final EventCallback callback) {
         if (LAUNCH_EVENT.equals(event)) {
-          delegate.onEnterPictureInPicture(mSession, message.getString("placementToken", ""));
+          delegate.onEnterPictureInPicture(
+              mSession,
+              message.getString("placementToken", ""),
+              message.getInt("videoWidth", 0),
+              message.getInt("videoHeight", 0));
         } else if (CLOSE_EVENT.equals(event)) {
           delegate.onExitPictureInPicture(mSession);
         }

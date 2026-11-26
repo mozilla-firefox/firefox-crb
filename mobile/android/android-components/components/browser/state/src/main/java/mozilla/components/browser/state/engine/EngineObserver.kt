@@ -260,8 +260,8 @@ internal class EngineObserver(
         )
     }
 
-    override fun onEnterPictureInPicture(session: EngineSession) {
-        dispatchAsync(PictureInPictureAction.EnterAction(tabId, session))
+    override fun onEnterPictureInPicture(session: EngineSession, videoWidth: Int, videoHeight: Int) {
+        dispatchAsync(PictureInPictureAction.EnterAction(tabId, session, videoWidth, videoHeight))
     }
 
     override fun onPictureInPictureRequestFinished() {

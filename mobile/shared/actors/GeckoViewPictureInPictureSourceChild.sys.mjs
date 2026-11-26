@@ -27,7 +27,7 @@ export class GeckoViewPictureInPictureSourceChild extends GeckoViewActorChild {
    * The first video this frame is playing, in document order, or otherwise the
    * first paused one that has played. Null if there is neither.
    *
-   * @returns {?{videoRef: object, paused: boolean}}
+   * @returns {?{videoRef: object, paused: boolean, videoWidth: number, videoHeight: number}}
    */
   findVideo() {
     const doc = this.document;
@@ -52,6 +52,8 @@ export class GeckoViewPictureInPictureSourceChild extends GeckoViewActorChild {
     return {
       videoRef: lazy.ContentDOMReference.get(video),
       paused: video.paused,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
     };
   }
 }

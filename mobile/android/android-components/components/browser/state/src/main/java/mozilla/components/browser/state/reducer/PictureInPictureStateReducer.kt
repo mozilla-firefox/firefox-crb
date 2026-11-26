@@ -20,7 +20,15 @@ internal object PictureInPictureStateReducer {
                 }
             is PictureInPictureAction.EnterAction ->
                 state.copyWithPictureInPictureWindow { window ->
-                    window.copy(session = PictureInPictureSession(action.tabId, action.engineSession))
+                    window.copy(
+                        session =
+                            PictureInPictureSession(
+                                action.tabId,
+                                action.engineSession,
+                                action.videoWidth,
+                                action.videoHeight,
+                            )
+                    )
                 }
             is PictureInPictureAction.ExitAction ->
                 state.copyWithPictureInPictureWindow { window ->

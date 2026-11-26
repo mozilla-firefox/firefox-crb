@@ -1851,14 +1851,19 @@ class GeckoEngineSession(
     @OptIn(ExperimentalGeckoViewApi::class)
     private fun createPictureInPictureDelegate() =
         object : PictureInPictureController.SessionPictureInPicture.Delegate {
-            override fun onEnterPictureInPicture(session: GeckoSession, placementToken: String) {
+            override fun onEnterPictureInPicture(
+                session: GeckoSession,
+                placementToken: String,
+                videoWidth: Int,
+                videoHeight: Int,
+            ) {
                 if (placementToken.isEmpty()) {
                     logger.warn("Ignoring picture-in-picture request without a placement token")
                     return
                 }
                 keepActiveForPictureInPicture()
                 val pictureInPictureSession = createPictureInPictureSession(placementToken)
-                notifyObservers { onEnterPictureInPicture(pictureInPictureSession) }
+                notifyObservers { onEnterPictureInPicture(pictureInPictureSession, videoWidth, videoHeight) }
             }
 
             override fun onExitPictureInPicture(session: GeckoSession) {

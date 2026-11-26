@@ -99,6 +99,8 @@ class PictureInPictureTest : BaseSessionTest() {
         mainSession.loadTestPath(VIDEO_WEBM_PATH)
         mainSession.waitForPageStop()
         mainSession.playVideo()
+        val expectedWidth = (mainSession.evaluateJS("document.querySelector('video').videoWidth") as Double).toInt()
+        val expectedHeight = (mainSession.evaluateJS("document.querySelector('video').videoHeight") as Double).toInt()
 
         sessionRule.delegateDuringNextWait(
             object : PictureInPictureController.SessionPictureInPicture.Delegate {
@@ -106,6 +108,8 @@ class PictureInPictureTest : BaseSessionTest() {
                 override fun onEnterPictureInPicture(
                     session: GeckoSession,
                     placementToken: String,
+                    videoWidth: Int,
+                    videoHeight: Int,
                 ) {
                     assertThat(
                         "Should be notified for the requesting session",
@@ -117,6 +121,8 @@ class PictureInPictureTest : BaseSessionTest() {
                         placementToken.isNotEmpty(),
                         equalTo(true),
                     )
+                    assertThat("The video width should be provided", videoWidth, equalTo(expectedWidth))
+                    assertThat("The video height should be provided", videoHeight, equalTo(expectedHeight))
                 }
             }
         )
@@ -142,6 +148,8 @@ class PictureInPictureTest : BaseSessionTest() {
                 override fun onEnterPictureInPicture(
                     session: GeckoSession,
                     placementToken: String,
+                    videoWidth: Int,
+                    videoHeight: Int,
                 ) {
                     fail("A paused at start video must not enter picture-in-picture")
                 }
@@ -241,6 +249,8 @@ class PictureInPictureTest : BaseSessionTest() {
                 override fun onEnterPictureInPicture(
                     session: GeckoSession,
                     placementToken: String,
+                    videoWidth: Int,
+                    videoHeight: Int,
                 ) {
                     assertThat(
                         "Should be notified for the requesting session",
@@ -645,6 +655,8 @@ class PictureInPictureTest : BaseSessionTest() {
         override fun onEnterPictureInPicture(
             session: GeckoSession,
             placementToken: String,
+            videoWidth: Int,
+            videoHeight: Int,
         ) {
             this.placementToken = placementToken
             enterCount++

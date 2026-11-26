@@ -2379,12 +2379,14 @@ class EngineObserverTest {
         val observer = createEngineObserver(tabId = "tab-id", store = store, scope = this)
         val session: EngineSession = mock()
 
-        observer.onEnterPictureInPicture(session)
+        observer.onEnterPictureInPicture(session, 360, 640)
         testScheduler.advanceUntilIdle()
 
         captureActionsMiddleware.assertFirstAction(PictureInPictureAction.EnterAction::class) { action ->
             assertEquals("tab-id", action.tabId)
             assertEquals(session, action.engineSession)
+            assertEquals(360, action.videoWidth)
+            assertEquals(640, action.videoHeight)
         }
     }
 

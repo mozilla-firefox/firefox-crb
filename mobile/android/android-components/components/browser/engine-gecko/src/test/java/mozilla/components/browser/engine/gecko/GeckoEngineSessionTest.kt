@@ -5415,7 +5415,7 @@ class GeckoEngineSessionTest {
         GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
         val delegate = capturePictureInPictureDelegate()
 
-        delegate.onEnterPictureInPicture(geckoSession, "token")
+        delegate.onEnterPictureInPicture(geckoSession, "token", 0, 0)
 
         verify(sessionPictureInPicture).setKeepActive(true)
         verify(geckoSession, never()).setActive(anyBoolean())
@@ -5429,7 +5429,7 @@ class GeckoEngineSessionTest {
         GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
         val delegate = capturePictureInPictureDelegate()
 
-        delegate.onEnterPictureInPicture(geckoSession, "token")
+        delegate.onEnterPictureInPicture(geckoSession, "token", 0, 0)
         delegate.onExitPictureInPicture(geckoSession)
 
         verify(sessionPictureInPicture).setKeepActive(false)
@@ -5444,7 +5444,7 @@ class GeckoEngineSessionTest {
         GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
         val delegate = capturePictureInPictureDelegate()
 
-        delegate.onEnterPictureInPicture(geckoSession, "token")
+        delegate.onEnterPictureInPicture(geckoSession, "token", 0, 0)
         delegate.onExitPictureInPicture(geckoSession)
 
         verify(sessionPictureInPicture).setKeepActive(false)
@@ -5459,7 +5459,7 @@ class GeckoEngineSessionTest {
         val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
         val delegate = capturePictureInPictureDelegate()
 
-        delegate.onEnterPictureInPicture(geckoSession, "token")
+        delegate.onEnterPictureInPicture(geckoSession, "token", 0, 0)
         engineSession.exitPictureInPicture()
 
         verify(sessionPictureInPicture).exit()
@@ -5475,7 +5475,7 @@ class GeckoEngineSessionTest {
         val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
         val delegate = capturePictureInPictureDelegate()
 
-        delegate.onEnterPictureInPicture(geckoSession, "token")
+        delegate.onEnterPictureInPicture(geckoSession, "token", 0, 0)
         engineSession.exitPictureInPicture()
 
         verify(sessionPictureInPicture).exit()
@@ -5574,17 +5574,37 @@ class GeckoEngineSessionTest {
     }
 
     @OptIn(ExperimentalGeckoViewApi::class)
+    @Test
+    fun `picture-in-picture video size from Gecko is passed on to observers`() {
+        mockSessionPictureInPicture()
+        val engineSession = GeckoEngineSession(runtime, geckoSessionProvider = geckoSessionProvider)
+        val delegate = capturePictureInPictureDelegate()
+        var size: Pair<Int, Int>? = null
+        engineSession.register(
+            object : EngineSession.Observer {
+                override fun onEnterPictureInPicture(session: EngineSession, videoWidth: Int, videoHeight: Int) {
+                    size = videoWidth to videoHeight
+                }
+            }
+        )
+
+        delegate.onEnterPictureInPicture(geckoSession, "token", 360, 640)
+
+        assertEquals(360 to 640, size)
+    }
+
+    @OptIn(ExperimentalGeckoViewApi::class)
     private fun enterPictureInPicture(engineSession: GeckoEngineSession, placementToken: String): EngineSession? {
         val delegate = capturePictureInPictureDelegate()
         var enteredSession: EngineSession? = null
         engineSession.register(
             object : EngineSession.Observer {
-                override fun onEnterPictureInPicture(session: EngineSession) {
+                override fun onEnterPictureInPicture(session: EngineSession, videoWidth: Int, videoHeight: Int) {
                     enteredSession = session
                 }
             }
         )
-        delegate.onEnterPictureInPicture(geckoSession, placementToken)
+        delegate.onEnterPictureInPicture(geckoSession, placementToken, 0, 0)
         return enteredSession
     }
 

@@ -74,6 +74,25 @@ class PictureInPictureStateReducerTest {
     }
 
     @Test
+    fun `WHEN EnterAction is dispatched with a video size THEN the window session has that size`() {
+        val result =
+            PictureInPictureStateReducer.reduce(
+                BrowserState(tabs = listOf(tab())),
+                PictureInPictureAction.EnterAction(
+                    tabId = "tab",
+                    engineSession = engineSession,
+                    videoWidth = 360,
+                    videoHeight = 640,
+                ),
+            )
+
+        assertEquals(
+            PictureInPictureSession(tabId = "tab", engineSession = engineSession, videoWidth = 360, videoHeight = 640),
+            result.pictureInPictureWindow.session,
+        )
+    }
+
+    @Test
     fun `GIVEN the window waits on the tab WHEN EnterAction and then ConsumeRequestAction are dispatched THEN the window has the session and stops waiting`() {
         val state =
             BrowserState(

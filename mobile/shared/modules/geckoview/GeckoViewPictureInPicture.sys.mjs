@@ -46,7 +46,7 @@ export const GeckoViewPictureInPictureController = {
   // `sourceDispatcher` must be the EventDispatcher of the session the video lives in: the embedder
   // identifies the tab to return to when the picture-in-picture window is expanded by which
   // session the launch event arrives on.
-  request(sourceWGP, videoRef, sourceDispatcher) {
+  request(sourceWGP, { videoRef, videoWidth, videoHeight }, sourceDispatcher) {
     const bc = sourceWGP.browsingContext;
     const bcGroupId = bc.group.id;
     const remoteType = sourceWGP.domProcess.remoteType;
@@ -84,6 +84,8 @@ export const GeckoViewPictureInPictureController = {
 
     sourceDispatcher.sendRequest("GeckoView:PictureInPicture:Launch", {
       placementToken: token,
+      videoWidth,
+      videoHeight,
     });
 
     return promise;
@@ -127,14 +129,14 @@ export const GeckoViewPictureInPictureController = {
       .getActor("GeckoViewPictureInPictureSource")
       .sendQuery("GeckoView:PictureInPicture:FindVideo");
     if (found && !found.paused) {
-      await this.request(wgp, found.videoRef, sourceDispatcher);
+      await this.request(wgp, found, sourceDispatcher);
       return;
     }
     await this._requestForAnyFrame(
       browser,
       sourceDispatcher,
       wgp,
-      found ? { wgp, videoRef: found.videoRef } : null
+      found ? { wgp, video: found } : null
     );
   },
 
@@ -167,10 +169,10 @@ export const GeckoViewPictureInPictureController = {
         continue;
       }
       if (!found.paused) {
-        await this.request(wgp, found.videoRef, sourceDispatcher);
+        await this.request(wgp, found, sourceDispatcher);
         return;
       }
-      pausedCandidates.push({ wgp, videoRef: found.videoRef });
+      pausedCandidates.push({ wgp, video: found });
     }
     // A candidate's frame may have navigated or gone away while later frames were being asked.
     const fallback = pausedCandidates.find(
@@ -178,7 +180,7 @@ export const GeckoViewPictureInPictureController = {
         !c.wgp.isClosed && c.wgp.browsingContext?.currentWindowGlobal === c.wgp
     );
     if (fallback) {
-      await this.request(fallback.wgp, fallback.videoRef, sourceDispatcher);
+      await this.request(fallback.wgp, fallback.video, sourceDispatcher);
     }
   },
 

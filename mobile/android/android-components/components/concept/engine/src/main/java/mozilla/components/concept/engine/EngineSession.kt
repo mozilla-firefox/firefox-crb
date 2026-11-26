@@ -161,8 +161,10 @@ abstract class EngineSession(private val delegate: Observable<Observer> = Observ
          *
          * @param session the session cloning the video, ready to be rendered in the picture-in-picture window. The
          *   observer taking ownership must close it if it is not shown.
+         * @param videoWidth width of the video, or 0 if unknown.
+         * @param videoHeight height of the video, or 0 if unknown.
          */
-        fun onEnterPictureInPicture(session: EngineSession) = Unit
+        fun onEnterPictureInPicture(session: EngineSession, videoWidth: Int, videoHeight: Int) = Unit
 
         /**
          * The engine is done with a [requestPictureInPicture] call, whether the window is showing the video by then or

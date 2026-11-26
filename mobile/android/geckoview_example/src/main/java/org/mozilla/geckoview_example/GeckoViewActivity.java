@@ -1342,7 +1342,10 @@ public class GeckoViewActivity extends AppCompatActivity
       implements PictureInPictureController.SessionPictureInPicture.Delegate {
     @Override
     public void onEnterPictureInPicture(
-        final @NonNull GeckoSession session, final @NonNull String placementToken) {
+        final @NonNull GeckoSession session,
+        final @NonNull String placementToken,
+        final int videoWidth,
+        final int videoHeight) {
       final PictureInPictureActivity window = PipSessionHolder.getActiveActivity();
       final boolean windowIsUp = window != null && !window.isFinishing();
 

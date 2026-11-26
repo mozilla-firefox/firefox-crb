@@ -22,8 +22,12 @@ data class PictureInPictureWindowState(
  *
  * @property tabId ID of the tab the video comes from.
  * @property engineSession The session cloning the video.
+ * @property videoWidth Width of the video, or 0 if unknown.
+ * @property videoHeight Height of the video, or 0 if unknown.
  */
 data class PictureInPictureSession(
     val tabId: String,
     val engineSession: EngineSession,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
 )

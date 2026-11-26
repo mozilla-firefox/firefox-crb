@@ -13,6 +13,11 @@ exclude: true
 
 ⚠️  breaking change and deprecation notices
 
+## v163
+- ⚠️ [`onEnterPictureInPicture`][163.1] now also receives the width and height of the video, so the picture-in-picture window can be opened at its aspect ratio. ([bug 2095311]({{bugzilla}}2095311))
+
+[163.1]: {{javadoc_uri}}/PictureInPictureController.SessionPictureInPicture.Delegate.html#onEnterPictureInPicture(org.mozilla.geckoview.GeckoSession,java.lang.String,int,int)
+
 ## v162
 - [`setKeepActive`][162.1] now returns whether a `GeckoView` skipped deactivating the session while it was kept active. ([bug 2075323]({{bugzilla}}2075323))
 - Added experimental [`GeckoRuntimeSettings.Builder.creditCardSecurityCodeEnabled`][162.2],
@@ -2155,4 +2160,4 @@ to allow adding gecko profiler markers.
 [65.24]: {{javadoc_uri}}/CrashReporter.html#sendCrashReport(android.content.Context,android.os.Bundle,java.lang.String)
 [65.25]: {{javadoc_uri}}/GeckoResult.html
 
-[api-version]: 3178a28d2e02b0ea9be0beb5d7c15ba598177d00
+[api-version]: 15f417663896ccfa5d6afc1b1823ff9cb21f0673

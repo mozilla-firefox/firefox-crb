@@ -1544,9 +1544,15 @@ sealed class PictureInPictureAction : BrowserAction() {
      * renders [engineSession] in place of the session it had.
      *
      * @property engineSession The session cloning the video.
+     * @property videoWidth Width of the video, or 0 if unknown.
+     * @property videoHeight Height of the video, or 0 if unknown.
      */
-    data class EnterAction(override val tabId: String, val engineSession: EngineSession) :
-        PictureInPictureAction(), ActionWithTab
+    data class EnterAction(
+        override val tabId: String,
+        val engineSession: EngineSession,
+        val videoWidth: Int = 0,
+        val videoHeight: Int = 0,
+    ) : PictureInPictureAction(), ActionWithTab
 
     /** The engine takes the video of the tab with the given [tabId] out of picture-in-picture. */
     data class ExitAction(override val tabId: String) : PictureInPictureAction(), ActionWithTab
