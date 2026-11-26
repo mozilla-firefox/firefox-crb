@@ -2,9 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "OriginInfo.h"
 #include "QuotaManagerDependencyFixture.h"
+#include "QuotaManagerImpl.h"
 #include "QuotaManagerTestHelpers.h"
 #include "gtest/gtest.h"
+#include "mozIStorageConnection.h"
+#include "mozIStorageService.h"
+#include "mozIStorageStatement.h"
+#include "mozStorageCID.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/ScopeExit.h"
@@ -552,6 +558,123 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Simple) {
 
   ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
 }
+
+class TestQuotaManagerWriteLease
+    : public TestQuotaManagerAndClearStorage,
+      public testing::WithParamInterface<BoolPairTestParams> {};
+
+TEST_P(TestQuotaManagerWriteLease, AcquireWriteLease_MissingOriginRow) {
+  const auto [async, failInsert] = GetParam();
+  const auto metadata = GetTestOriginMetadata();
+
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(metadata));
+
+  PerformClientDirectoryLockTest(
+      GetTestClientMetadata(), [&](auto directoryLock) {
+        auto* quotaManager = QuotaManager::Get();
+        nsCOMPtr<mozIStorageConnection> connection;
+        auto cleanup = MakeScopeExit([&] {
+          PerformOnIOThread([&] {
+            if (connection) {
+              EXPECT_NS_SUCCEEDED(connection->ExecuteSimpleSQL(
+                  "DROP TRIGGER IF EXISTS fail_origin_insert"_ns));
+              EXPECT_NS_SUCCEEDED(connection->Close());
+              connection = nullptr;
+            }
+          });
+          DropDirectoryLock(directoryLock);
+        });
+
+        PerformOnIOThread([&] {
+          nsCOMPtr<nsIFile> file;
+          ASSERT_NS_SUCCEEDED(NS_NewLocalFile(quotaManager->GetBasePath(),
+                                              getter_AddRefs(file)));
+          ASSERT_NS_SUCCEEDED(file->Append(u"storage.sqlite"_ns));
+          nsCOMPtr<mozIStorageService> service =
+              do_GetService(MOZ_STORAGE_SERVICE_CONTRACTID);
+          ASSERT_TRUE(service);
+          ASSERT_NS_SUCCEEDED(service->OpenUnsharedDatabase(
+              file, mozIStorageService::CONNECTION_DEFAULT,
+              getter_AddRefs(connection)));
+          QM_TRY_INSPECT(
+              const auto& statement,
+              CreateStatement(*connection,
+                              "DELETE FROM origin WHERE origin = :origin"_ns),
+              QM_TEST_FAIL);
+          ASSERT_NS_SUCCEEDED(
+              statement->BindUTF8StringByName("origin"_ns, metadata.mOrigin));
+          ASSERT_NS_SUCCEEDED(statement->Execute());
+          if (failInsert) {
+            ASSERT_NS_SUCCEEDED(connection->ExecuteSimpleSQL(
+                "CREATE TRIGGER fail_origin_insert BEFORE INSERT ON origin "
+                "BEGIN SELECT RAISE(ABORT, 'injected insert failure'); END"_ns));
+          }
+        });
+        ASSERT_FALSE(HasFatalFailure());
+
+        Maybe<WriteLease> lease;
+        if (async) {
+          auto result = Await(quotaManager->AcquireWriteLease(metadata));
+          EXPECT_EQ(result.IsReject(), failInsert);
+          if (result.IsResolve()) {
+            lease.emplace(std::move(result.ResolveValue()));
+          } else {
+            EXPECT_EQ(result.RejectValue(), NS_ERROR_STORAGE_CONSTRAINT);
+          }
+        } else {
+          auto result = PerformOnIOThread([&] {
+            return quotaManager->AcquireWriteLeaseOnIOThread(metadata);
+          });
+          EXPECT_EQ(result.isErr(), failInsert);
+          if (result.isOk()) {
+            lease.emplace(result.unwrap());
+          } else {
+            EXPECT_EQ(result.unwrapErr(), NS_ERROR_STORAGE_CONSTRAINT);
+          }
+        }
+
+        EXPECT_EQ(
+            quotaManager->WithOriginInfo(
+                metadata,
+                [](const auto& info) { return info->LockedDirtyOnDisk(); }),
+            !failInsert);
+        EXPECT_EQ(
+            quotaManager->WithOriginInfo(
+                metadata,
+                [](const auto& info) { return info->LockedHasWriteLease(); }),
+            !failInsert);
+
+        PerformOnIOThread([&] {
+          QM_TRY_INSPECT(
+              const auto& statement,
+              CreateAndExecuteSingleStepStatement<
+                  SingleStepResult::ReturnNullIfNoResult>(
+                  *connection,
+                  "SELECT metadata_flags FROM origin WHERE origin = :origin"_ns,
+                  [&](auto& stmt) {
+                    return MOZ_TO_RESULT(stmt.BindUTF8StringByName(
+                        "origin"_ns, metadata.mOrigin));
+                  }),
+              QM_TEST_FAIL);
+          EXPECT_EQ(!!statement, !failInsert);
+          if (statement) {
+            int32_t flags;
+            ASSERT_NS_SUCCEEDED(statement->GetInt32(0, &flags));
+            EXPECT_TRUE(flags & DirectoryMetadataFlags::Dirty);
+            EXPECT_TRUE(flags & DirectoryMetadataFlags::Accessed);
+          }
+        });
+      });
+}
+
+INSTANTIATE_TEST_SUITE_P(, TestQuotaManagerWriteLease,
+                         testing::Values(BoolPairTestParams{false, false},
+                                         BoolPairTestParams{false, true},
+                                         BoolPairTestParams{true, false},
+                                         BoolPairTestParams{true, true}));
 
 // Test simple OpenClientDirectory behavior when the origin directory exists,
 // and verify that access time updates are triggered on first and last access.
