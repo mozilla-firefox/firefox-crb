@@ -22,7 +22,6 @@
 #include "mozilla/dom/quota/FileStreams.h"
 #include "mozilla/dom/quota/ForwardDecls.h"
 #include "mozilla/dom/quota/QuotaCommon.h"
-#include "mozilla/dom/quota/QuotaManager.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
 #include "mozilla/ipc/BackgroundParent.h"
 #include "mozilla/ipc/FileDescriptorUtils.h"
@@ -74,41 +73,6 @@ IPCResult FileSystemManagerParent::RecvGetRootHandle(
   return IPC_OK();
 }
 
-void FileSystemManagerParent::WithWriteLease(
-    MoveOnlyFunction<void(mozilla::Result<quota::WriteLease, nsresult>)>
-        aBody) {
-  AssertIsOnIOTarget();
-  MOZ_ASSERT(mDataManager);
-
-  quota::QuotaManager* quotaManager = quota::QuotaManager::Get();
-  if (!quotaManager) {
-    aBody(Err(NS_ERROR_ILLEGAL_DURING_SHUTDOWN));
-    return;
-  }
-
-  const quota::OriginMetadata& originMetadata =
-      mDataManager->OriginMetadataRef();
-
-  if (Maybe<quota::WriteLease> lease =
-          quotaManager->TryAcquireWriteLease(originMetadata)) {
-    aBody(std::move(*lease));
-    return;
-  }
-
-  quotaManager->AcquireWriteLease(originMetadata)
-      ->Then(GetCurrentSerialEventTarget(), __func__,
-             [body = std::move(aBody)](
-                 quota::QuotaManager::WriteLeasePromise::ResolveOrRejectValue&&
-                     aValue) mutable {
-               if (aValue.IsReject()) {
-                 body(Err(aValue.RejectValue()));
-                 return;
-               }
-
-               body(std::move(aValue.ResolveValue()));
-             });
-}
-
 IPCResult FileSystemManagerParent::RecvGetDirectoryHandle(
     FileSystemGetHandleRequest&& aRequest,
     GetDirectoryHandleResolver&& aResolver) {
@@ -131,37 +95,22 @@ IPCResult FileSystemManagerParent::RecvGetDirectoryHandle(
     return IPC_OK();
   }
 
-  auto body =
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& aRv) {
+    FileSystemGetHandleResponse response(ToNSResult(aRv));
+    aResolver(response);
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(FileSystemGetHandleResponse(aWriteLease.unwrapErr()));
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const QMResult& aRv) {
-          FileSystemGetHandleResponse response(ToNSResult(aRv));
-          resolver(response);
-        };
+  QM_TRY_UNWRAP(fs::EntryId newEntryId,
+                mDataManager->MutableDatabaseManagerPtr()->GetOrCreateDirectory(
+                    aRequest.handle(), aRequest.create()),
+                IPC_OK(), reportError);
+  MOZ_ASSERT(!newEntryId.IsEmpty());
 
-        QM_TRY_UNWRAP(
-            fs::EntryId entryId,
-            self->mDataManager->MutableDatabaseManagerPtr()
-                ->GetOrCreateDirectory(request.handle(), request.create()),
-            QM_VOID, reportError);
-        MOZ_ASSERT(!entryId.IsEmpty());
-
-        FileSystemGetHandleResponse response(entryId);
-        resolver(response);
-      };
-
-  WithWriteLease(std::move(body));
+  FileSystemGetHandleResponse response(newEntryId);
+  aResolver(response);
 
   return IPC_OK();
 }
@@ -184,37 +133,22 @@ IPCResult FileSystemManagerParent::RecvGetFileHandle(
     return IPC_OK();
   }
 
-  auto body =
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& aRv) {
+    FileSystemGetHandleResponse response(ToNSResult(aRv));
+    aResolver(response);
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(FileSystemGetHandleResponse(aWriteLease.unwrapErr()));
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const QMResult& aRv) {
-          FileSystemGetHandleResponse response(ToNSResult(aRv));
-          resolver(response);
-        };
+  QM_TRY_UNWRAP(fs::EntryId newEntryId,
+                mDataManager->MutableDatabaseManagerPtr()->GetOrCreateFile(
+                    aRequest.handle(), aRequest.create()),
+                IPC_OK(), reportError);
+  MOZ_ASSERT(!newEntryId.IsEmpty());
 
-        QM_TRY_UNWRAP(
-            fs::EntryId entryId,
-            self->mDataManager->MutableDatabaseManagerPtr()->GetOrCreateFile(
-                request.handle(), request.create()),
-            QM_VOID, reportError);
-        MOZ_ASSERT(!entryId.IsEmpty());
-
-        FileSystemGetHandleResponse response(entryId);
-        resolver(response);
-      };
-
-  WithWriteLease(std::move(body));
+  FileSystemGetHandleResponse response(newEntryId);
+  aResolver(response);
 
   return IPC_OK();
 }
@@ -301,51 +235,26 @@ mozilla::ipc::IPCResult FileSystemManagerParent::RecvGetWritable(
   // Locking the entry starts usage tracking, which already writes to the file
   // system database, and the child then writes to the file directly, so the
   // origin must be marked dirty on disk before any of that.
-  WithWriteLease(
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver),
-       mode](mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        self->FinishGetWritable(request, resolver, mode,
-                                std::move(aWriteLease));
-      });
-
-  return IPC_OK();
-}
-
-void FileSystemManagerParent::FinishGetWritable(
-    const FileSystemGetWritableRequest& aRequest,
-    GetWritableResolver& aResolver, fs::FileMode aMode,
-    mozilla::Result<quota::WriteLease, nsresult> aWriteLease) {
-  if (!CanSend()) {
-    return;
-  }
-
-  AssertIsOnIOTarget();
-  MOZ_ASSERT(mDataManager);
-
-  // Without the dirty flag recorded on disk nothing may be written.
-  if (aWriteLease.isErr()) {
-    aResolver(aWriteLease.unwrapErr());
-    return;
-  }
-
   auto reportError = [&aResolver](const auto& aRv) {
     aResolver(ToNSResult(aRv));
   };
+
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
   // TODO: Get rid of mode and switching based on it, have the right unlocking
   // automatically
   const fs::EntryId& entryId = aRequest.entryId();
   QM_TRY_UNWRAP(
       fs::FileId fileId,
-      (aMode == fs::FileMode::EXCLUSIVE ? mDataManager->LockExclusive(entryId)
-                                        : mDataManager->LockShared(entryId)),
-      QM_VOID, reportError);
+      (mode == fs::FileMode::EXCLUSIVE ? mDataManager->LockExclusive(entryId)
+                                       : mDataManager->LockShared(entryId)),
+      IPC_OK(), reportError);
   MOZ_ASSERT(!fileId.IsEmpty());
 
   auto autoUnlock = MakeScopeExit(
-      [self = RefPtr<FileSystemManagerParent>(this), &entryId, &fileId, aMode] {
-        if (aMode == fs::FileMode::EXCLUSIVE) {
+      [self = RefPtr<FileSystemManagerParent>(this), &entryId, &fileId, mode] {
+        if (mode == fs::FileMode::EXCLUSIVE) {
           self->mDataManager->UnlockExclusive(entryId);
         } else {
           self->mDataManager->UnlockShared(entryId, fileId, /* aAbort */ true);
@@ -358,8 +267,8 @@ void FileSystemManagerParent::FinishGetWritable(
   nsCOMPtr<nsIFile> file;
   QM_TRY(
       MOZ_TO_RESULT(mDataManager->MutableDatabaseManagerPtr()->GetFile(
-          entryId, fileId, aMode, type, lastModifiedMilliSeconds, path, file)),
-      QM_VOID, reportError);
+          entryId, fileId, mode, type, lastModifiedMilliSeconds, path, file)),
+      IPC_OK(), reportError);
 
   if (LOG_ENABLED()) {
     nsAutoString path;
@@ -382,12 +291,12 @@ void FileSystemManagerParent::FinishGetWritable(
                           originMetadata.mPersistenceType, originMetadata,
                           quota::Client::FILESYSTEM, file, -1, -1,
                           nsIFileRandomAccessStream::DEFER_OPEN),
-                QM_VOID, reportError);
+                IPC_OK(), reportError);
 
   auto writableFileStreamParent =
       MakeNotNull<RefPtr<FileSystemWritableFileStreamParent>>(
-          this, entryId, fileId, aMode == fs::FileMode::EXCLUSIVE,
-          aWriteLease.unwrap());
+          this, entryId, fileId, mode == fs::FileMode::EXCLUSIVE,
+          std::move(writeLease));
 
   RandomAccessStreamParams streamParams =
       mozilla::ipc::SerializeRandomAccessStream(
@@ -402,11 +311,13 @@ void FileSystemManagerParent::FinishGetWritable(
 
   if (!SendPFileSystemWritableFileStreamConstructor(writableFileStreamParent)) {
     aResolver(NS_ERROR_FAILURE);
-    return;
+    return IPC_OK();
   }
 
   aResolver(FileSystemWritableFileStreamProperties(std::move(streamParams),
                                                    writableFileStreamParent));
+
+  return IPC_OK();
 }
 
 IPCResult FileSystemManagerParent::RecvGetFile(
@@ -436,32 +347,19 @@ IPCResult FileSystemManagerParent::RecvGetFile(
   }
 
   // The entry exists, but its file id or backing file needs to be created.
-  WithWriteLease(
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& rv) {
+    LOG(("getFile() Failed!"));
+    aResolver(ToNSResult(rv));
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(aWriteLease.unwrapErr());
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const auto& rv) {
-          LOG(("getFile() Failed!"));
-          resolver(ToNSResult(rv));
-        };
-
-        QM_TRY_UNWRAP(
-            auto properties,
-            self->GetFileProperties(request.entryId(), /* aCreate */ true),
-            QM_VOID, reportError);
-        MOZ_ASSERT(properties);
-        resolver(std::move(*properties));
-      });
+  QM_TRY_UNWRAP(properties,
+                GetFileProperties(aRequest.entryId(), /* aCreate */ true),
+                IPC_OK(), reportError);
+  MOZ_ASSERT(properties);
+  aResolver(std::move(*properties));
 
   return IPC_OK();
 }
@@ -596,60 +494,47 @@ IPCResult FileSystemManagerParent::RecvRemoveEntry(
   MOZ_ASSERT(!aRequest.handle().parentId().IsEmpty());
   MOZ_ASSERT(mDataManager);
 
-  WithWriteLease(
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& aRv) {
+    FileSystemRemoveEntryResponse response(ToNSResult(aRv));
+    aResolver(response);
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(FileSystemRemoveEntryResponse(aWriteLease.unwrapErr()));
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const QMResult& aRv) {
-          FileSystemRemoveEntryResponse response(ToNSResult(aRv));
-          resolver(response);
-        };
+  QM_TRY_UNWRAP(
+      bool isDeleted,
+      mDataManager->MutableDatabaseManagerPtr()->RemoveFile(aRequest.handle()),
+      IPC_OK(), reportError);
 
-        QM_TRY_UNWRAP(
-            bool isDeleted,
-            self->mDataManager->MutableDatabaseManagerPtr()->RemoveFile(
-                request.handle()),
-            QM_VOID, reportError);
+  if (isDeleted) {
+    FileSystemRemoveEntryResponse response(void_t{});
+    aResolver(response);
 
-        if (isDeleted) {
-          FileSystemRemoveEntryResponse response(void_t{});
-          resolver(response);
+    return IPC_OK();
+  }
 
-          return;
-        }
+  QM_TRY_UNWRAP(isDeleted,
+                mDataManager->MutableDatabaseManagerPtr()->RemoveDirectory(
+                    aRequest.handle(), aRequest.recursive()),
+                IPC_OK(), reportError);
 
-        QM_TRY_UNWRAP(
-            isDeleted,
-            self->mDataManager->MutableDatabaseManagerPtr()->RemoveDirectory(
-                request.handle(), request.recursive()),
-            QM_VOID, reportError);
+  if (!isDeleted) {
+    FileSystemRemoveEntryResponse response(NS_ERROR_DOM_NOT_FOUND_ERR);
+    aResolver(response);
 
-        if (!isDeleted) {
-          FileSystemRemoveEntryResponse response(NS_ERROR_DOM_NOT_FOUND_ERR);
-          resolver(response);
+    return IPC_OK();
+  }
 
-          return;
-        }
-
-        FileSystemRemoveEntryResponse response(void_t{});
-        resolver(response);
-      });
+  FileSystemRemoveEntryResponse response(void_t{});
+  aResolver(response);
 
   return IPC_OK();
 }
 
 IPCResult FileSystemManagerParent::RecvMoveEntry(
     FileSystemMoveEntryRequest&& aRequest, MoveEntryResolver&& aResolver) {
+  AssertIsOnIOTarget();
   LOG(("MoveEntry %s to %s",
        NS_ConvertUTF16toUTF8(aRequest.handle().entryName()).get(),
        NS_ConvertUTF16toUTF8(aRequest.destHandle().childName()).get()));
@@ -657,40 +542,28 @@ IPCResult FileSystemManagerParent::RecvMoveEntry(
   MOZ_ASSERT(!aRequest.destHandle().parentId().IsEmpty());
   MOZ_ASSERT(mDataManager);
 
-  WithWriteLease(
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& aRv) {
+    FileSystemMoveEntryResponse response(ToNSResult(aRv));
+    aResolver(response);
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(FileSystemMoveEntryResponse(aWriteLease.unwrapErr()));
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const QMResult& aRv) {
-          FileSystemMoveEntryResponse response(ToNSResult(aRv));
-          resolver(response);
-        };
+  QM_TRY_INSPECT(const EntryId& newId,
+                 mDataManager->MutableDatabaseManagerPtr()->MoveEntry(
+                     aRequest.handle(), aRequest.destHandle()),
+                 IPC_OK(), reportError);
 
-        QM_TRY_INSPECT(
-            const EntryId& newId,
-            self->mDataManager->MutableDatabaseManagerPtr()->MoveEntry(
-                request.handle(), request.destHandle()),
-            QM_VOID, reportError);
-
-        fs::FileSystemMoveEntryResponse response(newId);
-        resolver(response);
-      });
+  fs::FileSystemMoveEntryResponse response(newId);
+  aResolver(response);
 
   return IPC_OK();
 }
 
 IPCResult FileSystemManagerParent::RecvRenameEntry(
     FileSystemRenameEntryRequest&& aRequest, MoveEntryResolver&& aResolver) {
+  AssertIsOnIOTarget();
   // if destHandle's parentId is empty, then we're renaming in the same
   // directory
   LOG(("RenameEntry %s to %s",
@@ -699,34 +572,21 @@ IPCResult FileSystemManagerParent::RecvRenameEntry(
   MOZ_ASSERT(!aRequest.handle().entryId().IsEmpty());
   MOZ_ASSERT(mDataManager);
 
-  WithWriteLease(
-      [self = RefPtr(this), request = std::move(aRequest),
-       resolver = std::move(aResolver)](
-          mozilla::Result<quota::WriteLease, nsresult> aWriteLease) mutable {
-        if (!self->CanSend()) {
-          return;
-        }
+  auto reportError = [&aResolver](const auto& aRv) {
+    FileSystemMoveEntryResponse response(ToNSResult(aRv));
+    aResolver(response);
+  };
 
-        // Without the dirty flag recorded on disk nothing may be written.
-        if (aWriteLease.isErr()) {
-          resolver(FileSystemMoveEntryResponse(aWriteLease.unwrapErr()));
-          return;
-        }
+  QM_TRY_UNWRAP(auto writeLease, mDataManager->AcquireWriteLease(), IPC_OK(),
+                reportError);
 
-        auto reportError = [&resolver](const QMResult& aRv) {
-          FileSystemMoveEntryResponse response(ToNSResult(aRv));
-          resolver(response);
-        };
+  QM_TRY_INSPECT(const EntryId& newId,
+                 mDataManager->MutableDatabaseManagerPtr()->RenameEntry(
+                     aRequest.handle(), aRequest.name()),
+                 IPC_OK(), reportError);
 
-        QM_TRY_INSPECT(
-            const EntryId& newId,
-            self->mDataManager->MutableDatabaseManagerPtr()->RenameEntry(
-                request.handle(), request.name()),
-            QM_VOID, reportError);
-
-        fs::FileSystemMoveEntryResponse response(newId);
-        resolver(response);
-      });
+  fs::FileSystemMoveEntryResponse response(newId);
+  aResolver(response);
 
   return IPC_OK();
 }

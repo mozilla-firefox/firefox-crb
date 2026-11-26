@@ -68,6 +68,7 @@
 #include "mozilla/Logging.h"
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/Monitor.h"
 #include "mozilla/Mutex.h"
 #include "mozilla/NotNull.h"
 #include "mozilla/Now.h"
@@ -4449,6 +4450,17 @@ Result<Ok, nsresult> DeleteStaleOriginRows(mozIStorageConnection& aConnection,
   return Ok{};
 }
 
+class WriteLeaseAcquisition final {
+ public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(WriteLeaseAcquisition)
+
+  Monitor mMonitor{"QuotaManager::AcquireWriteLeaseSync"};
+  Maybe<Result<WriteLease, nsresult>> mResult MOZ_GUARDED_BY(mMonitor);
+
+ private:
+  ~WriteLeaseAcquisition() = default;
+};
+
 }  // namespace
 
 Result<FullOriginMetadata, nsresult> QuotaManager::LoadFullOriginMetadata(
@@ -8357,6 +8369,42 @@ void QuotaManager::ReleaseWriteLease(RefPtr<OriginInfo> aOriginInfo) {
 
   MutexAutoLock lock(mQuotaMutex);
   aOriginInfo->LockedReleaseWriteLease();
+}
+
+Result<WriteLease, nsresult> QuotaManager::AcquireWriteLeaseSync(
+    const OriginMetadata& aOriginMetadata) {
+  MOZ_DIAGNOSTIC_ASSERT(!NS_IsMainThread());
+  MOZ_DIAGNOSTIC_ASSERT(!IsOnBackgroundThread());
+  MOZ_DIAGNOSTIC_ASSERT(!IsOnIOThread());
+  AssertNotCurrentThreadOwnsQuotaMutex();
+
+  if (auto lease = TryAcquireWriteLease(aOriginMetadata)) {
+    return std::move(*lease);
+  }
+
+  auto acquisition = MakeRefPtr<WriteLeaseAcquisition>();
+  nsCOMPtr<nsIRunnable> runnable = NS_NewRunnableFunction(
+      "QuotaManager::AcquireWriteLeaseSync", [aOriginMetadata, acquisition] {
+        QuotaManager* quotaManager = QuotaManager::Get();
+        auto result =
+            quotaManager
+                ? quotaManager->AcquireWriteLeaseOnIOThread(aOriginMetadata)
+                : Result<WriteLease, nsresult>(
+                      Err(NS_ERROR_ILLEGAL_DURING_SHUTDOWN));
+        MonitorAutoLock lock(acquisition->mMonitor);
+        acquisition->mResult.emplace(std::move(result));
+        lock.Notify();
+      });
+
+  QM_TRY(ArtificialFailure(
+      nsIQuotaArtificialFailure::CATEGORY_ACQUIRE_WRITE_LEASE_DISPATCH));
+  QM_TRY(MOZ_TO_RESULT(mIOThread->get()->Dispatch(runnable.forget())));
+
+  MonitorAutoLock lock(acquisition->mMonitor);
+  while (!acquisition->mResult) {
+    lock.Wait();
+  }
+  return acquisition->mResult.extract();
 }
 
 Result<WriteLease, nsresult> QuotaManager::AcquireWriteLeaseOnIOThread(
