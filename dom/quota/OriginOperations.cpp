@@ -3742,6 +3742,15 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
         // exists and it needs to be updated because the origin directory has
         // been just created.
 
+        aQuotaManager.WithOriginInfo(
+            originMetadata,
+            [dirty = fullOriginMetadata.mDirty](const auto& originInfo) {
+              originInfo->LockedClearCacheRowStale();
+              if (dirty) {
+                originInfo->LockedMarkDirtyOnDisk();
+              }
+            });
+
         aQuotaManager.PersistOrigin(originMetadata);
       } else {
         // In this case, we have a temporary origin which hasn't been
@@ -3749,6 +3758,12 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
         // origin directory has been just created.
 
         aQuotaManager.InitQuotaForOrigin(fullOriginMetadata);
+
+        // CreateDirectoryMetadata2 already upserted the row.
+        aQuotaManager.WithOriginInfo(originMetadata,
+                                     [](const auto& originInfo) {
+                                       originInfo->LockedClearCacheRowStale();
+                                     });
       }
     }
   } else {
@@ -3787,6 +3802,15 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
       // Update OriginInfo too if the temporary origin was already initialized.
       if (aQuotaManager.IsTemporaryStorageInitializedInternal() &&
           aQuotaManager.IsTemporaryOriginInitializedInternal(originMetadata)) {
+        aQuotaManager.WithOriginInfo(
+            originMetadata,
+            [dirty = fullOriginMetadata.mDirty](const auto& originInfo) {
+              originInfo->LockedClearCacheRowStale();
+              if (dirty) {
+                originInfo->LockedMarkDirtyOnDisk();
+              }
+            });
+
         aQuotaManager.PersistOrigin(originMetadata);
       }
     }

@@ -124,32 +124,6 @@ nsresult OriginInfo::LockedBindToStatement(
   return NS_OK;
 }
 
-nsresult OriginInfo::UpdateDirtyMetadata(mozIStorageConnection* aConnection,
-                                         uint32_t aMetadataFlags,
-                                         int64_t aLastAccessTime) const {
-  MOZ_ASSERT(aConnection);
-
-  nsCOMPtr<mozIStorageStatement> stmt;
-  QM_TRY(MOZ_TO_RESULT(aConnection->CreateStatement(
-      "UPDATE origin SET metadata_flags = :metadata_flags, "
-      "last_access_time = :last_access_time "
-      "WHERE repository_id = :repository_id "
-      "AND origin = :origin;"_ns,
-      getter_AddRefs(stmt))));
-
-  QM_TRY(MOZ_TO_RESULT(
-      stmt->BindInt32ByName("metadata_flags"_ns, aMetadataFlags)));
-  QM_TRY(MOZ_TO_RESULT(
-      stmt->BindInt64ByName("last_access_time"_ns, aLastAccessTime)));
-  QM_TRY(MOZ_TO_RESULT(
-      stmt->BindInt32ByName("repository_id"_ns, mGroupInfo->mPersistenceType)));
-  QM_TRY(MOZ_TO_RESULT(stmt->BindUTF8StringByName("origin"_ns, mOrigin)));
-
-  QM_TRY(MOZ_TO_RESULT(stmt->Execute()));
-
-  return NS_OK;
-}
-
 void OriginInfo::LockedDecreaseUsage(Client::Type aClientType, int64_t aSize,
                                      DirtyTrackingAutoLock& aProofOfLock) {
   AssertCurrentThreadOwnsQuotaMutex();
@@ -422,15 +396,48 @@ bool OriginInfo::LockedUpdateUsagesForEviction(
 
 void OriginInfo::MakeDirty(DirtyTrackingAutoLock& aProofOfLock) {
   AssertCurrentThreadOwnsQuotaMutex();
+  MOZ_ASSERT(aProofOfLock.IsValid());
+
+  LockedMarkDirty();
+}
+
+void OriginInfo::LockedMarkDirty() {
+  AssertCurrentThreadOwnsQuotaMutex();
 
   mLastModifiedTime = TimeStamp::Now();
-  if (!mMetadataDirty) {
+  if (mMetadataDirty) {
+    return;
+  }
+
+  mMetadataDirty = true;
+
+  if (mDirectoryExists) {
     auto* const quotaManager = QuotaManager::Get();
     MOZ_ASSERT(quotaManager);
 
-    quotaManager->RegisterDirtyOriginInfo(aProofOfLock);
-    mMetadataDirty = true;
+    quotaManager->RegisterDirtyOriginInfo(this);
   }
+}
+
+void OriginInfo::LockedMarkDirtyOnDisk() {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  mDirtyOnDisk = true;
+  LockedMarkDirty();
+}
+
+void OriginInfo::LockedAcquireWriteLease() {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  AssertNoOverflow(mWriteLeaseCount, 1);
+  ++mWriteLeaseCount;
+}
+
+void OriginInfo::LockedReleaseWriteLease() {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  AssertNoUnderflow(mWriteLeaseCount, 1);
+  --mWriteLeaseCount;
 }
 
 void OriginInfo::LockedDirectoryCreated() {
@@ -438,6 +445,17 @@ void OriginInfo::LockedDirectoryCreated() {
   MOZ_ASSERT(!mDirectoryExists);
 
   mDirectoryExists = true;
+
+  // Origins without a directory are not queued for flushing (the flush would
+  // requeue them forever), so queue now if a flush is pending. The caller
+  // sets mDirtyOnDisk via LockedMarkDirtyOnDisk after CreateDirectoryMetadata2
+  // succeeds.
+  if (mMetadataDirty) {
+    auto* const quotaManager = QuotaManager::Get();
+    MOZ_ASSERT(quotaManager);
+
+    quotaManager->RegisterDirtyOriginInfo(this);
+  }
 }
 
 }  // namespace mozilla::dom::quota
