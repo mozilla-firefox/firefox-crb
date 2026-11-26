@@ -23,6 +23,31 @@ const lazy = XPCOMUtils.declareLazy({
 const DEFAULT_SEARCH_QUERY_ENDPOINT =
   "https://mlpa-prod-prod-mozilla.freetls.fastly.net/v1/search";
 const REQUEST_TIMEOUT_MS = 15000;
+const EXTRA_HEADERS_PREF = "browser.smartwindow.extraHeaders";
+const FASTLY_REQUEST_HEADER = "x-fastly-request";
+
+/**
+ * Returns the X-Fastly-Request header from browser.smartwindow.extraHeaders,
+ * which MLPA gateways reached without Fastly in front require. The other
+ * extra headers are not forwarded because search accepts a different set of
+ * service types than chat.
+ *
+ * @returns {object}
+ */
+function getFastlyRequestHeader() {
+  let extraHeaders;
+  try {
+    extraHeaders = JSON.parse(
+      Services.prefs.getStringPref(EXTRA_HEADERS_PREF, "{}")
+    );
+  } catch (e) {
+    return {};
+  }
+  const entry = Object.entries(extraHeaders ?? {}).find(
+    ([name]) => name.toLowerCase() === FASTLY_REQUEST_HEADER
+  );
+  return entry ? { [FASTLY_REQUEST_HEADER]: entry[1] } : {};
+}
 
 /**
  * Categories for a failed search request, attached to the thrown error as
@@ -164,6 +189,7 @@ export class ExaSearchProvider extends SearchProvider {
           Accept: "application/json",
           "service-type": "search",
           Authorization: `Bearer ${token}`,
+          ...getFastlyRequestHeader(),
         },
         body: JSON.stringify({ query, max_results: maxResults }),
         signal: controller.signal,

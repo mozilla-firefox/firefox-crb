@@ -43,6 +43,8 @@ firefox-appdir = "browser"
 
 ["test_SearchBrowsingHistoryDomainBoost.js"]
 
+["test_SearchProviders.js"]
+
 ["test_SecurityProperties.js"]
 
 ["test_SensitiveInfoDetector.js"]

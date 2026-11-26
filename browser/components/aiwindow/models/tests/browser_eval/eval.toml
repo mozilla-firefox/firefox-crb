@@ -8,6 +8,7 @@ support-files = [
   "pages/mylocalweather.html",
   "prompts/basic_quality.sys.mjs",
   "tests/basic_quality.sys.mjs",
+  "tests/mlpa_stage.sys.mjs",
 ]
 
 ["browser_eval_basic_quality_gemini25flashlite.js"]

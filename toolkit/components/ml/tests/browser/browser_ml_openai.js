@@ -834,6 +834,79 @@ add_task(async function test_openai_fxaccount_token() {
   }
 });
 
+add_task(async function test_openai_extra_headers_only_override_service_type() {
+  const records = [
+    {
+      ...BASE_ENGINE_OPTIONS,
+      id: TEST_INFERENCE_OPTIONS_RECORD_ID,
+    },
+  ];
+  const { cleanup } = await setup({ records });
+
+  const captured = {};
+  const { server: mockServer, port } = startMockOpenAI({
+    echo: "Response with extra headers",
+    onRequest: req => {
+      for (const name of [
+        "service-type",
+        "chat-id",
+        "x-engine-id",
+        "x-extra",
+      ]) {
+        if (req.hasHeader(name)) {
+          captured[name] = req.getHeader(name);
+        }
+      }
+    },
+  });
+
+  const chatId = "test-chat-id-12345";
+  const engineInstance = await createEngine({
+    ...BASE_ENGINE_OPTIONS,
+    apiKey: "test-api-key",
+    baseURL: `http://localhost:${port}/v1`,
+    backend: "openai",
+    extraHeaders: {
+      "service-type": "mochi-dev",
+      "chat-id": "spoofed-chat-id",
+      "x-engine-id": "spoofed-engine-id",
+      "x-extra": "extra-value",
+    },
+  });
+
+  try {
+    await engineInstance.run({
+      args: [{ role: "user", content: "Test request with extra headers" }],
+      chatId,
+    });
+
+    Assert.equal(
+      captured["service-type"],
+      "mochi-dev",
+      "extraHeaders should override service-type"
+    );
+    Assert.equal(
+      captured["chat-id"],
+      chatId,
+      "extraHeaders should not override chat-id"
+    );
+    Assert.notEqual(
+      captured["x-engine-id"],
+      "spoofed-engine-id",
+      "extraHeaders should not override x-engine-id"
+    );
+    Assert.equal(
+      captured["x-extra"],
+      "extra-value",
+      "Other extra headers should be sent"
+    );
+  } finally {
+    await EngineProcess.destroyMLEngine();
+    await cleanup();
+    await stopMockOpenAI(mockServer);
+  }
+});
+
 /**
  * A service that rejects a request reports why through the HTTP status and a
  * body error code. Both have to survive the trip from the inference process,

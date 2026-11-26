@@ -42,10 +42,13 @@ class _LlmJudge(_Evaluation):
 
     def __init__(self, log: Callable[[str], None], config: dict[str, Any]) -> None:
         super().__init__(log, config)
-        self.mlpa_url = "https://mlpa-nonprod-stage-mozilla.freetls.fastly.net"
+        self.mlpa_url = (
+            "https://mlpa-gateway-stage.llm-proxy.nonprod.dataservices.mozgcp.net"
+        )
         self.model = config.get("model", "vertex_ai/mistral-small-2503")
         self.fxa_token = os.environ.get("MOZ_FXA_BEARER_TOKEN")
         self.mlpa_token = os.environ.get("MOZ_MLPA_AUTHORIZATION_TOKEN")
+        self.fastly_token = os.environ.get("MOZ_MLPA_FASTLY_TOKEN")
 
     def query_llm(
         self,
@@ -62,6 +65,8 @@ class _LlmJudge(_Evaluation):
             raise RuntimeError(
                 "Missing MOZ_MLPA_AUTHORIZATION_TOKEN for LLM evaluation."
             )
+        if not self.fastly_token:
+            raise RuntimeError("Missing MOZ_MLPA_FASTLY_TOKEN for LLM evaluation.")
 
         # generate client
         client = OpenAI(
@@ -71,6 +76,7 @@ class _LlmJudge(_Evaluation):
                 "Authorization": f"Bearer {self.fxa_token}",
                 "X-Dev-Authorization": self.mlpa_token,
                 "Service-Type": "mochi-dev",
+                "X-Fastly-Request": self.fastly_token,
             },
         )
 
