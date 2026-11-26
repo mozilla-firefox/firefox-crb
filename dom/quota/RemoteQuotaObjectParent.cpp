@@ -25,6 +25,11 @@ mozilla::ipc::IPCResult RemoteQuotaObjectParent::RecvMaybeUpdateSize(
   MOZ_ASSERT(!mozilla::ipc::IsOnBackgroundThread());
   MOZ_ASSERT(!GetCurrentThreadWorkerPrivate());
 
+  if (!mAcceptSizeUpdates) {
+    *aResult = false;
+    return IPC_OK();
+  }
+
   QM_TRY(OkIf(aSize >= 0), [&aResult](const auto&) {
     *aResult = false;
     return IPC_OK();
@@ -35,13 +40,35 @@ mozilla::ipc::IPCResult RemoteQuotaObjectParent::RecvMaybeUpdateSize(
 }
 
 void RemoteQuotaObjectParent::ActorDestroy(ActorDestroyReason aWhy) {
-  QM_WARNONLY_TRY(MOZ_TO_RESULT(CheckFileAfterClose()));
+  if (!mUsageAccountingFinished) {
+    QM_WARNONLY_TRY(MOZ_TO_RESULT(CheckFileAfterClose()));
+  }
 
   mCanonicalQuotaObject = nullptr;
 
   if (mTracker) {
     mTracker->UnregisterRemoteQuotaObjectParent(WrapNotNullUnchecked(this));
   }
+}
+
+nsresult RemoteQuotaObjectParent::FinishUsageAccounting() {
+  MOZ_ASSERT(GetActorEventTarget()->IsOnCurrentThread());
+
+  mAcceptSizeUpdates = false;
+  if (mUsageAccountingFinished) {
+    return NS_OK;
+  }
+
+  QM_TRY(MOZ_TO_RESULT(CheckFileAfterClose()));
+  mUsageAccountingFinished = true;
+  return NS_OK;
+}
+
+void RemoteQuotaObjectParent::AbandonUsageAccounting() {
+  MOZ_ASSERT(GetActorEventTarget()->IsOnCurrentThread());
+
+  mAcceptSizeUpdates = false;
+  mUsageAccountingFinished = true;
 }
 
 nsresult RemoteQuotaObjectParent::CheckFileAfterClose() {
@@ -52,9 +79,9 @@ nsresult RemoteQuotaObjectParent::CheckFileAfterClose() {
 
   QM_TRY_UNWRAP(auto size, MOZ_TO_RESULT_INVOKE_MEMBER(file, GetFileSize));
 
-  DebugOnly<bool> res =
-      mCanonicalQuotaObject->MaybeUpdateSize(size, /* aTruncate */ true);
-  MOZ_ASSERT(res);
+  QM_TRY(
+      OkIf(mCanonicalQuotaObject->MaybeUpdateSize(size, /* aTruncate */ true)),
+      NS_ERROR_FILE_NO_DEVICE_SPACE);
 
   return NS_OK;
 }
