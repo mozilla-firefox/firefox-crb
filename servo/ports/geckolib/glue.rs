@@ -10522,7 +10522,7 @@ pub extern "C" fn Servo_InterpolateColor(
 
     mix::mix_many(
         interpolation,
-        [
+        &[
             mix::ColorMixItem::new(*start_color, 1.0 - progress),
             mix::ColorMixItem::new(*end_color, progress),
         ],

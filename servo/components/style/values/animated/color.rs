@@ -25,7 +25,7 @@ impl Animate for AbsoluteColor {
 
         Ok(mix::mix_many(
             ColorInterpolationMethod::best_interpolation_between(self, other),
-            [
+            &[
                 mix::ColorMixItem::new(*self, left_weight as f32),
                 mix::ColorMixItem::new(*other, right_weight as f32),
             ],
@@ -66,6 +66,32 @@ pub type ColorMix = GenericColorMix<Color, Percentage>;
 impl Animate for Color {
     #[inline]
     fn animate(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
+        if let Procedure::Interpolate { progress } = procedure {
+            if !(self.is_absolute() && other.is_absolute()) {
+                // Extend an existing interpolation rather than nesting it, so
+                // that e.g. repeatedly interrupted transitions don't grow in
+                // depth.
+                let mut items = match *self {
+                    Self::ColorMix(ref mix) if mix.kind == ColorMixKind::InterpolationSequence => {
+                        mix.items.to_vec()
+                    },
+                    _ => vec![GenericColorMixItem {
+                        color: self.clone(),
+                        percentage: Optional::None,
+                    }],
+                };
+                items.push(GenericColorMixItem {
+                    color: other.clone(),
+                    percentage: Optional::Some(Percentage(progress as f32)),
+                });
+                return Ok(Self::ColorMix(Box::new(ColorMix {
+                    interpolation: ColorInterpolationMethod::srgb(),
+                    items: items.into(),
+                    kind: ColorMixKind::InterpolationSequence,
+                })));
+            }
+        }
+
         let (left_weight, right_weight) = procedure.weights();
 
         Ok(Self::from_color_mix(ColorMix {

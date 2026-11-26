@@ -87,22 +87,9 @@ impl Color {
                 color_function.resolve_to_absolute(current_color)
             },
             Self::CurrentColor => *current_color,
-            Self::ColorMix(ref mix) => {
-                use crate::color::mix;
-
-                let fill = mix.omitted_weight().unwrap_or(0.0);
-
-                mix::mix_many(
-                    mix.interpolation,
-                    mix.items.iter().map(|item| {
-                        mix::ColorMixItem::new(
-                            item.color.resolve_to_absolute(current_color),
-                            item.percentage.as_ref().map_or(fill, |p| p.0),
-                        )
-                    }),
-                    mix.kind,
-                )
-            },
+            Self::ColorMix(ref mix) => mix
+                .mix_resolved(|color| Some(color.resolve_to_absolute(current_color)))
+                .unwrap_or(AbsoluteColor::TRANSPARENT_BLACK),
             Self::ContrastColor(ref c) => {
                 let bg_color = c.resolve_to_absolute(current_color);
                 Self::resolve_contrast_color(&bg_color)

@@ -9,7 +9,8 @@ use crate::color::{AbsoluteColor, ColorFunction, mix::ColorInterpolationMethod};
 use crate::derives::*;
 use crate::values::generics::Optional;
 use crate::values::{
-    ParseError, Parser, computed::ToComputedValue, specified::percentage::ToPercentage,
+    ParseError, Parser, computed::Percentage as ComputedPercentage, computed::ToComputedValue,
+    specified::percentage::ToPercentage,
 };
 use std::fmt::{self, Write};
 use style_traits::{CssWriter, ToCss, owned_slice::OwnedSlice};
@@ -53,6 +54,10 @@ pub enum ColorMixKind {
     /// Normalizing the weights would turn addition into averaging.
     /// Finalize the result as legacy sRGB when all inputs use legacy syntax.
     Weighted,
+
+    /// Successive interpolations stored as an initial color followed by targets
+    /// with progress values. Each step mixes the previous result with its target.
+    InterpolationSequence,
 }
 
 impl ColorMixKind {
@@ -117,6 +122,13 @@ impl<Color: ToCss, Percentage: ToCss + ToPercentage> ToCss for ColorMix<Color, P
     where
         W: Write,
     {
+        // We special case serialization for now. See:
+        // - https://bugzilla.mozilla.org/show_bug.cgi?id=2095524
+        // - https://github.com/w3c/csswg-drafts/issues/14829
+        if self.kind == ColorMixKind::InterpolationSequence {
+            return self.interpolation_to_css(dest);
+        }
+
         dest.write_str("color-mix(")?;
 
         // If the color interpolation method is oklab (which is now the default),
@@ -159,6 +171,86 @@ impl<Color: ToCss, Percentage: ToCss + ToPercentage> ToCss for ColorMix<Color, P
     }
 }
 
+impl<Color: ToCss, Percentage: ToCss + ToPercentage> ColorMix<Color, Percentage> {
+    /// Serialize an interpolation as the equivalent nested two-item
+    /// color-mix() functions.
+    fn interpolation_to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        let Some((start, steps)) = self.items.split_first() else {
+            return Ok(());
+        };
+        for _ in steps {
+            dest.write_str("color-mix(")?;
+            self.interpolation.to_css(dest)?;
+            dest.write_str(", ")?;
+        }
+        start.color.to_css(dest)?;
+        for step in steps {
+            let weight = step.percentage.as_ref();
+            let accumulated_weight = weight.and_then(|w| w.to_percentage()).map(|w| 1.0 - w);
+            let omit = accumulated_weight == Some(0.5)
+                && weight.is_some_and(|w| !w.is_calc() && w.to_percentage() == Some(0.5));
+            if let Some(accumulated_weight) = accumulated_weight.filter(|_| !omit) {
+                dest.write_char(' ')?;
+                ComputedPercentage(accumulated_weight).to_css(dest)?;
+            }
+            dest.write_str(", ")?;
+            step.color.to_css(dest)?;
+            if let Some(weight) = weight.filter(|_| !omit) {
+                dest.write_char(' ')?;
+                weight.to_css(dest)?;
+            }
+            dest.write_char(')')?;
+        }
+        Ok(())
+    }
+}
+
+impl<Color, Percentage> ColorMix<Color, Percentage> {
+    /// Mix the colors, resolving each of them with `resolve`. Returns `None`
+    /// if a color can't be resolved, or a weight can't be resolved to a
+    /// number.
+    pub fn mix_resolved(
+        &self,
+        mut resolve: impl FnMut(&Color) -> Option<AbsoluteColor>,
+    ) -> Option<AbsoluteColor>
+    where
+        Percentage: ToPercentage,
+    {
+        use crate::color::mix;
+
+        if self.kind == ColorMixKind::InterpolationSequence {
+            let (start, steps) = self.items.split_first()?;
+            let mut accumulated = resolve(&start.color)?;
+            for step in steps {
+                let weight = step.percentage.as_ref()?.to_percentage()?;
+                accumulated = mix::interpolation_step(
+                    self.interpolation,
+                    accumulated,
+                    resolve(&step.color)?,
+                    weight,
+                );
+            }
+            return Some(accumulated);
+        }
+
+        let fill = self.omitted_weight()?;
+
+        let mut items = ColorMixItemList::with_capacity(self.items.len());
+        for item in self.items.iter() {
+            let weight = match item.percentage.as_ref() {
+                Some(percentage) => percentage.to_percentage()?,
+                None => fill,
+            };
+            items.push(mix::ColorMixItem::new(resolve(&item.color)?, weight))
+        }
+
+        Some(mix::mix_many(self.interpolation, &items, self.kind))
+    }
+}
+
 impl<Color, Percentage> ColorMix<Color, Percentage> {
     /// The weight used for percentages that were omitted next to a calc()
     /// sibling: an equal share of the weight not taken by specified percentages.
@@ -190,20 +282,7 @@ impl<Percentage> ColorMix<GenericColor<Percentage>, Percentage> {
     where
         Percentage: ToPercentage,
     {
-        use crate::color::mix;
-
-        let fill = self.omitted_weight()?;
-
-        let mut items = ColorMixItemList::with_capacity(self.items.len());
-        for item in self.items.iter() {
-            let weight = match item.percentage.as_ref() {
-                Some(percentage) => percentage.to_percentage()?,
-                None => fill,
-            };
-            items.push(mix::ColorMixItem::new(*item.color.as_absolute()?, weight))
-        }
-
-        Some(mix::mix_many(self.interpolation, items, self.kind))
+        self.mix_resolved(|color| color.as_absolute().copied())
     }
 }
 

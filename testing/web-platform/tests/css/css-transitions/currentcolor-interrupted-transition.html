@@ -1,0 +1,91 @@
+<!doctype html>
+<meta charset=utf-8>
+<title>CSS Transitions: repeatedly interrupted transitions involving currentcolor</title>
+<link rel="help" href="https://drafts.csswg.org/css-transitions/#starting">
+<link rel="help" href="https://drafts.csswg.org/css-color-4/#resolving-other-colors">
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2033796">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<style>
+  #target {
+    color: rgb(0, 0, 255);
+    border-top-color: currentcolor;
+  }
+  #child {
+    color: rgb(255, 255, 0);
+    border-top-color: inherit;
+  }
+</style>
+<div id="target"><div id="child"></div></div>
+<script>
+const COLORS = {
+  "red": [255, 0, 0],
+  "lime": [0, 255, 0],
+};
+
+// An interpolated value is tracked as a weight of currentcolor plus an
+// already-weighted absolute RGB contribution. All colors are opaque, so the
+// interpolation is linear in these.
+function interpolate(from, to, p) {
+  return {
+    currentcolor: from.currentcolor * (1 - p) + to.currentcolor * p,
+    rgb: from.rgb.map((c, i) => c * (1 - p) + to.rgb[i] * p),
+  };
+}
+
+function valueFor(keyword) {
+  if (keyword == "currentcolor") {
+    return { currentcolor: 1, rgb: [0, 0, 0] };
+  }
+  return { currentcolor: 0, rgb: COLORS[keyword] };
+}
+
+function resolve(value, currentColor) {
+  return value.rgb.map((c, i) => c + value.currentcolor * currentColor[i]);
+}
+
+function parseRgb(string) {
+  const match = string.match(/^rgba?\(([^,]+), ([^,]+), ([^,)]+)\)$/);
+  assert_true(!!match, `"${string}" is an opaque rgb() color`);
+  return match.slice(1, 4).map(Number);
+}
+
+function assertColor(actual, expected, description) {
+  const components = parseRgb(actual);
+  for (let i = 0; i < 3; ++i) {
+    assert_approx_equals(components[i], expected[i], 1, `${description} component ${i}`);
+  }
+}
+
+function runInterruptions(count) {
+  const target = document.getElementById("target");
+  const child = document.getElementById("child");
+  target.style.transition = "";
+  target.style.borderTopColor = "currentcolor";
+  getComputedStyle(target).borderTopColor;
+
+  target.style.transition = "border-top-color 10s -5s linear";
+  const keywords = ["red", "lime", "currentcolor"];
+  let expected = valueFor("currentcolor");
+  for (let i = 0; i < count; ++i) {
+    const keyword = keywords[i % keywords.length];
+    target.style.borderTopColor = keyword;
+    getComputedStyle(target).borderTopColor;
+    expected = interpolate(expected, valueFor(keyword), 0.5);
+  }
+
+  assertColor(getComputedStyle(target).borderTopColor,
+              resolve(expected, [0, 0, 255]), "target");
+  assertColor(getComputedStyle(child).borderTopColor,
+              resolve(expected, [255, 255, 0]), "child");
+
+  target.style.transition = "";
+  target.style.borderTopColor = "";
+}
+
+for (const count of [1, 2, 3, 60]) {
+  test(() => {
+    runInterruptions(count);
+  }, `${count} interrupted transition(s) involving currentcolor resolve correctly`);
+}
+</script>

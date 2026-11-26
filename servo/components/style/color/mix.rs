@@ -5,7 +5,6 @@
 //! Color mixing/interpolation.
 
 use super::{AbsoluteColor, ColorFlags, ColorSpace};
-use crate::color::ColorMixItemList;
 use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
 use crate::values::generics::color::ColorMixKind;
@@ -165,11 +164,9 @@ impl ColorMixItem {
 /// Mix N colors into one (left-to-right fold).
 pub fn mix_many(
     interpolation: ColorInterpolationMethod,
-    items: impl IntoIterator<Item = ColorMixItem>,
+    items: &[ColorMixItem],
     kind: ColorMixKind,
 ) -> AbsoluteColor {
-    let items = items.into_iter().collect::<ColorMixItemList<_>>();
-
     // Convert a mix result into the syntax required by the mix kind:
     // - modern syntax when requested (converting legacy spaces like hsl/hwb to srgb), otherwise;
     // - legacy srgb when every mixed color used legacy syntax.
@@ -263,6 +260,24 @@ pub fn mix_many(
     result.flags = accumulated_color.flags;
 
     finalize(result)
+}
+
+/// Mix `color` into `accumulated` as a single interpolation step.
+#[inline]
+pub(crate) fn interpolation_step(
+    interpolation: ColorInterpolationMethod,
+    accumulated: AbsoluteColor,
+    color: AbsoluteColor,
+    weight: f32,
+) -> AbsoluteColor {
+    mix_many(
+        interpolation,
+        &[
+            ColorMixItem::new(accumulated, 1.0 - weight),
+            ColorMixItem::new(color, weight),
+        ],
+        ColorMixKind::Weighted,
+    )
 }
 
 /// What the outcome of each component should be in a mix result.

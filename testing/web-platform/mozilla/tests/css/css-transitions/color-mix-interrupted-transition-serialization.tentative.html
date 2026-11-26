@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>CSS Typed OM serialization of interrupted color transitions</title>
+<link rel="help" href="https://github.com/w3c/csswg-drafts/issues/14829">
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2033796">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<body>
+<script>
+function setup(t) {
+  const target = document.body.appendChild(document.createElement("div"));
+  t.add_cleanup(() => target.remove());
+  target.style.color = "red";
+  target.style.backgroundColor = "currentcolor";
+
+  const styleMap = target.computedStyleMap();
+  const serializedColor = () => styleMap.get("background-color").toString();
+  assert_equals(serializedColor(), "currentcolor", "Initial computed value");
+  target.style.transition = "background-color 100s linear";
+
+  function transitionTo(color, currentTime, easing = "linear") {
+    target.style.transitionTimingFunction = easing;
+    target.style.backgroundColor = color;
+    const [transition] = target.getAnimations();
+    assert_true(transition instanceof CSSTransition, `Transition to ${color}`);
+    transition.pause();
+    transition.currentTime = currentTime;
+  }
+
+  return { serializedColor, transitionTo };
+}
+
+test(t => {
+  const { serializedColor, transitionTo } = setup(t);
+  transitionTo("black", 25000);
+  const firstMix = "color-mix(in srgb, currentcolor 75%, rgb(0, 0, 0) 25%)";
+  assert_equals(serializedColor(), firstMix, "The initial interpolation");
+
+  transitionTo("color(srgb none 0 0)", 50000);
+  const secondMix = `color-mix(in srgb, ${firstMix}, color(srgb none 0 0))`;
+  assert_equals(serializedColor(), secondMix,
+                "The new target mixes with the previous interpolation");
+
+  transitionTo("blue", 75000);
+  assert_equals(serializedColor(), `color-mix(in srgb, ${secondMix} 25%, rgb(0, 0, 255) 75%)`,
+                "A second interruption wraps both earlier mixes in order");
+}, "Typed OM serializes interrupted currentcolor transitions as nested color-mix() calls");
+
+test(t => {
+  const { serializedColor, transitionTo } = setup(t);
+  transitionTo("black", 50000, "linear(0, 1.25, 1)");
+  const overshootingMix = "color-mix(in srgb, currentcolor -25%, rgb(0, 0, 0) 125%)";
+  assert_equals(serializedColor(), overshootingMix, "The overshoot is serialized");
+
+  transitionTo("blue", 50000);
+  assert_equals(serializedColor(), `color-mix(in srgb, ${overshootingMix}, rgb(0, 0, 255))`,
+                "The interrupted transition retains the overshoot in the inner mix");
+}, "Typed OM serializes an overshooting step in an interrupted currentcolor transition");
+</script>

@@ -1,0 +1,48 @@
+<!doctype html>
+<title>Repeatedly interrupting a currentcolor transition</title>
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2033796">
+<!--
+  Interrupting a transition of a color that depends on currentcolor many times
+  builds up a large interpolated value. Restyle it among many siblings so that
+  it may get styled on a style worker thread, which has a smaller stack.
+-->
+<style>
+  #target {
+    color: green;
+    background-color: color-mix(in srgb, currentcolor 10%, transparent);
+    transition: background-color 1000s linear;
+  }
+  #target[data-s="1"] {
+    background-color: color-mix(in srgb, currentcolor 20%, transparent);
+  }
+  #target[data-s="2"] {
+    background-color: color-mix(in srgb, currentcolor 30%, transparent);
+  }
+  .x > div {
+    outline-color: red;
+  }
+</style>
+<body>
+<script>
+  let target;
+  for (let i = 0; i < 400; i++) {
+    const e = document.body.appendChild(document.createElement("div"));
+    e.textContent = i;
+    if (i == 250) {
+      e.id = "target";
+      target = e;
+    }
+  }
+  getComputedStyle(document.body.lastChild).color;
+  for (let i = 1; i <= 1000; i++) {
+    target.dataset.s = i % 3;
+    getComputedStyle(target).backgroundColor;
+    if (i % 50 == 0) {
+      for (let j = 0; j < 10; j++) {
+        document.body.classList.toggle("x");
+        getComputedStyle(document.body.lastChild).color;
+      }
+    }
+  }
+</script>
+</body>
