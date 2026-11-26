@@ -318,16 +318,16 @@ internal class TelemetryAccountObserver(
         settings.signedInFxaAccount = true
         when (authType) {
             // User signed-in into an existing FxA account.
-            AuthType.Signin -> {
+            is AuthType.Signin -> {
                 SyncAuth.signIn.record(NoExtras())
                 context.recordEventInNimbus("sync_auth.sign_in")
             }
 
             // User created a new FxA account.
-            AuthType.Signup -> SyncAuth.signUp.record(NoExtras())
+            is AuthType.Signup -> SyncAuth.signUp.record(NoExtras())
 
             // User paired to an existing account via QR code scanning.
-            AuthType.Pairing -> SyncAuth.paired.record(NoExtras())
+            is AuthType.Pairing -> SyncAuth.paired.record(NoExtras())
 
             // Account Manager recovered a broken FxA auth state, without direct user involvement.
             AuthType.Recovered -> SyncAuth.recovered.record(NoExtras())
@@ -396,9 +396,9 @@ internal class SyncedTabsClosedNotificationObserver(
 private val AuthType.signInTelemetryId: String?
     get() =
         when (this) {
-            AuthType.Pairing -> "pairing"
-            AuthType.Signin -> "sign_in"
-            AuthType.Signup -> "sign_up"
+            is AuthType.Pairing -> "pairing"
+            is AuthType.Signin -> "sign_in"
+            is AuthType.Signup -> "sign_up"
             is AuthType.OtherExternal,
             AuthType.Existing,
             AuthType.MigratedCopy,
