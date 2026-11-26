@@ -27,19 +27,19 @@ profile-selector {
 }
 
 .profile-list {
+  --profile-card-height: 185px;
+
   width: 100%;
-  max-height: 400px;
+  /* Show the top of a third row, so the list reads as scrollable. */
+  max-height: calc(2 * var(--profile-card-height) + 3 * var(--space-xxlarge));
   min-width: 426px;
   overflow: auto;
-  margin: var(--space-xxlarge) 0;
+  margin-block: var(--space-xxlarge) var(--space-large);
+  margin-inline: 0;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-xxlarge);
   padding: 4px;
-}
-
-moz-checkbox {
-  margin-block-start: 40px;
 }
 
 moz-checkbox span[hidden] {
