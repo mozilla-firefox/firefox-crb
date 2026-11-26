@@ -23,20 +23,18 @@ endif()
 
 # VERSION is the release version of the library. It should be updated at the
 # same time as the LT_* variables.
-project(AOM LANGUAGES C CXX VERSION 3.15.2)
+project(AOM LANGUAGES C CXX VERSION 3.15.3)
 
 # GENERATED source property global visibility.
 if(POLICY CMP0118)
   cmake_policy(SET CMP0118 NEW)
 endif()
 
-if(NOT EMSCRIPTEN)
-  if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE
-        "Release"
-        CACHE STRING "Build type: Debug, Release, RelWithDebInfo or MinSizeRel"
-              FORCE)
-  endif()
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE
+      "Release"
+      CACHE STRING "Build type: Debug, Release, RelWithDebInfo or MinSizeRel"
+            FORCE)
 endif()
 
 if(MSVC AND MSVC_VERSION LESS 1920)
@@ -59,7 +57,7 @@ endif()
 #
 # The VERSION number in project() should be updated when these variables are.
 set(LT_CURRENT 18)
-set(LT_REVISION 2)
+set(LT_REVISION 3)
 set(LT_AGE 15)
 math(EXPR SO_VERSION "${LT_CURRENT} - ${LT_AGE}")
 set(SO_FILE_VERSION "${SO_VERSION}.${LT_AGE}.${LT_REVISION}")

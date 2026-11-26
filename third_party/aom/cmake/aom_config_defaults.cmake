@@ -34,6 +34,7 @@ set_aom_detect_var(AOM_ARCH_PPC 0 "Enables PPC architecture.")
 set_aom_detect_var(AOM_ARCH_X86 0 "Enables X86 architecture.")
 set_aom_detect_var(AOM_ARCH_X86_64 0 "Enables X86_64 architecture.")
 set_aom_detect_var(AOM_ARCH_RISCV 0 "Enables RISC-V architecture.")
+set_aom_detect_var(AOM_ARCH_WASM 0 "Enables WebAssembly architecture.")
 
 # Arm/AArch64 feature flags.
 set_aom_detect_var(HAVE_NEON 0 "Enables Neon intrinsics optimizations.")
@@ -59,9 +60,13 @@ set_aom_detect_var(HAVE_SSE4_2 0 "Enables SSE 4.2 optimizations.")
 set_aom_detect_var(HAVE_AVX 0 "Enables AVX optimizations.")
 set_aom_detect_var(HAVE_AVX2 0 "Enables AVX2 optimizations.")
 set_aom_detect_var(HAVE_AVX512 0 "Enables AVX512 optimizations.")
+set_aom_detect_var(HAVE_X86_ASM 0 "Enables x86 assembly optimizations.")
 
 # RISC-V64 feature flags.
 set_aom_detect_var(HAVE_RVV 0 "Enables RVV optimizations.")
+
+# WebAssembly feature flags.
+set_aom_detect_var(HAVE_SIMD128 0 "Enables WebAssembly SIMD128 optimizations.")
 
 # Flags describing the build environment.
 set_aom_detect_var(HAVE_FEXCEPT 0
@@ -211,6 +216,8 @@ set_aom_option_var(ENABLE_GOMA "Enable goma support." OFF)
 set_aom_option_var(
   ENABLE_IDE_TEST_HOSTING
   "Enables running tests within IDEs like Visual Studio and Xcode." OFF)
+set_aom_option_var(ENABLE_X86_ASM
+                   "Enables x86 assembly optimizations on x86 targets." ON)
 set_aom_option_var(ENABLE_NASM "Use nasm instead of yasm for x86 assembly." OFF)
 set_aom_option_var(ENABLE_TESTDATA "Enables unit test data download targets."
                    ON)
@@ -263,3 +270,10 @@ set_aom_option_var(ENABLE_AVX512
 
 # RVV intrinsics flags.
 set_aom_option_var(ENABLE_RVV "Enables RVV optimizations on RISC-V targets." ON)
+
+# WebAssembly SIMD128 intrinsics flags.
+set_aom_option_var(ENABLE_SIMD128
+                   "Enables SIMD128 optimizations on wasm32 targets." ON)
+set_aom_option_var(
+  ENABLE_WASM_X86_INTRINSICS
+  "Builds the x86 SSE intrinsics kernels for wasm32 (requires SIMD128)." OFF)

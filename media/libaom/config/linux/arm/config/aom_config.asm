@@ -13,6 +13,7 @@
 .equ AOM_ARCH_ARM, 1
 .equ AOM_ARCH_PPC, 0
 .equ AOM_ARCH_RISCV, 0
+.equ AOM_ARCH_WASM, 0
 .equ AOM_ARCH_X86, 0
 .equ AOM_ARCH_X86_64, 0
 .equ CONFIG_ACCOUNTING, 0
@@ -86,6 +87,7 @@
 .equ HAVE_NEON_I8MM, 0
 .equ HAVE_PTHREAD_SETNAME_NP, 0
 .equ HAVE_RVV, 0
+.equ HAVE_SIMD128, 0
 .equ HAVE_SSE, 0
 .equ HAVE_SSE2, 0
 .equ HAVE_SSE3, 0
@@ -96,5 +98,6 @@
 .equ HAVE_SVE2, 0
 .equ HAVE_VSX, 0
 .equ HAVE_WXWIDGETS, 0
+.equ HAVE_X86_ASM, 0
 .equ STATIC_LINK_JXL, 0
 .section	.note.GNU-stack,"",%progbits
