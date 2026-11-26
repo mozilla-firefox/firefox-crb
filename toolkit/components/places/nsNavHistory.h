@@ -162,29 +162,6 @@ class nsNavHistory final : public nsSupportsWeakReference,
   // Returns whether or not diacritics must match in history text searches.
   bool MatchDiacritics() const { return mMatchDiacritics; }
 
-  // Constants for the columns returned by the above statement.
-  static const int32_t kGetInfoIndex_PageID;
-  static const int32_t kGetInfoIndex_URL;
-  static const int32_t kGetInfoIndex_Title;
-  static const int32_t kGetInfoIndex_RevHost;
-  static const int32_t kGetInfoIndex_VisitCount;
-  static const int32_t kGetInfoIndex_VisitDate;
-  static const int32_t kGetInfoIndex_FaviconURL;
-  static const int32_t kGetInfoIndex_ItemId;
-  static const int32_t kGetInfoIndex_ItemDateAdded;
-  static const int32_t kGetInfoIndex_ItemLastModified;
-  static const int32_t kGetInfoIndex_ItemParentId;
-  static const int32_t kGetInfoIndex_ItemTags;
-  static const int32_t kGetInfoIndex_Frecency;
-  static const int32_t kGetInfoIndex_Hidden;
-  static const int32_t kGetInfoIndex_Guid;
-  static const int32_t kGetInfoIndex_VisitId;
-  static const int32_t kGetInfoIndex_FromVisitId;
-  static const int32_t kGetInfoIndex_VisitType;
-  static const int32_t kGetTargetFolder_Guid;
-  static const int32_t kGetTargetFolder_ItemId;
-  static const int32_t kGetTargetFolder_Title;
-
   int64_t GetTagsFolder();
 
   // this actually executes a query and gives you results, it is used by
@@ -194,9 +171,9 @@ class nsNavHistory final : public nsSupportsWeakReference,
                            const RefPtr<nsNavHistoryQueryOptions>& aOptions,
                            nsCOMArray<nsNavHistoryResultNode>* aResults);
 
-  // Take a row of kGetInfoIndex_* columns and construct a ResultNode.
-  // The row must contain the full set of columns.
-  nsresult RowToResult(mozIStorageValueArray* aRow,
+  // Take a query result row and construct a ResultNode. Columns are read by
+  // name, and columns missing from the row are treated as NULL.
+  nsresult RowToResult(mozilla::places::ResultRowReader& aRow,
                        nsNavHistoryQueryOptions* aOptions,
                        nsNavHistoryResultNode** aResult);
 

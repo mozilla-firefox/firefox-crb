@@ -9,7 +9,9 @@
  * This file contains helper classes used by various bits of Places code.
  */
 
+#include "mozilla/Maybe.h"
 #include "mozilla/storage.h"
+#include "mozIStorageRow.h"
 #include "nsIURI.h"
 #include "nsThreadUtils.h"
 #include "nsProxyRelease.h"
@@ -307,6 +309,47 @@ class FinalizeStatementCacheProxy : public Runnable {
  * @return true if this visit should be hidden.
  */
 bool GetHiddenState(bool aIsRedirect, uint32_t aTransitionType);
+
+/**
+ * Reads result columns by name from either a synchronous statement or the rows
+ * of an asynchronous result set. A column that the query doesn't return is read
+ * as NULL.
+ *
+ * A reader must only be used with the rows of a single statement, since column
+ * indices are looked up once and cached for all the following rows.
+ */
+class ResultRowReader final {
+ public:
+  // For asynchronous results. SetRow must be called before reading each row.
+  ResultRowReader() = default;
+  // For synchronous results, reads the current row of aStatement.
+  explicit ResultRowReader(mozIStorageStatement* aStatement);
+
+  void SetRow(mozIStorageRow* aRow);
+  // Forgets the cached column indices, so the reader can be reused for another
+  // statement.
+  void Reset();
+
+  bool IsNull(const nsLiteralCString& aName);
+  int32_t AsInt32(const nsLiteralCString& aName);
+  int64_t AsInt64(const nsLiteralCString& aName);
+  nsresult GetUTF8String(const nsLiteralCString& aName, nsACString& aResult);
+  nsresult GetString(const nsLiteralCString& aName, nsAString& aResult);
+
+ private:
+  Maybe<uint32_t> ColumnIndex(const nsLiteralCString& aName);
+
+  struct CachedColumn {
+    // Literal names have static storage, so they are cached by pointer.
+    const char* mName;
+    Maybe<uint32_t> mIndex;
+  };
+
+  nsCOMPtr<mozIStorageStatement> mStatement;
+  nsCOMPtr<mozIStorageRow> mAsyncRow;
+  nsCOMPtr<mozIStorageValueArray> mRow;
+  nsTArray<CachedColumn> mColumns;
+};
 
 }  // namespace mozilla::places
 
