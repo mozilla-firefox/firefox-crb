@@ -1361,6 +1361,45 @@ def write_source_repo(topobjdir, topsrcdir, substs):
         fh.write(f"{changeset or ''}\n{repo or ''}\n")
 
 
+BUILD_STEPS = {
+    "artifact": lambda substs: substs.get("MOZ_ARTIFACT_BUILDS"),
+}
+
+
+def select_build_steps(what, substs, directory=None):
+    if directory is not None:
+        return [], what
+    enabled_steps = [step for step, enabled in BUILD_STEPS.items() if enabled(substs)]
+    if not what:
+        return enabled_steps, None
+    steps = [t for t in what if t in BUILD_STEPS]
+    if disabled := [step for step in steps if step not in enabled_steps]:
+        raise ValueError(f"Not enabled in this build: {', '.join(disabled)}")
+    targets = [t for t in what if t not in BUILD_STEPS]
+    if {"all", "default"} & set(targets):
+        return enabled_steps, targets
+    return steps, targets
+
+
+def build_step_command(step, substs, topsrcdir, verbose):
+    if step == "artifact":
+        command = [
+            mozpath.join(topsrcdir, "mach"),
+            "--log-no-times",
+            "artifact",
+            "install",
+        ]
+        if symbols := substs.get("MOZ_ARTIFACT_BUILD_SYMBOLS"):
+            command.append("--symbols=full" if symbols == "full" else "--symbols")
+        if not substs.get("ENABLE_TESTS"):
+            command.append("--no-tests")
+    else:
+        raise ValueError(f"Unknown build step: {step}")
+    if verbose:
+        command.append("-v")
+    return [substs["PYTHON3"], *command]
+
+
 class BuildDriver(MozbuildObject):
     """Provides a high-level API for build actions."""
 
@@ -1572,15 +1611,27 @@ class BuildDriver(MozbuildObject):
                 self.mozconfig["make_extra"], substs, append_env
             )
 
+            try:
+                steps, targets = select_build_steps(what, substs, directory)
+            except ValueError as e:
+                self.log(logging.ERROR, "build_error", {"error": str(e)}, "{error}")
+                return 1
+            if steps:
+                status = self._run_build_steps(
+                    steps, substs, output, verbose, append_env
+                )
+                if not status and (targets is None or targets):
+                    status = None
+
             jobs = self.resolve_num_jobs(jobs, job_size)
 
             backend_cls = get_backend_class(active_backend)
-            if what:
-                what = backend_cls.resolve_targets(what)
+            if targets:
+                targets = backend_cls.resolve_targets(targets)
 
-            if "Make" not in active_backend:
+            if status is None and "Make" not in active_backend:
                 status = backend_cls(config).build(
-                    self, output, jobs, verbose, what, append_env=append_env
+                    self, output, jobs, verbose, targets, append_env=append_env
                 )
 
                 if status and clobber_requested:
@@ -1589,10 +1640,10 @@ class BuildDriver(MozbuildObject):
                             logging.WARNING, "clobber", {"msg": line.rstrip()}, "{msg}"
                         )
 
-            if what and status is None:
+            if targets and status is None:
                 # Collect target pairs.
                 target_pairs = []
-                for target in what:
+                for target in targets:
                     path_arg = self._wrap_path_argument(target)
 
                     if directory is not None:
@@ -2140,6 +2191,23 @@ class BuildDriver(MozbuildObject):
             # file unnecessarily.
             to_write = "\n".join([line.rstrip() for line in to_write.splitlines()])
             fh.write(to_write)
+
+    def _run_build_steps(self, steps, substs, output, verbose, append_env):
+        output.on_stdout_line(f"BUILDSTATUS TIERS {' '.join(steps)}")
+        for step in steps:
+            output.on_stdout_line(f"BUILDSTATUS TIER_START {step}")
+            status = self.run_process(
+                build_step_command(step, substs, self.topsrcdir, verbose),
+                cwd=self.topobjdir,
+                append_env=append_env,
+                line_handler=output.on_stdout_line,
+                stderr_line_handler=output.on_stderr_line,
+                ensure_exit_code=False,
+            )
+            if status:
+                return status
+            output.on_stdout_line(f"BUILDSTATUS TIER_FINISH {step}")
+        return 0
 
     def _run_client_mk(
         self,

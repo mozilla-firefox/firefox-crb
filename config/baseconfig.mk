@@ -43,14 +43,11 @@ ifeq ($(MOZ_BUILD_APP),tools/rusttests)
 ALL_TIERS := pre-export export pre-compile rusttests
 else
 # All possible tiers
-ALL_TIERS := artifact android-fat-aar-artifact pre-export export pre-compile rust compile misc libs android-stage-package android-archive-geckoview tools check
+ALL_TIERS := android-fat-aar-artifact pre-export export pre-compile rust compile misc libs android-stage-package android-archive-geckoview tools check
 endif
 
 # All tiers that may be used manually via `mach build $tier`
 RUNNABLE_TIERS := $(ALL_TIERS)
-ifndef MOZ_ARTIFACT_BUILDS
-RUNNABLE_TIERS := $(filter-out artifact,$(RUNNABLE_TIERS))
-endif
 ifndef MOZ_ANDROID_FAT_AAR_ARCHITECTURES
 RUNNABLE_TIERS := $(filter-out android-fat-aar-artifact,$(RUNNABLE_TIERS))
 endif
