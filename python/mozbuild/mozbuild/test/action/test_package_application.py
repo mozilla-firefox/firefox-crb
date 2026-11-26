@@ -134,6 +134,21 @@ def _patched(substs, topobjdir):
                     package_application.subprocess, "call", return_value=0
                 )
             ),
+            "l10n_merge": es.enter_context(
+                mock.patch.object(
+                    package_application.l10n_merge, "main", return_value=0
+                )
+            ),
+            "l10n_stage": es.enter_context(
+                mock.patch.object(
+                    package_application.l10n_stage, "main", return_value=0
+                )
+            ),
+            "package_langpack": es.enter_context(
+                mock.patch.object(
+                    package_application.package_langpack, "main", return_value=0
+                )
+            ),
         }
 
 
@@ -593,6 +608,131 @@ class TestMain(unittest.TestCase):
                 package_application.main(["--stub"])
 
         self.assertEqual(run.call_count, 0)
+
+
+_LANGPACK_SUBSTS = {
+    **_WIN_SUBSTS,
+    "L10NBASEDIR": "/l10n",
+    "MOZ_PKG_LANGPACK_LOCALES_DIR": "browser/locales",
+    "MOZ_PKG_LANGPACK_SUBDIRS": ["browser"],
+    "MOZ_LANGPACK_EID_HOST": "firefox.mozilla.org",
+    "MOZ_APP_VERSION": "156.0a1",
+    "MOZ_APP_MAXVERSION": "156.*",
+    "MOZ_APP_DISPLAYNAME": "Firefox Nightly",
+    "PKG_LANGPACK_PATH": "xpi/",
+}
+
+
+class TestLangpack(_PackageApplicationTestCase):
+    def _run(self, **kwargs):
+        return super()._run(substs=_LANGPACK_SUBSTS, **kwargs)
+
+    def _package_langpack_argv(self, tmp, ab_cd, metadata):
+        return [
+            f"--locale={ab_cd}",
+            f"--xpi-stage={tmp}/dist/xpi-stage/locale-{ab_cd}",
+            f"--metadata={metadata}",
+            f"--output={tmp}/dist/xpi/firefox-156.0a1.{ab_cd}.langpack.xpi",
+            f"--eid=langpack-{ab_cd}@firefox.mozilla.org",
+            "--app-version=156.0a1",
+            "--max-app-ver=156.*",
+            "--app-name=Firefox Nightly",
+            "--l10n-basedir=/l10n",
+            "--include=chrome",
+            "--include=localization",
+            "--include=browser",
+            "--include=manifest.json",
+        ]
+
+    def test_langpack_step_line(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self._run(langpack=True)
+
+        self.assertEqual(
+            out.getvalue().splitlines(),
+            [
+                "package: stage",
+                "package: prepare",
+                "package: sourcestamp",
+                "package: archive",
+                "package: langpack",
+            ],
+        )
+
+    def test_langpack(self):
+        rc, calls, tmp = self._run(langpack=True)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls["l10n_merge"].call_count, 0)
+        self.assertEqual(
+            calls["l10n_stage"].call_args.args[0],
+            [
+                "--locale=en-US",
+                f"--manifest={tmp}/l10n-manifest.json",
+                f"--merge-tree={tmp}/browser/locales/merge-dir/en-US",
+                f"--dest={tmp}/dist/xpi-stage/locale-en-US",
+                "--topsrcdir=/src",
+                f"--topobjdir={tmp}",
+            ],
+        )
+        self.assertEqual(
+            calls["package_langpack"].call_args.args[0],
+            self._package_langpack_argv(
+                tmp, "en-US", "/src/browser/locales/en-US/langpack-metadata.ftl"
+            ),
+        )
+
+    def test_langpack_other_locale(self):
+        rc, calls, tmp = self._run(langpack=True, ab_cd="de")
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            calls["l10n_merge"].call_args.args[0],
+            [
+                "--locale=de",
+                "--config=/src/browser/locales/l10n.toml",
+                "--l10n-base=/l10n",
+                f"--target={tmp}/browser/locales/merge-dir",
+            ],
+        )
+        self.assertEqual(
+            calls["l10n_stage"].call_args.args[0][2],
+            f"--merge-tree={tmp}/browser/locales/merge-dir/de",
+        )
+        self.assertEqual(
+            calls["package_langpack"].call_args.args[0],
+            self._package_langpack_argv(
+                tmp,
+                "de",
+                f"{tmp}/browser/locales/merge-dir/de/browser/langpack-metadata.ftl",
+            ),
+        )
+
+    def test_langpack_off(self):
+        _, calls, _ = self._run()
+
+        self.assertEqual(calls["l10n_stage"].call_count, 0)
+        self.assertEqual(calls["package_langpack"].call_count, 0)
+
+    def test_langpack_merge_failure(self):
+        def fail(calls):
+            calls["l10n_merge"].return_value = 2
+
+        rc, calls, _ = self._run(configure=fail, langpack=True, ab_cd="de")
+
+        self.assertEqual(rc, 2)
+        self.assertEqual(calls["l10n_stage"].call_count, 0)
+        self.assertEqual(calls["package_langpack"].call_count, 0)
+
+    def test_langpack_stage_failure(self):
+        def fail(calls):
+            calls["l10n_stage"].return_value = 3
+
+        rc, calls, _ = self._run(configure=fail, langpack=True)
+
+        self.assertEqual(rc, 3)
+        self.assertEqual(calls["package_langpack"].call_count, 0)
 
 
 class TestStage(unittest.TestCase):
