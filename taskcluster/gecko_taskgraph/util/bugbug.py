@@ -17,6 +17,8 @@ from taskgraph import create
 from taskgraph.util import json
 from taskgraph.util.taskcluster import requests_retry_session
 
+from gecko_taskgraph.util.hg import get_push_data
+
 try:
     # TODO(py3): use time.monotonic()
     from time import monotonic
@@ -391,6 +393,80 @@ def patch_schedules(base_rev, patch_content, mode="quick"):
         )
 
     return {k: v for k, v in data["groups"].items() if v >= confidence_threshold}
+
+
+def merge_bugbug_replies(data, new_data):
+    """Merge a bugbug reply (stored in the `new_data` argument) into another (stored
+    in the `data` argument).
+    """
+    for key, value in new_data.items():
+        # The confidence thresholds depend on the models used for each reply: use the ones of
+        # the latest reply.
+        if key == "confidence_thresholds":
+            if value:
+                data[key] = value
+            continue
+
+        if isinstance(value, dict):
+            if key not in data:
+                data[key] = {}
+
+            if len(value) == 0:
+                continue
+
+            dict_value = next(iter(value.values()))
+            if isinstance(dict_value, list):
+                for name, configs in value.items():
+                    if name not in data[key]:
+                        data[key][name] = set()
+
+                    data[key][name].update(configs)
+            else:
+                for name, confidence in value.items():
+                    if name not in data[key] or data[key][name] < confidence:
+                        data[key][name] = confidence
+        elif isinstance(value, list):
+            if key not in data:
+                data[key] = set()
+
+            data[key].update(value)
+
+
+class PushDataUnavailable(Exception):
+    """The pushlog entries of the pushes before the current one couldn't be
+    retrieved."""
+
+
+def get_push_schedules(params, num_pushes=1):
+    """Return bugbug's reply for the push in `params`, merged with the replies for
+    the `num_pushes - 1` pushes before it.
+
+    Raises PushDataUnavailable if the pushes before it couldn't be retrieved.
+    """
+    current_push_id = int(params["pushlog_id"])
+    start_push_id = current_push_id - num_pushes + 1
+    if num_pushes != 1:
+        push_data = get_push_data(
+            params["head_repository"],
+            params["project"],
+            start_push_id,
+            current_push_id - 1,
+        )
+        if push_data is None:
+            raise PushDataUnavailable(
+                f"Failed to retrieve pushes {start_push_id}-{current_push_id - 1}"
+            )
+
+    data = {}
+    for push_id in range(start_push_id, current_push_id + 1):
+        if push_id == current_push_id:
+            rev = params["head_rev"]
+        else:
+            rev = push_data[push_id]["changesets"][-1]
+
+        merge_bugbug_replies(data, push_schedules(params["project"], rev))
+
+    return data
 
 
 if __name__ == "__main__":
