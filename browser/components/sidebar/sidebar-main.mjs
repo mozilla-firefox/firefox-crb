@@ -862,7 +862,7 @@ export default class SidebarMain extends MozLitElement {
           class=${classMap({
             "tools-overflow": buttonValues.toolsOverflowing,
           })}
-          type=${buttonValues.isActiveView ? "icon" : "icon ghost"}
+          type="toolbar"
           aria-label=${buttonValues.actionLabel}
           aria-selected=${buttonValues.isActiveView}
           view=${buttonValues.action.view}
@@ -989,7 +989,7 @@ export default class SidebarMain extends MozLitElement {
           >
             <moz-button
               class="more-tools-button"
-              type=${this.isOverflowMenuOpen ? "icon" : "icon ghost"}
+              type="toolbar"
               aria-pressed=${this.isOverflowMenuOpen}
               @click=${window.SidebarController.sidebarRevampVisibility ===
               "expand-on-hover"

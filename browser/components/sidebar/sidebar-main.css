@@ -104,8 +104,16 @@
   min-width: 0;
 
   > moz-button {
+    /* Keep the launcher's size rather than the toolbar variant's tab height. */
+    --button-size-icon: inherit;
     --button-icon-fill: var(--toolbarbutton-icon-fill);
     --button-attention-dot-color: light-dark(#53b93a, #73d25d);
+
+    /* The selected toolbar button swaps its colors, so the icon has to follow
+     * the text to stay on its pair. */
+    @media (forced-colors) {
+      --button-icon-fill: currentColor;
+    }
   }
 
   > moz-button:not(.tools-overflow) {
