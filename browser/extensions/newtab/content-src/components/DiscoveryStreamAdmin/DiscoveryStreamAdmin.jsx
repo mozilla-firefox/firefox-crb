@@ -282,6 +282,51 @@ export class TogglePrefCheckbox extends React.PureComponent {
   }
 }
 
+/**
+ * A notice across New Tab while changes the devtools made are still in effect,
+ * since the page then doesn't show what a regular install would.
+ *
+ * @param {object} props
+ * @param {string[]} props.changes - see NewTabDevtoolsFeed.getDevtoolsChanges
+ * @param {Function} props.dispatch
+ */
+export function DevtoolsChangesNotice({ changes, dispatch }) {
+  const [resetting, setResetting] = React.useState(false);
+  // Offered again whenever what's applied changes, in case Reset didn't
+  // undo all of it.
+  const changesKey = (changes ?? []).join("\n");
+  React.useEffect(() => setResetting(false), [changesKey]);
+  if (!changes?.length) {
+    return null;
+  }
+  // Like the rest of the devtools, deliberately not localized: it only shows
+  // with asrouter.devtoolsEnabled set.
+  return (
+    <moz-message-bar
+      type="warning"
+      // A standing state rather than an alert, which would interrupt screen
+      // readers on every New Tab.
+      role="status"
+      class="devtools-changes-notice"
+      heading="This New Tab has non-default settings"
+      message={`The New Tab devtools changed: ${changes.join("; ")}.`}
+    >
+      <moz-button
+        slot="actions"
+        disabled={resetting || null}
+        onClick={() => {
+          setResetting(true);
+          dispatch(
+            ac.OnlyToMain({ type: at.DISCOVERY_STREAM_DEV_AVAILABILITY_RESET })
+          );
+        }}
+      >
+        Reset to default
+      </moz-button>
+    </moz-message-bar>
+  );
+}
+
 export class DiscoveryStreamAdminUI extends React.PureComponent {
   constructor(props) {
     super(props);

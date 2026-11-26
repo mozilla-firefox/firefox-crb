@@ -3,7 +3,10 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { actionCreators as ac, actionTypes as at } from "common/Actions.mjs";
-import { DiscoveryStreamAdmin } from "content-src/components/DiscoveryStreamAdmin/DiscoveryStreamAdmin";
+import {
+  DevtoolsChangesNotice,
+  DiscoveryStreamAdmin,
+} from "content-src/components/DiscoveryStreamAdmin/DiscoveryStreamAdmin";
 import { ConfirmDialog } from "content-src/components/ConfirmDialog/ConfirmDialog";
 import { connect } from "react-redux";
 import { DiscoveryStreamBase } from "content-src/components/DiscoveryStreamBase/DiscoveryStreamBase";
@@ -949,6 +952,12 @@ export class BaseContent extends React.PureComponent {
     const { App, DiscoveryStream } = props;
     const { initialized, customizeMenuVisible } = App;
     const prefs = props.Prefs.values;
+    const devtoolsChangesNotice = prefs["asrouter.devtoolsEnabled"] ? (
+      <DevtoolsChangesNotice
+        changes={DiscoveryStream.devtoolsChanges}
+        dispatch={props.dispatch}
+      />
+    ) : null;
 
     // @nova-cleanup(remove-conditional):
     const novaEnabled = prefs[PREF_NOVA_ENABLED];
@@ -1268,6 +1277,7 @@ export class BaseContent extends React.PureComponent {
           <div
             className={`nova-outer-wrapper${this.state.fixedSearch ? " stuck-search" : ""}${searchHasOwnRow ? " search-has-own-row" : ""}`}
           >
+            {devtoolsChangesNotice}
             <div
               className={`container nova-enabled${logoShouldBeCentered ? " logo-in-content" : ""}${searchHasOwnRow ? " search-has-own-row" : ""}${searchShouldBeLowered ? " search-lowered" : ""}${hasFiveColumnLayout ? " sections-5-col" : ""}`}
             >
@@ -1491,7 +1501,9 @@ export class BaseContent extends React.PureComponent {
           </div>
 
           <div className={outerClassName}>
+            {/* In main, a column, rather than beside it in the flex row. */}
             <main className="newtab-main" style={this.state.fixedNavStyle}>
+              {devtoolsChangesNotice}
               {prefs.showSearch && (
                 <div className="non-collapsible-section">
                   <ErrorBoundary>
