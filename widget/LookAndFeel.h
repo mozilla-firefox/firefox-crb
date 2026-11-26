@@ -110,6 +110,9 @@ class LookAndFeel {
     /* Whether Windows mica effect is enabled and available on popups */
     WindowsMicaPopups,
 
+    /* Whether the OS is Windows 11 or later */
+    Windows11,
+
     /*
      * A Boolean value to determine whether the macOS Big Sur-specific
      * theming should be used.

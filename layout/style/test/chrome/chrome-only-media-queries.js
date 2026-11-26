@@ -7,6 +7,7 @@ const CHROME_ONLY_TOGGLES = [
   "-moz-mac-tahoe-theme",
   "-moz-menubar-drag",
   "-moz-windows-accent-color-in-titlebar",
+  "-moz-windows-11",
   "-moz-swipe-animation-enabled",
   "-moz-gtk-csd-available",
   "-moz-gtk-csd-transparency-available",

@@ -114,6 +114,7 @@ static const char sIntPrefs[][45] = {
     "ui.windowsAccentColorInTitlebar",
     "ui.windowsMica",
     "ui.windowsMicaPopups",
+    "ui.windows11",
     "ui.macBigSurTheme",
     "ui.macTahoeTheme",
     "ui.alertNotificationOrigin",

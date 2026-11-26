@@ -11,6 +11,7 @@
 #include "WinUtils.h"
 #include "WindowsUIUtils.h"
 #include "mozilla/FontPropertyTypes.h"
+#include "mozilla/WindowsVersion.h"
 #include "mozilla/glean/WidgetWindowsMetrics.h"
 #include "mozilla/intl/LocaleService.h"
 #include "mozilla/widget/WinRegistry.h"
@@ -592,6 +593,9 @@ nsresult nsLookAndFeel::NativeGetInt(IntID aID, int32_t& aResult) {
       break;
     case IntID::WindowsMicaPopups:
       aResult = WinUtils::MicaPopupsEnabled();
+      break;
+    case IntID::Windows11:
+      aResult = IsWin11OrLater();
       break;
     case IntID::AlertNotificationOrigin:
       aResult = 0;
