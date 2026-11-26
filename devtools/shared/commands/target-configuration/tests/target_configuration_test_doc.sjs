@@ -69,6 +69,11 @@ function handleRequest(request, response) {
 
 
       </script>
+      ${
+        query.get("slowStylesheet") === "true"
+          ? "<link rel=stylesheet href=delayed_stylesheet.sjs>"
+          : ""
+      }
       <style>
         iframe {
           display: block;
