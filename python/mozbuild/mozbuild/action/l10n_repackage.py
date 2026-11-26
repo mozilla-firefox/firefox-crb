@@ -241,7 +241,7 @@ def _build_uninstaller(
     from mozbuild.action import nsis_build, nsis_stage
 
     substs = buildconfig.substs
-    config_dir = installer_dir / "l10ngen"
+    config_dir = installer_dir / "l10ngen" / locale
     if result := nsis_stage.stage_repack(
         spec_path=installer_dir / nsis_stage.SPEC_FILENAME,
         config_dir=config_dir,
