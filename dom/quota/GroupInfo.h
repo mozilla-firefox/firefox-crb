@@ -56,6 +56,9 @@ class GroupInfo final {
 
   void LockedAdjustUsageForRemovedOriginInfo(const OriginInfo& aOriginInfo);
 
+  void LockedAdjustReservedUsageForRemovedOriginInfo(
+      const OriginInfo& aOriginInfo);
+
   void LockedRemoveOriginInfo(const nsACString& aOrigin);
 
   void LockedRemoveOriginInfos();
@@ -77,6 +80,9 @@ class GroupInfo final {
   // number, making all integers comparisons to become buggy. See bug 2066923
   // and bug 1585978 for details.
   int64_t mUsage;
+  // Sum of the reservations of the non-persisted origins in this group (see
+  // OriginInfo::mReservedUsage).
+  int64_t mReservedUsage = 0;
 };
 
 }  // namespace mozilla::dom::quota

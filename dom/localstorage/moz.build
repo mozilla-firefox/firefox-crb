@@ -74,6 +74,7 @@ SOURCE_HEADERS += [
     "LSCipherKeyManager.h",
     "LSDatabase.h",
     "LSInitializationTypes.h",
+    "LSQuotaAccounting.h",
     "NotifyUtils.h",
     "ReportInternalError.h",
 ]
