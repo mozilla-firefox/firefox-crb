@@ -11,7 +11,7 @@
 
 [package]
 edition = "2024"
-rust-version = "1.90.0"
+rust-version = "1.88.0"
 name = "crash-context"
 version = "0.8.0"
 authors = ["Jake Shadle <jake.shadle@embark-studios.com>"]
@@ -47,7 +47,6 @@ version = "1.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies.libc]
 version = "0.2"
-default-features = false
 
 [target.'cfg(target_os = "macos")'.dependencies.mach2]
 version = "0.6"

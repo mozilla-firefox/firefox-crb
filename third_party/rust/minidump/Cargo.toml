@@ -12,7 +12,7 @@
 [package]
 edition = "2018"
 name = "minidump"
-version = "0.26.1"
+version = "0.27.0"
 authors = ["Ted Mielczarek <ted@mielczarek.org>"]
 build = false
 autolib = false
@@ -62,23 +62,23 @@ version = "0.8"
 version = "0.9"
 
 [dependencies.minidump-common]
-version = "0.26.1"
+version = "0.27.0"
 
 [dependencies.num-traits]
 version = "0.2"
 
 [dependencies.procfs-core]
-version = "0.17"
+version = "0.18"
 default-features = false
 
 [dependencies.prost]
-version = "0.13"
+version = "0.14"
 
 [dependencies.range-map]
 version = "0.2"
 
 [dependencies.scroll]
-version = "0.12.0"
+version = "0.13.0"
 
 [dependencies.thiserror]
 version = "2"
@@ -95,7 +95,7 @@ features = ["log"]
 version = "1.0.0"
 
 [dev-dependencies.ctor]
-version = "0.4"
+version = "0.6"
 
 [dev-dependencies.doc-comment]
 version = "0.3.3"
