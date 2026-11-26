@@ -582,7 +582,20 @@ ComPtr<IXmlDocument> ToastNotificationHandler::CreateToastXmlDocument() {
 #endif
   if (MOZ_LIKELY(wantSettings)) {
     nsAutoString settingsButtonTitle;
-    bundle->GetStringFromName("webActions.settings.label", settingsButtonTitle);
+    nsCOMPtr<nsIStringBundle> brandBundle;
+    nsAutoString brandShortName;
+    sbs->CreateBundle("chrome://branding/locale/brand.properties",
+                      getter_AddRefs(brandBundle));
+    if (brandBundle && NS_SUCCEEDED(brandBundle->GetStringFromName(
+                           "brandShortName", brandShortName))) {
+      AutoTArray<nsString, 1> brandFormatStrings = {brandShortName};
+      bundle->FormatStringFromName("webActions.settingsWithBrand.label",
+                                   brandFormatStrings, settingsButtonTitle);
+    }
+    if (settingsButtonTitle.IsEmpty()) {
+      bundle->GetStringFromName("webActions.settings.label",
+                                settingsButtonTitle);
+    }
     success = AddActionNode(
         toastXml, actionsNode, settingsButtonTitle, launchArgWithoutAction,
         // TODO: launch into `about:preferences`?
