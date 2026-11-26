@@ -2266,9 +2266,9 @@ static nsresult TruncFile(PRFileDesc* aFD, int64_t aEOF) {
 // ending in a well-formed metadata block would be loaded as the entry's
 // metadata.  Data writes therefore keep this trailer at the end of the file
 // until the metadata is written; its offset word points past any file.
-static nsresult WriteInvalidTrailer(PRFileDesc* aFD, int64_t aOffset) {
-  static const uint32_t kInvalidTrailer[2] = {UINT32_MAX, UINT32_MAX};
+static const uint32_t kInvalidTrailer[2] = {UINT32_MAX, UINT32_MAX};
 
+static nsresult WriteInvalidTrailer(PRFileDesc* aFD, int64_t aOffset) {
   if (PR_Seek64(aFD, aOffset, PR_SEEK_SET) == -1) {
     return NS_ERROR_FAILURE;
   }
@@ -2362,14 +2362,29 @@ nsresult CacheFileIOManager::WriteInternal(CacheFileHandle* aHandle,
   // Write invalidates the entry by default
   aHandle->mInvalid = true;
 
-  // The trailer goes in first, so the file never ends with the new data.
+  // The file must never end with the new data.  A write reaching the end of
+  // the file carries the trailer along in the same write; writing the trailer
+  // first would leave a hole before it, which Windows fills with an extra
+  // zeroing write of the same size as the data.
+  const char* buf = aBuf;
+  int32_t count = aCount;
+  std::unique_ptr<char[]> bufWithTrailer;
+  int64_t dataEnd = aOffset + aCount;
   if (!aValidate && !aHandle->IsSpecialFile()) {
     MOZ_ASSERT(!aTruncate);
-    int64_t end = std::max<int64_t>(aHandle->mFileSize, aOffset + aCount);
-    if (aHandle->mInvalidTrailerOffset < end) {
-      rv = WriteInvalidTrailer(aHandle->mFD, end);
-      NS_ENSURE_SUCCESS(rv, rv);
-      aHandle->mInvalidTrailerOffset = end;
+    if (dataEnd < aHandle->mFileSize) {
+      if (aHandle->mInvalidTrailerOffset < aHandle->mFileSize) {
+        rv = WriteInvalidTrailer(aHandle->mFD, aHandle->mFileSize);
+        NS_ENSURE_SUCCESS(rv, rv);
+        aHandle->mInvalidTrailerOffset = aHandle->mFileSize;
+      }
+    } else if (aHandle->mInvalidTrailerOffset < dataEnd) {
+      count += sizeof(kInvalidTrailer);
+      bufWithTrailer = std::make_unique<char[]>(count);
+      memcpy(bufWithTrailer.get(), aBuf, aCount);
+      memcpy(bufWithTrailer.get() + aCount, kInvalidTrailer,
+             sizeof(kInvalidTrailer));
+      buf = bufWithTrailer.get();
     }
   }
 
@@ -2378,7 +2393,11 @@ nsresult CacheFileIOManager::WriteInternal(CacheFileHandle* aHandle,
     return NS_ERROR_FAILURE;
   }
 
-  int32_t bytesWritten = PR_Write(aHandle->mFD, aBuf, aCount);
+  int32_t written = PR_Write(aHandle->mFD, buf, count);
+  if (bufWithTrailer && written == count) {
+    aHandle->mInvalidTrailerOffset = dataEnd;
+  }
+  int32_t bytesWritten = written == -1 ? -1 : std::min(written, aCount);
 
   if (bytesWritten != -1) {
     uint32_t oldSizeInK = aHandle->FileSizeInK();
@@ -2411,7 +2430,7 @@ nsresult CacheFileIOManager::WriteInternal(CacheFileHandle* aHandle,
     CacheIndex::UpdateTotalBytesWritten(bytesWritten);
   }
 
-  if (bytesWritten != aCount) {
+  if (written != count) {
     return NS_ERROR_FAILURE;
   }
 
