@@ -71,6 +71,19 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
     return IsDirty();
   }
 
+  // See mDirtyOnDisk.
+  bool LockedDirtyOnDisk() const {
+    AssertCurrentThreadOwnsQuotaMutex();
+
+    return mDirtyOnDisk;
+  }
+
+  bool LockedHasWriteLease() const {
+    AssertCurrentThreadOwnsQuotaMutex();
+
+    return mWriteLeaseCount != 0;
+  }
+
   bool IsPrivate() const { return mIsPrivate; }
 
   bool IsEncrypted() const { return mIsEncrypted; }
@@ -86,6 +99,7 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   void LockedSetClean() {
     AssertCurrentThreadOwnsQuotaMutex();
     mMetadataDirty = false;
+    mDirtyOnDisk = false;
     mCacheRowStale = false;
   }
 
@@ -112,10 +126,6 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   FullOriginMetadata LockedFlattenToFullOriginMetadata() const;
 
   nsresult LockedBindToStatement(mozIStorageStatement* aStatement) const;
-
-  nsresult UpdateDirtyMetadata(mozIStorageConnection* aConnection,
-                               uint32_t aMetadataFlags,
-                               int64_t aLastAccessTime) const;
 
  private:
   // Private destructor, to discourage deletion outside of Release():
@@ -211,6 +221,18 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   void LockedMaybeRecordUsageUnderflow(Client::Type aClientType, int64_t aUsage,
                                        StaticString aCallSite);
 
+  // Sets the in-memory dirty flag and, if the origin directory exists, queues
+  // the origin for a metadata flush.
+  void LockedMarkDirty();
+
+  // LockedMarkDirty plus a note that the dirty flag was just recorded in the
+  // storage database (see QuotaManager::FlagOriginInfoAsDirtyOnDisk).
+  void LockedMarkDirtyOnDisk();
+
+  void LockedAcquireWriteLease();
+
+  void LockedReleaseWriteLease();
+
   ClientUsageArray mClientUsages;
   // Per client, how many times a negative usage was seen for this OriginInfo.
   // Used to throttle usage_underflow telemetry events.
@@ -224,9 +246,24 @@ class OriginInfo final : public SupportsThreadSafeWeakPtr<OriginInfo> {
   int64_t mUsage;
   TimeStamp mLastModifiedTime;
   bool mMetadataDirty = false;
-  // The origin row in the storage database is missing or does not match this
-  // OriginInfo. Cleared when the row is upserted.
+  // Whether this origin's row in the storage database is missing or does not
+  // match this OriginInfo. Set during origin initialization: true when
+  // InitQuotaForOrigin found no row for the origin, or a row that differs
+  // from the metadata obtained from disk. PopulateCacheAfterScan and
+  // UnloadQuota upsert every such row; the cache is marked complete only
+  // when no origin has a stale row left. Cleared whenever a full row is
+  // upserted from this OriginInfo. Independent of mDirtyOnDisk, which is
+  // about one bit of a row that already exists.
   bool mCacheRowStale = true;
+  // Whether the Dirty bit is known to be set in this origin's row of the
+  // storage database, i.e. the origin has already been recorded on disk as
+  // dirty. Set once a write lease recorded the bit, or the row was created
+  // with it, so later leases can skip that IO. Says nothing about the other
+  // columns of the row. Conservatively false after initialization even if
+  // the row is dirty, so the first lease always records it. Cleared when the
+  // row is settled clean.
+  bool mDirtyOnDisk = false;
+  uint64_t mWriteLeaseCount = 0;
 };
 
 class OriginInfoAccessTimeComparator {

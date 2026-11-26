@@ -114,6 +114,7 @@ EXPORTS.mozilla.dom.quota += [
     "ThreadUtils.h",
     "UniversalDirectoryLock.h",
     "UsageInfo.h",
+    "WriteLease.h",
 ]
 
 XPCOM_MANIFESTS += [
