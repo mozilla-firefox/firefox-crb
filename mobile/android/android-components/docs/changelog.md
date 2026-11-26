@@ -93,8 +93,10 @@ permalink: /changelog/
 * **concept-sync**
     * ⚠️ **Breaking change**: Replaced `DeviceConstellation.finalizeDevice(authType, config)` with `DeviceConstellation.ensureCapabilities(capabilities)`, which updates the capabilities advertised for the current device. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
     * ⚠️ **Breaking change**: `DeviceConfig.capabilities` is now private. Use `DeviceConfig.getCapabilities(hasSyncScope)`, which returns an empty set when the account does not have the Sync scope. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
+    * Added `FxaService` and `FxaScope`, moved from `service-firefox-accounts`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 * **service-firefox-accounts**
     * `FxaAccountManager` only advertises the `SEND_TAB` and `CLOSE_TABS` device capabilities when the account has the Sync scope. [Bug 2080763](https://bugzilla.mozilla.org/show_bug.cgi?id=2080763)
+    * ⚠️ **Breaking change**: Moved `FxaService` and `FxaScope` to `concept-sync`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 161.0
 * **browser-state**
