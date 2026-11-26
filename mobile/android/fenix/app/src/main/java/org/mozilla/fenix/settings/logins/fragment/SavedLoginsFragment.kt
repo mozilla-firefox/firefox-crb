@@ -23,6 +23,8 @@ import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.hideToolbar
 import org.mozilla.fenix.ext.openToBrowser
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.settings.biometric.ui.AuthPromptSuppressor
+import org.mozilla.fenix.settings.biometric.ui.DefaultAuthPromptSuppressor
 import org.mozilla.fenix.settings.logins.ImportPasswordsDialogFragment
 import org.mozilla.fenix.settings.logins.ui.DefaultSavedLoginsStorage
 import org.mozilla.fenix.settings.logins.ui.ImportAction
@@ -38,6 +40,7 @@ import org.mozilla.fenix.theme.FirefoxTheme
 class SavedLoginsFragment : SecureFragment(), SystemInsetsPaddedFragment {
 
     private var loginsStore: LoginsStore? = null
+    private val authPromptSuppressor: AuthPromptSuppressor = DefaultAuthPromptSuppressor()
 
     override fun onResume() {
         super.onResume()
@@ -101,6 +104,7 @@ class SavedLoginsFragment : SecureFragment(), SystemInsetsPaddedFragment {
                                             sortOrder
                                     },
                                     navigateToImportDialog = {
+                                        authPromptSuppressor.suppressNextPrompt()
                                         ImportPasswordsDialogFragment()
                                             .show(
                                                 childFragmentManager,
@@ -133,6 +137,7 @@ class SavedLoginsFragment : SecureFragment(), SystemInsetsPaddedFragment {
                 exitLogins = {
                     findNavController().popBackStack()
                 },
+                shouldSuppressAuthPrompt = authPromptSuppressor::consumeSuppression,
             )
         }
     }

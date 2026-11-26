@@ -87,6 +87,34 @@ class SecureScreenReducerTest {
     }
 
     @Test
+    fun `GIVEN previously ready to lock WHEN the lifecycle becomes resumed with the prompt suppressed THEN authentication state is set to authorized`() {
+        val result =
+            secureScreenReducer(
+                state = createState(authenticationState = BiometricAuthenticationState.ReadyToLock),
+                action = LifecycleAction.OnResumeWithPromptSuppressed,
+            )
+
+        assertEquals(
+            BiometricAuthenticationState.Authorized,
+            result.authenticationState,
+        )
+    }
+
+    @Test
+    fun `GIVEN previous state not ready to lock WHEN the lifecycle becomes resumed with the prompt suppressed THEN authentication state is unchanged`() {
+        val result =
+            secureScreenReducer(
+                state = createState(authenticationState = BiometricAuthenticationState.Failed),
+                action = LifecycleAction.OnResumeWithPromptSuppressed,
+            )
+
+        assertEquals(
+            BiometricAuthenticationState.Failed,
+            result.authenticationState,
+        )
+    }
+
+    @Test
     fun `GIVEN previously authorized WHEN the lifecycle becomes paused THEN state is set to ready to lock`() {
         val result =
             secureScreenReducer(

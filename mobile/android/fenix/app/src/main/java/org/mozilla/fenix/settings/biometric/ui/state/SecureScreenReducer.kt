@@ -63,5 +63,15 @@ private fun SecureScreenState.handleLifecycleAction(action: LifecycleAction): Se
                         authenticationState
                     }
             )
+
+        LifecycleAction.OnResumeWithPromptSuppressed ->
+            copy(
+                authenticationState =
+                    if (authenticationState.isReadyToLock) {
+                        BiometricAuthenticationState.Authorized
+                    } else {
+                        authenticationState
+                    }
+            )
     }
 }
