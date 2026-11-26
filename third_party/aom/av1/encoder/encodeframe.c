@@ -1276,11 +1276,23 @@ static void copy_sb_span(const AV1_COMMON *cm, MV_REFERENCE_FRAME ref,
                                 y1 >> ss_y);
 }
 
+// Gets the segment id of each superblock of a tile row. The map of a
+// superblock only changes while it is coded, so the ids hold for the row.
+static void get_sb_segment_ids_of_row(const AV1_COMP *cpi,
+                                      const TileInfo *tile_info, int mi_row,
+                                      uint8_t *segment_ids) {
+  const int mib_size = cpi->common.seq_params->mib_size;
+  for (int mi_col = tile_info->mi_col_start; mi_col < tile_info->mi_col_end;
+       mi_col += mib_size) {
+    *segment_ids++ = get_sb_segment_id(cpi, mi_row, mi_col);
+  }
+}
+
 // Fills the skip segment superblocks of a row from their reference before the
 // row is coded. Wide row copies are much faster than copying every 64x64 block
 // plane by plane, so encode_superblock() then skips their prediction.
 static void copy_skip_sbs_of_row(const AV1_COMP *cpi, const TileInfo *tile_info,
-                                 int mi_row) {
+                                 int mi_row, const uint8_t *segment_ids) {
   if (!can_copy_skip_sbs(cpi)) return;
 
   const AV1_COMMON *const cm = &cpi->common;
@@ -1288,12 +1300,11 @@ static void copy_skip_sbs_of_row(const AV1_COMP *cpi, const TileInfo *tile_info,
   int span_start = -1;
   MV_REFERENCE_FRAME span_ref = NONE_FRAME;
 
-  for (int mi_col = tile_info->mi_col_start;; mi_col += mib_size) {
+  for (int mi_col = tile_info->mi_col_start, sb_col = 0;;
+       mi_col += mib_size, ++sb_col) {
     const int in_tile = mi_col < tile_info->mi_col_end;
     const MV_REFERENCE_FRAME ref =
-        in_tile
-            ? get_skip_sb_copy_ref(cm, get_sb_segment_id(cpi, mi_row, mi_col))
-            : NONE_FRAME;
+        in_tile ? get_skip_sb_copy_ref(cm, segment_ids[sb_col]) : NONE_FRAME;
     if (span_start >= 0 && ref != span_ref) {
       copy_sb_span(cm, span_ref, mi_row, span_start, mi_col);
       span_start = -1;
@@ -1349,7 +1360,14 @@ static inline void encode_sb_row(AV1_COMP *cpi, ThreadData *td,
   }
 
   reset_thresh_freq_fact(x);
-  copy_skip_sbs_of_row(cpi, tile_info, mi_row);
+
+  const struct segmentation *const seg = &cm->seg;
+  uint8_t sb_segment_ids[MAX_TILE_WIDTH >> MIN_SB_SIZE_LOG2] = { 0 };
+  assert(sb_cols_in_tile <= (int)sizeof(sb_segment_ids));
+  if (seg->enabled) {
+    get_sb_segment_ids_of_row(cpi, tile_info, mi_row, sb_segment_ids);
+    copy_skip_sbs_of_row(cpi, tile_info, mi_row, sb_segment_ids);
+  }
 
   // Code each SB in the row
   for (int mi_col = tile_info->mi_col_start, sb_col_in_tile = 0;
@@ -1405,6 +1423,9 @@ static inline void encode_sb_row(AV1_COMP *cpi, ThreadData *td,
     x->sb_me_partition = 0;
     x->sb_me_mv.as_int = 0;
     x->sb_force_fixed_part = 1;
+    // Superblocks coded without the variance partitioning must not use the
+    // low variance flags of an earlier superblock.
+    av1_zero(x->part_search_info.variance_low);
     x->color_palette_thresh = 64;
     x->force_color_check_block_level = 0;
     x->nonrd_prune_ref_frame_search =
@@ -1419,11 +1440,10 @@ static inline void encode_sb_row(AV1_COMP *cpi, ThreadData *td,
     td->mb.cb_coef_buff = av1_get_cb_coeff_buffer(cpi, mi_row, mi_col);
 
     // Get segment id and skip flag
-    const struct segmentation *const seg = &cm->seg;
     int seg_skip = 0;
     x->sb_copied_ref = NONE_FRAME;
     if (seg->enabled) {
-      const uint8_t segment_id = get_sb_segment_id(cpi, mi_row, mi_col);
+      const uint8_t segment_id = sb_segment_ids[sb_col_in_tile];
       seg_skip = segfeature_active(seg, segment_id, SEG_LVL_SKIP);
       if (seg_skip && !frame_is_intra_only(cm) && use_nonrd_mode)
         x->sb_copied_ref = get_skip_sb_copy_ref(cm, segment_id);
@@ -1689,8 +1709,6 @@ static inline void encode_tiles(AV1_COMP *cpi) {
       cpi->td.intrabc_used = 0;
       cpi->td.deltaq_used = 0;
       cpi->td.abs_sum_level = 0;
-      cpi->td.rd_counts.seg_tmp_pred_cost[0] = 0;
-      cpi->td.rd_counts.seg_tmp_pred_cost[1] = 0;
       cpi->td.mb.e_mbd.tile_ctx = &this_tile->tctx;
       cpi->td.mb.tile_pb_ctx = &this_tile->tctx;
       av1_init_rtc_counters(&cpi->td.mb);
@@ -2046,9 +2064,198 @@ static void populate_thresh_to_force_zeromv_skip(AV1_COMP *cpi) {
   }
 }
 
-static void free_block_hash_buffers(uint32_t *block_hash_values[2]) {
+static void free_block_hash_buffers(IntraBCHashInfo *intrabc_hash_info) {
   for (int j = 0; j < 2; ++j) {
-    aom_free(block_hash_values[j]);
+    aom_free(intrabc_hash_info->frame_hash_buffer[j]);
+    intrabc_hash_info->frame_hash_buffer[j] = NULL;
+  }
+  intrabc_hash_info->frame_hash_width = 0;
+  intrabc_hash_info->frame_hash_height = 0;
+}
+
+// Returns the distance in values between rows of the frame hash buffers. The
+// table fill reads the buffers column by column, 2 or more rows at a time.
+// When the width has a large power of 2 factor, the reads of a column share
+// their low address bits and map to only a few cache sets. The lines a column
+// loads are then evicted before the next column reads them again. With an odd
+// multiple of 8 values, a step of 2 rows is an odd number of 64 byte cache
+// lines, so a column spreads over all the cache sets.
+static int get_intrabc_hash_stride(int width) {
+  return ALIGN_POWER_OF_TWO(width, 3) | 8;
+}
+
+// Gets the region covered by the hash table with the given index. That is the
+// bounding rectangle of the tiles that share the table.
+static void get_intrabc_hash_region(const YV12_BUFFER_CONFIG *source,
+                                    const AV1_COMMON *cm,
+                                    const IntraBCHashInfo *intrabc_hash_info,
+                                    int table_idx, IntraBCHashRegion *region) {
+  const int tile_cols = intrabc_hash_info->tile_cols_per_table;
+  const int tile_rows = intrabc_hash_info->tile_rows_per_table;
+  const int first_row = table_idx / intrabc_hash_info->table_cols * tile_rows;
+  const int first_col = table_idx % intrabc_hash_info->table_cols * tile_cols;
+  const int last_row = AOMMIN(first_row + tile_rows, cm->tiles.rows) - 1;
+  const int last_col = AOMMIN(first_col + tile_cols, cm->tiles.cols) - 1;
+  TileInfo first_tile;
+  TileInfo last_tile;
+  av1_tile_init(&first_tile, cm, first_row, first_col);
+  av1_tile_init(&last_tile, cm, last_row, last_col);
+  region->x_start = first_tile.mi_col_start * MI_SIZE;
+  region->y_start = first_tile.mi_row_start * MI_SIZE;
+  region->x_end = AOMMIN(last_tile.mi_col_end * MI_SIZE, source->y_crop_width);
+  region->y_end = AOMMIN(last_tile.mi_row_end * MI_SIZE, source->y_crop_height);
+}
+
+// Splits the tiles into at most MAX_INTRABC_HASH_TABLES rectangles of
+// neighboring tiles, one for each table. The side with more tables is halved
+// until they fit.
+static void set_intrabc_hash_table_grid(const CommonTileParams *tiles,
+                                        IntraBCHashInfo *intrabc_hash_info) {
+  int table_cols = tiles->cols;
+  int table_rows = tiles->rows;
+  while (table_cols * table_rows > MAX_INTRABC_HASH_TABLES) {
+    if (table_cols >= table_rows) {
+      table_cols = (table_cols + 1) / 2;
+    } else {
+      table_rows = (table_rows + 1) / 2;
+    }
+  }
+  const int tile_cols_per_table = (tiles->cols + table_cols - 1) / table_cols;
+  const int tile_rows_per_table = (tiles->rows + table_rows - 1) / table_rows;
+  // Rounding up may leave fewer tables than the halving gave.
+  intrabc_hash_info->tile_cols_per_table = tile_cols_per_table;
+  intrabc_hash_info->tile_rows_per_table = tile_rows_per_table;
+  intrabc_hash_info->table_cols =
+      (tiles->cols + tile_cols_per_table - 1) / tile_cols_per_table;
+  intrabc_hash_info->table_rows =
+      (tiles->rows + tile_rows_per_table - 1) / tile_rows_per_table;
+}
+
+// Returns the largest block size that is hashed for intrabc.
+static int get_max_intrabc_hash_size(const AV1_COMP *cpi) {
+  const int sb_size =
+      1 << (cpi->common.seq_params->mib_size_log2 + MI_SIZE_LOG2);
+  return cpi->sf.mv_sf.hash_max_8x8_intrabc_blocks ? AOMMIN(8, sb_size)
+                                                   : sb_size;
+}
+
+// Returns true if the 4x4 hashes go in a hash table.
+static bool has_intrabc_hash_table_4x4(const AV1_COMMON *cm) {
+  return block_size_wide[cm->mi_params.mi_alloc_bsize] <= 4;
+}
+
+bool av1_build_intrabc_hash_table(AV1_COMP *cpi, int table_idx) {
+  const AV1_COMMON *const cm = &cpi->common;
+  IntraBCHashInfo *const intrabc_hash_info = &cpi->td.mb.intrabc_hash_info;
+  // The frame hash buffers are only used with cpi->source, which must have the
+  // frame size they were allocated for.
+  uint32_t **const block_hash_values = intrabc_hash_info->frame_hash_buffer;
+  const int pic_width = cpi->source->y_crop_width;
+  const int pic_height = cpi->source->y_crop_height;
+  if (pic_width != intrabc_hash_info->frame_hash_width ||
+      pic_height != intrabc_hash_info->frame_hash_height) {
+    return false;
+  }
+  const int hash_stride = get_intrabc_hash_stride(pic_width);
+  IntraBCHashRegion region;
+  get_intrabc_hash_region(cpi->source, cm, intrabc_hash_info, table_idx,
+                          &region);
+  hash_table *const table = &intrabc_hash_info->tile_tables[table_idx];
+
+  // Hash data generated for screen contents is used for intraBC ME
+  uint32_t *const hash_4x4 =
+      has_intrabc_hash_table_4x4(cm) ? block_hash_values[1] : NULL;
+  if (!av1_generate_block_8x8_hash_value(intrabc_hash_info, cpi->source,
+                                         &region, hash_4x4,
+                                         block_hash_values[0], hash_stride)) {
+    return false;
+  }
+  if (hash_4x4 != NULL && !av1_add_to_hash_map_by_row_with_precal_data(
+                              table, hash_4x4, hash_stride, &region, 4)) {
+    return false;
+  }
+
+  const int min_alloc_size = block_size_wide[cm->mi_params.mi_alloc_bsize];
+  const int max_size = get_max_intrabc_hash_size(cpi);
+  int src_idx = 0;
+  for (int size = 8; size <= max_size; size *= 2) {
+    if (size > 8) {
+      av1_generate_block_hash_value(intrabc_hash_info, &region, size,
+                                    block_hash_values[src_idx],
+                                    block_hash_values[!src_idx], hash_stride);
+      src_idx = !src_idx;
+    }
+    if (size >= min_alloc_size &&
+        !av1_add_to_hash_map_by_row_with_precal_data(
+            table, block_hash_values[src_idx], hash_stride, &region, size)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Builds the hash tables for intrabc. A block can only copy from its own tile,
+// so up to MAX_INTRABC_HASH_TABLES tiles each tile gets its own table with only
+// the blocks that lie inside it. With more tiles, neighboring tiles share a
+// table, which bounds the memory. The encoder threads build the tables before
+// the tiles are encoded, one table per job, and av1_intrabc_hash_search() uses
+// the table of the current tile.
+static void build_intrabc_hash_tables(AV1_COMP *cpi) {
+  AV1_COMMON *const cm = &cpi->common;
+  MultiThreadInfo *const mt_info = &cpi->mt_info;
+  IntraBCHashInfo *const intrabc_hash_info = &cpi->td.mb.intrabc_hash_info;
+  const int pic_width = cpi->source->y_crop_width;
+  const int pic_height = cpi->source->y_crop_height;
+  const int hash_stride = get_intrabc_hash_stride(pic_width);
+  set_intrabc_hash_table_grid(&cm->tiles, intrabc_hash_info);
+  const int num_tables =
+      intrabc_hash_info->table_cols * intrabc_hash_info->table_rows;
+  bool error = false;
+
+  // The second buffer is only needed for the 4x4 hashes and the sizes above
+  // 8x8.
+  const bool needs_second_buffer =
+      has_intrabc_hash_table_4x4(cm) || get_max_intrabc_hash_size(cpi) > 8;
+  const int num_buffers = needs_second_buffer ? 2 : 1;
+
+  free_block_hash_buffers(intrabc_hash_info);
+  for (int j = 0; j < num_buffers; ++j) {
+    intrabc_hash_info->frame_hash_buffer[j] = (uint32_t *)aom_malloc(
+        sizeof(*intrabc_hash_info->frame_hash_buffer[j]) * hash_stride *
+        pic_height);
+    if (!intrabc_hash_info->frame_hash_buffer[j]) {
+      error = true;
+      break;
+    }
+  }
+  if (!error) {
+    intrabc_hash_info->frame_hash_width = pic_width;
+    intrabc_hash_info->frame_hash_height = pic_height;
+  }
+
+  av1_hash_table_init(intrabc_hash_info);
+  if (error || !av1_hash_tables_create(intrabc_hash_info, num_tables)) {
+    free_block_hash_buffers(intrabc_hash_info);
+    aom_internal_error(cm->error, AOM_CODEC_MEM_ERROR,
+                       "Error allocating intrabc_hash_table and buffers");
+  }
+
+  const int num_workers =
+      AOMMIN(AOMMIN(mt_info->num_mod_workers[MOD_ENC], mt_info->num_workers),
+             num_tables);
+  if (num_workers > 1) {
+    av1_build_intrabc_hash_tables_mt(cpi, num_workers);
+  } else {
+    for (int i = 0; i < num_tables && !error; i++) {
+      error = !av1_build_intrabc_hash_table(cpi, i);
+    }
+  }
+
+  free_block_hash_buffers(intrabc_hash_info);
+
+  if (error) {
+    aom_internal_error(cm->error, AOM_CODEC_MEM_ERROR,
+                       "Error adding data to intrabc_hash_table");
   }
 }
 
@@ -2289,7 +2496,6 @@ static inline void encode_frame_internal(AV1_COMP *cpi) {
       &cpi->ppi->temp_frame_probs_simulation;
 #endif
   FrameProbInfo *const frame_probs = &cpi->ppi->frame_probs;
-  IntraBCHashInfo *const intrabc_hash_info = &x->intrabc_hash_info;
   MultiThreadInfo *const mt_info = &cpi->mt_info;
   AV1EncRowMultiThreadInfo *const enc_row_mt = &mt_info->enc_row_mt;
   const AV1EncoderConfig *const oxcf = &cpi->oxcf;
@@ -2332,64 +2538,11 @@ static inline void encode_frame_internal(AV1_COMP *cpi) {
       features->allow_warped_motion = 0;
   }
 
-  int hash_table_created = 0;
   if (!is_stat_generation_stage(cpi) && av1_use_hash_me(cpi) &&
       (!cpi->sf.rt_sf.use_nonrd_pick_mode || cpi->sf.rt_sf.rt_use_intrabc)) {
     // TODO(any): move this outside of the recoding loop to avoid recalculating
     // the hash table.
-    // add to hash table
-    const int pic_width = cpi->source->y_crop_width;
-    const int pic_height = cpi->source->y_crop_height;
-    uint32_t *block_hash_values[2] = { NULL };  // two buffers used ping-pong
-    bool error = false;
-
-    for (int j = 0; j < 2; ++j) {
-      block_hash_values[j] = (uint32_t *)aom_malloc(
-          sizeof(*block_hash_values[j]) * pic_width * pic_height);
-      if (!block_hash_values[j]) {
-        error = true;
-        break;
-      }
-    }
-
-    av1_hash_table_init(intrabc_hash_info);
-    if (error ||
-        !av1_hash_table_create(&intrabc_hash_info->intrabc_hash_table)) {
-      free_block_hash_buffers(block_hash_values);
-      aom_internal_error(cm->error, AOM_CODEC_MEM_ERROR,
-                         "Error allocating intrabc_hash_table and buffers");
-    }
-    hash_table_created = 1;
-    av1_generate_block_2x2_hash_value(cpi->source, block_hash_values[0]);
-    // Hash data generated for screen contents is used for intraBC ME
-    const int min_alloc_size = block_size_wide[mi_params->mi_alloc_bsize];
-    int max_sb_size = (1 << (cm->seq_params->mib_size_log2 + MI_SIZE_LOG2));
-
-    if (cpi->sf.mv_sf.hash_max_8x8_intrabc_blocks) {
-      max_sb_size = AOMMIN(8, max_sb_size);
-    }
-
-    int src_idx = 0;
-    for (int size = 4; size <= max_sb_size; size *= 2, src_idx = !src_idx) {
-      const int dst_idx = !src_idx;
-      av1_generate_block_hash_value(intrabc_hash_info, cpi->source, size,
-                                    block_hash_values[src_idx],
-                                    block_hash_values[dst_idx]);
-      if (size >= min_alloc_size &&
-          !av1_add_to_hash_map_by_row_with_precal_data(
-              &intrabc_hash_info->intrabc_hash_table,
-              block_hash_values[dst_idx], pic_width, pic_height, size)) {
-        error = true;
-        break;
-      }
-    }
-
-    free_block_hash_buffers(block_hash_values);
-
-    if (error) {
-      aom_internal_error(cm->error, AOM_CODEC_MEM_ERROR,
-                         "Error adding data to intrabc_hash_table");
-    }
+    build_intrabc_hash_tables(cpi);
   }
 
   const CommonQuantParams *quant_params = &cm->quant_params;
@@ -2474,8 +2627,12 @@ static inline void encode_frame_internal(AV1_COMP *cpi) {
   init_encode_frame_mb_context(cpi);
   set_default_interp_skip_flags(cm, &cpi->interp_search_flags);
 
+  // Like the decoder, only use the previous segment map if it has the size of
+  // this frame.
   if (cm->prev_frame && cm->prev_frame->seg.enabled &&
-      cpi->svc.number_spatial_layers == 1)
+      cpi->svc.number_spatial_layers == 1 &&
+      cm->prev_frame->mi_rows == cm->mi_params.mi_rows &&
+      cm->prev_frame->mi_cols == cm->mi_params.mi_cols)
     cm->last_frame_seg_map = cm->prev_frame->seg_map;
   else
     cm->last_frame_seg_map = NULL;
@@ -2826,9 +2983,6 @@ static inline void encode_frame_internal(AV1_COMP *cpi) {
         }
       }
     }
-  }
-  if (hash_table_created) {
-    av1_hash_table_destroy(&intrabc_hash_info->intrabc_hash_table);
   }
 }
 

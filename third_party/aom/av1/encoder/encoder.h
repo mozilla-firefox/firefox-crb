@@ -2939,6 +2939,11 @@ typedef struct AV1_COMP {
   CB_COEFF_BUFFER *coeff_buffer_base;
 
   /*!
+   * Number of superblock columns per row of coeff_buffer_base, as allocated.
+   */
+  int coeff_buffer_stride;
+
+  /*!
    * Structure holding pointers to frame level memory allocated for transform
    * block related information.
    */
@@ -3401,6 +3406,12 @@ typedef struct AV1_COMP {
    * In addition, rate control strategy is adjusted when this flag is true.
    */
   int is_screen_content_type;
+
+  /*!
+   * A flag to indicate moderate screen content blocks with high variance when
+   * allow_screen_content_tools is not directly enabled by the strict threshold.
+   */
+  int sc_high_var_blocks;
 
 #if CONFIG_COLLECT_PARTITION_STATS
   /*!
