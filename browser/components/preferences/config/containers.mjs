@@ -10,6 +10,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
+  PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "idnService", function () {
@@ -97,13 +98,26 @@ async function removeContainer(userContextId) {
     lazy.ContextualIdentityService.getUserContextLabel(userContextId);
   let tabCount =
     lazy.ContextualIdentityService.countContainerTabs(userContextId);
-  let [title, message, deleteButton] = await document.l10n.formatValues([
-    { id: "containers-delete-alert-title", args: { name: containerName } },
-    tabCount > 0
-      ? { id: "containers-delete-alert-msg-with-tabs", args: { tabCount } }
-      : { id: "containers-delete-alert-msg" },
-    { id: "containers-delete-alert-ok-button" },
-  ]);
+  let [pageCount, [title, message, deleteButton, historyKept]] =
+    await Promise.all([
+      lazy.PlacesUtils.history.countPagesByUserContextId(userContextId),
+      document.l10n.formatValues([
+        { id: "containers-delete-alert-title", args: { name: containerName } },
+        tabCount > 0
+          ? { id: "containers-delete-alert-msg-with-tabs", args: { tabCount } }
+          : { id: "containers-delete-alert-msg" },
+        { id: "containers-delete-alert-ok-button" },
+        { id: "containers-delete-alert-history-kept" },
+      ]),
+    ]);
+  let historyCheckbox = null;
+  if (pageCount > 0) {
+    message += "\n\n" + historyKept;
+    historyCheckbox = await document.l10n.formatValue(
+      "containers-delete-alert-history-checkbox",
+      { pageCount }
+    );
+  }
 
   let flags =
     Services.prompt.BUTTON_TITLE_IS_STRING * Services.prompt.BUTTON_POS_0 +
@@ -118,7 +132,7 @@ async function removeContainer(userContextId) {
     deleteButton,
     null,
     null,
-    null,
+    historyCheckbox,
     false,
     { useTitle: true }
   );
@@ -127,6 +141,11 @@ async function removeContainer(userContextId) {
     return;
   }
   await lazy.ContextualIdentityService.closeContainerTabs(userContextId);
+  if (!propertyBag.get("checked")) {
+    await lazy.PlacesUtils.history.moveVisitsToDefaultUserContext(
+      userContextId
+    );
+  }
   lazy.ContextualIdentityService.remove(userContextId);
 }
 

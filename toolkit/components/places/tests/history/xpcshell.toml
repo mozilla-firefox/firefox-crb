@@ -41,3 +41,5 @@ head = "head_history.js"
 ["test_update.js"]
 
 ["test_updatePlaces_embed.js"]
+
+["test_userContextId_count_and_move.js"]

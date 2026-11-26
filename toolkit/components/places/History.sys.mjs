@@ -631,6 +631,52 @@ export var History = Object.freeze({
   },
 
   /**
+   * Count the distinct pages visited in a container, as shown in the history
+   * UI. Hidden pages, like redirect sources, are not counted.
+   *
+   * @param {number} userContextId
+   *   The container to count pages for. Must not be the default one.
+   * @returns {Promise<number>}
+   */
+  countPagesByUserContextId(userContextId) {
+    ensureNonDefaultUserContextId(userContextId);
+    return lazy.PlacesUtils.promiseDBConnection().then(async db => {
+      let rows = await db.executeCached(
+        `SELECT COUNT(DISTINCT v.place_id) AS count
+         FROM moz_historyvisits v
+         JOIN moz_places h ON h.id = v.place_id
+         WHERE v.userContextId = :userContextId AND v.userContextId <> 0
+           AND h.hidden = 0`,
+        { userContextId }
+      );
+      return rows[0].getResultByName("count");
+    });
+  },
+
+  /**
+   * Move all the visits made in a container to the default one.
+   *
+   * No Places notification is fired, so history views that are already open
+   * keep showing the moved visits in the container until they are refreshed.
+   *
+   * @param {number} userContextId
+   *   The container whose visits are moved. Must not be the default one.
+   * @returns {Promise<void>}
+   */
+  moveVisitsToDefaultUserContext(userContextId) {
+    ensureNonDefaultUserContextId(userContextId);
+    return lazy.PlacesUtils.withConnectionWrapper(
+      "History.sys.mjs: moveVisitsToDefaultUserContext",
+      db =>
+        db.executeCached(
+          `UPDATE moz_historyvisits SET userContextId = 0
+           WHERE userContextId = :userContextId AND userContextId <> 0`,
+          { userContextId }
+        )
+    );
+  },
+
+  /**
    * Clear all history.
    *
    * @returns {Promise<void>}
@@ -836,6 +882,12 @@ function convertForUpdatePlaces(pageInfo) {
     info.visits.push(visit);
   }
   return info;
+}
+
+function ensureNonDefaultUserContextId(userContextId) {
+  if (!Number.isInteger(userContextId) || userContextId <= 0) {
+    throw new TypeError("Expected a non-default userContextId");
+  }
 }
 
 // Inner implementation of History.clear().

@@ -342,6 +342,20 @@ containers-delete-alert-msg = { -brand-short-name } will clear the cookies and s
 
 containers-delete-alert-ok-button = Delete
 
+# Shown after the message of the dialog shown before deleting a container, when
+# the container has browsing history.
+containers-delete-alert-history-kept = Browsing history from this container will be kept outside of containers unless you choose to delete it.
+
+# Checkbox in the dialog shown before deleting a container. When unchecked, the
+# history of the container is kept and moved outside of any container.
+# Variables:
+#   $pageCount (number) - Number of pages visited in the container.
+containers-delete-alert-history-checkbox =
+    { $pageCount ->
+        [one] Also delete browsing history from this container ({ $pageCount } page)
+       *[other] Also delete browsing history from this container ({ $pageCount } pages)
+    }
+
 settings-tabs-show-image-in-preview =
     .label = Show an image preview when you hover on a tab
     .accessKey = h
