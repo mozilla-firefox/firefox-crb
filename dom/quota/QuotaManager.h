@@ -1388,6 +1388,9 @@ class QuotaManager final : public BackgroundThreadObject {
   // How many times a negative mTemporaryStorageUsage was seen. Used to
   // throttle temporary_storage_usage_underflow telemetry events.
   uint32_t mTemporaryStorageUsageUnderflowCount = 0;
+  // Sum of all origin reservations (see OriginInfo::mReservedUsage). Counted
+  // against mTemporaryStorageLimit but not part of mTemporaryStorageUsage.
+  int64_t mTemporaryStorageReservedUsage = 0;
 
   int64_t mNextDirectoryLockId;
   bool mStorageInitialized;

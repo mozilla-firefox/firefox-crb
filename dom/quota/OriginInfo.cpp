@@ -204,6 +204,8 @@ void OriginInfo::LockedPersist(DirtyTrackingAutoLock& aProofOfLock) {
   // Remove Usage from GroupInfo
   mGroupInfo->mUsage -= mUsage;
   QM_ASSERT_NOT_NEGATIVE(mGroupInfo->mUsage);
+  mGroupInfo->mReservedUsage -= mReservedUsage;
+  QM_ASSERT_NOT_NEGATIVE(mGroupInfo->mReservedUsage);
 }
 
 void OriginInfo::LockedTruncateUsages(Client::Type aClientType, int64_t aDelta,
@@ -268,9 +270,6 @@ Maybe<bool> OriginInfo::LockedUpdateUsages(
   QuotaManager* quotaManager = QuotaManager::Get();
   MOZ_ASSERT(quotaManager);
 
-  const auto& complementaryPersistenceTypes =
-      ComplementaryPersistenceTypes(mGroupInfo->mPersistenceType);
-
   AssertNoOverflow(mClientUsages[aClientType].valueOr(0), aDelta);
   int64_t newClientUsage = mClientUsages[aClientType].valueOr(0) + aDelta;
 
@@ -286,23 +285,10 @@ Maybe<bool> OriginInfo::LockedUpdateUsages(
     AssertNoOverflow(mGroupInfo->mUsage, aDelta);
     newGroupUsage += aDelta;
 
-    int64_t groupUsage = mGroupInfo->mUsage;
-    for (const auto& complementaryPersistenceType :
-         complementaryPersistenceTypes) {
-      const auto& complementaryGroupInfo =
-          mGroupInfo->mGroupInfoPair->LockedGetGroupInfo(
-              complementaryPersistenceType);
-
-      if (complementaryGroupInfo) {
-        AssertNoOverflow(groupUsage, complementaryGroupInfo->mUsage);
-        groupUsage += complementaryGroupInfo->mUsage;
-      }
-    }
-
     // Temporary storage has a hard limit for group usage (20 % of the global
     // limit).
-    AssertNoOverflow(groupUsage, aDelta);
-    if (groupUsage + aDelta > quotaManager->GetGroupLimit()) {
+    if (LockedGroupUsageWithReservations() + aDelta >
+        quotaManager->GetGroupLimit()) {
       return Some(false);
     }
   }
@@ -311,7 +297,8 @@ Maybe<bool> OriginInfo::LockedUpdateUsages(
   int64_t newTemporaryStorageUsage =
       quotaManager->mTemporaryStorageUsage + aDelta;
 
-  if (newTemporaryStorageUsage <= quotaManager->mTemporaryStorageLimit) {
+  if (newTemporaryStorageUsage + quotaManager->mTemporaryStorageReservedUsage <=
+      quotaManager->mTemporaryStorageLimit) {
     mClientUsages[aClientType] = Some(newClientUsage);
 
     mUsage = newUsage;
@@ -350,24 +337,8 @@ bool OriginInfo::LockedUpdateUsagesForEviction(
     AssertNoOverflow(mGroupInfo->mUsage, aDelta);
     newGroupUsage += aDelta;
 
-    int64_t groupUsage = mGroupInfo->mUsage;
-
-    const auto& complementaryPersistenceTypes =
-        ComplementaryPersistenceTypes(mGroupInfo->mPersistenceType);
-    for (const auto& complementaryPersistenceType :
-         complementaryPersistenceTypes) {
-      const auto& complementaryGroupInfo =
-          mGroupInfo->mGroupInfoPair->LockedGetGroupInfo(
-              complementaryPersistenceType);
-
-      if (complementaryGroupInfo) {
-        AssertNoOverflow(groupUsage, complementaryGroupInfo->mUsage);
-        groupUsage += complementaryGroupInfo->mUsage;
-      }
-    }
-
-    AssertNoOverflow(groupUsage, aDelta);
-    if (groupUsage + aDelta > quotaManager->GetGroupLimit()) {
+    if (LockedGroupUsageWithReservations() + aDelta >
+        quotaManager->GetGroupLimit()) {
       // Unfortunately some other thread increased the group usage in the
       // meantime and we are not below the group limit anymore.
       return false;
@@ -377,8 +348,10 @@ bool OriginInfo::LockedUpdateUsagesForEviction(
   AssertNoOverflow(quotaManager->mTemporaryStorageUsage, aDelta);
   newTemporaryStorageUsage = quotaManager->mTemporaryStorageUsage + aDelta;
 
-  NS_ASSERTION(newTemporaryStorageUsage <= quotaManager->mTemporaryStorageLimit,
-               "How come?!");
+  NS_ASSERTION(
+      newTemporaryStorageUsage + quotaManager->mTemporaryStorageReservedUsage <=
+          quotaManager->mTemporaryStorageLimit,
+      "How come?!");
 
   // Ok, we successfully freed enough space and the operation can continue
   // without throwing the quota error.
@@ -394,9 +367,140 @@ bool OriginInfo::LockedUpdateUsagesForEviction(
   return true;
 };
 
+int64_t OriginInfo::LockedGroupUsageWithReservations() const {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  int64_t groupUsage = mGroupInfo->mUsage + mGroupInfo->mReservedUsage;
+
+  for (const auto& complementaryPersistenceType :
+       ComplementaryPersistenceTypes(mGroupInfo->mPersistenceType)) {
+    const auto& complementaryGroupInfo =
+        mGroupInfo->mGroupInfoPair->LockedGetGroupInfo(
+            complementaryPersistenceType);
+
+    if (complementaryGroupInfo) {
+      groupUsage += complementaryGroupInfo->mUsage +
+                    complementaryGroupInfo->mReservedUsage;
+    }
+  }
+
+  return groupUsage;
+}
+
+void OriginInfo::LockedAdjustReservedUsage(int64_t aDelta) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  // A removed OriginInfo has already been subtracted from the group and the
+  // global reserved usage; there is nothing left to adjust.
+  if (!mGroupInfo) {
+    return;
+  }
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  if (aDelta > 0) {
+    AssertNoOverflow(mReservedUsage, aDelta);
+    AssertNoOverflow(mGroupInfo->mReservedUsage, aDelta);
+    AssertNoOverflow(quotaManager->mTemporaryStorageReservedUsage, aDelta);
+  }
+  mReservedUsage += aDelta;
+  QM_ASSERT_NOT_NEGATIVE(mReservedUsage);
+  if (!LockedPersisted()) {
+    mGroupInfo->mReservedUsage += aDelta;
+    QM_ASSERT_NOT_NEGATIVE(mGroupInfo->mReservedUsage);
+  }
+  quotaManager->mTemporaryStorageReservedUsage += aDelta;
+  QM_ASSERT_NOT_NEGATIVE(quotaManager->mTemporaryStorageReservedUsage);
+}
+
+Maybe<bool> OriginInfo::LockedReserve(uint64_t aDelta) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  const int64_t delta = AssertedCast<int64_t>(aDelta);
+
+  if (!LockedPersisted() && LockedGroupUsageWithReservations() + delta >
+                                quotaManager->GetGroupLimit()) {
+    return Some(false);
+  }
+
+  if (quotaManager->mTemporaryStorageUsage +
+          quotaManager->mTemporaryStorageReservedUsage + delta >
+      quotaManager->mTemporaryStorageLimit) {
+    return Nothing();
+  }
+
+  LockedAdjustReservedUsage(delta);
+
+  return Some(true);
+}
+
+bool OriginInfo::LockedReserveForEviction(uint64_t aDelta) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  const int64_t delta = AssertedCast<int64_t>(aDelta);
+
+  if (!LockedPersisted() && LockedGroupUsageWithReservations() + delta >
+                                quotaManager->GetGroupLimit()) {
+    return false;
+  }
+
+  LockedAdjustReservedUsage(delta);
+
+  return true;
+}
+
+void OriginInfo::LockedUnreserve(int64_t aDelta) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  LockedAdjustReservedUsage(-aDelta);
+}
+
+void OriginInfo::LockedCommitReservation(Client::Type aClientType,
+                                         int64_t aDelta,
+                                         int64_t aReservationDelta,
+                                         DirtyTrackingAutoLock& aProofOfLock) {
+  AssertCurrentThreadOwnsQuotaMutex();
+
+  LockedAdjustReservedUsage(aReservationDelta);
+
+  if (aDelta < 0) {
+    LockedTruncateUsages(aClientType, -aDelta, aProofOfLock);
+    return;
+  }
+
+  QuotaManager* quotaManager = QuotaManager::Get();
+  MOZ_ASSERT(quotaManager);
+
+  const uint64_t delta = AssertedCast<uint64_t>(aDelta);
+
+  AssertNoOverflow(mClientUsages[aClientType].valueOr(0), delta);
+  mClientUsages[aClientType] =
+      Some(mClientUsages[aClientType].valueOr(0) + delta);
+
+  AssertNoOverflow(mUsage, delta);
+  mUsage += delta;
+  MakeDirty(aProofOfLock);
+
+  if (!LockedPersisted()) {
+    AssertNoOverflow(mGroupInfo->mUsage, delta);
+    mGroupInfo->mUsage += delta;
+  }
+
+  AssertNoOverflow(quotaManager->mTemporaryStorageUsage, delta);
+  quotaManager->mTemporaryStorageUsage += AssertedCast<int64_t>(delta);
+}
+
 void OriginInfo::MakeDirty(DirtyTrackingAutoLock& aProofOfLock) {
   AssertCurrentThreadOwnsQuotaMutex();
   MOZ_ASSERT(aProofOfLock.IsValid());
+  MOZ_ASSERT(!aProofOfLock.IsReservationOnly());
 
   LockedMarkDirty();
 }
