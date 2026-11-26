@@ -24,6 +24,7 @@
 #include "mozilla/StaticPtr.h"
 #include "mozilla/dom/FileSystemLog.h"
 #include "mozilla/dom/FileSystemManagerParent.h"
+#include "mozilla/dom/FileSystemSnapshot.h"
 #include "mozilla/dom/QMResult.h"
 #include "mozilla/dom/quota/ClientDirectoryLock.h"
 #include "mozilla/dom/quota/ClientImpl.h"
@@ -449,6 +450,12 @@ Result<FileId, QMResult> FileSystemDataManager::LockExclusive(
   // quota usage until the (external) blocker is gone or the file is removed.
   QM_TRY(QM_TO_RESULT(mDatabaseManager->BeginUsageTracking(fileId)));
 
+  // The lock holder writes the main file in place; the stream parameters
+  // reach the content process only after this returns, so reads started
+  // after this line cannot observe the writes. A read already in progress
+  // keeps going and may return torn data, see SnapshotInputStream.
+  InvalidateSnapshots(fileId, NS_ERROR_DOM_FILE_NOT_READABLE_ERR);
+
   LOG_VERBOSE(("ExclusiveLock"));
   mExclusiveLocks.Insert(aEntryId);
 
@@ -573,9 +580,45 @@ void FileSystemDataManager::UnlockShared(const EntryId& aEntryId,
   // updated successfully.
   QM_TRY(MOZ_TO_RESULT(mDatabaseManager->UpdateUsage(aFileId)), QM_VOID);
   QM_TRY(MOZ_TO_RESULT(mDatabaseManager->EndUsageTracking(aFileId)), QM_VOID);
+
+  // A commit replaces the main file the snapshots read.
+  if (!aAbort) {
+    if (auto oldFileId = mDatabaseManager->GetFileId(aEntryId);
+        oldFileId.isOk()) {
+      InvalidateSnapshots(oldFileId.inspect(),
+                          NS_ERROR_DOM_FILE_NOT_READABLE_ERR);
+    }
+  }
+
   QM_TRY(
       MOZ_TO_RESULT(mDatabaseManager->MergeFileId(aEntryId, aFileId, aAbort)),
       QM_VOID);
+}
+
+void FileSystemDataManager::RegisterSnapshot(const FileId& aFileId,
+                                             RefPtr<SnapshotState> aState) {
+  MOZ_ASSERT(!aFileId.IsEmpty());
+  MOZ_ASSERT(aState);
+
+  auto& states = mSnapshots.LookupOrInsert(aFileId.Value());
+  states.RemoveElementsBy(
+      [](const auto& aOther) { return aOther->IsUnused(); });
+  states.AppendElement(std::move(aState));
+}
+
+void FileSystemDataManager::InvalidateSnapshots(const FileId& aFileId,
+                                                nsresult aStatus) {
+  auto entry = mSnapshots.Lookup(aFileId.Value());
+  if (!entry) {
+    return;
+  }
+
+  LOG_VERBOSE(("Invalidating %zu snapshots", entry.Data().Length()));
+  for (const auto& state : entry.Data()) {
+    state->Invalidate(aStatus);
+  }
+
+  entry.Remove();
 }
 
 void FileSystemDataManager::DeprecateSharedLocks(const EntryId& aEntryId,
