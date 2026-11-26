@@ -31,6 +31,11 @@ function testWindows(windowsToOpen, expectedResults) {
       openDialog(AppConstants.BROWSER_CHROME_URL, "", features, url);
       let win = await openWindowPromise;
       await BrowserTestUtils.closeWindow(win);
+
+      // Windows closed one after the other are kept regardless of the
+      // max_windows_undo pref until there is some interaction with the browser.
+      let tab = BrowserTestUtils.addTab(gBrowser, "about:blank");
+      BrowserTestUtils.removeTab(tab);
     }
 
     let closedWindowData = ss.getClosedWindowData();

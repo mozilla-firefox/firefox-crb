@@ -82,6 +82,11 @@ add_task(async function test_closedObjectsChangedNotifications() {
   await closeWindow(win2);
   assertNotificationCount(4);
 
+  // Windows closed one after the other are kept regardless of the
+  // max_windows_undo pref until there is some interaction with the browser.
+  let tab = BrowserTestUtils.addTab(gBrowser, "about:blank");
+  BrowserTestUtils.removeTab(tab);
+
   info(`Changing the ${MAX_WINDOWS_UNDO_PREF} pref.`);
   registerCleanupFunction(function () {
     Services.prefs.clearUserPref(MAX_WINDOWS_UNDO_PREF);

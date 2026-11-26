@@ -294,18 +294,20 @@ class _SessionSaver {
         }
       }
 
-      while (state._closedWindows.length) {
-        let i = state._closedWindows.length - 1;
-
-        if (!state._closedWindows[i]._shouldRestore) {
-          // We only need to go until _shouldRestore
-          // is falsy since we're going in reverse.
-          break;
-        }
-
-        delete state._closedWindows[i]._shouldRestore;
-        state.windows.unshift(state._closedWindows.pop());
+      // Closed windows are ordered most recent first, so the windows marked
+      // _shouldRestore are at the start of the list. The window objects are
+      // shared with SessionStore, so copy them rather than deleting the flag.
+      let restoringCount = 0;
+      while (
+        restoringCount < state._closedWindows.length &&
+        state._closedWindows[restoringCount]._shouldRestore
+      ) {
+        restoringCount++;
       }
+      let restoringWindows = state._closedWindows
+        .splice(0, restoringCount)
+        .map(({ _shouldRestore, ...winData }) => winData);
+      state.windows.unshift(...restoringWindows);
     }
 
     lazy.TabSplitViewState.normalizeSession(state);

@@ -1686,6 +1686,9 @@ class _SessionStore {
         }
         this.#saveStateDelayed(win);
         break;
+      // A crash isn't an interaction with the browser, but it is still
+      // treated as one, so windows closed before it are not restored when the
+      // browser quits.
       case "oop-browser-crashed":
       case "oop-browser-buildid-mismatch":
         if (/** @type {FrameCrashedEvent} */ (aEvent).isTopFrame) {
@@ -1701,6 +1704,11 @@ class _SessionStore {
           browser.permanentKey
         ) {
           this.#resetEpoch(browser.permanentKey, browser.frameLoader);
+        }
+        // The preloaded new tab page gets a frame loader without the user
+        // interacting with the browser.
+        if (browser.getAttribute("preloadedState") == "preloaded") {
+          return;
         }
         break;
       }
@@ -8419,12 +8427,21 @@ class _SessionStore {
    * Resize this.#closedWindows to the value of the pref, except in the case
    * where we don't have any non-popup windows on Windows and Linux. Then we must
    * resize such that we have at least one non-popup window.
+   * Windows marked _shouldRestore are part of a series of windows closing to
+   * quit, so they don't count towards the limit.
    */
   #capClosedWindows() {
-    if (this.#closedWindows.length <= this.#max_windows_undo) {
+    let restoringCount = 0;
+    while (
+      restoringCount < this.#closedWindows.length &&
+      this.#closedWindows[restoringCount]._shouldRestore
+    ) {
+      restoringCount++;
+    }
+    let spliceTo = restoringCount + this.#max_windows_undo;
+    if (this.#closedWindows.length <= spliceTo) {
       return;
     }
-    let spliceTo = this.#max_windows_undo;
     if (AppConstants.platform != "macosx") {
       let normalWindowIndex = 0;
       // try to find a non-popup window in this.#closedWindows
@@ -8434,7 +8451,7 @@ class _SessionStore {
       ) {
         normalWindowIndex++;
       }
-      if (normalWindowIndex >= this.#max_windows_undo) {
+      if (normalWindowIndex >= spliceTo) {
         spliceTo = normalWindowIndex + 1;
       }
     }
@@ -8457,6 +8474,7 @@ class _SessionStore {
     for (let i = 0; i < this.#closedWindows.length; i++) {
       delete this.#closedWindows[i]._shouldRestore;
     }
+    this.#capClosedWindows();
   }
 
   /**
