@@ -163,6 +163,7 @@ export class SidebarTabList extends FxviewTabListBase {
         .timeMsPref=${this.timeMsPref}
         .title=${tabItem.title}
         .url=${tabItem.url}
+        .userContextId=${tabItem.userContextId}
         @keydown=${e => e.currentTarget.primaryActionHandler(e)}
       ></sidebar-tab-row>
     `;
@@ -287,22 +288,12 @@ export class SidebarTabRow extends FxviewTabRowBase {
     HTMLElement.prototype.focus.call(this, options);
   }
 
-  #getContainerClasses() {
-    let containerClasses = ["fxview-tab-row-container-indicator", "icon"];
-    if (this.containerObj) {
-      let { icon, color } = this.containerObj;
-      containerClasses.push(`identity-icon-${icon}`);
-      containerClasses.push(`identity-color-${color}`);
-    }
-    return containerClasses;
-  }
-
   #containerIndicatorTemplate() {
     let tabList = this.getRootNode().host;
     let tabsToCheck = tabList.tabItems;
     return html`${when(
       tabsToCheck.some(tab => tab.containerObj),
-      () => html`<span class=${this.#getContainerClasses().join(" ")}></span>`
+      () => this.containerIndicatorTemplate()
     )}`;
   }
 

@@ -16,6 +16,11 @@ fxviewtabrow-tabs-list-tab =
   .title = Open { $targetURI } in a new tab
 
 # Variables:
+#   $containerName (string) - Name of the container of the visit or tab
+fxviewtabrow-container-indicator =
+  .aria-label = Container: { $containerName }
+
+# Variables:
 #   $tabTitle (string) - Title of tab being closed
 fxviewtabrow-close-tab-button =
   .title = Close { $tabTitle }

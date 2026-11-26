@@ -426,16 +426,6 @@ export class OpenTabsTabRow extends FxviewTabRowBase {
     </span>`;
   }
 
-  #getContainerClasses() {
-    let containerClasses = ["fxview-tab-row-container-indicator", "icon"];
-    if (this.containerObj) {
-      let { icon, color } = this.containerObj;
-      containerClasses.push(`identity-icon-${icon}`);
-      containerClasses.push(`identity-color-${color}`);
-    }
-    return containerClasses;
-  }
-
   muteOrUnmuteTab(e) {
     e?.preventDefault();
     // If the tab has no sound playing, the mute/unmute button will be removed when toggled.
@@ -491,7 +481,7 @@ export class OpenTabsTabRow extends FxviewTabRowBase {
       : tabList.tabItems;
     return html`${when(
       tabsToCheck.some(tab => tab.containerObj),
-      () => html`<span class=${this.#getContainerClasses().join(" ")}></span>`
+      () => this.containerIndicatorTemplate()
     )}`;
   }
 

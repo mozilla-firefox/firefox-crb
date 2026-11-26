@@ -31,6 +31,8 @@ const OBSERVER_DEBOUNCE_TIMEOUT_MS = 5000;
  *   The number of times the page has been visited.
  * @property {string} guid
  *   The page's GUID.
+ * @property {number} userContextId
+ *   The userContextId of the visit, 0 for the default container.
  */
 
 /**
@@ -140,12 +142,13 @@ export class PlacesQuery {
     switch (sortBy) {
       case SORT_BY.DATE:
       case SORT_BY.DATESITE:
-        groupBy = "url, date(visit_date / 1000000, 'unixepoch', 'localtime')";
+        groupBy =
+          "url, v.userContextId, date(visit_date / 1000000, 'unixepoch', 'localtime')";
         break;
       case SORT_BY.SITE:
       case SORT_BY.LAST_VISITED:
       case SORT_BY.MOST_VISITED:
-        groupBy = "url";
+        groupBy = "url, v.userContextId";
         break;
     }
     const whereClause =
@@ -158,7 +161,7 @@ export class PlacesQuery {
       sortBy === SORT_BY.MOST_VISITED
         ? "visit_count DESC, visit_date DESC"
         : "visit_date DESC";
-    const sql = `SELECT MAX(visit_date) as visit_date, h.visit_count as visit_count, title, url, guid
+    const sql = `SELECT MAX(visit_date) as visit_date, h.visit_count as visit_count, title, url, guid, v.userContextId
       FROM moz_historyvisits v
       JOIN moz_places h
       ON v.place_id = h.id
@@ -211,13 +214,13 @@ export class PlacesQuery {
         orderBy = "visit_count DESC, visit_date DESC";
         break;
     }
-    const sql = `SELECT MAX(visit_date) as visit_date, h.visit_count as visit_count, title, url, guid
+    const sql = `SELECT MAX(visit_date) as visit_date, h.visit_count as visit_count, title, url, guid, v.userContextId
       FROM moz_historyvisits v
       JOIN moz_places h
       ON v.place_id = h.id
       WHERE AUTOCOMPLETE_MATCH(:query, url, title, NULL, 1, 1, 1, 1, :matchBehavior, :searchBehavior, NULL)
       AND hidden = 0
-      GROUP BY url
+      GROUP BY url, v.userContextId
       ORDER BY ${orderBy}
       LIMIT ${limit > 0 ? limit : -1}`;
     if (this.#searchInProgress) {
@@ -397,6 +400,7 @@ export class PlacesQuery {
       visitCount: Number(row.getResultByName("visit_count")),
       // @ts-expect-error - Bug 1966462
       guid: row.getResultByName("guid"),
+      userContextId: Number(row.getResultByName("userContextId")),
     };
   }
 
@@ -415,6 +419,7 @@ export class PlacesQuery {
       url: event.url,
       visitCount: event.visitCount,
       guid: event.pageGuid,
+      userContextId: event.userContextId,
     };
   }
 }
@@ -669,8 +674,8 @@ class HistoryCache {
 
   /**
    * Handle duplicate detection and removal. If an older visit for the same
-   * URL exists in the container, it is removed. If a newer visit exists,
-   * the new visit is rejected.
+   * URL and userContextId exists in the container, it is removed. If a newer
+   * visit exists, the new visit is rejected.
    *
    * @param {HistoryVisit} visit
    *   The visit to check.
@@ -684,7 +689,10 @@ class HistoryCache {
     }
 
     for (let existingVisit of existingVisitsForUrl) {
-      if (container.includes(existingVisit)) {
+      if (
+        existingVisit.userContextId === visit.userContextId &&
+        container.includes(existingVisit)
+      ) {
         if (existingVisit.date.getTime() >= visit.date.getTime()) {
           return false;
         }

@@ -15,6 +15,10 @@
   :host([compactRows]) & {
     grid-template-columns: min-content 1fr min-content min-content;
   }
+
+  &.hasContainerTab {
+    grid-template-columns: min-content 3fr min-content 2fr 1fr 1fr min-content;
+  }
 }
 
 virtual-list {

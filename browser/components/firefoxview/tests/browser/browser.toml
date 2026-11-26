@@ -33,6 +33,8 @@ skip-if = [
 
 ["browser_history_firefoxview.js"]
 
+["browser_history_firefoxview_containers.js"]
+
 ["browser_opentabs_cards.js"]
 
 ["browser_opentabs_changes.js"]

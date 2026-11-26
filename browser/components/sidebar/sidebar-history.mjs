@@ -225,6 +225,10 @@ export class SidebarHistory extends SidebarPage {
     return URL.parse(url)?.hostname ? url : null;
   }
 
+  getUserContextIdToOpen(row) {
+    return this.controller.getUserContextIdToOpen(row, this.topWindow);
+  }
+
   async handleCommandEvent(e) {
     let label;
     switch (e.target.id) {
@@ -336,25 +340,55 @@ export class SidebarHistory extends SidebarPage {
     });
   }
 
+  #uniqueByUrlAndContainer(items) {
+    const seen = new Map();
+    for (const item of items) {
+      const key = `${item.url}|${item.userContextId ?? 0}`;
+      if (!seen.has(key)) {
+        seen.set(key, item);
+      }
+    }
+    return [...seen.values()];
+  }
+
   #openAllInTabs(e, items) {
-    const urls = [...new Set(items.map(item => item.url))];
-    if (!lazy.OpenInTabsUtils.confirmOpenInTabs(urls.length, this.topWindow)) {
+    const uniqueItems = this.#uniqueByUrlAndContainer(items);
+    if (
+      !lazy.OpenInTabsUtils.confirmOpenInTabs(
+        uniqueItems.length,
+        this.topWindow
+      )
+    ) {
       return;
     }
     const tabset = [];
-    for (const uri of urls) {
+    for (const item of uniqueItems) {
       // The only reason to know if a url is bookmarked is for calling
       // markPageAsFollowedBookmark, that will annotate the visit with TRANSITION_BOOKMARK.
       // But the new frecency doesn't need that info, it can derive it iself,
       // so we can just pass isBookmark: false and lose nothing
-      tabset.push({ uri, isBookmark: false });
+      tabset.push({
+        uri: item.url,
+        isBookmark: false,
+        userContextId: this.getUserContextIdToOpen(item),
+      });
     }
     lazy.PlacesUIUtils.openTabset(tabset, e, this.topWindow);
   }
 
   #deletePagesFromHistory(items) {
-    const pageGuids = new Set(items.map(item => item.pageGuid));
-    return lazy.PlacesUtils.history.remove([...pageGuids]);
+    const urlsByContainer = Map.groupBy(
+      this.#uniqueByUrlAndContainer(items),
+      item => item.userContextId ?? 0
+    );
+    return Promise.all(
+      Array.from(urlsByContainer, ([userContextId, containerItems]) =>
+        lazy.PlacesUtils.history.removeVisitsByFilter({
+          url: containerItems.map(item => item.url),
+          userContextId,
+        })
+      )
+    );
   }
 
   /**
@@ -406,7 +440,9 @@ export class SidebarHistory extends SidebarPage {
   }
 
   handleNavigateToLink(e) {
-    this.navigateToPlacesLink(e, e.originalTarget.url);
+    this.navigateToPlacesLink(e, e.originalTarget.url, {
+      userContextId: this.getUserContextIdToOpen(e.originalTarget),
+    });
     Glean.sidebar.link.history.add(1);
     this.treeView.resetSelection();
     this.treeView.selectRowInList(e.currentTarget, e.originalTarget.guid);

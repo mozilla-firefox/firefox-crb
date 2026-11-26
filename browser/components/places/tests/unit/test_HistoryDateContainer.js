@@ -183,3 +183,32 @@ add_task(async function test_yesterday_in_previous_month() {
   );
   history.unloadAll();
 });
+
+/*
+ * Tests that a page visited in several containers has one entry per container.
+ */
+add_task(async function test_userContextId() {
+  await PlacesUtils.history.clear();
+  await PlacesUtils.history.insert({
+    url: "https://example.com/",
+    visits: [
+      { date: new Date(2024, 0, 1, 10) },
+      { date: new Date(2024, 0, 1, 11), userContextId: 2 },
+      { date: new Date(2024, 0, 1, 12), userContextId: 2 },
+    ],
+  });
+  const history = await HistoryDateRegistry.create({
+    now: new Date(2024, 0, 1, 12),
+  });
+  const [container] = history.containers;
+  await container.load();
+  Assert.deepEqual(
+    container.children.map(({ date, userContextId }) => [date, userContextId]),
+    [
+      [new Date(2024, 0, 1, 12), 2],
+      [new Date(2024, 0, 1, 10), 0],
+    ],
+    "The page has one entry per container, with its most recent visit."
+  );
+  history.unloadAll();
+});

@@ -58,13 +58,14 @@ export class HistoryDateContainer extends HistoryContainerBase {
     const db = await lazy.PlacesUtils.promiseDBConnection();
     const visits = [];
     await db.executeCached(
-      `SELECT MAX(v.visit_date) AS visit_date, h.title, h.url, h.guid
+      `SELECT MAX(v.visit_date) AS visit_date, h.title, h.url, h.guid,
+              v.userContextId
        FROM moz_historyvisits v
        JOIN moz_places h ON h.id = v.place_id
        WHERE v.visit_date >= :startDate AND v.visit_date < :endDate
          AND h.hidden = 0
-       GROUP BY v.place_id
-       ORDER BY visit_date DESC, h.id DESC`,
+       GROUP BY v.place_id, v.userContextId
+       ORDER BY visit_date DESC, h.id DESC, v.userContextId`,
       {
         startDate: lazy.PlacesUtils.toPRTime(startDate),
         endDate: lazy.PlacesUtils.toPRTime(endDate),
@@ -75,6 +76,7 @@ export class HistoryDateContainer extends HistoryContainerBase {
           title: row.getResultByName("title"),
           url: row.getResultByName("url"),
           guid: row.getResultByName("guid"),
+          userContextId: row.getResultByName("userContextId"),
         });
       }
     );

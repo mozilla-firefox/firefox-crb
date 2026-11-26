@@ -2753,6 +2753,9 @@ export class Tabbrowser {
    *   The policy container that should apply to the loads.
    * @param {number} [options.userContextId]
    *   The userContextId (container identifier) to open the tabs in.
+   * @param {number[]} [options.userContextIds]
+   *   The userContextId of each tab, in the same order as `aURIs`. Entries that
+   *   are not set fall back to `userContextId`.
    * @param {boolean} [options.fromExternal]
    *   Whether the URIs were supplied to Firefox from an external application.
    * @param {boolean} [options.newWindowLoad]
@@ -2776,6 +2779,7 @@ export class Tabbrowser {
       triggeringPrincipal,
       policyContainer,
       userContextId,
+      userContextIds,
       fromExternal,
       newWindowLoad,
     } = {}
@@ -2867,7 +2871,7 @@ export class Tabbrowser {
         skipAnimation: multiple,
         allowThirdPartyFixup,
         postData: postDatas && postDatas[0],
-        userContextId,
+        userContextId: userContextIds?.[0] ?? userContextId,
         triggeringPrincipal,
         bulkOrderedOpen: multiple,
         policyContainer,
@@ -2891,7 +2895,7 @@ export class Tabbrowser {
         skipAnimation: true,
         allowThirdPartyFixup,
         postData: postDatas && postDatas[i],
-        userContextId,
+        userContextId: userContextIds?.[i] ?? userContextId,
         triggeringPrincipal,
         bulkOrderedOpen: true,
         policyContainer,
