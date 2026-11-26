@@ -869,7 +869,7 @@ class ClearClientOp final
 
   RefPtr<BoolPromise> OpenDirectory() override;
 
-  void DeleteFiles(const ClientMetadata& aClientMetadata);
+  Result<Ok, nsresult> DeleteFiles(const ClientMetadata& aClientMetadata);
 
   nsresult DoDirectoryWork(QuotaManager& aQuotaManager) override;
 
@@ -1435,6 +1435,12 @@ nsresult SaveOriginAccessTimeOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
   QM_TRY(
       OkIf(aQuotaManager.IsTemporaryOriginInitializedInternal(mOriginMetadata)),
       NS_ERROR_NOT_INITIALIZED);
+
+  // Taken before the metadata is flattened so that the upsert in
+  // CreateDirectoryMetadata2 writes the row dirty, and held across
+  // UpdateOriginAccessTime below.
+  QM_TRY_UNWRAP(const auto writeLease,
+                aQuotaManager.AcquireWriteLeaseOnIOThread(mOriginMetadata));
 
   auto maybeFullOriginMetadata =
       aQuotaManager.GetFullOriginMetadata(mOriginMetadata);
@@ -3232,32 +3238,26 @@ RefPtr<BoolPromise> ClearClientOp::OpenDirectory() {
       /* aInitializeOrigins */ false, DirectoryLockCategory::UninitClients);
 }
 
-void ClearClientOp::DeleteFiles(const ClientMetadata& aClientMetadata) {
+Result<Ok, nsresult> ClearClientOp::DeleteFiles(
+    const ClientMetadata& aClientMetadata) {
   AssertIsOnIOThread();
 
-  QM_TRY(
-      MOZ_TO_RESULT(mQuotaManager->AboutToClearOrigins(
-          PersistenceScope::CreateFromValue(aClientMetadata.mPersistenceType),
-          OriginScope::FromOrigin(aClientMetadata),
-          ClientStorageScope::CreateFromClient(aClientMetadata.mClientType))),
-      QM_VOID);
+  QM_TRY(MOZ_TO_RESULT(mQuotaManager->AboutToClearOrigins(
+      PersistenceScope::CreateFromValue(aClientMetadata.mPersistenceType),
+      OriginScope::FromOrigin(aClientMetadata),
+      ClientStorageScope::CreateFromClient(aClientMetadata.mClientType))));
 
   QM_TRY_INSPECT(const auto& directory,
-                 mQuotaManager->GetOriginDirectory(aClientMetadata), QM_VOID);
+                 mQuotaManager->GetOriginDirectory(aClientMetadata));
 
-  QM_TRY(MOZ_TO_RESULT(directory->Append(
-             Client::TypeToString(aClientMetadata.mClientType))),
-         QM_VOID);
+  QM_TRY(MOZ_TO_RESULT(
+      directory->Append(Client::TypeToString(aClientMetadata.mClientType))));
 
   QM_TRY_INSPECT(const bool& exists,
-                 MOZ_TO_RESULT_INVOKE_MEMBER(directory, Exists), QM_VOID);
+                 MOZ_TO_RESULT_INVOKE_MEMBER(directory, Exists));
   if (!exists) {
-    return;
+    return Ok{};
   }
-
-  QM_TRY(MOZ_TO_RESULT(directory->Remove(true)), QM_VOID);
-
-  mClientMetadataArray.AppendElement(aClientMetadata);
 
   const bool initialized =
       aClientMetadata.mPersistenceType == PERSISTENCE_TYPE_PERSISTENT
@@ -3265,8 +3265,22 @@ void ClearClientOp::DeleteFiles(const ClientMetadata& aClientMetadata) {
                 aClientMetadata.mOrigin)
           : mQuotaManager->IsTemporaryStorageInitializedInternal();
 
+  // The client's usage is reset once its directory is gone, so the dirty flag
+  // has to be on disk before the removal starts.
+  WriteLease writeLease;
+  if (initialized &&
+      aClientMetadata.mPersistenceType != PERSISTENCE_TYPE_PERSISTENT &&
+      mQuotaManager->IsTemporaryOriginInitializedInternal(aClientMetadata)) {
+    QM_TRY_UNWRAP(writeLease,
+                  mQuotaManager->AcquireWriteLeaseOnIOThread(aClientMetadata));
+  }
+
+  QM_TRY(MOZ_TO_RESULT(directory->Remove(true)));
+
+  mClientMetadataArray.AppendElement(aClientMetadata);
+
   if (!initialized) {
-    return;
+    return Ok{};
   }
 
   if (aClientMetadata.mPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
@@ -3276,6 +3290,7 @@ void ClearClientOp::DeleteFiles(const ClientMetadata& aClientMetadata) {
   mQuotaManager->OriginClearCompleted(
       aClientMetadata,
       ClientStorageScope::CreateFromClient(aClientMetadata.mClientType));
+  return Ok{};
 }
 
 nsresult ClearClientOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
@@ -3285,18 +3300,21 @@ nsresult ClearClientOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
   AUTO_PROFILER_LABEL("ClearClientOp::DoDirectoryWork", OTHER);
 
   if (mPersistenceScope.IsNull()) {
+    nsresult firstError = NS_OK;
     for (const PersistenceType type : kAllPersistenceTypes) {
-      DeleteFiles(ClientMetadata(OriginMetadata(mPrincipalMetadata, type),
-                                 mClientType));
+      auto result = DeleteFiles(ClientMetadata(
+          OriginMetadata(mPrincipalMetadata, type), mClientType));
+      if (result.isErr() && NS_SUCCEEDED(firstError)) {
+        firstError = result.unwrapErr();
+      }
     }
-  } else {
-    MOZ_ASSERT(mPersistenceScope.IsValue());
-
-    DeleteFiles(ClientMetadata(
-        OriginMetadata(mPrincipalMetadata, mPersistenceScope.GetValue()),
-        mClientType));
+    return firstError;
   }
 
+  MOZ_ASSERT(mPersistenceScope.IsValue());
+  QM_TRY(DeleteFiles(ClientMetadata(
+      OriginMetadata(mPrincipalMetadata, mPersistenceScope.GetValue()),
+      mClientType)));
   return NS_OK;
 }
 
@@ -3750,6 +3768,7 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
               });
 
           metadata.mPersisted = true;
+          metadata.mDirty = true;
           return metadata;
         }
       }
@@ -3793,6 +3812,10 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
                 originInfo->LockedMarkDirtyOnDisk();
               }
             });
+
+        QM_TRY_UNWRAP(
+            const auto writeLease,
+            aQuotaManager.AcquireWriteLeaseOnIOThread(originMetadata));
 
         aQuotaManager.PersistOrigin(originMetadata);
       } else {
@@ -3838,13 +3861,24 @@ nsresult PersistOp::DoDirectoryWork(QuotaManager& aQuotaManager) {
 
       fullOriginMetadata.mPersisted = true;
 
+      // If the OriginInfo exists it is updated below, so take the lease first
+      // and have the upsert write the row dirty instead of clobbering the
+      // flag the lease just recorded.
+      const bool originInitialized =
+          aQuotaManager.IsTemporaryStorageInitializedInternal() &&
+          aQuotaManager.IsTemporaryOriginInitializedInternal(originMetadata);
+
+      WriteLease writeLease;
+      if (originInitialized) {
+        QM_TRY_UNWRAP(writeLease, aQuotaManager.AcquireWriteLeaseOnIOThread(
+                                      originMetadata));
+        fullOriginMetadata.mDirty = true;
+      }
+
       QM_TRY(MOZ_TO_RESULT(aQuotaManager.CreateDirectoryMetadata2(
           *directory, fullOriginMetadata)));
 
-      // Directory metadata has been successfully updated.
-      // Update OriginInfo too if the temporary origin was already initialized.
-      if (aQuotaManager.IsTemporaryStorageInitializedInternal() &&
-          aQuotaManager.IsTemporaryOriginInitializedInternal(originMetadata)) {
+      if (originInitialized) {
         aQuotaManager.WithOriginInfo(
             originMetadata,
             [dirty = fullOriginMetadata.mDirty](const auto& originInfo) {
