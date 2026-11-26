@@ -1564,6 +1564,79 @@ nsresult nsHttpConnectionMgr::MakeNewConnection(
   return NS_OK;
 }
 
+// Whether to use InnerConnectionAttempt to establish the inner connection.
+// A consumer that takes the tunnel itself stays on the legacy path for now:
+// connect-only wants the CONNECT response on its own transaction, and a
+// WebSocket or WebTransport upgrade needs an extended CONNECT stream when the
+// connection carrying it is HTTP/2.
+static bool ShouldUseInnerConnectionAttempt(nsHttpConnectionInfo* aCi,
+                                            nsHttpTransaction* aTrans) {
+  return StaticPrefs::network_http_happy_eyeballs_tunnel_enabled() &&
+         aCi->UsingHttpsProxy() && aCi->UsingConnect() &&
+         !aTrans->IsWebsocketUpgrade() && !aTrans->IsForWebTransport() &&
+         !(aTrans->Caps() & NS_HTTP_CONNECT_ONLY);
+}
+
+nsresult nsHttpConnectionMgr::TryStartInnerConnection(
+    ConnectionEntry* aEnt, PendingTransactionInfo* aPendingTransInfo) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+
+  nsHttpTransaction* trans = aPendingTransInfo->Transaction();
+  nsHttpConnectionInfo* ci = aEnt->mConnInfo;
+  MOZ_ASSERT(ShouldUseInnerConnectionAttempt(ci, trans),
+             "a transaction on the legacy path must not get here");
+
+  // The proxy refused this transaction's CONNECT over HTTP/2, so it needs a
+  // fresh outer connection instead of the shared HTTP/2 one in the wildcard
+  // entry. Declining here leaves that to MakeNewConnection.
+  if (trans->Caps() & NS_HTTP_DISALLOW_HTTP2_PROXY) {
+    LOG(("TryStartInnerConnection needs a fresh outer connection [trans=%p]",
+         trans));
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  RefPtr<nsHttpConnectionInfo> wildCardCI;
+  if (NS_FAILED(ci->CreateWildCard(getter_AddRefs(wildCardCI)))) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+  // The wildcard entry itself: its connections are the outer ones.
+  if (wildCardCI->HashKey().Equals(ci->HashKey())) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  ConnectionEntry* wcEnt = mCT.GetWeak(wildCardCI->HashKey());
+  if (!wcEnt) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  bool isHttp3Proxy = ci->IsHttp3ProxyConnection();
+  RefPtr<HttpConnectionBase> outer =
+      GetH2orH3ActiveConn(wcEnt, isHttp3Proxy, !isHttp3Proxy);
+  if (!outer) {
+    outer = GetH2orH3ActiveConn(wcEnt, false, false);
+  }
+  if (!outer) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  if (AtActiveConnectionLimit(aEnt, trans->Caps(), true)) {
+    LOG(("TryStartInnerConnection at limit [ci=%s]", ci->HashKey().get()));
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  if (!(trans->Caps() & NS_HTTP_DISALLOW_SPDY) &&
+      (trans->Caps() & NS_HTTP_ALLOW_KEEPALIVE) &&
+      aEnt->RestrictConnections()) {
+    LOG(("TryStartInnerConnection restricted [ci=%s]", ci->HashKey().get()));
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  LOG(("TryStartInnerConnection [trans=%p outer=%p ci=%s]", trans, outer.get(),
+       ci->HashKey().get()));
+  return aEnt->StartInnerConnectionEstablishment(trans, trans->Caps(), outer,
+                                                 aPendingTransInfo);
+}
+
 // returns OK if a connection is found for the transaction
 //   and the transaction is started.
 // returns ERROR_NOT_AVAILABLE if no connection can be found and it
@@ -1769,6 +1842,26 @@ nsresult nsHttpConnectionMgr::TryDispatchTransaction(
   // true or when echConfig is enabled.
   if (trans->WaitingForHTTPSRR()) {
     return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  // step 3.5
+  // The outer proxy connection lives on the wildcard entry, which only
+  // ProcessNewTransaction's isWildcard path looks at. An already pending
+  // transaction never goes through that again, so MakeNewConnection below
+  // would just build a second outer proxy connection.
+  if (!onlyReusedConnection &&
+      ShouldUseInnerConnectionAttempt(ent->mConnInfo, trans)) {
+    nsresult rv = TryStartInnerConnection(ent, pendingTransInfo);
+    if (NS_SUCCEEDED(rv)) {
+      // Asynchronous like step 4; the transaction stays queued.
+      LOG(("   dispatched step 3.5 (async inner conn) trans=%p\n", trans));
+      return NS_ERROR_NOT_AVAILABLE;
+    }
+    if (rv != NS_ERROR_NOT_AVAILABLE) {
+      LOG(("   failed step 3.5 (%" PRIx32 ") trans=%p\n",
+           static_cast<uint32_t>(rv), trans));
+      return rv;
+    }
   }
 
   // step 4
@@ -2134,6 +2227,16 @@ nsresult nsHttpConnectionMgr::ProcessNewTransaction(nsHttpTransaction* trans) {
         MOZ_ASSERT(false, "wildcard entry has no connection to tunnel through");
         LOG(("no active conn for proxy tunnel; pending trans=%p", trans));
         rv = NS_ERROR_NOT_AVAILABLE;
+      } else if (ShouldUseInnerConnectionAttempt(ent->mConnInfo, trans)) {
+        // Publish only once CONNECT, and the inner handshake for an https
+        // origin, have succeeded.
+        pendingTransInfo = new PendingTransactionInfo(trans);
+        rv = ent->StartInnerConnectionEstablishment(trans, trans->Caps(), conn,
+                                                    pendingTransInfo);
+        if (NS_SUCCEEDED(rv)) {
+          // The attempt takes it back out of the pending queue.
+          rv = NS_ERROR_NOT_AVAILABLE;
+        }
       } else {
         RefPtr<HttpConnectionBase> newTunnel;
         conn->CreateTunnelStream(trans, getter_AddRefs(newTunnel));
