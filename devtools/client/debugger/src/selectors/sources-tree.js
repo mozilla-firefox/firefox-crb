@@ -52,7 +52,7 @@ export const getDisplayedSourcesList = createSelector(
   roots => {
     const sources = [];
     function walk(item) {
-      if (item.type == sourceTree.itemTypes.SOURCE) {
+      if (item.type == sourceTree.itemTypes.SOURCE){
         sources.push(item.source);
       } else {
         for (const child of item.children) {

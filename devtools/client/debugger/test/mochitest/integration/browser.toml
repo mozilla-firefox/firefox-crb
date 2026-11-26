@@ -31,6 +31,11 @@ fail-if = [
 
 ["browser_dbg-features-edit-stylesheets.js"]
 
+["browser_dbg-features-inline-stylesheets.js"]
+fail-if = [
+  "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
+]
+
 ["browser_dbg-features-source-text-content.js"]
 
 ["browser_dbg-features-source-tree.js"]
