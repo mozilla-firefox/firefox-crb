@@ -1363,6 +1363,9 @@ def write_source_repo(topobjdir, topsrcdir, substs):
 
 BUILD_STEPS = {
     "artifact": lambda substs: substs.get("MOZ_ARTIFACT_BUILDS"),
+    "android-fat-aar-artifact": lambda substs: substs.get(
+        "MOZ_ANDROID_FAT_AAR_ARCHITECTURES"
+    ),
 }
 
 
@@ -1381,7 +1384,7 @@ def select_build_steps(what, substs, directory=None):
     return steps, targets
 
 
-def build_step_command(step, substs, topsrcdir, verbose):
+def build_step_command(step, substs, environ, topsrcdir, topobjdir, verbose):
     if step == "artifact":
         command = [
             mozpath.join(topsrcdir, "mach"),
@@ -1393,6 +1396,22 @@ def build_step_command(step, substs, topsrcdir, verbose):
             command.append("--symbols=full" if symbols == "full" else "--symbols")
         if not substs.get("ENABLE_TESTS"):
             command.append("--no-tests")
+    elif step == "android-fat-aar-artifact":
+        android = substs["MOZ_ANDROID_FAT_AAR_ARCHITECTURES"]
+        command = [
+            "-m",
+            "mozbuild.action.fat_aar",
+            "--android-architectures",
+            *android,
+        ]
+        if desktop := substs.get("MOZ_ANDROID_FAT_AAR_DESKTOP_ARCHITECTURES", []):
+            command += ["--desktop-architectures", *desktop]
+        for prefix, archs in (("", android), ("DESKTOP_", desktop)):
+            for arch in archs:
+                var = f"MOZ_ANDROID_FAT_AAR_{prefix}{arch.upper().replace('-', '_')}"
+                if path := environ.get(var):
+                    command += [f"--{arch.replace('_', '-')}", path]
+        command += ["--distdir", mozpath.join(topobjdir, "dist", "fat-aar")]
     else:
         raise ValueError(f"Unknown build step: {step}")
     if verbose:
@@ -2197,7 +2216,14 @@ class BuildDriver(MozbuildObject):
         for step in steps:
             output.on_stdout_line(f"BUILDSTATUS TIER_START {step}")
             status = self.run_process(
-                build_step_command(step, substs, self.topsrcdir, verbose),
+                build_step_command(
+                    step,
+                    substs,
+                    {**os.environ, **(append_env or {})},
+                    self.topsrcdir,
+                    self.topobjdir,
+                    verbose,
+                ),
                 cwd=self.topobjdir,
                 append_env=append_env,
                 line_handler=output.on_stdout_line,
