@@ -34,9 +34,16 @@ from . import GECKO
 from .actions import render_actions_json
 from .files_changed import get_changed_files
 from .parameters import get_app_version, get_version
-from .util.backstop import ANDROID_PERFTEST_BACKSTOP_INDEX, BACKSTOP_INDEX, is_backstop
+from .util.backstop import (
+    ANDROID_PERFTEST_BACKSTOP_INDEX,
+    BACKSTOP_INDEX,
+    is_backstop,
+    is_expanded,
+)
 from .util.bugbug import (
     PUSH_SCHEDULES_ENV,
+    PushDataUnavailable,
+    previous_push_schedules,
     push_schedules,
     read_push_schedules_data,
     start_push_schedules,
@@ -256,6 +263,8 @@ def taskgraph_decision(options, parameters, bugbug_result_path=None):
 
     decision_task_id = os.environ["TASK_ID"]
 
+    prefetch_previous_push_schedules(parameters)
+
     with source_bundle(parameters["head_rev"], parameters["repository_type"]):
         # create a TaskGraphGenerator instance
         tgg = TaskGraphGenerator(
@@ -443,6 +452,8 @@ def get_decision_parameters(graph_config, options):
     parameters["release_enable_emefree"] = False
     parameters["release_product"] = None
     parameters["test_manifest_loader"] = "default"
+    parameters["bugbug_confidence_threshold"] = "low"
+    parameters["bugbug_num_pushes"] = 1
     parameters["try_mode"] = None
     parameters["try_task_config"] = {}
 
@@ -507,6 +518,12 @@ def get_decision_parameters(graph_config, options):
 
     # Determine if this should be a backstop push.
     parameters["backstop"] = is_backstop(parameters)
+
+    # Expanded autoland pushes run the tests bugbug selects for the last 10 pushes,
+    # at a lower threshold.
+    if project == "autoland" and is_expanded(parameters):
+        parameters["bugbug_confidence_threshold"] = "very_low"
+        parameters["bugbug_num_pushes"] = 10
 
     # For the android perf tasks, run them 50% less often
     parameters["android_perftest_backstop"] = is_backstop(
@@ -605,6 +622,27 @@ def get_git_files_changed(repo, parameters):
             SystemResourceMonitor.end_marker("git", text)
 
     return repo.get_changed_files(rev=parameters["head_rev"], base=base_rev)
+
+
+def prefetch_previous_push_schedules(parameters):
+    """Fetch bugbug's replies for the pushes before the current one, if the test
+    kinds use them, so that the processes loading the kinds share them."""
+    if (
+        create.testing
+        or parameters["test_manifest_loader"] != "bugbug"
+        or parameters["bugbug_num_pushes"] == 1
+    ):
+        return
+
+    try:
+        previous_push_schedules(
+            parameters["head_repository"],
+            parameters["project"],
+            int(parameters["pushlog_id"]),
+            parameters["bugbug_num_pushes"],
+        )
+    except PushDataUnavailable:
+        logger.exception("Failed to get bugbug's results for the previous pushes")
 
 
 @contextmanager

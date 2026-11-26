@@ -65,6 +65,8 @@ class GeckoParametersSchema(Schema, kw_only=True, rename=None):
     android_perftest_backstop: bool
     app_version: str
     backstop: bool
+    bugbug_confidence_threshold: Literal["very_low", "low", "medium", "high"]
+    bugbug_num_pushes: int
     dontbuild: bool
     build_number: int
     enable_always_target: Union[bool, list[str]]
@@ -115,6 +117,8 @@ def get_defaults(repo_root=None):
         "android_perftest_backstop": False,
         "app_version": get_app_version(),
         "backstop": False,
+        "bugbug_confidence_threshold": "low",
+        "bugbug_num_pushes": 1,
         "dontbuild": False,
         "base_repository": "https://hg.mozilla.org/mozilla-unified",
         "build_number": 1,

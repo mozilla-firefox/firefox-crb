@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from mozunit import main
 
-from gecko_taskgraph.util import chunking
+from gecko_taskgraph.util import bugbug, chunking
 
 pytestmark = pytest.mark.slow
 
@@ -570,6 +570,63 @@ def test_get_manifests_non_testharness_keeps_subsuites(platform, mock_mozinfo):
     assert any(m.startswith("/html/canvas") for m in active)
 
 
+@pytest.fixture
+def bugbug_loader_manifests():
+    default_manifests = {
+        "active": ["a.toml", "b.toml", "c.toml", "d.toml"],
+        "skipped": [],
+        "other_dirs": {},
+    }
+    with patch.object(
+        chunking.DefaultLoader, "get_manifests", return_value=default_manifests
+    ):
+        yield
+
+
+BUGBUG_LOADER_PARAMS = {
+    "backstop": False,
+    "bugbug_num_pushes": 1,
+    "bugbug_confidence_threshold": "low",
+    "head_repository": "https://hg.mozilla.org/integration/autoland",
+    "head_rev": "rev10",
+    "project": "autoland",
+    "pushlog_id": 10,
+}
+
+# The replies of bugbug for the pushes up to the 10th one.
+BUGBUG_REPLIES = {
+    "rev1": {"groups": {"d.toml": 0.75}},
+    "rev9": {"groups": {"c.toml": 0.75}},
+    "rev10": {
+        "groups": {"a.toml": 0.95, "b.toml": 0.75, "c.toml": 0.2},
+        "confidence_thresholds": {
+            "groups": {"very_low": 0.4, "low": 0.6, "medium": 0.8}
+        },
+    },
+}
+
+
+@pytest.fixture(autouse=True)
+def clear_previous_push_schedules():
+    bugbug.previous_push_schedules.cache_clear()
+    yield
+    bugbug.previous_push_schedules.cache_clear()
+
+
+@pytest.fixture
+def bugbug_replies(monkeypatch):
+    push_data = {push_id: {"changesets": [f"rev{push_id}"]} for push_id in range(1, 10)}
+    monkeypatch.setattr(
+        bugbug, "push_schedules", lambda _, rev: BUGBUG_REPLIES.get(rev, {})
+    )
+    monkeypatch.setattr(
+        bugbug,
+        "_fetch_push_schedules",
+        lambda _, rev, session, **kwargs: BUGBUG_REPLIES.get(rev, {}),
+    )
+    monkeypatch.setattr(bugbug, "get_push_data", lambda *args: push_data)
+
+
 @pytest.mark.parametrize(
     "bugbug_data,expected",
     [
@@ -583,21 +640,54 @@ def test_get_manifests_non_testharness_keeps_subsuites(platform, mock_mozinfo):
         ),
     ],
 )
-def test_bugbug_loader_confidence_thresholds(bugbug_data, expected):
-    params = {"backstop": False, "project": "autoland", "head_rev": "abcdef"}
-    loader = chunking.BugbugLoader(params)
-    default_manifests = {
-        "active": ["a.toml", "b.toml", "c.toml"],
-        "skipped": [],
-        "other_dirs": {},
-    }
-    with patch.object(
-        chunking.DefaultLoader, "get_manifests", return_value=default_manifests
-    ):
-        with patch.object(chunking, "push_schedules", return_value=bugbug_data):
-            manifests = loader.get_manifests("xpcshell", frozenset())
+def test_bugbug_loader_confidence_thresholds(
+    bugbug_loader_manifests, bugbug_data, expected
+):
+    loader = chunking.BugbugLoader(BUGBUG_LOADER_PARAMS)
+    with patch.object(bugbug, "push_schedules", return_value=bugbug_data):
+        manifests = loader.get_manifests("xpcshell", frozenset())
 
     assert sorted(manifests["active"]) == expected
+
+
+@pytest.mark.parametrize(
+    "threshold,pushes,expected",
+    [
+        pytest.param("low", 1, ["a.toml", "b.toml"], id="low"),
+        pytest.param("medium", 1, ["a.toml"], id="medium"),
+        pytest.param(
+            "very_low", 10, ["a.toml", "b.toml", "c.toml", "d.toml"], id="expanded"
+        ),
+    ],
+)
+def test_bugbug_loader_manifest_selection(
+    bugbug_loader_manifests, bugbug_replies, threshold, pushes, expected
+):
+    params = dict(
+        BUGBUG_LOADER_PARAMS,
+        bugbug_confidence_threshold=threshold,
+        bugbug_num_pushes=pushes,
+    )
+    loader = chunking.BugbugLoader(params)
+    manifests = loader.get_manifests("xpcshell", frozenset())
+
+    assert sorted(manifests["active"]) == expected
+
+
+def test_bugbug_loader_push_data_unavailable(
+    monkeypatch, bugbug_loader_manifests, bugbug_replies
+):
+    """All manifests are loaded when the previous pushes can't be retrieved."""
+    monkeypatch.setattr(bugbug, "get_push_data", lambda *args: None)
+    params = dict(
+        BUGBUG_LOADER_PARAMS,
+        bugbug_confidence_threshold="very_low",
+        bugbug_num_pushes=10,
+    )
+    loader = chunking.BugbugLoader(params)
+    manifests = loader.get_manifests("xpcshell", frozenset())
+
+    assert sorted(manifests["active"]) == ["a.toml", "b.toml", "c.toml", "d.toml"]
 
 
 if __name__ == "__main__":

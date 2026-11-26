@@ -11,7 +11,7 @@ task.
 See ``taskcluster/docs/optimization.rst`` for more information.
 """
 
-from taskgraph.optimize.base import Alias, All, Any, Not, register_strategy
+from taskgraph.optimize.base import Alias, All, Any, register_strategy
 from taskgraph.util.python_path import import_sibling_modules
 
 from gecko_taskgraph.optimize.perf_batching import (
@@ -83,49 +83,15 @@ class project:
     """Strategies that should be applied per-project."""
 
     autoland = {
-        "test": Any(
-            # This `Any` strategy implements bi-modal behaviour. It allows different
-            # strategies on expanded pushes vs regular pushes.
-            # This first `All` handles "expanded" pushes.
-            All(
-                # There are three substrategies in this `All`, the first two act as barriers
-                # that help determine when to apply the third:
-                # 1. On backstop pushes, `skip-unless-backstop` returns False. Therefore
-                #    the overall composite strategy is False and we don't optimize.
-                # 2. On regular pushes, `Not('skip-unless-expanded')` returns False. Therefore
-                #    the overall composite strategy is False and we don't optimize.
-                # 3. On expanded pushes, the third strategy will determine whether or
-                #    not to optimize each individual task.
-                # The barrier strategies.
-                "skip-unless-backstop",
-                Not("skip-unless-expanded"),
-                # The actual test strategy applied to "expanded" pushes.
-                Any(
-                    "skip-unless-schedules",
-                    "bugbug-reduced-manifests-fallback-last-10-pushes",
-                    "platform-disperse",
-                    split_args=split_bugbug_arg,
-                ),
-            ),
-            # This second `All` handles regular (aka not expanded or backstop)
-            # pushes.
-            All(
-                # There are two substrategies in this `All`, the first acts as a barrier
-                # that determines when to apply the second:
-                # 1. On expanded pushes (which includes backstops), `skip-unless-expanded`
-                #    returns False. Therefore the overall composite strategy is False and we
-                #    don't optimize.
-                # 2. On regular pushes, the second strategy will determine whether or
-                #    not to optimize each individual task.
-                # The barrier strategy.
-                "skip-unless-expanded",
-                # The actual test strategy applied to regular pushes.
-                Any(
-                    "skip-unless-schedules",
-                    "bugbug-reduced-manifests-fallback-low",
-                    "platform-disperse",
-                    split_args=split_bugbug_arg,
-                ),
+        # On expanded pushes, the decision task lowers the confidence threshold and
+        # increases the number of pushes bugbug selects manifests with.
+        "test": All(
+            "skip-unless-backstop",
+            Any(
+                "skip-unless-schedules",
+                "bugbug-reduced-manifests-fallback",
+                "platform-disperse",
+                split_args=split_bugbug_arg,
             ),
         ),
         "build": All(
