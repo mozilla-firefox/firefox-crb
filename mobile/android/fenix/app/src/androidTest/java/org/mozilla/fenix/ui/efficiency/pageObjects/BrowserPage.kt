@@ -436,12 +436,45 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         return this
     }
 
-    fun continueToHttpSite(): BrowserPage {
-        // The HTTPS-Only error page renders its buttons only once the HTTP->HTTPS upgrade has failed,
-        // which lands after navigateToPage() has already returned on engineView. mozClick does a single
-        // non-polling lookup, so wait for the button to render first, otherwise the click races it.
-        verifyPageContent(HTTPS_ERROR_CONTINUE)
-        return clickPageContent(HTTPS_ERROR_CONTINUE)
+    /**
+     * Tap "Continue to HTTP Site" on the HTTPS-Only interstitial and confirm the plain-HTTP [host] page loaded,
+     * reloading [url] between attempts. The tap on this GeckoView button can fail or land as a no-op; it is best-effort
+     * (a prior attempt may already have set the session exception, so the reload has no button to tap) and
+     * [verifyHttpSiteLoaded] is the real confirmation.
+     */
+    fun continueToHttpSiteUntilLoaded(url: String, host: String, attempts: Int = 3): BrowserPage {
+        for (attempt in 1..attempts) {
+            try {
+                clickPageContentIfPresent(HTTPS_ERROR_CONTINUE)
+                // Right after the tap the interstitial was just here, so a short stay-gone window is enough to tell a
+                // real dismissal from a no-op tap (which leaves the button up and fails fast into a reload).
+                return verifyHttpSiteLoaded(host, interstitialGrace = waitingTimeShort)
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i(
+                    "BrowserPage",
+                    "continueToHttpSiteUntilLoaded: HTTP page not loaded on attempt $attempt, reloading",
+                )
+                navigateToPage(url, forceNavigation = true)
+            }
+        }
+        return this
+    }
+
+    /**
+     * Assert the plain-HTTP [host] page is showing, not the HTTPS-Only interstitial. The interstitial body embeds the
+     * host too, so the distinguishing signal is the "Continue to HTTP Site" button: wait for content, then require that
+     * button to *stay* gone over [interstitialGrace] (a plain wait-until-absent would pass on the frame before the
+     * interstitial repaints). On a fresh navigation the interstitial paints only once the HTTPS upgrade resolves, so
+     * the default window is generous; right after an explicit Continue tap a short window suffices.
+     */
+    fun verifyHttpSiteLoaded(host: String, interstitialGrace: Long = waitingTime): BrowserPage {
+        verifyPageContent(host)
+        mozVerifyElementStaysAbsent(
+            BrowserPageSelectors.PAGE_CONTENT(HTTPS_ERROR_CONTINUE),
+            timeout = interstitialGrace,
+        )
+        return this
     }
 
     fun verifyOpenLinkInAppPrompt(appName: String): BrowserPage {

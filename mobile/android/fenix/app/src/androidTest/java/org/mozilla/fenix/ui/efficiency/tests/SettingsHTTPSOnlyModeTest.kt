@@ -58,7 +58,9 @@ class SettingsHTTPSOnlyModeTest : BaseTest() {
             .verifyPageContentWithReload("http://permission.site/", "permission.site")
 
         on.searchBar.navigateToPage()
-        on.browserPage.navigateToPage("http.badssl.com").continueToHttpSite().verifyPageContent("http.badssl.com")
+        on.browserPage
+            .navigateToPage("http.badssl.com")
+            .continueToHttpSiteUntilLoaded(url = "http.badssl.com", host = "http.badssl.com")
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/2091057
@@ -74,10 +76,9 @@ class SettingsHTTPSOnlyModeTest : BaseTest() {
         on.browserPage
             .navigateToPage("http.badssl.com")
             .verifyPageContent("Secure site not available")
-            .clickPageContent("Continue to HTTP Site")
-            .verifyPageContent("http.badssl.com")
+            .continueToHttpSiteUntilLoaded(url = "http.badssl.com", host = "http.badssl.com")
         on.tabDrawer.navigateToPage().closeAllTabs()
         on.home.navigateToPage()
-        on.browserPage.navigateToPage("http.badssl.com").verifyPageContent("http.badssl.com")
+        on.browserPage.navigateToPage("http.badssl.com").verifyHttpSiteLoaded("http.badssl.com")
     }
 }
