@@ -2565,12 +2565,14 @@ bool Instance::init(JSContext* cx, const JSObjectVector& funcImports,
 
   // Initialize the hotness counters, if relevant.
   if (code().mode() == CompileMode::LazyTiering) {
-    // Computing the initial hotness counters requires the code section size.
-    const size_t codeSectionSize = codeMeta().codeSectionSize();
+    auto sharedCounters = code().lockSharedHotnessCounters();
     for (uint32_t funcIndex = codeMeta().numFuncImports;
          funcIndex < codeMeta().numFuncs(); funcIndex++) {
-      funcDefInstanceData(funcIndex)->hotnessCounter =
-          computeInitialHotnessCounter(funcIndex, codeSectionSize);
+      int32_t shared =
+          sharedCounters->get()[funcIndex - codeMeta().numFuncImports];
+      setLocalHotnessCounter(
+          funcIndex,
+          std::clamp(shared, 0, localCounterInitialValue(funcIndex)));
     }
   }
 
@@ -2958,6 +2960,11 @@ bool Instance::init(JSContext* cx, const JSObjectVector& funcImports,
 Instance::~Instance() {
   realm_->wasm.unregisterInstance(*this);
 
+  if (code().mode() == CompileMode::LazyTiering) {
+    // Transfer local hotness information to the shared counter.
+    flushHotnessCounters();
+  }
+
   if (debugFilter_) {
     js_free(debugFilter_);
   }
@@ -2978,21 +2985,70 @@ bool Instance::isInterrupted() const { return interrupt_; }
 
 void Instance::resetInterrupt() { interrupt_ = false; }
 
-int32_t Instance::computeInitialHotnessCounter(uint32_t funcIndex,
-                                               size_t codeSectionSize) {
-  MOZ_ASSERT(code().mode() == CompileMode::LazyTiering);
-  MOZ_ASSERT(codeSectionSize > 0);
-  uint32_t bodyLength = codeTailMeta().funcDefRange(funcIndex).size();
-  return LazyTieringHeuristics::estimateIonCompilationCost(bodyLength,
-                                                           codeSectionSize);
+// Subtracts `used` from `*counter`, saturating at INT32_MIN.
+static void SubtractHotness(int32_t* counter, int64_t used) {
+  *counter = int32_t(std::max(int64_t(*counter) - used, int64_t(INT32_MIN)));
 }
 
-void Instance::resetHotnessCounter(uint32_t funcIndex) {
-  funcDefInstanceData(funcIndex)->hotnessCounter = INT32_MAX;
+int32_t Instance::localCounterInitialValue(uint32_t funcIndex) const {
+  return LazyTieringHeuristics::localCounterInitialValue(
+      code().initialHotnessCounter(funcIndex));
+}
+
+void Instance::setLocalHotnessCounter(uint32_t funcIndex, int32_t value) {
+  FuncDefInstanceData* data = funcDefInstanceData(funcIndex);
+  data->hotnessCounter = value;
+  data->hotnessCounterStart = value;
 }
 
 int32_t Instance::readHotnessCounter(uint32_t funcIndex) const {
   return funcDefInstanceData(funcIndex)->hotnessCounter;
+}
+
+bool Instance::transferHotnessCounter(uint32_t funcIndex) {
+  FuncDefInstanceData* data = funcDefInstanceData(funcIndex);
+  MOZ_ASSERT(data->hotnessCounter < 0);
+
+  // Another instance already requested tier-up for this function.
+  if (code().tierUpRequested(funcIndex)) {
+    setLocalHotnessCounter(funcIndex, INT32_MAX);
+    return false;
+  }
+
+  int64_t used = int64_t(data->hotnessCounterStart) - data->hotnessCounter;
+  int32_t initialValue = localCounterInitialValue(funcIndex);
+  bool requestTierUp = false;
+  int32_t next;
+  {
+    auto sharedCounters = code().lockSharedHotnessCounters();
+    int32_t* shared =
+        &sharedCounters->get()[funcIndex - codeMeta().numFuncImports];
+    SubtractHotness(shared, used);
+    if (*shared < 0) {
+      // Defer duplicate requests as long as possible.
+      *shared = INT32_MAX;
+      next = INT32_MAX;
+      requestTierUp = true;
+    } else {
+      next = std::min(*shared, initialValue);
+    }
+  }
+  setLocalHotnessCounter(funcIndex, next);
+  return requestTierUp;
+}
+
+void Instance::flushHotnessCounters() {
+  MOZ_ASSERT(code().mode() == CompileMode::LazyTiering);
+  auto sharedCounters = code().lockSharedHotnessCounters();
+  for (uint32_t funcIndex = codeMeta().numFuncImports;
+       funcIndex < codeMeta().numFuncs(); funcIndex++) {
+    FuncDefInstanceData* data = funcDefInstanceData(funcIndex);
+    int64_t used = int64_t(data->hotnessCounterStart) - data->hotnessCounter;
+    if (used > 0) {
+      SubtractHotness(
+          &sharedCounters->get()[funcIndex - codeMeta().numFuncImports], used);
+    }
+  }
 }
 
 void Instance::submitCallRefHints(uint32_t funcIndex) {

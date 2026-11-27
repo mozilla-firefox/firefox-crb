@@ -359,6 +359,7 @@ struct FuncState {
   mozilla::Atomic<TierUpState> tierUpState;
 };
 using FuncStatesPointer = mozilla::UniquePtr<FuncState[], JS::FreePolicy>;
+using HotnessCountersPointer = mozilla::UniquePtr<int32_t[], JS::FreePolicy>;
 
 // LazyFuncExport helps to efficiently lookup a CodeRange from a given function
 // index. It is inserted in a vector sorted by function index, to perform
@@ -847,6 +848,12 @@ class Code : public ShareableBase<Code> {
   // only needed if we're doing partial tiering.
   mutable FuncStatesPointer funcStates_;
 
+  // Lazy tiering hotness counters for every defined function, indexed by
+  // funcIndex - numFuncImports and shared by all instances of this module.
+  // Only allocated for lazy tiering. See [SMDOC] WebAssembly baseline
+  // compiler, Lazy Tier-Up mechanism, point (11).
+  ExclusiveData<HotnessCountersPointer> sharedHotnessCounters_;
+
   FuncImportVector funcImports_;
   ExclusiveData<CacheableCharsVector> profilingLabels_;
   JumpTables jumpTables_;
@@ -939,6 +946,21 @@ class Code : public ShareableBase<Code> {
     FuncState& state = funcStates_[funcIndex - codeMeta_->numFuncImports];
     return state.tierUpState.compareExchange(TierUpState::NotRequested,
                                              TierUpState::Requested);
+  }
+
+  bool tierUpRequested(uint32_t funcIndex) const {
+    MOZ_ASSERT(mode_ == CompileMode::LazyTiering);
+    FuncState& state = funcStates_[funcIndex - codeMeta_->numFuncImports];
+    return state.tierUpState != TierUpState::NotRequested;
+  }
+
+  // The initial value of the shared hotness counter for `funcIndex`.
+  int32_t initialHotnessCounter(uint32_t funcIndex) const;
+
+  using HotnessCountersGuard = ExclusiveData<HotnessCountersPointer>::Guard;
+  HotnessCountersGuard lockSharedHotnessCounters() const {
+    MOZ_ASSERT(mode_ == CompileMode::LazyTiering);
+    return sharedHotnessCounters_.lock();
   }
 
   CompileMode mode() const { return mode_; }

@@ -253,6 +253,11 @@ class alignas(16) Instance {
 
   // Internal helpers:
   FuncDefInstanceData* funcDefInstanceData(uint32_t funcIndex) const;
+  int32_t localCounterInitialValue(uint32_t funcIndex) const;
+  void setLocalHotnessCounter(uint32_t funcIndex, int32_t value);
+  // Adds the work counted by the local hotness counters, but not yet
+  // transferred, to the shared counters in the Code.
+  void flushHotnessCounters();
   TypeDefInstanceData* typeDefInstanceData(uint32_t typeIndex) const;
   const void* addressOfGlobalCell(const GlobalDesc& globalDesc) const;
   FuncImportInstanceData& funcImportInstanceData(uint32_t funcIndex);
@@ -425,10 +430,11 @@ class alignas(16) Instance {
     hasAllocationMetadataBuilder_ = hasBuilder;
   }
 
-  int32_t computeInitialHotnessCounter(uint32_t funcIndex,
-                                       size_t codeSectionSize);
-  void resetHotnessCounter(uint32_t funcIndex);
   int32_t readHotnessCounter(uint32_t funcIndex) const;
+  // Transfers the work counted by the (negative) local hotness counter of
+  // `funcIndex` to the shared counter in the Code, and restarts the local
+  // counter.  Returns true if the function should request tier-up.
+  bool transferHotnessCounter(uint32_t funcIndex);
   void submitCallRefHints(uint32_t funcIndex);
 
   // Reset this instance's pretenured allocation sites so that they allocate in

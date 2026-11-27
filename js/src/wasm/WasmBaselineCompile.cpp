@@ -69,9 +69,14 @@
  *     FuncDefInstanceData::hotnessCounter.  These are stored in an array in
  *     the Instance.  Hence access to them is fast and thread-local.
  *
- * (2) On instantiation, the counters are set to some positive number
- *     (Instance::init, Instance::computeInitialHotnessCounter), which is a
- *     very crude estimate of the cost of Ion compilation of the function.
+ * (2) Each function also has a counter shared by all Instances of the module,
+ *     in Code::sharedHotnessCounters_ and protected by a lock.  When the Code
+ *     is created, these are set to some positive number
+ *     (Code::initialHotnessCounter), which is a very crude estimate of the
+ *     cost of Ion compilation of the function.  On instantiation, the
+ *     Instance's counters (1) are set to a fraction of that estimate
+ *     (LazyTieringHeuristics::localCounterInitialValue), or to the remaining
+ *     shared count if that is smaller. See (11).
  *
  * (3) In baseline compilation, a function decrements its counter at every
  *     entry (BaseCompiler::beginFunction) and at the start of every loop
@@ -97,10 +102,13 @@
  *     GenerateRequestTierUpStub.  This saves all registers and calls onwards
  *     to WasmHandleRequestTierUp in C++-land.
  *
- * (8) WasmHandleRequestTierUp figures out which function in which Instance is
- *     requesting tier-up.  It sets the function's counter (1) to the largest
- *     possible value, which is 2^31-1.  It then calls onwards to
- *     Code::requestTierUp, which requests off-thread Ion compilation of the
+ * (8) WasmHandleRequestTierUp figures out which function in which Instance has
+ *     a negative counter (1).  Instance::consumeHotnessCounter subtracts the
+ *     work counted by it from the shared counter (2).  If that is still
+ *     non-negative, the Instance's counter is restarted and we return.
+ *     Otherwise, it sets both counters to the largest possible value, which is
+ *     2^31-1, and the function is requesting tier-up.  It then calls onwards
+ *     to Code::requestTierUp, which requests off-thread Ion compilation of the
  *     function, then immediately returns.
  *
  * (9) It is important that (8) sets the counter to 2^31-1 (as close to
@@ -120,12 +128,18 @@
  *      ignore duplicate requests.
  *
  * (11) Each Instance of a Module runs in its own thread and has its own array
- *      of counters.  This makes the counter updating thread-local and cheap.
- *      But it means that, if a Module has multiple threads (Instances), it
- *      could be that a function never gets hot enough to request tier up,
- *      because it is not hot enough in any single thread, even though the
- *      total hotness summed across all threads is enough to request tier up.
- *      Whether this inaccuracy is a problem in practice remains to be seen.
+ *      of counters (1).  This makes the counter updating thread-local and
+ *      cheap, and avoids cache-line bouncing between cores when several
+ *      Instances run the same functions in parallel.  The shared counters (2)
+ *      give a global view of hotness, so a function is tiered up if it is
+ *      hot across all Instances, even if not in a single Instance.
+ *      Since the Instance counters only start at a fraction of
+ *      the shared ones, the lock is taken a handful of times per function
+ *      before tier-up, and not at all once tier-up has been requested.  When
+ *      an Instance dies, the work counted by its counters but not yet
+ *      transferred is subtracted from the shared counters
+ *      (Instance::flushHotnessCounters).  The shared view is approximate: work
+ *      counted by live Instances is only transferred in chunks.
  *
  * (12) Code::requestTierUp (8) creates a PartialTier2CompileTask and queues it
  *      for execution.  It does not do the compilation itself.

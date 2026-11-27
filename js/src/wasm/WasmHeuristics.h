@@ -112,6 +112,14 @@ class LazyTieringHeuristics {
     }
     MOZ_CRASH();
   }
+
+  // The amount of work an instance counts locally before transferring it to
+  // the function's shared counter, given that counter's initial value.  See
+  // "[SMDOC] WebAssembly baseline compiler, Lazy Tier-Up mechanism".
+  static int32_t localCounterInitialValue(int32_t initialSharedCounter) {
+    MOZ_ASSERT(initialSharedCounter >= 0);
+    return initialSharedCounter / 10;
+  }
 };
 
 // [SMDOC] Per-function and per-module inlining limits

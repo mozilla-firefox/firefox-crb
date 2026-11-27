@@ -71,6 +71,7 @@
   _(ThreadId, 600)                      \
   _(WasmCodeBlockMap, 600)              \
   _(WasmInliningBudget, 600)            \
+  _(WasmHotnessCounters, 600)           \
   _(VTuneLock, 600)                     \
   _(ShellTelemetry, 600)                \
   _(ShellUseCounters, 600)              \

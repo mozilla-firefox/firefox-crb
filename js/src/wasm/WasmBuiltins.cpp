@@ -727,6 +727,12 @@ static void WasmHandleRequestTierUp(Instance* instance) {
   int32_t counter = instance->readHotnessCounter(funcIndex);
   MOZ_RELEASE_ASSERT(counter >= -127 && counter <= -1);
 
+  // The instance-local counter went negative. Transfer its value to the
+  // counter shared by all instances.
+  if (!instance->transferHotnessCounter(funcIndex)) {
+    return;
+  }
+
   // Function `funcIndex` is requesting tier-up.  This can go one of three ways:
   // - the request is a duplicate -- ignore
   // - tier-up compilation succeeds -- we hope
@@ -734,8 +740,7 @@ static void WasmHandleRequestTierUp(Instance* instance) {
   //   We have no feasible way to recover.
   //
   // Regardless of the outcome, we want to defer duplicate requests as long as
-  // possible.  So set the counter to "infinity" right now.
-  instance->resetHotnessCounter(funcIndex);
+  // possible, so consumeHotnessCounter has set the counters to "infinity".
 
   // Submit the collected profiling information for call_ref to be available
   // for compilation.

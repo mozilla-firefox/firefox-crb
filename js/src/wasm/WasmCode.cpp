@@ -34,6 +34,7 @@
 #ifdef MOZ_VTUNE
 #  include "vtune/VTuneWrapper.h"
 #endif
+#include "wasm/WasmHeuristics.h"
 #include "wasm/WasmModule.h"
 #include "wasm/WasmProcess.h"
 #include "wasm/WasmSerialize.h"
@@ -1209,6 +1210,13 @@ bool JumpTables::initialize(CompileMode mode, const CodeMetadata& codeMeta,
   return true;
 }
 
+int32_t Code::initialHotnessCounter(uint32_t funcIndex) const {
+  MOZ_ASSERT(mode_ == CompileMode::LazyTiering);
+  uint32_t bodyLength = codeTailMeta_->funcDefRange(funcIndex).size();
+  return LazyTieringHeuristics::estimateIonCompilationCost(
+      bodyLength, codeMeta_->codeSectionSize());
+}
+
 Code::Code(CompileMode mode, const CodeMetadata& codeMeta,
            const CodeTailMetadata& codeTailMeta)
     : mode_(mode),
@@ -1217,6 +1225,7 @@ Code::Code(CompileMode mode, const CodeMetadata& codeMeta,
       codeTailMeta_(&codeTailMeta),
       completeTier1_(nullptr),
       completeTier2_(nullptr),
+      sharedHotnessCounters_(mutexid::WasmHotnessCounters),
       profilingLabels_(mutexid::WasmCodeProfilingLabels,
                        CacheableCharsVector()),
       trapCode_(nullptr),
@@ -1289,6 +1298,18 @@ bool Code::initialize(FuncImportVector&& funcImports,
          funcDefIndex++) {
       funcStates_.get()[funcDefIndex].bestTier = completeTier1_;
       funcStates_.get()[funcDefIndex].tierUpState = TierUpState::NotRequested;
+    }
+
+    auto counters = sharedHotnessCounters_.lock();
+    counters.get() =
+        HotnessCountersPointer(js_pod_malloc<int32_t>(numFuncDefs));
+    if (!counters.get()) {
+      return false;
+    }
+    for (uint32_t funcDefIndex = 0; funcDefIndex < numFuncDefs;
+         funcDefIndex++) {
+      counters->get()[funcDefIndex] =
+          initialHotnessCounter(codeMeta_->numFuncImports + funcDefIndex);
     }
   }
 

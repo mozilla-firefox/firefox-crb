@@ -110,13 +110,14 @@ struct TypeDefInstanceData {
 };
 
 // FuncDefInstanceData maintains the per-instance hotness state for a locally
-// defined wasm function.  This is a signed-int32 value that counts downwards
-// from an initially non-negative value.  At the point where the value
-// transitions below zero (not *to* zero), we deem the owning function to
-// have become hot.  Transitions from one negative value to any other (even
-// more) negative value are meaningless and should not happen.
+// defined wasm function. `hotnessCounter` is a signed-int32 value that counts
+// downwards from the non-negative value `hotnessCounterStart`. At the point
+// where it transitions below zero, the work done since `hotnessCounterStart`
+// is subtracted from the function's counter in the Code, which is shared by
+// all instances.
 struct FuncDefInstanceData {
   int32_t hotnessCounter;
+  int32_t hotnessCounterStart;
 };
 
 // FuncExportInstanceData maintains the exported function JS wrapper for an
