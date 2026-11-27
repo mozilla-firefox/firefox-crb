@@ -65,7 +65,8 @@ bool RecordedTextureData::Lock(OpenMode aMode) {
     mDrawTargetCreationAttempted = true;
     // The canvas draw target creation event locks the remote texture on replay.
     mDT = mCanvasChild->CreateDrawTarget(mRemoteTextureOwnerId, mSize, mFormat,
-                                         mPreferAcceleration);
+                                         mPreferAcceleration,
+                                         mSoftwareInGPUProcess);
     if (!mDT) {
       return false;
     }

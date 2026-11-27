@@ -110,11 +110,14 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
    * @param aFormat SurfaceFormat for the DrawTarget
    * @param aPreferAcceleration prefer acceleration even when aSize is below
    *        the usual minimum size
+   * @param aSoftwareInGPUProcess if the DrawTarget can't be accelerated, draw
+   *        in software in the GPU process instead of asking for a refresh
    * @returns newly created DrawTargetRecording
    */
   already_AddRefed<gfx::DrawTargetRecording> CreateDrawTarget(
       const RemoteTextureOwnerId& aTextureOwnerId, gfx::IntSize aSize,
-      gfx::SurfaceFormat aFormat, bool aPreferAcceleration);
+      gfx::SurfaceFormat aFormat, bool aPreferAcceleration,
+      bool aSoftwareInGPUProcess);
 
   /**
    * Record an event for processing by the CanvasParent's CanvasTranslator.

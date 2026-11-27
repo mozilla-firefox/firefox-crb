@@ -2171,7 +2171,14 @@ CanvasRenderingContext2D::SetDimensions(int32_t aWidth, int32_t aHeight) {
     mZero = true;
   }
 
+  bool sizeChanged = aWidth != mWidth || aHeight != mHeight;
   ClearTarget(aWidth, aHeight);
+
+  // A canvas that was lost because it could not be allocated is not restored
+  // automatically, but it might fit at its new size.
+  if (sizeChanged && mIsContextLost) {
+    OnRemoteCanvasRestored();
+  }
 
   return NS_OK;
 }

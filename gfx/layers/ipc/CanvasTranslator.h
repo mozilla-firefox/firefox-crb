@@ -164,12 +164,15 @@ class CanvasTranslator final : public gfx::InlineTranslator,
    * @param aFormat the surface format for the DrawTarget
    * @param aPreferAcceleration prefer acceleration for this DrawTarget even
    *        when it is below the usual minimum size
+   * @param aSoftwareInGPUProcess if the DrawTarget can't be accelerated, or
+   *        stops being accelerated, use software instead of asking the content
+   *        process to fall back
    * @returns the new DrawTarget
    */
   already_AddRefed<gfx::DrawTarget> CreateDrawTarget(
       gfx::ReferencePtr aRefPtr, RemoteTextureOwnerId aTextureOwnerId,
       const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
-      bool aPreferAcceleration);
+      bool aPreferAcceleration, bool aSoftwareInGPUProcess);
 
   already_AddRefed<gfx::DrawTarget> CreateDrawTarget(
       gfx::ReferencePtr aRefPtr, const gfx::IntSize& aSize,
@@ -584,6 +587,9 @@ class CanvasTranslator final : public gfx::InlineTranslator,
     RefPtr<gfx::DrawTarget> mDrawTarget;
     RefPtr<gfx::DrawTarget> mFallbackDrawTarget;
     bool mNotifiedRequiresRefresh = false;
+    // Fall back to software in this process instead of notifying the content
+    // process that a refresh is required.
+    bool mSoftwareInGPUProcess = false;
     // Ref-count of how active uses of the DT. Avoids deletion when locked.
     int32_t mKeepAlive = 1;
     OpenMode mTextureLockMode = OpenMode::OPEN_NONE;
