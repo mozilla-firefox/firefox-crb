@@ -173,46 +173,6 @@ inline Maybe<uint16_t> Deserialize(RangeConsumerView& view,
 
 // -
 
-template <class R, class... Args>
-using fn_t = R(Args...);
-
-// The MethodDispatcher setup uses a CommandSink to read parameters, call the
-// given method using the given synchronization protocol, and provide
-// compile-time lookup of the ID by class method.
-// To use this system, first define a dispatcher subclass of
-// EmptyMethodDispatcher.  This class must be parameterized by command ID.
-//
-// Example:
-// template <size_t id=0> class MyDispatcher
-//    : public EmptyMethodDispatcher<MyDispatcher> {};
-//
-// Then, for each command handled, specialize this to subclass MethodDispatcher.
-// The subclass must define the Method.  It may optionally define isSync for
-// synchronous methods.
-//
-// Example:
-// template <>
-// class MyDispatcher<0>
-//    : public MethodDispatcher<MyDispatcher, 0,
-//        decltype(&MyClass::MyMethod), MyClass::MyMethod> {};
-//
-// The method may then be called from the source and run on the sink.
-//
-// Example:
-// int result = Run<MyClass::MyMethod>(param1, std::move(param2));
-
-template <template <size_t> typename Derived>
-class EmptyMethodDispatcher {
- public:
-  template <typename ObjectT>
-  static constexpr fn_t<bool, ObjectT&, webgl::RangeConsumerView&>*
-  DispatchCommandFuncById(const size_t id) {
-    return nullptr;
-  }
-};
-
-// -
-
 template <typename ReturnT, typename ObjectT, typename... Args>
 std::tuple<std::remove_cvref_t<Args>...> ArgsTuple(
     ReturnT (ObjectT::*)(Args... args)) {
@@ -235,31 +195,21 @@ class MethodDispatcher {
 
  public:
   template <class ObjectT>
-  static constexpr fn_t<bool, ObjectT&, webgl::RangeConsumerView&>*
-  DispatchCommandFuncById(const size_t targetId) {
-    if (targetId != Id)
-      return Derived<Id + 1>::template DispatchCommandFuncById<ObjectT>(
-          targetId);
-
-    return [](ObjectT& obj, webgl::RangeConsumerView& view) -> bool {
-      const auto viewWas = view;
-      (void)viewWas;  // For debugging.
-
-      auto argsTuple = ArgsTuple(Method);
-      return std::apply(
-          [&](auto&... args) {
-            const auto badArgId = webgl::Deserialize(view, 1, args...);
-            if (badArgId) {
-              const auto& name = DerivedType::Name();
-              gfxCriticalError() << "webgl::Deserialize failed for " << name
-                                 << " arg " << *badArgId;
-              return false;
-            }
-            (obj.*Method)(args...);
-            return true;
-          },
-          argsTuple);
-    };
+  static bool Dispatch(ObjectT& obj, webgl::RangeConsumerView& view) {
+    auto argsTuple = ArgsTuple(Method);
+    return std::apply(
+        [&](auto&... args) {
+          const auto badArgId = webgl::Deserialize(view, 1, args...);
+          if (badArgId) {
+            const auto& name = DerivedType::Name();
+            gfxCriticalError() << "webgl::Deserialize failed for " << name
+                               << " arg " << *badArgId;
+            return false;
+          }
+          (obj.*Method)(args...);
+          return true;
+        },
+        argsTuple);
   }
 };
 

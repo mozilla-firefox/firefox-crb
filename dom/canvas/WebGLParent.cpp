@@ -4,6 +4,9 @@
 
 #include "WebGLParent.h"
 
+#include <array>
+#include <utility>
+
 #include "HostWebGLContext.h"
 #include "ImageContainer.h"
 #include "WebGLChild.h"
@@ -12,6 +15,26 @@
 #include "mozilla/layers/TextureClientSharedSurface.h"
 
 namespace mozilla::dom {
+
+namespace {
+
+using WebGLCommandHandler = bool (*)(HostWebGLContext&,
+                                     webgl::RangeConsumerView&);
+
+// WEBGL_COMMAND_LIST defines the contiguous IDs and their dispatchers.
+// Expand those IDs in order to build the table at compile time.
+template <size_t... Ids>
+constexpr auto MakeWebGLCommandHandlers(std::index_sequence<Ids...>) {
+  return std::array<WebGLCommandHandler, sizeof...(Ids)>{
+      &WebGLMethodDispatcher<Ids>::template Dispatch<HostWebGLContext>...};
+}
+
+// Each command ID is an index into this table.
+// All WebGLParent instances in the receiving process share this table.
+constexpr auto kWebGLCommandHandlers =
+    MakeWebGLCommandHandlers(std::make_index_sequence<kWebGLCommandCount>{});
+
+}  // namespace
 
 mozilla::ipc::IPCResult WebGLParent::RecvInitialize(
     const webgl::InitContextDesc& desc, webgl::InitContextResult* const out) {
@@ -64,21 +87,17 @@ IPCResult WebGLParent::RecvDispatchCommands(BigBuffer&& shmem,
     size_t id = 0;
     if (!view.ReadParam(&id)) break;
 
-    // We split this up so that we don't end up in a long callstack chain of
-    // WebGLMethodDispatcher<i>|i=0->N. First get the lambda for dispatch, then
-    // invoke the lambda with our args.
-    const auto pfn =
-        WebGLMethodDispatcher<0>::DispatchCommandFuncById<HostWebGLContext>(id);
-    if (!pfn) {
+    if (id >= kWebGLCommandHandlers.size()) {
       const nsPrintfCString cstr(
           "MethodDispatcher<%zu> not found. Please file a bug!", id);
       fatalError = ToString(cstr);
       gfxCriticalError() << *fatalError;
       break;
-    };
+    }
 
-    const auto ok = (*pfn)(*mHost, view);
-    if (!ok) {
+    // The handler reads this command's arguments from the view and invokes
+    // the corresponding HostWebGLContext method after decoding succeeds.
+    if (!kWebGLCommandHandlers[id](*mHost, view)) {
       const nsPrintfCString cstr(
           "DispatchCommand(id: %zu) failed. Please file a bug!", id);
       fatalError = ToString(cstr);
