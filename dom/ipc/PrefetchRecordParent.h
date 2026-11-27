@@ -97,7 +97,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   void FirePrefetchStatusUpdated(bool aSuccess);
 
   // Cancels the fetch and marks state=Canceled. Idempotent.
-  // Called by RecvCancel and WindowGlobalParent::DedupePrefetchRecords.
+  // Called by RecvCancel, the expiry timer,
+  // WindowGlobalParent::DedupePrefetchRecords and
+  // WindowGlobalParent::AdmitPrefetchRecord.
   void MarkCanceled();
 
   // Called when a navigation activates this record.
@@ -153,7 +155,7 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // Keeps the response's HTTP cache entry alive so activation can be served
   // from it; no-store responses would otherwise be purged as expired.
   nsCOMPtr<nsISupports> mCacheToken;
-  // Releases mCacheToken once the record expires.
+  // Cancels the record once it expires.
   nsCOMPtr<nsITimer> mExpiryTimer;
   nsTArray<ExchangeRecord> mRedirectChain;
   TimeStamp mStartTime;
