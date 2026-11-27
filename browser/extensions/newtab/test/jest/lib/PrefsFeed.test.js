@@ -198,24 +198,6 @@ describe("PrefsFeed", () => {
     expect(data.isPrivateBrowsingEnabled).toBe(true);
     expect(data.isNightlyBuild).toBe(true);
   });
-  describe(".adsNewReportReasonsSupported", () => {
-    it("should be true on 161 and newer", () => {
-      services.vc.compare.mockReturnValue(0);
-      feed.onAction({ type: at.INIT });
-      const [[{ data }]] = feed.store.dispatch.mock.calls;
-      expect(services.vc.compare).toHaveBeenCalledWith(
-        expect.anything(),
-        "161.0a1"
-      );
-      expect(data.adsNewReportReasonsSupported).toBe(true);
-    });
-    it("should be false before 161", () => {
-      services.vc.compare.mockReturnValue(-1);
-      feed.onAction({ type: at.INIT });
-      const [[{ data }]] = feed.store.dispatch.mock.calls;
-      expect(data.adsNewReportReasonsSupported).toBe(false);
-    });
-  });
   it("should dispatch PREFS_INITIAL_VALUES with a .featureConfig", () => {
     nimbusFeatures.newtab.getAllVariables.mockReturnValue({
       prefsButtonIcon: "icon-foo",

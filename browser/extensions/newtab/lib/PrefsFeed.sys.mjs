@@ -753,13 +753,6 @@ export class PrefsFeed {
       // Nightly apart.
       isNightlyBuild: AppConstants.NIGHTLY_BUILD,
       /**
-       * @backward-compat { version 161 }
-       * MozAdsReportReason only has SCAM, MISLEADING and OFFENSIVE from 161, so
-       * ReportContent keeps showing the legacy ad report reasons before that.
-       */
-      adsNewReportReasonsSupported:
-        Services.vc.compare(AppConstants.MOZ_APP_VERSION, "161.0a1") >= 0,
-      /**
        * @backward-compat { version 162 }
        * play-fill.svg and pause-fill.svg moved from chrome://global/skin/media/
        * to resource://content-accessible/media/ in Firefox 162 (bug 2093279).

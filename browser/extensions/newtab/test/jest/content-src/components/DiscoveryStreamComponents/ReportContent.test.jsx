@@ -160,7 +160,6 @@ describe("Discovery Stream <ReportContent>", () => {
   ];
   const NEW_REASONS_ON = {
     [PREF_REPORT_ADS_NEW_REASONS_ENABLED]: true,
-    adsNewReportReasonsSupported: true,
   };
 
   it("should use the shared why-reporting heading for ad reporting reasons", () => {
@@ -180,11 +179,6 @@ describe("Discovery Stream <ReportContent>", () => {
   it("should render new ad reporting reasons when new reasons pref is on", () => {
     renderAdReport(NEW_REASONS_ON);
     expect(adReasonValues()).toEqual(["scam", "misleading", "offensive"]);
-  });
-
-  it("should render legacy ad reporting reasons when new reasons are not supported", () => {
-    renderAdReport({ ...NEW_REASONS_ON, adsNewReportReasonsSupported: false });
-    expect(adReasonValues()).toEqual(LEGACY_AD_REASON_VALUES);
   });
 
   it("should dispatch REPORT_AD_SUBMIT with the selected new reason", () => {

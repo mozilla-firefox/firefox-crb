@@ -21,12 +21,9 @@ const LEGACY_AD_REPORT_REASONS = [
 ];
 
 /**
- * @backward-compat { version 161 }
- * The main process maps these values to MozAdsReportReason, which only has
- * SCAM, MISLEADING and OFFENSIVE from Firefox 161. On older versions reports
- * sent through the ads client are dropped, so only use this list when both
- * PREF_REPORT_ADS_NEW_REASONS_ENABLED and adsNewReportReasonsSupported (set by
- * PrefsFeed from the Firefox version) are true.
+ * Used instead of LEGACY_AD_REPORT_REASONS when
+ * PREF_REPORT_ADS_NEW_REASONS_ENABLED is true. The main process maps these
+ * values to MozAdsReportReason.
  */
 const AD_REPORT_REASONS = [
   { l10nId: "newtab-report-ads-reason-scam", value: "scam" },
@@ -43,13 +40,9 @@ export const ReportContent = spocs => {
   const newReportReasonsEnabled = useSelector(
     state => state.Prefs.values[PREF_REPORT_ADS_NEW_REASONS_ENABLED]
   );
-  const newReportReasonsSupported = useSelector(
-    state => state.Prefs.values.adsNewReportReasonsSupported
-  );
-  const adReportReasons =
-    newReportReasonsEnabled && newReportReasonsSupported
-      ? AD_REPORT_REASONS
-      : LEGACY_AD_REPORT_REASONS;
+  const adReportReasons = newReportReasonsEnabled
+    ? AD_REPORT_REASONS
+    : LEGACY_AD_REPORT_REASONS;
   const [valueSelected, setValueSelected] = useState(false);
   const [selectedReason, setSelectedReason] = useState(null);
   const spocData = spocs.spocs.data;
