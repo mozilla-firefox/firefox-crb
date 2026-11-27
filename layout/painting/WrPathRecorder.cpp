@@ -20,6 +20,12 @@ void WrPathRecorder::MoveTo(const gfx::Point& aPoint) {
 }
 
 void WrPathRecorder::LineTo(const gfx::Point& aPoint) {
+  // Like in PathBuilderSkia, a line on an empty path only moves to its end.
+  // ArcToBezier relies on this to start arcs without a MoveTo.
+  if (mCommands.IsEmpty()) {
+    MoveTo(aPoint);
+    return;
+  }
   EnsureSubPath();
   mCommands.AppendElement(wr::PathCommand::LineTo);
   PushPoint(aPoint);
