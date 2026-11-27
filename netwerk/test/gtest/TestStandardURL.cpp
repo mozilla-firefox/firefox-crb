@@ -522,8 +522,9 @@ TEST(TestStandardURL, Deserialize_PercentEncodedPunycodeHost)
     }
   }
 
-  nsCOMPtr<nsIURI> ipcURI = mozilla::ipc::DeserializeURI(params);
-  ASSERT_EQ(nullptr, ipcURI.get());
+  nsCOMPtr<nsIURIMutator> mutator =
+      do_CreateInstance(NS_STANDARDURLMUTATOR_CID);
+  ASSERT_EQ(mutator->Deserialize(params), NS_ERROR_FAILURE);
 }
 
 TEST(TestStandardURL, CorruptSerialization)
