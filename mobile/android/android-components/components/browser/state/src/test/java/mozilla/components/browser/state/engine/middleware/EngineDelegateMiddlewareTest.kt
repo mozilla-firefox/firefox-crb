@@ -12,6 +12,7 @@ import mozilla.components.browser.state.engine.EngineMiddleware
 import mozilla.components.browser.state.selector.findTab
 import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.EngineState
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.createCustomTab
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
@@ -840,7 +841,9 @@ class EngineDelegateMiddlewareTest {
                 initialState = BrowserState(tabs = listOf(tab)),
             )
 
-        store.dispatch(PictureInPictureAction.RequestAction(tabId = tab.id))
+        store.dispatch(
+            PictureInPictureAction.RequestAction(tabId = tab.id, source = PictureInPictureSource.ADDRESS_BAR)
+        )
         testScheduler.advanceUntilIdle()
 
         verify(engineSession).requestPictureInPicture()

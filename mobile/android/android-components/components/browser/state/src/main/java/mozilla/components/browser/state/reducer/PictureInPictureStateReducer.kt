@@ -13,10 +13,16 @@ internal object PictureInPictureStateReducer {
     fun reduce(state: BrowserState, action: PictureInPictureAction): BrowserState =
         when (action) {
             is PictureInPictureAction.RequestAction ->
-                state.copyWithPictureInPictureWindow { window -> window.copy(requestedTabId = action.tabId) }
+                state.copyWithPictureInPictureWindow { window ->
+                    window.copy(requestedTabId = action.tabId, source = action.source)
+                }
             is PictureInPictureAction.ConsumeRequestAction ->
                 state.copyWithPictureInPictureWindow { window ->
-                    window.copy(requestedTabId = window.requestedTabId.takeUnless { it == action.tabId })
+                    val requestedTabId = window.requestedTabId.takeUnless { it == action.tabId }
+                    window.copy(
+                        requestedTabId = requestedTabId,
+                        source = window.source.takeIf { window.session != null || requestedTabId != null },
+                    )
                 }
             is PictureInPictureAction.EnterAction ->
                 state.copyWithPictureInPictureWindow { window ->
@@ -24,7 +30,11 @@ internal object PictureInPictureStateReducer {
                 }
             is PictureInPictureAction.ExitAction ->
                 state.copyWithPictureInPictureWindow { window ->
-                    window.copy(session = window.session?.takeUnless { it.tabId == action.tabId })
+                    val session = window.session?.takeUnless { it.tabId == action.tabId }
+                    window.copy(
+                        session = session,
+                        source = window.source.takeIf { session != null || window.requestedTabId != null },
+                    )
                 }
             is PictureInPictureAction.CloseWindowAction ->
                 state.copyWithPictureInPictureWindow { PictureInPictureWindowState() }
