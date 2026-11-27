@@ -10442,11 +10442,11 @@ release_enable_partner_attribution: true
 release_enable_partner_repack: true
 release_eta: '2023-11-21T14:00:00.000Z'
 release_history: {}
-release_partner_build_number: 1
 release_partner_config:
   release-eme-free-repack:
     mozilla-EME-free:
       mozilla-EME-free:
+        build_number: 1
         locales:
           - ach
           - af
@@ -10550,6 +10550,7 @@ release_partner_config:
   release-partner-attribution:
     configs:
       - campaign: smi
+        build_number: 1
         content: smi-001
         locales:
           - en-GB
@@ -10559,6 +10560,7 @@ release_partner_config:
         upload_to_candidates: true
         publish_to_releases: true
       - campaign: softonic
+        build_number: 1
         content: softonic-003
         locales:
           - en-US
@@ -10576,6 +10578,7 @@ release_partner_config:
   release-partner-repack:
     acer:
       acer-002:
+        build_number: 1
         locales:
           - ar
           - bg
@@ -10615,6 +10618,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       acer-003:
+        build_number: 1
         locales:
           - ar
           - bg
@@ -10654,6 +10658,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       acer-004:
+        build_number: 1
         locales:
           - ar
           - bg
@@ -10693,6 +10698,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       acer-g-003:
+        build_number: 1
         locales:
           - en-US
         platforms:
@@ -10702,30 +10708,35 @@ release_partner_config:
         upload_to_candidates: 'true'
     mozillaonline:
       baidu:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
           - win32-shippable
         upload_to_candidates: 'true'
       baizhu:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
           - win64-shippable
         upload_to_candidates: 'true'
       cumulon:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
           - win64-shippable
         upload_to_candidates: 'true'
       kingsoft:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
           - win32-shippable
         upload_to_candidates: 'true'
       mainOther:
+        build_number: 1
         locales:
           - en-US
           - zh-CN
@@ -10734,6 +10745,7 @@ release_partner_config:
           - macosx64-shippable
         upload_to_candidates: 'true'
       mainWinFull:
+        build_number: 1
         locales:
           - en-US
           - zh-CN
@@ -10742,6 +10754,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       mainWinStub:
+        build_number: 1
         locales:
           - en-US
           - zh-CN
@@ -10751,6 +10764,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       mainWinStubFallback:
+        build_number: 1
         locales:
           - en-US
           - zh-CN
@@ -10759,12 +10773,14 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       mydown:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
           - win64-shippable
         upload_to_candidates: 'true'
       others:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
@@ -10772,6 +10788,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       qihoo:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
@@ -10779,6 +10796,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       tencent:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
@@ -10786,6 +10804,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       xbsafe:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
@@ -10793,6 +10812,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       zol:
+        build_number: 1
         locales:
           - zh-CN
         platforms:
@@ -10800,6 +10820,7 @@ release_partner_config:
         upload_to_candidates: 'true'
     softonic:
       softonic-003:
+        build_number: 1
         locales:
           - ar
           - bn
@@ -10832,6 +10853,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       softonic-004:
+        build_number: 1
         locales:
           - en-US
           - es-AR
@@ -10846,6 +10868,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-005:
+        build_number: 1
         locales:
           - de
           - en-CA
@@ -10860,6 +10883,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-006:
+        build_number: 1
         locales:
           - de
           - en-CA
@@ -10874,6 +10898,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-007:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10884,6 +10909,7 @@ release_partner_config:
           - win64-shippable
         upload_to_candidates: 'true'
       softonic-008:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10896,6 +10922,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-009:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10908,6 +10935,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-010:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10920,6 +10948,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-011:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10932,6 +10961,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       softonic-012:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10945,6 +10975,7 @@ release_partner_config:
         upload_to_candidates: 'true'
     unitedinternet:
       1und1:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10956,6 +10987,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       1und1_notb:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10966,6 +10998,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       gmx:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -10977,6 +11010,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       gmx.co.uk:
+        build_number: 1
         locales:
           - en-GB
           - en-US
@@ -10989,6 +11023,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       gmx.es:
+        build_number: 1
         locales:
           - en-US
           - es-ES
@@ -11001,6 +11036,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       gmx.fr:
+        build_number: 1
         locales:
           - en-US
           - fr
@@ -11013,6 +11049,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       gmx_notb:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -11023,6 +11060,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       mail.com:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -11034,6 +11072,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       mail.com_notb:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -11044,6 +11083,7 @@ release_partner_config:
         publish_to_releases: 'true'
         upload_to_candidates: 'true'
       web.de:
+        build_number: 1
         locales:
           - de
           - en-US
@@ -11055,6 +11095,7 @@ release_partner_config:
         repack_stub_installer: 'true'
         upload_to_candidates: 'true'
       web.de_notb:
+        build_number: 1
         locales:
           - de
           - en-US

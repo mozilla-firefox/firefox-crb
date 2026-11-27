@@ -208,16 +208,6 @@ def get_flavors(graph_config, param):
                 "default": False,
                 "description": "Toggle for creating partner attribution",
             },
-            "release_partner_build_number": {
-                "type": "integer",
-                "default": 1,
-                "minimum": 1,
-                "description": (
-                    "The partner build number. This translates to, e.g. "
-                    "`v1` in the path. We generally only have to "
-                    "bump this on off-cycle partner rebuilds."
-                ),
-            },
             "release_partners": {
                 "type": "array",
                 "description": (
@@ -403,10 +393,6 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     if partner_config:
         parameters["release_partner_config"] = fix_partner_config(partner_config)
     parameters["release_partners"] = input.get("release_partners")
-    if input.get("release_partner_build_number"):
-        parameters["release_partner_build_number"] = input[
-            "release_partner_build_number"
-        ]
 
     if input["version"]:
         parameters["version"] = input["version"]
