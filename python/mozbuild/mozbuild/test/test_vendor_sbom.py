@@ -10,6 +10,7 @@ from mozbuild.vendor.sbom import (
     clean_version,
     components_for_unmatched,
     discover_manifests,
+    is_tooling_path,
     load_license_notices,
     manifest_to_record,
     merge_license_notices,
@@ -323,6 +324,14 @@ class TestComponentsForUnmatched(unittest.TestCase):
         )
         self.assertEqual(extra[0]["occurrences"], ["third_party/rlbox"])
 
+    def test_code_described_elsewhere_is_covered(self):
+        extra = components_for_unmatched(
+            [],
+            [self.notice("mit", ["third_party/rust/proc-macro2"], "MIT")],
+            elsewhere=[self.record("third_party/rust/proc-macro2")],
+        )
+        self.assertEqual(extra, [])
+
     def test_notice_without_a_manifest_becomes_a_component(self):
         extra = components_for_unmatched(
             [], [self.notice("mit", ["third_party/rust/byteorder"], "MIT")]
@@ -520,6 +529,30 @@ class TestDiscoverManifests(unittest.TestCase):
             "tools/lint/test/files/license-declarations/bad/vendored/moz.yaml",
         ])
         self.assertEqual(discover_manifests(repo, "/src"), ["gfx/harfbuzz/moz.yaml"])
+
+
+class TestIsToolingPath(unittest.TestCase):
+    def test_test_suites_and_benchmarks(self):
+        for path in (
+            "dom/canvas/test/webgl-conf",
+            "dom/webgpu/tests/cts",
+            "remote/test/puppeteer",
+            "testing/mochitest/pywebsocket3",
+            "third_party/googletest",
+            "third_party/webkit/PerformanceTests/Speedometer3",
+            "tools/fuzzing/libfuzzer",
+            "tools/lint/eslint/eslint-plugin-sdl-vendored",
+        ):
+            self.assertTrue(is_tooling_path(path), path)
+
+    def test_shipped_code(self):
+        for path in (
+            "media/libvpx",
+            "third_party/googletest-like",
+            "toolkit/components/pdfjs",
+            "third_party/js/testlib",
+        ):
+            self.assertFalse(is_tooling_path(path), path)
 
 
 if __name__ == "__main__":
