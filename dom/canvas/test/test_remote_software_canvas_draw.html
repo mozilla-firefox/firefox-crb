@@ -1,0 +1,99 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Check drawing with remote software canvases</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" href="/tests/SimpleTest/test.css">
+</head>
+<body>
+<script type="application/javascript">
+
+function createContext(width, height, options) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas.getContext("2d", options);
+}
+
+function checkPixel(context, x, y, expected, message) {
+  const data = Array.from(context.getImageData(x, y, 1, 1).data);
+  isDeeply(data, expected, message);
+}
+
+const GREEN = [0, 255, 0, 255];
+const BLUE = [0, 0, 255, 255];
+
+add_task(function test_small_canvas() {
+  const context = createContext(32, 32);
+  context.fillStyle = "green";
+  context.fillRect(0, 0, 32, 32);
+  context.fillStyle = "blue";
+  context.fillRect(16, 0, 16, 32);
+  checkPixel(context, 8, 8, [0, 128, 0, 255], "Left half should be green");
+  checkPixel(context, 24, 8, BLUE, "Right half should be blue");
+});
+
+add_task(function test_large_into_small() {
+  // A canvas large enough to be accelerated, drawn into one that is too small
+  // to be accelerated.
+  const large = createContext(512, 512);
+  large.fillStyle = "lime";
+  large.fillRect(0, 0, 512, 512);
+  large.fillStyle = "blue";
+  large.fillRect(256, 0, 256, 512);
+
+  const small = createContext(32, 32);
+  for (let i = 0; i < 10; i++) {
+    small.clearRect(0, 0, 32, 32);
+    small.drawImage(large.canvas, 240, 0, 32, 32, 0, 0, 32, 32);
+  }
+  checkPixel(small, 8, 8, GREEN, "Left of the copy should come from the lime half");
+  checkPixel(small, 24, 8, BLUE, "Right of the copy should come from the blue half");
+});
+
+add_task(function test_small_into_large() {
+  const small = createContext(16, 16);
+  small.fillStyle = "lime";
+  small.fillRect(0, 0, 16, 16);
+
+  const large = createContext(512, 512);
+  large.fillStyle = "blue";
+  large.fillRect(0, 0, 512, 512);
+  large.drawImage(small.canvas, 100, 100);
+  checkPixel(large, 108, 108, GREEN, "Copied area should be lime");
+  checkPixel(large, 50, 50, BLUE, "Area outside the copy should stay blue");
+});
+
+add_task(function test_wider_than_texture_limit() {
+  // Wider than the maximum size of D3D11 textures and IOSurfaces.
+  const width = 20000;
+  const wide = createContext(width, 8);
+  wide.fillStyle = "blue";
+  wide.fillRect(0, 0, width, 8);
+  wide.fillStyle = "lime";
+  wide.fillRect(width - 100, 0, 100, 8);
+  checkPixel(wide, width - 50, 4, GREEN, "Far end of the wide canvas should be lime");
+  checkPixel(wide, 50, 4, BLUE, "Start of the wide canvas should be blue");
+
+  const small = createContext(32, 8);
+  small.drawImage(wide.canvas, width - 116, 0, 32, 8, 0, 0, 32, 8);
+  checkPixel(small, 8, 4, BLUE, "Copy should start in the blue part");
+  checkPixel(small, 24, 4, GREEN, "Copy should end in the lime part");
+});
+
+add_task(function test_resize() {
+  const context = createContext(32, 32);
+  context.fillStyle = "lime";
+  context.fillRect(0, 0, 32, 32);
+  context.canvas.width = 300;
+  context.canvas.height = 300;
+  checkPixel(context, 8, 8, [0, 0, 0, 0], "Resizing should clear the canvas");
+  context.fillStyle = "lime";
+  context.fillRect(0, 0, 300, 300);
+  checkPixel(context, 290, 290, GREEN, "Resized canvas should draw");
+});
+
+</script>
+</body>
+</html>

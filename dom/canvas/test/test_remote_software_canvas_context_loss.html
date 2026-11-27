@@ -1,0 +1,117 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Check that small remote canvases are lost and restored after a GPU process restart</title>
+  <script src="/tests/SimpleTest/SimpleTest.js"></script>
+  <link rel="stylesheet" href="/tests/SimpleTest/test.css">
+</head>
+<body>
+<canvas id="small" width="32" height="32"></canvas>
+<canvas id="local" width="32" height="32"></canvas>
+
+<script type="application/javascript">
+
+function waitRAF() {
+  return new Promise(resolve => window.requestAnimationFrame(resolve));
+}
+
+async function getGfxInfo() {
+  return SpecialPowers.spawnChrome([], () => {
+    const gfxInfo = Cc["@mozilla.org/gfx/info;1"].getService(Ci.nsIGfxInfo);
+    return {
+      usingGPUProcess: gfxInfo.usingGPUProcess,
+      usingRemoteCanvas: gfxInfo.usingRemoteCanvas,
+    };
+  });
+}
+
+async function restartGPUProcess() {
+  await SpecialPowers.spawnChrome([], async () => {
+    const gfxInfo = Cc["@mozilla.org/gfx/info;1"].getService(Ci.nsIGfxInfo);
+    const { TestUtils } = ChromeUtils.importESModule(
+      "resource://testing-common/TestUtils.sys.mjs"
+    );
+    const promise = TestUtils.topicObserved("compositor-reinitialized");
+    gfxInfo.killGPUProcessForTests();
+    await promise;
+  });
+}
+
+function trackEvents(canvas) {
+  const counts = { lost: 0, restored: 0 };
+  counts.restoredPromise = new Promise(resolve => {
+    canvas.addEventListener("contextlost", () => counts.lost++);
+    canvas.addEventListener("contextrestored", () => {
+      counts.restored++;
+      resolve();
+    });
+  });
+  return counts;
+}
+
+function isLime(context) {
+  const data = context.getImageData(16, 16, 1, 1).data;
+  return data[0] == 0 && data[1] == 255 && data[2] == 0 && data[3] == 255;
+}
+
+async function start() {
+  try {
+    const { usingGPUProcess, usingRemoteCanvas } = await getGfxInfo();
+    if (!usingGPUProcess || !usingRemoteCanvas) {
+      ok(true, "Remote canvas is not in use, nothing to test");
+      return;
+    }
+
+    // Below gfx.canvas.accelerated.min-size, so this canvas is remote only
+    // because of gfx.canvas.remote.software.
+    const small = document.getElementById("small");
+    const smallContext = small.getContext("2d");
+    const smallEvents = trackEvents(small);
+
+    const local = document.getElementById("local");
+    const localContext = local.getContext("2d", { willReadFrequently: true });
+    const localEvents = trackEvents(local);
+
+    for (const context of [smallContext, localContext]) {
+      context.fillStyle = "lime";
+      context.fillRect(0, 0, 32, 32);
+    }
+    await waitRAF();
+    ok(isLime(smallContext), "Small canvas should draw before the restart");
+
+    await restartGPUProcess();
+
+    let timeoutId;
+    const timeout = new Promise((resolve, reject) => {
+      timeoutId = window.setTimeout(() => reject("timed out"), 5000);
+    });
+    await Promise.race([smallEvents.restoredPromise, timeout]);
+    window.clearTimeout(timeoutId);
+    await waitRAF();
+
+    is(smallEvents.lost, 1, "Small canvas should fire one contextlost event");
+    is(smallEvents.restored, 1, "Small canvas should fire one contextrestored event");
+    ok(!smallContext.isContextLost(), "Small canvas should not be lost after restoration");
+
+    is(localEvents.lost, 0, "willReadFrequently canvas should not be lost");
+    ok(isLime(localContext), "willReadFrequently canvas should keep its contents");
+
+    smallContext.fillStyle = "lime";
+    smallContext.fillRect(0, 0, 32, 32);
+    await waitRAF();
+    ok(isLime(smallContext), "Small canvas should draw after restoration");
+  } catch (err) {
+    ok(false, "Caught exception " + err);
+  } finally {
+    SimpleTest.finish();
+  }
+}
+
+SimpleTest.waitForExplicitFinish();
+SimpleTest.requestFlakyTimeout("Wait for failure condition");
+start();
+
+</script>
+</body>
+</html>
