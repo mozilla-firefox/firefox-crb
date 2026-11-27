@@ -82,7 +82,8 @@ to exercise the localized repack logic in CI.
 ## linux-install-test
 
 Tests the Firefox Linux installer script (``browser/installer/linux/script/install-firefox.sh``)
-across distros, install methods, channels, locales, and architectures.
+across distros, install methods, channels, locales, and architectures. Most tasks run on
+upstream distro docker images (e.g. ``fedora:41``) rather than in-tree ones.
 
 ## install-script-signing
 

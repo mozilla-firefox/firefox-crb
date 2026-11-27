@@ -41,6 +41,8 @@ subsuite = "taskgraph"
 
 ["test_transforms_job_common.py"]
 
+["test_transforms_linux_install_test.py"]
+
 ["test_transforms_mozconfig.py"]
 
 ["test_transforms_perftest.py"]

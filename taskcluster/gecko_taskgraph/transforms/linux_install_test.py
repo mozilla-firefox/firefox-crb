@@ -6,7 +6,11 @@ from typing import Optional
 
 from taskgraph.transforms.base import TransformSequence
 from taskgraph.util.schema import Schema
+from taskgraph.util.taskcluster import get_artifact_prefix
 from taskgraph.util.templates import merge
+
+from gecko_taskgraph.transforms.job import transforms as job_transforms
+from gecko_taskgraph.util.workertypes import worker_type_implementation
 
 
 class TaskSchema(Schema, forbid_unknown_fields=False, kw_only=True, rename="kebab"):
@@ -26,11 +30,68 @@ transforms = TransformSequence()
 transforms.add_validate(TaskSchema)
 
 
+def _uses_upstream_image(task):
+    # A plain string (e.g. "fedora:41") is an image pulled from Docker Hub, as
+    # opposed to {in-tree: ...} or {indexed: ...}.
+    return isinstance(task.get("worker", {}).get("docker-image"), str)
+
+
+def _download_fetches_commands(config, task):
+    """Upstream images have neither run-task nor fetch-content (nor python3 to
+    run them). Download the fetched artifacts with curl or wget instead, which
+    pre-install provides, into the MOZ_FETCHES_DIR set in the kind's
+    task-defaults. Returns the shell commands doing so and sets the worker env
+    they need."""
+    name = task.get("name", "?")
+    # Copy, as generated tasks may share their worker config.
+    worker_env = dict(task["worker"].get("env", {}))
+    task["worker"] = {**task["worker"], "env": worker_env}
+    if "MOZ_FETCHES_DIR" not in worker_env:
+        raise ValueError(
+            f"Task '{name}' runs on an upstream image but sets no MOZ_FETCHES_DIR"
+        )
+    commands = ['mkdir -p "$MOZ_FETCHES_DIR"']
+    dependencies = task.get("dependencies", {})
+    index = 0
+    for dep_name, artifacts in task.pop("fetches", {}).items():
+        if dep_name not in dependencies:
+            raise ValueError(
+                f"Task '{name}' fetches from '{dep_name}' which is not a dependency"
+            )
+        dep_task = config.kind_dependencies_tasks[dependencies[dep_name]]
+        for fetch in artifacts:
+            artifact = {"artifact": fetch} if isinstance(fetch, str) else fetch
+            if artifact.get("extract", True) or set(artifact) - {
+                "artifact",
+                "extract",
+            }:
+                raise ValueError(
+                    f"Task '{name}' runs on an upstream image, which only supports "
+                    f"fetches with 'extract: false': {artifact!r}"
+                )
+            path = artifact["artifact"]
+            if "/" not in path:
+                path = f"{get_artifact_prefix(dep_task)}/{path}"
+            url_var = f"MOZ_FETCH_URL_{index}"
+            index += 1
+            worker_env[url_var] = {"artifact-reference": f"<{dep_name}/{path}>"}
+            dest = f'"$MOZ_FETCHES_DIR/{path.rsplit("/", 1)[-1]}"'
+            commands.append(
+                f'(curl --retry 5 -fsSL -o {dest} "${url_var}" || '
+                f'wget --tries=5 -qO {dest} "${url_var}")'
+            )
+    return commands
+
+
 def _resolve_docker_image(distro_name, distro_cfg, arch_name):
     docker_image_cfg = distro_cfg["docker-image"]
+    # Upstream images (e.g. "fedora:41") are multi-arch: the same name works for
+    # every architecture.
+    if isinstance(docker_image_cfg, str):
+        return docker_image_cfg
     if not isinstance(docker_image_cfg, dict):
         raise ValueError(
-            f"Distro '{distro_name}' docker-image must be a dict, got: {docker_image_cfg!r}"
+            f"Distro '{distro_name}' docker-image must be a string or a dict, got: {docker_image_cfg!r}"
         )
     if arch_name in docker_image_cfg:
         return docker_image_cfg[arch_name]
@@ -132,7 +193,10 @@ def build_run_command(config, tasks):
             cmd = f"LANG={lang_env} {fx_cmd} {fx_args}"
         else:
             cmd = f"{fx_cmd} {fx_args} --lang {{matrix[locale]}}"
-        parts = [pre_install, cmd] if pre_install else [cmd]
+        parts = [pre_install] if pre_install else []
+        if _uses_upstream_image(task):
+            parts.extend(_download_fetches_commands(config, task))
+        parts.append(cmd)
         task.setdefault("run", {})["command"] = " && ".join(parts)
 
         yield task
@@ -172,3 +236,51 @@ def stash_distro_attributes(config, tasks):
             attrs["install-method"] = method
 
         yield task
+
+
+def run_jobs(config, tasks):
+    """Run the job transforms, except on tasks using an upstream docker image.
+
+    run-task needs python3, which upstream images don't ship, so those tasks
+    become plain docker-worker tasks running their command with `sh`, as root
+    (the default user of upstream images).
+    """
+    run_task_tasks = []
+    for task in tasks:
+        if not _uses_upstream_image(task):
+            run_task_tasks.append(task)
+            continue
+
+        name = task.pop("name")
+        run = task.pop("run")
+        if run.get("using") != "run-task" or run.get("checkout", True):
+            raise ValueError(
+                f"Task '{name}' runs on an upstream image, so it needs "
+                "'using: run-task' and 'checkout: false'"
+            )
+        if not run.get("run-as-root"):
+            raise ValueError(
+                f"Task '{name}' runs on an upstream image, so it runs as root "
+                "and needs 'run-as-root: true'"
+            )
+        if "fetches" in task:
+            raise ValueError(
+                f"Task '{name}' runs on an upstream image but its fetches were not "
+                "turned into downloads (it has no install-method)"
+            )
+        task["label"] = f"{config.kind}-{name}"
+        impl, os = worker_type_implementation(
+            config.graph_config, config.params, task["worker-type"]
+        )
+        if impl != "docker-worker":
+            raise ValueError(
+                f"Task '{name}' runs on an upstream docker image, which requires "
+                f"a docker-worker, not {impl}"
+            )
+        worker = task["worker"]
+        worker["implementation"] = impl
+        worker["os"] = os
+        worker["command"] = ["sh", "-xc", run["command"]]
+        yield task
+
+    yield from job_transforms(config, run_task_tasks)

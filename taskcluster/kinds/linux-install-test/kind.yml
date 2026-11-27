@@ -10,7 +10,7 @@ transforms:
     - taskgraph.transforms.matrix:transforms
     - gecko_taskgraph.transforms.linux_install_test_symbol:transforms
     - taskgraph.transforms.task_context:transforms
-    - gecko_taskgraph.transforms.job:transforms
+    - gecko_taskgraph.transforms.linux_install_test:run_jobs
     - gecko_taskgraph.transforms.task:transforms
 
 tasks-from:
@@ -22,6 +22,10 @@ task-defaults:
         using: run-task
     worker:
         max-run-time: 1200
+        env:
+            # Upstream images have no run-task to set it, so the
+            # linux_install_test transform downloads fetches here itself.
+            MOZ_FETCHES_DIR: /builds/worker/fetches
     treeherder:
         tier: 2
         kind: test
@@ -30,8 +34,6 @@ task-defaults:
         skip-unless-changed:
             - browser/installer/linux/mach_commands.py
             - browser/installer/linux/script/install-firefox.sh
-            - taskcluster/docker/el-base/Dockerfile
-            - taskcluster/docker/el-raw/Dockerfile
             - taskcluster/gecko_taskgraph/transforms/linux_install_test.py
             - taskcluster/gecko_taskgraph/transforms/linux_install_test_symbol.py
             - taskcluster/kinds/linux-install-test/kind.yml
