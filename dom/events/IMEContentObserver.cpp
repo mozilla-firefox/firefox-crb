@@ -121,13 +121,6 @@ NS_INTERFACE_MAP_END
 NS_IMPL_CYCLE_COLLECTING_ADDREF(IMEContentObserver)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(IMEContentObserver)
 
-IMEContentObserver::IMEContentObserver() {
-#ifdef DEBUG
-  // TODO: Make this test as GTest.
-  mTextChangeData.Test();
-#endif
-}
-
 void IMEContentObserver::Init(nsIWidget& aWidget, nsPresContext& aPresContext,
                               Element* aElement, EditorBase& aEditorBase) {
   State state = GetState();

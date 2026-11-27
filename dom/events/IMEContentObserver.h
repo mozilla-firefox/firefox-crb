@@ -49,7 +49,7 @@ class IMEContentObserver final : public nsStubMutationObserver,
   using IMENotificationRequests = widget::IMENotificationRequests;
   using IMEMessage = widget::IMEMessage;
 
-  IMEContentObserver();
+  IMEContentObserver() = default;
 
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS_FINAL
   NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(IMEContentObserver,
