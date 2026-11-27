@@ -110,6 +110,9 @@ const DIRECTION_FORWARD = 1;
 const DIRECTION_BACKWARD = -1;
 const TAB_LABEL_MAX_LENGTH = 256;
 
+/** @type {WeakSet<MozBrowser>} */
+const browsersInitiatedFromNonWebControlled = new WeakSet();
+
 /**
  * Updates the User Context UI indicators if the browser is in a non-default context
  */
@@ -391,6 +394,12 @@ export class Tabbrowser {
 
   /** @type {WeakMap<MozTabbrowserTab, string>} */
   static #fullLabels = new WeakMap();
+
+  /** @type {WeakMap<MozBrowser, string>} */
+  static #urlbarOverrideValuesAtBeforeTabSwitch = new WeakMap();
+
+  /** @type {WeakMap<MozBrowser, nsIURI>} */
+  static #lazyBrowserURIs = new WeakMap();
 
   /** @type {WeakMap<MozTabbrowserTab, MozTabbrowserTab>} */
   static #successors = new WeakMap();
@@ -2264,8 +2273,10 @@ export class Tabbrowser {
       this.documentGlobal.gURLBar.focused;
 
     if (this.#asyncTabSwitching) {
-      newBrowser._urlbarOverrideValueAtBeforeTabSwitch =
-        newBrowser.urlbarOverrideValue;
+      Tabbrowser.#urlbarOverrideValuesAtBeforeTabSwitch.set(
+        newBrowser,
+        newBrowser.urlbarOverrideValue
+      );
     }
 
     if (this.isFindBarInitialized(oldTab)) {
@@ -2335,8 +2346,12 @@ export class Tabbrowser {
               // selected which could cause them to overwrite what they've
               // already typed in.
               let urlbarOverrideValueAtBeforeTabSwitch =
-                newBrowser._urlbarOverrideValueAtBeforeTabSwitch;
-              delete newBrowser._urlbarOverrideValueAtBeforeTabSwitch;
+                Tabbrowser.#urlbarOverrideValuesAtBeforeTabSwitch.get(
+                  newBrowser
+                );
+              Tabbrowser.#urlbarOverrideValuesAtBeforeTabSwitch.delete(
+                newBrowser
+              );
               if (
                 newBrowser.urlbarOverrideValue &&
                 newBrowser.urlbarOverrideValue !=
@@ -2851,7 +2866,7 @@ export class Tabbrowser {
         loadFlags |= LOAD_FLAGS_FROM_EXTERNAL;
       }
       if (newWindowLoad) {
-        browser.initiatedFromNonWebControlled = true;
+        browsersInitiatedFromNonWebControlled.add(browser);
       }
       try {
         browser.fixupAndLoadURIString(aURIs[0], {
@@ -3273,12 +3288,15 @@ export class Tabbrowser {
         case "currentURI":
           getter = () => {
             // Avoid recreating the same nsIURI object over and over again...
-            if (browser._cachedCurrentURI) {
-              return browser._cachedCurrentURI;
+            let uri = Tabbrowser.#lazyBrowserURIs.get(browser);
+            if (uri) {
+              return uri;
             }
             let url =
               lazy.SessionStore.getLazyTabValue(aTab, "url") || "about:blank";
-            return (browser._cachedCurrentURI = Services.io.newURI(url));
+            uri = Services.io.newURI(url);
+            Tabbrowser.#lazyBrowserURIs.set(browser, uri);
+            return uri;
           };
           break;
         case "loadStartedSinceUrlbarOverride":
@@ -3385,7 +3403,7 @@ export class Tabbrowser {
     let { uriIsAboutBlank, usingPreloadedContent } =
       Tabbrowser.#browserParams.get(aTab);
     Tabbrowser.#browserParams.delete(aTab);
-    delete browser._cachedCurrentURI;
+    Tabbrowser.#lazyBrowserURIs.delete(browser);
 
     let panel = this.getPanel(browser);
     let uniqueId = Tabbrowser.#generateUniquePanelID();
@@ -7571,7 +7589,7 @@ export class Tabbrowser {
       // are triggered amidst the tab/browser restoration process
       // (TabHide, TabPinned, TabUnpinned, "muted" attribute changes, etc.).
       aOurTab.initializing = true;
-      delete ourBrowser._cachedCurrentURI;
+      Tabbrowser.#lazyBrowserURIs.delete(ourBrowser);
       lazy.SessionStore.setTabState(
         aOurTab,
         lazy.SessionStore.getTabState(aOtherTab)
@@ -10728,7 +10746,7 @@ class TabProgressListener {
           // non-web-controlled blank page.
           if (
             this._browser.browsingContext.sessionHistory?.count === 0 &&
-            (this._browser.initiatedFromNonWebControlled ||
+            (browsersInitiatedFromNonWebControlled.has(this._browser) ||
               lazy.BrowserUIUtils.checkEmptyPageOrigin(
                 this._browser,
                 originalLocation
@@ -10750,7 +10768,7 @@ class TabProgressListener {
           }
         }
         delete this._browser.initialPageLoadedFromUserAction;
-        delete this._browser.initiatedFromNonWebControlled;
+        browsersInitiatedFromNonWebControlled.delete(this._browser);
         // If the browser is loading it must not be crashed anymore
         this._tab.removeAttribute("crashed");
       }

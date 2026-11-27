@@ -27,7 +27,6 @@ class TabEventTracker {
       this._expectations.tabUrl,
       `${description} - expected currentURI`
     );
-    ok(browser._cachedCurrentURI, `${description} - currentURI was cached`);
 
     if (event.type === "TabAttrModified") {
       if (event.detail.changed.includes("muted")) {
