@@ -1148,6 +1148,7 @@ void arena_t::DemoteChunkToSpare(arena_chunk_t* aChunk) {
   MOZ_ASSERT(!mChunksDirty.ElementProbablyInList(aChunk));
   MOZ_ASSERT(!mSpares.ElementProbablyInList(aChunk));
   mSpares.pushFront(aChunk);
+  mNumSpares++;
 }
 
 arena_run_t* arena_t::AllocRun(size_t aSize, bool aLarge, bool aZero) {
@@ -1173,7 +1174,9 @@ arena_run_t* arena_t::AllocRun(size_t aSize, bool aLarge, bool aZero) {
     }
     return run;
   } else if (!mSpares.isEmpty()) {
+    MOZ_ASSERT(mNumSpares != 0);
     arena_chunk_t* chunk = mSpares.popFront();
+    mNumSpares--;
     MOZ_ASSERT(!chunk->mIsPurging);
 
     arena_run_t* run = (arena_run_t*)(uintptr_t(chunk) +
@@ -1320,11 +1323,15 @@ size_t arena_t::ExtraCommitPages(size_t aReqPages, size_t aRemainingPages) {
 arena_chunk_t* arena_t::PurgeGetSpareChunk(PurgeStats& aStats)
     MOZ_REQUIRES(mLock) {
   if (mSpares.isEmpty()) {
+    MOZ_ASSERT(mNumSpares == 0);
     return nullptr;
   }
 
+  MOZ_ASSERT(mNumSpares != 0);
+
   // Start flushing our cache of spare chunks.
   arena_chunk_t* chunk = mSpares.popBack();
+  mNumSpares--;
 
   // This is not possible. Not because another thread won't be purging
   // memory because that is possible (but rare).  But because it'd need
@@ -1342,8 +1349,9 @@ arena_chunk_t* arena_t::PurgeGetSpareChunk(PurgeStats& aStats)
 }
 
 arena_chunk_t* arena_t::GetExcessSpareChunk() MOZ_REQUIRES(mLock) {
-  if (!mSpares.isEmpty() && !mSpares.isSingle()) {
+  if (mNumSpares > 1) {
     arena_chunk_t* chunk = mSpares.popBack();
+    mNumSpares--;
     MOZ_ASSERT(!chunk->mIsPurging);
     RemoveChunk(chunk);
     return chunk;
@@ -1361,9 +1369,12 @@ arena_chunk_t* arena_t::PurgeGetDirtyChunk(PurgeStats& aStats)
   }
 
   // Spare chunks don't appear in mChunksDirty.
+  size_t num_spares = 0;
   for (auto& chunk : mSpares) {
     ndirty += chunk.mNumDirty;
+    num_spares++;
   }
+  MOZ_ASSERT(num_spares == mNumSpares);
 
   // Not all dirty chunks are in mChunksDirty as some may not have enough
   // dirty pages for purging or might currently be being purged.
@@ -3124,7 +3135,9 @@ arena_t::~arena_t() {
   MOZ_RELEASE_ASSERT(!mStats.allocated_small && !mStats.allocated_large,
                      "Arena is not empty");
   while (!mSpares.isEmpty()) {
+    MOZ_ASSERT(mNumSpares != 0);
     arena_chunk_t* spare = mSpares.popFront();
+    mNumSpares--;
     arena_chunk_dealloc(mChunkAllocator, spare, kChunkSize);
   }
   for (i = 0; i < NUM_SMALL_CLASSES; i++) {
