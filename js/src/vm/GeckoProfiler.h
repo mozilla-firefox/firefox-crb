@@ -114,13 +114,28 @@ class BaseScript;
 class GeckoProfilerThread;
 class ScriptSource;
 
-using ProfilerScriptSourceSet =
-    HashSet<RefPtr<ScriptSource>, PointerHasher<ScriptSource*>,
-            SystemAllocPolicy>;
+// How far a script source that only the profiler holds is from being dropped.
+// See GeckoProfilerRuntime::sweepScriptSources.
+struct ProfilerScriptSourceExpiry {
+  // The number of samples when the profiler was first found to hold the only
+  // reference to the source.
+  mozilla::Maybe<uint64_t> unusedSinceSampleCount;
+  // A sample position before which all buffer entries that can refer to the
+  // source lie.
+  mozilla::Maybe<uint64_t> referencesEndBefore;
+};
+
+using ProfilerScriptSourceMap =
+    HashMap<RefPtr<ScriptSource>, ProfilerScriptSourceExpiry,
+            PointerHasher<ScriptSource*>, SystemAllocPolicy>;
 
 class GeckoProfilerRuntime {
   JSRuntime* rt;
-  RWExclusiveData<ProfilerScriptSourceSet> scriptSources_;
+  RWExclusiveData<ProfilerScriptSourceMap> scriptSources_;
+  // The number of periodic samples of the thread that runs this runtime's JS,
+  // and the buffer position at which the most recent one starts.
+  mozilla::Atomic<uint64_t, mozilla::ReleaseAcquire> sampleCount_;
+  mozilla::Atomic<uint64_t, mozilla::ReleaseAcquire> lastSamplePosition_;
   bool slowAssertions;
   uint32_t enabled_;
   void (*eventMarker_)(mozilla::MarkerCategory, const char*, const char*);
@@ -175,6 +190,17 @@ class GeckoProfilerRuntime {
   void stringsReset();
 
   bool insertScriptSource(ScriptSource* scriptSource);
+
+  // Called after each periodic sample, with the buffer position at which the
+  // sample starts.
+  void noteSample(uint64_t samplePosition) {
+    lastSamplePosition_ = samplePosition;
+    sampleCount_++;
+  }
+
+  // Drops the script sources that only the profiler holds and that no entry
+  // left in the profiler buffer can refer to.
+  void sweepScriptSources();
 
   js::ProfilerJSSources getProfilerScriptSources(bool gatherSourceText);
 

@@ -1185,6 +1185,7 @@ class ScriptSource {
   ~ScriptSource() { MOZ_ASSERT(refs == 0); }
 
   void AddRef() { refs++; }
+  bool hasSingleRef() const { return refs == 1; }
   void Release() {
     MOZ_ASSERT(refs != 0);
     if (--refs == 0) {

@@ -31,6 +31,8 @@ GeckoProfilerThread::GeckoProfilerThread()
 GeckoProfilerRuntime::GeckoProfilerRuntime(JSRuntime* rt)
     : rt(rt),
       scriptSources_(mutexid::GeckoProfilerScriptSources),
+      sampleCount_(0),
+      lastSamplePosition_(0),
       slowAssertions(false),
       enabled_(false),
       eventMarker_(nullptr),
@@ -74,7 +76,49 @@ bool GeckoProfilerRuntime::insertScriptSource(ScriptSource* scriptSource) {
     return true;
   }
 
-  return guard->put(scriptSource);
+  return guard->put(scriptSource, ProfilerScriptSourceExpiry());
+}
+
+void GeckoProfilerRuntime::sweepScriptSources() {
+  mozilla::Maybe<uint64_t> rangeStart = rt->profilerSampleBufferRangeStart();
+  if (!rangeStart) {
+    return;
+  }
+  // Read the count first: lastSamplePosition_ is set before sampleCount_ is
+  // incremented, so the position is at least that of sample number
+  // sampleCount.
+  uint64_t sampleCount = sampleCount_;
+  uint64_t lastSamplePosition = lastSamplePosition_;
+
+  // Released after the lock, since destroying a source takes other locks.
+  Vector<RefPtr<ScriptSource>, 0, SystemAllocPolicy> expired;
+  auto guard = scriptSources_.writeLock();
+  for (auto iter = guard->modIter(); !iter.done(); iter.next()) {
+    ProfilerScriptSourceExpiry& expiry = iter.get().value();
+    if (!iter.get().key()->hasSingleRef()) {
+      expiry = ProfilerScriptSourceExpiry();
+      continue;
+    }
+    // No script uses the source anymore, so no new sample or marker can refer
+    // to it.
+    if (!expiry.unusedSinceSampleCount) {
+      expiry.unusedSinceSampleCount = mozilla::Some(sampleCount);
+      continue;
+    }
+    if (!expiry.referencesEndBefore) {
+      // A sample can be in progress while the source is found unused, but the
+      // one after it starts later, after every entry that refers to the
+      // source.
+      if (sampleCount >= *expiry.unusedSinceSampleCount + 2) {
+        expiry.referencesEndBefore = mozilla::Some(lastSamplePosition);
+      }
+      continue;
+    }
+    if (*rangeStart > *expiry.referencesEndBefore &&
+        expired.append(iter.get().key())) {
+      iter.remove();
+    }
+  }
 }
 
 // Get a pointer to the top-most profiling frame, given the exit frame pointer.
@@ -123,6 +167,8 @@ void GeckoProfilerRuntime::enable(bool enabled) {
     rt->jitRuntime()->getJitcodeGlobalTable()->setAllEntriesAsExpired();
   }
   rt->setProfilerSampleBufferRangeStart(0);
+  sampleCount_ = 0;
+  lastSamplePosition_ = 0;
 
   // Ensure that lastProfilingFrame is null for the main thread.
   if (cx->jitActivation) {
@@ -510,7 +556,7 @@ js::ProfilerJSSources GeckoProfilerRuntime::getProfilerScriptSources(
 
   auto guard = scriptSources_.readLock();
   for (auto iter = guard->iter(); !iter.done(); iter.next()) {
-    const RefPtr<ScriptSource>& scriptSource = iter.get();
+    const RefPtr<ScriptSource>& scriptSource = iter.get().key();
     MOZ_ASSERT(scriptSource);
 
     ScriptSource::DataReader sourceReader(scriptSource);

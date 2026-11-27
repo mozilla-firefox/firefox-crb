@@ -836,6 +836,11 @@ JS_PUBLIC_API void JS::SetJSContextProfilerSampleBufferRangeStart(
   cx->runtime()->setProfilerSampleBufferRangeStart(rangeStart);
 }
 
+JS_PUBLIC_API void JS::SetJSContextProfilerSamplePosition(
+    JSContext* cx, uint64_t samplePosition) {
+  cx->runtime()->geckoProfiler().noteSample(samplePosition);
+}
+
 JS_PUBLIC_API bool JS::IsProfilingEnabledForContext(JSContext* cx) {
   MOZ_ASSERT(cx);
   return cx->runtime()->geckoProfiler().enabled();

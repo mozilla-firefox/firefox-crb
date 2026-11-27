@@ -2632,6 +2632,13 @@ static void MergeStacks(
   // profiler_suspend_and_sample_thread() from the background hang reporter -
   // in that case, aCollector.BufferRangeStart() will return Nothing().
   if (!aIsSynchronous) {
+    aCollector.SamplePositionInBuffer().apply(
+        [&aThreadData](uint64_t aSamplePosition) {
+          JSContext* context = aThreadData.GetJSContext();
+          if (context) {
+            JS::SetJSContextProfilerSamplePosition(context, aSamplePosition);
+          }
+        });
     aCollector.BufferRangeStart().apply(
         [&aThreadData](uint64_t aBufferRangeStart) {
           JSContext* context = aThreadData.GetJSContext();

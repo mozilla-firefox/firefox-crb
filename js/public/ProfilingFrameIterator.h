@@ -241,6 +241,15 @@ JS_PUBLIC_API bool IsProfilingEnabledForContext(JSContext* cx);
 JS_PUBLIC_API void SetJSContextProfilerSampleBufferRangeStart(
     JSContext* cx, uint64_t rangeStart);
 
+/**
+ * After each periodic sample of the thread of cx, this method should be called
+ * with the buffer position at which the sample starts. Script sources that no
+ * script uses anymore are kept until the buffer range start has moved past a
+ * sample that started after they became unused.
+ */
+JS_PUBLIC_API void SetJSContextProfilerSamplePosition(JSContext* cx,
+                                                      uint64_t samplePosition);
+
 class ProfiledFrameRange;
 
 // A handle to the underlying JitcodeGlobalEntry, so as to avoid repeated

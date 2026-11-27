@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "js/CompilationAndEvaluation.h"
+#include "js/ProfilingFrameIterator.h"
 #include "js/ProfilingSources.h"
 #include "js/ProfilingStack.h"
 #include "js/SourceText.h"
@@ -83,3 +84,52 @@ BEGIN_TEST(testProfilerScriptSources_copiesSameSourceOnce) {
   return true;
 }
 END_TEST(testProfilerScriptSources_copiesSameSourceOnce)
+
+static bool HasSourceWithFilename(JSContext* cx, const char* aFilename) {
+  js::ProfilerJSSources sources =
+      js::GetProfilerScriptSources(cx->runtime(), /* gatherSourceText */ false);
+  for (const ProfilerJSSourceData& sourceData : sources) {
+    if (HasFilename(sourceData, aFilename)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+BEGIN_TEST(testProfilerScriptSources_expireUnusedSources) {
+  js::SetContextProfilingStack(cx, &sourcesProfilingStack);
+  js::EnableContextProfilingStack(cx, true);
+
+  CHECK(EvaluateWithFilename(cx, "kept.js", "function kept() {} kept();"));
+  CHECK(EvaluateWithFilename(cx, "unused.js", "(function () {})();"));
+  CHECK(HasSourceWithFilename(cx, "unused.js"));
+
+  // The scripts of unused.js are collected, but no sample has been taken
+  // since, so a buffer entry could still refer to the source.
+  for (int i = 0; i < 3; i++) {
+    JS_GC(cx);
+  }
+  CHECK(HasSourceWithFilename(cx, "unused.js"));
+
+  // The first sample may have been in progress when the source was found
+  // unused; the second one starts after any entry that refers to it.
+  JS::SetJSContextProfilerSamplePosition(cx, 100);
+  JS_GC(cx);
+  JS::SetJSContextProfilerSamplePosition(cx, 200);
+  JS_GC(cx);
+  CHECK(HasSourceWithFilename(cx, "unused.js"));
+
+  // The buffer still holds the second sample.
+  JS::SetJSContextProfilerSampleBufferRangeStart(cx, 200);
+  JS_GC(cx);
+  CHECK(HasSourceWithFilename(cx, "unused.js"));
+
+  JS::SetJSContextProfilerSampleBufferRangeStart(cx, 201);
+  JS_GC(cx);
+  CHECK(!HasSourceWithFilename(cx, "unused.js"));
+  CHECK(HasSourceWithFilename(cx, "kept.js"));
+
+  js::EnableContextProfilingStack(cx, false);
+  return true;
+}
+END_TEST(testProfilerScriptSources_expireUnusedSources)
