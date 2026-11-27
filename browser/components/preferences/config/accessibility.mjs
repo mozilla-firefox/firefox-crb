@@ -8,6 +8,9 @@ import { SettingGroupManager } from "chrome://browser/content/preferences/config
 const { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
 );
+const { FullZoom } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs"
+);
 
 Preferences.addAll([
   { id: "accessibility.blockautorefresh", type: "bool" },
@@ -128,9 +131,6 @@ Preferences.addSetting({ id: "keyboardLinksBoxGroup" });
  */
 const ZoomHelpers = {
   win: window.browsingContext.topChromeWindow,
-  get FullZoom() {
-    return this.win.FullZoom;
-  },
   get ZoomManager() {
     return this.win.ZoomManager;
   },
@@ -152,7 +152,7 @@ const ZoomHelpers = {
      * and non-private contexts, we create a non-private context and use that
      * to set the property, regardless of our actual context.
      */
-    cps2.setGlobal(this.FullZoom.name, newZoom, nonPrivateLoadContext, {
+    cps2.setGlobal(FullZoom.CONTENT_PREF_NAME, newZoom, nonPrivateLoadContext, {
       handleCompletion: resolvers.resolve,
       handleError: resolvers.reject,
     });

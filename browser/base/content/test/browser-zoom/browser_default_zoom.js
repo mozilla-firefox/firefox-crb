@@ -84,7 +84,7 @@ add_task(async function test_enlarge_reduce_reset_local_zoom() {
     "Current tab zoom matches default zoom"
   );
 
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
   info("Enlarged!");
   defaultZoom = await FullZoomHelper.getGlobalValue();
   info("Current global zoom is " + defaultZoom);
@@ -108,11 +108,11 @@ add_task(async function test_enlarge_reduce_reset_local_zoom() {
   );
   info("Reducing...");
   info("Current tab zoom is ", ZoomManager.getZoomForBrowser(tabBrowser));
-  await FullZoom.reduce(); // 120% tab zoom
+  await FullZoom.reduce(gBrowser.selectedBrowser); // 120% tab zoom
   info("Current tab zoom is ", ZoomManager.getZoomForBrowser(tabBrowser));
-  await FullZoom.reduce(); // 110% tab zoom
+  await FullZoom.reduce(gBrowser.selectedBrowser); // 110% tab zoom
   info("Current tab zoom is ", ZoomManager.getZoomForBrowser(tabBrowser));
-  await FullZoom.reduce(); // 100% tab zoom
+  await FullZoom.reduce(gBrowser.selectedBrowser); // 100% tab zoom
   info("Current tab zoom is ", ZoomManager.getZoomForBrowser(tabBrowser));
 
   await TestUtils.waitForCondition(() => {
@@ -132,7 +132,7 @@ add_task(async function test_enlarge_reduce_reset_local_zoom() {
     "Decreasing zoom of current tab doesn't change default zoom."
   );
   info("Resetting...");
-  FullZoom.reset(); // 120% tab zoom
+  FullZoom.reset(gBrowser.selectedBrowser); // 120% tab zoom
   await TestUtils.waitForCondition(() => {
     info("Current tab zoom is ", ZoomManager.getZoomForBrowser(tabBrowser));
     return ZoomManager.getZoomForBrowser(tabBrowser) == 1.2;

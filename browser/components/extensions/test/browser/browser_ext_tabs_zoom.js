@@ -296,7 +296,7 @@ add_task(async function test_zoom_api() {
         }
       );
     } else if (msg == "enlarge") {
-      FullZoom.enlarge();
+      FullZoom.enlarge(gBrowser.selectedBrowser);
     } else if (msg == "site-specific") {
       if (args[0] == null) {
         SpecialPowers.clearUserPref(SITE_SPECIFIC_PREF);

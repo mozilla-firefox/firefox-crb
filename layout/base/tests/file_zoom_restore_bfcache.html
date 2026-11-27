@@ -15,8 +15,8 @@
         }
         case "case2action": {
           SpecialPowers.spawnChrome([], () => {
-            const FullZoom = this.browsingContext.embedderElement.documentGlobal.FullZoom;
-            FullZoom.setZoom(2.0);
+            const browser = this.browsingContext.embedderElement;
+            browser.documentGlobal.FullZoom.setZoom(2.0, browser);
           });
           SpecialPowers.setFullZoom(window, 2);
           window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
@@ -73,8 +73,8 @@
         }
         case "close": {
           SpecialPowers.spawnChrome([], () => {
-            const FullZoom = this.browsingContext.embedderElement.documentGlobal.FullZoom;
-            FullZoom.setZoom(1.0);
+            const browser = this.browsingContext.embedderElement;
+            browser.documentGlobal.FullZoom.setZoom(1.0, browser);
           });
           bc.postMessage({command: "closed"});
           bc.close();

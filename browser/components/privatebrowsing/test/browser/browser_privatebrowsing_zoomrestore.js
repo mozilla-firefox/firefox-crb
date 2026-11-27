@@ -42,7 +42,7 @@ add_task(async function test() {
         "Zoom level for freshly loaded about:blank should be 1"
       );
       // change the zoom on the blank page
-      aWindow.FullZoom.enlarge();
+      FullZoom.enlarge(aWindow.gBrowser.selectedBrowser);
       isnot(
         aWindow.ZoomManager.zoom,
         1,
@@ -73,7 +73,7 @@ add_task(async function test() {
   );
 
   // cleanup
-  windowsToReset.forEach(win => win.FullZoom.reset());
+  windowsToReset.forEach(win => FullZoom.reset(win.gBrowser.selectedBrowser));
   await Promise.all(
     windowsToClose.map(win => BrowserTestUtils.closeWindow(win))
   );

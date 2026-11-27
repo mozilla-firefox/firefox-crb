@@ -27,6 +27,18 @@ export class FullZoom {
   /** @type {WeakMap<BrowserWindow, FullZoom>} */
   static #instances = new WeakMap();
 
+  static get CONTENT_PREF_NAME() {
+    return CONTENT_PREF_NAME;
+  }
+
+  static get siteSpecific() {
+    return lazy.siteSpecific;
+  }
+
+  static get updateBackgroundTabs() {
+    return lazy.updateBackgroundTabs;
+  }
+
   /**
    * Returns the window's instance, creating it if needed. A location change
    * can reach the instance before `init` runs; `init` replays it.
@@ -34,7 +46,7 @@ export class FullZoom {
    * @param {BrowserWindow} window
    * @returns {FullZoom}
    */
-  static forWindow(window) {
+  static #forWindow(window) {
     let instance = FullZoom.#instances.get(window);
     if (!instance) {
       instance = new FullZoom(window);
@@ -47,7 +59,7 @@ export class FullZoom {
    * @param {BrowserWindow} window
    */
   static init(window) {
-    FullZoom.forWindow(window).#init();
+    FullZoom.#forWindow(window).#init();
   }
 
   /**
@@ -56,6 +68,93 @@ export class FullZoom {
   static destroy(window) {
     FullZoom.#instances.get(window).#destroy();
     FullZoom.#instances.delete(window);
+  }
+
+  /**
+   * @param {MozBrowser} browser
+   * @returns {FullZoom}
+   */
+  static #forBrowser(browser) {
+    return FullZoom.#forWindow(
+      /** @type {BrowserWindow} */ (browser.documentGlobal)
+    );
+  }
+
+  /**
+   * Updates the zoom level of a browser after its location changed.
+   *
+   * @param {nsIURI} uri
+   * @param {boolean} isTabSwitch
+   *   Whether the location change comes from selecting the browser's tab.
+   * @param {MozBrowser} browser
+   */
+  static onLocationChange(uri, isTabSwitch, browser) {
+    FullZoom.#forBrowser(browser).#onLocationChange(uri, isTabSwitch, browser);
+  }
+
+  /**
+   * Updates the window's zoom commands.
+   *
+   * @param {BrowserWindow} window
+   * @param {boolean} [forceResetEnabled=false]
+   *   Set to true if the zoom reset command should be enabled regardless of
+   *   the ZoomManager.zoom level, e.g. after a pinch gesture's scaling zoom.
+   * @returns {Promise<void>}
+   */
+  static updateCommands(window, forceResetEnabled = false) {
+    return FullZoom.#forWindow(window).#updateCommands(forceResetEnabled);
+  }
+
+  /**
+   * @param {MozBrowser} browser
+   * @returns {Promise<void>}
+   */
+  static reduce(browser) {
+    return FullZoom.#forBrowser(browser).#reduce(browser);
+  }
+
+  /**
+   * @param {MozBrowser} browser
+   * @returns {Promise<void>}
+   */
+  static enlarge(browser) {
+    return FullZoom.#forBrowser(browser).#enlarge(browser);
+  }
+
+  /**
+   * @param {number} value
+   *   The zoom level, where 1 is the default.
+   * @param {MozBrowser} browser
+   */
+  static setZoom(value, browser) {
+    FullZoom.#forBrowser(browser).#setZoom(value, browser);
+  }
+
+  /**
+   * @param {MozBrowser} browser
+   * @returns {Promise<void>}
+   *   Resolves when the zoom reset has been applied.
+   */
+  static reset(browser) {
+    return FullZoom.#forBrowser(browser).#reset(browser);
+  }
+
+  /**
+   * Called from the URL bar's inline zoom reset indicator button.
+   *
+   * @param {BrowserWindow} window
+   */
+  static resetFromURLBar(window) {
+    let browser = window.gBrowser.selectedBrowser;
+    FullZoom.reset(browser);
+    FullZoom.resetScalingZoom(browser);
+  }
+
+  /**
+   * @param {MozBrowser} browser
+   */
+  static resetScalingZoom(browser) {
+    browser.browsingContext?.resetScalingZoom();
   }
 
   // This maps the browser to monotonically increasing integer
@@ -76,18 +175,6 @@ export class FullZoom {
   constructor(window) {
     this.documentGlobal = window;
     this.document = window.document;
-  }
-
-  get name() {
-    return CONTENT_PREF_NAME;
-  }
-
-  get siteSpecific() {
-    return lazy.siteSpecific;
-  }
-
-  get updateBackgroundTabs() {
-    return lazy.updateBackgroundTabs;
   }
 
   // nsISupports
@@ -114,7 +201,7 @@ export class FullZoom {
     // before we were initialized we want to replay those upon initialization.
     for (let browser of this.documentGlobal.gBrowser.browsers) {
       if (this.#initialLocations.has(browser)) {
-        this.onLocationChange(...this.#initialLocations.get(browser), browser);
+        this.#onLocationChange(...this.#initialLocations.get(browser), browser);
       }
     }
 
@@ -137,14 +224,14 @@ export class FullZoom {
   handleEvent(event) {
     switch (event.type) {
       case "DoZoomEnlarge":
-        this.enlarge(this.#getTargetedBrowser(event));
+        this.#enlarge(this.#getTargetedBrowser(event));
         break;
       case "DoZoomReduce":
-        this.reduce(this.#getTargetedBrowser(event));
+        this.#reduce(this.#getTargetedBrowser(event));
         break;
       case "MozScaleGestureComplete": {
         let nonDefaultScalingZoom = event.detail != 1.0;
-        this.updateCommands(nonDefaultScalingZoom);
+        this.#updateCommands(nonDefaultScalingZoom);
         break;
       }
     }
@@ -154,7 +241,7 @@ export class FullZoom {
 
   observe(aSubject, aTopic, aData) {
     if (aTopic == "nsPref:changed" && aData == "browser.zoom.full") {
-      this.updateCommands();
+      this.#updateCommands();
     }
   }
 
@@ -236,12 +323,10 @@ export class FullZoom {
    *        A URI object representing the new location.
    * @param aIsTabSwitch
    *        Whether this location change has happened because of a tab switch.
-   * @param aBrowser
-   *        (optional) browser object displaying the document
+   * @param browser
+   *        browser object displaying the document
    */
-  onLocationChange(aURI, aIsTabSwitch, aBrowser) {
-    let browser = aBrowser || this.documentGlobal.gBrowser.selectedBrowser;
-
+  #onLocationChange(aURI, aIsTabSwitch, browser) {
     // If we haven't been initialized yet but receive an onLocationChange
     // notification then let's store and replay it upon initialization.
     if (this.#initialLocations) {
@@ -254,7 +339,7 @@ export class FullZoom {
     // to the new location.
     this.#ignorePendingZoomAccesses(browser);
 
-    if (!aURI || (aIsTabSwitch && !this.siteSpecific)) {
+    if (!aURI || (aIsTabSwitch && !lazy.siteSpecific)) {
       this.#notifyOnLocationChange(browser);
       return;
     }
@@ -357,7 +442,7 @@ export class FullZoom {
    *   the ZoomManager.zoom level to change.
    * @returns {Promise<void>}
    */
-  async updateCommands(forceResetEnabled = false) {
+  async #updateCommands(forceResetEnabled = false) {
     let zoomLevel = this.documentGlobal.ZoomManager.zoom;
     let defaultZoomLevel = await lazy.ZoomUI.getGlobalValue();
     let reduceCmd = this.document.getElementById("cmd_fullZoomReduce");
@@ -390,7 +475,7 @@ export class FullZoom {
 
   // Setting & Pref Manipulation
 
-  sendMessageToPDFViewer(browser, name) {
+  #sendMessageToPDFViewer(browser, name) {
     try {
       browser.sendMessageToActor(name, {}, "PdfJs");
     } catch (ex) {
@@ -402,15 +487,15 @@ export class FullZoom {
    * If browser in reader mode sends message to reader in order to decrease font size,
    * Otherwise reduces the zoom level of the page in the passed browser.
    *
-   * @param {MozBrowser} [aBrowser=gBrowser.selectedBrowser]
+   * @param {MozBrowser} aBrowser
    *   The browser to reduce the zoom level on.
    * @returns {Promise<void>}
    */
-  async reduce(aBrowser = this.documentGlobal.gBrowser.selectedBrowser) {
+  async #reduce(aBrowser) {
     if (aBrowser.currentURI.spec.startsWith("about:reader")) {
       aBrowser.sendMessageToActor("Reader:ZoomOut", {}, "AboutReader");
     } else if (this.#isPDFViewer(aBrowser)) {
-      this.sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomOut");
+      this.#sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomOut");
     } else {
       this.documentGlobal.ZoomManager.reduceForBrowser(aBrowser);
       this.#ignorePendingZoomAccesses(aBrowser);
@@ -422,15 +507,15 @@ export class FullZoom {
    * If browser in reader mode sends message to reader in order to increase font size,
    * Otherwise enlarges the zoom level of the page in the passed browser.
    *
-   * @param {MozBrowser} [aBrowser=gBrowser.selectedBrowser]
+   * @param {MozBrowser} aBrowser
    *   The browser to enlarge the zoom level on.
    * @returns {Promise<void>}
    */
-  async enlarge(aBrowser = this.documentGlobal.gBrowser.selectedBrowser) {
+  async #enlarge(aBrowser) {
     if (aBrowser.currentURI.spec.startsWith("about:reader")) {
       aBrowser.sendMessageToActor("Reader:ZoomIn", {}, "AboutReader");
     } else if (this.#isPDFViewer(aBrowser)) {
-      this.sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomIn");
+      this.#sendMessageToPDFViewer(aBrowser, "PDFJS:ZoomIn");
     } else {
       this.documentGlobal.ZoomManager.enlargeForBrowser(aBrowser);
       this.#ignorePendingZoomAccesses(aBrowser);
@@ -442,7 +527,7 @@ export class FullZoom {
    * Sets the zoom level for the given browser to the given floating
    * point value, where 1 is the default zoom level.
    */
-  setZoom(value, browser = this.documentGlobal.gBrowser.selectedBrowser) {
+  #setZoom(value, browser) {
     if (this.#isPDFViewer(browser)) {
       return;
     }
@@ -457,12 +542,12 @@ export class FullZoom {
    *
    * @return A promise which resolves when the zoom reset has been applied.
    */
-  reset(browser = this.documentGlobal.gBrowser.selectedBrowser) {
+  #reset(browser) {
     let forceValue;
     if (browser.currentURI.spec.startsWith("about:reader")) {
       browser.sendMessageToActor("Reader:ResetZoom", {}, "AboutReader");
     } else if (this.#isPDFViewer(browser)) {
-      this.sendMessageToPDFViewer(browser, "PDFJS:ZoomReset");
+      this.#sendMessageToPDFViewer(browser, "PDFJS:ZoomReset");
       // Ensure that the UI elements of the PDF viewer won't be zoomed in/out
       // on reset, even if/when browser default zoom value is not set to 100%.
       forceValue = 1;
@@ -479,18 +564,6 @@ export class FullZoom {
     });
     this.#removePref(browser);
     return result;
-  }
-
-  /**
-   * Called from the URL bar's inline zoom reset indicator button.
-   */
-  resetFromURLBar() {
-    this.reset();
-    this.resetScalingZoom();
-  }
-
-  resetScalingZoom(browser = this.documentGlobal.gBrowser.selectedBrowser) {
-    browser.browsingContext?.resetScalingZoom();
   }
 
   /**
@@ -523,13 +596,13 @@ export class FullZoom {
     if (
       !aBrowser.mInitialized ||
       aBrowser.isSyntheticDocument ||
-      (!this.siteSpecific && aBrowser.tabHasCustomZoom)
+      (!lazy.siteSpecific && aBrowser.tabHasCustomZoom)
     ) {
       this.#executeSoon(aCallback);
       return;
     }
 
-    if (aValue !== undefined && this.siteSpecific) {
+    if (aValue !== undefined && lazy.siteSpecific) {
       this.documentGlobal.ZoomManager.setZoomForBrowser(
         aBrowser,
         this.#ensureValid(aValue)
@@ -559,11 +632,11 @@ export class FullZoom {
    * @param browser  The zoom of this browser will be saved.  Required.
    */
   #applyZoomToPref(browser) {
-    if (!this.siteSpecific || browser.isSyntheticDocument) {
+    if (!lazy.siteSpecific || browser.isSyntheticDocument) {
       // If site-specific zoom is disabled, we have called this function
       // to adjust our tab's zoom level. It is now considered "custom"
       // and we mark that here.
-      browser.tabHasCustomZoom = !this.siteSpecific;
+      browser.tabHasCustomZoom = !lazy.siteSpecific;
       return null;
     }
 

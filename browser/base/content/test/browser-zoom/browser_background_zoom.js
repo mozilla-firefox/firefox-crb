@@ -11,9 +11,13 @@ function test() {
   waitForExplicitFinish();
   registerCleanupFunction(async () => {
     await new Promise(resolve => {
-      ContentPrefService2.removeByName(FullZoom.name, Cu.createLoadContext(), {
-        handleCompletion: resolve,
-      });
+      ContentPrefService2.removeByName(
+        FullZoom.CONTENT_PREF_NAME,
+        Cu.createLoadContext(),
+        {
+          handleCompletion: resolve,
+        }
+      );
     });
   });
 
@@ -36,7 +40,7 @@ function secondPageLoaded() {
 
     // Now have three tabs, two with the test page, one blank. Tab 1 is selected
     // Zoom tab 1
-    FullZoom.enlarge();
+    FullZoom.enlarge(gBrowser.selectedBrowser);
     gLevel = ZoomManager.getZoomForBrowser(gBrowser.getBrowserForTab(gTab1));
 
     Assert.greater(gLevel, 1, "New zoom for tab 1 should be greater than 1");

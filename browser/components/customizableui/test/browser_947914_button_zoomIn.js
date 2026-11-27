@@ -21,7 +21,7 @@ add_task(async function () {
     );
     let gLoadContext = Cu.createLoadContext();
     await new Promise(resolve => {
-      gContentPrefs.removeByName(window.FullZoom.name, gLoadContext, {
+      gContentPrefs.removeByName(FullZoom.CONTENT_PREF_NAME, gLoadContext, {
         handleResult() {},
         handleCompletion() {
           resolve();

@@ -71,19 +71,22 @@ async function zoomNewTab(changeZoom, message) {
 }
 
 add_task(async function test_preloaded_zoom_out() {
-  await zoomNewTab(() => FullZoom.reduce(), "zoomed out applied to preloaded");
+  await zoomNewTab(
+    () => FullZoom.reduce(gBrowser.selectedBrowser),
+    "zoomed out applied to preloaded"
+  );
 });
 
 add_task(async function test_preloaded_zoom_in() {
   await zoomNewTab(() => {
-    FullZoom.enlarge();
-    FullZoom.enlarge();
+    FullZoom.enlarge(gBrowser.selectedBrowser);
+    FullZoom.enlarge(gBrowser.selectedBrowser);
   }, "zoomed in applied to preloaded");
 });
 
 add_task(async function test_preloaded_zoom_default() {
   await zoomNewTab(
-    () => FullZoom.reduce(),
+    () => FullZoom.reduce(gBrowser.selectedBrowser),
     "zoomed back to default applied to preloaded"
   );
 });

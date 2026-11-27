@@ -27,7 +27,7 @@ async function testZoomButtonAppearsAndDisappearsBasedOnZoomChanges(
     "label",
     zoomResetButton
   );
-  FullZoom.enlarge();
+  FullZoom.enlarge(gBrowser.selectedBrowser);
   await labelUpdatePromise;
   info("Zoom increased to " + Math.floor(ZoomManager.zoom * 100) + "%");
   is(zoomResetButton.hidden, false, "Zoom reset button is now visible");
@@ -75,7 +75,7 @@ add_task(async function () {
     window,
     "FullZoomChange"
   );
-  FullZoom.enlarge();
+  FullZoom.enlarge(gBrowser.selectedBrowser);
   await zoomChangePromise;
   is(
     zoomResetButton.hidden,

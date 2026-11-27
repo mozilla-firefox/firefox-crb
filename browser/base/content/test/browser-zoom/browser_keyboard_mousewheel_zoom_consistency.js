@@ -48,21 +48,21 @@ add_task(async function test_keyboard_mousewheel_zoom_consistency() {
     let currentZoom = ZoomManager.getZoomForBrowser(browser);
     Assert.equal(currentZoom, 1, "Initial zoom should be 100%");
 
-    await FullZoom.enlarge();
+    await FullZoom.enlarge(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       1.1,
       "First enlarge should go to 110%"
     );
 
-    await FullZoom.enlarge();
+    await FullZoom.enlarge(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       1.2,
       "Second enlarge should go to 120%"
     );
 
-    await FullZoom.enlarge();
+    await FullZoom.enlarge(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       1.3,
@@ -97,27 +97,27 @@ add_task(async function test_keyboard_mousewheel_zoom_consistency() {
       "Should be at 120% after zooming back in with wheel"
     );
 
-    await FullZoom.reduce();
+    await FullZoom.reduce(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       1.1,
       "First keyboard reduce should go to 110%"
     );
 
-    await FullZoom.reduce();
+    await FullZoom.reduce(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       1,
       "Second keyboard reduce should go to 100%"
     );
 
-    await FullZoom.reduce();
+    await FullZoom.reduce(gBrowser.selectedBrowser);
     Assert.equal(
       ZoomManager.getZoomForBrowser(browser),
       0.9,
       "Third keyboard reduce should go to 90%"
     );
 
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
   });
 });

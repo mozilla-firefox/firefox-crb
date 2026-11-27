@@ -84,7 +84,7 @@ add_task(async function test_sitespecific_global_zoom_enlarge() {
   let loadedURL = await frameLoadedPromise;
   is(loadedURL, TEST_IFRAME_URL, "got the load event for the iframe");
   console.log("Enlarging tab");
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
   // 80% local zoom
   await TestUtils.waitForCondition(() => {
     console.log("Current zoom is: ", ZoomManager.getZoomForBrowser(tabBrowser));

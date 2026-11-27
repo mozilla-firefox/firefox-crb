@@ -228,7 +228,7 @@ add_task(async function test_browser_zoom() {
       const initialWidth = await getPageWidth(newTabBrowser);
 
       // Zoom in
-      FullZoom.enlarge();
+      FullZoom.enlarge(gBrowser.selectedBrowser);
       Assert.greater(
         await waitForPageWidth(newTabBrowser, initialWidth, "bigger"),
         initialWidth,
@@ -236,7 +236,7 @@ add_task(async function test_browser_zoom() {
       );
 
       // Reset
-      FullZoom.reset();
+      FullZoom.reset(gBrowser.selectedBrowser);
       is(
         await waitForPageWidth(newTabBrowser, initialWidth, "same"),
         initialWidth,
@@ -244,7 +244,7 @@ add_task(async function test_browser_zoom() {
       );
 
       // Zoom out
-      FullZoom.reduce();
+      FullZoom.reduce(gBrowser.selectedBrowser);
       Assert.less(
         await waitForPageWidth(newTabBrowser, initialWidth, "smaller"),
         initialWidth,

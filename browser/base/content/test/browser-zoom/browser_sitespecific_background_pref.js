@@ -12,7 +12,7 @@ function test() {
     let tab2 = BrowserTestUtils.addTab(gBrowser);
     await FullZoomHelper.load(tab2, testPage);
 
-    await FullZoom.enlarge();
+    await FullZoom.enlarge(gBrowser.selectedBrowser);
     let tab1Zoom = ZoomManager.getZoomForBrowser(tab1.linkedBrowser);
 
     await FullZoomHelper.selectTabAndWaitForLocationChange(tab2);
@@ -20,7 +20,7 @@ function test() {
     is(tab2Zoom, tab1Zoom, "Zoom should affect background tabs");
 
     Services.prefs.setBoolPref("browser.zoom.updateBackgroundTabs", false);
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     gBrowser.selectedTab = tab1;
     tab1Zoom = ZoomManager.getZoomForBrowser(tab1.linkedBrowser);
     tab2Zoom = ZoomManager.getZoomForBrowser(tab2.linkedBrowser);
