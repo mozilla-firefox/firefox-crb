@@ -243,6 +243,7 @@ export var SearchUtils = {
     contextmenu: "context",
     text_selection: "context",
     newtab_searchbar: "newtab",
+    private_newtab_searchbar: "newtab",
     about_home: "newtab",
     about_newtab: "newtab",
     urlbar_handoff: "urlbar",
