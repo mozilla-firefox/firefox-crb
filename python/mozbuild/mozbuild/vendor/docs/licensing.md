@@ -226,8 +226,11 @@ Components come from four sources, because none alone covers the tree:
   (`sbom_cargo.py`: geckodriver, the http3server, the uniffi bindgens...)
   reaches, `mockall`, `cc`, `syn` or `hyper` for instance, ships in nothing
   and goes to the {ref}`build tooling document <build_tooling_sbom>`. A
-  member missing from that list counts as shipped. An unconfigured tree has
-  no kinds, so it keeps every crate in the product document.
+  member missing from that list counts as shipped. A second
+  `cargo metadata --filter-platform` run for the configuration's
+  `RUST_TARGET` leaves out the crates only another platform builds,
+  `android_logger` on Windows or `dbus` on macOS. An unconfigured tree has no
+  kinds, so it keeps every crate in the product document.
 - **The npm lockfiles of the bundled front-end code** describe what webpack
   folds into the newtab, aboutwelcome and asrouter bundles: React, Redux,
   Fluent and their closures. These packages leave no directory of their own,
