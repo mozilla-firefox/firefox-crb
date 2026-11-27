@@ -140,6 +140,7 @@ export const SingleSelect = ({
     "paddingInlineStart",
     "paddingInlineEnd",
     "width",
+    "fill",
   ];
 
   const hasSelectedNotice =

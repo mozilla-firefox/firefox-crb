@@ -295,7 +295,8 @@ html {
   --mr-smart-window-background-gradient: radial-gradient(190% 105% at 50% 90%, light-dark(#FDF3F2, #4E243F) 0%, light-dark(#ECE4FB, #311764) 100%);
   --mr-screen-background-color: light-dark(var(--color-gray-0), var(--color-gray-70));
   --single-select-border-color: var(--color-gray-60);
-  --single-select-hover-color: light-dark(var(--color-gray-20), var(--color-gray-70));
+  // fallback values can be removed after Nova has reached release
+  --single-select-hover-color: light-dark(var(--color-violet-desaturated-10, var(--color-gray-20)), var(--color-violet-desaturated-70, var(--color-gray-70)));
   --carousel-peek-card-width: 348px;
   --carousel-peek-card-height: 190px;
   --carousel-peek-card-button-size: 11px;
@@ -987,6 +988,10 @@ html {
 
   .screen.AW_AI_KILLSWITCH .single-select-notice-region {
     max-width: var(--size-layout-xlarge);
+  }
+
+  .screen.AW_MODEL_CHOICE .tiles-single-select-section .select-item {
+    max-width: var(--size-layout-xsmall);
   }
 
   .screen {
@@ -3412,6 +3417,7 @@ html {
 
         .icon {
           outline: none;
+          -moz-context-properties: fill;
         }
 
         .text {

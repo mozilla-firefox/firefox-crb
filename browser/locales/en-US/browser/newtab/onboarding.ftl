@@ -662,6 +662,11 @@ onboarding-refresh-ai-killswitch-block-notice-link = Get more details
 
 onboarding-refresh-primary-button-save-start = Save and start browsing
 
+## Model choice screen
+
+onboarding-refresh-model-choice-title = Choose a model to power AI in your sidebar
+onboarding-refresh-dont-use-model-choice = Don’t use AI in { -brand-short-name } sidebar
+
 ## Smart window switcher callout
 
 smartwindow-switcher-callout = Switch between Smart and Classic Windows anytime.

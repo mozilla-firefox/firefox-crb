@@ -5728,7 +5728,7 @@ const SingleSelect = ({
     }
   }, [activeSingleSelectSelections]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const CONFIGURABLE_STYLES = ["background", "backgroundImage", "border", "borderRadius", "height", "marginBlock", "marginBlockStart", "marginBlockEnd", "marginInline", "paddingBlock", "paddingBlockStart", "paddingBlockEnd", "paddingInline", "paddingInlineStart", "paddingInlineEnd", "width"];
+  const CONFIGURABLE_STYLES = ["background", "backgroundImage", "border", "borderRadius", "height", "marginBlock", "marginBlockStart", "marginBlockEnd", "marginInline", "paddingBlock", "paddingBlockStart", "paddingBlockEnd", "paddingInline", "paddingInlineStart", "paddingInlineEnd", "width", "fill"];
   const hasSelectedNotice = isSingleSelect && content.tiles?.data.some(tile => tile.selectedNotice);
   const selectedNotice = content.tiles?.data.find(tile => tile.id === activeSingleSelectSelections[singleSelectId])?.selectedNotice;
   return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", {
