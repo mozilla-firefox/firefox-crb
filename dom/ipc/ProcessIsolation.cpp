@@ -16,6 +16,7 @@
 #include "mozilla/Preferences.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/StaticPrefs_browser.h"
+#include "mozilla/StaticPrefs_extensions.h"
 #include "mozilla/StaticPrefs_fission.h"
 #include "mozilla/StaticPtr.h"
 #include "mozilla/dom/BrowsingContextGroup.h"
@@ -423,10 +424,21 @@ static IsolationBehavior IsolationBehaviorForURI(nsIURI* aURI,
  * synchronous access to the extension content.
  */
 static bool CanHostExtensionContent(const RemoteType& aRemoteType) {
+  // The `extension` process can always host extension subframes, and we cannot
+  // place restrictions on them if remote extensions or remote subframes are
+  // disabled.
+  if (aRemoteType.IsExtension() || !FissionAutostart() ||
+      !StaticPrefs::extensions_webextensions_remote()) {
+    return true;
+  }
+
+  // Isolated extension subframes are always `extension`-process only.
+  if (StaticPrefs::extensions_isolate_subframes()) {
+    return false;
+  }
+
   // Only "web-like" content can be matched by content scripts.
-  return !StaticPrefs::extensions_webextensions_remote() ||
-         !FissionAutostart() || aRemoteType.IsExtension() ||
-         aRemoteType.IsWeb() || aRemoteType.IsFile() ||
+  return aRemoteType.IsWeb() || aRemoteType.IsFile() ||
          aRemoteType.IsPrivilegedMozilla();
 }
 
