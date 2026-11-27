@@ -1896,6 +1896,82 @@ describe("DiscoveryStreamFeed", () => {
       );
     });
 
+    it("Bad categories or MozAdsIabContextTaxonomy should not result in an error", async () => {
+      expectConsoleError();
+
+      jest.spyOn(feed.cache, "get").mockReturnValue(Promise.resolve());
+      jest.spyOn(feed.cache, "set").mockReturnValue(Promise.resolve());
+
+      feed.store = createStore(combineReducers(reducers), {
+        Prefs: {
+          values: {
+            "unifiedAds.blockedAds": "",
+            "unifiedAds.spocs.enabled": true,
+          },
+        },
+      });
+
+      /**
+       * @backward-compat { version 161 }
+       * `Services.vc.compare` in the loadSpocs function is used to alternate between `requestSpocOrImageAds`
+       * or `requestSpocAds`. This tests the former, the subsequent test tests the latter.
+       * This line isn't strictly necessary (the default mock for Services.vc.compare is 0), but helpful to contrast
+       * to the subsequent test.
+       */
+      jest.spyOn(Services.vc, "compare").mockReturnValue(0);
+
+      // Actual spocs are not parsed or used in this test, so mocks can use an empty map.
+      const ADS_CLIENT = {
+        requestSpocOrImageAds: jest.fn().mockResolvedValue(new Map([])),
+      };
+
+      const REQUEST_OPTIONS = {
+        flags: new Map(),
+        ohttp: true,
+      };
+
+      const AdsClient = {
+        isEnabled: jest.fn().mockReturnValue(true),
+        getClient: jest.fn().mockReturnValue(ADS_CLIENT),
+        requestOptions: jest.fn().mockReturnValue(REQUEST_OPTIONS),
+      };
+      globalThis.AdsClient = AdsClient;
+
+      await feed.onAction({
+        type: at.INIT,
+      });
+
+      // Submit with various malformed `content` fields in spoc placement requests.
+      // These should simply default to being empty where possible.
+      await feed._fetchSpocsWithAdsClient([
+        {
+          content: "test_bad_content",
+          placement: "dummy_placement",
+          count: 4,
+        },
+        {
+          content: {},
+          placement: "dummy_placement",
+          count: 4,
+        },
+
+        {
+          content: {
+            categories: ["test_category"],
+            taxonomy: "something_wrong",
+          },
+          placement: "dummy_placement",
+          count: 4,
+        },
+      ]);
+
+      expect(ADS_CLIENT.requestSpocOrImageAds).toHaveBeenCalledTimes(1);
+      expect(ADS_CLIENT.requestSpocOrImageAds).toHaveBeenCalledWith(
+        [expect.anything(), expect.anything(), expect.anything()],
+        REQUEST_OPTIONS
+      );
+    });
+
     it("should not read the spocs cache when adsClient is set", async () => {
       expectConsoleError();
       jest.spyOn(feed.cache, "get").mockResolvedValue({

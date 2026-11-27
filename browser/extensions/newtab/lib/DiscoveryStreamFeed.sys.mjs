@@ -700,17 +700,21 @@ export class DiscoveryStreamFeed {
     const requests = [];
     for (let { placement: placementId, count, content } of placements) {
       let iabContent = null;
-      if (content) {
-        iabContent = new lazy.MozAdsIabContent({
-          categoryIds: content.categories,
-          taxonomy:
-            lazy.MozAdsIabContentTaxonomy[
-              // js-style enum strings (eg. "IAB-3.0") must be converted to
-              // rust-style enum names (eg. "IAB3_0") before looking up
-              // the actual enum value (eg. 4)
-              content.taxonomy.replace("-", "").replace(".", "_")
-            ],
-        });
+      if (typeof content?.taxonomy === "string") {
+        // js-style enum strings (eg. "IAB-3.0") must be converted to
+        // rust-style enum names (eg. "IAB3_0") before looking up
+        // the actual enum value (eg. 4)
+        const taxonomy = content.taxonomy.replace("-", "").replace(".", "_");
+        if (Object.hasOwn(lazy.MozAdsIabContentTaxonomy, taxonomy)) {
+          iabContent = new lazy.MozAdsIabContent({
+            categoryIds: Array.isArray(content.categories)
+              ? content.categories
+              : [],
+            taxonomy: lazy.MozAdsIabContentTaxonomy[taxonomy],
+          });
+        } else {
+          console.error("Spoc taxonomy not recognized: ", taxonomy);
+        }
       }
 
       requests.push(
