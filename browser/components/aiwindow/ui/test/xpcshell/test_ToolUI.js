@@ -3084,3 +3084,77 @@ add_task(async function test_createTabGroup_keeps_chat_tab_with_others() {
   Assert.ok(createCall.includes(chatTab), "Should still group the chat tab");
   Assert.equal(createCall.length, 2, "Both tabs go into the group");
 });
+
+add_task(async function test_markDeletedAITabCards() {
+  const { AITabStore } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/aiwindow/ui/modules/AITabStore.sys.mjs"
+  );
+  registerCleanupFunction(() => AITabStore.destroyDatabase());
+
+  const conversation = new ChatConversation({});
+  const addCard = async slug => {
+    const page = await AITabStore.create({
+      convId: conversation.id,
+      slug,
+      title: slug,
+    });
+    const message = conversation.addAssistantMessage("text", "Created.");
+    message.toolUIData = {
+      toolCallId: slug,
+      uiType: "aitab",
+      properties: {
+        state: "choose",
+        viewerURL: `about:smartpage?page=${page.slug}`,
+        title: slug,
+      },
+    };
+    return message;
+  };
+  const kept = await addCard("kept");
+  const deleted = await addCard("deleted");
+  const reused = await addCard("reused");
+
+  await AITabStore.deleteBySlug("deleted");
+  await AITabStore.deleteBySlug("reused");
+  await AITabStore.create({
+    convId: "another-conversation",
+    slug: "reused",
+    title: "reused",
+  });
+
+  await ToolUI.markDeletedAITabCards(conversation);
+
+  Assert.equal(kept.toolUIData.properties.state, "choose");
+  Assert.equal(deleted.toolUIData.properties.state, "deleted");
+  Assert.equal(
+    reused.toolUIData.properties.state,
+    "deleted",
+    "A page that reused the slug does not revive the card"
+  );
+  Assert.equal(
+    deleted.toolUIData.properties.viewerURL,
+    "about:smartpage?page=deleted",
+    "The deleted card keeps its other properties"
+  );
+});
+
+add_task(async function test_markDeletedAITabCards_skips_store_without_cards() {
+  const { AITabStore } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/aiwindow/ui/modules/AITabStore.sys.mjs"
+  );
+  const sandbox = sinon.createSandbox();
+  const getPages = sandbox.spy(AITabStore, "getAITabPagesByConvId");
+  const conversation = new ChatConversation({});
+  conversation.addAssistantMessage("text", "No page here.");
+
+  try {
+    await ToolUI.markDeletedAITabCards(conversation);
+  } finally {
+    sandbox.restore();
+  }
+
+  Assert.ok(
+    getPages.notCalled,
+    "A conversation without a card never opens the page store"
+  );
+});

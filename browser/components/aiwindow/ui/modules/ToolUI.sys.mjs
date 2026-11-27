@@ -49,6 +49,8 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
  */
 
 const lazy = XPCOMUtils.declareLazy({
+  AITabStore:
+    "moz-src:///browser/components/aiwindow/ui/modules/AITabStore.sys.mjs",
   tabManagementService:
     "moz-src:///browser/components/aiwindow/ui/modules/TabManagementService.sys.mjs",
   ToolTabActions:
@@ -927,5 +929,38 @@ export class ToolUI {
       originalData: data,
       mode,
     });
+  }
+
+  /**
+   * Puts the AITab cards whose page has since been deleted in the deleted
+   * state, so a reopened conversation stops offering to open them.
+   *
+   * @param {ChatConversation} conversation
+   */
+  static async markDeletedAITabCards(conversation) {
+    const isLiveCard = message =>
+      message.toolUIData?.uiType === UI_TYPES.AITAB &&
+      message.toolUIData.properties?.state !== "deleted";
+    const cards = conversation.messages.filter(isLiveCard);
+    if (!cards.length) {
+      return;
+    }
+
+    // A deleted page's slug can be minted again for a new page, so a card's
+    // page only still exists if this conversation still owns that slug.
+    const pages = await lazy.AITabStore.getAITabPagesByConvId(conversation.id);
+    const slugs = new Set(pages.map(page => page.slug));
+    for (const message of cards.filter(isLiveCard)) {
+      const slug = URL.parse(
+        message.toolUIData.properties?.viewerURL
+      )?.searchParams.get("page");
+      if (!slugs.has(slug)) {
+        conversation.updateToolUI(
+          message,
+          { properties: { state: "deleted" } },
+          UI_TYPES.AITAB
+        );
+      }
+    }
   }
 }

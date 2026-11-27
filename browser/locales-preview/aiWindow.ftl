@@ -481,6 +481,8 @@ smartwindow-aitab-open-new =
     .label = Open in new tab
 
 smartwindow-aitab-response-card-title = Your { -smart-page-brand-name } is ready
+# Replaces the title above once the page has been deleted.
+smartwindow-aitab-response-card-title-deleted = { -smart-page-brand-name } deleted
 smartwindow-aitab-created-an-aitab = Created { -smart-page-brand-name }
 smartwindow-aitab-updated-an-aitab = Updated { -smart-page-brand-name }
 smartwindow-aitab-empty-chat-message = Want to make changes to your { -smart-page-brand-name }? Ask in the chat to add or remove content.

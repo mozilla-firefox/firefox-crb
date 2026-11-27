@@ -9,6 +9,12 @@ const { MockEngineManager } = ChromeUtils.importESModule(
 const { AITabStore } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/AITabStore.sys.mjs"
 );
+const { ChatStore } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ChatStore.sys.mjs"
+);
+const { ToolUI } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs"
+);
 
 const SOURCE_URL =
   "https://example.com/browser/browser/components/aiwindow/ui/test/browser/test_context_url_page.html";
@@ -28,10 +34,10 @@ Services.scriptloader.loadSubScript(
   this
 );
 
-let STATE_CHOOSE, STATE_COMPLETE;
+let STATE_CHOOSE, STATE_COMPLETE, STATE_DELETED;
 
 add_setup(async function importAITabStates() {
-  ({ STATE_CHOOSE, STATE_COMPLETE } =
+  ({ STATE_CHOOSE, STATE_COMPLETE, STATE_DELETED } =
     await import("chrome://browser/content/aiwindow/components/aitab-tool-ui.mjs"));
 });
 
@@ -70,7 +76,7 @@ async function readAITabCard(browser) {
     }
     return SpecialPowers.spawn(chatBrowser, [], async () => {
       const chatContent = content.document.querySelector("ai-chat-content");
-      const card = chatContent?.shadowRoot.querySelector("aitab-tool-ui");
+      const card = chatContent?.shadowRoot?.querySelector("aitab-tool-ui");
       if (!card) {
         return null;
       }
@@ -78,7 +84,10 @@ async function readAITabCard(browser) {
       await cardElement.updateComplete;
       return {
         state: cardElement.state,
+        heading:
+          card.shadowRoot.querySelector(".card-title span")?.dataset.l10nId,
         title: card.shadowRoot.querySelector(".page-title")?.textContent.trim(),
+        hasTitleLink: !!card.shadowRoot.querySelector("a.page-title"),
         buttonCount: card.shadowRoot.querySelectorAll("moz-button").length,
         hasSpinner: !!chatContent.shadowRoot.querySelector(
           "chat-assistant-loader"
@@ -486,6 +495,86 @@ describe("AITab ToolUI", () => {
         pageTab,
         "The existing tab is focused"
       );
+    });
+  });
+
+  describe("deleted page", () => {
+    let saved;
+    let slug;
+
+    beforeEach(async () => {
+      const generationRequest = await startAITabGeneration(win, mockEngine);
+      generationRequest.respond(JSON.stringify(SURFACE));
+      await waitForAITabCardState(win.gBrowser.selectedBrowser, STATE_CHOOSE);
+      const conversation = AIWindow.getActiveConversation(win);
+      [{ slug }] = await AITabStore.getAITabPagesByConvId(conversation.id);
+      await TestUtils.waitForCondition(async () => {
+        saved = await ChatStore.findConversationById(conversation.id);
+        return saved?.messages.some(
+          m => m.toolUIData?.properties?.state === STATE_CHOOSE
+        );
+      }, "The card is saved with the conversation");
+    });
+
+    afterEach(async () => {
+      await ChatStore.deleteConversationById(saved.id);
+    });
+
+    async function reopenSavedConversation() {
+      const tab = await BrowserTestUtils.openNewForegroundTab(
+        win.gBrowser,
+        AIWINDOW_URL
+      );
+      const chatBrowser = await getAichatBrowser(tab.linkedBrowser);
+      await TestUtils.waitForCondition(
+        () => chatBrowser.currentURI.spec === "about:aichatcontent",
+        "The new tab's chat content loads"
+      );
+      tab.linkedBrowser.contentDocument
+        .querySelector("ai-window")
+        .openConversation(saved);
+      return tab;
+    }
+
+    it("stops offering to open a page deleted since the chat was closed", async () => {
+      await AITabStore.deleteBySlug(slug);
+
+      const tab = await reopenSavedConversation();
+      const card = await waitForAITabCardState(
+        tab.linkedBrowser,
+        STATE_DELETED
+      );
+
+      Assert.equal(
+        card.heading,
+        "smartwindow-aitab-response-card-title-deleted",
+        "The card says the page was deleted"
+      );
+      Assert.equal(
+        card.title,
+        "Lisbon hotels",
+        "The card still names the page"
+      );
+      Assert.ok(!card.hasTitleLink, "The page title is no longer a link");
+      Assert.equal(card.buttonCount, 0, "The open buttons are gone");
+      BrowserTestUtils.removeTab(tab);
+    });
+
+    it("keeps offering to open a page that still exists", async () => {
+      const sandbox = sinon.createSandbox();
+      const check = sandbox.spy(ToolUI, "markDeletedAITabCards");
+      let tab;
+      try {
+        tab = await reopenSavedConversation();
+        await check.lastCall.returnValue;
+      } finally {
+        sandbox.restore();
+      }
+      const card = await waitForAITabCardState(tab.linkedBrowser, STATE_CHOOSE);
+
+      Assert.equal(card.heading, "smartwindow-aitab-response-card-title");
+      Assert.equal(card.buttonCount, 2);
+      BrowserTestUtils.removeTab(tab);
     });
   });
 

@@ -3644,6 +3644,10 @@ export class AIWindow extends MozLitElement {
       if (this.#browser && actor) {
         this.#deliverConversationMessages(actor);
       }
+
+      lazy.ToolUI.markDeletedAITabCards(this.#conversation).catch(e =>
+        lazy.log.error("Failed to check for deleted Smart Pages:", e)
+      );
     } else {
       this.clearChat(conversation);
     }

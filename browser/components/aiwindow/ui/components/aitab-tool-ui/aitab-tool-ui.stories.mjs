@@ -3,7 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { html } from "chrome://global/content/vendor/lit.all.mjs";
-import { STATES, STATE_CHOOSE, STATE_COMPLETE } from "./aitab-tool-ui.mjs";
+import {
+  STATES,
+  STATE_CHOOSE,
+  STATE_COMPLETE,
+  STATE_DELETED,
+} from "./aitab-tool-ui.mjs";
 
 export default {
   title: "Domain-specific UI Widgets/AI Window/AI Tab Tool UI",
@@ -27,6 +32,8 @@ smartwindow-aitab-open-current =
 smartwindow-aitab-open-new =
     .label = Open in new tab
 smartwindow-aitab-created-an-aitab = Created a Smart Page
+smartwindow-aitab-response-card-title = Your Smart Page is ready
+smartwindow-aitab-response-card-title-deleted = Smart Page deleted
     `,
   },
 };
@@ -60,4 +67,10 @@ export const CompleteCollapsed = Template.bind({});
 CompleteCollapsed.args = {
   ...CompleteExpanded.args,
   completeStateOpen: false,
+};
+
+export const Deleted = Template.bind({});
+Deleted.args = {
+  ...Choose.args,
+  state: STATE_DELETED,
 };

@@ -20,10 +20,15 @@ export const STATE_CHOOSE = "choose";
  * the AITab or re-open it if it's closed
  */
 export const STATE_COMPLETE = "complete";
+/**
+ * Puts the UI in deleted state once the AITab has been
+ * deleted, so it names the page without offering to open it.
+ */
+export const STATE_DELETED = "deleted";
 /*
  * List of available states for this component.
  */
-export const STATES = [STATE_CHOOSE, STATE_COMPLETE];
+export const STATES = [STATE_CHOOSE, STATE_COMPLETE, STATE_DELETED];
 
 /**
  * Renders options for opening a generated AITab and its completed state.
@@ -87,7 +92,11 @@ export class AITabToolUI extends MozLitElement {
         @keydown=${e => this.#handleKeyboardActivation(e)}
       >
         <img src=${arrow} alt="" />
-        <span data-l10n-id="smartwindow-aitab-response-card-title"></span>
+        <span
+          data-l10n-id=${this.state === STATE_DELETED
+            ? "smartwindow-aitab-response-card-title-deleted"
+            : "smartwindow-aitab-response-card-title"}
+        ></span>
       </div>
 
       ${this.actionsStateOpen ? this.#renderTitle() : nothing}
@@ -127,7 +136,7 @@ export class AITabToolUI extends MozLitElement {
       ${this.title}
     `;
 
-    return this.viewerURL
+    return this.viewerURL && this.state !== STATE_DELETED
       ? html`<a
           href=${this.viewerURL}
           class="page-title"
