@@ -521,9 +521,14 @@ security:
       document itself ran, from a script element, an event handler attribute
       or a `javascript:` URL; with `js-0`, the sinks are `none` and
       `created`, `used` and `lib` are 0.
+      Documents that are not web pages only increment `excluded-document`:
+      initial `about:blank` documents, image and media documents, plain text,
+      `view-source:` and documents with an `about:` URL other than
+      `about:srcdoc`, unless `document.open()` gave them the opener's URL.
       Only recorded while `dom.security.trusted_types.readiness_telemetry.enabled`
       is set. Compare against `use.counter.content_documents_destroyed`.
     labels:
+      - excluded-document
       - doc-top_htmlsink-none_writesink-none_ttcsp-none_strictcsp-none_created-0_used-0_lib-0_js-0
       - doc-sub_htmlsink-none_writesink-none_ttcsp-none_strictcsp-none_created-0_used-0_lib-0_js-0
       - doc-top_htmlsink-none_writesink-none_ttcsp-none_strictcsp-report_created-0_used-0_lib-0_js-0
