@@ -354,7 +354,9 @@ toolbar .toolbarbutton-1 {
 
   /* While running, tint the icon and display a colored dot. */
   &[remote-control-running] {
-    --toolbarbutton-icon-fill: var(--icon-color-success);
+    @media not (forced-colors) {
+      --toolbarbutton-icon-fill: var(--icon-color-success);
+    }
 
     /* Same dot styling as the .toolbarbutton-badge.feature-callout rule in
      * toolbarbuttons.css, duplicated here because this badge is keyed off an

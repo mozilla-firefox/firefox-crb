@@ -30,8 +30,10 @@
 
   @media not (forced-colors) {
     --button-background-color-ghost: color-mix(in srgb, var(--color-violet-0) 87%, transparent);
-    --button-border-color-ghost: var(--color-white);
-    --button-text-color-ghost: var(--color-violet-90);
+    @media not (prefers-contrast) {
+      --button-border-color-ghost: var(--color-white);
+      --button-text-color-ghost: var(--color-violet-90);
+    }
   }
 
   &::part(button) {

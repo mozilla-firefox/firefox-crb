@@ -129,8 +129,10 @@
 
 :host([current][inactive-window]) {
   outline-color: color-mix(in srgb, var(--tab-border-color-selected) 60%, transparent);
-  --tab-border-color-selected-leading: color-mix(in srgb, var(--color-violet-30) 60%, transparent);
-  --tab-border-color-selected-trailing: color-mix(in srgb, light-dark(var(--color-orange-30), var(--color-violet-50)) 60%, transparent);
+  @media not (forced-colors) {
+    --tab-border-color-selected-leading: color-mix(in srgb, var(--color-violet-30) 60%, transparent);
+    --tab-border-color-selected-trailing: color-mix(in srgb, light-dark(var(--color-orange-30), var(--color-violet-50)) 60%, transparent);
+  }
 }
 
 :host([medium-view]) {

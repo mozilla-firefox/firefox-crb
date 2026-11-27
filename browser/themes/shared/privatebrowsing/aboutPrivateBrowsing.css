@@ -7,9 +7,11 @@
 @media not (prefers-contrast) {
   html.private {
     --background-color-canvas: #25003e;
-    --link-color: white;
-    --link-color-hover: white;
-    --link-color-active: white;
+    @media not (forced-colors) {
+      --link-color: white;
+      --link-color-hover: white;
+      --link-color-active: white;
+    }
 
     color-scheme: dark;
   }
@@ -648,7 +650,9 @@ content-search-handoff-ui {
     @media not (prefers-contrast) {
       html.private {
         --background-color-canvas: var(--color-violet-desaturated-80);
-        --link-color: var(--color-violet-10);
+        @media not (forced-colors) {
+          --link-color: var(--color-violet-10);
+        }
       }
     }
 

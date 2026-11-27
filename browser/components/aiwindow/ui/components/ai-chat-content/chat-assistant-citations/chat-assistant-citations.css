@@ -34,11 +34,15 @@
     --button-font-weight: var(--font-weight);
     --button-min-height: 0;
     --button-padding: var(--space-xxsmall) var(--space-small);
-    --button-text-color-ghost: light-dark(var(--color-violet-90), var(--color-violet-10));
+    @media not (prefers-contrast) {
+      --button-text-color-ghost: light-dark(var(--color-violet-90), var(--color-violet-10));
+    }
     white-space: nowrap;
 
     @media -moz-pref("browser.nova.enabled") {
-      --button-text-color-ghost: light-dark(var(--color-violet-desaturated-90), var(--color-violet-desaturated-0));
+      @media not (prefers-contrast) {
+        --button-text-color-ghost: light-dark(var(--color-violet-desaturated-90), var(--color-violet-desaturated-0));
+      }
     }
   }
 }
