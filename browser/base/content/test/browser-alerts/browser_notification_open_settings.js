@@ -38,6 +38,35 @@ add_task(async function test_settingsOpen_observer() {
   );
 });
 
+add_task(async function test_settingsOpen_observer_no_window() {
+  let { BrowserWindowTracker } = ChromeUtils.importESModule(
+    "resource:///modules/BrowserWindowTracker.sys.mjs"
+  );
+  let { sinon } = ChromeUtils.importESModule(
+    "resource://testing-common/Sinon.sys.mjs"
+  );
+  let sandbox = sinon.createSandbox();
+  let stub = sandbox.stub(BrowserWindowTracker, "getTopWindow");
+  stub.returns(null);
+
+  let windowPromise = BrowserTestUtils.waitForNewWindow();
+  let principal =
+    Services.scriptSecurityManager.createContentPrincipalFromOrigin(
+      "https://example.com"
+    );
+  info("simulate a notifications-open-settings notification with no window");
+  Services.obs.notifyObservers(principal, "notifications-open-settings");
+
+  let win = await windowPromise;
+  ok(win, "A window opened for the notification settings");
+  await TestUtils.waitForCondition(
+    () => win.gBrowser.selectedBrowser.currentURI.spec == expectedURL,
+    "The new window shows the notification settings"
+  );
+  await BrowserTestUtils.closeWindow(win);
+  sandbox.restore();
+});
+
 add_task(async function test_settingsOpen_button() {
   info("Adding notification permission");
   await addNotificationPermission(notificationURL);
