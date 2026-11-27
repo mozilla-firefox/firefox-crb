@@ -22,7 +22,7 @@ class HttpConnectionBase;
 //
 // Succeeds only once the connection is usable -- CONNECT 200 plus the inner TLS
 // handshake for an https origin. A non-200 fails, keeping the response for
-// the caller to hand to the real transaction.
+// InnerConnectionAttempt to hand to the real transaction.
 class InnerConnectionEstablisher {
  public:
   NS_INLINE_DECL_REFCOUNTING(InnerConnectionEstablisher)

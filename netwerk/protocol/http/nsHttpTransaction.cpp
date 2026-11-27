@@ -3728,6 +3728,42 @@ bool nsHttpTransaction::IsWebsocketUpgrade() {
   return result;
 }
 
+void nsHttpTransaction::InjectProxyConnectResponse(
+    const nsHttpResponseHead& aHead, const nsACString& aBody) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+
+  LOG(("nsHttpTransaction::InjectProxyConnectResponse %p status=%u body=%zu",
+       this, aHead.Status(), aBody.Length()));
+
+  {
+    MutexAutoLock lock(mLock);
+    delete mResponseHead;
+    mResponseHead = new nsHttpResponseHead(aHead);
+  }
+
+  mHaveStatusLine = true;
+  mHaveAllHeaders = true;
+  mHttpVersion = aHead.Version();
+  mHttpResponseCode = aHead.Status();
+  mProxyConnectFailed = true;
+  // The proxy did answer, even if this transaction never read it. Without this
+  // Close() sees !mReceivedData and restarts, re-running the whole CONNECT up
+  // to MaxRequestAttempts().
+  mReceivedData = true;
+
+  if (!aBody.IsEmpty() && mPipeOut) {
+    uint32_t written = 0;
+    nsresult rv =
+        mPipeOut->Write(aBody.BeginReading(), aBody.Length(), &written);
+    if (NS_FAILED(rv) || written != aBody.Length()) {
+      // The channel acts on the status line; a body the pipe would not take is
+      // only the error page.
+      LOG(("  body write failed rv=%" PRIx32 " written=%u of %zu",
+           static_cast<uint32_t>(rv), written, aBody.Length()));
+    }
+  }
+}
+
 void nsHttpTransaction::OnProxyConnectComplete(
     ProxyConnectResponseHead* aResponseHead) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
