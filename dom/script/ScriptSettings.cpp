@@ -190,6 +190,22 @@ Document* GetEntryDocument() {
   return entryWin ? entryWin->GetExtantDoc() : nullptr;
 }
 
+// aScriptedCallerGlobalOrNull is JS::GetScriptedCallerGlobal's result.
+static nsIGlobalObject* IncumbentGlobalForScriptedCaller(
+    JSObject* aScriptedCallerGlobalOrNull) {
+  // See what the JS engine has to say. If we've got a scripted caller
+  // override in place, the JS engine will lie to us and pretend that
+  // there's nothing on the JS stack, which will cause us to check the
+  // incumbent script stack below.
+  if (aScriptedCallerGlobalOrNull) {
+    return ClampToSubject(xpc::NativeGlobal(aScriptedCallerGlobalOrNull));
+  }
+
+  // Ok, nothing from the JS engine. Let's use whatever's on the
+  // explicit stack.
+  return ClampToSubject(ScriptSettingsStack::IncumbentGlobal());
+}
+
 nsIGlobalObject* GetIncumbentGlobal() {
   // We need the current JSContext in order to check the JS for
   // scripted frames that may have appeared since anyone last
@@ -202,17 +218,15 @@ nsIGlobalObject* GetIncumbentGlobal() {
     return nullptr;
   }
 
-  // See what the JS engine has to say. If we've got a scripted caller
-  // override in place, the JS engine will lie to us and pretend that
-  // there's nothing on the JS stack, which will cause us to check the
-  // incumbent script stack below.
-  if (JSObject* global = JS::GetScriptedCallerGlobal(cx)) {
-    return ClampToSubject(xpc::NativeGlobal(global));
-  }
+  return IncumbentGlobalForScriptedCaller(JS::GetScriptedCallerGlobal(cx));
+}
 
-  // Ok, nothing from the JS engine. Let's use whatever's on the
-  // explicit stack.
-  return ClampToSubject(ScriptSettingsStack::IncumbentGlobal());
+JSObject* GetIncumbentGlobalJSObject(JSContext* aCx) {
+  MOZ_ASSERT(aCx == danger::GetJSContext());
+
+  nsIGlobalObject* global =
+      IncumbentGlobalForScriptedCaller(JS::GetScriptedCallerGlobal(aCx));
+  return global ? global->GetGlobalJSObject() : nullptr;
 }
 
 nsIGlobalObject* GetCurrentGlobal() {

@@ -200,12 +200,7 @@ static const JSClass sSchedulingStateClass = {"SchedulingStateWrapper",
 
 bool CycleCollectedJSContext::getHostDefinedGlobal(
     JSContext* aCx, JS::MutableHandle<JSObject*> out) const {
-  nsIGlobalObject* global = mozilla::dom::GetIncumbentGlobal();
-  if (!global) {
-    return true;
-  }
-
-  out.set(global->GetGlobalJSObject());
+  out.set(mozilla::dom::GetIncumbentGlobalJSObject(aCx));
   return true;
 }
 
