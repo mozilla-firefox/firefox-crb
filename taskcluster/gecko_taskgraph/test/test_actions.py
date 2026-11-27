@@ -962,15 +962,14 @@ AB_PROFILES_COMMAND = [
 ]
 
 
-@pytest.fixture
-def ab_profiles_mocks(mocker):
-    """Stand in for the two pushes the AB profiles action reads."""
-    graph = make_graph(
+def ab_profiles_graph():
+    return make_graph(
         make_task(
             label=AB_PROFILES_LABEL,
             attributes={"supports_ab_profiles": True},
             task_def={
                 "metadata": {"name": AB_PROFILES_LABEL, "description": "Raptor"},
+                "deadline": "2026-11-24T00:00:00.000Z",
                 "extra": {"treeherder": {"symbol": "sp3-p"}},
                 "payload": {
                     "env": {
@@ -1007,6 +1006,11 @@ def ab_profiles_mocks(mocker):
         (AB_PROFILES_LABEL, AB_PROFILES_BUILD_LABEL, "build"),
     )
 
+
+@pytest.fixture
+def ab_profiles_mocks(mocker):
+    """Stand in for the two pushes the AB profiles action reads."""
+    graph = ab_profiles_graph()
     mocker.patch(
         "gecko_taskgraph.actions.ab_profiles.fetch_graph_and_labels",
         return_value=("gid", graph, {AB_PROFILES_BUILD_LABEL: "newbuildtid"}, None),
@@ -1145,6 +1149,58 @@ def test_ab_profiles_refuses_failed_new_build(
             "ab-profiles",
             params={"head_rev": "newrev123456789", "project": "try"},
             input={"base_revision": AB_PROFILES_BASE_REV},
+        )
+
+
+def test_ab_profiles_push_action(ab_profiles_mocks, run_action, get_artifact):
+    run_action(
+        "ab-profiles-push",
+        params={"head_rev": "newrev123456789", "project": "try"},
+        task_id=None,
+        input={"tasks": [AB_PROFILES_LABEL], "base_revision": AB_PROFILES_BASE_REV},
+    )
+
+    task_def = ab_task_def(get_artifact)
+    assert task_def["metadata"]["name"] == f"{AB_PROFILES_LABEL}-ab"
+    assert {"basebuildtid", "newbuildtid"} <= set(task_def["dependencies"])
+    config = json.loads(task_def["payload"]["env"]["RAPTOR_AB_CONFIG"])
+    assert config["order"] == ["base", "new"]
+    assert "basebuildtid" in config["runs"]["base"]["installer_url"]
+
+
+def test_ab_profiles_push_action_schedules_the_new_build(
+    ab_profiles_mocks, mocker, run_action, get_artifact
+):
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.fetch_graph_and_labels",
+        return_value=("gid", ab_profiles_graph(), {}, None),
+    )
+    run_action(
+        "ab-profiles-push",
+        params={"head_rev": "newrev123456789", "project": "try"},
+        task_id=None,
+        input={"tasks": [AB_PROFILES_LABEL], "base_revision": AB_PROFILES_BASE_REV},
+    )
+
+    new_build_task_id = get_artifact("label-to-taskid.json")[AB_PROFILES_BUILD_LABEL]
+    assert new_build_task_id in get_artifact("task-graph.json")
+    assert new_build_task_id in ab_task_def(get_artifact)["dependencies"]
+
+
+def test_ab_profiles_push_action_rejects_unsupported_task(
+    ab_profiles_mocks, run_action
+):
+    with pytest.raises(
+        Exception, match=f"These tasks support AB profiles: {AB_PROFILES_LABEL}"
+    ):
+        run_action(
+            "ab-profiles-push",
+            params={"head_rev": "newrev123456789", "project": "try"},
+            task_id=None,
+            input={
+                "tasks": [AB_PROFILES_BUILD_LABEL],
+                "base_revision": AB_PROFILES_BASE_REV,
+            },
         )
 
 
