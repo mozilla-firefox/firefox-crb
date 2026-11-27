@@ -88,6 +88,7 @@ pub unsafe extern "C" fn happy_eyeballs_create(
     ip_preference: IpPreference,
     http_versions: HttpVersions,
     resolution: ResolutionMode,
+    connection_attempt_delay_ms_override: u32,
 ) -> nsresult {
     *result = ptr::null_mut();
 
@@ -132,9 +133,15 @@ pub unsafe extern "C" fn happy_eyeballs_create(
         10,
         static_prefs::pref!("network.http.happy_eyeballs_resolution_delay"),
     );
+    // A caller with its own notion of how long an attempt takes (e.g. an inner
+    // connection through a CONNECT tunnel) overrides the global pref.
     let connection_attempt_delay_ms = std::cmp::max(
         10,
-        static_prefs::pref!("network.http.happy_eyeballs_connection_attempt_delay"),
+        if connection_attempt_delay_ms_override != 0 {
+            connection_attempt_delay_ms_override
+        } else {
+            static_prefs::pref!("network.http.happy_eyeballs_connection_attempt_delay")
+        },
     );
     let connection_attempt_delay_multiplier = NonZeroU32::new(static_prefs::pref!(
         "network.http.happy_eyeballs_connection_attempt_delay_multiplier"
