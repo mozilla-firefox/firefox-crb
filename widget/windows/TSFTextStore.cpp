@@ -3323,7 +3323,7 @@ IMENotificationRequests TSFTextStore::GetIMENotificationRequests() const {
 
 nsresult TSFTextStore::OnTextChangeInternal(
     const IMENotification& aIMENotification) {
-  const TextChangeDataBase& textChangeData = aIMENotification.mTextChangeData;
+  const TextChangeData& textChangeData = aIMENotification.mTextChangeData.ref();
 
   MOZ_LOG(
       gIMELog, LogLevel::Debug,
@@ -3416,8 +3416,8 @@ void TSFTextStore::NotifyTSFOfTextChange() {
 
 nsresult TSFTextStore::OnSelectionChangeInternal(
     const IMENotification& aIMENotification) {
-  const SelectionChangeDataBase& selectionChangeData =
-      aIMENotification.mSelectionChangeData;
+  const SelectionChangeData& selectionChangeData =
+      aIMENotification.mSelectionChangeData.ref();
   MOZ_LOG(gIMELog, LogLevel::Debug,
           ("0x%p   TSFTextStore::OnSelectionChangeInternal("
            "aIMENotification={ mSelectionChangeData=%s }), mDestroyed=%s, "
@@ -3727,25 +3727,25 @@ nsresult TSFTextStore::OnMouseButtonEventInternal(
       ("0x%p   TSFTextStore::OnMouseButtonEventInternal("
        "aIMENotification={ mEventMessage=%s, mOffset=%u, mCursorPos=%s, "
        "mCharRect=%s, mButton=%s, mButtons=%s, mModifiers=%s })",
-       this, ToChar(aIMENotification.mMouseButtonEventData.mEventMessage),
-       aIMENotification.mMouseButtonEventData.mOffset,
-       ToString(aIMENotification.mMouseButtonEventData.mCursorPos).c_str(),
-       ToString(aIMENotification.mMouseButtonEventData.mCharRect).c_str(),
+       this, ToChar(aIMENotification.mMouseButtonEventData->mEventMessage),
+       aIMENotification.mMouseButtonEventData->mOffset,
+       ToString(aIMENotification.mMouseButtonEventData->mCursorPos).c_str(),
+       ToString(aIMENotification.mMouseButtonEventData->mCharRect).c_str(),
        TSFUtils::MouseButtonToChar(
-           aIMENotification.mMouseButtonEventData.mButton),
-       AutoMouseButtonsCString(aIMENotification.mMouseButtonEventData.mButtons)
+           aIMENotification.mMouseButtonEventData->mButton),
+       AutoMouseButtonsCString(aIMENotification.mMouseButtonEventData->mButtons)
            .get(),
-       GetModifiersName(aIMENotification.mMouseButtonEventData.mModifiers)
+       GetModifiersName(aIMENotification.mMouseButtonEventData->mModifiers)
            .get()));
 
-  uint32_t offset = aIMENotification.mMouseButtonEventData.mOffset;
+  uint32_t offset = aIMENotification.mMouseButtonEventData->mOffset;
   if (offset > static_cast<uint32_t>(LONG_MAX)) {
     return NS_OK;
   }
   LayoutDeviceIntRect charRect =
-      aIMENotification.mMouseButtonEventData.mCharRect;
+      aIMENotification.mMouseButtonEventData->mCharRect;
   LayoutDeviceIntPoint cursorPos =
-      aIMENotification.mMouseButtonEventData.mCursorPos;
+      aIMENotification.mMouseButtonEventData->mCursorPos;
   ULONG quadrant = 1;
   if (charRect.Width() > 0) {
     int32_t cursorXInChar = cursorPos.x - charRect.X();
@@ -3755,9 +3755,9 @@ nsresult TSFTextStore::OnMouseButtonEventInternal(
   ULONG edge = quadrant < 2 ? offset + 1 : offset;
   DWORD buttonStatus = 0;
   bool isMouseUp =
-      aIMENotification.mMouseButtonEventData.mEventMessage == eMouseUp;
+      aIMENotification.mMouseButtonEventData->mEventMessage == eMouseUp;
   if (!isMouseUp) {
-    switch (aIMENotification.mMouseButtonEventData.mButton) {
+    switch (aIMENotification.mMouseButtonEventData->mButton) {
       case MouseButton::ePrimary:
         buttonStatus = MK_LBUTTON;
         break;
@@ -3769,10 +3769,10 @@ nsresult TSFTextStore::OnMouseButtonEventInternal(
         break;
     }
   }
-  if (aIMENotification.mMouseButtonEventData.mModifiers & MODIFIER_CONTROL) {
+  if (aIMENotification.mMouseButtonEventData->mModifiers & MODIFIER_CONTROL) {
     buttonStatus |= MK_CONTROL;
   }
-  if (aIMENotification.mMouseButtonEventData.mModifiers & MODIFIER_SHIFT) {
+  if (aIMENotification.mMouseButtonEventData->mModifiers & MODIFIER_SHIFT) {
     buttonStatus |= MK_SHIFT;
   }
   for (size_t i = 0; i < mMouseTrackers.Length(); i++) {
