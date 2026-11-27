@@ -22,9 +22,9 @@ import mozilla.components.concept.engine.ipprotection.ServiceState
  * @property holdResults Whether the results of [activate] and [deactivate] wait for [releaseHeldResults].
  */
 internal class FakeIPProtectionHandler(
-    var activateResult: Throwable? = null,
-    var deactivateResult: Throwable? = null,
-    var countryListResult: Throwable? = null,
+    var activateResult: IPProtectionHandler.RequestError? = null,
+    var deactivateResult: IPProtectionHandler.RequestError? = null,
+    var countryListResult: IPProtectionHandler.RequestError? = null,
     var enrollResult: IPProtectionHandler.EnrollResult = IPProtectionHandler.EnrollResult(true),
     var serviceState: ServiceState = ServiceState.Uninitialized,
     var holdResults: Boolean = false,
@@ -45,14 +45,14 @@ internal class FakeIPProtectionHandler(
     var lastProxyCallThread: Thread? = null
         private set
 
-    override fun activate(countryCode: String?, onResult: (Throwable?) -> Unit) {
+    override fun activate(countryCode: String?, onResult: (IPProtectionHandler.RequestError?) -> Unit) {
         calls += Call.Activate(countryCode)
         lastProxyCallThread = Thread.currentThread()
         val result = activateResult
         reply { onResult(result) }
     }
 
-    override fun deactivate(onResult: (Throwable?) -> Unit) {
+    override fun deactivate(onResult: (IPProtectionHandler.RequestError?) -> Unit) {
         calls += Call.Deactivate
         lastProxyCallThread = Thread.currentThread()
         val result = deactivateResult
@@ -84,7 +84,7 @@ internal class FakeIPProtectionHandler(
         onResult(serviceState)
     }
 
-    override fun updateCountryList(onResult: (Throwable?) -> Unit) {
+    override fun updateCountryList(onResult: (IPProtectionHandler.RequestError?) -> Unit) {
         calls += Call.UpdateCountryList
         onResult(countryListResult)
     }

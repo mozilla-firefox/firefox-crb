@@ -860,7 +860,10 @@ class IPProtectionReducerTest {
         val resultState =
             iPProtectionReducer(
                 state = initialState,
-                action = IPProtectionAction.LocationAction.LocationUpdateFailed(RuntimeException("unknown-error")),
+                action =
+                    IPProtectionAction.LocationAction.LocationUpdateFailed(
+                        IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("unknown-error"))
+                    ),
             )
 
         assertEquals(LocationListUpdateState.Failed, resultState.locationState.updateState)
@@ -873,7 +876,10 @@ class IPProtectionReducerTest {
         val resultState =
             iPProtectionReducer(
                 state = initialState,
-                action = IPProtectionAction.LocationAction.LocationUpdateFailed(RuntimeException("unknown-error")),
+                action =
+                    IPProtectionAction.LocationAction.LocationUpdateFailed(
+                        IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("unknown-error"))
+                    ),
             )
 
         assertEquals(LocationListUpdateState.NotRequested, resultState.locationState.updateState)
