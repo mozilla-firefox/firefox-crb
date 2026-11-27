@@ -444,12 +444,29 @@ DocumentChannelChild::OnRedirectVerifyCallback(nsresult aStatusCode) {
   }
 
   nsresult rv = aStatusCode;
+  RefPtr<nsDocShell> navigatingDocShell;
+  // Load was a download, turned navigation. Make it behave like one for
+  // navigation load groups.
+  if (NS_SUCCEEDED(rv) && !mLoadState->FileName().IsVoid()) {
+    if (RefPtr<nsDocShell> docShell = GetDocShell()) {
+      auto result = docShell->StartNavigationForDownloadTurnedDocument(
+          redirectChannel, mLoadState->LoadType());
+      if (result.isErr()) {
+        rv = result.unwrapErr();
+      } else if (result.inspect()) {
+        navigatingDocShell = std::move(docShell);
+      }
+    }
+  }
   if (NS_SUCCEEDED(rv)) {
     if (nsCOMPtr<nsIChildChannel> childChannel =
             do_QueryInterface(redirectChannel)) {
       rv = childChannel->CompleteRedirectSetup(mListener);
     } else {
       rv = redirectChannel->AsyncOpen(mListener);
+    }
+    if (NS_FAILED(rv) && navigatingDocShell) {
+      navigatingDocShell->RevertNavigationLoadGroup();
     }
   } else {
     redirectChannel->SetNotificationCallbacks(nullptr);

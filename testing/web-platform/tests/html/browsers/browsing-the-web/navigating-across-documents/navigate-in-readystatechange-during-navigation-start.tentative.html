@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="timeout" content="long">
+<title>Script run by the readystatechange fired by aborting a loading document, during the navigation that aborted it</title>
+<link rel="help" href="https://html.spec.whatwg.org/#navigate">
+<link rel="help" href="https://html.spec.whatwg.org/#abort-a-document">
+<link rel="help" href="https://html.spec.whatwg.org/#nav-stop">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/common/utils.js"></script>
+<script src="resources/pending-navigation-helpers.js"></script>
+<script>
+// The navigation is the ongoing navigation before it aborts the document, so
+// script run by that abort can stop it.
+async function testWindowStopFromReadyStateChange(t, inReadyStateChange) {
+  const parserRequest = heldRequest(t, "script");
+  const win = await openObserver(t, parserRequest);
+  const originalDocument = win.document;
+  const originalURL = win.location.href;
+
+  const stopped = new Promise(resolve => {
+    originalDocument.addEventListener("readystatechange", () => {
+      inReadyStateChange(() => {
+        win.stop();
+        resolve("stopped");
+      });
+    }, {once: true});
+  });
+
+  const navigated = popupMessage(t, win, ["navigated"]);
+  const navigationRequest = heldRequest(t, "navigation");
+  win.location.href = navigationRequest.url;
+
+  assert_equals(await Promise.race([stopped, timeout(t, 5000, "timeout")]), "stopped",
+    "Starting the navigation aborts the parser, firing readystatechange");
+
+  await navigationRequest.release();
+  await parserRequest.release();
+  assert_equals(await Promise.race([navigated, timeout(t, 2000, "none")]), "none",
+    "The new document never loads");
+  assert_equals(win.document, originalDocument, "The navigation did not commit");
+  assert_equals(win.location.href, originalURL, "The URL did not change");
+}
+
+// A navigation started from that readystatechange is the newer one, so it
+// supersedes the navigation that fired it.
+async function testNavigationFromReadyStateChange(t, startSecond) {
+  const parserRequest = heldRequest(t, "script");
+  const win = await openObserver(t, parserRequest);
+
+  const first = heldRequest(t, "navigation");
+  const second = heldRequest(t, "navigation");
+  const navigatedAgain = new Promise(resolve => {
+    win.document.addEventListener("readystatechange", () => {
+      startSecond(() => {
+        win.location.href = second.url;
+        resolve("navigated again");
+      });
+    }, {once: true});
+  });
+
+  const commits = [];
+  const onMessage = event => {
+    if (event.source === win && event.data === "navigated") {
+      commits.push(win.location.href);
+    }
+  };
+  window.addEventListener("message", onMessage);
+  t.add_cleanup(() => window.removeEventListener("message", onMessage));
+
+  win.location.href = first.url;
+
+  assert_equals(await Promise.race([navigatedAgain, timeout(t, 5000, "timeout")]),
+    "navigated again", "Starting the navigation aborts the parser, firing readystatechange");
+
+  await parserRequest.release();
+  await second.release();
+  await timeout(t, 1000);
+  await first.release();
+  await timeout(t, 1000);
+  assert_array_equals(commits, [second.url],
+    "Only the navigation started from readystatechange commits");
+}
+
+// The abort runs in a task of its own, so per spec a microtask queued from
+// readystatechange runs within it, while the navigation is still ongoing. Each
+// microtask variant must therefore behave like its synchronous counterpart.
+promise_test(t => testWindowStopFromReadyStateChange(t, f => f()),
+  "A window.stop() from inside readystatechange should stop a navigation");
+
+promise_test(t => testWindowStopFromReadyStateChange(t, queueMicrotask),
+  "A window.stop() started in a microtask from inside readystatechange should stop a navigation");
+
+promise_test(t => testNavigationFromReadyStateChange(t, f => f()),
+  "A navigation started in readystatechange during navigation start supersedes the navigation");
+
+promise_test(t => testNavigationFromReadyStateChange(t, queueMicrotask),
+  "A navigation started in a microtask from readystatechange during navigation start supersedes the navigation");
+</script>
