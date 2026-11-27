@@ -144,6 +144,11 @@ class nsDocLoader : public nsIDocumentLoader,
 
   [[nodiscard]] virtual nsresult SetDocLoaderParent(nsDocLoader* aLoader);
 
+  // Creates a load group observed by this docloader and carrying its
+  // notification callbacks, default load flags and priority. A zero
+  // aRequestContextId makes the group mint its own request context.
+  already_AddRefed<nsILoadGroup> CreateLoadGroup(uint64_t aRequestContextId);
+
   bool IsBusy();
 
   void SetBackgroundLoadIframe();
@@ -280,6 +285,7 @@ class nsDocLoader : public nsIDocumentLoader,
   ListenerArray mListenerInfoList;
 
   nsCOMPtr<nsILoadGroup> mLoadGroup;
+
   // We hold weak refs to all our kids
   nsTObserverArray<nsDocLoader*> mChildList;
 
