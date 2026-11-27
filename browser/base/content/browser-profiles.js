@@ -2,8 +2,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var gProfiles = {
+class BrowserProfiles {
+  #window;
+
+  #subViewProfile;
+
+  /**
+   * @param {Window} window The browser window whose profile menus this
+   *   manages.
+   */
+  constructor(window) {
+    this.#window = window;
+  }
+
   async init() {
+    let { document, PanelUI } = this.#window;
     this.copyProfile = this.copyProfile.bind(this);
     this.createNewProfile = this.createNewProfile.bind(this);
     this.handleCommand = this.handleCommand.bind(this);
@@ -49,12 +62,12 @@ var gProfiles = {
     this.subview.addEventListener("command", this.handleCommand);
 
     PanelUI.mainView.addEventListener("ViewShowing", () =>
-      this._onPanelShowing(this.profilesButton)
+      this.#onPanelShowing(this.profilesButton)
     );
 
     let fxaPanelView = PanelMultiView.getViewNode(document, "PanelUI-fxa");
     fxaPanelView.addEventListener("ViewShowing", () =>
-      this._onFxaMenuPanelShowing()
+      this.#onFxaMenuPanelShowing()
     );
 
     this.profilesButton.addEventListener("command", this.handleCommand);
@@ -85,18 +98,19 @@ var gProfiles = {
       let listener = (event, isEnabled) => this.toggleProfileMenus(isEnabled);
 
       SelectableProfileService.on("enableChanged", listener);
-      window.addEventListener("unload", () =>
+      this.#window.addEventListener("unload", () =>
         SelectableProfileService.off("enableChanged", listener)
       );
     }
-  },
+  }
 
   toggleProfileMenus(isEnabled) {
+    let { document } = this.#window;
     let profilesMenu = document.getElementById("profiles-menu");
     profilesMenu.hidden = !isEnabled;
-  },
+  }
 
-  async _onPanelShowing(profilesButton) {
+  async #onPanelShowing(profilesButton) {
     if (!SelectableProfileService?.isEnabled) {
       profilesButton.hidden = true;
       this.appMenuCreateProfileButton.hidden = true;
@@ -128,9 +142,10 @@ var gProfiles = {
       "image",
       await SelectableProfileService.currentProfile.getAvatarURL(16)
     );
-  },
+  }
 
-  async _onFxaMenuPanelShowing() {
+  async #onFxaMenuPanelShowing() {
+    let { document } = this.#window;
     const container = this.fxaMenuProfileButtonsContainer;
     const headerLabel = this.fxaMenuProfilesHeaderLabel;
     const separator = this.fxaMenuProfilesSeparator;
@@ -220,9 +235,10 @@ var gProfiles = {
     }
 
     showProfilesSection();
-  },
+  }
 
-  async _populateAllProfilesPanel() {
+  async #populateAllProfilesPanel() {
+    let { document } = this.#window;
     const list = PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-all-profiles-list"
@@ -297,12 +313,13 @@ var gProfiles = {
 
       list.appendChild(btn);
     }
-  },
+  }
 
   /**
    * Draws the menubar panel contents.
    */
   async onPopupShowing() {
+    let { document } = this.#window;
     let menuPopup = document.getElementById("menu_ProfilesPopup");
     let profiles = await SelectableProfileService.getAllProfiles();
     let currentProfile = SelectableProfileService.currentProfile;
@@ -346,9 +363,10 @@ var gProfiles = {
     for (let remaining of existingItems) {
       remaining.remove();
     }
-  },
+  }
 
   manageProfiles() {
+    let { toOpenWindowByType } = this.#window;
     return SelectableProfileService.maybeSetupDataStore().then(() => {
       toOpenWindowByType(
         "about:profilemanager",
@@ -356,21 +374,22 @@ var gProfiles = {
         "chrome,resizable,toolbar,centerscreen"
       );
     });
-  },
+  }
 
   copyProfile() {
     const profile =
-      this._subViewProfile ?? SelectableProfileService.currentProfile;
+      this.#subViewProfile ?? SelectableProfileService.currentProfile;
     SelectableProfileService.maybeSetupDataStore().then(() => {
       profile.copyProfile();
     });
-  },
+  }
 
   createNewProfile(source) {
     SelectableProfileService.createNewProfile(true, null, source);
-  },
+  }
 
   updateView(target) {
+    let { PanelUI } = this.#window;
     const closestPanelView = target.closest("panelview");
     const panelView = closestPanelView
       ? PanelView.forNode(closestPanelView)
@@ -381,16 +400,17 @@ var gProfiles = {
       panelView._doingKeyboardActivation = true;
     }
     PanelUI.showSubView("PanelUI-profiles", target);
-  },
+  }
 
   async updateFxAView(target) {
+    let { PanelUI } = this.#window;
     const profileId = parseInt(target.getAttribute("profileid"), 10);
-    this._subViewProfile = profileId
+    this.#subViewProfile = profileId
       ? await SelectableProfileService.getProfile(profileId)
       : null;
-    this.populateSubView(this._subViewProfile);
+    this.populateSubView(this.#subViewProfile);
     PanelUI.showSubView("PanelUI-profiles", target);
-  },
+  }
 
   launchProfile(aEvent) {
     SelectableProfileService.getProfile(
@@ -398,7 +418,7 @@ var gProfiles = {
     ).then(profile => {
       SelectableProfileService.launchInstance(profile);
     });
-  },
+  }
 
   async openTabsInProfile(aEvent, tabsToOpen) {
     let profile = await SelectableProfileService.getProfile(
@@ -408,7 +428,7 @@ var gProfiles = {
       profile,
       tabsToOpen.map(tab => tab.linkedBrowser.currentURI.spec)
     );
-  },
+  }
 
   async handleCommand(aEvent) {
     switch (aEvent.target.id) {
@@ -420,18 +440,27 @@ var gProfiles = {
       /* FxA menu button events */
       case "PanelUI-fxa-menu-all-profiles-button": {
         aEvent.stopPropagation();
-        gSync.emitFxaToolbarTelemetry("view_all_profiles", aEvent.target);
-        this._populateAllProfilesPanel();
-        PanelUI.showSubView("PanelUI-fxa-menu-all-profiles", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "view_all_profiles",
+          aEvent.target
+        );
+        this.#populateAllProfilesPanel();
+        this.#window.PanelUI.showSubView(
+          "PanelUI-fxa-menu-all-profiles",
+          aEvent.target
+        );
         break;
       }
       case "PanelUI-fxa-menu-all-profiles-manage-button": {
-        gSync.emitFxaToolbarTelemetry("manage_all_profiles", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "manage_all_profiles",
+          aEvent.target
+        );
         this.manageProfiles();
         break;
       }
       case "PanelUI-fxa-menu-all-profiles-create-button": {
-        gSync.emitFxaToolbarTelemetry(
+        this.#window.gSync.emitFxaToolbarTelemetry(
           "create_new_profile_cta_label",
           aEvent.target
         );
@@ -442,15 +471,18 @@ var gProfiles = {
       // fall through
       case "PanelUI-fxa-menu-create-profile-button": {
         aEvent.stopPropagation();
-        gSync.emitFxaToolbarTelemetry(
+        this.#window.gSync.emitFxaToolbarTelemetry(
           "create_new_profile_submenu",
           aEvent.target
         );
-        PanelUI.showSubView("PanelUI-fxa-menu-create-profile", aEvent.target);
+        this.#window.PanelUI.showSubView(
+          "PanelUI-fxa-menu-create-profile",
+          aEvent.target
+        );
         break;
       }
       case "PanelUI-fxa-menu-create-profile-confirm-button": {
-        gSync.emitFxaToolbarTelemetry(
+        this.#window.gSync.emitFxaToolbarTelemetry(
           "create_new_profile_cta_button",
           aEvent.target
         );
@@ -458,20 +490,29 @@ var gProfiles = {
         break;
       }
       case "PanelUI-fxa-menu-create-profile-learn-more-button": {
-        gSync.emitFxaToolbarTelemetry("what_are_profiles", aEvent.target);
-        openTrustedLinkIn(
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "what_are_profiles",
+          aEvent.target
+        );
+        this.#window.openTrustedLinkIn(
           "https://support.mozilla.org/kb/profile-management",
           "tab"
         );
         break;
       }
       case "PanelUI-fxa-menu-create-profile-copy-button": {
-        gSync.emitFxaToolbarTelemetry("copy_primary_profile", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "copy_primary_profile",
+          aEvent.target
+        );
         this.copyProfile();
         break;
       }
       case "PanelUI-fxa-menu-create-profile-manage-button": {
-        gSync.emitFxaToolbarTelemetry("manage_profiles", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "manage_profiles",
+          aEvent.target
+        );
         this.manageProfiles();
         break;
       }
@@ -481,7 +522,7 @@ var gProfiles = {
           aEvent.target.classList.contains("subviewbutton-nav")
         ) {
           aEvent.stopPropagation();
-          gSync.emitFxaToolbarTelemetry(
+          this.#window.gSync.emitFxaToolbarTelemetry(
             "manage_primary_profile",
             aEvent.target
           );
@@ -496,22 +537,31 @@ var gProfiles = {
         break;
       }
       case "profiles-edit-this-profile-button": {
-        gSync.emitFxaToolbarTelemetry("edit_primary_profile", aEvent.target);
-        openTrustedLinkIn("about:editprofile", "tab");
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "edit_primary_profile",
+          aEvent.target
+        );
+        this.#window.openTrustedLinkIn("about:editprofile", "tab");
         break;
       }
       case "profiles-manage-profiles-button": {
-        gSync.emitFxaToolbarTelemetry("manage_profiles", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "manage_profiles",
+          aEvent.target
+        );
         this.manageProfiles();
         break;
       }
       case "profiles-copy-profile-button": {
-        gSync.emitFxaToolbarTelemetry("copy_primary_profile", aEvent.target);
+        this.#window.gSync.emitFxaToolbarTelemetry(
+          "copy_primary_profile",
+          aEvent.target
+        );
         this.copyProfile();
         break;
       }
       case "profiles-create-profile-button": {
-        gSync.emitFxaToolbarTelemetry(
+        this.#window.gSync.emitFxaToolbarTelemetry(
           "create_new_profile_cta_label",
           aEvent.target
         );
@@ -534,10 +584,10 @@ var gProfiles = {
       }
       case "Profiles:MoveTabsToProfile": {
         let tabs;
-        if (TabContextMenu.contextTab.multiselected) {
-          tabs = gBrowser.selectedTabs;
+        if (this.#window.TabContextMenu.contextTab.multiselected) {
+          tabs = this.#window.gBrowser.selectedTabs;
         } else {
-          tabs = [TabContextMenu.contextTab];
+          tabs = [this.#window.TabContextMenu.contextTab];
         }
         this.openTabsInProfile(aEvent.sourceEvent, tabs);
         break;
@@ -550,7 +600,7 @@ var gProfiles = {
       aEvent.target.getAttribute("profileid") !==
         String(SelectableProfileService.currentProfile?.id)
     ) {
-      gSync.emitFxaToolbarTelemetry(
+      this.#window.gSync.emitFxaToolbarTelemetry(
         aEvent.target.closest("#PanelUI-fxa-menu-all-profiles-list")
           ? "launch_secondary_profile_all_profiles"
           : "launch_secondary_profile",
@@ -558,7 +608,7 @@ var gProfiles = {
       );
       this.launchProfile(aEvent);
     }
-  },
+  }
 
   /**
    * Inserts the subpanel contents for the PanelUI subpanel, which may be shown
@@ -569,6 +619,7 @@ var gProfiles = {
    *   current profile.
    */
   async populateSubView(displayProfile = null) {
+    let { document } = this.#window;
     let profiles = [];
     let currentProfile = null;
 
@@ -788,9 +839,10 @@ var gProfiles = {
       subview.insertBefore(copyProfileButton, subviewBody);
       subview.insertBefore(manageProfilesButton, subviewBody);
     }
-  },
+  }
 
   async populateMoveTabMenu(menuPopup) {
+    let { document } = this.#window;
     if (!SelectableProfileService.initialized) {
       return;
     }
@@ -836,5 +888,7 @@ var gProfiles = {
     for (let remaining of existingItems) {
       remaining.remove();
     }
-  },
-};
+  }
+}
+
+var gProfiles = new BrowserProfiles(window);
