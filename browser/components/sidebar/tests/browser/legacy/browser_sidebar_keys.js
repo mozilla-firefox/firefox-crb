@@ -53,11 +53,14 @@ add_task(async function test_sidebar_in_customize_mode() {
   let widgetIcon = CustomizableUI.getWidget("sidebar-button")
     .forWindow(window)
     .node?.querySelector(".toolbarbutton-icon");
-  // Get the alpha value of the sidebar toggle widget's background
-  let getBGAlpha = () =>
-    InspectorUtils.colorToRGBA(
-      getComputedStyle(widgetIcon).getPropertyValue("background-color")
-    ).a;
+  // Get the alpha value of the sidebar toggle widget's background once it has
+  // finished fading.
+  let getBGAlpha = async () => {
+    let style = getComputedStyle(widgetIcon);
+    style.backgroundColor;
+    await Promise.all(widgetIcon.getAnimations().map(a => a.finished));
+    return InspectorUtils.colorToRGBA(style.backgroundColor).a;
+  };
 
   let promiseShown = BrowserTestUtils.waitForEvent(window, "SidebarShown");
   SidebarController.show("viewBookmarksSidebar");
@@ -65,7 +68,7 @@ add_task(async function test_sidebar_in_customize_mode() {
 
   if (!Services.prefs.getBoolPref("sidebar.revamp", false)) {
     Assert.greater(
-      getBGAlpha(),
+      await getBGAlpha(),
       0,
       "Sidebar widget background should appear checked"
     );
@@ -81,7 +84,7 @@ add_task(async function test_sidebar_in_customize_mode() {
   await customizationReadyPromise;
 
   Assert.equal(
-    getBGAlpha(),
+    await getBGAlpha(),
     0,
     "Sidebar widget background should appear unchecked"
   );
@@ -101,7 +104,7 @@ add_task(async function test_sidebar_in_customize_mode() {
 
   if (!Services.prefs.getBoolPref("sidebar.revamp", false)) {
     Assert.greater(
-      getBGAlpha(),
+      await getBGAlpha(),
       0,
       "Sidebar widget background should appear checked again"
     );
@@ -111,7 +114,7 @@ add_task(async function test_sidebar_in_customize_mode() {
   ok(!SidebarController.isOpen, "Sidebar is closed");
   if (!Services.prefs.getBoolPref("sidebar.revamp", false)) {
     Assert.equal(
-      getBGAlpha(),
+      await getBGAlpha(),
       0,
       "Sidebar widget background should appear unchecked"
     );

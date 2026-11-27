@@ -981,7 +981,7 @@ const gClickAndHoldListenersOnElement = {
     aEvent.currentTarget.addEventListener("mouseup", this);
     this._timers.set(
       aEvent.currentTarget,
-      setTimeout(b => this._openMenu(b), 500, aEvent.currentTarget)
+      setTimeout(b => this._openHeldMenu(b), 500, aEvent.currentTarget)
     );
   },
 
@@ -1027,6 +1027,25 @@ const gClickAndHoldListenersOnElement = {
     this._cancelHold(aButton);
     aButton.firstElementChild.hidden = false;
     aButton.open = true;
+  },
+
+  /**
+   * Opens the menu of a button that is still being pressed. Opening the menu
+   * clears the button's :active state, so [held] stands in for it until the
+   * mouse button is released.
+   *
+   * @param {XULElement} aButton
+   */
+  _openHeldMenu(aButton) {
+    aButton.toggleAttribute("held", true);
+    let release = () => {
+      aButton.removeAttribute("held");
+      window.removeEventListener("mouseup", release, true);
+      aButton.menupopup.removeEventListener("popuphidden", release);
+    };
+    window.addEventListener("mouseup", release, true);
+    aButton.menupopup.addEventListener("popuphidden", release);
+    this._openMenu(aButton);
   },
 
   _mouseoutHandler(aEvent) {

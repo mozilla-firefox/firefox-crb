@@ -608,6 +608,19 @@ toolbar .toolbarbutton-1 {
       opacity: 1;
     }
 
+    /* The active state's layer stands in for the hidden icon, so it has to
+     * shrink with it when the button is pressed. */
+    toolbar & .ipprotection-icon-layer {
+      transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      toolbar &:not([disabled]):hover:active .ipprotection-icon-layer {
+        scale: var(--toolbarbutton-motion-scale);
+        transition: scale var(--toolbarbutton-motion-duration-press) var(--toolbarbutton-motion-easing);
+      }
+    }
+
     /* Icon Inactive State */
     &:is(.ipprotection-on, .ipprotection-network-error, .ipprotection-error, .ipprotection-excluded, .ipprotection-included, .ipprotection-paused)
       .toolbarbutton-icon {

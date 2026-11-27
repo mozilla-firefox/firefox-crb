@@ -212,5 +212,24 @@
     "offset": {
       "value": "calc(-1 * {border.width})"
     }
+  },
+  "motion": {
+    "easing": {
+      "value": "{motion.easing.standard}"
+    },
+    "duration": {
+      "hover": {
+        "value": "100ms"
+      },
+      "press": {
+        "value": "60ms"
+      },
+      "release": {
+        "value": "100ms"
+      }
+    },
+    "scale": {
+      "value": 0.95
+    }
   }
 }

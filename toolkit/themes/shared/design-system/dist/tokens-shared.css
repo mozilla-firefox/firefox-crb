@@ -559,6 +559,11 @@
     --toolbarbutton-icon-fill-disabled: var(--toolbarbutton-icon-fill);
     --toolbarbutton-icon-fill-attention: light-dark(var(--color-blue-60), var(--color-cyan-30));
     --toolbarbutton-icon-fill-attention-text: light-dark(var(--color-gray-20), var(--color-gray-90));
+    --toolbarbutton-motion-duration-hover: 100ms;
+    --toolbarbutton-motion-duration-press: 60ms;
+    --toolbarbutton-motion-duration-release: 100ms;
+    --toolbarbutton-motion-easing: var(--motion-easing-standard);
+    --toolbarbutton-motion-scale: 0.95;
     --toolbarbutton-opacity-disabled: var(--button-opacity-disabled);
     --toolbarbutton-outline: var(--border-width) solid var(--toolbarbutton-outline-color);
     --toolbarbutton-outline-color: transparent;
