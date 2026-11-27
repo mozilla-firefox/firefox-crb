@@ -1,6 +1,6 @@
 "use strict";
 
-const { Schemas } = ChromeUtils.importESModule(
+const { Schemas, SchemaRoot } = ChromeUtils.importESModule(
   "resource://gre/modules/Schemas.sys.mjs"
 );
 
@@ -85,6 +85,23 @@ let schemaJson = [
           },
         ],
       },
+      {
+        name: "async_true",
+        type: "function",
+        async: true,
+        parameters: [],
+      },
+      {
+        name: "async_true_param",
+        type: "function",
+        async: true,
+        parameters: [
+          {
+            name: "message",
+            type: "string",
+          },
+        ],
+      },
     ],
   },
 ];
@@ -127,6 +144,25 @@ function generateAPIs(extraWrapper, apiObj) {
   return root.testnamespace;
 }
 
+add_task(function testMissingAsyncParameters() {
+  const root = new SchemaRoot(null, new Map());
+  const parse = () =>
+    root.parseSchema(
+      { name: "api", type: "function", async: true },
+      ["namespace"],
+      ["name"]
+    );
+
+  if (AppConstants.DEBUG) {
+    Assert.throws(
+      parse,
+      /Internal error: Async functions must have parameters array\./
+    );
+  } else {
+    Assert.equal(parse().parameters[0].name, "callback");
+  }
+});
+
 add_task(async function testParameterValidation() {
   await Schemas.load("data:," + JSON.stringify(schemaJson));
 
@@ -163,6 +199,8 @@ add_task(async function testParameterValidation() {
         one_optional() {},
         async_required() {},
         async_optional() {},
+        async_true() {},
+        async_true_param() {},
       }
     );
 
@@ -195,6 +233,22 @@ add_task(async function testParameterValidation() {
     assertNoThrows("async_optional", cb);
     assertThrows("async_optional", cb, null);
     assertThrows("async_optional", cb, cb);
+
+    assertNoThrows("async_true");
+    assertNoThrows("async_true", null);
+    assertNoThrows("async_true", undefined);
+    assertNoThrows("async_true", cb);
+    assertThrows("async_true", cb, null);
+    assertThrows("async_true", cb, undefined);
+    assertThrows("async_true", cb, cb);
+
+    assertNoThrows("async_true_param", "message");
+    assertNoThrows("async_true_param", "message", null);
+    assertNoThrows("async_true_param", "message", undefined);
+    assertNoThrows("async_true_param", "message", cb);
+    assertThrows("async_true_param", "message", cb, null);
+    assertThrows("async_true_param", "message", cb, undefined);
+    assertThrows("async_true_param", "message", cb, cb);
   }
 });
 
@@ -247,11 +301,11 @@ add_task(async function testCheckAsyncResults() {
 
 add_task(async function testAsyncResults() {
   await Schemas.load("data:," + JSON.stringify(schemaJson));
-  function runWithCallback(func) {
+  function runWithCallback(func, ...args) {
     info(`Calling testnamespace.${func.name}, expecting callback with result`);
     return new Promise(resolve => {
       let result = "uninitialized value";
-      let returnValue = func(reply => {
+      let returnValue = func(...args, reply => {
         result = reply;
         resolve(result);
       });
@@ -262,10 +316,10 @@ add_task(async function testAsyncResults() {
     });
   }
 
-  function runFailCallback(func) {
+  function runFailCallback(func, ...args) {
     info(`Calling testnamespace.${func.name}, expecting callback with error`);
     return new Promise(resolve => {
-      func(reply => {
+      func(...args, reply => {
         Assert.equal(reply, undefined);
         resolve(context.lastError.message); // eslint-disable-line no-undef
       });
@@ -287,6 +341,13 @@ add_task(async function testAsyncResults() {
           Assert.equal(cb, undefined);
           return Promise.resolve(2);
         },
+        async_true() {
+          return Promise.resolve(3);
+        },
+        async_true_param(message) {
+          Assert.equal(message, "message");
+          return Promise.resolve(4);
+        },
       }
     );
     if (!isChromeCompat) {
@@ -300,10 +361,25 @@ add_task(async function testAsyncResults() {
       promise = testnamespace.async_optional();
       Assert.ok(promise instanceof context.cloneScope.Promise);
       Assert.equal(await promise, 2);
+
+      info("testnamespace.async_true should be a Promise");
+      promise = testnamespace.async_true();
+      Assert.ok(promise instanceof context.cloneScope.Promise);
+      Assert.equal(await promise, 3);
+
+      info("testnamespace.async_true_param should be a Promise");
+      promise = testnamespace.async_true_param("message");
+      Assert.ok(promise instanceof context.cloneScope.Promise);
+      Assert.equal(await promise, 4);
     }
 
     Assert.equal(await runWithCallback(testnamespace.async_required), 1);
     Assert.equal(await runWithCallback(testnamespace.async_optional), 2);
+    Assert.equal(await runWithCallback(testnamespace.async_true), 3);
+    Assert.equal(
+      await runWithCallback(testnamespace.async_true_param, "message"),
+      4
+    );
 
     let otherSandbox = Cu.Sandbox(null, {});
     let errorFactories = [
@@ -328,6 +404,12 @@ add_task(async function testAsyncResults() {
           async_optional() {
             return makeError("TWO");
           },
+          async_true() {
+            return makeError("THREE");
+          },
+          async_true_param() {
+            return makeError("FOUR");
+          },
         }
       );
 
@@ -343,10 +425,25 @@ add_task(async function testAsyncResults() {
           /TWO/,
           "should reject testnamespace.async_optional()"
         );
+        await Assert.rejects(
+          testnamespace.async_true(),
+          /THREE/,
+          "should reject testnamespace.async_true()"
+        );
+        await Assert.rejects(
+          testnamespace.async_true_param("message"),
+          /FOUR/,
+          "should reject testnamespace.async_true_param()"
+        );
       }
 
       Assert.equal(await runFailCallback(testnamespace.async_required), "ONE");
       Assert.equal(await runFailCallback(testnamespace.async_optional), "TWO");
+      Assert.equal(await runFailCallback(testnamespace.async_true), "THREE");
+      Assert.equal(
+        await runFailCallback(testnamespace.async_true_param, "message"),
+        "FOUR"
+      );
     }
   }
 });

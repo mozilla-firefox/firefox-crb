@@ -2702,6 +2702,25 @@ class FunctionType extends Type {
       }
     }
 
+    // Async APIs without callbacks defined in the schema can still optionally
+    // accept a callback.
+    if (schema.async === true) {
+      if (DEBUG && !parameters) {
+        throw new Error(
+          "Internal error: Async functions must have parameters array."
+        );
+      }
+      parameters ||= [];
+
+      parameters.push({
+        type: root.parseSchema({ type: "function", parameters: [] }, path),
+        name: "callback",
+        optional: true,
+        default: null,
+      });
+      hasAsyncCallback = true;
+    }
+
     return new this(
       schema,
       parameters,
