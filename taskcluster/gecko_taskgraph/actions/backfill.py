@@ -6,6 +6,7 @@
 import logging
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 from taskgraph.util import json
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 SYMBOL_REGEX = re.compile("^(.*)-[a-z0-9]{11}-bk$")
 GROUP_SYMBOL_REGEX = re.compile("^(.*)-bk$")
 MIN_SLICE_GAP = 7
+MAX_BACKFILL_WORKERS = 8
 _PRIORITIES = ["lowest", "very-low", "low", "medium", "high", "very-high", "highest"]
 _PERF_SUITES = ("raptor", "talos")
 
@@ -205,7 +207,9 @@ def backfill_action(parameters, graph_config, input, task_group_id, task_id):
             "target_pushes": planned_pushes,
         }),
     )
-    for i, push_id in enumerate(planned_pushes, 1):
+
+    def trigger_for_push(item):
+        i, push_id = item
         try:
             # The Gecko decision task can sometimes fail on a push and we need to handle
             # the exception that this call will produce
@@ -214,7 +218,7 @@ def backfill_action(parameters, graph_config, input, task_group_id, task_id):
             logger.warning(f"Could not find decision task for push {push_id}")
             # The decision task may have failed, this is common enough that we
             # don't want to report an error for it.
-            continue
+            return False
 
         logger.info(
             "BACKFILL_DATA: %s",
@@ -237,7 +241,12 @@ def backfill_action(parameters, graph_config, input, task_group_id, task_id):
             )
         except Exception:
             logger.exception(f"Failed to trigger action for {push_id}")
-            failed = True
+            return True
+        return False
+
+    if planned_pushes:
+        with ThreadPoolExecutor(max_workers=MAX_BACKFILL_WORKERS) as executor:
+            failed = any(executor.map(trigger_for_push, enumerate(planned_pushes, 1)))
 
     if failed:
         sys.exit(1)
