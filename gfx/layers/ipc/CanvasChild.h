@@ -186,6 +186,12 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
   bool EnsureDataSurfaceShmem(size_t aSizeRequired);
   bool EnsureDataSurfaceShmem(gfx::IntSize aSize, gfx::SurfaceFormat aFormat);
 
+  already_AddRefed<gfx::DataSourceSurface> ReadFromSnapshotShmem(
+      RemoteTextureOwnerId aTextureOwnerId,
+      const std::shared_ptr<ipc::ReadOnlySharedMemoryMapping>& aSnapshotShmem,
+      int32_t aStride, const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
+      bool& aMayInvalidate);
+
   static void ReleaseDataShmemHolder(void* aClosure);
 
   void DropFreeBuffersWhenDormant();

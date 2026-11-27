@@ -693,33 +693,13 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
 
   // Shmem is only valid if the surface is the latest snapshot (not detached).
   if (!aDetached) {
-    // If there is a shmem associated with this snapshot id, then we want to try
-    // to use that directly instead of allocating a new shmem for retrieval.
-    // Also check that it meets the size required.
+    // Use the texture's snapshot shmem if it can hold the requested data.
     auto it = mTextureInfo.find(aTextureOwnerId);
     if (it != mTextureInfo.end() && it->second.mSnapshotShmem &&
         !NS_WARN_IF(sizeRequired > it->second.mSnapshotShmem->Size())) {
-      const auto* shmemPtr = it->second.mSnapshotShmem->DataAs<uint8_t>();
-      MOZ_RELEASE_ASSERT(shmemPtr);
-      mRecorder->RecordEvent(RecordedPrepareShmem(aTextureOwnerId));
-      auto checkpoint = CreateCheckpoint();
-      if (NS_WARN_IF(!mRecorder->WaitForCheckpoint(checkpoint))) {
-        return nullptr;
-      }
-      auto* closure =
-          new CanvasDataShmemHolder(it->second.mSnapshotShmem, this);
-      if (NS_WARN_IF(!closure->Init(mWorkerRef))) {
-        delete closure;
-        return nullptr;
-      }
-      // We can cast away the const of `shmemPtr` to match the call because the
-      // DataSourceSurface will not be written to.
-      RefPtr<gfx::DataSourceSurface> dataSurface =
-          gfx::Factory::CreateWrappingDataSourceSurface(
-              const_cast<uint8_t*>(shmemPtr), stride.value(), ssSize, ssFormat,
-              ReleaseDataShmemHolder, closure);
-      aMayInvalidate = true;
-      return dataSurface.forget();
+      return ReadFromSnapshotShmem(aTextureOwnerId, it->second.mSnapshotShmem,
+                                   stride.value(), ssSize, ssFormat,
+                                   aMayInvalidate);
     }
   }
 
@@ -752,6 +732,33 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
           const_cast<uint8_t*>(data), stride.value(), ssSize, ssFormat,
           ReleaseDataShmemHolder, closure);
   aMayInvalidate = false;
+  return dataSurface.forget();
+}
+
+already_AddRefed<gfx::DataSourceSurface> CanvasChild::ReadFromSnapshotShmem(
+    RemoteTextureOwnerId aTextureOwnerId,
+    const std::shared_ptr<ipc::ReadOnlySharedMemoryMapping>& aSnapshotShmem,
+    int32_t aStride, const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
+    bool& aMayInvalidate) {
+  const auto* shmemPtr = aSnapshotShmem->DataAs<uint8_t>();
+  MOZ_RELEASE_ASSERT(shmemPtr);
+  mRecorder->RecordEvent(RecordedPrepareShmem(aTextureOwnerId));
+  auto checkpoint = CreateCheckpoint();
+  if (NS_WARN_IF(!mRecorder->WaitForCheckpoint(checkpoint))) {
+    return nullptr;
+  }
+  auto* closure = new CanvasDataShmemHolder(aSnapshotShmem, this);
+  if (NS_WARN_IF(!closure->Init(mWorkerRef))) {
+    delete closure;
+    return nullptr;
+  }
+  // We can cast away the const of `shmemPtr` to match the call because the
+  // DataSourceSurface will not be written to.
+  RefPtr<gfx::DataSourceSurface> dataSurface =
+      gfx::Factory::CreateWrappingDataSourceSurface(
+          const_cast<uint8_t*>(shmemPtr), aStride, aSize, aFormat,
+          ReleaseDataShmemHolder, closure);
+  aMayInvalidate = true;
   return dataSurface.forget();
 }
 
