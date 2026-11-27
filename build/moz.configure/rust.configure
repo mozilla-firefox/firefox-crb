@@ -1190,6 +1190,7 @@ def cargo_ldflags_filter_out(sanitizers):
         "ExceptionHandling",
         "-fprofile-%",
         "-Wl,--build-id=uuid",
+        "-Wl,-plugin-opt=-moz-force-full-lto=1",
     ]
     program = []
     if "-Zsanitizer=thread" in sanitizers:

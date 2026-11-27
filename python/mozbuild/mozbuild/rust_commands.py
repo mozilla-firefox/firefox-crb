@@ -104,7 +104,7 @@ CARGO_CONFIG_KEYS = {
     "MOZ_LIBCLANG_PATH": _as_str,
     "MOZ_LTO_LDFLAGS": _as_list,
     "MOZ_LTO_OBJECT_PATH": _bool,
-    "MOZ_LTO_RUST_CROSS": _bool,
+    "MOZ_LTO_RUST_CROSS": _as_str,
     "MOZ_PROFILE_GENERATE": _bool,
     "MOZ_RUSTC_BOOTSTRAP_DEFAULT": _as_str,
     "MOZ_RUSTC_BOOTSTRAP_FORCE": _as_str,

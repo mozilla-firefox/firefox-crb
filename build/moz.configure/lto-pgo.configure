@@ -277,6 +277,14 @@ use_fat_lto = cxx_compiler.try_link(
     ),
 )
 
+has_moz_full_lto_extension = cxx_compiler.try_link(
+    ldflags=["-fuse-ld=lld", "-Wl,-plugin-opt=-moz-force-full-lto=1"],
+    check_msg="whether the C++ linker supports full lto mozilla extension",
+    when=depends(select_linker, "--enable-lto")(
+        lambda linker, lto: linker and linker.KIND == "lld" and lto
+    ),
+)
+
 
 @depends(
     "--enable-lto",
@@ -289,6 +297,7 @@ use_fat_lto = cxx_compiler.try_link(
     "--enable-profile-use",
     moz_automation,
     use_fat_lto,
+    has_moz_full_lto_extension,
 )
 @imports("multiprocessing")
 def lto(
@@ -302,6 +311,7 @@ def lto(
     pgo_build,
     moz_automation,
     fat,
+    has_moz_full_lto_extension,
 ):
     cflags = []
     ldflags = []
@@ -365,6 +375,8 @@ def lto(
         if "full" in values:
             cflags.append("-flto")
             ldflags.append("-flto")
+            if has_moz_full_lto_extension:
+                ldflags.append("-Wl,-plugin-opt=-moz-force-full-lto=1")
         else:
             cflags.append("-flto=thin")
             ldflags.append("-flto=thin")

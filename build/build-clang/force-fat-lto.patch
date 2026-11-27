@@ -1,0 +1,24 @@
+Allo forcing fat lto linkage in presence of thin lto archive
+diff --git a/llvm/lib/LTO/LTO.cpp b/llvm/lib/LTO/LTO.cpp
+index c8c5b0880819..27c5f5fac1b3 100644
+--- a/llvm/lib/LTO/LTO.cpp
++++ b/llvm/lib/LTO/LTO.cpp
+@@ -105,6 +105,9 @@ void LTO::emitRemark(OptimizationRemark &Remark) {
+   ORE.emit(Remark);
+ }
+ 
++static cl::opt<bool>
++    ForceFullLTO("moz-force-full-lto", cl::init(false), cl::Hidden,
++                 cl::desc("Force Full LTO linkage even if some Thin archive are passed"));
+ static cl::opt<bool>
+     DumpThinCGSCCs("dump-thin-cg-sccs", cl::init(false), cl::Hidden,
+                    cl::desc("Dump the SCCs in the ThinLTO index's callgraph"));
+@@ -892,7 +895,7 @@ LTO::addModule(InputFile &Input, ArrayRef<SymbolResolution> InputRes,
+   if (LTOInfo->UnifiedLTO && LTOMode == LTOK_Default)
+     LTOMode = LTOK_UnifiedThin;
+ 
+-  bool IsThinLTO = LTOInfo->IsThinLTO && (LTOMode != LTOK_UnifiedRegular);
++  bool IsThinLTO = !ForceFullLTO && LTOInfo->IsThinLTO && (LTOMode != LTOK_UnifiedRegular);
+   // If any of the modules inside of a input bitcode file was compiled with
+   // ThinLTO, we assume that the whole input file also was compiled with
+   // ThinLTO.

@@ -1,0 +1,37 @@
+From 6c385280ceab527d21a91644e1fb83fc09af55f3 Mon Sep 17 00:00:00 2001
+From: serge-sans-paille <sguelton@mozilla.com>
+Date: Thu, 26 Nov 2026 17:03:03 +0100
+Subject: [PATCH] patch-lto
+
+---
+ llvm/lib/LTO/LTO.cpp | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/llvm/lib/LTO/LTO.cpp b/llvm/lib/LTO/LTO.cpp
+index 2766d4c06fdb..717d92287dc9 100644
+--- a/llvm/lib/LTO/LTO.cpp
++++ b/llvm/lib/LTO/LTO.cpp
+@@ -71,6 +71,10 @@ using namespace object;
+ 
+ #define DEBUG_TYPE "lto"
+ 
++static cl::opt<bool> ForceFullLTO(
++    "moz-force-full-lto", cl::init(false), cl::Hidden,
++    cl::desc("Force Full LTO linkage even if some Thin archive are passed"));
++
+ static cl::opt<bool>
+     DumpThinCGSCCs("dump-thin-cg-sccs", cl::init(false), cl::Hidden,
+                    cl::desc("Dump the SCCs in the ThinLTO index's callgraph"));
+@@ -802,7 +806,8 @@ LTO::addModule(InputFile &Input, ArrayRef<SymbolResolution> InputRes,
+   if (LTOInfo->UnifiedLTO && LTOMode == LTOK_Default)
+     LTOMode = LTOK_UnifiedThin;
+ 
+-  bool IsThinLTO = LTOInfo->IsThinLTO && (LTOMode != LTOK_UnifiedRegular);
++  bool IsThinLTO =
++      !ForceFullLTO && LTOInfo->IsThinLTO && (LTOMode != LTOK_UnifiedRegular);
+   // If any of the modules inside of a input bitcode file was compiled with
+   // ThinLTO, we assume that the whole input file also was compiled with
+   // ThinLTO.
+-- 
+2.56.1
+
