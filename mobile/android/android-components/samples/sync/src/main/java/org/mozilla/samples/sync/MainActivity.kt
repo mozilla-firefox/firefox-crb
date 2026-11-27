@@ -31,7 +31,6 @@ import mozilla.components.concept.sync.DeviceCommandOutgoing
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceConstellationObserver
 import mozilla.components.concept.sync.DeviceType
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.PeriodicSyncConfig
 import mozilla.components.concept.sync.Profile

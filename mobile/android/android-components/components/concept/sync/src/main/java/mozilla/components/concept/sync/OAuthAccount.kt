@@ -5,6 +5,7 @@
 package mozilla.components.concept.sync
 
 import kotlinx.coroutines.Deferred
+import mozilla.components.concept.fxa.FxaService
 
 /** User data provided by the web content as a means of delivering the session token to the application */
 data class UserData(
@@ -165,20 +166,24 @@ interface StatePersistenceCallback {
 }
 
 sealed class AuthType {
+    /** The service requested by the authentication flow, or null when unknown or not flow-specific. */
+    open val service: FxaService?
+        get() = null
+
     /** Account restored from hydrated state on disk. */
     object Existing : AuthType()
 
     /** Account created in response to a sign-in. */
-    object Signin : AuthType()
+    data class Signin(override val service: FxaService? = null) : AuthType()
 
     /** Account created in response to a sign-up. */
-    object Signup : AuthType()
+    data class Signup(override val service: FxaService? = null) : AuthType()
 
     /** Account created via pairing (similar to sign-in, but without requiring credentials). */
-    object Pairing : AuthType()
+    data class Pairing(override val service: FxaService? = null) : AuthType()
 
     /** Account was created for an unknown external reason, hopefully identified by [action]. */
-    data class OtherExternal(val action: String?) : AuthType()
+    data class OtherExternal(val action: String?, override val service: FxaService? = null) : AuthType()
 
     /** Account created via a shared account state from another app via the copy token flow. */
     object MigratedCopy : AuthType()

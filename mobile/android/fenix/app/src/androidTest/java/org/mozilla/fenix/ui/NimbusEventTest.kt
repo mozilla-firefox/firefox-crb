@@ -44,7 +44,7 @@ class NimbusEventTest {
     @Test
     fun telemetryAccountObserverTest() {
         val observer = TelemetryAccountObserver(appContext, appContext.components.settings)
-        observer.onAuthenticated(UnusedOAuthAccount(), AuthType.Signin)
+        observer.onAuthenticated(UnusedOAuthAccount(), AuthType.Signin())
 
         Experimentation.withHelper {
             assertTrue(evalJexl("'sync_auth.sign_in'|eventSum('Days', 28, 0) > 0"))

@@ -12,6 +12,8 @@ android {
 }
 
 dependencies {
+    api project(':components:concept-firefox-accounts')
+
     // Observables are part of the public API of this module.
     api project(':components:support-base')
 
