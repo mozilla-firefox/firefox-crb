@@ -133,6 +133,8 @@ skip-if = [
   "inc_origin_init",
 ]
 
+["test_invalidOriginRow.js"]
+
 ["test_listCachedOrigins.js"]
 
 ["test_listOrigins.js"]

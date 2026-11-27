@@ -62,6 +62,18 @@ class OriginCacheMap {
     return mMap.Extract(key);
   }
 
+  // The pointer is valid until the map is next mutated.
+  const FullOriginMetadata* Lookup(PersistenceType aPersistenceType,
+                                   const nsACString& aOrigin) const {
+    AssertIsOnIOThread();
+    if (!mActive) {
+      return nullptr;
+    }
+    Key key(aPersistenceType, nsCString(aOrigin));
+    auto entry = mMap.Lookup(key);
+    return entry ? &entry.Data() : nullptr;
+  }
+
   bool IsEmpty() const {
     AssertIsOnIOThread();
     return mMap.IsEmpty();

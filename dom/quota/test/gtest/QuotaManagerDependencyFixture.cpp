@@ -4,9 +4,12 @@
 
 #include "QuotaManagerDependencyFixture.h"
 
+#include "Constants.h"
 #include "DirectoryMetadata.h"
 #include "QuotaManagerTestHelpers.h"
+#include "mozIStorageConnection.h"
 #include "mozIStorageService.h"
+#include "mozIStorageStatement.h"
 #include "mozStorageCID.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/dom/ScriptSettings.h"
@@ -475,6 +478,137 @@ QuotaManagerDependencyFixture::LoadDirectoryMetadataHeader(
   });
 
   return result;
+}
+
+// static
+Maybe<OriginStateMetadata>
+QuotaManagerDependencyFixture::LoadOriginStateMetadataFromDB(
+    const OriginMetadata& aOriginMetadata) {
+  const auto result =
+      PerformOnIOThread([aOriginMetadata]() -> Maybe<OriginStateMetadata> {
+        QuotaManager* quotaManager = QuotaManager::Get();
+        MOZ_RELEASE_ASSERT(quotaManager);
+
+        nsCOMPtr<nsIFile> dbFile;
+        nsresult rv = NS_NewLocalFile(quotaManager->GetBasePath(),
+                                      getter_AddRefs(dbFile));
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        rv = dbFile->Append(quotaManager->GetStorageName() + kSQLiteSuffix);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        nsCOMPtr<mozIStorageService> ss =
+            do_GetService(MOZ_STORAGE_SERVICE_CONTRACTID);
+        MOZ_RELEASE_ASSERT(ss);
+
+        nsCOMPtr<mozIStorageConnection> conn;
+        rv = ss->OpenUnsharedDatabase(dbFile,
+                                      mozIStorageService::CONNECTION_DEFAULT,
+                                      getter_AddRefs(conn));
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        nsCOMPtr<mozIStorageStatement> stmt;
+        rv = conn->CreateStatement(
+            nsLiteralCString(
+                "SELECT last_access_time, last_maintenance_date, "
+                "metadata_flags FROM origin "
+                "WHERE repository_id = :repository_id AND origin = :origin"),
+            getter_AddRefs(stmt));
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        rv = stmt->BindInt32ByName("repository_id"_ns,
+                                   aOriginMetadata.mPersistenceType);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        rv = stmt->BindUTF8StringByName("origin"_ns, aOriginMetadata.mOrigin);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        bool hasResult;
+        rv = stmt->ExecuteStep(&hasResult);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        if (!hasResult) {
+          rv = conn->Close();
+          MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+          return Nothing();
+        }
+
+        OriginStateMetadata metadata;
+        rv = stmt->GetInt64(0, &metadata.mLastAccessTime);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        rv = stmt->GetInt32(1, &metadata.mLastMaintenanceDate);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        int32_t flags;
+        rv = stmt->GetInt32(2, &flags);
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+        metadata.FromMetadataFlags(static_cast<uint32_t>(flags));
+
+        rv = stmt->Finalize();
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        rv = conn->Close();
+        MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
+
+        return Some(metadata);
+      });
+
+  return result;
+}
+
+// static
+void QuotaManagerDependencyFixture::MarkOriginRowDirtyInDB(
+    const OriginMetadata& aOriginMetadata) {
+  PerformOnIOThread([aOriginMetadata]() {
+    QuotaManager* quotaManager = QuotaManager::Get();
+    ASSERT_TRUE(quotaManager);
+
+    nsCOMPtr<nsIFile> dbFile;
+    nsresult rv =
+        NS_NewLocalFile(quotaManager->GetBasePath(), getter_AddRefs(dbFile));
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = dbFile->Append(quotaManager->GetStorageName() + kSQLiteSuffix);
+    ASSERT_NS_SUCCEEDED(rv);
+
+    nsCOMPtr<mozIStorageService> ss =
+        do_GetService(MOZ_STORAGE_SERVICE_CONTRACTID);
+    ASSERT_TRUE(ss);
+
+    nsCOMPtr<mozIStorageConnection> conn;
+    rv = ss->OpenUnsharedDatabase(
+        dbFile, mozIStorageService::CONNECTION_DEFAULT, getter_AddRefs(conn));
+    ASSERT_NS_SUCCEEDED(rv);
+
+    nsCOMPtr<mozIStorageStatement> stmt;
+    rv = conn->CreateStatement(
+        nsLiteralCString("UPDATE origin SET metadata_flags = "
+                         "metadata_flags | :dirty "
+                         "WHERE repository_id = :repository_id "
+                         "AND origin = :origin"),
+        getter_AddRefs(stmt));
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = stmt->BindInt32ByName("dirty"_ns, DirectoryMetadataFlags::Dirty);
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = stmt->BindInt32ByName("repository_id"_ns,
+                               aOriginMetadata.mPersistenceType);
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = stmt->BindUTF8StringByName("origin"_ns, aOriginMetadata.mOrigin);
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = stmt->Execute();
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = stmt->Finalize();
+    ASSERT_NS_SUCCEEDED(rv);
+
+    rv = conn->Close();
+    ASSERT_NS_SUCCEEDED(rv);
+  });
 }
 
 // static
