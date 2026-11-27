@@ -12,8 +12,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.SyncConfig
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import org.mozilla.fenix.BuildConfig
 import org.mozilla.fenix.components.accounts.FenixFxAEntryPoint
