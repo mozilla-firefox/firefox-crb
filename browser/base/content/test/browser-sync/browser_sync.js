@@ -2246,7 +2246,7 @@ function checkFxAAvatar(fxaStatus) {
   // Unhide the panel so computed styles can be read
   document.querySelector("#appMenu-popup").hidden = false;
 
-  const avatarContainers = [document.getElementById("fxa-avatar-image")];
+  const avatarContainers = [document.getElementById("fxa-toolbar-menu-button")];
   for (const avatar of avatarContainers) {
     const avatarURL = getComputedStyle(avatar).listStyleImage;
     const expected = {

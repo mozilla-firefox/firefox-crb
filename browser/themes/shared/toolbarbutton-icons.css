@@ -515,7 +515,7 @@ toolbar .toolbarbutton-1 {
   &:is([overflowedItem="true"], [cui-areatype="panel"]) {
     list-style-image: url("chrome://browser/content/ipprotection/assets/states/ipprotection-off.svg");
 
-    .ipprotection-icon-stack > .toolbarbutton-icon,
+    .ipprotection-icon-stack .toolbarbutton-icon-image,
     .ipprotection-icon-layer {
       width: var(--icon-size-small);
     }
@@ -563,7 +563,7 @@ toolbar .toolbarbutton-1 {
    * This approach prevents flickers between initial state changes.
    */
   &:not([overflowedItem="true"], [cui-areatype="panel"]) {
-    .ipprotection-icon-stack > .toolbarbutton-icon,
+    .ipprotection-icon-stack .toolbarbutton-icon-image,
     .ipprotection-icon-layer {
       width: var(--size-image-small);
     }
