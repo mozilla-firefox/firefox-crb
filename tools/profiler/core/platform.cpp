@@ -5583,12 +5583,11 @@ void SamplerThread::SpyOnUnregisteredThreads() {
       /* aProcessType = */ ProcType::Unknown,
       /* aOrigin = */ ""_ns,
       /* aWindowInfo = */ nsTArray<WindowInfo>{},
-      /* aUtilityInfo = */ nsTArray<UtilityInfo>{},
-      /* aChild = */ 0
+      /* aUtilityInfo = */ nsTArray<UtilityInfo>{}
 #ifdef XP_MACOSX
       ,
-      /* aChildTask = */ MACH_PORT_NULL
-#endif  // XP_DARWIN
+      /* aChildTask = */ mach_task_self()
+#endif  // XP_MACOSX
   );
 
   const ProcInfoPromise::ResolveOrRejectValue procInfoOrError =
