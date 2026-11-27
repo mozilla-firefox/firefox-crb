@@ -701,13 +701,12 @@ DEFINE_IPC_SERIALIZER_WITH_FIELDS(mozilla::widget::NativeIMEContext,
                                   mRawNativeIMEContext, mOriginProcessID);
 
 template <>
-struct ParamTraits<mozilla::widget::IMENotification::SelectionChangeDataBase> {
-  using paramType = mozilla::widget::IMENotification::SelectionChangeDataBase;
+struct ParamTraits<mozilla::widget::IMENotification::SelectionChangeData> {
+  using paramType = mozilla::widget::IMENotification::SelectionChangeData;
 
   static void Write(MessageWriter* aWriter, const paramType& aParam) {
-    MOZ_RELEASE_ASSERT(aParam.mString);
     WriteParam(aWriter, aParam.mOffset);
-    WriteParam(aWriter, *aParam.mString);
+    WriteParam(aWriter, aParam.mString);
     WriteParam(aWriter, aParam.mWritingModeBits);
     WriteParam(aWriter, aParam.mIsInitialized);
     WriteParam(aWriter, aParam.mHasRange);
@@ -718,9 +717,8 @@ struct ParamTraits<mozilla::widget::IMENotification::SelectionChangeDataBase> {
   }
 
   static bool Read(MessageReader* aReader, paramType* aResult) {
-    aResult->mString = new nsString();
     return ReadParam(aReader, &aResult->mOffset) &&
-           ReadParam(aReader, aResult->mString) &&
+           ReadParam(aReader, &aResult->mString) &&
            ReadParam(aReader, &aResult->mWritingModeBits) &&
            ReadParam(aReader, &aResult->mIsInitialized) &&
            ReadParam(aReader, &aResult->mHasRange) &&
@@ -732,7 +730,7 @@ struct ParamTraits<mozilla::widget::IMENotification::SelectionChangeDataBase> {
 };
 
 DEFINE_IPC_SERIALIZER_WITH_FIELDS(
-    mozilla::widget::IMENotification::TextChangeDataBase, mStartOffset,
+    mozilla::widget::IMENotification::TextChangeData, mStartOffset,
     mRemovedEndOffset, mAddedEndOffset, mCausedOnlyByComposition,
     mIncludingChangesDuringComposition, mIncludingChangesWithoutComposition);
 
@@ -767,11 +765,19 @@ struct ParamTraits<mozilla::widget::IMENotification> {
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
         WriteParam(aWriter, aParam.mMouseButtonEventData);
         return;
-      default:
+      case mozilla::widget::NOTIFY_IME_OF_FOCUS:
+      case mozilla::widget::NOTIFY_IME_OF_BLUR:
+      case mozilla::widget::NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
+      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
+      case mozilla::widget::REQUEST_TO_COMMIT_COMPOSITION:
+      case mozilla::widget::REQUEST_TO_CANCEL_COMPOSITION:
+        return;
+      case mozilla::widget::NOTIFY_IME_OF_NOTHING:
+        MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE(
+            "Don't send NOTIFY_IME_OF_NOTHING");
         return;
     }
   }
-
   static bool Read(MessageReader* aReader, paramType* aResult) {
     if (!ReadParam(aReader, &aResult->mMessage)) {
       return false;
@@ -782,11 +788,14 @@ struct ParamTraits<mozilla::widget::IMENotification> {
             "NOTIFY_IME_OF_NOTHING shouldn't cross the process boundary");
         return false;
       case mozilla::widget::NOTIFY_IME_OF_SELECTION_CHANGE:
-        return ReadParam(aReader, &aResult->mSelectionChangeData);
+        return ReadParam(aReader, &aResult->mSelectionChangeData) &&
+               aResult->mSelectionChangeData.isSome();
       case mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE:
-        return ReadParam(aReader, &aResult->mTextChangeData);
+        return ReadParam(aReader, &aResult->mTextChangeData) &&
+               aResult->mTextChangeData.isSome();
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
-        return ReadParam(aReader, &aResult->mMouseButtonEventData);
+        return ReadParam(aReader, &aResult->mMouseButtonEventData) &&
+               aResult->mMouseButtonEventData.isSome();
       case mozilla::widget::NOTIFY_IME_OF_FOCUS:
       case mozilla::widget::NOTIFY_IME_OF_BLUR:
       case mozilla::widget::NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:

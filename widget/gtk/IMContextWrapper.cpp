@@ -1728,7 +1728,7 @@ void IMContextWrapper::OnSelectionChange(
     }
     // If the new range exactly matches with the caret in the composition
     // string, we can treat the selection is not changed actually.
-    if (aIMENotification.mSelectionChangeData.EqualsRange(
+    if (aIMENotification.mSelectionChangeData->EqualsRange(
             mContentSelection.ref())) {
       return false;
     }
@@ -1740,16 +1740,16 @@ void IMContextWrapper::OnSelectionChange(
     // string because we will set new caret position at the next composition
     // change and the web app does not intent to make the user to insert text to
     // different place.
-    if (!aIMENotification.mSelectionChangeData.HasRange()) [[unlikely]] {
+    if (!aIMENotification.mSelectionChangeData->HasRange()) [[unlikely]] {
       return false;
     }
-    return aIMENotification.mSelectionChangeData.StartOffset() >=
+    return aIMENotification.mSelectionChangeData->StartOffset() >=
                mCompositionStart &&
-           aIMENotification.mSelectionChangeData.EndOffset() <=
+           aIMENotification.mSelectionChangeData->EndOffset() <=
                mCompositionStart + mDispatchedCompositionString.Length();
   }();
   mContentSelection =
-      Some(ContentSelection(aIMENotification.mSelectionChangeData));
+      Some(ContentSelection(aIMENotification.mSelectionChangeData.ref()));
   const bool retrievedSurroundingSignalReceived =
       mRetrieveSurroundingSignalReceived;
   mRetrieveSurroundingSignalReceived = false;
@@ -1758,8 +1758,8 @@ void IMContextWrapper::OnSelectionChange(
     return;
   }
 
-  const IMENotification::SelectionChangeDataBase& selectionChangeData =
-      aIMENotification.mSelectionChangeData;
+  const IMENotification::SelectionChangeData& selectionChangeData =
+      aIMENotification.mSelectionChangeData.ref();
 
   MOZ_LOG(gIMELog, LogLevel::Info,
           ("0x%p OnSelectionChange(aCaller=0x%p, aIMENotification={ "

@@ -44,7 +44,6 @@ class IMEContentObserver final : public nsStubMutationObserver,
  public:
   using SelectionChangeData = widget::IMENotification::SelectionChangeData;
   using TextChangeData = widget::IMENotification::TextChangeData;
-  using TextChangeDataBase = widget::IMENotification::TextChangeDataBase;
   using IMENotificationRequest = widget::IMENotificationRequest;
   using IMENotificationRequests = widget::IMENotificationRequests;
   using IMEMessage = widget::IMEMessage;
@@ -304,7 +303,7 @@ class IMEContentObserver final : public nsStubMutationObserver,
   void PostFocusSetNotification();
   void MaybeNotifyIMEOfFocusSet();
   void PostTextChangeNotification();
-  void MaybeNotifyIMEOfTextChange(const TextChangeDataBase& aTextChangeData);
+  void MaybeNotifyIMEOfTextChange(const TextChangeData&);
   void CancelNotifyingIMEOfTextChange();
   void PostSelectionChangeNotification();
   void MaybeNotifyIMEOfSelectionChange(bool aCausedByComposition,
