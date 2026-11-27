@@ -24,7 +24,9 @@ SimpleTest.waitForFocus(async () => {
     if (!aNotification) {
       return "{}";
     }
-    return `{ offset: ${aNotification.offset}, removedLength: ${aNotification.removedLength}, addedLength: ${aNotification.addedLength} }`;
+    return `{ textChangeOffset: ${aNotification.textChangeOffset}, removedLength: ${
+      aNotification.removedLength
+    }, addedLength: ${aNotification.addedLength} }`;
   }
 
   const tip =
@@ -39,8 +41,10 @@ SimpleTest.waitForFocus(async () => {
       case "request-to-cancel":
         aTIP.cancelComposition();
         break;
-      case "notify-text-change":
-        notifications.push(aNotification);
+      case "notify-content-change":
+        if (aNotification.textChanged) {
+          notifications.push(aNotification);
+        }
         break;
     }
     return true;
@@ -53,7 +57,7 @@ SimpleTest.waitForFocus(async () => {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   is(
     stringifyTextChangeNotification(notifications[0]),
-    stringifyTextChangeNotification({ offset: 0, removedLength: 0, addedLength: "abc".length }),
+    stringifyTextChangeNotification({ textChangeOffset: 0, removedLength: 0, addedLength: "abc".length }),
     "Adding text node to empty <textarea> should notify IME of a text change"
   );
 
@@ -62,7 +66,7 @@ SimpleTest.waitForFocus(async () => {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   is(
     stringifyTextChangeNotification(notifications[0]),
-    stringifyTextChangeNotification({ offset: 0, removedLength: "abc".length, addedLength: 0 }),
+    stringifyTextChangeNotification({ textChangeOffset: 0, removedLength: "abc".length, addedLength: 0 }),
     "Removing text node from <textarea> should notify IME of a text change"
   );
 
@@ -73,7 +77,7 @@ SimpleTest.waitForFocus(async () => {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   is(
     stringifyTextChangeNotification(notifications[0]),
-    stringifyTextChangeNotification({ offset: 0, removedLength: 0, addedLength: "abc".length }),
+    stringifyTextChangeNotification({ textChangeOffset: 0, removedLength: 0, addedLength: "abc".length }),
     "Adding text node to empty <textarea> during reframes should notify IME of a text change"
   );
 
@@ -83,7 +87,7 @@ SimpleTest.waitForFocus(async () => {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   is(
     stringifyTextChangeNotification(notifications[0]),
-    stringifyTextChangeNotification({ offset: 0, removedLength: "abc".length, addedLength: 0 }),
+    stringifyTextChangeNotification({ textChangeOffset: 0, removedLength: "abc".length, addedLength: 0 }),
     "Removing text node from <textarea> during reframes should notify IME of a text change"
   );
 

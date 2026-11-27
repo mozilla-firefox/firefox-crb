@@ -762,13 +762,15 @@ struct ParamTraits<mozilla::widget::IMENotification> {
       case mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE:
         WriteParam(aWriter, aParam.mTextChangeData);
         return;
+      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
+        WriteParam(aWriter, aParam.mLayoutChanged);
+        return;
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
         WriteParam(aWriter, aParam.mMouseButtonEventData);
         return;
       case mozilla::widget::NOTIFY_IME_OF_FOCUS:
       case mozilla::widget::NOTIFY_IME_OF_BLUR:
       case mozilla::widget::NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
-      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
       case mozilla::widget::REQUEST_TO_COMMIT_COMPOSITION:
       case mozilla::widget::REQUEST_TO_CANCEL_COMPOSITION:
         return;
@@ -793,13 +795,14 @@ struct ParamTraits<mozilla::widget::IMENotification> {
       case mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE:
         return ReadParam(aReader, &aResult->mTextChangeData) &&
                aResult->mTextChangeData.isSome();
+      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
+        return ReadParam(aReader, &aResult->mLayoutChanged);
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
         return ReadParam(aReader, &aResult->mMouseButtonEventData) &&
                aResult->mMouseButtonEventData.isSome();
       case mozilla::widget::NOTIFY_IME_OF_FOCUS:
       case mozilla::widget::NOTIFY_IME_OF_BLUR:
       case mozilla::widget::NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
-      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
       case mozilla::widget::REQUEST_TO_COMMIT_COMPOSITION:
       case mozilla::widget::REQUEST_TO_CANCEL_COMPOSITION:
         return true;
