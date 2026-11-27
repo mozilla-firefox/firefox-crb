@@ -225,3 +225,47 @@ add_task(async function test_design_mode() {
   // Cleanup.
   gBrowser.removeTab(tab);
 });
+
+/**
+ * This test ensures that restoring an unmodified editable document
+ * (designMode=on) does not replace its content with a re-parsed copy of its
+ * serialized innerHTML. That would lose state that innerHTML can't round-trip,
+ * such as an element that script moved into an SVG element, or a shadow root.
+ */
+add_task(async function test_design_mode_unmodified() {
+  const URL =
+    "data:text/html;charset=utf-8,<div id='host'></div>" +
+    "<h6 id='b'></h6><svg><marker id='c'></marker></svg>" +
+    "<script>document.getElementById('c').appendChild(" +
+    "document.getElementById('b'));" +
+    "document.getElementById('host').attachShadow({mode:'open'})" +
+    ".innerHTML='<p>shadow</p>';" +
+    "document.designMode='on'</script>";
+
+  async function checkDOM(browser, msg) {
+    let result = await SpecialPowers.spawn(browser, [], () => {
+      let doc = content.document;
+      return {
+        parent: doc.getElementById("b").parentNode.id,
+        shadow: !!doc.getElementById("host").shadowRoot,
+      };
+    });
+    is(result.parent, "c", `h6 is still inside the SVG marker ${msg}`);
+    ok(result.shadow, `shadow root still exists ${msg}`);
+  }
+
+  let tab = (gBrowser.selectedTab = BrowserTestUtils.addTab(gBrowser, URL));
+  let browser = tab.linkedBrowser;
+  await promiseBrowserLoaded(browser);
+  await checkDOM(browser, "after initial load");
+
+  // Close and restore the tab without modifying the document.
+  await promiseRemoveTabAndSessionState(tab);
+  tab = ss.undoCloseTab(window, 0);
+  browser = tab.linkedBrowser;
+  await promiseTabRestored(tab);
+  await checkDOM(browser, "after restoring the tab");
+
+  // Cleanup.
+  gBrowser.removeTab(tab);
+});

@@ -1188,7 +1188,17 @@ MOZ_CAN_RUN_SCRIPT static void SetInnerHTML(Document& aDocument,
                                             const nsAString& aInnerHTML) {
   RefPtr<Element> bodyElement = aDocument.GetBody();
   if (bodyElement && bodyElement->IsInDesignMode()) {
+    // If the document already serializes to the saved markup (i.e. the user
+    // didn't edit it), don't replace its content: re-parsing the markup loses
+    // state that can't round-trip through innerHTML (shadow roots, DOM trees
+    // the parser can't produce, node identity held by page scripts).
+    nsAutoString currentHTML;
     IgnoredErrorResult rv;
+    bodyElement->GetInnerHTML(currentHTML, rv);
+    if (!rv.Failed() && currentHTML.Equals(aInnerHTML)) {
+      return;
+    }
+    rv.SuppressException();
     bodyElement->SetInnerHTMLTrusted(aInnerHTML, aDocument.NodePrincipal(), rv);
     if (!rv.Failed()) {
       nsContentUtils::DispatchInputEvent(bodyElement);
