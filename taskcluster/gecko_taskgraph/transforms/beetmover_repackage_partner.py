@@ -235,9 +235,7 @@ def make_task_worker(config, jobs):
             "locale": locale,
             "partner": partner,
             "platform": ftp_platform,
-            "release_partner_build_number": config.params[
-                "release_partner_build_number"
-            ],
+            "partner_build_number": partner_config[partner][subpartner]["build_number"],
             "subpartner": subpartner,
             "version": config.params["version"],
         }
