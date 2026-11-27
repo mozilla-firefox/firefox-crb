@@ -2,6 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
+import io
+import os
 import unittest
 from pathlib import Path
 from shutil import rmtree
@@ -9,6 +12,7 @@ from tempfile import mkdtemp
 from unittest import mock
 
 import mozunit
+from mozshellutil import quote as shell_quote
 
 from mozbuild.action import nsis_build
 from mozbuild.util import FileAvoidWrite
@@ -138,6 +142,36 @@ class TestNsisBuild(unittest.TestCase):
         self.assertEqual(
             calls,
             [["makensis", "installer.nsi", f'-XOutFile "{output.resolve()}"']],
+        )
+
+    def test_verbose(self):
+        output = self.config_dir / "setup.exe"
+
+        def fake_run(argv, cwd=None, check=False):
+            output.write_text("exe", encoding="utf-8")
+            return mock.Mock(returncode=0)
+
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"BUILD_VERBOSE_LOG": "1"}):
+            with contextlib.redirect_stdout(out):
+                with mock.patch.object(
+                    nsis_build.subprocess, "run", side_effect=fake_run
+                ):
+                    nsis_build.main([
+                        "--config-dir",
+                        str(self.config_dir),
+                        "--nsi",
+                        "installer.nsi",
+                        "--makensis",
+                        "makensis",
+                        "--output",
+                        str(output),
+                    ])
+
+        self.assertEqual(
+            out.getvalue(),
+            shell_quote("makensis", "installer.nsi", f'-XOutFile "{output.resolve()}"')
+            + "\n",
         )
 
     def test_makensis_failure_propagates(self):
