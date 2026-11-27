@@ -47,7 +47,7 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
   void ClearCachedResources();
 
   ipc::IPCResult RecvNotifyDeviceReset(
-      const nsTArray<RemoteTextureOwnerId>& aOwnerIds);
+      const nsTArray<RemoteTextureOwnerId>& aOwnerIds, bool aRestore);
 
   ipc::IPCResult RecvDeactivate();
 

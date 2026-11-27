@@ -37,7 +37,7 @@ class CanvasShutdownManager final {
   void OnRemoteCanvasLost();
   void OnRemoteCanvasRestored();
   void OnRemoteCanvasReset(
-      const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds);
+      const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds, bool aRestore);
 
  private:
   explicit CanvasShutdownManager(dom::StrongWorkerRef* aWorkerRef);

@@ -459,7 +459,8 @@ class CanvasTranslator final : public gfx::InlineTranslator,
 
   bool CreateReferenceTexture();
 
-  void NotifyDeviceReset(const RemoteTextureOwnerIdSet& aIds);
+  void NotifyDeviceReset(const RemoteTextureOwnerIdSet& aIds,
+                         bool aRestore = true);
   bool EnsureSharedContextWebgl();
   gfx::DrawTargetWebgl* GetDrawTargetWebgl(
       const RemoteTextureOwnerId aTextureOwnerId,
