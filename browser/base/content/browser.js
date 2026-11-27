@@ -463,7 +463,7 @@ ChromeUtils.defineLazyGetter(this, "PopupNotifications", () => {
       return (
         (urlBarEdited && gURLBar.focused) ||
         (gURLBar.getAttribute("pageproxystate") != "valid" &&
-          gBrowser.selectedBrowser._awaitingSetURI) ||
+          gBrowser.selectedBrowser.awaitingSetURI) ||
         shouldSuppressPopupNotifications()
       );
     };
