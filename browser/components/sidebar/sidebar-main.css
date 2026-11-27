@@ -104,7 +104,8 @@
   min-width: 0;
 
   > moz-button {
-    --button-icon-fill: var(--toolbarbutton-icon-fill);
+    /* Keep the launcher's size rather than the toolbar variant's tab height. */
+    --button-size-icon: inherit;
     --button-attention-dot-color: light-dark(#53b93a, #73d25d);
   }
 

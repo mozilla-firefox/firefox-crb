@@ -13,6 +13,12 @@
   user-select: none;
 }
 
+/* On the host rather than .button-background, so that a consumer can size its
+ * toolbar buttons from outside. */
+:host([type~="toolbar"]) {
+  --button-size-icon: var(--tab-min-height, var(--button-min-height));
+}
+
 :host([type="split"]) {
   --button-split-separator-height: 50%;
 
@@ -274,12 +280,18 @@ button {
   &[type~="toolbar"] {
     --button-outer-padding-block: 4px;
     --button-outer-padding-inline: var(--toolbarbutton-padding-outer);
-    --button-size-icon: var(--tab-min-height, var(--button-min-height));
     --focus-outline-offset: -2px;
+    --button-icon-fill: var(--toolbarbutton-icon-fill);
 
     background-color: var(--button-background-color-toolbar);
     border-color: var(--button-border-color-toolbar);
     color: var(--button-text-color-toolbar);
+
+    /* The selected state swaps its colors, so the icon has to follow the text
+     * to stay on its pair. */
+    @media (forced-colors) {
+      --button-icon-fill: currentColor;
+    }
 
     button:hover > & {
       background-color: var(--button-background-color-toolbar-hover);
