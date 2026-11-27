@@ -4440,8 +4440,6 @@ extern "C" void logalloc_init(malloc_table_t*, ReplaceMallocBridge**);
 extern "C" void dmd_init(malloc_table_t*, ReplaceMallocBridge**);
 #  endif
 
-void phc_init(malloc_table_t*, ReplaceMallocBridge**);
-
 bool Equals(const malloc_table_t& aTable1, const malloc_table_t& aTable2) {
   return memcmp(&aTable1, &aTable2, sizeof(malloc_table_t)) == 0;
 }
