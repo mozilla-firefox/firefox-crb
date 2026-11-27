@@ -21,13 +21,13 @@ add_task(async function () {
         const window = this.browsingContext.topChromeWindow;
         switch (data) {
           case "zoom-enlarge":
-            window.FullZoom.enlarge();
+            window.FullZoom.enlarge(window.gBrowser.selectedBrowser);
             break;
           case "zoom-reset":
-            await window.FullZoom.reset();
+            await window.FullZoom.reset(window.gBrowser.selectedBrowser);
             break;
           case "zoom-reduce":
-            window.FullZoom.reduce();
+            window.FullZoom.reduce(window.gBrowser.selectedBrowser);
             break;
         }
       });

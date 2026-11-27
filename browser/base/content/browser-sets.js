@@ -243,14 +243,14 @@ document.addEventListener(
             BrowserCommands.separateTabSplitView();
             break;
           case "cmd_fullZoomReduce":
-            FullZoom.reduce();
+            FullZoom.reduce(gBrowser.selectedBrowser);
             break;
           case "cmd_fullZoomEnlarge":
-            FullZoom.enlarge();
+            FullZoom.enlarge(gBrowser.selectedBrowser);
             break;
           case "cmd_fullZoomReset":
-            FullZoom.reset();
-            FullZoom.resetScalingZoom();
+            FullZoom.reset(gBrowser.selectedBrowser);
+            FullZoom.resetScalingZoom(gBrowser.selectedBrowser);
             break;
           case "cmd_fullZoomToggle":
             ZoomManager.toggleZoom();

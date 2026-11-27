@@ -473,7 +473,7 @@ add_task(async function test_aboutcrashedtabzoom() {
   BrowserTestUtils.startLoadingURIString(browser, PAGE_1);
   await promiseBrowserLoaded(browser);
 
-  FullZoom.enlarge();
+  FullZoom.enlarge(gBrowser.selectedBrowser);
   let zoomLevel = ZoomManager.getZoomForBrowser(browser);
   Assert.notStrictEqual(zoomLevel, 1, "should have enlarged");
 
@@ -497,7 +497,7 @@ add_task(async function test_aboutcrashedtabzoom() {
     zoomLevel,
     "zoom should have gone back to enlarged"
   );
-  FullZoom.reset();
+  FullZoom.reset(gBrowser.selectedBrowser);
 
   gBrowser.removeTab(newTab);
 });

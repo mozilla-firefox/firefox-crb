@@ -40,6 +40,7 @@ ChromeUtils.defineESModuleGetters(this, {
     "moz-src:///browser/components/downloads/DownloadsCommon.sys.mjs",
   E10SUtils: "resource://gre/modules/E10SUtils.sys.mjs",
   ExtensionsUI: "resource:///modules/ExtensionsUI.sys.mjs",
+  FullZoom: "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs",
   HomePage: "resource:///modules/HomePage.sys.mjs",
   LightweightThemeConsumer:
     "resource://gre/modules/LightweightThemeConsumer.sys.mjs",
@@ -146,13 +147,6 @@ ChromeUtils.defineLazyGetter(this, "fxAccounts", () => {
   return ChromeUtils.importESModule(
     "resource://gre/modules/FxAccounts.sys.mjs"
   ).getFxAccountsSingleton();
-});
-
-ChromeUtils.defineLazyGetter(this, "FullZoom", () => {
-  const { FullZoom } = ChromeUtils.importESModule(
-    "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs"
-  );
-  return FullZoom.forWindow(window);
 });
 
 XPCOMUtils.defineLazyScriptGetter(
@@ -2665,7 +2659,11 @@ var XULBrowserWindow = {
     _aTotalProgress
   ) {
     if (FullZoom.updateBackgroundTabs) {
-      FullZoom.onLocationChange(gBrowser.currentURI, true);
+      FullZoom.onLocationChange(
+        gBrowser.currentURI,
+        true,
+        gBrowser.selectedBrowser
+      );
     }
 
     // Docshell should normally take care of hiding the tooltip, but we need to do it

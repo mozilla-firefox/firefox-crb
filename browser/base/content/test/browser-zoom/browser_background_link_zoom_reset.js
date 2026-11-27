@@ -15,7 +15,7 @@ function testBackgroundLoad() {
 
     await FullZoomHelper.removeTabAndWaitForLocationChange(gBgTab);
 
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     await FullZoomHelper.removeTabAndWaitForLocationChange(gTestTab);
     finish();
   })();
@@ -24,7 +24,7 @@ function testBackgroundLoad() {
 function testInitialZoom() {
   (async function () {
     is(ZoomManager.zoom, 1, "initial zoom level should be 1");
-    FullZoom.enlarge();
+    FullZoom.enlarge(gBrowser.selectedBrowser);
 
     gTestZoom = ZoomManager.zoom;
     isnot(gTestZoom, 1, "zoom level should have changed");

@@ -63,10 +63,10 @@ function zoomTab1() {
 function finishTest() {
   (async function () {
     await FullZoomHelper.selectTabAndWaitForLocationChange(gTab1);
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     await FullZoomHelper.removeTabAndWaitForLocationChange(gTab1);
     await FullZoomHelper.selectTabAndWaitForLocationChange(gTab2);
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     await FullZoomHelper.removeTabAndWaitForLocationChange(gTab2);
   })().then(finish, FullZoomHelper.failAndContinue(finish));
 }

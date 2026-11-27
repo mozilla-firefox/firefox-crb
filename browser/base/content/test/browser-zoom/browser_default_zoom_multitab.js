@@ -58,7 +58,7 @@ add_task(async function test_multidomain_global_zoom() {
     "Setting default zoom causes tab 2 (foreground) to zoom to default zoom."
   );
   console.log("Enlarging tab");
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
   // 80% local zoom tab 2
   await TestUtils.waitForCondition(() => {
     console.log(
@@ -156,7 +156,7 @@ add_task(async function test_site_specific_global_zoom() {
   console.log("Selecting tab 1");
   await FullZoomHelper.selectTabAndWaitForLocationChange(tab1);
   console.log("Enlarging");
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
   await TestUtils.waitForCondition(() => {
     console.log(
       "Current tab 1 zoom is: ",

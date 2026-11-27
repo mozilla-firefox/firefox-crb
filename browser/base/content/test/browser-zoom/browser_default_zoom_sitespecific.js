@@ -43,7 +43,7 @@ add_task(async function test_disabled_ss_multi() {
   zoomLevel = ZoomManager.getZoomForBrowser(tabBrowser1);
   is(zoomLevel, 0.7, "tab 1 zoom has been set to 70%");
 
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
 
   zoomLevel = ZoomManager.getZoomForBrowser(tabBrowser1);
   is(zoomLevel, 0.8, "tab 1 zoom has been set to 80%");
@@ -94,7 +94,7 @@ add_task(async function test_disabled_ss_custom() {
   let zoomLevel = ZoomManager.getZoomForBrowser(tabBrowser1);
   is(zoomLevel, 1.5, "tab 1 zoom has been set to 150%");
 
-  await FullZoom.enlarge();
+  await FullZoom.enlarge(gBrowser.selectedBrowser);
 
   zoomLevel = ZoomManager.getZoomForBrowser(tabBrowser1);
   is(zoomLevel, 1.6, "tab 1 zoom has been set to 160%");

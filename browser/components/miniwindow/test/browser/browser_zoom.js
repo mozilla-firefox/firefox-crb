@@ -67,7 +67,7 @@ async function checkZoomShortcuts(cropped) {
       );
     }
   } finally {
-    await miniWin.FullZoom.reset();
+    await FullZoom.reset(miniWin.gBrowser.selectedBrowser);
     let closed = BrowserTestUtils.domWindowClosed(miniWin);
     mini.close();
     await closed;

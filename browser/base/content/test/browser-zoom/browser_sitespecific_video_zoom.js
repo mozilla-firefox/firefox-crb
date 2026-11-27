@@ -34,13 +34,13 @@ function zoomTab1() {
       gBrowser.getBrowserForTab(gTab1)
     );
     if (level1 > 1) {
-      FullZoom.reduce();
+      FullZoom.reduce(gBrowser.selectedBrowser);
     }
 
     FullZoomHelper.zoomTest(gTab1, 1, "Initial zoom of tab 1 should be 1");
     FullZoomHelper.zoomTest(gTab2, 1, "Initial zoom of tab 2 should be 1");
 
-    FullZoom.enlarge();
+    FullZoom.enlarge(gBrowser.selectedBrowser);
     gLevel1 = ZoomManager.getZoomForBrowser(gBrowser.getBrowserForTab(gTab1));
 
     Assert.greater(gLevel1, 1, "New zoom for tab 1 should be greater than 1");
@@ -60,7 +60,7 @@ function zoomTab2() {
   (async function () {
     is(gBrowser.selectedTab, gTab2, "Tab 2 is selected");
 
-    FullZoom.reduce();
+    FullZoom.reduce(gBrowser.selectedBrowser);
     let level2 = ZoomManager.getZoomForBrowser(
       gBrowser.getBrowserForTab(gTab2)
     );
@@ -119,10 +119,10 @@ function finishTest() {
     finishTestStarted = true;
 
     await FullZoomHelper.selectTabAndWaitForLocationChange(gTab1);
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     await FullZoomHelper.removeTabAndWaitForLocationChange(gTab1);
     await FullZoomHelper.selectTabAndWaitForLocationChange(gTab2);
-    await FullZoom.reset();
+    await FullZoom.reset(gBrowser.selectedBrowser);
     await FullZoomHelper.removeTabAndWaitForLocationChange(gTab2);
   })().then(finish, FullZoomHelper.failAndContinue(finish));
 }

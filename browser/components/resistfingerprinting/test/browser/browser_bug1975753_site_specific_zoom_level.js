@@ -54,7 +54,7 @@ async function runTest(defaultZoom) {
     "privacy.resistFingerprinting is true, site-specific zoom should be reset when clearing FPP state for tab1"
   );
 
-  await FullZoom.reset();
+  await FullZoom.reset(gBrowser.selectedBrowser);
 
   BrowserTestUtils.removeTab(tab1);
 
@@ -82,11 +82,13 @@ add_task(async function () {
     await promise;
   };
   await promisifyCps2(cb =>
-    cps2.setGlobal(FullZoom.name, defaultZoom, context, cb)
+    cps2.setGlobal(FullZoom.CONTENT_PREF_NAME, defaultZoom, context, cb)
   );
   try {
     await runTest(defaultZoom);
   } finally {
-    await promisifyCps2(cb => cps2.removeGlobal(FullZoom.name, context, cb));
+    await promisifyCps2(cb =>
+      cps2.removeGlobal(FullZoom.CONTENT_PREF_NAME, context, cb)
+    );
   }
 });

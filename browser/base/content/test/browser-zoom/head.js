@@ -9,7 +9,7 @@ let gLoadContext = Cu.createLoadContext();
 
 registerCleanupFunction(async function () {
   await new Promise(resolve => {
-    gContentPrefs.removeByName(window.FullZoom.name, gLoadContext, {
+    gContentPrefs.removeByName(FullZoom.CONTENT_PREF_NAME, gLoadContext, {
       handleResult() {},
       handleCompletion() {
         resolve();
@@ -30,7 +30,7 @@ var FullZoomHelper = {
     let parsedZoomValue = parseFloat((parseInt(newZoom) / 100).toFixed(2));
     await new Promise(resolve => {
       gContentPrefs.setGlobal(
-        FullZoom.name,
+        FullZoom.CONTENT_PREF_NAME,
         parsedZoomValue,
         nonPrivateLoadContext,
         {
@@ -55,7 +55,7 @@ var FullZoomHelper = {
   async getGlobalValue() {
     return new Promise(resolve => {
       let cachedVal = parseFloat(
-        gContentPrefs.getCachedGlobal(FullZoom.name, gLoadContext)
+        gContentPrefs.getCachedGlobal(FullZoom.CONTENT_PREF_NAME, gLoadContext)
       );
       if (cachedVal) {
         // We've got cached information, though it may be we've cached
@@ -66,7 +66,7 @@ var FullZoomHelper = {
         return;
       }
       let value = 1.0;
-      gContentPrefs.getGlobal(FullZoom.name, gLoadContext, {
+      gContentPrefs.getGlobal(FullZoom.CONTENT_PREF_NAME, gLoadContext, {
         handleResult(pref) {
           if (pref.value) {
             value = parseFloat(pref.value);

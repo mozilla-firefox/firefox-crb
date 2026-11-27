@@ -19,7 +19,7 @@ add_task(async function test() {
   let mozillaZoom = win.ZoomManager.zoom;
 
   // change the zoom on the mozilla page
-  win.FullZoom.enlarge();
+  FullZoom.enlarge(win.gBrowser.selectedBrowser);
   // make sure the zoom level has been changed
   isnot(win.ZoomManager.zoom, mozillaZoom, "Zoom level can be changed");
   mozillaZoom = win.ZoomManager.zoom;
@@ -38,7 +38,7 @@ add_task(async function test() {
   );
 
   // cleanup
-  win.FullZoom.reset();
+  FullZoom.reset(win.gBrowser.selectedBrowser);
   BrowserTestUtils.removeTab(tabMozilla);
   BrowserTestUtils.removeTab(tabAbout);
 

@@ -14,6 +14,7 @@ const lazy = XPCOMUtils.declareLazy({
   AIWindow:
     "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  FullZoom: "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 });
 
@@ -141,7 +142,7 @@ export let NewTabPagePreloading = {
     window.gURLBar.getBrowserState(browser).urlbarFocused = true;
 
     // Make sure the preloaded browser is loaded with desired zoom level
-    window.FullZoom.onLocationChange(tabURI, false, browser);
+    lazy.FullZoom.onLocationChange(tabURI, false, browser);
 
     this.browserCounts[countKey]++;
   },

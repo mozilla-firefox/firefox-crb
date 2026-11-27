@@ -256,7 +256,7 @@ document.addEventListener(
 
         case "urlbar-zoom-button":
           if (isLeftClick) {
-            FullZoom.resetFromURLBar();
+            FullZoom.resetFromURLBar(window);
           }
           break;
 
@@ -378,7 +378,7 @@ document.addEventListener(
 
         case "urlbar-zoom-button":
           if (isLikeLeftClick) {
-            FullZoom.resetFromURLBar();
+            FullZoom.resetFromURLBar(window);
           }
           break;
 

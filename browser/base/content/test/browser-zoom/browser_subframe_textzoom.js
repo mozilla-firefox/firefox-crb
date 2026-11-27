@@ -25,7 +25,7 @@ function test() {
 
     // Change the zoom level and then save it so we can compare it to the level
     // after loading the sub-document.
-    FullZoom.enlarge();
+    FullZoom.enlarge(gBrowser.selectedBrowser);
     var zoomLevel = ZoomManager.zoom;
 
     // Start the sub-document load.

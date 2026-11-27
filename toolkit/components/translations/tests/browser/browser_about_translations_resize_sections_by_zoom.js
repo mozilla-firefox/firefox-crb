@@ -98,7 +98,7 @@ add_task(
         ],
       },
       () => {
-        FullZoom.setZoom(0.9 * Math.SQRT1_2);
+        FullZoom.setZoom(0.9 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 
@@ -123,7 +123,7 @@ add_task(
         ],
       },
       () => {
-        FullZoom.setZoom(1.1 * Math.SQRT1_2);
+        FullZoom.setZoom(1.1 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 
@@ -171,7 +171,7 @@ add_task(
         ],
       },
       () => {
-        FullZoom.setZoom(1.5 * Math.SQRT1_2);
+        FullZoom.setZoom(1.5 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 
@@ -234,7 +234,7 @@ add_task(
         unexpected: [AboutTranslationsTestUtils.Events.PageOrientationChanged],
       },
       () => {
-        FullZoom.setZoom(4 * Math.SQRT1_2);
+        FullZoom.setZoom(4 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 
@@ -255,7 +255,7 @@ add_task(
         unexpected: [AboutTranslationsTestUtils.Events.PageOrientationChanged],
       },
       () => {
-        FullZoom.setZoom(1.5 * Math.SQRT1_2);
+        FullZoom.setZoom(1.5 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 
@@ -279,7 +279,7 @@ add_task(
         ],
       },
       () => {
-        FullZoom.setZoom(1.0 * Math.SQRT1_2);
+        FullZoom.setZoom(1.0 * Math.SQRT1_2, gBrowser.selectedBrowser);
       }
     );
 

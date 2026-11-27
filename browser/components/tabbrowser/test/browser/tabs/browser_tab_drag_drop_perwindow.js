@@ -389,7 +389,7 @@ add_task(async function test_dragging_zoom_handling() {
     "http://example.com/"
   );
 
-  win2.FullZoom.setZoom(ZOOM_FACTOR);
+  FullZoom.setZoom(ZOOM_FACTOR, win2.gBrowser.selectedBrowser);
   is(
     ZoomManager.getZoomForBrowser(tab2.linkedBrowser),
     ZOOM_FACTOR,
@@ -416,7 +416,7 @@ add_task(async function test_dragging_zoom_handling() {
     "Dragged tab should have correct zoom factor"
   );
 
-  win1.FullZoom.reset();
+  FullZoom.reset(win1.gBrowser.selectedBrowser);
 
   await BrowserTestUtils.closeWindow(win1);
   await BrowserTestUtils.closeWindow(win2);

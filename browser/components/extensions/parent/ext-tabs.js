@@ -10,6 +10,7 @@ ChromeUtils.defineESModuleGetters(this, {
   DownloadPaths: "resource://gre/modules/DownloadPaths.sys.mjs",
   ExtensionControlledPopup:
     "resource:///modules/ExtensionControlledPopup.sys.mjs",
+  FullZoom: "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   SessionStore:
     "moz-src:///browser/components/sessionstore/SessionStore.sys.mjs",
@@ -1264,7 +1265,7 @@ this.tabs = class extends ExtensionAPIPersistent {
         setZoom(tabId, zoom) {
           let nativeTab = getTabOrActive(tabId);
 
-          let { FullZoom, ZoomManager } = nativeTab.documentGlobal;
+          let { ZoomManager } = nativeTab.documentGlobal;
 
           if (zoom === 0) {
             // A value of zero means use the default zoom factor.
@@ -1283,7 +1284,7 @@ this.tabs = class extends ExtensionAPIPersistent {
         async getZoomSettings(tabId) {
           let nativeTab = getTabOrActive(tabId);
 
-          let { FullZoom, ZoomUI } = nativeTab.documentGlobal;
+          let { ZoomUI } = nativeTab.documentGlobal;
 
           return {
             mode: "automatic",

@@ -38,7 +38,7 @@ add_task(async function () {
     100,
     "Default zoom is 100% for about:mozilla"
   );
-  FullZoom.enlarge();
+  FullZoom.enlarge(gBrowser.selectedBrowser);
   await waitForZoom(110);
   is(
     parseInt(gZoomResetButton.label, 10),
@@ -60,7 +60,7 @@ add_task(async function () {
 
   gBrowser.selectedTab = tab1;
   await waitForZoom(110);
-  FullZoom.reset();
+  FullZoom.reset(gBrowser.selectedBrowser);
   await waitForZoom(100);
   is(
     parseInt(gZoomResetButton.label, 10),
@@ -69,7 +69,7 @@ add_task(async function () {
   );
 
   // Test zoom label updates while navigating pages in the same tab.
-  FullZoom.enlarge();
+  FullZoom.enlarge(gBrowser.selectedBrowser);
   await waitForZoom(110);
   is(
     parseInt(gZoomResetButton.label, 10),
@@ -93,5 +93,5 @@ add_task(async function () {
     110,
     "Zoom is still 110% for about:mozilla"
   );
-  FullZoom.reset();
+  FullZoom.reset(gBrowser.selectedBrowser);
 });

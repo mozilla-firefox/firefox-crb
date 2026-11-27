@@ -2,6 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+const lazy = XPCOMUtils.declareLazy({
+  FullZoom: "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs",
+});
+
 const gLoadContext = Cu.createLoadContext();
 const gContentPrefs = Cc["@mozilla.org/content-pref/service;1"].getService(
   Ci.nsIContentPrefService2
@@ -180,7 +186,7 @@ export async function updateZoomUI(aBrowser, aAnimate = false) {
     urlbarZoomButton.setAttribute("aria-label", accessibilityLabel);
   }
 
-  win.FullZoom.updateCommands();
+  lazy.FullZoom.updateCommands(win);
 }
 
 import { CustomizableUI } from "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs";
