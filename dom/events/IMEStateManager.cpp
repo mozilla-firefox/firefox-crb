@@ -2538,9 +2538,7 @@ nsresult IMEStateManager::NotifyIME(const IMENotification& aNotification,
                        IMENotification(NOTIFY_IME_OF_BLUR))
                  : NS_OK;
     }
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-    case NOTIFY_IME_OF_POSITION_CHANGE:
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
     case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED: {
       if (aBrowserParent != sFocusedIMEBrowserParent) {
@@ -2630,8 +2628,7 @@ nsresult IMEStateManager::NotifyIME(IMEMessage aMessage,
   // overload shouldn't be used for them.
   MOZ_ASSERT(aMessage != NOTIFY_IME_OF_FOCUS &&
              aMessage != NOTIFY_IME_OF_BLUR &&
-             aMessage != NOTIFY_IME_OF_TEXT_CHANGE &&
-             aMessage != NOTIFY_IME_OF_SELECTION_CHANGE &&
+             aMessage != NOTIFY_IME_OF_CONTENT_CHANGE &&
              aMessage != NOTIFY_IME_OF_MOUSE_BUTTON_EVENT);
 
   if (NS_WARN_IF(!CanHandleWith(aPresContext))) {

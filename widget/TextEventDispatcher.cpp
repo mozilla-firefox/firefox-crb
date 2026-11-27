@@ -906,8 +906,9 @@ nsresult TextEventDispatcher::NotifyIME(
         MOZ_ASSERT(!IsHandlingComposition());
       }
       break;
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      if (mHasFocus && aIMENotification.mSelectionChangeData->HasRange()) {
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      if (mHasFocus && aIMENotification.mSelectionChangeData.isSome() &&
+          aIMENotification.mSelectionChangeData->HasRange()) {
         mWritingMode =
             Some(aIMENotification.mSelectionChangeData->GetWritingMode());
       }

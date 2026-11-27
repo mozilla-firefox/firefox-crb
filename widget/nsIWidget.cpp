@@ -2322,8 +2322,11 @@ void nsIWidget::NotifyWindowMoved(const LayoutDeviceIntPoint& aPoint,
   }
 
   if (mIMEHasFocus && IMENotificationRequestsRef().contains(
-                          IMENotificationRequest::PositionChange)) {
-    NotifyIME(IMENotification(IMEMessage::NOTIFY_IME_OF_POSITION_CHANGE));
+                          IMENotificationRequest::LayoutChange)) {
+    IMENotification positionChange =
+        IMENotification(NOTIFY_IME_OF_CONTENT_CHANGE);
+    positionChange.mLayoutChanged = true;
+    NotifyIME(positionChange);
   }
 }
 

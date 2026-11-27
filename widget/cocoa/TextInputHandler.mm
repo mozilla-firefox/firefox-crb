@@ -3476,14 +3476,16 @@ nsresult IMEInputHandler::NotifyIME(TextEventDispatcher* aTextEventDispatcher,
     case NOTIFY_IME_OF_BLUR:
       OnFocusChangeInGecko(false);
       return NS_OK;
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      OnSelectionChange(aNotification);
-      return NS_OK;
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      OnLayoutChange();
-      return NS_OK;
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-      OnTextChange(aNotification);
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      if (aNotification.mTextChangeData.isSome()) {
+        OnTextChange(aNotification);
+      }
+      if (aNotification.mSelectionChangeData.isSome()) {
+        OnSelectionChange(aNotification);
+      }
+      if (aNotification.mLayoutChanged) {
+        OnLayoutChange();
+      }
       return NS_OK;
     default:
       return NS_ERROR_NOT_IMPLEMENTED;

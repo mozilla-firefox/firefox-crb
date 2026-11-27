@@ -795,7 +795,7 @@ void GeckoEditableSupport::FlushIMEText(FlushChangesFlag aFlags) {
   // with this text change, and overflow might occur if we just use
   // INT32_MAX.
   constexpr uint32_t kEnoughLargeEndOffset = INT32_MAX / 2;
-  IMENotification notification(NOTIFY_IME_OF_TEXT_CHANGE);
+  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
   notification.mTextChangeData.emplace(
       0, kEnoughLargeEndOffset, kEnoughLargeEndOffset,
       /* aCausedByComposition = */ false,
@@ -1386,32 +1386,32 @@ nsresult GeckoEditableSupport::NotifyIME(
       break;
     }
 
-    case NOTIFY_IME_OF_SELECTION_CHANGE: {
-      ALOGIME("IME: NOTIFY_IME_OF_SELECTION_CHANGE: SelectionChangeData=%s",
-              ToString(aNotification.mSelectionChangeData).c_str());
+    case NOTIFY_IME_OF_CONTENT_CHANGE: {
+      ALOGIME(
+          "IME: NOTIFY_IME_OF_CONTENT_CHANGE: TextChangeData=%s, "
+          "SelectionChangeData=%s, LayoutChanged=%s",
+          ToString(aNotification.mTextChangeData).c_str(),
+          ToString(aNotification.mSelectionChangeData).c_str(),
+          TrueOrFalse(aNotification.mLayoutChanged));
 
-      if (aNotification.mSelectionChangeData->HasRange()) {
-        mCachedSelection.mStartOffset = static_cast<int32_t>(
-            aNotification.mSelectionChangeData->AnchorOffset());
-        mCachedSelection.mEndOffset = static_cast<int32_t>(
-            aNotification.mSelectionChangeData->FocusOffset());
-      } else {
-        mCachedSelection.Reset();
+      if (aNotification.mTextChangeData.isSome()) {
+        /* Make sure Java's selection is up-to-date */
+        PostFlushIMEChanges();
+        mIMESelectionChanged = true;
+        AddIMETextChange(aNotification.mTextChangeData.ref());
       }
-
-      PostFlushIMEChanges();
-      mIMESelectionChanged = true;
-      break;
-    }
-
-    case NOTIFY_IME_OF_TEXT_CHANGE: {
-      ALOGIME("IME: NOTIFY_IME_OF_TEXT_CHANGE: TextChangeData=%s",
-              ToString(aNotification.mTextChangeData).c_str());
-
-      /* Make sure Java's selection is up-to-date */
-      PostFlushIMEChanges();
-      mIMESelectionChanged = true;
-      AddIMETextChange(aNotification.mTextChangeData.ref());
+      if (aNotification.mSelectionChangeData.isSome()) {
+        if (aNotification.mSelectionChangeData->HasRange()) {
+          mCachedSelection.mStartOffset = static_cast<int32_t>(
+              aNotification.mSelectionChangeData->AnchorOffset());
+          mCachedSelection.mEndOffset = static_cast<int32_t>(
+              aNotification.mSelectionChangeData->FocusOffset());
+        } else {
+          mCachedSelection.Reset();
+        }
+        PostFlushIMEChanges();
+        mIMESelectionChanged = true;
+      }
       break;
     }
 

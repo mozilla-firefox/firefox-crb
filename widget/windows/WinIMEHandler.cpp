@@ -228,16 +228,32 @@ nsresult IMEHandler::NotifyIME(nsWindow* aWindow,
                                const IMENotification& aIMENotification) {
   if (IsTSFAvailable()) {
     switch (aIMENotification.mMessage) {
-      case NOTIFY_IME_OF_SELECTION_CHANGE: {
-        nsresult rv = TSFTextStore::OnSelectionChange(aIMENotification);
-        // If IMM IME is active, we need to notify IMMHandler of updating
-        // composition change.  It will adjust candidate window position or
-        // composition window position.
-        bool isIMMActive = IsIMMActive();
-        if (isIMMActive) {
-          IMMHandler::OnUpdateComposition(aWindow);
+      case NOTIFY_IME_OF_CONTENT_CHANGE: {
+        RefPtr window(aWindow);
+        nsresult rv = NS_OK;
+        if (aIMENotification.mTextChangeData.isSome()) {
+          if (NS_FAILED(TSFTextStore::OnTextChange(aIMENotification))) {
+            rv = NS_ERROR_FAILURE;
+          }
         }
-        IMMHandler::OnSelectionChange(aWindow, aIMENotification, isIMMActive);
+        if (aIMENotification.mSelectionChangeData.isSome()) {
+          if (NS_FAILED(TSFTextStore::OnSelectionChange(aIMENotification))) {
+            rv = NS_ERROR_FAILURE;
+          }
+          // If IMM IME is active, we need to notify IMMHandler of updating
+          // composition change.  It will adjust candidate window position or
+          // composition window position.
+          bool isIMMActive = IsIMMActive();
+          if (isIMMActive) {
+            IMMHandler::OnUpdateComposition(window);
+          }
+          IMMHandler::OnSelectionChange(window, aIMENotification, isIMMActive);
+        }
+        if (aIMENotification.mLayoutChanged) {
+          if (NS_FAILED(TSFTextStore::OnLayoutChange())) {
+            rv = NS_ERROR_FAILURE;
+          }
+        }
         return rv;
       }
       case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
@@ -250,8 +266,6 @@ nsresult IMEHandler::NotifyIME(nsWindow* aWindow,
           TSFTextStore::OnUpdateComposition();
         }
         return NS_OK;
-      case NOTIFY_IME_OF_TEXT_CHANGE:
-        return TSFTextStore::OnTextChange(aIMENotification);
       case NOTIFY_IME_OF_FOCUS: {
         sFocusedWindow = aWindow;
         IMMHandler::OnFocusChange(true, aWindow);
@@ -300,8 +314,6 @@ nsresult IMEHandler::NotifyIME(nsWindow* aWindow,
           IMMHandler::CancelComposition(aWindow);
         }
         return NS_OK;
-      case NOTIFY_IME_OF_POSITION_CHANGE:
-        return TSFTextStore::OnLayoutChange();
       default:
         return NS_ERROR_NOT_IMPLEMENTED;
     }
@@ -314,17 +326,23 @@ nsresult IMEHandler::NotifyIME(nsWindow* aWindow,
     case REQUEST_TO_CANCEL_COMPOSITION:
       IMMHandler::CancelComposition(aWindow);
       return NS_OK;
-    case NOTIFY_IME_OF_POSITION_CHANGE:
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       IMMHandler::OnUpdateComposition(aWindow);
       return NS_OK;
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      IMMHandler::OnSelectionChange(aWindow, aIMENotification, true);
-      // IMMHandler::OnSelectionChange() cannot work without its singleton
-      // instance.  Therefore, IMEHandler needs to create native caret instead
-      // if it's necessary.
-      MaybeCreateNativeCaret(aWindow);
+    case NOTIFY_IME_OF_CONTENT_CHANGE: {
+      RefPtr window(aWindow);
+      if (aIMENotification.mSelectionChangeData.isSome()) {
+        IMMHandler::OnSelectionChange(window, aIMENotification, true);
+        // IMMHandler::OnSelectionChange() cannot work without its singleton
+        // instance.  Therefore, IMEHandler needs to create native caret instead
+        // if it's necessary.
+        MaybeCreateNativeCaret(window);
+      }
+      if (aIMENotification.mLayoutChanged) {
+        IMMHandler::OnUpdateComposition(window);
+      }
       return NS_OK;
+    }
     case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
       return IMMHandler::OnMouseButtonEvent(aWindow, aIMENotification);
     case NOTIFY_IME_OF_FOCUS:
