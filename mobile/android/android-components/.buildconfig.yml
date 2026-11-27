@@ -666,6 +666,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -2431,6 +2432,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2458,6 +2460,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2521,6 +2524,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2548,6 +2552,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2621,6 +2626,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync

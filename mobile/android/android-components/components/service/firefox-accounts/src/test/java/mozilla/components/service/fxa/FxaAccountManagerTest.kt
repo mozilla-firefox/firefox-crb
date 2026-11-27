@@ -18,6 +18,7 @@ import mozilla.appservices.fxaclient.FxaEvent
 import mozilla.appservices.fxaclient.FxaServer
 import mozilla.appservices.fxaclient.FxaState
 import mozilla.components.concept.base.crash.CrashReporting
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AccountEventsObserver
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthFlowError
