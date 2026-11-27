@@ -7,6 +7,7 @@ import mozunit
 from mozbuild.packaging import (
     NO_PKG_FILES,
     all_locales,
+    echo_command,
     jsshell_name,
     langpack_basename,
     multilocale_content,
@@ -137,6 +138,18 @@ def test_all_locales_empty():
 
 def test_multilocale_content():
     assert multilocale_content(["de", "fr"]) == "de,fr,en-US\n"
+
+
+def test_echo_command(monkeypatch, capsys):
+    monkeypatch.setenv("BUILD_VERBOSE_LOG", "1")
+    echo_command(["tar", "-cf", "a b.tar", "firefox"])
+    assert capsys.readouterr().out == "tar -cf 'a b.tar' firefox\n"
+
+
+def test_echo_command_quiet(monkeypatch, capsys):
+    monkeypatch.delenv("BUILD_VERBOSE_LOG", raising=False)
+    echo_command(["tar", "-cf", "a.tar", "firefox"])
+    assert capsys.readouterr().out == ""
 
 
 if __name__ == "__main__":
