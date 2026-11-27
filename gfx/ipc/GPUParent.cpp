@@ -323,7 +323,7 @@ mozilla::ipc::IPCResult GPUParent::RecvInit(
   // here that would normally be initialized there.
   SkGraphics::Init();
 
-  bool useRemoteCanvas = gfxVars::UseAcceleratedCanvas2D();
+  bool useRemoteCanvas = gfxVars::UseRemoteCanvas2D();
   if (useRemoteCanvas) {
     gfxGradientCache::Init();
   }

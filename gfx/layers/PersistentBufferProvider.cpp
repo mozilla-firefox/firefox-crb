@@ -6,6 +6,7 @@
 
 #include "gfxPlatform.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/StaticPrefs_gfx.h"
 #include "mozilla/StaticPrefs_layers.h"
 #include "mozilla/gfx/CanvasManagerChild.h"
 #include "mozilla/gfx/DrawTargetWebgl.h"
@@ -125,17 +126,27 @@ PersistentBufferProviderRemote::Create(gfx::IntSize aSize,
     return nullptr;
   }
 
-  if (!DrawTargetWebgl::CanCreate(aSize, aFormat, aPreferAcceleration)) {
+  bool accelerated =
+      DrawTargetWebgl::CanCreate(aSize, aFormat, aPreferAcceleration);
 #ifdef XP_WIN
-    // Direct2D acceleration does not require DrawTargetWebgl, but still
-    // requires PersistentBufferProviderRemote.
-    if (!TextureData::IsRemote(aKnowsCompositor, BackendSelector::Canvas,
-                               aFormat, aSize)) {
+  // Direct2D acceleration does not require DrawTargetWebgl, but still
+  // requires PersistentBufferProviderRemote.
+  if (!accelerated) {
+    accelerated = TextureData::IsRemote(
+        aKnowsCompositor, BackendSelector::Canvas, aFormat, aSize);
+  }
+#endif
+
+  // If the GPU process can fall back to software itself, then the canvas is
+  // remote even if it can't be accelerated.
+  bool softwareInGPUProcess = StaticPrefs::gfx_canvas_remote_software();
+  if (softwareInGPUProcess) {
+    if (!gfxPlatform::UseRemoteCanvas() ||
+        !Factory::AllowedSurfaceSize(aSize)) {
       return nullptr;
     }
-#else
+  } else if (!accelerated) {
     return nullptr;
-#endif
   }
 
   RefPtr<TextureClient> texture = CreateTexture(
@@ -152,17 +163,20 @@ PersistentBufferProviderRemote::Create(gfx::IntSize aSize,
     return nullptr;
   }
   recordedTextureData->SetPreferAcceleration(aPreferAcceleration);
+  recordedTextureData->SetSoftwareInGPUProcess(softwareInGPUProcess);
 
   RefPtr<PersistentBufferProviderRemote> provider =
       new PersistentBufferProviderRemote(
-          recordedTextureData->mRemoteTextureOwnerId, texture);
+          recordedTextureData->mRemoteTextureOwnerId, texture, accelerated);
   return provider.forget();
 }
 
 PersistentBufferProviderRemote::PersistentBufferProviderRemote(
     RemoteTextureOwnerId aRemoteTextureOwnerId,
-    const RefPtr<TextureClient>& aTexture)
-    : mRemoteTextureOwnerId(aRemoteTextureOwnerId), mTexture(aTexture) {
+    const RefPtr<TextureClient>& aTexture, bool aAccelerated)
+    : mRemoteTextureOwnerId(aRemoteTextureOwnerId),
+      mTexture(aTexture),
+      mAccelerated(aAccelerated) {
   MOZ_COUNT_CTOR(PersistentBufferProviderRemote);
 }
 

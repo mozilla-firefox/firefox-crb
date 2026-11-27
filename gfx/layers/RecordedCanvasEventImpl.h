@@ -458,14 +458,16 @@ class RecordedCanvasDrawTargetCreation final
                                    RemoteTextureOwnerId aTextureOwnerId,
                                    BackendType aType, const IntSize& aSize,
                                    SurfaceFormat aFormat,
-                                   bool aPreferAcceleration)
+                                   bool aPreferAcceleration,
+                                   bool aSoftwareInGPUProcess)
       : RecordedEventDerived(CANVAS_DRAW_TARGET_CREATION),
         mRefPtr(aRefPtr),
         mTextureOwnerId(aTextureOwnerId),
         mBackendType(aType),
         mSize(aSize),
         mFormat(aFormat),
-        mPreferAcceleration(aPreferAcceleration) {}
+        mPreferAcceleration(aPreferAcceleration),
+        mSoftwareInGPUProcess(aSoftwareInGPUProcess) {}
 
   template <class S>
   MOZ_IMPLICIT RecordedCanvasDrawTargetCreation(S& aStream);
@@ -483,12 +485,14 @@ class RecordedCanvasDrawTargetCreation final
   IntSize mSize;
   SurfaceFormat mFormat = SurfaceFormat::UNKNOWN;
   bool mPreferAcceleration = false;
+  bool mSoftwareInGPUProcess = false;
 };
 
 inline bool RecordedCanvasDrawTargetCreation::PlayCanvasEvent(
     CanvasTranslator* aTranslator) const {
-  RefPtr<DrawTarget> newDT = aTranslator->CreateDrawTarget(
-      mRefPtr, mTextureOwnerId, mSize, mFormat, mPreferAcceleration);
+  RefPtr<DrawTarget> newDT =
+      aTranslator->CreateDrawTarget(mRefPtr, mTextureOwnerId, mSize, mFormat,
+                                    mPreferAcceleration, mSoftwareInGPUProcess);
 
   // If we couldn't create a DrawTarget this will probably cause us to crash
   // with nullptr later in the playback, so return false to abort.
@@ -503,6 +507,7 @@ void RecordedCanvasDrawTargetCreation::Record(S& aStream) const {
   WriteElement(aStream, mSize);
   WriteElement(aStream, mFormat);
   WriteElement(aStream, mPreferAcceleration);
+  WriteElement(aStream, mSoftwareInGPUProcess);
 }
 
 template <class S>
@@ -516,6 +521,7 @@ RecordedCanvasDrawTargetCreation::RecordedCanvasDrawTargetCreation(S& aStream)
   ReadElementConstrained(aStream, mFormat, SurfaceFormat::A8R8G8B8_UINT32,
                          SurfaceFormat::UNKNOWN);
   ReadElement(aStream, mPreferAcceleration);
+  ReadElement(aStream, mSoftwareInGPUProcess);
 }
 
 class RecordedTextureDestruction final
