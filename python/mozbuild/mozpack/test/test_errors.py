@@ -90,6 +90,14 @@ class TestErrorsImpl(TestErrors, unittest.TestCase):
             ],
         )
 
+    def test_errors_exception(self):
+        with self.assertRaises(ValueError):
+            with errors.accumulate():
+                with errors.context("foo", 1):
+                    raise ValueError
+        self.assertEqual(errors.get_context(), None)
+        self.assertRaises(ErrorMessage, errors.error, "foo")
+
 
 if __name__ == "__main__":
     mozunit.main()
