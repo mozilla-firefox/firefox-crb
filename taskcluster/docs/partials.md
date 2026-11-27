@@ -129,11 +129,14 @@ implementation is active for each release channel, based on the
 Each branch reads its own copy of the transform, so a change to this set
 on mozilla-central only reaches beta and release by riding the trains.
 
-The transform exposes two sequences:
+The transform exposes three sequences:
 
 - `partials_transforms`, used by the `partials` kind, skips generating
   the legacy `partials` tasks entirely on non-legacy projects, so they
   only run on legacy projects.
+- `partials_zucchini_transforms`, used by the `partials-zucchini` and
+  `partials-zucchini-l10n` kinds, skips generating zucchini tasks
+  entirely on legacy projects.
 - `zucchini_transforms`, used by the `partials-signing` kind, filters
   out the unused implementation. `partials-signing` depends on both
   `partials` (legacy) and `partials-zucchini`, so on legacy projects it

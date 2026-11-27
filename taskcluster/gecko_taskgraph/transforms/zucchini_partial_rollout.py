@@ -7,6 +7,7 @@ from taskgraph.util.dependencies import get_primary_dependency
 
 zucchini_transforms = TransformSequence()
 partials_transforms = TransformSequence()
+partials_zucchini_transforms = TransformSequence()
 
 # Projects that will use the "partials-zucchini" implementation as upstream.
 # Every other project, including all ESR branches, keeps using the legacy
@@ -28,6 +29,17 @@ def filter_legacy_partials_by_project(config, tasks):
     of the filtering applied by the zucchini_transforms below.
     """
     if config.params["project"] in ZUCCHINI_PARTIALS_PROJECTS:
+        return
+    yield from tasks
+
+
+@partials_zucchini_transforms.add
+def filter_zucchini_partials_by_project(config, tasks):
+    """Only generate "partials-zucchini" tasks on non-legacy release channels.
+
+    This is the inverse of filter_legacy_partials_by_project.
+    """
+    if config.params["project"] not in ZUCCHINI_PARTIALS_PROJECTS:
         return
     yield from tasks
 
