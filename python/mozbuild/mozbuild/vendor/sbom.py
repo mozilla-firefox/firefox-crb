@@ -194,6 +194,28 @@ def collect_records(repo, topsrcdir, log=None):
     return records, errors
 
 
+# Vendored code that only builds, tests, benchmarks or fuzzes the tree. A
+# manifest at or under one of these, or under a directory named like a test
+# directory, describes code that ships in nothing, so it goes to the build
+# tooling document.
+TOOLING_PATHS = (
+    "third_party/googletest",
+    "third_party/webkit/PerformanceTests",
+    "tools/fuzzing",
+    "tools/lint",
+)
+TEST_DIRECTORY_NAMES = frozenset(("test", "tests", "testing"))
+
+
+def is_tooling_path(path):
+    """Does a topsrcdir-relative directory hold test or build tooling code?"""
+    if TEST_DIRECTORY_NAMES.intersection(path.split("/")):
+        return True
+    return any(
+        path == prefix or path.startswith(prefix + "/") for prefix in TOOLING_PATHS
+    )
+
+
 def load_license_notices(path):
     """Read the licenses.json the build backend writes from moz.build LICENSES.
 
@@ -295,7 +317,7 @@ def merge_license_notices(records, notices):
     return records
 
 
-def components_for_unmatched(records, notices, is_file=None):
+def components_for_unmatched(records, notices, is_file=None, elsewhere=()):
     """Build records for licensed code that no moz.yaml or crate describes.
 
     about:license attributes roughly 250 paths, but moz.yaml only exists for
@@ -311,8 +333,12 @@ def components_for_unmatched(records, notices, is_file=None):
     ``is_file`` decides whether a path is a file rather than a directory; it
     defaults to the filesystem-free heuristic that a basename with a suffix is
     a file, so callers with a real tree should pass ``os.path.isfile``.
+    ``elsewhere`` holds records another document describes, whose code must
+    not come back as a notice component.
     """
-    known = {location for record in records for location in _locations(record)}
+    known = {
+        location for record in [*records, *elsewhere] for location in _locations(record)
+    }
 
     def covered(path):
         """Is `path` already described by a component, exactly or within one?
