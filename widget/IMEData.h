@@ -628,8 +628,7 @@ struct InputContextAction final {
 // IMEMessage is shared by IMEStateManager and TextComposition.
 // Update values in GeckoEditable.java if you make changes here.
 // XXX Negative values are used in Android...
-using IMEMessageType = int8_t;
-enum IMEMessage : IMEMessageType {
+enum IMEMessage : int8_t {
   // This is used by IMENotification internally.  This means that the instance
   // hasn't been initialized yet.
   NOTIFY_IME_OF_NOTHING,
@@ -669,123 +668,70 @@ enum IMEMessage : IMEMessageType {
 const char* ToChar(IMEMessage aIMEMessage);
 
 struct IMENotification final {
-  IMENotification() : mMessage(NOTIFY_IME_OF_NOTHING), mSelectionChangeData() {}
+  IMENotification() = default;
 
-  IMENotification(const IMENotification& aOther)
-      : mMessage(NOTIFY_IME_OF_NOTHING) {
-    Assign(aOther);
-  }
-
+  IMENotification(const IMENotification& aOther) = default;
   ~IMENotification() { Clear(); }
 
-  MOZ_IMPLICIT IMENotification(IMEMessage aMessage)
-      : mMessage(aMessage), mSelectionChangeData() {
-    switch (aMessage) {
-      case NOTIFY_IME_OF_SELECTION_CHANGE:
-        mSelectionChangeData.mString = new nsString();
-        mSelectionChangeData.Clear();
-        break;
-      case NOTIFY_IME_OF_TEXT_CHANGE:
-        mTextChangeData.Clear();
-        break;
-      case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
-        mMouseButtonEventData.mEventMessage = eVoidEvent;
-        mMouseButtonEventData.mOffset = UINT32_MAX;
-        mMouseButtonEventData.mCursorPos.MoveTo(0, 0);
-        mMouseButtonEventData.mCharRect.SetRect(0, 0, 0, 0);
-        mMouseButtonEventData.mButton = -1;
-        mMouseButtonEventData.mButtons = 0;
-        mMouseButtonEventData.mModifiers = 0;
-        break;
-      default:
-        break;
-    }
-  }
+  MOZ_IMPLICIT IMENotification(IMEMessage aMessage) : mMessage(aMessage) {}
 
-  void Assign(const IMENotification& aOther) {
-    bool changingMessage = mMessage != aOther.mMessage;
-    if (changingMessage) {
-      Clear();
-      mMessage = aOther.mMessage;
-    }
-    switch (mMessage) {
-      case NOTIFY_IME_OF_SELECTION_CHANGE:
-        if (changingMessage) {
-          mSelectionChangeData.mString = new nsString();
-        }
-        mSelectionChangeData.Assign(aOther.mSelectionChangeData);
-        break;
-      case NOTIFY_IME_OF_TEXT_CHANGE:
-        mTextChangeData = aOther.mTextChangeData;
-        break;
-      case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
-        mMouseButtonEventData = aOther.mMouseButtonEventData;
-        break;
-      default:
-        break;
-    }
-  }
-
-  IMENotification& operator=(const IMENotification& aOther) {
-    Assign(aOther);
-    return *this;
-  }
+  IMENotification& operator=(const IMENotification& aOther) = default;
 
   void Clear() {
-    if (mMessage == NOTIFY_IME_OF_SELECTION_CHANGE) {
-      MOZ_ASSERT(mSelectionChangeData.mString);
-      delete mSelectionChangeData.mString;
-      mSelectionChangeData.mString = nullptr;
-    }
     mMessage = NOTIFY_IME_OF_NOTHING;
+    mTextChangeData.reset();
+    mSelectionChangeData.reset();
+    mMouseButtonEventData.reset();
   }
 
   bool HasNotification() const { return mMessage != NOTIFY_IME_OF_NOTHING; }
 
   void MergeWith(const IMENotification& aNotification) {
-    switch (mMessage) {
-      case NOTIFY_IME_OF_NOTHING:
-        MOZ_ASSERT(aNotification.mMessage != NOTIFY_IME_OF_NOTHING);
-        Assign(aNotification);
-        break;
-      case NOTIFY_IME_OF_SELECTION_CHANGE:
-        MOZ_ASSERT(aNotification.mMessage == NOTIFY_IME_OF_SELECTION_CHANGE);
-        mSelectionChangeData.Assign(aNotification.mSelectionChangeData);
-        break;
-      case NOTIFY_IME_OF_TEXT_CHANGE:
-        MOZ_ASSERT(aNotification.mMessage == NOTIFY_IME_OF_TEXT_CHANGE);
-        mTextChangeData += aNotification.mTextChangeData;
-        break;
-      case NOTIFY_IME_OF_POSITION_CHANGE:
-      case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
-        MOZ_ASSERT(aNotification.mMessage == mMessage);
-        break;
-      default:
-        MOZ_CRASH("Merging notification isn't supported");
-        break;
+    if (mMessage == NOTIFY_IME_OF_NOTHING) {
+      MOZ_ASSERT(aNotification.mMessage != NOTIFY_IME_OF_NOTHING);
+      *this = aNotification;
+      return;
+    }
+    if (aNotification.mTextChangeData) {
+      if (!mTextChangeData) {
+        mTextChangeData.emplace(aNotification.mTextChangeData.ref());
+      } else {
+        mTextChangeData->MergeWith(aNotification.mTextChangeData.ref());
+      }
+    }
+    if (aNotification.mSelectionChangeData) {
+      mSelectionChangeData = aNotification.mSelectionChangeData;
+    }
+    if (aNotification.mMouseButtonEventData) {
+      if (!mMouseButtonEventData) {
+        mMouseButtonEventData.emplace(
+            aNotification.mMouseButtonEventData.ref());
+      } else {
+        mMouseButtonEventData = aNotification.mMouseButtonEventData;
+      }
     }
   }
 
-  IMEMessage mMessage;
+  IMEMessage mMessage = NOTIFY_IME_OF_NOTHING;
 
   // NOTIFY_IME_OF_SELECTION_CHANGE specific data
-  struct SelectionChangeDataBase {
+  struct SelectionChangeData {
     // Selection range.
-    uint32_t mOffset;
+    uint32_t mOffset = UINT32_MAX;
 
     // Selected string
-    nsString* mString;
+    nsString mString;
 
     // Writing mode at the selection.
-    uint8_t mWritingModeBits;
+    uint8_t mWritingModeBits = 0;
 
-    bool mIsInitialized;
-    bool mHasRange;
+    bool mIsInitialized = false;
+    bool mHasRange = false;
     // FIXME: Use RangeDirection enum class.
-    bool mReversed;
-    bool mCausedByComposition;
-    bool mCausedBySelectionEvent;
-    bool mOccurredDuringComposition;
+    bool mReversed = false;
+    bool mCausedByComposition = false;
+    bool mCausedBySelectionEvent = false;
+    bool mOccurredDuringComposition = false;
 
     void SetWritingMode(const WritingMode& aWritingMode);
     WritingMode GetWritingMode() const;
@@ -808,23 +754,23 @@ struct IMENotification final {
     }
     const nsString& String() const {
       MOZ_ASSERT(mHasRange);
-      return *mString;
+      return mString;
     }
     uint32_t Length() const {
       MOZ_ASSERT(mHasRange);
-      return mString->Length();
+      return mString.Length();
     }
     bool IsInInt32Range() const {
       return mHasRange && mOffset <= INT32_MAX && Length() <= INT32_MAX &&
              mOffset + Length() <= INT32_MAX;
     }
     bool HasRange() const { return mIsInitialized && mHasRange; }
-    bool IsCollapsed() const { return !mHasRange || mString->IsEmpty(); }
+    bool IsCollapsed() const { return !mHasRange || mString.IsEmpty(); }
     void ClearSelectionData() {
       mIsInitialized = false;
       mHasRange = false;
       mOffset = UINT32_MAX;
-      mString->Truncate();
+      mString.Truncate();
       mWritingModeBits = 0;
       mReversed = false;
     }
@@ -835,17 +781,17 @@ struct IMENotification final {
       mOccurredDuringComposition = false;
     }
     bool IsInitialized() const { return mIsInitialized; }
-    void Assign(const SelectionChangeDataBase& aOther) {
+    void Assign(const SelectionChangeData& aOther) {
       mIsInitialized = aOther.mIsInitialized;
       mHasRange = aOther.mHasRange;
       if (mIsInitialized && mHasRange) {
         mOffset = aOther.mOffset;
-        *mString = aOther.String();
+        mString = aOther.mString;
         mReversed = aOther.mReversed;
         mWritingModeBits = aOther.mWritingModeBits;
       } else {
         mOffset = UINT32_MAX;
-        mString->Truncate();
+        mString.Truncate();
         mReversed = false;
         // Let's keep the writing mode for avoiding temporarily changing the
         // writing mode at no selection range.
@@ -861,21 +807,21 @@ struct IMENotification final {
       mOccurredDuringComposition = aOccurredDuringComposition;
     }
 
-    bool EqualsRange(const SelectionChangeDataBase& aOther) const {
+    bool EqualsRange(const SelectionChangeData& aOther) const {
       if (HasRange() != aOther.HasRange()) {
         return false;
       }
       if (!HasRange()) {
         return true;
       }
-      return mOffset == aOther.mOffset && mString->Equals(*aOther.mString);
+      return mOffset == aOther.mOffset && mString.Equals(aOther.mString);
     }
-    bool EqualsRangeAndDirection(const SelectionChangeDataBase& aOther) const {
+    bool EqualsRangeAndDirection(const SelectionChangeData& aOther) const {
       return EqualsRange(aOther) &&
              (!HasRange() || mReversed == aOther.mReversed);
     }
     bool EqualsRangeAndDirectionAndWritingMode(
-        const SelectionChangeDataBase& aOther) const {
+        const SelectionChangeData& aOther) const {
       return EqualsRangeAndDirection(aOther) &&
              mWritingModeBits == aOther.mWritingModeBits;
     }
@@ -885,71 +831,55 @@ struct IMENotification final {
         const ContentSelection& aContentSelection) const;
 
     OffsetAndData<uint32_t> ToUint32OffsetAndData() const {
-      return OffsetAndData<uint32_t>(mOffset, *mString,
+      return OffsetAndData<uint32_t>(mOffset, mString,
                                      OffsetAndDataFor::SelectedString);
     }
   };
 
-  // SelectionChangeDataBase cannot have constructors because it's used in
-  // the union.  Therefore, SelectionChangeData should only implement
-  // constructors.  In other words, add other members to
-  // SelectionChangeDataBase.
-  struct SelectionChangeData final : public SelectionChangeDataBase {
-    SelectionChangeData() {
-      mString = &mStringInstance;
-      Clear();
-    }
-    explicit SelectionChangeData(const SelectionChangeDataBase& aOther) {
-      mString = &mStringInstance;
-      Assign(aOther);
-    }
-    SelectionChangeData(const SelectionChangeData& aOther) {
-      mString = &mStringInstance;
-      Assign(aOther);
-    }
-    SelectionChangeData& operator=(const SelectionChangeDataBase& aOther) {
-      mString = &mStringInstance;
-      Assign(aOther);
-      return *this;
-    }
-    SelectionChangeData& operator=(const SelectionChangeData& aOther) {
-      mString = &mStringInstance;
-      Assign(aOther);
-      return *this;
+  struct TextChangeData {
+    TextChangeData() = default;
+    TextChangeData(uint32_t aStartOffset, uint32_t aRemovedEndOffset,
+                   uint32_t aAddedEndOffset, bool aCausedByComposition,
+                   bool aOccurredDuringComposition)
+        : mStartOffset(aStartOffset),
+          mRemovedEndOffset(aRemovedEndOffset),
+          mAddedEndOffset(aAddedEndOffset),
+          mCausedOnlyByComposition(aCausedByComposition),
+          mIncludingChangesDuringComposition(!aCausedByComposition &&
+                                             aOccurredDuringComposition),
+          mIncludingChangesWithoutComposition(!aCausedByComposition &&
+                                              !aOccurredDuringComposition) {
+      MOZ_ASSERT(aRemovedEndOffset >= aStartOffset,
+                 "removed end offset must not be smaller than start offset");
+      MOZ_ASSERT(aAddedEndOffset >= aStartOffset,
+                 "added end offset must not be smaller than start offset");
     }
 
-   private:
-    // When SelectionChangeData is used outside of union, it shouldn't create
-    // nsString instance in the heap as far as possible.
-    nsString mStringInstance;
-  };
-
-  struct TextChangeDataBase {
     // mStartOffset is the start offset of modified or removed text in
     // original content and inserted text in new content.
-    uint32_t mStartOffset;
+    uint32_t mStartOffset = UINT32_MAX;
     // mRemovalEndOffset is the end offset of modified or removed text in
     // original content.  If the value is same as mStartOffset, no text hasn't
     // been removed yet.
-    uint32_t mRemovedEndOffset;
+    uint32_t mRemovedEndOffset = 0;
     // mAddedEndOffset is the end offset of inserted text or same as
-    // mStartOffset if just removed.  The vlaue is offset in the new content.
-    uint32_t mAddedEndOffset;
+    // mStartOffset if just removed.  The value is offset in the new content.
+    uint32_t mAddedEndOffset = 0;
 
-    // Note that TextChangeDataBase may be the result of merging two or more
+    // Note that TextChangeData may be the result of merging two or more
     // changes especially in e10s mode.
 
     // mCausedOnlyByComposition is true only when *all* merged changes are
     // caused by composition.
-    bool mCausedOnlyByComposition;
+    bool mCausedOnlyByComposition = false;
     // mIncludingChangesDuringComposition is true if at least one change which
     // is not caused by composition occurred during the last composition.
     // Note that if after the last composition is finished and there are some
     // changes not caused by composition, this is set to false.
-    bool mIncludingChangesDuringComposition;
+    bool mIncludingChangesDuringComposition = false;
     // mIncludingChangesWithoutComposition is true if there is at least one
     // change which did occur when there wasn't a composition ongoing.
-    bool mIncludingChangesWithoutComposition;
+    bool mIncludingChangesWithoutComposition = false;
 
     uint32_t OldLength() const {
       MOZ_ASSERT(IsValid());
@@ -979,8 +909,8 @@ struct IMENotification final {
       mRemovedEndOffset = mAddedEndOffset = 0;
     }
 
-    void MergeWith(const TextChangeDataBase& aOther);
-    TextChangeDataBase& operator+=(const TextChangeDataBase& aOther) {
+    void MergeWith(const TextChangeData& aOther);
+    TextChangeData& operator+=(const TextChangeData& aOther) {
       MergeWith(aOther);
       return *this;
     }
@@ -1003,66 +933,30 @@ struct IMENotification final {
     }
   };
 
-  // TextChangeDataBase cannot have constructors because they are used in union.
-  // Therefore, TextChangeData should only implement constructor.  In other
-  // words, add other members to TextChangeDataBase.
-  struct TextChangeData : public TextChangeDataBase {
-    TextChangeData() { Clear(); }
-
-    TextChangeData(uint32_t aStartOffset, uint32_t aRemovedEndOffset,
-                   uint32_t aAddedEndOffset, bool aCausedByComposition,
-                   bool aOccurredDuringComposition) {
-      MOZ_ASSERT(aRemovedEndOffset >= aStartOffset,
-                 "removed end offset must not be smaller than start offset");
-      MOZ_ASSERT(aAddedEndOffset >= aStartOffset,
-                 "added end offset must not be smaller than start offset");
-      mStartOffset = aStartOffset;
-      mRemovedEndOffset = aRemovedEndOffset;
-      mAddedEndOffset = aAddedEndOffset;
-      mCausedOnlyByComposition = aCausedByComposition;
-      mIncludingChangesDuringComposition =
-          !aCausedByComposition && aOccurredDuringComposition;
-      mIncludingChangesWithoutComposition =
-          !aCausedByComposition && !aOccurredDuringComposition;
-    }
-  };
-
   struct MouseButtonEventData {
     // The value of WidgetEvent::mMessage
-    EventMessage mEventMessage;
+    EventMessage mEventMessage = eVoidEvent;
     // Character offset from the start of the focused editor under the cursor
-    uint32_t mOffset;
+    uint32_t mOffset = UINT32_MAX;
     // Cursor position in pixels relative to the widget
-    LayoutDeviceIntPoint mCursorPos;
+    LayoutDeviceIntPoint mCursorPos = {0, 0};
     // Character rect in pixels under the cursor relative to the widget
-    LayoutDeviceIntRect mCharRect;
+    LayoutDeviceIntRect mCharRect = {0, 0, 0, 0};
     // The value of WidgetMouseEventBase::button and buttons
-    int16_t mButton;
-    int16_t mButtons;
+    int16_t mButton = -1;
+    int16_t mButtons = 0;
     // The value of WidgetInputEvent::modifiers
-    Modifiers mModifiers;
+    Modifiers mModifiers = 0;  // MODIFIER_NONE, defined in BasicEvents.h
   };
 
-  union {
-    // NOTIFY_IME_OF_SELECTION_CHANGE specific data
-    SelectionChangeDataBase mSelectionChangeData;
+  // NOTIFY_IME_OF_SELECTION_CHANGE specific data
+  Maybe<SelectionChangeData> mSelectionChangeData;
 
-    // NOTIFY_IME_OF_TEXT_CHANGE specific data
-    TextChangeDataBase mTextChangeData;
+  // NOTIFY_IME_OF_TEXT_CHANGE specific data
+  Maybe<TextChangeData> mTextChangeData;
 
-    // NOTIFY_IME_OF_MOUSE_BUTTON_EVENT specific data
-    MouseButtonEventData mMouseButtonEventData;
-  };
-
-  void SetData(const SelectionChangeDataBase& aSelectionChangeData) {
-    MOZ_RELEASE_ASSERT(mMessage == NOTIFY_IME_OF_SELECTION_CHANGE);
-    mSelectionChangeData.Assign(aSelectionChangeData);
-  }
-
-  void SetData(const TextChangeDataBase& aTextChangeData) {
-    MOZ_RELEASE_ASSERT(mMessage == NOTIFY_IME_OF_TEXT_CHANGE);
-    mTextChangeData = aTextChangeData;
-  }
+  // NOTIFY_IME_OF_MOUSE_BUTTON_EVENT specific data
+  Maybe<MouseButtonEventData> mMouseButtonEventData;
 };
 
 std::ostream& operator<<(std::ostream& aStream, const IMEEnabled& aEnabled);
@@ -1076,9 +970,9 @@ std::ostream& operator<<(std::ostream& aStream,
 std::ostream& operator<<(std::ostream& aStream,
                          const InputContextAction::FocusChange& aFocusChange);
 std::ostream& operator<<(std::ostream& aStream,
-                         const IMENotification::SelectionChangeDataBase& aData);
+                         const IMENotification::SelectionChangeData& aData);
 std::ostream& operator<<(std::ostream& aStream,
-                         const IMENotification::TextChangeDataBase& aData);
+                         const IMENotification::TextChangeData& aData);
 
 }  // namespace widget
 }  // namespace mozilla
