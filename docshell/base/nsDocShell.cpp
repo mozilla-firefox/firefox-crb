@@ -4333,6 +4333,45 @@ nsresult nsDocShell::StopInternal(
     uint32_t aStopFlags, UnsetOngoingNavigation aUnsetOngoingNavigation) {
   RefPtr kungFuDeathGrip = this;
 
+  ResetNavigationStateForStop(aUnsetOngoingNavigation);
+  StopActiveDocument(aStopFlags);
+
+  if (nsIWebNavigation::STOP_NETWORK & aStopFlags) {
+    // XXXbz We could also pass |this| to nsIURILoader::Stop.  That will
+    // just call Stop() on us as an nsIDocumentLoader... We need fewer
+    // redundant apis!
+    if (aUnsetOngoingNavigation == UnsetOngoingNavigation::No && mLoadGroup) {
+      // Tag load group cancellation as navigation-caused so that XHR can
+      // suppress abort events (bug 1505389). SetCanceledReason is
+      // first-write-wins, so nsDocLoader::Stop's reason won't overwrite.
+
+      // XXX Consider using a flag on LoadGroup instead of CanceledReason
+      mLoadGroup->SetCanceledReason("navigation"_ns);
+    }
+    // Cancel <form> planned navigations.
+    // Not currently in the spec, but it follows other browsers' behaviour:
+    // https://github.com/whatwg/html/issues/12609
+    CancelPlannedFormNavigation();
+    Stop();
+
+    // Clear out mChannelToDisconnectOnPageHide. This page won't go in the
+    // BFCache now, and the Stop above will have removed the DocumentChannel
+    // from the loadgroup.
+    mChannelToDisconnectOnPageHide = 0;
+  }
+
+  for (auto* child : mChildList.ForwardRange()) {
+    nsCOMPtr<nsIWebNavigation> shellAsNav(do_QueryObject(child));
+    if (shellAsNav) {
+      shellAsNav->Stop(aStopFlags);
+    }
+  }
+
+  return NS_OK;
+}
+
+void nsDocShell::ResetNavigationStateForStop(
+    UnsetOngoingNavigation aUnsetOngoingNavigation) {
   // Drop the view transition state of an aborted or superseded navigation.
   mFiredCrossDocPageSwap = false;
   mPendingInboundViewTransitionParams = nullptr;
@@ -4366,7 +4405,9 @@ nsresult nsDocShell::StopInternal(
     mFailedChannel = nullptr;
     mFailedURI = nullptr;
   }
+}
 
+void nsDocShell::StopActiveDocument(uint32_t aStopFlags) {
   if (nsIWebNavigation::STOP_CONTENT & aStopFlags) {
     // Stop the document loading and animations
     if (mDocumentViewer) {
@@ -4383,46 +4424,13 @@ nsresult nsDocShell::StopInternal(
     }
   }
 
-  if (nsIWebNavigation::STOP_NETWORK & aStopFlags) {
+  if ((nsIWebNavigation::STOP_NETWORK & aStopFlags) && mRefreshURIList) {
     // Suspend any timers that were set for this loader.  We'll clear
     // them out for good in CreateDocumentViewer.
-    if (mRefreshURIList) {
-      SuspendRefreshURIs();
-      mSavedRefreshURIList.swap(mRefreshURIList);
-      mRefreshURIList = nullptr;
-    }
-
-    // XXXbz We could also pass |this| to nsIURILoader::Stop.  That will
-    // just call Stop() on us as an nsIDocumentLoader... We need fewer
-    // redundant apis!
-    if (aUnsetOngoingNavigation == UnsetOngoingNavigation::No && mLoadGroup) {
-      // Tag load group cancellation as navigation-caused so that XHR can
-      // suppress abort events (bug 1505389). SetCanceledReason is
-      // first-write-wins, so nsDocLoader::Stop's reason won't overwrite.
-
-      // XXX Consider using a flag on LoadGroup instead of CanceledReason
-      mLoadGroup->SetCanceledReason("navigation"_ns);
-    }
-    // Cancel <form> planned navigations.
-    // Not currently in the spec, but it follows other browsers' behaviour:
-    // https://github.com/whatwg/html/issues/12609
-    CancelPlannedFormNavigation();
-    Stop();
-
-    // Clear out mChannelToDisconnectOnPageHide. This page won't go in the
-    // BFCache now, and the Stop above will have removed the DocumentChannel
-    // from the loadgroup.
-    mChannelToDisconnectOnPageHide = 0;
+    SuspendRefreshURIs();
+    mSavedRefreshURIList.swap(mRefreshURIList);
+    mRefreshURIList = nullptr;
   }
-
-  for (auto* child : mChildList.ForwardRange()) {
-    nsCOMPtr<nsIWebNavigation> shellAsNav(do_QueryObject(child));
-    if (shellAsNav) {
-      shellAsNav->Stop(aStopFlags);
-    }
-  }
-
-  return NS_OK;
 }
 
 NS_IMETHODIMP
