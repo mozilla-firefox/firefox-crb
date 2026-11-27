@@ -263,10 +263,17 @@ class ArenaCollection {
     // The main arena allows more dirty pages than the default for other arenas.
     params.mMaxDirty = opt_dirty_max;
     params.mLabel = "Default";
-    mDefaultArena =
-        mLock.Init() ? CreateArena(/* aIsPrivate = */ false, &params) : nullptr;
-    mPurgeListLock.Init();
-    return bool(mDefaultArena);
+
+    if (!mLock.Init() || !mPurgeListLock.Init()) {
+      return false;
+    }
+
+    mDefaultArena = CreateArena(/* aIsPrivate = */ false, &params);
+    if (!mDefaultArena) {
+      return false;
+    }
+
+    return true;
   }
 
   // The requested arena must exist.
