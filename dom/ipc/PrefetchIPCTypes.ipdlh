@@ -23,6 +23,9 @@ struct SpeculativePrefetchArgs {
   nullable nsIReferrerInfo referrerInfo;
   nsString noVarySearchHint;
   bool anonymizeClientIP;
+  // Whether the candidate has "immediate" eagerness, which selects the
+  // per-document budget the record counts against.
+  bool isImmediate;
   // A null speculation rule tag is carried as a voided string.
   // Spec: https://html.spec.whatwg.org/multipage/speculative-loading.html#speculation-rule-tag
   nsString?[] tags;
