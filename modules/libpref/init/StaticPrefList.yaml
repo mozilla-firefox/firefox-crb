@@ -5091,6 +5091,12 @@
   value: 5
   mirror: always
 
+# Maximum number of prefetches a document can have in flight at once
+- name: dom.speculation_rules.max_inflight_prefetches_per_document
+  type: RelaxedAtomicUint32
+  value: 3
+  mirror: always
+
 # Maximum response body bytes allowed per prefetch record before the fetch
 # is cancelled with NS_ERROR_FILE_TOO_BIG. Enforced in
 # PrefetchRecordParent::OnDataAvailable. Set lower in tests to verify cap
