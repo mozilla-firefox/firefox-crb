@@ -54,9 +54,6 @@ static void RecordingSourceSurfaceUserDataFunc(void* aUserData) {
 static bool EnsureSurfaceStoredRecording(DrawEventRecorderPrivate* aRecorder,
                                          SourceSurface* aSurface,
                                          const char* reason) {
-  // It's important that TryAddStoredObject is called first because that will
-  // run any pending processing required by recorded objects that have been
-  // deleted off the main thread.
   if (!aRecorder->TryAddStoredObject(aSurface)) {
     // Surface is already stored.
     return false;
@@ -1070,9 +1067,7 @@ already_AddRefed<PathRecording> DrawTargetRecording::EnsurePathStored(
     mRecorder->AddStoredObject(pathRecording);
   }
 
-  // It's important that AddStoredObject or TryAddStoredObject is called before
-  // this because that will run any pending processing required by recorded
-  // objects that have been deleted off the main thread.
+  // Record creation after registering the path.
   RecordEventSelfSkipFlushTransform(RecordedPathCreation(pathRecording.get()));
   pathRecording->mStoredRecorders.push_back(mRecorder);
 

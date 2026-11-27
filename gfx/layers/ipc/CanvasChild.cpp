@@ -110,9 +110,7 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
         mRecordedSurface(aRecordedSuface),
         mCanvasChild(aCanvasChild),
         mRecorder(aRecorder) {
-    // It's important that AddStoredObject is called first because that will
-    // run any pending processing required by recorded objects that have been
-    // deleted off the main thread.
+    // Register the wrapper before recording its alias.
     mRecorder->AddStoredObject(this);
     mRecorder->RecordEvent(RecordedAddSurfaceAlias(this, aRecordedSuface));
   }
