@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import mozilla.components.ExperimentalAndroidComponentsApi
+import mozilla.components.concept.engine.ipprotection.IPProtectionHandler
 import mozilla.components.concept.engine.ipprotection.ProxyState
 import mozilla.components.concept.engine.ipprotection.ServiceState
 import mozilla.components.feature.ipprotection.FakeIPProtectionHandler
@@ -119,7 +120,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN an activation in progress WHEN the user picks a location AND the activation is rejected THEN the proxy is not moved`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(activateResult = RuntimeException("rejected"), holdResults = true)
+            val handler = FakeIPProtectionHandler(activateResult = requestError("rejected"), holdResults = true)
             val (store, _) = buildStore(readyState(Authorized.Idle), handler)
 
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -137,7 +138,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `WHEN a request fails THEN the failure is reported for the request that failed`() =
         runTest(testDispatcher) {
-            val failure = RuntimeException("rejected")
+            val failure = requestError("rejected")
             val handler = FakeIPProtectionHandler(activateResult = failure, deactivateResult = failure)
 
             val (activation, activationActions) = buildStore(readyState(Authorized.Idle), handler)
@@ -150,11 +151,15 @@ class IPProtectionEngineMiddlewareTest {
 
             activationActions.assertLastAction(IPProtectionAction.ActivationAction.ToggleFailed::class) {
                 assertEquals(ActivationOperation.Activate, it.operation)
+                assertEquals(failure, it.error)
             }
-            switchActions.assertLastAction(IPProtectionAction.LocationAction.LocationSwitchFailed::class)
+            switchActions.assertLastAction(IPProtectionAction.LocationAction.LocationSwitchFailed::class) {
+                assertEquals(failure, it.error)
+            }
             switchActions.assertNotDispatched(IPProtectionAction.ActivationAction.ToggleFailed::class)
             deactivationActions.assertLastAction(IPProtectionAction.ActivationAction.ToggleFailed::class) {
                 assertEquals(ActivationOperation.Deactivate, it.operation)
+                assertEquals(failure, it.error)
             }
         }
 
@@ -200,7 +205,7 @@ class IPProtectionEngineMiddlewareTest {
                 .forEach { action ->
                     val handler =
                         FakeIPProtectionHandler(
-                            activateResult = RuntimeException("activation-canceled"),
+                            activateResult = requestError("activation-canceled"),
                             holdResults = true,
                         )
                     val (store, actions) = buildStore(readyState(Authorized.Idle), handler)
@@ -265,7 +270,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN the user's turn-off failed WHEN the service stops THEN the proxy is turned off again`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(deactivateResult = RuntimeException("rejected"))
+            val handler = FakeIPProtectionHandler(deactivateResult = requestError("rejected"))
             val (store, _) = buildStore(readyState(Authorized.Active), handler)
 
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -279,7 +284,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN an activation is waiting behind a turn-off that fails WHEN the user toggles THEN the activation is cancelled instead of a second one being sent`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(deactivateResult = RuntimeException("rejected"), holdResults = true)
+            val handler = FakeIPProtectionHandler(deactivateResult = requestError("rejected"), holdResults = true)
             val (store, _) = buildStore(readyState(Authorized.Idle), handler)
 
             store.dispatch(IPProtectionAction.AccountAction.AccountManagerStateChanged(AccountStatus.NoAccount))
@@ -380,8 +385,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN a location switch fails while others are waiting WHEN the next switch runs THEN it goes to the latest location`() =
         runTest(testDispatcher) {
-            val handler =
-                FakeIPProtectionHandler(activateResult = RuntimeException("server-not-found"), holdResults = true)
+            val handler = FakeIPProtectionHandler(activateResult = requestError("server-not-found"), holdResults = true)
             val (store, _) = buildStore(readyState(Authorized.Active), handler)
 
             store.dispatch(IPProtectionAction.LocationAction.LocationChanged(JAPAN, userAction = true))
@@ -402,13 +406,13 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN a location switch failed WHEN a later turn-off also fails THEN no switch is sent`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(deactivateResult = RuntimeException("rejected"))
+            val handler = FakeIPProtectionHandler(deactivateResult = requestError("rejected"))
             val (store, _) = buildStore(readyState(Authorized.Idle), handler)
 
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
             testScheduler.advanceUntilIdle()
             store.dispatch(IPProtectionAction.ProxyAction.ProxyStateChanged(ProxyState.ACTIVE))
-            handler.activateResult = RuntimeException("server-not-found")
+            handler.activateResult = requestError("server-not-found")
             store.dispatch(IPProtectionAction.LocationAction.LocationChanged(JAPAN, userAction = true))
             testScheduler.advanceUntilIdle()
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -427,7 +431,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN a location was picked during a turn-off WHEN the turn-off fails THEN the proxy is moved to that location`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(deactivateResult = RuntimeException("rejected"))
+            val handler = FakeIPProtectionHandler(deactivateResult = requestError("rejected"))
             val (store, _) = buildStore(readyState(Authorized.Idle), handler)
 
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -478,7 +482,7 @@ class IPProtectionEngineMiddlewareTest {
             val proxyFailed = listOf(IPProtectionAction.ProxyAction.ProxyStateChanged(ProxyState.ERROR))
 
             listOf(engineReset, proxyFailed).forEach { reports ->
-                val handler = FakeIPProtectionHandler(deactivateResult = RuntimeException("rejected"))
+                val handler = FakeIPProtectionHandler(deactivateResult = requestError("rejected"))
                 val (store, _) = buildStore(readyState(Authorized.Idle), handler)
 
                 store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -510,7 +514,7 @@ class IPProtectionEngineMiddlewareTest {
     @Test
     fun `GIVEN a request in progress WHEN the engine resets THEN the request is dropped without a failure`() =
         runTest(testDispatcher) {
-            val handler = FakeIPProtectionHandler(activateResult = RuntimeException("rejected"), holdResults = true)
+            val handler = FakeIPProtectionHandler(activateResult = requestError("rejected"), holdResults = true)
             val (store, actions) = buildStore(readyState(Authorized.Idle), handler)
 
             store.dispatch(IPProtectionAction.ActivationAction.Toggle)
@@ -548,6 +552,9 @@ class IPProtectionEngineMiddlewareTest {
     private fun FakeIPProtectionHandler.proxyCalls() = calls.filter {
         it is FakeIPProtectionHandler.Call.Activate || it is FakeIPProtectionHandler.Call.Deactivate
     }
+
+    private fun requestError(message: String) =
+        IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException(message))
 
     private companion object {
         val JAPAN = Country("JP", available = true)

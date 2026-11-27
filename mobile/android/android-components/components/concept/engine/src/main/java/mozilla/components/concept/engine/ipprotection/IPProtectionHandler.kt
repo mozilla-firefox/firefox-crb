@@ -17,18 +17,18 @@ interface IPProtectionHandler {
      * Activates the IP protection.
      *
      * @param countryCode ISO 3166-1 alpha-2 country code.
-     * @param onResult Invoked once the activation request resolves. Receives `null` on success or the [Throwable] that
-     *   caused the failure.
+     * @param onResult Invoked once the activation request resolves. Receives `null` on success or the [RequestError]
+     *   the request failed with.
      */
-    fun activate(countryCode: String?, onResult: (Throwable?) -> Unit = {})
+    fun activate(countryCode: String?, onResult: (RequestError?) -> Unit = {})
 
     /**
      * Deactivates the IP protection proxy.
      *
-     * @param onResult Invoked once the deactivation request resolves. Receives `null` on success or the [Throwable]
-     *   that caused the failure.
+     * @param onResult Invoked once the deactivation request resolves. Receives `null` on success or the [RequestError]
+     *   the request failed with.
      */
-    fun deactivate(onResult: (Throwable?) -> Unit = {})
+    fun deactivate(onResult: (RequestError?) -> Unit = {})
 
     /**
      * Triggers enrollment via the active auth provider. The [onResult] callback is invoked once the enrollment attempt
@@ -45,10 +45,10 @@ interface IPProtectionHandler {
     /**
      * Requests an update for the list of countries available in the proxy server-list.
      *
-     * @param onResult Invoked once the update request resolves. Receives `null` on success or the [Throwable] that
-     *   caused the failure.
+     * @param onResult Invoked once the update request resolves. Receives `null` on success or the [RequestError] the
+     *   request failed with.
      */
-    fun updateCountryList(onResult: (Throwable?) -> Unit = {})
+    fun updateCountryList(onResult: (RequestError?) -> Unit = {})
 
     /** Initializes the proxy state machine. */
     fun init(signedOutAuth: SignedOutAuth = SignedOutAuth.None)
@@ -128,6 +128,17 @@ interface IPProtectionHandler {
     data class Country(
         val code: String,
         val available: Boolean,
+    )
+
+    /**
+     * Failure of an [IPProtectionHandler] activate, deactivate or country list update request.
+     *
+     * @property errorCode The error code the engine reported for the failure, or null when the engine reported none.
+     * @property cause The [Throwable] the engine rejected the request with.
+     */
+    data class RequestError(
+        val errorCode: Int?,
+        val cause: Throwable,
     )
 }
 
