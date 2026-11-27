@@ -483,6 +483,9 @@ pref("browser.urlbar.newtab.featureGate", false);
 pref("browser.urlbar.newtab.variantA", false);
 pref("browser.urlbar.newtab.variantB", false);
 
+// Feature gate for the <moz-urlbar> on about:privatebrowsing.
+pref("browser.urlbar.aboutprivatebrowsing.featureGate", false);
+
 // Enable a certain level of urlbar logging to the Browser Console. See
 // ConsoleInstance.webidl.
 pref("browser.urlbar.loglevel", "Error");

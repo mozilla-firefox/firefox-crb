@@ -236,6 +236,14 @@ urlbar:
     the event is recorded once per app session when the user first encounters
     the UI of the experiment in which they're enrolled.
   variables:
+    aboutPrivateBrowsingFeatureGate:
+      type: boolean
+      setPref:
+        branch: user
+        pref: browser.urlbar.aboutprivatebrowsing.featureGate
+      description: >-
+        Feature gate that controls whether about:privatebrowsing shows the
+        search bar in place of the handoff search bar.
     actionsOnboardingTimesToShow:
       type: int
       fallbackPref: browser.urlbar.quickactions.timesToShowOnboardingLabel
