@@ -5,7 +5,6 @@
 #ifndef ARENA_H
 #define ARENA_H
 
-#include "mozilla/Atomics.h"
 #include "mozilla/DoublyLinkedList.h"
 #include "mozilla/fallible.h"
 #include "mozilla/XorShift128PlusRNG.h"
@@ -366,9 +365,8 @@ struct arena_t : public BaseAllocClass {
   //
   // Timestamp of the last time we saw a page reuse (in ns).
   // Note that this variable is written very often from many threads and read
-  // only sparsely on the main thread, but when we read it we need to see the
-  // chronologically latest write asap (so we cannot use Relaxed).
-  mozilla::Atomic<uint64_t> mLastPageReuseNS;
+  // only sparsely on the main thread.
+  uint64_t mLastPageReuseNS MOZ_GUARDED_BY(mLock) = 0;
 
   // With deferred purge, every dirty page reuse postpones the arena's purge by
   // the reuse grace time, so an arena that keeps reusing a few pages would
@@ -702,7 +700,7 @@ struct arena_t : public BaseAllocClass {
   void RestartMaxPurgeDelay() MOZ_REQUIRES(mLock);
 
   // Update the last page reuse timestamp.
-  void NotifyPageReuse() MOZ_EXCLUDES(mLock);
+  void NotifyPageReuse() MOZ_REQUIRES(mLock);
 
   bool IsMainThreadOnly() const { return !mLock.LockIsEnabled(); }
 
