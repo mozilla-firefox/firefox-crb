@@ -73,13 +73,14 @@ void PrefetchMatchWaiter::OnRecordStateChanged(PrefetchRecordParent* aRec) {
   if (!mWGP->HasPotentialPrefetchMatch(mURI)) {
     LOG_SPECRULES(
         ("PrefetchMatchWaiter::OnRecordStateChanged: this=%p no potential "
-         "match remains, resolving nullptr",
+         "match remains, rejecting",
          this));
-    Resolve(nullptr);
+    Resolve(nullptr, mWGP->PrefetchNotServedReason(mURI));
   }
 }
 
-void PrefetchMatchWaiter::Resolve(PrefetchRecordParent* aMatch) {
+void PrefetchMatchWaiter::Resolve(PrefetchRecordParent* aMatch,
+                                  PrefetchNavigationResult aReason) {
   if (mResolved.exchange(true)) {
     return;  // already resolved — idempotent
   }
@@ -89,7 +90,11 @@ void PrefetchMatchWaiter::Resolve(PrefetchRecordParent* aMatch) {
   }
   LOG_SPECRULES(
       ("PrefetchMatchWaiter::Resolve: this=%p match=%p", this, aMatch));
-  mPromiseHolder.ResolveIfExists(RefPtr{aMatch}, __func__);
+  if (aMatch) {
+    mPromiseHolder.ResolveIfExists(RefPtr{aMatch}, __func__);
+  } else {
+    mPromiseHolder.RejectIfExists(aReason, __func__);
+  }
   mWGP->RemoveWaiter(this);
 }
 

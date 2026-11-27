@@ -43,6 +43,7 @@
 #include "mozilla/dom/WindowGlobalParent.h"
 #include "mozilla/dom/ipc/IdType.h"
 #include "mozilla/dom/nsHTTPSOnlyUtils.h"
+#include "mozilla/glean/DomMetrics.h"
 #include "mozilla/intl/Localization.h"
 #include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "mozilla/net/ChannelClassifierUtils.h"
@@ -634,7 +635,25 @@ RefPtr<dom::PrefetchMatchPromise> DocumentLoadListener::TryActivateFromPrefetch(
     ActivateFromPrefetch(rec);
     return nullptr;
   }
-  return sourceWGP->WaitForMatchingPrefetchRecord(aURI);
+  RefPtr<dom::PrefetchMatchPromise> promise =
+      sourceWGP->WaitForMatchingPrefetchRecord(aURI);
+  if (!promise) {
+    RecordPrefetchNavigationResult(sourceWGP->PrefetchNotServedReason(aURI));
+  }
+  return promise;
+}
+
+void DocumentLoadListener::RecordPrefetchNavigationResult(
+    dom::PrefetchNavigationResult aResult) {
+  nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
+  if (!loadInfo->GetPrefetchCandidateMatched()) {
+    return;
+  }
+  nsLiteralCString label = dom::PrefetchNavigationResultLabel(aResult);
+  LOG_SPECRULES(
+      ("DocumentLoadListener::RecordPrefetchNavigationResult: [%p] %s", this,
+       label.get()));
+  glean::speculation_rules::prefetch_navigation_result.Get(label).Add();
 }
 
 void DocumentLoadListener::ActivateFromPrefetch(
@@ -690,11 +709,16 @@ void DocumentLoadListener::AsyncOpenAfterPrefetchWait(
         // Cancelled while waiting. The channel never opens, so break the
         // ParentChannelListener cycle here instead of in OnStopRequest.
         if (self->mOpenPromiseResolved) {
+          self->RecordPrefetchNavigationResult(
+              dom::PrefetchNavigationResult::NavigationCanceled);
           self->mParentChannelListener = nullptr;
           return;
         }
         dom::PrefetchRecordParent* rec =
             aValue.IsResolve() ? aValue.ResolveValue().get() : nullptr;
+        if (!rec) {
+          self->RecordPrefetchNavigationResult(aValue.RejectValue());
+        }
         LOG_SPECRULES(
             ("DocumentLoadListener::AsyncOpenAfterPrefetchWait: [%p] wait "
              "over, rec=%p",
@@ -3103,6 +3127,15 @@ nsresult DocumentLoadListener::DoOnStartRequest(nsIRequest* aRequest) {
       uint32_t httpsOnlyStatus = loadInfo->GetHttpsOnlyStatus();
       httpsOnlyStatus |= nsILoadInfo::HTTPS_ONLY_TOP_LEVEL_LOAD_IN_PROGRESS;
       loadInfo->SetHttpsOnlyStatus(httpsOnlyStatus);
+    }
+
+    // Only now is it known whether the prefetched response was reused.
+    if (loadInfo->GetActivatedFromNavigationalPrefetch()) {
+      bool fromCache = false;
+      (void)httpChannel->IsFromCache(&fromCache);
+      RecordPrefetchNavigationResult(
+          fromCache ? dom::PrefetchNavigationResult::Served
+                    : dom::PrefetchNavigationResult::CacheMiss);
     }
 
     if (mLoadingSessionHistoryInfo &&

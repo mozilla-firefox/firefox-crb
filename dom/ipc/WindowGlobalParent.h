@@ -479,7 +479,7 @@ class WindowGlobalParent final : public WindowContext,
 
   // "Wait for a matching prefetch record": returns null if no ongoing
   // prefetch could match aURI, otherwise a promise that resolves when a match
-  // completes (or with nullptr when none can, or when
+  // completes (or rejects when none can, or when
   // dom.speculation_rules.wait_timeout_ms expires).
   // Spec:
   // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
@@ -497,6 +497,8 @@ class WindowGlobalParent final : public WindowContext,
   // Branch-symmetric, so the experiment can compare prefetched navigations
   // against ones that would have been prefetched.
   bool HasMatchingPrefetchCandidate(nsIURI* aURI);
+
+  PrefetchNavigationResult PrefetchNotServedReason(nsIURI* aURI);
 
   void RemoveWaiter(PrefetchMatchWaiter* aWaiter);
 
