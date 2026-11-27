@@ -3316,7 +3316,7 @@ IMENotificationRequests TSFTextStore::GetIMENotificationRequests() const {
   // nullptr, we need to keep notifying the sink even when it is not focused
   // text store for the thread manager.
   return {IMENotificationRequest::TextChange,
-          IMENotificationRequest::PositionChange,
+          IMENotificationRequest::LayoutChange,
           IMENotificationRequest::MouseEventOnChar,
           IMENotificationRequest::NotifyDuringInactive};
 }
