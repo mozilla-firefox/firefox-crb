@@ -92,7 +92,7 @@ class LocaleService final : public mozILocaleService,
    * Use this accessor in C++ code that just wants to call a method on the
    * instance, but does not need to hold a reference, as in
    *    nsAutoCString str;
-   *    LocaleService::GetInstance()->GetAppLocaleAsLangTag(str);
+   *    LocaleService::GetInstance()->GetAppLocaleAsBCP47(str);
    */
   static LocaleService* GetInstance();
 

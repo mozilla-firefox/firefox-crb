@@ -65,14 +65,8 @@ interface mozILocaleService : nsISupports
    *
    * This API always returns at least one locale.
    *
-   * When retrieving the locales for language negotiation and matching
-   * to language resources, use the language tag form.
-   * When retrieving the locales for Intl API or ICU locale settings,
-   * use the BCP47 form.
-   *
    * Example: ["en-US", "de", "pl", "sr-Cyrl", "zh-Hans-HK"]
    */
-  readonly attribute Array<ACString> appLocalesAsLangTags;
   readonly attribute Array<ACString> appLocalesAsBCP47;
 
   /**
@@ -118,22 +112,15 @@ interface mozILocaleService : nsISupports
   /**
    * Returns the best locale that the application should be localized to.
    *
-   * The result is a valid locale ID and it should be
-   * used for all APIs that do not handle language negotiation.
+   * The result is a valid locale ID.
    *
-   * When retrieving the locales for language negotiation and matching
-   * to language resources, use the language tag form.
-   * When retrieving the locales for Intl API or ICU locale settings,
-   * use the BCP47 form.
-   *
-   * Where possible, appLocales* should be preferred over this API and
+   * Where possible, appLocalesAsBCP47 should be preferred over this API and
    * all callsites should handle some form of "best effort" language
    * negotiation to respect user preferences in case the use case does
    * not have data for the first locale in the list.
    *
    * Example: "zh-Hans-HK"
    */
-  readonly attribute ACString appLocaleAsLangTag;
   readonly attribute ACString appLocaleAsBCP47;
 
   /**

@@ -324,7 +324,10 @@ nsIURI* nsChromeRegistryChrome::GetBaseURIFromPackage(
 
   if (aProvider.EqualsLiteral("locale")) {
     nsAutoCString appLocale;
-    LocaleService::GetInstance()->GetAppLocaleAsLangTag(appLocale);
+    LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+    if (appLocale.LowerCaseEqualsASCII("ja-jp-macos")) {
+      appLocale.AssignLiteral("ja-JP-mac");
+    }
     return entry->locales.GetBase(appLocale, nsProviderArray::LOCALE);
   }
 
