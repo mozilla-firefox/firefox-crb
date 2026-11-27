@@ -5,7 +5,7 @@
 "use strict";
 
 const {
-  getFormatStr,
+  getStr,
 } = require("resource://devtools/client/inspector/animation/utils/l10n.js");
 
 // If total duration for all animations is eqaul to or less than
@@ -102,11 +102,13 @@ class TimeScale {
 
     // Format in milliseconds if the total duration is short enough.
     if (this.getDuration() <= TIME_FORMAT_MAX_DURATION_IN_MS) {
-      return getFormatStr("timeline.timeGraduationLabel", time.toFixed(0));
+      return getStr("animation-inspector-timeline-milliseconds", { time });
     }
 
     // Otherwise format in seconds.
-    return getFormatStr("player.timeLabel", (time / 1000).toFixed(1));
+    return getStr("animation-inspector-timeline-seconds", {
+      time: time / 1000,
+    });
   }
 
   /**

@@ -12,8 +12,9 @@ Services.scriptloader.loadSubScript(
 
 const TAB_NAME = "animationinspector";
 
-const ANIMATION_L10N = new LocalizationHelper(
-  "devtools/client/locales/animationinspector.properties"
+const ANIMATION_L10N = new Localization(
+  ["devtools/client/animation-inspector.ftl"],
+  true
 );
 
 /**

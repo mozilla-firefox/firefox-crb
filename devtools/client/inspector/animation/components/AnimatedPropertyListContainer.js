@@ -22,7 +22,7 @@ const ProgressInspectionPanel = createFactory(
 );
 
 const {
-  getFormatStr,
+  getStr,
 } = require("resource://devtools/client/inspector/animation/utils/l10n.js");
 
 class AnimatedPropertyListContainer extends PureComponent {
@@ -76,10 +76,9 @@ class AnimatedPropertyListContainer extends PureComponent {
           simulateAnimation,
         }),
         ticks: [0, 50, 100].map(position => {
-          const label = getFormatStr(
-            "detail.propertiesHeader.percentage",
-            position
-          );
+          const label = getStr("animation-inspector-percentage", {
+            percentage: position,
+          });
           return { position, label };
         }),
       })

@@ -11,7 +11,7 @@ const dom = require("resource://devtools/client/shared/vendor/react-dom-factorie
 const PropTypes = require("resource://devtools/client/shared/vendor/react-prop-types.mjs");
 
 const {
-  getFormatStr,
+  getStr,
 } = require("resource://devtools/client/inspector/animation/utils/l10n.js");
 
 const OPTIONS = [0.01, 0.1, 0.25, 0.5, 1, 2, 5, 10];
@@ -46,7 +46,7 @@ class PlaybackRateSelector extends PureComponent {
             value: option,
             selected: option === this.props.playBackRateMultiplier,
           },
-          getFormatStr("player.playbackRateLabel", option)
+          getStr("animation-inspector-playback-rate", { rate: option })
         );
       })
     );

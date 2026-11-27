@@ -75,8 +75,8 @@ class PauseResumeButton extends PureComponent {
         "pause-resume-button devtools-button" + (isRunning ? "" : " paused"),
       onClick: this.onToggleAnimationsPlayState.bind(this),
       title: isRunning
-        ? getStr("timeline.resumedButtonTooltip")
-        : getStr("timeline.pausedButtonTooltip"),
+        ? getStr("animation-inspector-pause-button-title")
+        : getStr("animation-inspector-resume-button-title"),
       ref: this.pauseResumeButtonRef,
     });
   }

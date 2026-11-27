@@ -20,7 +20,7 @@ add_task(async function () {
   );
   is(
     panel.querySelector(".animation-error-message > p").textContent,
-    ANIMATION_L10N.getStr("panel.noAnimation"),
+    ANIMATION_L10N.formatValueSync("animation-inspector-no-animation"),
     "The correct error message is displayed"
   );
   ok(

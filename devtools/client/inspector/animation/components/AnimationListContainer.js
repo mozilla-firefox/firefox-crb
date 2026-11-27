@@ -156,7 +156,7 @@ class AnimationListContainer extends PureComponent {
       const distance = timeScale.distanceToRelativeTime(position);
       const label =
         isAllDurationInfinity && i === tickCount
-          ? getStr("player.infiniteTimeLabel")
+          ? getStr("animation-inspector-infinity")
           : timeScale.formatTime(distance);
       ticks.push({ position, label, width: intervalWidth });
     }
