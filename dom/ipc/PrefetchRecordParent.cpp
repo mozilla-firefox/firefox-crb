@@ -557,6 +557,7 @@ PrefetchRecordParent::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
   // Step 6: trigger a prefetch status updated event ("ready").
   FirePrefetchStatusUpdated(true);
   wgp->NotifyPrefetchStateChanged(this);
+  wgp->PumpPrefetchQueue();
 
   LOG_SPECRULES(
       ("PrefetchRecordParent::OnStopRequest: this=%p completed", this));
@@ -682,6 +683,11 @@ void PrefetchRecordParent::MarkCanceled() {
 
   LOG_SPECRULES(("PrefetchRecordParent::MarkCanceled: this=%p", this));
 
+  auto* wgp = static_cast<WindowGlobalParent*>(Manager());
+  if (wgp && mState == PrefetchState::Queued) {
+    wgp->RemoveQueuedPrefetch(this);
+  }
+
   mState = PrefetchState::Canceled;  // Step 3: set state to "canceled"
   ReleaseCacheToken();
 
@@ -693,8 +699,9 @@ void PrefetchRecordParent::MarkCanceled() {
   // Step 5: destroy prerendering traversable — deferred (no prerender in M1).
   FirePrefetchStatusUpdated(false);  // Step 7: trigger "failure" status event
 
-  if (auto* wgp = static_cast<WindowGlobalParent*>(Manager())) {
+  if (wgp) {
     wgp->NotifyPrefetchStateChanged(this);
+    wgp->PumpPrefetchQueue();
   }
 }
 
@@ -712,15 +719,30 @@ mozilla::ipc::IPCResult PrefetchRecordParent::RecvCancel() {
 void PrefetchRecordParent::ActorDestroy(ActorDestroyReason aReason) {
   LOG_SPECRULES(("PrefetchRecordParent::ActorDestroy: this=%p, reason=%d", this,
                  static_cast<int>(aReason)));
+  auto* wgp = static_cast<WindowGlobalParent*>(Manager());
+  if (wgp && mState == PrefetchState::Queued) {
+    wgp->RemoveQueuedPrefetch(this);
+    mState = PrefetchState::Canceled;
+  }
+
   // Safety net: ensure the channel is canceled if we die mid-flight
   // (covers PWindowGlobal teardown, tab close, content process crash).
+  bool freedSlot = false;
   if (mChannel && mState == PrefetchState::Ongoing) {
     mChannel->Cancel(NS_BINDING_ABORTED);
     mChannel = nullptr;
+    mState = PrefetchState::Canceled;
+    freedSlot = true;
   }
   ReleaseCacheToken();
 
   RecordDataUsage();
+
+  // Only a record the child deleted on its own leaves its document alive, with
+  // queued records that can use the slot.
+  if (freedSlot && wgp && aReason == Deletion) {
+    wgp->PumpPrefetchQueue();
+  }
 }
 
 uint64_t PrefetchRecordParent::AccumulateTransferSize(nsIRequest* aRequest) {
