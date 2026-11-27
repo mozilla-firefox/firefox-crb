@@ -7,6 +7,8 @@ prefs = [
 
 ["browser_BrowserDOMWindow_openURI.js"]
 
+["browser_BrowserThumbnails_windows.js"]
+
 ["browser_BrowserWindowTracker.js"]
 
 ["browser_BrowserWindowTracker_minimize.js"]

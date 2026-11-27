@@ -3,6 +3,9 @@
 
 "use strict";
 
+const { NewTabUtils } = ChromeUtils.importESModule(
+  "resource://gre/modules/NewTabUtils.sys.mjs"
+);
 const { Spotlight } = ChromeUtils.importESModule(
   "resource:///modules/asrouter/Spotlight.sys.mjs"
 );

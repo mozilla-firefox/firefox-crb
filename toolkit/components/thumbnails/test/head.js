@@ -3,6 +3,7 @@
 
 ChromeUtils.defineESModuleGetters(this, {
   BackgroundPageThumbs: "resource://gre/modules/BackgroundPageThumbs.sys.mjs",
+  BrowserThumbnails: "moz-src:///browser/modules/BrowserThumbnails.sys.mjs",
   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
   NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   PageThumbs: "resource://gre/modules/PageThumbs.sys.mjs",

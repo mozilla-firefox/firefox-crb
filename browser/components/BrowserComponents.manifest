@@ -121,7 +121,7 @@ category browser-window-sessionstore-initialized chrome://browser/content/browse
 category browser-window-idle-tasks chrome://browser/content/browser.js#gReduceMotionManager gReduceMotionManager.init
 category browser-window-idle-tasks chrome://browser/content/browser.js#Win7Features Win7Features.onOpenWindow
 category browser-window-idle-tasks chrome://browser/content/browser-sync.js gSync.init
-category browser-window-idle-tasks chrome://browser/content/browser-thumbnails.js gBrowserThumbnails.init
+category browser-window-idle-tasks moz-src:///browser/modules/BrowserThumbnails.sys.mjs BrowserThumbnails.init
 category browser-window-idle-tasks chrome://browser/content/browser-gestureSupport.js#gGestureSupport gGestureSupport.init
 category browser-window-idle-tasks chrome://browser/content/browser-gestureSupport.js#gHistorySwipeAnimation gHistorySwipeAnimation.init
 category browser-window-idle-tasks moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs NewTabPagePreloading.maybeCreatePreloadedBrowser
@@ -173,7 +173,7 @@ category browser-window-unload-delayed-startup chrome://browser/content/tabbrows
 category browser-window-unload-delayed-startup chrome://browser/content/browser.js BrowserOffline.uninit
 category browser-window-unload-delayed-startup chrome://browser/content/customizableui/panelUI.js PanelUI.uninit
 category browser-window-unload-delayed-startup chrome://browser/content/browser.js#Win7Features Win7Features.onCloseWindow
-category browser-window-unload-delayed-startup chrome://browser/content/browser-thumbnails.js gBrowserThumbnails.uninit
+category browser-window-unload-delayed-startup moz-src:///browser/modules/BrowserThumbnails.sys.mjs BrowserThumbnails.uninit
 
 # The category below is specific to Tabbrowser destruction. For consumers that need to uninitialize during
 # window unload, use 'browser-window-unload' instead.

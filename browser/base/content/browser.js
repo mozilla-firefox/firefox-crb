@@ -50,13 +50,11 @@ ChromeUtils.defineESModuleGetters(this, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NewTabPagePreloading:
     "moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs",
-  NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   nsContextMenu: "chrome://browser/content/nsContextMenu.sys.mjs",
   OpenSearchManager:
     "moz-src:///browser/components/search/OpenSearchManager.sys.mjs",
   PageActions: "resource:///modules/PageActions.sys.mjs",
-  PageThumbs: "resource://gre/modules/PageThumbs.sys.mjs",
   PanelMultiView:
     "moz-src:///browser/components/customizableui/PanelMultiView.sys.mjs",
   PanelView:
@@ -253,11 +251,6 @@ XPCOMUtils.defineLazyScriptGetter(
   this,
   "gSync",
   "chrome://browser/content/browser-sync.js"
-);
-XPCOMUtils.defineLazyScriptGetter(
-  this,
-  "gBrowserThumbnails",
-  "chrome://browser/content/browser-thumbnails.js"
 );
 XPCOMUtils.defineLazyScriptGetter(
   this,

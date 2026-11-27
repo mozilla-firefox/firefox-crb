@@ -3,7 +3,9 @@
 ChromeUtils.defineESModuleGetters(this, {
   AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
   DiscoveryStreamFeed: "resource://newtab/lib/DiscoveryStreamFeed.sys.mjs",
+  NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   ObjectUtils: "resource://gre/modules/ObjectUtils.sys.mjs",
+  PageThumbs: "resource://gre/modules/PageThumbs.sys.mjs",
   PlacesTestUtils: "resource://testing-common/PlacesTestUtils.sys.mjs",
   QueryCache: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
 });

@@ -579,6 +579,7 @@ export interface Modules {
   "moz-src:///browser/components/widgets/GeneratedWidgetsFeature.sys.mjs": typeof import("moz-src:///browser/components/widgets/GeneratedWidgetsFeature.sys.mjs"),
   "moz-src:///browser/components/widgets/WidgetGenerator.sys.mjs": typeof import("moz-src:///browser/components/widgets/WidgetGenerator.sys.mjs"),
   "moz-src:///browser/modules/ASWebAuthSessionService.sys.mjs": typeof import("moz-src:///browser/modules/ASWebAuthSessionService.sys.mjs"),
+  "moz-src:///browser/modules/BrowserThumbnails.sys.mjs": typeof import("moz-src:///browser/modules/BrowserThumbnails.sys.mjs"),
   "moz-src:///browser/modules/CanvasPermissionPromptHelper.sys.mjs": typeof import("moz-src:///browser/modules/CanvasPermissionPromptHelper.sys.mjs"),
   "moz-src:///browser/modules/ContextId.sys.mjs": typeof import("moz-src:///browser/modules/ContextId.sys.mjs"),
   "moz-src:///browser/modules/PrivateBrowsingUI.sys.mjs": typeof import("moz-src:///browser/modules/PrivateBrowsingUI.sys.mjs"),

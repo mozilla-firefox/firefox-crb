@@ -90,7 +90,7 @@ async function promiseCreateThumbnail() {
       url: URL,
     },
     async () => {
-      gBrowserThumbnails.clearTopSiteURLCache();
+      BrowserThumbnails.clearTopSiteURLCache(window);
       await whenFileExists(URL);
     }
   );
