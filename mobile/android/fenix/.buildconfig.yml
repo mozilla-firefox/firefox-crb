@@ -27,6 +27,7 @@ projects:
     - components:concept-fetch
     - components:concept-file-importer
     - components:concept-file-parser
+    - components:concept-firefox-accounts
     - components:concept-integrity
     - components:concept-llm
     - components:concept-menu
