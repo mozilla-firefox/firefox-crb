@@ -392,7 +392,7 @@ class IMMHandler final {
   const Maybe<ContentSelection>& GetContentSelectionWithQueryIfNothing(
       nsWindow* aWindow) {
     // When IME has focus, mContentSelection is automatically updated by
-    // NOTIFY_IME_OF_SELECTION_CHANGE.
+    // NOTIFY_IME_OF_CONTENT_CHANGE.
     if (sHasFocus) {
       if (mContentSelection.isNothing()) {
         // But if this is the first access of mContentSelection, we need to

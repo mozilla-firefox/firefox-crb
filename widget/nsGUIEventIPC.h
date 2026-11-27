@@ -756,13 +756,9 @@ struct ParamTraits<mozilla::widget::IMENotification> {
   static void Write(MessageWriter* aWriter, const paramType& aParam) {
     WriteParam(aWriter, aParam.mMessage);
     switch (aParam.mMessage) {
-      case mozilla::widget::NOTIFY_IME_OF_SELECTION_CHANGE:
-        WriteParam(aWriter, aParam.mSelectionChangeData);
-        return;
-      case mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE:
+      case mozilla::widget::NOTIFY_IME_OF_CONTENT_CHANGE:
         WriteParam(aWriter, aParam.mTextChangeData);
-        return;
-      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
+        WriteParam(aWriter, aParam.mSelectionChangeData);
         WriteParam(aWriter, aParam.mLayoutChanged);
         return;
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
@@ -789,14 +785,13 @@ struct ParamTraits<mozilla::widget::IMENotification> {
         MOZ_MAKE_COMPILER_ASSUME_IS_UNREACHABLE(
             "NOTIFY_IME_OF_NOTHING shouldn't cross the process boundary");
         return false;
-      case mozilla::widget::NOTIFY_IME_OF_SELECTION_CHANGE:
-        return ReadParam(aReader, &aResult->mSelectionChangeData) &&
-               aResult->mSelectionChangeData.isSome();
-      case mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE:
+      case mozilla::widget::NOTIFY_IME_OF_CONTENT_CHANGE:
         return ReadParam(aReader, &aResult->mTextChangeData) &&
-               aResult->mTextChangeData.isSome();
-      case mozilla::widget::NOTIFY_IME_OF_POSITION_CHANGE:
-        return ReadParam(aReader, &aResult->mLayoutChanged);
+               ReadParam(aReader, &aResult->mSelectionChangeData) &&
+               ReadParam(aReader, &aResult->mLayoutChanged) &&
+               (aResult->mTextChangeData.isSome() ||
+                aResult->mSelectionChangeData.isSome() ||
+                aResult->mLayoutChanged);
       case mozilla::widget::NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
         return ReadParam(aReader, &aResult->mMouseButtonEventData) &&
                aResult->mMouseButtonEventData.isSome();
