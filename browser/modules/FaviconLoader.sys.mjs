@@ -197,11 +197,25 @@ class FaviconLoad {
         Ci.nsILoadInfo.SEC_ALLOW_CROSS_ORIGIN_INHERITS_SEC_CONTEXT;
     }
 
+    let loadingNode = iconInfo.node;
+    let loadingPrincipal = loadingNode.nodePrincipal;
+    if (iconInfo.fallbackIconURI) {
+      // The pdf.js viewer's resource://pdf.js principal would make this load
+      // cross-origin (no cached credentials) and its CSP would block it, so
+      // load the icon as its own origin. LoadInfo requires the loading node
+      // principal to match the loading principal, hence no node.
+      loadingPrincipal = Services.scriptSecurityManager.createContentPrincipal(
+        iconInfo.iconUri,
+        loadingPrincipal.originAttributes
+      );
+      loadingNode = null;
+    }
+
     this.channel = Services.io.newChannelFromURI(
       iconInfo.iconUri,
-      iconInfo.node,
-      iconInfo.node.nodePrincipal,
-      iconInfo.node.nodePrincipal,
+      loadingNode,
+      loadingPrincipal,
+      loadingPrincipal,
       securityFlags |
         Ci.nsILoadInfo.SEC_ALLOW_CHROME |
         Ci.nsILoadInfo.SEC_DISALLOW_SCRIPT,
@@ -605,6 +619,29 @@ class IconLoader {
     this.actor = actor;
   }
 
+  #setTrustedIcon(iconURI, { node, beforePageShow, isRichIcon, isTabIcon }) {
+    // We need to do a manual security check because the channel won't do
+    // it for us.
+    try {
+      Services.scriptSecurityManager.checkLoadURIWithPrincipal(
+        node.nodePrincipal,
+        iconURI,
+        Services.scriptSecurityManager.ALLOW_CHROME
+      );
+    } catch (ex) {
+      return;
+    }
+    this.actor.sendAsyncMessage("Link:SetIcon", {
+      originalURL: iconURI.spec,
+      expiration: undefined,
+      iconURL: iconURI.spec,
+      canStoreIcon: beforePageShow && iconURI.schemeIs("data"),
+      beforePageShow,
+      isRichIcon,
+      isTabIcon,
+    });
+  }
+
   async load(iconInfo) {
     if (this._loader) {
       // If we're already loading this icon, just let it finish.
@@ -615,27 +652,7 @@ class IconLoader {
     }
 
     if (TRUSTED_FAVICON_SCHEMES.includes(iconInfo.iconUri.scheme)) {
-      // We need to do a manual security check because the channel won't do
-      // it for us.
-      try {
-        Services.scriptSecurityManager.checkLoadURIWithPrincipal(
-          iconInfo.node.nodePrincipal,
-          iconInfo.iconUri,
-          Services.scriptSecurityManager.ALLOW_CHROME
-        );
-      } catch (ex) {
-        return;
-      }
-      this.actor.sendAsyncMessage("Link:SetIcon", {
-        originalURL: iconInfo.iconUri.spec,
-        expiration: undefined,
-        iconURL: iconInfo.iconUri.spec,
-        canStoreIcon:
-          iconInfo.beforePageShow && iconInfo.iconUri.schemeIs("data"),
-        beforePageShow: iconInfo.beforePageShow,
-        isRichIcon: iconInfo.isRichIcon,
-        isTabIcon: iconInfo.isTabIcon,
-      });
+      this.#setTrustedIcon(iconInfo.iconUri, iconInfo);
       return;
     }
 
@@ -673,6 +690,9 @@ class IconLoader {
           isRichIcon: iconInfo.isRichIcon,
           isTabIcon: iconInfo.isTabIcon,
         });
+        if (iconInfo.fallbackIconURI) {
+          this.#setTrustedIcon(iconInfo.fallbackIconURI, iconInfo);
+        }
       }
     } finally {
       this._loader = null;
@@ -756,10 +776,11 @@ export class FaviconLoader {
     return false;
   }
 
-  addDefaultIcon(pageUri) {
+  addDefaultIcon(pageUri, fallbackIconURI) {
     // Currently ImageDocuments will just load the default favicon, see bug
     // 403651 for discussion.
     this.iconInfos.push({
+      fallbackIconURI,
       iconUri: pageUri.mutate().setPathQueryRef("/favicon.ico").finalize(),
       width: -1,
       isRichIcon: false,

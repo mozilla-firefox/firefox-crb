@@ -23,16 +23,51 @@ export class LinkHandlerChild extends JSWindowActorChild {
     return this._iconLoader;
   }
 
+  get rootIconPageURI() {
+    if (!Services.prefs.getBoolPref("browser.chrome.guess_favicon", true)) {
+      return null;
+    }
+
+    // Use documentURIObject to handle about:-style error pages (bug 453442).
+    const pageURI = this.document.documentURIObject;
+    return ["http", "https"].includes(pageURI.scheme) ? pageURI : null;
+  }
+
+  /**
+   * Replaces the pdf.js viewer's chrome:// tab icon with the site favicon,
+   * keeping the viewer icon as a fallback.
+   *
+   * @param {HTMLLinkElement} link
+   * @returns {boolean} Whether the icon has been handled.
+   */
+  addPdfJsTabIcon(link) {
+    if (link.nodePrincipal.originNoSuffix !== "resource://pdf.js") {
+      return false;
+    }
+    const pageURI = this.rootIconPageURI;
+    if (!pageURI) {
+      return false;
+    }
+    let iconURI;
+    try {
+      iconURI = Services.io.newURI(link.href);
+    } catch {
+      return false;
+    }
+    if (!iconURI.schemeIs("chrome")) {
+      return false;
+    }
+    this.iconLoader.addDefaultIcon(pageURI, iconURI);
+    return true;
+  }
+
   addRootIcon() {
     if (
       !this.seenTabIcon &&
-      Services.prefs.getBoolPref("browser.chrome.guess_favicon", true) &&
       Services.prefs.getBoolPref("browser.chrome.site_icons", true)
     ) {
-      // Inject the default icon. Use documentURIObject so that we do the right
-      // thing with about:-style error pages. See bug 453442
-      let pageURI = this.document.documentURIObject;
-      if (["http", "https"].includes(pageURI.scheme)) {
+      const pageURI = this.rootIconPageURI;
+      if (pageURI) {
         this.seenTabIcon = true;
         this.iconLoader.addDefaultIcon(pageURI);
       }
@@ -121,7 +156,10 @@ export class LinkHandlerChild extends JSWindowActorChild {
             return;
           }
 
-          if (this.iconLoader.addIconFromLink(link, isRichIcon)) {
+          if (
+            (!isRichIcon && this.addPdfJsTabIcon(link)) ||
+            this.iconLoader.addIconFromLink(link, isRichIcon)
+          ) {
             iconAdded = true;
             if (!isRichIcon) {
               this.seenTabIcon = true;
