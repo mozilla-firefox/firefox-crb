@@ -1723,7 +1723,11 @@ class ActivePS {
     // This replaces random UUIDs with deterministic hashes, which enables us to
     // deduplicate sources with identical content.
     for (ProfilerJSSourceData& sourceData : threadSources) {
-      nsCString hash = nsPrintfCString("%08x", sourceData.hash());
+      // A source that is the same as an earlier one has no data of its own, so
+      // it gets the id of that one.
+      nsCString hash = sourceData.sameSourceAsIndex()
+                           ? jsSourceEntries[*sourceData.sameSourceAsIndex()].id
+                           : nsPrintfCString("%08x", sourceData.hash());
       jsSourceEntries.AppendElement(
           JSSourceEntry(std::move(hash), std::move(sourceData)));
     }

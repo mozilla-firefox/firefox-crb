@@ -6,6 +6,7 @@
 #define js_ProfilingSources_h
 
 #include "mozilla/HashFunctions.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/Variant.h"
 
 #include <stdint.h>
@@ -135,6 +136,17 @@ struct JS_PUBLIC_API ProfilerJSSourceData {
     return result;
   }
 
+  // The entry of a source whose file path, start position, source map URL and
+  // text are the same as those of the entry at aIndex, an earlier entry of the
+  // same ProfilerJSSources. This entry has no data of its own.
+  static ProfilerJSSourceData CreateSameSourceAs(uint32_t sourceId,
+                                                 size_t aIndex) {
+    ProfilerJSSourceData result;
+    result.sourceId_ = sourceId;
+    result.sameSourceAsIndex_ = aIndex;
+    return result;
+  }
+
   ProfilerJSSourceData(ProfilerJSSourceData&&) = default;
   ProfilerJSSourceData& operator=(ProfilerJSSourceData&&) = default;
 
@@ -158,6 +170,12 @@ struct JS_PUBLIC_API ProfilerJSSourceData {
   const ProfilerSourceVariant& data() const { return data_; }
   uint32_t startLine() const { return startLine_; }
   uint32_t startColumn() const { return startColumn_; }
+  mozilla::Maybe<size_t> sameSourceAsIndex() const {
+    if (sameSourceAsIndex_ == kNotSameSource) {
+      return mozilla::Nothing();
+    }
+    return mozilla::Some(sameSourceAsIndex_);
+  }
 
   // Used only for memory reporting.
   size_t SizeOf() const {
@@ -236,6 +254,9 @@ struct JS_PUBLIC_API ProfilerJSSourceData {
   // - sourceMapURL allocation fails during copy.
   JS::UniqueTwoByteChars sourceMapURL_;
   size_t sourceMapURLLength_;
+  static constexpr size_t kNotSameSource = SIZE_MAX;
+  // See CreateSameSourceAs.
+  size_t sameSourceAsIndex_ = kNotSameSource;
 };
 
 namespace js {
@@ -247,6 +268,8 @@ using ProfilerJSSources =
  * Main API for getting the profiled JS sources.
  * If gatherSourceText is false, only metadata (filename, sourceMapURL) will
  * be gathered, not the actual source text.
+ * Of several sources with the same text and metadata, only the first one is
+ * copied; the others refer to it, see ProfilerJSSourceData::CreateSameSourceAs.
  */
 JS_PUBLIC_API ProfilerJSSources GetProfilerScriptSources(JSRuntime* rt,
                                                          bool gatherSourceText);
