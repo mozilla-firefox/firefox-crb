@@ -8,12 +8,12 @@
 #include <functional>
 
 #include "mozilla/Maybe.h"
+#include "mozilla/MozPromise.h"
 #include "mozilla/Result.h"
+#include "mozilla/TaskQueue.h"
 #include "mozilla/TimeStamp.h"
 #include "nsITimer.h"
 #include "nsTArray.h"
-
-class nsIEventTarget;
 
 class TimeStampWindow;
 
@@ -57,13 +57,18 @@ class MemoryTelemetry final {
 
   static Result<uint32_t, nsresult> GetOpenTabsCount();
 
-  void GatherTotalMemory();
+  using GatherPromise = MozPromise<Ok, nsresult, /*IsExclusive=*/true>;
+
+  RefPtr<GatherPromise> GatherTotalMemory();
   nsresult FinishGatheringTotalMemory(Maybe<int64_t> aTotalMemory,
                                       const nsTArray<int64_t>& aChildSizes);
 
-  nsCOMPtr<nsIEventTarget> mThreadPool;
+  // Serial queue used to run the off-main-thread parts of GatherReports.
+  RefPtr<TaskQueue> mTaskQueue;
 
-  bool mGatheringTotalMemory = false;
+  // Prevents multiple concurrent GatherReports() from running unnecessarily:
+  // true while GatherReports has active gather tasks in flight.
+  bool mGathering = false;
 
   TimeStamp mLastRun{};
   TimeStamp mLastPoke{};

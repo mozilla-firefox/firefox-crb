@@ -114,8 +114,10 @@ class TimeStampWindow {
   AutoCleanLinkedList<Event> mEvents;
 };
 
-MemoryTelemetry::MemoryTelemetry()
-    : mThreadPool(do_GetService(NS_STREAMTRANSPORTSERVICE_CONTRACTID)) {
+MemoryTelemetry::MemoryTelemetry() {
+  nsCOMPtr<nsIEventTarget> target =
+      do_GetService(NS_STREAMTRANSPORTSERVICE_CONTRACTID);
+  mTaskQueue = TaskQueue::Create(target.forget(), "MemoryTelemetry");
   for (auto& val : gPrevValues) {
     val = kUninitialized;
   }
@@ -276,8 +278,13 @@ nsresult MemoryTelemetry::GatherReports(
 
   // If we're running in the parent process, collect data from all processes for
   // the MEMORY_TOTAL histogram.
-  if (XRE_IsParentProcess() && !mGatheringTotalMemory) {
-    GatherTotalMemory();
+  if (XRE_IsParentProcess() && !mGathering) {
+    mGathering = true;
+    GatherTotalMemory()->Then(
+        GetCurrentSerialEventTarget(), __func__,
+        [self = RefPtr{this}](const GatherPromise::ResolveOrRejectValue&) {
+          self->mGathering = false;
+        });
   }
 
   if (!Telemetry::CanRecordReleaseData()) {
@@ -364,7 +371,7 @@ nsresult MemoryTelemetry::GatherReports(
 
 #undef RECORD
 
-  nsresult rv = mThreadPool->Dispatch(runnable.forget(), NS_DISPATCH_NORMAL);
+  nsresult rv = mTaskQueue->Dispatch(runnable.forget(), NS_DISPATCH_NORMAL);
   if (!NS_WARN_IF(NS_FAILED(rv))) {
     cleanup.release();
   }
@@ -383,15 +390,22 @@ struct ChildProcessInfo {
   pid_t mHandle;
 #endif
 };
+
+struct GatherTotalResult {
+  Maybe<int64_t> mbTotal;
+  CopyableTArray<int64_t> childSizes;
+};
+using GatherTotalPromise =
+    MozPromise<GatherTotalResult, nsresult, /*IsExclusive=*/true>;
 }  // namespace
 
 /**
- * Runs a task on the background thread pool to fetch the memory usage of all
- * processes.
+ * Fetches the memory usage of all processes on the background task queue, then
+ * finishes gathering on the main thread. Returns a promise that resolves once
+ * the results have been recorded.
  */
-void MemoryTelemetry::GatherTotalMemory() {
-  MOZ_ASSERT(!mGatheringTotalMemory);
-  mGatheringTotalMemory = true;
+RefPtr<MemoryTelemetry::GatherPromise> MemoryTelemetry::GatherTotalMemory() {
+  MOZ_ASSERT(mGathering);
 
   nsTArray<ChildProcessInfo> infos;
   for (auto& geckoProcess : mozilla::ipc::GeckoChildProcessHost::GetAll()) {
@@ -429,61 +443,65 @@ void MemoryTelemetry::GatherTotalMemory() {
     infos.AppendElement(info);
   }
 
-  RefPtr<MemoryTelemetry> self = this;
-  mThreadPool->Dispatch(NS_NewRunnableFunction(
-      "MemoryTelemetry::GatherTotalMemory",
-      [self = std::move(self), infos = std::move(infos)] {
-        RefPtr<nsMemoryReporterManager> mgr =
-            nsMemoryReporterManager::GetOrCreate();
-        MOZ_RELEASE_ASSERT(mgr);
+  return InvokeAsync(
+             mTaskQueue, __func__,
+             [infos =
+                  std::move(infos)]() mutable -> RefPtr<GatherTotalPromise> {
+               RefPtr<nsMemoryReporterManager> mgr =
+                   nsMemoryReporterManager::GetOrCreate();
+               MOZ_RELEASE_ASSERT(mgr);
 
-        int64_t totalMemory = mgr->ResidentFast();
-        nsTArray<int64_t> childSizes(infos.Length());
+               int64_t totalMemory = mgr->ResidentFast();
+               nsTArray<int64_t> childSizes(infos.Length());
 
-        // Use our handle for the remote process to collect resident unique set
-        // size information for that process.
-        bool success = true;
-        for (const auto& info : infos) {
+               // Use our handle for the remote process to collect resident
+               // unique set size information for that process.
+               bool success = true;
+               for (const auto& info : infos) {
 #ifdef XP_MACOSX
-          int64_t memory =
-              nsMemoryReporterManager::PhysicalFootprint(info.mHandle);
+                 int64_t memory =
+                     nsMemoryReporterManager::PhysicalFootprint(info.mHandle);
 #else
-          int64_t memory =
-              nsMemoryReporterManager::ResidentUnique(info.mHandle);
+                 int64_t memory =
+                     nsMemoryReporterManager::ResidentUnique(info.mHandle);
 #endif
-          if (memory > 0) {
-            childSizes.AppendElement(memory);
-            totalMemory += memory;
-          } else {
-            // We don't break out of the loop otherwise the cleanup code
-            // wouldn't run.
-            success = false;
-          }
+                 if (memory > 0) {
+                   childSizes.AppendElement(memory);
+                   totalMemory += memory;
+                 } else {
+                   // We don't break out of the loop otherwise the cleanup code
+                   // wouldn't run.
+                   success = false;
+                 }
 
 #if defined(XP_WIN)
-          ::CloseHandle(info.mHandle);
+                 ::CloseHandle(info.mHandle);
 #elif defined(XP_MACOSX)
-          mach_port_deallocate(mach_task_self(), info.mHandle);
+                 mach_port_deallocate(mach_task_self(), info.mHandle);
 #endif
-        }
+               }
 
-        Maybe<int64_t> mbTotal;
-        if (success) {
-          mbTotal = Some(totalMemory);
-        }
-
-        NS_DispatchToMainThread(NS_NewRunnableFunction(
-            "MemoryTelemetry::FinishGatheringTotalMemory",
-            [self, mbTotal, childSizes = std::move(childSizes)] {
-              self->FinishGatheringTotalMemory(mbTotal, childSizes);
-            }));
-      }));
+               Maybe<int64_t> mbTotal;
+               if (success) {
+                 mbTotal = Some(totalMemory);
+               }
+               return GatherTotalPromise::CreateAndResolve(
+                   GatherTotalResult{mbTotal, std::move(childSizes)}, __func__);
+             })
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          [self = RefPtr{this}](GatherTotalResult&& aResult) {
+            self->FinishGatheringTotalMemory(aResult.mbTotal,
+                                             aResult.childSizes);
+            return GatherPromise::CreateAndResolve(Ok{}, __func__);
+          },
+          [](nsresult aRv) {
+            return GatherPromise::CreateAndReject(aRv, __func__);
+          });
 }
 
 nsresult MemoryTelemetry::FinishGatheringTotalMemory(
     Maybe<int64_t> aTotalMemory, const nsTArray<int64_t>& aChildSizes) {
-  mGatheringTotalMemory = false;
-
   // Total memory usage can be difficult to measure both accurately and fast
   // enough for telemetry (iterating memory maps can jank whole processes on
   // MacOS).  Therefore this shouldn't be relied on as an absolute measurement
