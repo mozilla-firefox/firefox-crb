@@ -106,6 +106,14 @@ class SSLTokensCache : public nsIMemoryReporter,
   // Non-consuming snapshot of all current records, for about:networking.
   static void GetAllRecords(SSLTokensCacheSnapshot& aOut);
 
+  // Bytes of the cache capacity that a record, excluding its certs, or a cert
+  // takes.
+  static uint32_t RecordSize(const nsACString& aKey,
+                             Span<const uint8_t> aCompressedPayload,
+                             const CertHashChain& aSucceededHashes,
+                             const CertHashChain& aHandshakeHashes);
+  static uint32_t CertSize(Span<const uint8_t> aDER);
+
   // aDecompressedLength, if non-null, receives the size of the decompressed
   // payload (token + serialized SessionCacheInfo combined), for reporting
   // the compression ratio against the compressed size.

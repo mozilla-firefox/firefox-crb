@@ -190,17 +190,33 @@ dictionary SSLTokensCacheElement {
   unsigned long tokenLength = 0;
   unsigned long compressedLength = 0;
   unsigned long decompressedLength = 0;
+  // ALPN of the connection the token is from: empty if none was negotiated,
+  // absent if the token couldn't be read.
+  DOMString alpn;
   boolean evStatus = false;
   unsigned short certificateTransparencyStatus = 0;
   octet overridableErrorCategory = 0;
   // -1: unknown, 0: not a built-in root, 1: built-in root.
   long builtInRoot = -1;
-  Uint8Array serverCertDER;
-  sequence<Uint8Array> succeededCertChainDER;
-  sequence<Uint8Array> handshakeCertDER;
+  // Bytes the token takes of the cache capacity, excluding its certs.
+  unsigned long size = 0;
+  // Hex SHA-256 hashes of the token's certs, as in SSLTokensCacheCert.hash.
+  // The server cert is the first handshake cert.
+  sequence<DOMString> succeededHashes;
+  sequence<DOMString> handshakeHashes;
+};
+
+dictionary SSLTokensCacheCert {
+  DOMString hash = "";
+  Uint8Array der;
+  // Bytes the cert takes of the cache capacity; stored once for all tokens.
+  unsigned long size = 0;
 };
 
 [GenerateConversionToJS]
 dictionary SSLTokensCacheDict {
   sequence<SSLTokensCacheElement> entries;
+  sequence<SSLTokensCacheCert> certs;
+  // Bytes of the cache capacity in use.
+  unsigned long cacheSize = 0;
 };

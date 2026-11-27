@@ -107,29 +107,243 @@ tbody tr:hover {
   gap: var(--space-small);
 }
 
+/** Sortable tables **/
+
+.sort-button {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:enabled:hover,
+  &:focus-visible {
+    background-color: transparent;
+    color: inherit;
+  }
+
+  &::after {
+    margin-inline-start: var(--space-xsmall);
+    -moz-context-properties: fill;
+    fill: currentColor;
+  }
+
+  th[aria-sort="ascending"] > &::after {
+    content: url("chrome://global/skin/icons/arrow-up-12.svg");
+  }
+
+  th[aria-sort="descending"] > &::after {
+    content: url("chrome://global/skin/icons/arrow-down-12.svg");
+  }
+}
+
 /** SSL tokens cache **/
 
 .ssltokens-summary {
   display: flex;
-  align-items: center;
-  gap: var(--space-medium);
+  flex-direction: column;
+  gap: var(--space-small);
   margin-bottom: var(--space-small);
 }
 
-.ssltokens-summary progress {
-  width: 150px;
+.ssltokens-summary-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small) var(--space-xxlarge);
+  margin: 0;
+}
+
+.ssltokens-summary-item {
+  flex-grow: 1;
+}
+
+.ssltokens-summary-term {
+  font-size: var(--font-size-small);
+  color: var(--text-color-deemphasized);
+}
+
+.ssltokens-summary-description {
+  margin: 0;
+}
+
+.ssltokens-capacity-bar {
+  display: flex;
+  box-sizing: border-box;
+  height: var(--size-item-small);
+  overflow: hidden;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-small);
+}
+
+.ssltokens-capacity-segment {
+  width: calc(var(--ssltokens-capacity-fraction) * 100%);
+  background-color: var(--ssltokens-kind-color);
+}
+
+.ssltokens-capacity-legend,
+.ssltokens-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small) var(--space-xlarge);
+}
+
+.ssltokens-capacity-legend {
+  align-items: center;
+}
+
+.ssltokens-options {
+  margin-inline-start: auto;
+}
+
+.ssltokens-capacity-legend-item {
+  display: flex;
+  align-items: center;
+
+  &::before {
+    content: "";
+    width: var(--size-item-small);
+    height: var(--size-item-small);
+    margin-inline-end: var(--space-small);
+    background-color: var(--ssltokens-kind-color);
+  }
+}
+
+/* Okabe-Ito colorblind-safe palette, shared by the capacity bar and the
+ * protocol badges. */
+.ssltokens-kind-h3 {
+  --ssltokens-kind-color: #009e73;
+}
+
+.ssltokens-kind-h2 {
+  --ssltokens-kind-color: #56b4e9;
+}
+
+.ssltokens-kind-h1 {
+  --ssltokens-kind-color: #f0e442;
+}
+
+.ssltokens-kind-other {
+  --ssltokens-kind-color: #0072b2;
+}
+
+.ssltokens-kind-certs {
+  --ssltokens-kind-color: #cc79a7;
+}
+
+.ssltokens-kind-expired {
+  --ssltokens-kind-color: #e69f00;
+}
+
+@media (forced-colors) {
+  :is(.ssltokens-kind-h3, .ssltokens-kind-h2, .ssltokens-kind-h1, .ssltokens-kind-other) {
+    --ssltokens-kind-color: SelectedItem;
+  }
+
+  .ssltokens-kind-certs {
+    --ssltokens-kind-color: CanvasText;
+  }
+
+  .ssltokens-kind-expired {
+    --ssltokens-kind-color: GrayText;
+  }
 }
 
 #ssltokens td {
   vertical-align: top;
 }
 
+/* Stripe only shown row groups of the token table and rows of the certs
+ * table; a group's rows read as one unit. */
+#ssltokens_table tbody:nth-child(even of tbody:not([hidden])),
+#ssltokens_certs_table tr:nth-child(even of tr:not([hidden])):not(:hover) {
+  background-color: var(--table-row-background-color-alternate);
+}
+
+#ssltokens tbody tr:not(:hover) {
+  background-color: transparent;
+}
+
 .ssltokens-key {
   overflow-wrap: anywhere;
 }
 
-.ssltokens-token-count-multiple {
-  font-weight: var(--font-weight-bold);
+.ssltokens-cert-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xsmall);
+  margin-block-start: var(--space-xsmall);
+}
+
+/* Drops down from the button that opened it, over the rows below. */
+.ssltokens-popover {
+  margin: 0;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  max-width: 40em;
+  padding: var(--space-small) var(--space-medium);
+  border: var(--border-width) solid var(--panel-border-color);
+  border-radius: var(--panel-border-radius);
+  background-color: var(--background-color-box);
+  color: var(--text-color);
+  box-shadow: var(--panel-box-shadow);
+  overflow-wrap: anywhere;
+
+  > ul {
+    margin: 0;
+    padding-inline-start: var(--space-large);
+  }
+}
+
+.ssltokens-token-stat {
+  margin-inline-end: var(--space-small);
+}
+
+.ssltokens-protocol-badges {
+  display: inline-flex;
+  gap: var(--space-xsmall);
+  vertical-align: middle;
+}
+
+/* moz-badge only fills its "new" type, so fill the host instead. */
+.ssltokens-protocol-badge {
+  --badge-border-color: transparent;
+  --badge-text-color: contrast-color(var(--ssltokens-kind-color));
+  --badge-padding-block: var(--space-xxsmall);
+  --badge-padding-inline: calc(var(--space-xsmall) + var(--space-xxsmall));
+  display: inline-flex;
+  border-radius: var(--badge-border-radius);
+  background-color: var(--ssltokens-kind-color);
+
+  @media (forced-colors) {
+    --badge-border-color: CanvasText;
+    --badge-text-color: CanvasText;
+    background-color: Canvas;
+  }
+}
+
+/* Beats `.tab table`, which sizes the top-level tables. */
+table.ssltokens-token-table {
+  margin-block: var(--space-xsmall) 0;
+  background-color: transparent;
+  border-color: var(--border-color-deemphasized);
+}
+
+.ssltokens-token-table :is(th, td) {
+  padding-block: var(--space-xxsmall);
+}
+
+.ssltokens-token-table th {
+  background-color: transparent;
+  color: inherit;
+  font-size: var(--font-size-small);
+}
+
+.ssltokens-token-table tbody tr {
+  background-color: transparent;
 }
 
 .ssltokens-icon {
@@ -140,6 +354,17 @@ tbody tr:hover {
   -moz-context-properties: fill, stroke;
   fill: currentColor;
   stroke: currentColor;
+}
+
+/* As narrow as its icons. */
+.ssltokens-icons {
+  width: 0;
+  padding-inline-end: 0;
+  white-space: nowrap;
+}
+
+.ssltokens-icon-expired {
+  fill: var(--icon-color-warning);
 }
 
 #ssltokens summary {

@@ -537,21 +537,33 @@ SSLTokensCache::TokenCacheRecord::~TokenCacheRecord() {
   gInstance->OnRecordDestroyed(this);
 }
 
-uint32_t SSLTokensCache::TokenCacheRecord::Size() const {
-  const uint32_t size = mKey.Length() + mCompressedPayload.Length();
-  if (mHandshakeHashes.isNothing()) {
+// static
+uint32_t SSLTokensCache::RecordSize(const nsACString& aKey,
+                                    Span<const uint8_t> aCompressedPayload,
+                                    const CertHashChain& aSucceededHashes,
+                                    const CertHashChain& aHandshakeHashes) {
+  const uint32_t size = aKey.Length() + aCompressedPayload.Length();
+  if (aHandshakeHashes.isNothing()) {
     return size;
   }
 
   // The certs of a shared record are in mCertStore; it holds only their hashes.
-  const size_t hashCount = mHandshakeHashes->Length() +
-                           (mSucceededHashes ? mSucceededHashes->Length() : 0);
+  const size_t hashCount = aHandshakeHashes->Length() +
+                           (aSucceededHashes ? aSucceededHashes->Length() : 0);
   return size + hashCount * kCertHashLen;
 }
 
-uint32_t SSLTokensCache::CertStoreEntry::Size() const {
-  return kCertHashLen + mDER.Length();
+// static
+uint32_t SSLTokensCache::CertSize(Span<const uint8_t> aDER) {
+  return kCertHashLen + aDER.Length();
 }
+
+uint32_t SSLTokensCache::TokenCacheRecord::Size() const {
+  return RecordSize(mKey, mCompressedPayload, mSucceededHashes,
+                    mHandshakeHashes);
+}
+
+uint32_t SSLTokensCache::CertStoreEntry::Size() const { return CertSize(mDER); }
 
 uint32_t SSLTokensCache::TokenCacheEntry::Size() const {
   uint32_t size = 0;
@@ -812,6 +824,7 @@ void SSLTokensCache::GetAllRecords(SSLTokensCacheSnapshot& aOut) {
     return;
   }
   gInstance->CollectRecordInfosLocked(aOut, /* aFilterForPersistence */ false);
+  aOut.cacheSize = gInstance->mCacheSize;
 }
 
 // static

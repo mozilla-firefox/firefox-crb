@@ -10,8 +10,8 @@
 #include "mozilla/Components.h"
 #include "mozilla/ErrorNames.h"
 #include "mozilla/ErrorResult.h"
+#include "mozilla/Hex.h"
 #include "mozilla/Logging.h"
-#include "mozilla/Maybe.h"
 #include "mozilla/Span.h"
 #include "mozilla/dom/NetDashboardBinding.h"
 #include "mozilla/dom/RootedDictionary.h"
@@ -35,6 +35,8 @@
 #include "nsSocketTransportService2.h"
 #include "nsThreadUtils.h"
 #include "nsURLHelper.h"
+#include "ssl.h"
+#include "sslexp.h"
 
 using mozilla::AutoSafeJSContext;
 using mozilla::dom::Sequence;
@@ -1284,28 +1286,45 @@ static nsresult InitCertDER(JSContext* aCx, Span<const uint8_t> aDER,
   return aOut.Init(obj) ? NS_OK : NS_ERROR_FAILURE;
 }
 
-static nsresult SetCertDERChain(
-    JSContext* aCx, const Maybe<nsTArray<nsTArray<uint8_t>>>& aChainBytes,
-    dom::Optional<Sequence<dom::Uint8Array>>& aOut) {
-  Sequence<dom::Uint8Array>& chain = aOut.Construct();
-  if (!aChainBytes) {
+static void SetCertHash(Span<const uint8_t> aHash, nsAString& aOut) {
+  nsAutoCString hex;
+  HexEncode(aHash, hex);
+  CopyASCIItoUTF16(hex, aOut);
+}
+
+static nsresult SetCertHashes(JSContext* aCx,
+                              const SSLTokensCache::CertHashChain& aHashes,
+                              dom::Optional<Sequence<nsString>>& aOut) {
+  Sequence<nsString>& hashes = aOut.Construct();
+  if (!aHashes) {
     return NS_OK;
   }
-  if (!chain.SetCapacity(aChainBytes->Length(), fallible)) {
+  if (!hashes.SetCapacity(aHashes->Length(), fallible)) {
     JS_ReportOutOfMemory(aCx);
     return NS_ERROR_OUT_OF_MEMORY;
   }
 
-  for (const auto& der : *aChainBytes) {
-    dom::Uint8Array* elem = chain.AppendElement(fallible);
+  for (const auto& hash : *aHashes) {
+    nsString* elem = hashes.AppendElement(fallible);
     if (!elem) {
       JS_ReportOutOfMemory(aCx);
       return NS_ERROR_OUT_OF_MEMORY;
     }
-    nsresult rv = InitCertDER(aCx, der, *elem);
-    NS_ENSURE_SUCCESS(rv, rv);
+    SetCertHash(hash, *elem);
   }
   return NS_OK;
+}
+
+// QUIC peer IDs come from CommonSocketControl::GetPeerId; only
+// NSSSocketControl::GetPeerId adds "tlsflags0x...:" after its flag prefixes.
+static bool IsQuicPeerId(const nsACString& aPeerId) {
+  size_t start = 0;
+  for (const auto& prefix : {"anon:"_ns, "private:"_ns, "beConservative:"_ns}) {
+    if (StringBeginsWith(Substring(aPeerId, start), prefix)) {
+      start += prefix.Length();
+    }
+  }
+  return !StringBeginsWith(Substring(aPeerId, start), "tlsflags0x"_ns);
 }
 
 nsresult Dashboard::GetSSLTokensCache(SSLTokensCacheData* aData) {
@@ -1337,6 +1356,14 @@ nsresult Dashboard::GetSSLTokensCache(SSLTokensCacheData* aData) {
     // Set regardless of decode success below: the record occupies this many
     // bytes in the cache either way.
     entry->mCompressedLength = rec.compressedPayload.Length();
+    entry->mSize =
+        SSLTokensCache::RecordSize(rec.key, rec.compressedPayload,
+                                   rec.succeededHashes, rec.handshakeHashes);
+    nsresult rv =
+        SetCertHashes(cx, rec.succeededHashes, entry->mSucceededHashes);
+    NS_ENSURE_SUCCESS(rv, rv);
+    rv = SetCertHashes(cx, rec.handshakeHashes, entry->mHandshakeHashes);
+    NS_ENSURE_SUCCESS(rv, rv);
 
     nsTArray<uint8_t> token;
     SessionCacheInfo info;
@@ -1348,24 +1375,44 @@ nsresult Dashboard::GetSSLTokensCache(SSLTokensCacheData* aData) {
 
     entry->mTokenLength = token.Length();
     entry->mDecompressedLength = decompressedLength;
+    if (IsQuicPeerId(rec.key)) {
+      // neqo_glue only negotiates "h3".
+      entry->mAlpn.Construct(u"h3"_ns);
+    } else if (SSLResumptionTokenInfo tokenInfo;
+               SSL_GetResumptionTokenInfoWithFlags(
+                   token.Elements(), token.Length(), &tokenInfo,
+                   sizeof(tokenInfo),
+                   SSL_RESUMPTION_TOKEN_INFO_NO_PEER_CERT) == SECSuccess) {
+      CopyUTF8toUTF16(
+          AsChars(Span(tokenInfo.alpnSelection, tokenInfo.alpnSelectionLen)),
+          entry->mAlpn.Construct());
+      SSL_DestroyResumptionTokenInfo(&tokenInfo);
+    }
     entry->mEvStatus = info.mEVStatus == psm::EVStatus::EV;
     entry->mCertificateTransparencyStatus = info.mCertificateTransparencyStatus;
     entry->mBuiltInRoot =
         info.mIsBuiltCertChainRootBuiltInRoot.isNothing()
             ? -1
             : (*info.mIsBuiltCertChainRootBuiltInRoot ? 1 : 0);
-    nsresult rv = InitCertDER(cx, info.mServerCertBytes,
-                              entry->mServerCertDER.Construct());
-    NS_ENSURE_SUCCESS(rv, rv);
+  }
 
-    rv = SetCertDERChain(cx, info.mSucceededCertChainBytes,
-                         entry->mSucceededCertChainDER);
-    NS_ENSURE_SUCCESS(rv, rv);
-
-    rv = SetCertDERChain(cx, info.mHandshakeCertificatesBytes,
-                         entry->mHandshakeCertDER);
+  Sequence<mozilla::dom::SSLTokensCacheCert>& certs = dict.mCerts.Construct();
+  if (!certs.SetCapacity(data->mData.certs.Count(), fallible)) {
+    JS_ReportOutOfMemory(cx);
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+  for (const auto& certEntry : data->mData.certs) {
+    mozilla::dom::SSLTokensCacheCert* cert = certs.AppendElement(fallible);
+    if (!cert) {
+      JS_ReportOutOfMemory(cx);
+      return NS_ERROR_OUT_OF_MEMORY;
+    }
+    SetCertHash(AsBytes(Span(certEntry.GetKey())), cert->mHash);
+    cert->mSize = SSLTokensCache::CertSize(certEntry.GetData());
+    nsresult rv = InitCertDER(cx, certEntry.GetData(), cert->mDer.Construct());
     NS_ENSURE_SUCCESS(rv, rv);
   }
+  dict.mCacheSize = data->mData.cacheSize;
 
   JS::Rooted<JS::Value> val(cx);
   if (!ToJSValue(cx, dict, &val)) {

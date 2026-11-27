@@ -15,6 +15,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-l10n-id="about-networking-title"></title>
     <link rel="stylesheet" href="chrome://global/skin/aboutNetworking.css" />
+    <script
+      type="module"
+      src="chrome://global/content/elements/moz-badge.mjs"
+    ></script>
+    <script
+      type="module"
+      src="chrome://global/content/elements/moz-button.mjs"
+    ></script>
+    <script
+      type="module"
+      src="chrome://global/content/elements/moz-toggle.mjs"
+    ></script>
     <script src="chrome://global/content/aboutNetworking.js"></script>
     <link rel="localization" href="toolkit/about/aboutNetworking.ftl" />
   </head>
@@ -206,18 +218,43 @@
 
       <div id="ssltokens" class="tab" hidden="true">
         <div id="ssltokens_summary" class="ssltokens-summary"></div>
-        <table>
+        <span id="ssltokens_options" class="ssltokens-options">
+          <moz-toggle
+            id="ssltokens_show_expired"
+            data-l10n-id="about-networking-ssl-tokens-show-expired"
+          ></moz-toggle>
+          <moz-toggle
+            id="ssltokens_expand_tokens"
+            data-l10n-id="about-networking-ssl-tokens-expand-tokens"
+          ></moz-toggle>
+        </span>
+        <table id="ssltokens_table">
           <thead>
             <tr>
-              <th></th>
               <th data-l10n-id="about-networking-host"></th>
               <th data-l10n-id="about-networking-ssl-tokens-partition-key"></th>
-              <th data-l10n-id="about-networking-ssl-tokens-tokens-column"></th>
-              <th data-l10n-id="about-networking-ssl-tokens-expires"></th>
               <th data-l10n-id="about-networking-ssl-tokens-certificate"></th>
             </tr>
           </thead>
-          <tbody id="ssltokens_content"></tbody>
+        </table>
+        <div id="ssltokens_popover" class="ssltokens-popover" popover></div>
+        <h2 data-l10n-id="about-networking-ssl-tokens-certs-heading"></h2>
+        <table id="ssltokens_certs_table">
+          <thead>
+            <tr>
+              <th data-l10n-id="about-networking-ssl-tokens-cert-subject"></th>
+              <th data-l10n-id="about-networking-ssl-tokens-cert-issuer"></th>
+              <th
+                data-l10n-id="about-networking-ssl-tokens-cert-not-after"
+              ></th>
+              <th
+                data-l10n-id="about-networking-ssl-tokens-cert-references"
+              ></th>
+              <th
+                data-l10n-id="about-networking-ssl-tokens-cert-size-column"
+              ></th>
+            </tr>
+          </thead>
         </table>
       </div>
 

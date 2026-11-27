@@ -129,6 +129,7 @@ struct SSLTokensCacheRecordInfo {
 struct SSLTokensCacheSnapshot {
   CopyableTArray<SSLTokensCacheRecordInfo> records;
   SSLTokensCacheCertDERByFingerprint certs;
+  uint32_t cacheSize = 0;  // Set only by SSLTokensCache::GetAllRecords.
 };
 
 }  // namespace net
