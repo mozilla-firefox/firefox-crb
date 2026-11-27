@@ -63,10 +63,11 @@ internal fun loginsReducer(state: LoginsState, action: LoginsAction) =
         is ImportPasswordsOverflowMenuClicked -> state.copy(importPasswordsMenuShown = true)
         is ImportPasswordsOverflowMenuDismissed -> state.copy(importPasswordsMenuShown = false)
         is ImportAction.ImportFileClicked -> state.copy(importPasswordsMenuShown = false)
+        is ImportAction.ImportSucceeded -> state.copy(loginsSnackbarState = LoginsSnackbarState.ImportSucceeded)
+        is ImportAction.ImportFailed -> state.copy(loginsSnackbarState = LoginsSnackbarState.ImportFailed(action.error))
         is ImportAction.ImportStarted,
-        is ImportAction.ImportSucceeded,
-        is ImportAction.ImportFailed,
         is ImportAction.ImportCancelled -> state
+        is SnackbarAction.Dismissed -> state.copy(loginsSnackbarState = LoginsSnackbarState.None)
     }
 
 private fun LoginsState.withDeletedLoginRemoved(): LoginsState =

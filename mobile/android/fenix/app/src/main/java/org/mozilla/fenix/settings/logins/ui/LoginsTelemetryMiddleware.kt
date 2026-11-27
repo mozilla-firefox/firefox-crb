@@ -78,7 +78,8 @@ internal class LoginsTelemetryMiddleware : Middleware<LoginsState, LoginsAction>
             is LoginsLoaded,
             is SearchLogins,
             is ImportPasswordsOverflowMenuClicked,
-            is ImportPasswordsOverflowMenuDismissed -> Unit
+            is ImportPasswordsOverflowMenuDismissed,
+            is SnackbarAction.Dismissed -> Unit
         }
     }
 
