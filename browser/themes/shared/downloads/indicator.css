@@ -11,6 +11,21 @@
   list-style-image: url("chrome://browser/skin/downloads/downloads.svg");
 }
 
+/* The anchor and the progress ring stand in for the hidden button icon, so they
+ * are what shrinks when the button is pressed. */
+toolbar #downloads-button {
+  > .toolbarbutton-badge-stack > :is(#downloads-indicator-anchor, #downloads-indicator-progress-outer) {
+    transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &:not([disabled]):hover:active > .toolbarbutton-badge-stack > :is(#downloads-indicator-anchor, #downloads-indicator-progress-outer) {
+      scale: var(--toolbarbutton-motion-scale);
+      transition: scale var(--toolbarbutton-motion-duration-press) var(--toolbarbutton-motion-easing);
+    }
+  }
+}
+
 #downloads-button[progress] > .toolbarbutton-badge-stack > #downloads-indicator-anchor > #downloads-indicator-icon,
 #downloads-button[animate][notification] > .toolbarbutton-badge-stack > #downloads-indicator-anchor > #downloads-indicator-icon {
   visibility: hidden;

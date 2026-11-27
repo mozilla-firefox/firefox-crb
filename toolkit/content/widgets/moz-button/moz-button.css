@@ -286,6 +286,18 @@ button {
     background-color: var(--button-background-color-toolbar);
     border-color: var(--button-border-color-toolbar);
     color: var(--button-text-color-toolbar);
+    transition: background-color var(--toolbarbutton-motion-duration-hover) var(--toolbarbutton-motion-easing);
+
+    img {
+      transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      button:hover:active:not(:disabled) > & img {
+        scale: var(--toolbarbutton-motion-scale);
+        transition-duration: var(--toolbarbutton-motion-duration-press);
+      }
+    }
 
     /* The selected state swaps its colors, so the icon has to follow the text
      * to stay on its pair. */

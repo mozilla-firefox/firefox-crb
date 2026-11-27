@@ -73,6 +73,8 @@ run-if = [
 
 ["browser_tabswitch.js"]
 
+["browser_toolbarbutton_press_reflows.js"]
+
 ["browser_toolbariconcolor_restyles.js"]
 
 ["browser_urlbar_keyed_search.js"]
