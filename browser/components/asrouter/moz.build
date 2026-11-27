@@ -57,6 +57,10 @@ XPCSHELL_TESTS_MANIFESTS += [
     "tests/xpcshell/xpcshell.toml",
 ]
 
+PYTHON_UNITTEST_MANIFESTS += [
+    "content-src/schemas/test/python.toml",
+]
+
 TESTING_JS_MODULES += [
     "content-src/schemas/FxMSCommon.schema.json",
     "content-src/templates/InfoBar/InfoBar.schema.json",
