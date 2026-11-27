@@ -692,7 +692,7 @@ def test_compose_cmd_gecko_profiler_defaults(make_bt, make_test_dict, tmp_path):
     assert "--firefox.geckoProfilerRecordingType" not in cmd
     assert (
         arg_value(cmd, "--firefox.geckoProfilerParams.features")
-        == "js,stackwalk,screenshots,memory,java"
+        == "js,stackwalk,screenshots,memory,java,ipcmessages"
     )
     assert (
         arg_value(cmd, "--firefox.geckoProfilerParams.threads")
