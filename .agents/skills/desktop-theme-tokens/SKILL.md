@@ -214,14 +214,14 @@ manifest: under `browser/themes/addons/`
 for a theme built from the tree, and to the theme's author for one hosted on
 addons.mozilla.org.
 
-**A redefinition of a token name outranks the whole generated stack,
-forced-colors values included.** On the element the token sheet declares on
-(`:root`, or a component's `:host`), an unlayered redefinition beats every
-layer. On a descendant element a redefinition wins in any layer, because a
-declaration on the element beats the value it inherits, so wrapping it in a
-layer fixes nothing. When a surface misbehaves under one condition only (e.g.
-forced colors, prefers-contrast, Nova, the in-app theme) or a token change has
-no effect there, grep the surface's sheets for a redefinition before suspecting
+**A redefinition of a token name outranks the whole generated stack.** On the
+element the token sheet declares on (`:root`, or a component's `:host`), an
+unlayered redefinition beats every layer. On a descendant element a
+redefinition wins in any layer, because a declaration on the element beats the
+value it inherits, so wrapping it in a layer fixes nothing. When a surface
+misbehaves under one condition only (e.g. forced colors, prefers-contrast, Nova,
+the in-app theme) or a token change has no effect there, grep the surface's
+sheets for a redefinition before suspecting
 the token, and for every name in its `var()` chain in that layer
 (`./mach theme resolve-token --name`): a redefinition of a base token on the root reaches
 every token that references it there, including a reference only one layer
@@ -245,13 +245,14 @@ changes every surface. The rule covers design tokens (§2's `isDesignToken`
 check); a sheet-local custom property is not one, whatever its casing suggests.
 In review, ask for this move before discussing the override's media query or
 comment. Under a condition with no key (e.g. a `-moz-platform` or other
-platform media feature, a `[uidensity]` attribute), or one that combines a keyless
-condition with a keyed one, the value stays in the consumer sheet; scope it with
-the token layer's own conditions, plus `prefers-contrast` and `forced-colors`
-where that layer has them as separate layers, so the unlayered rule does not
-outrank the accessibility values. Judge the reverse patch, which adds tokens and
-new consumer rules for them, by `desktop-theme-colors` §4's pairing by state and
-by selector. Before writing a high-contrast value into a token's JSON, read §1
+platform media feature, a `[uidensity]` attribute), or one that combines a
+keyless condition with a keyed one, the value stays in the consumer sheet;
+scope it with the token layer's own conditions. The
+`no-unguarded-high-contrast-token-overrides` stylelint rule reports an override
+that also needs a high-contrast guard, and names the guard. Judge the reverse
+patch, which adds tokens and new consumer rules for them, by
+`desktop-theme-colors` §4's pairing by state and by selector. Before writing a
+high-contrast value into a token's JSON, read §1
 "Writing a high-contrast value into the token's JSON" in
 [`references/token-layers.md`](references/token-layers.md).
 

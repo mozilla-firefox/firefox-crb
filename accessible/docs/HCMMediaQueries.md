@@ -192,10 +192,24 @@ A component author later adds a dark-mode-aware override:
 
 When choosing between `@media (not (forced-colors))` and `@media (not (prefers-contrast))` you need to consider a few things:
 
-* Do defaults exist for the tokens you're overriding in _both_ the prefers-contrast layer and the forced-colors layer? Or are defaults only specified in a single layer? Remember: the goal of this override strategy is to reveal the defeault token values.
-* Do your new token values increase contrast? If so, they could be more valuable to `prefers-contrast` users than the existing token defaults. You should consider exempting `forced-colors` users only.
+* Do defaults exist for the tokens you're overriding in _both_ the prefers-contrast layer and the forced-colors layer? Or are defaults only specified in a single layer? Remember: the goal of this override strategy is to reveal the default token values.
+* Do your new token values increase contrast? If so, they could be more valuable to `prefers-contrast` users than the existing token defaults. You should consider exempting `forced-colors` users only, and add a `stylelint-disable-next-line` comment saying why.
+
+You don't need to look up the token source to answer the first question. Write the override and run `./mach lint --fix`: the [no-unguarded-high-contrast-token-overrides](/code-quality/lint/linters/stylelint-plugin-mozilla/rules/no-unguarded-high-contrast-token-overrides.md) rule knows which values each token has and wraps the override in `@media (not (forced-colors))` or `@media (not (prefers-contrast))` as needed. Then look at the result in high contrast mode, since the token's own value may not suit your surface.
 
 In most cases, `(not (forced-colors))` is the right choice: it leaves the existing token layer's forced-colors handling in effect, while users who have only a contrast preference (and no active forced-colors mode) continue to benefit from non-system-color visual enhancements.
+
+For example, light text on a dark background image keeps its contrast when `prefers-contrast` is set, because the image doesn't change. The override below exempts only forced-colors users, so `prefers-contrast` users still get the light text:
+
+```css
+@media (not (forced-colors)) {
+  .promo-banner {
+    background-image: url("chrome://browser/content/promo/night-sky.avif");
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides -- light text on the dark image */
+    --text-color: #fbfbfe;
+  }
+}
+```
 
 ## Putting it all together
 
