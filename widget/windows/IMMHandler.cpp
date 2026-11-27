@@ -491,16 +491,16 @@ void IMMHandler::OnUpdateComposition(nsWindow* aWindow) {
 void IMMHandler::OnSelectionChange(nsWindow* aWindow,
                                    const IMENotification& aIMENotification,
                                    bool aIsIMMActive) {
-  if (!aIMENotification.mSelectionChangeData.mCausedByComposition &&
+  if (!aIMENotification.mSelectionChangeData->mCausedByComposition &&
       aIsIMMActive) {
     MaybeAdjustCompositionFont(
-        aWindow, aIMENotification.mSelectionChangeData.GetWritingMode());
+        aWindow, aIMENotification.mSelectionChangeData->GetWritingMode());
   }
   // MaybeAdjustCompositionFont() may create gIMMHandler.  So, check it
   // after a call of MaybeAdjustCompositionFont().
   if (gIMMHandler) {
     gIMMHandler->mContentSelection =
-        Some(ContentSelection(aIMENotification.mSelectionChangeData));
+        Some(ContentSelection(aIMENotification.mSelectionChangeData.ref()));
   }
 }
 
@@ -2277,7 +2277,7 @@ nsresult IMMHandler::OnMouseButtonEvent(
   }
 
   // We need to handle only mousedown event.
-  if (aIMENotification.mMouseButtonEventData.mEventMessage != eMouseDown) {
+  if (aIMENotification.mMouseButtonEventData->mEventMessage != eMouseDown) {
     return NS_OK;
   }
 
@@ -2286,13 +2286,13 @@ nsresult IMMHandler::OnMouseButtonEvent(
   uint32_t compositionStart = gIMMHandler->mCompositionStart;
   uint32_t compositionEnd =
       compositionStart + gIMMHandler->mCompositionString.Length();
-  if (aIMENotification.mMouseButtonEventData.mOffset < compositionStart ||
-      aIMENotification.mMouseButtonEventData.mOffset >= compositionEnd) {
+  if (aIMENotification.mMouseButtonEventData->mOffset < compositionStart ||
+      aIMENotification.mMouseButtonEventData->mOffset >= compositionEnd) {
     return NS_OK;
   }
 
   BYTE button;
-  switch (aIMENotification.mMouseButtonEventData.mButton) {
+  switch (aIMENotification.mMouseButtonEventData->mButton) {
     case MouseButton::ePrimary:
       button = IMEMOUSE_LDOWN;
       break;
@@ -2311,9 +2311,9 @@ nsresult IMMHandler::OnMouseButtonEvent(
   // offset:           0011 1122 2233
   // positioning:      2301 2301 2301
   LayoutDeviceIntPoint cursorPos =
-      aIMENotification.mMouseButtonEventData.mCursorPos;
+      aIMENotification.mMouseButtonEventData->mCursorPos;
   LayoutDeviceIntRect charRect =
-      aIMENotification.mMouseButtonEventData.mCharRect;
+      aIMENotification.mMouseButtonEventData->mCharRect;
   int32_t cursorXInChar = cursorPos.x - charRect.X();
   // The event might hit to zero-width character, see bug 694913.
   // The reason might be:
@@ -2329,7 +2329,7 @@ nsresult IMMHandler::OnMouseButtonEvent(
   }
 
   int offset =
-      aIMENotification.mMouseButtonEventData.mOffset - compositionStart;
+      aIMENotification.mMouseButtonEventData->mOffset - compositionStart;
   if (positioning < 2) {
     offset++;
   }

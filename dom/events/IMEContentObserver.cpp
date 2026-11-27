@@ -993,16 +993,11 @@ bool IMEContentObserver::OnMouseButtonEvent(nsPresContext& aPresContext,
   }
 
   IMENotification notification(NOTIFY_IME_OF_MOUSE_BUTTON_EVENT);
-  notification.mMouseButtonEventData.mEventMessage = aMouseEvent.mMessage;
-  notification.mMouseButtonEventData.mOffset =
-      queryCharAtPointEvent.mReply->StartOffset();
-  notification.mMouseButtonEventData.mCursorPos =
-      queryCharAtPointEvent.mRefPoint;
-  notification.mMouseButtonEventData.mCharRect =
-      queryCharAtPointEvent.mReply->mRect;
-  notification.mMouseButtonEventData.mButton = aMouseEvent.mButton;
-  notification.mMouseButtonEventData.mButtons = aMouseEvent.mButtons;
-  notification.mMouseButtonEventData.mModifiers = aMouseEvent.mModifiers;
+  notification.mMouseButtonEventData.emplace(
+      IMENotification::MouseButtonEventData{
+          aMouseEvent.mMessage, queryCharAtPointEvent.mReply->StartOffset(),
+          queryCharAtPointEvent.mRefPoint, queryCharAtPointEvent.mReply->mRect,
+          aMouseEvent.mButton, aMouseEvent.mButtons, aMouseEvent.mModifiers});
 
   nsresult rv = IMEStateManager::NotifyIME(notification, mWidget);
   if (NS_WARN_IF(NS_FAILED(rv))) {
@@ -1562,7 +1557,7 @@ void IMEContentObserver::MaybeNotifyIMEOfFocusSet() {
 }
 
 void IMEContentObserver::MaybeNotifyIMEOfTextChange(
-    const TextChangeDataBase& aTextChangeData) {
+    const TextChangeData& aTextChangeData) {
   MOZ_LOG(sIMECOLog, LogLevel::Debug,
           ("0x%p MaybeNotifyIMEOfTextChange(aTextChangeData=%s)", this,
            ToString(aTextChangeData).c_str()));
@@ -2213,7 +2208,7 @@ void IMEContentObserver::IMENotificationSender::SendSelectionChange() {
     return;
   }
 
-  SelectionChangeData lastSelChangeData = observer->mSelectionData;
+  SelectionChangeData lastSelChangeData(observer->mSelectionData);
   if (NS_WARN_IF(!observer->UpdateSelectionCache())) {
     MOZ_LOG(sIMECOLog, LogLevel::Error,
             ("0x%p   IMENotificationSender::SendSelectionChange(), FAILED, due "
@@ -2233,7 +2228,7 @@ void IMEContentObserver::IMENotificationSender::SendSelectionChange() {
 
   // If the selection isn't changed actually, we shouldn't notify IME of
   // selection change.
-  SelectionChangeData& newSelChangeData = observer->mSelectionData;
+  const SelectionChangeData& newSelChangeData = observer->mSelectionData;
   if (lastSelChangeData.IsInitialized() &&
       lastSelChangeData.EqualsRangeAndDirectionAndWritingMode(
           newSelChangeData)) {
@@ -2251,7 +2246,7 @@ void IMEContentObserver::IMENotificationSender::SendSelectionChange() {
            this, ToString(newSelChangeData).c_str()));
 
   IMENotification notification(NOTIFY_IME_OF_SELECTION_CHANGE);
-  notification.SetData(observer->mSelectionData);
+  notification.mSelectionChangeData = Some(observer->mSelectionData);
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
   observer->mSendingNotification = NOTIFY_IME_OF_SELECTION_CHANGE;
@@ -2306,7 +2301,7 @@ void IMEContentObserver::IMENotificationSender::SendTextChange() {
            this, ToString(observer->mTextChangeData).c_str()));
 
   IMENotification notification(NOTIFY_IME_OF_TEXT_CHANGE);
-  notification.SetData(observer->mTextChangeData);
+  notification.mTextChangeData = Some(observer->mTextChangeData);
   observer->mTextChangeData.Clear();
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);

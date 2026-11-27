@@ -117,7 +117,7 @@ class GeckoEditableSupport final
   RefPtr<TextComposition> GetComposition() const;
   bool RemoveComposition(RemoveCompositionFlag aFlag = COMMIT_IME_COMPOSITION);
   void SendIMEDummyKeyEvent(nsIWidget* aWidget, EventMessage msg);
-  void AddIMETextChange(const IMENotification::TextChangeDataBase& aChange);
+  void AddIMETextChange(const IMENotification::TextChangeData&);
   void PostFlushIMEChanges();
   void FlushIMEChanges(FlushChangesFlag aFlags = FLUSH_FLAG_NONE);
   void FlushIMEText(FlushChangesFlag aFlags = FLUSH_FLAG_NONE);
