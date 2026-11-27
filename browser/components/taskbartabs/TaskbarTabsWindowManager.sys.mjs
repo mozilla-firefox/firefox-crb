@@ -73,6 +73,10 @@ export class TaskbarTabsWindowManager {
     );
     extraOptions.setPropertyAsAString("taskbartab", aTaskbarTab.id);
     if (AppConstants.platform === "linux") {
+      extraOptions.setPropertyAsAString(
+        "taskbartabicon",
+        lazy.TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id).path
+      );
       let windowClass = getInitialLinuxWindowClass(aTaskbarTab);
       if (windowClass) {
         extraOptions.setPropertyAsAString("taskbartabclass", windowClass);
@@ -105,6 +109,10 @@ export class TaskbarTabsWindowManager {
     );
     extraOptions.setPropertyAsAString("taskbartab", aTaskbarTab.id);
     if (AppConstants.platform === "linux") {
+      extraOptions.setPropertyAsAString(
+        "taskbartabicon",
+        lazy.TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id).path
+      );
       let windowClass = getInitialLinuxWindowClass(aTaskbarTab);
       if (windowClass) {
         extraOptions.setPropertyAsAString("taskbartabclass", windowClass);

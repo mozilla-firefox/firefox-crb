@@ -52,22 +52,50 @@ ChromeUtils.defineLazyGetter(lazy, "platformPin", () => {
  */
 export const TaskbarTabsPin = {
   /**
-   * Pins the provided Taskbar Tab to the taskbar.
+   * Saves the icon of the provided Taskbar Tab to disk, so that it can be used
+   * by its shortcut and its windows. Errors are logged rather than thrown.
+   *
+   * @param {TaskbarTab} aTaskbarTab - The Taskbar Tab to save the icon for.
+   * @param {imgIContainer} aIcon - The icon to associate with this Taskbar Tab.
+   * @returns {Promise<boolean>} Whether the icon was saved.
+   */
+  async saveTaskbarTabIcon(aTaskbarTab, aIcon) {
+    lazy.logConsole.info("Saving Taskbar Tab icon.");
+
+    try {
+      let iconFile = lazy.TaskbarTabsUtils.getTaskbarTabIconFile(
+        aTaskbarTab.id
+      );
+      lazy.logConsole.debug(`Using icon path: ${iconFile.path}`);
+
+      await IOUtils.makeDirectory(iconFile.parent.path);
+      await lazy.ShellService.writeShortcutIcon(iconFile, aIcon);
+      return true;
+    } catch (e) {
+      lazy.logConsole.error(`Failed to save Taskbar Tab icon: ${e.message}`);
+      return false;
+    }
+  },
+
+  /**
+   * Pins the provided Taskbar Tab to the taskbar, using the icon saved by
+   * saveTaskbarTabIcon.
    *
    * @param {TaskbarTab} aTaskbarTab - A Taskbar Tab to pin to the taskbar.
-   * @param {imgIContainer} aIcon - The icon to show with this Taskbar Tab.
    * @param {object} [aDetails] - Additional options for this pin.
    * @param {DOMWindow} [aDetails.window] - The window to associate any UI with.
    * @returns {Promise<{shortcut: ?string, rejected: boolean}>} The path to the
    * created shortcut, and whether the user or system rejected the pin request.
    */
-  async pinTaskbarTab(aTaskbarTab, aIcon, { window = null } = {}) {
+  async pinTaskbarTab(aTaskbarTab, { window = null } = {}) {
     lazy.logConsole.info("Pinning Taskbar Tab to the taskbar.");
 
     let shortcut = null;
     let rejected = false;
     try {
-      let iconFile = await createTaskbarIcon(aTaskbarTab, aIcon);
+      let iconFile = lazy.TaskbarTabsUtils.getTaskbarTabIconFile(
+        aTaskbarTab.id
+      );
 
       shortcut = await lazy.platformPin.createShortcut(
         aTaskbarTab,
@@ -109,7 +137,9 @@ export const TaskbarTabsPin = {
         unpinError = e;
       }
 
-      let iconFile = getIconFile(aTaskbarTab);
+      let iconFile = lazy.TaskbarTabsUtils.getTaskbarTabIconFile(
+        aTaskbarTab.id
+      );
 
       lazy.logConsole.debug(`Deleting ${relativePath}`);
       lazy.logConsole.debug(`Deleting ${iconFile.path}`);
@@ -135,28 +165,6 @@ export const TaskbarTabsPin = {
 };
 
 /**
- * Fetches the favicon from the provided Taskbar Tab's start url, and saves it
- * to an icon file.
- *
- * @param {TaskbarTab} aTaskbarTab - The Taskbar Tab to generate an icon file for.
- * @param {imgIContainer} aIcon - The icon to associate with this Taskbar Tab.
- * @returns {Promise<nsIFile>} The created icon file.
- */
-async function createTaskbarIcon(aTaskbarTab, aIcon) {
-  lazy.logConsole.info("Creating Taskbar Tabs shortcut icon.");
-
-  let iconFile = getIconFile(aTaskbarTab);
-
-  lazy.logConsole.debug(`Using icon path: ${iconFile.path}`);
-
-  await IOUtils.makeDirectory(iconFile.parent.path);
-
-  await lazy.ShellService.writeShortcutIcon(iconFile, aIcon);
-
-  return iconFile;
-}
-
-/**
  * Gets the command line arguments a shortcut should pass to Firefox to open
  * the provided Taskbar Tab.
  *
@@ -176,19 +184,4 @@ function getShortcutArgs(aTaskbarTab) {
     "-container",
     aTaskbarTab.userContextId.toString(),
   ];
-}
-
-/**
- * Generates a file path to use for the Taskbar Tab icon file.
- *
- * @param {TaskbarTab} aTaskbarTab - A Taskbar Tab to generate an icon file path for.
- * @returns {nsIFile} The icon file path for the Taskbar Tab.
- */
-function getIconFile(aTaskbarTab) {
-  let iconPath = lazy.TaskbarTabsUtils.getTaskbarTabsFolder();
-  iconPath.append("icons");
-  iconPath.append(
-    aTaskbarTab.id + "." + lazy.ShellService.shortcutIconType.extension
-  );
-  return iconPath;
 }

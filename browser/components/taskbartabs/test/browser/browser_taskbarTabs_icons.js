@@ -282,13 +282,45 @@ add_task(async function test_findOrCreateTaskbarTab_noIcon() {
   let fakeImg = {};
   sandbox.stub(TaskbarTabsUtils, "getFaviconUri").resolves(null);
   sandbox.stub(TaskbarTabsUtils, "getDefaultIcon").resolves(fakeImg);
-  let pinStub = sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  let saveStub = sandbox
+    .stub(TaskbarTabsPin, "saveTaskbarTabIcon")
+    .resolves(true);
 
   let result = await TaskbarTabs.findOrCreateTaskbarTab(kBaseUri, 0);
   Assert.equal(
-    pinStub.firstCall?.args[1],
+    saveStub.firstCall?.args[1],
     fakeImg,
     "The default icon was selected when no favicon was available"
+  );
+
+  await TaskbarTabs.removeTaskbarTab(result.taskbarTab.id);
+  sandbox.restore();
+});
+
+add_task(async function test_findOrCreateTaskbarTab_saveFails() {
+  let sandbox = sinon.createSandbox();
+  let defaultImg = {};
+  sandbox
+    .stub(TaskbarTabsUtils, "getFaviconUri")
+    .resolves(kGoodFaviconLocalUri);
+  sandbox.stub(TaskbarTabsUtils, "getDefaultIcon").resolves(defaultImg);
+  sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  let saveStub = sandbox.stub(TaskbarTabsPin, "saveTaskbarTabIcon");
+  saveStub.onFirstCall().resolves(false);
+  saveStub.resolves(true);
+
+  let result = await TaskbarTabs.findOrCreateTaskbarTab(kBaseUri, 0);
+  Assert.equal(saveStub.callCount, 2, "The save was retried");
+  Assert.notEqual(
+    saveStub.firstCall.args[1],
+    defaultImg,
+    "The favicon is saved first"
+  );
+  Assert.equal(
+    saveStub.secondCall.args[1],
+    defaultImg,
+    "The default icon is saved after the first save fails"
   );
 
   await TaskbarTabs.removeTaskbarTab(result.taskbarTab.id);
@@ -304,6 +336,42 @@ add_task(async function test_moveTabIntoTaskbarTabLoadsSavedIcon() {
       await TaskbarTabs.moveTabIntoTaskbarTab(tab);
     });
   });
+});
+
+add_task(async function test_iconSavedBeforeOpeningWindow() {
+  const sandbox = sinon.createSandbox();
+
+  let pinStub = sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  let saveSpy = sandbox.spy(TaskbarTabsPin, "saveTaskbarTabIcon");
+  let iconExisted = null;
+  let openStub = sandbox
+    .stub(TaskbarTabsWindowManager.prototype, "replaceTabWithWindow")
+    .callsFake(async aTaskbarTab => {
+      iconExisted = await IOUtils.exists(
+        TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id).path
+      );
+      return {};
+    });
+
+  await BrowserTestUtils.withNewTab(kBaseUri.spec, async browser => {
+    let tab = window.gBrowser.getTabForBrowser(browser);
+    let { created, taskbarTab } = await TaskbarTabs.moveTabIntoTaskbarTab(tab);
+
+    Assert.ok(created, "A new Taskbar Tab was created");
+    Assert.equal(saveSpy.callCount, 1, "The icon was saved once");
+    Assert.equal(openStub.callCount, 1, "The window was opened once");
+    Assert.ok(saveSpy.calledBefore(openStub), "The icon was saved first");
+    Assert.strictEqual(
+      iconExisted,
+      true,
+      "The icon file existed when the window was opened"
+    );
+    Assert.ok(openStub.calledBefore(pinStub), "Pinning started afterwards");
+
+    await TaskbarTabs.removeTaskbarTab(taskbarTab.id);
+  });
+
+  sandbox.restore();
 });
 
 add_task(async function test_openWindowLoadsSavedIcon() {
@@ -341,16 +409,17 @@ async function checkManifestIcon(aImageWithTab, aImageWithoutTab, aManifest) {
   // This case checks moveTabIntoTaskbarTab.
   await checkTaskbarTabIcon(aImageWithTab, { manifest: aManifest });
 
-  let pinStub = sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  let saveSpy = sandbox.spy(TaskbarTabsPin, "saveTaskbarTabIcon");
 
   let { taskbarTab } = await TaskbarTabs.findOrCreateTaskbarTab(kBaseUri, 0, {
     manifest: aManifest,
   });
 
   await TaskbarTabs.removeTaskbarTab(taskbarTab.id);
-  Assert.equal(pinStub.callCount, 1, "The taskbar tab was pinned once");
+  Assert.equal(saveSpy.callCount, 1, "The icon was saved once");
   assertBytesEqual(
-    encodeImagePNG(pinStub.firstCall?.args[1]),
+    encodeImagePNG(saveSpy.firstCall?.args[1]),
     aImageWithoutTab
   );
 
@@ -376,15 +445,8 @@ async function checkTaskbarTabIcon(
 ) {
   const sandbox = sinon.createSandbox();
 
-  // We want to wait for the pin to fully complete before continuing, as
-  // otherwise e.g. the image might not have saved.
-  let pendingPin;
-  let pinStub = sandbox
-    .stub(TaskbarTabsPin, "pinTaskbarTab")
-    .callsFake((...args) => {
-      pendingPin = TaskbarTabsPin.pinTaskbarTab.wrappedMethod(...args);
-      return pendingPin;
-    });
+  let pinStub = sandbox.stub(TaskbarTabsPin, "pinTaskbarTab").resolves({});
+  let saveSpy = sandbox.spy(TaskbarTabsPin, "saveTaskbarTabIcon");
 
   let replaceStub = sandbox
     .stub(TaskbarTabsWindowManager.prototype, "replaceTabWithWindow")
@@ -395,17 +457,17 @@ async function checkTaskbarTabIcon(
 
   // The first run should create a Taskbar Tab.
   await openAndMoveIntoTaskbarTab(uri, manifest);
-  await pendingPin;
   tt = await TaskbarTabs.findTaskbarTab(uri, 0);
   Assert.notEqual(tt, null, "A new Taskbar Tab was created");
   let priorId = tt.id;
 
   Assert.equal(pinStub.callCount, 1, "Tried to pin taskbar tab");
+  Assert.equal(saveSpy.callCount, 1, "Saved the taskbar tab icon");
   if (aImage) {
-    assertBytesEqual(encodeImagePNG(pinStub.firstCall.args[1]), aImage);
+    assertBytesEqual(encodeImagePNG(saveSpy.firstCall.args[1]), aImage);
   } else {
     assertBytesEqual(
-      encodeImagePNG(pinStub.firstCall.args[1]),
+      encodeImagePNG(saveSpy.firstCall.args[1]),
       encodeImagePNG(await TaskbarTabsUtils.getDefaultIcon())
     );
   }
@@ -427,11 +489,11 @@ async function checkTaskbarTabIcon(
   // This time, we expect to reuse the same one, read from the disk (and thus
   // scaled to 256x256).
   await openAndMoveIntoTaskbarTab(uri, manifest);
-  await pendingPin;
   tt = await TaskbarTabs.findTaskbarTab(uri, 0);
   Assert.equal(tt?.id, priorId, "The Taskbar Tab was reused");
 
   Assert.equal(pinStub.callCount, 1, "Did not try to pin the second time");
+  Assert.equal(saveSpy.callCount, 1, "Did not save the icon the second time");
 
   Assert.equal(
     replaceStub.callCount,
@@ -516,8 +578,11 @@ async function checkLoadsCorrectIcon(methodName, index, callback) {
     .stub(TaskbarTabsUtils, "_remoteDecodeImageFromFile")
     .rejects();
 
+  let saveSpy = sandbox.spy(TaskbarTabsPin, "saveTaskbarTabIcon");
+
   await callback(taskbarTab);
 
+  Assert.equal(saveSpy.callCount, 0, "The saved icon was not overwritten");
   Assert.equal(openStub.callCount, 2, `${methodName} was called a second time`);
   Assert.equal(
     openStub.secondCall?.args[index],

@@ -42,10 +42,12 @@ registerCleanupFunction(() => {
 do_get_profile();
 
 async function tryPinTaskbarTab(aTaskbarTab) {
-  let result = await TaskbarTabsPin.pinTaskbarTab(
-    aTaskbarTab,
-    await TaskbarTabsUtils.getDefaultIcon(),
-    { window: kFakeWindow }
+  let result = await TaskbarTabsPin.pinTaskbarTab(aTaskbarTab, {
+    window: kFakeWindow,
+  });
+  Assert.ok(
+    !ShellService.writeShortcutIcon.called,
+    "Pinning uses the icon that was already saved."
   );
   Assert.equal(
     result.shortcut,
@@ -73,9 +75,10 @@ async function tryPinTaskbarTab(aTaskbarTab) {
     ),
     "Reasonable command-line arguments were specified."
   );
-  Assert.ok(
-    ShellService.createLinuxDesktopEntry.firstCall.args[3].endsWith(".png"),
-    "A reasonable icon path was specified."
+  Assert.equal(
+    ShellService.createLinuxDesktopEntry.firstCall.args[3],
+    TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id).path,
+    "The saved icon path was specified."
   );
   Assert.equal(
     ShellService.createLinuxDesktopEntry.firstCall.args[4]?.window,

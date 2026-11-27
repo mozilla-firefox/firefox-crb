@@ -188,6 +188,12 @@ var gBrowserInit = {
           "taskbartab",
           taskbarTabId
         );
+        if (extraOptions.hasKey("taskbartabicon")) {
+          window.document.documentElement.setAttribute(
+            "icon",
+            extraOptions.getPropertyAsAString("taskbartabicon")
+          );
+        }
         window.document.documentElement.id = "taskbartab-" + taskbarTabId;
         if (AppConstants.platform == "win") {
           const { TaskbarTabsUtils } = ChromeUtils.importESModule(

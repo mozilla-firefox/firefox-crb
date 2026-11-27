@@ -93,10 +93,7 @@ async function testPinMetricCustom(aPinResult, aPinMessage = null) {
 
   gShortcutPinResult = aPinResult;
 
-  await TaskbarTabsPin.pinTaskbarTab(
-    taskbarTab,
-    await TaskbarTabsUtils.getDefaultIcon()
-  );
+  await TaskbarTabsPin.pinTaskbarTab(taskbarTab);
 
   snapshot = Glean.webApp.pin.testGetValue();
   is(snapshot.length, 1, "A single pin event was recorded");

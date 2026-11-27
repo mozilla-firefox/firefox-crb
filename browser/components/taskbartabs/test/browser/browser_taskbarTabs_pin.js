@@ -30,7 +30,7 @@ add_task(async function test_moveTabIntoTaskbarTabParentWindow() {
     const move = await TaskbarTabs.moveTabIntoTaskbarTab(tab);
     is(gPinStub.callCount, 1, "Exactly one pin was attempted");
     is(
-      gPinStub.firstCall.args[2]?.window,
+      gPinStub.firstCall.args[1]?.window,
       move.window,
       "The newly-created window was passed as part of the pinning"
     );
@@ -47,7 +47,7 @@ add_task(async function test_findOrCreateTaskbarTabParentWindow() {
   let result = await TaskbarTabs.findOrCreateTaskbarTab(uri, 0);
   is(gPinStub.callCount, 1, "Exactly one pin was attempted");
   Assert.strictEqual(
-    gPinStub.firstCall.args[2]?.window,
+    gPinStub.firstCall.args[1]?.window,
     null,
     "No window was passed to pinTaskbarTab"
   );
@@ -60,7 +60,7 @@ add_task(async function test_findOrCreateTaskbarTabParentWindow() {
   });
   is(gPinStub.callCount, 2, "Exactly one pin was attempted");
   is(
-    gPinStub.secondCall.args[2]?.window,
+    gPinStub.secondCall.args[1]?.window,
     fakeWindow,
     "Provided window was passed to pinTaskbarTab"
   );
