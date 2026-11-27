@@ -26,6 +26,9 @@ def _crate_records(topsrcdir, topobjdir, substs, log):
     what Cargo.lock cannot express: whether a crate is reached as a normal, a
     build or a dev dependency, and so whether it ships at all.
 
+    A crate `cargo metadata --filter-platform RUST_TARGET` does not build into
+    the product is in neither list, or tooling if this platform builds it.
+
     Returns (shipped, tooling, edges, kinds). Without `cargo metadata` nothing
     can be told apart, so every crate counts as shipped and ``kinds`` is empty.
     """
@@ -42,10 +45,27 @@ def _crate_records(topsrcdir, topobjdir, substs, log):
         log=log,
         rustc=substs.get("RUSTC"),
     )
+    target_kinds = {}
+    if kinds and substs.get("RUST_TARGET"):
+        target_kinds = collect_dependency_kinds(
+            topsrcdir,
+            topobjdir,
+            substs.get("CARGO"),
+            log=log,
+            rustc=substs.get("RUSTC"),
+            target=substs["RUST_TARGET"],
+        )
     crates, edges = crate_records(topsrcdir, kinds=kinds)
     shipped, tooling = [], []
     for crate in crates:
-        (tooling if is_tooling(crate) else shipped).append(crate)
+        target = target_kinds.get((crate["name"], crate["version"]), [])
+        built_here = not target_kinds or "normal" in target
+        if is_tooling(crate) or (target and not built_here):
+            tooling.append(crate)
+        elif built_here:
+            shipped.append(crate)
+    if dropped := len(crates) - len(shipped) - len(tooling):
+        log(f"{dropped} crate(s) only other platforms build left out.")
     return shipped, tooling, edges, kinds
 
 
