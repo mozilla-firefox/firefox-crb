@@ -904,10 +904,21 @@ async function findAnimationItemByIndex(panel, index) {
 
   itemEl.scrollIntoView(false);
 
-  await waitUntil(
+  await waitFor(
     () =>
-      itemEl.querySelector(".animation-target .attrName") &&
-      itemEl.querySelector(".animation-computed-timing-path")
+      itemEl.querySelector(".animation-target :is(.attrName, .tag-name)") &&
+      itemEl.querySelector(".animation-computed-timing-path"),
+    {
+      toString() {
+        const targetEl = itemEl.querySelector(
+          ".animation-target :is(.attrName, .tag-name)"
+        );
+        const timingPathEl = itemEl.querySelector(
+          ".animation-computed-timing-path"
+        );
+        return `Didn't get expected elements. targetEl: ${targetEl ? targetEl.outerHTML : null} | timingPath: ${timingPathEl ? timingPathEl.outerHTML : null}`;
+      },
+    }
   );
 
   return itemEl;
