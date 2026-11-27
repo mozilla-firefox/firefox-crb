@@ -116,8 +116,8 @@ class HttpConnectionUDP final : public HttpConnectionBase,
       HttpConnectionBase** aInnerConnection) override;
 
   void OnConnected();
-  // Fires once the QUIC handshake completes. The creator of an inner
-  // connection has no transaction of its own on it to learn that from: the
+  // Fires once the QUIC handshake completes. The inner-connection establisher
+  // has no transaction of its own on this connection to learn that from: the
   // setup driver is a NullHttpTransaction, so Http3Session's
   // NS_NET_STATUS_CONNECTED_TO never reaches it (mFirstHttpTransaction is
   // null).
