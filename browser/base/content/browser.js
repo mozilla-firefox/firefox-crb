@@ -152,7 +152,7 @@ ChromeUtils.defineLazyGetter(this, "FullZoom", () => {
   const { FullZoom } = ChromeUtils.importESModule(
     "moz-src:///browser/components/tabbrowser/FullZoom.sys.mjs"
   );
-  return new FullZoom(window);
+  return FullZoom.forWindow(window);
 });
 
 XPCOMUtils.defineLazyScriptGetter(
