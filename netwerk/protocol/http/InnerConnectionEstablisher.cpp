@@ -136,7 +136,7 @@ void InnerConnectionEstablisher::Finish(nsresult aResult, bool aSynchronous) {
   mFinished = true;
 
   if (mTransaction) {
-    // Keep the ref; the caller still needs the captured response head.
+    // Keep the ref; the attempt still needs the captured response head.
     mTransaction->SetConnectedCallback(nullptr);
     mTransaction->SetProxyConnectCallback(nullptr);
   }
