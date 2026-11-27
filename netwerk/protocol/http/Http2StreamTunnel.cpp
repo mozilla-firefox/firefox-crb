@@ -350,11 +350,73 @@ nsresult OutputStreamTunnel::OnSocketReady(nsresult condition) {
   }
   callback = std::move(mCallback);
 
+  // Only the session pulling from the stream gives us somewhere to put bytes;
+  // a failed condition, or a stream or session already gone, means the stream
+  // is going away.
+  RefPtr<Http2StreamTunnel> tunnel = mWeakStream.get();
+  RefPtr<Http2Session> session = tunnel ? tunnel->Session() : nullptr;
+  const bool canSend = NS_SUCCEEDED(mCondition) && session;
   nsresult rv = NS_OK;
-  if (callback) {
+  mInReadWindow = canSend;
+  if (!canSend) {
+    // Whatever was held can never go out; the consumer finds out from its
+    // next Write.
+    mHeldOver.Clear();
+  } else if (!mHeldOver.IsEmpty()) {
+    rv = FlushHeldOver();
+    if (NS_FAILED(rv)) {
+      // The stream refused the held bytes, so it is failing.
+      if (NS_SUCCEEDED(mCondition)) {
+        mCondition = rv;
+      }
+      mHeldOver.Clear();
+    }
+  }
+  if (!mHeldOver.IsEmpty()) {
+    // A partial flush: the rest goes out on the next window, so keep the
+    // consumer waiting rather than dropping its AsyncWait, and make sure that
+    // window comes.
+    mCallback = std::move(callback);
+    session->TransactionHasDataToWrite(tunnel);
+  } else if (callback) {
     rv = callback->OnOutputStreamReady(this);
   }
+  mInReadWindow = false;
 
+  return rv;
+}
+
+nsresult OutputStreamTunnel::SignalDataToWrite(Http2StreamTunnel* aTunnel) {
+  RefPtr<Http2Session> session;
+  nsresult rv = GetSession(getter_AddRefs(session));
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+  session->TransactionHasDataToWrite(aTunnel);
+  return NS_OK;
+}
+
+// Send whatever an out-of-window Write() accepted. Called with the session's
+// segment reader live, so a partial send just shrinks the buffer and the next
+// AsyncWait picks the rest up.
+nsresult OutputStreamTunnel::FlushHeldOver() {
+  RefPtr<Http2StreamTunnel> tunnel = mWeakStream.get();
+  if (!tunnel) {
+    return NS_ERROR_UNEXPECTED;
+  }
+
+  uint32_t written = 0;
+  nsresult rv =
+      tunnel->OnReadSegment(reinterpret_cast<const char*>(mHeldOver.Elements()),
+                            mHeldOver.Length(), &written);
+  LOG((
+      "OutputStreamTunnel::FlushHeldOver [this=%p held=%zu wrote=%u rv=%" PRIx32
+      "]\n",
+      this, mHeldOver.Length(), written, static_cast<uint32_t>(rv)));
+  mHeldOver.RemoveElementsAt(0, written);
+  if (rv == NS_BASE_STREAM_WOULD_BLOCK) {
+    rv = NS_OK;
+  }
   return rv;
 }
 
@@ -385,7 +447,26 @@ OutputStreamTunnel::Write(const char* buf, uint32_t count,
     return rv;
   }
 
-  return tunnel->OnReadSegment(buf, count, countWritten);
+  if (mInReadWindow) {
+    return tunnel->OnReadSegment(buf, count, countWritten);
+  }
+
+  // Outside the window there is nothing to hand the bytes to, and returning
+  // WOULD_BLOCK would livelock a consumer whose write always lands after the
+  // callback returns (anything copying through NS_AsyncCopy). Take one chunk
+  // and send it from the next window instead.
+  if (!mHeldOver.IsEmpty()) {
+    return NS_BASE_STREAM_WOULD_BLOCK;
+  }
+  // Only take the bytes once the next window is assured, so a failure leaves
+  // nothing held and nothing reported as written.
+  rv = SignalDataToWrite(tunnel);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+  mHeldOver.AppendElements(reinterpret_cast<const uint8_t*>(buf), count);
+  *countWritten = count;
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -480,8 +561,43 @@ nsresult InputStreamTunnel::OnSocketReady(nsresult condition) {
     mCondition = condition;
   }
   callback = std::move(mCallback);
+  if (!callback) {
+    return NS_OK;
+  }
 
-  return callback ? callback->OnInputStreamReady(this) : NS_OK;
+  // Only the session writing to the stream gives us anywhere to pull from, and
+  // a failed condition means the stream is going away.
+  const bool canRecv = NS_SUCCEEDED(mCondition) && mWeakStream;
+  mInWriteWindow = canRecv;
+  mReadInWindow = false;
+  nsresult rv = callback->OnInputStreamReady(this);
+  // A consumer that reads after the callback returns (anything copying through
+  // NS_AsyncCopy) would find the segment writer gone and never progress, so
+  // take a chunk off the network now and serve its Read() from that.
+  if (canRecv && !mReadInWindow && mHeldOver.IsEmpty()) {
+    FillHeldOver();
+  }
+  mInWriteWindow = false;
+
+  return rv;
+}
+
+void InputStreamTunnel::FillHeldOver() {
+  RefPtr<Http2StreamTunnel> tunnel = mWeakStream.get();
+  if (!tunnel) {
+    return;
+  }
+
+  // One pipe segment's worth; whatever is left stays in the session and the
+  // next AsyncWait comes back for it.
+  char buf[4096];
+  uint32_t got = 0;
+  nsresult rv = tunnel->OnWriteSegment(buf, sizeof(buf), &got);
+  LOG(("InputStreamTunnel::FillHeldOver [this=%p got=%u rv=%" PRIx32 "]\n",
+       this, got, static_cast<uint32_t>(rv)));
+  if (NS_SUCCEEDED(rv) && got) {
+    mHeldOver.AppendElements(reinterpret_cast<uint8_t*>(buf), got);
+  }
 }
 
 NS_IMPL_ISUPPORTS(InputStreamTunnel, nsIInputStream, nsIAsyncInputStream)
@@ -495,6 +611,11 @@ InputStreamTunnel::Available(uint64_t* avail) {
 
   if (NS_FAILED(mCondition)) {
     return mCondition;
+  }
+
+  if (!mHeldOver.IsEmpty()) {
+    *avail = mHeldOver.Length();
+    return NS_OK;
   }
 
   return NS_ERROR_FAILURE;
@@ -517,12 +638,20 @@ InputStreamTunnel::Read(char* buf, uint32_t count, uint32_t* countRead) {
     return mCondition;
   }
 
+  if (!mHeldOver.IsEmpty()) {
+    *countRead = std::min<uint32_t>(count, mHeldOver.Length());
+    memcpy(buf, mHeldOver.Elements(), *countRead);
+    mHeldOver.RemoveElementsAt(0, *countRead);
+    return NS_OK;
+  }
+
   RefPtr<Http2StreamTunnel> tunnel;
   nsresult rv = GetStream(getter_AddRefs(tunnel));
   if (NS_FAILED(rv)) {
     return rv;
   }
 
+  mReadInWindow = true;
   return tunnel->OnWriteSegment(buf, count, countRead);
 }
 
@@ -570,7 +699,7 @@ InputStreamTunnel::AsyncWait(nsIInputStreamCallback* callback, uint32_t flags,
   (void)target;
 
   RefPtr<InputStreamTunnel> self(this);
-  if (NS_FAILED(mCondition)) {
+  if (NS_FAILED(mCondition) || !mHeldOver.IsEmpty()) {
     (void)DispatchToCurrent(NS_NewRunnableFunction(
         "InputStreamTunnel::CallOnSocketReady",
         [self{std::move(self)}]() { self->OnSocketReady(NS_OK); }));
