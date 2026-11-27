@@ -22,6 +22,10 @@ const lazy = XPCOMUtils.declareLazy({
     "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillAutocomplete.sys.mjs",
   SmartFormFillTelemetry:
     "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs",
+  getAddressDisplayData:
+    "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillSources.sys.mjs",
+  getSavedAddresses:
+    "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillSources.sys.mjs",
   getSourceTexts:
     "moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillSources.sys.mjs",
   console() {
@@ -92,6 +96,8 @@ export class SmartFormFillParent extends JSWindowActorParent {
    * @type {string | null}
    */
   #autocompleteFormId;
+  #autocompleteAddressSource = null;
+  #autocompleteAddressLookup = null;
 
   /**
    * Whether tab metadata changed while form values were being generated.
@@ -277,7 +283,7 @@ export class SmartFormFillParent extends JSWindowActorParent {
     }
 
     try {
-      await this.#selectTabs(focusedForm.id);
+      await this.#selectSources(focusedForm);
     } finally {
       if (!this.#destroyed) {
         const browser = this.browsingContext?.embedderElement;
@@ -291,19 +297,30 @@ export class SmartFormFillParent extends JSWindowActorParent {
   }
 
   /**
-   * Presents the tab selector, which keeps the user's picks for the form.
+   * Presents the source selector, which keeps the user's picks for the form.
    *
-   * @param {string} formId
+   * @param {FocusedForm} focusedForm
    *
    * @returns {Promise<void>}
    */
-  async #selectTabs(formId) {
+  async #selectSources(focusedForm) {
+    const addresses = await lazy.getSavedAddresses();
+    if (this.#cannotAutofill()) {
+      return;
+    }
+
+    const formId = focusedForm.id;
     const result = this.#tabSelector.open({
       browser: this.browsingContext.embedderElement,
       chromeWindow: this.browsingContext.topChromeWindow,
       formId,
       tabs: this.#controller.getTabs(),
       suggestedTabs: this.#controller.getRelevantTabsFor(formId),
+      addresses,
+      selectedAddressGuid: this.#tabSelector.getSelectedAddress(
+        focusedForm,
+        addresses
+      )?.guid,
       pageUrl: this.manager.documentURI.spec,
     });
     if (!result) {
@@ -353,6 +370,7 @@ export class SmartFormFillParent extends JSWindowActorParent {
    */
   didDestroy() {
     lazy.NonPrivateTabs.removeEventListener("TabChange", this);
+    this.#clearAutocompleteAddressLookup();
     this.#tabSelector.reset();
     this.#formReviewSession?.abort();
     this.#formReviewSession = null;
@@ -554,7 +572,7 @@ export class SmartFormFillParent extends JSWindowActorParent {
   }
 
   /**
-   * Triggers the autofill for the focused form with chosen tabs
+   * Triggers autofill for the focused form with its selected sources.
    *
    * @param {FocusedForm} focusedForm
    * @param {Array<SelectedTab>} selectedTabs
@@ -577,12 +595,15 @@ export class SmartFormFillParent extends JSWindowActorParent {
       generation
     );
 
-    const { pageText, tabContentById } = await lazy.getSourceTexts(
-      this.manager,
-      selectedTabs
-        .map(({ id }) => this.#controller.getTabData(id))
-        .filter(Boolean)
-    );
+    const [{ pageText, tabContentById }, addresses] = await Promise.all([
+      lazy.getSourceTexts(
+        this.manager,
+        selectedTabs
+          .map(({ id }) => this.#controller.getTabData(id))
+          .filter(Boolean)
+      ),
+      lazy.getSavedAddresses(),
+    ]);
 
     if (this.#cannotApplyAutofill(generation)) {
       return;
@@ -602,7 +623,8 @@ export class SmartFormFillParent extends JSWindowActorParent {
         focusedForm.emptyFieldIds,
         selectedTabs,
         tabContentById,
-        pageText
+        pageText,
+        this.#tabSelector.getSelectedAddress(focusedForm, addresses)
       )
       .then(result => ({ result, error: null }))
       .catch(error => ({ result: null, error }));
@@ -1027,18 +1049,70 @@ export class SmartFormFillParent extends JSWindowActorParent {
       return null;
     }
 
-    this.#autocompleteFormId = focusedForm.id;
     this.#startFormMetadataRequests(metadata);
+    return this.#createAutocompleteEntries(focusedForm, options.focusElementId);
+  }
+
+  async #createAutocompleteEntries(focusedForm, focusElementId) {
+    const addresses = await this.#getAutocompleteAddresses(focusedForm);
+    if (this.#destroyed || !this.#controller) {
+      return null;
+    }
+
+    const selectedAddress = this.#tabSelector.getSelectedAddress(
+      focusedForm,
+      addresses
+    );
+    this.#autocompleteFormId = focusedForm.id;
+    this.#autocompleteAddressSource = selectedAddress
+      ? lazy.getAddressDisplayData(selectedAddress)
+      : null;
 
     const availableTabs = this.#controller.getTabs().length;
     const entries = await lazy.SmartFormFillAutocomplete.createItemsAsync({
       sffActor: this,
       formId: focusedForm.id,
-      focusElementId: options.focusElementId,
+      focusElementId,
       availableTabs,
+      hasSavedAddresses: Boolean(addresses.length),
+      hasSelectedAddress: Boolean(selectedAddress),
     });
 
     return entries.length ? { entries } : null;
+  }
+
+  #getAutocompleteAddresses({ focusedFieldId }) {
+    const popup = this.browsingContext.top.embedderElement?.autoCompletePopup;
+    const lookup = this.#autocompleteAddressLookup;
+    if (
+      popup?.popupOpen &&
+      lookup?.popup === popup &&
+      lookup.focusedFieldId === focusedFieldId
+    ) {
+      return lookup.addresses;
+    }
+
+    this.#clearAutocompleteAddressLookup();
+    const addresses = lazy.getSavedAddresses();
+    if (popup) {
+      this.#autocompleteAddressLookup = { popup, focusedFieldId, addresses };
+      popup.addEventListener("popuphidden", this.#onAutocompletePopupHidden);
+    }
+    return addresses;
+  }
+
+  #onAutocompletePopupHidden = event => {
+    if (event.target === this.#autocompleteAddressLookup?.popup) {
+      this.#clearAutocompleteAddressLookup();
+    }
+  };
+
+  #clearAutocompleteAddressLookup() {
+    this.#autocompleteAddressLookup?.popup.removeEventListener(
+      "popuphidden",
+      this.#onAutocompletePopupHidden
+    );
+    this.#autocompleteAddressLookup = null;
   }
 
   /**
@@ -1070,7 +1144,12 @@ export class SmartFormFillParent extends JSWindowActorParent {
 
     lazy.SmartFormFillAutocomplete.updatePopupSources({
       browser: this.browsingContext.top.embedderElement,
-      sources: this.getSelectedTabSources(formId),
+      sources: [
+        ...(this.#autocompleteAddressSource
+          ? [this.#autocompleteAddressSource]
+          : []),
+        ...this.getSelectedTabSources(formId),
+      ],
     });
   }
 

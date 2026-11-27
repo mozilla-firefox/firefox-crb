@@ -5,13 +5,10 @@
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
-  AutofillDataTypes: "resource://gre/modules/shared/AutofillDataTypes.sys.mjs",
   clearTimeout: "resource://gre/modules/Timer.sys.mjs",
   MAX_SELECTED_TABS:
     "chrome://browser/content/aiwindow/modules/SmartFormFillConstants.mjs",
   getTabList: "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs",
-  FormAutofill: "resource://autofill/FormAutofill.sys.mjs",
-  formAutofillStorage: "resource://autofill/FormAutofillStorage.sys.mjs",
   FormAutofillUtils: "resource://gre/modules/shared/FormAutofillUtils.sys.mjs",
   FormHistory: "resource://gre/modules/FormHistory.sys.mjs",
   MemoriesManager:
@@ -355,6 +352,7 @@ export class SmartFormFillController {
    * @param {Array<SelectedTab>} selectedTabs
    * @param {Map<string, string>} tabContentById
    * @param {string} pageText
+   * @param {object | undefined} savedAddress Selected address record.
    *
    * @returns {Promise<FillFormResult | null>}
    */
@@ -363,7 +361,8 @@ export class SmartFormFillController {
     emptyFieldIds,
     selectedTabs,
     tabContentById,
-    pageText
+    pageText,
+    savedAddress
   ) {
     const formData = this.#formDataById.get(formId);
     if (!formData) {
@@ -383,7 +382,8 @@ export class SmartFormFillController {
       formData.fields,
       selectedTabs,
       tabContentById,
-      pageText
+      pageText,
+      savedAddress
     );
   }
 
@@ -398,6 +398,7 @@ export class SmartFormFillController {
    * @param {Array<SelectedTab>} selectedTabs
    * @param {Map<string, string>} tabContentById
    * @param {string} pageText
+   * @param {object | undefined} savedAddress Selected address record.
    *
    * @returns {Promise<FillFormResult>}
    */
@@ -407,7 +408,8 @@ export class SmartFormFillController {
     formFields,
     selectedTabs,
     tabContentById,
-    pageText
+    pageText,
+    savedAddress
   ) {
     this.#abortValueGenerationControllers.get(id)?.abort();
 
@@ -454,7 +456,7 @@ export class SmartFormFillController {
 
     try {
       const { candidates, valuesByToken, tokensByFieldId } =
-        await this.#getCandidates(fields);
+        await this.#getCandidates(fields, savedAddress);
       abortCtrl.signal.throwIfAborted();
 
       const request = {
@@ -627,15 +629,14 @@ export class SmartFormFillController {
    * Builds stored-value candidates for fields.
    *
    * @param {Array<FieldData>} fields
+   * @param {object | undefined} savedAddress Selected address record.
    * @returns {Promise<CandidateResult>}
    */
-  async #getCandidates(fields) {
+  async #getCandidates(fields, savedAddress) {
     const candidates = [];
     const valuesByToken = new Map();
     const tokensByFieldId = new Map();
     const typeCounts = new Map();
-    // Read once, and only for a form that has a field to spend it on.
-    let savedAddresses;
 
     for (const field of fields) {
       const type = field.localGuess;
@@ -644,9 +645,8 @@ export class SmartFormFillController {
       }
 
       let value;
-      if (lazy.FormAutofillUtils.isAddressField(type)) {
-        savedAddresses ??= await this.#getSavedAddresses();
-        value = savedAddresses.find(address => address[type])?.[type];
+      if (savedAddress && lazy.FormAutofillUtils.isAddressField(type)) {
+        value = savedAddress[type];
       }
       value ??= await this.#getFormHistoryValue(field);
 
@@ -665,34 +665,6 @@ export class SmartFormFillController {
     }
 
     return { candidates, valuesByToken, tokensByFieldId };
-  }
-
-  /**
-   * Gets the saved addresses autofill would offer, most recently used first.
-   * The local guess a field carries is the canonical autofill field name, so
-   * it is also the key these records hold their values under.
-   * Only addresses: a saved card's `cc-number` comes back masked and the real
-   * one needs an OSKeyStore decrypt, which prompts the user to reauthenticate.
-   *
-   * @returns {Promise<Array<object>>}
-   */
-  async #getSavedAddresses() {
-    if (
-      !lazy.FormAutofill.isAutofillTypeEnabled(lazy.AutofillDataTypes.ADDRESS)
-    ) {
-      return [];
-    }
-
-    try {
-      await lazy.formAutofillStorage.initialize();
-      const addresses = await lazy.formAutofillStorage.addresses.getAll();
-
-      return addresses.sort(
-        (a, b) => (b.timeLastUsed ?? 0) - (a.timeLastUsed ?? 0)
-      );
-    } catch {
-      return [];
-    }
   }
 
   /**

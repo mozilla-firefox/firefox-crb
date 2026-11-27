@@ -3,18 +3,23 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 /**
- * The tabs Smart Form Fill draws values from: the dialog where the user picks
- * them, and the page text extracted from them.
+ * The sources Smart Form Fill draws values from and the dialog where the
+ * user picks them.
  */
 
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 /** @typedef {import("moz-src:///browser/components/aiwindow/models/SmartFormFillModel.sys.mjs").TabData} TabData */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillController.sys.mjs").SelectedTab} SelectedTab */
+/** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillDocument.sys.mjs").FocusedForm} FocusedForm */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillTelemetry.sys.mjs").SourceEditorResult} SourceEditorResult */
 /** @typedef {import("moz-src:///browser/components/aiwindow/ui/modules/SmartFormFillAutocomplete.sys.mjs").SmartFormFillAutocompleteSource} SmartFormFillAutocompleteSource */
 
 const lazy = XPCOMUtils.declareLazy({
+  AutofillDataTypes: "resource://gre/modules/shared/AutofillDataTypes.sys.mjs",
+  FormAutofill: "resource://autofill/FormAutofill.sys.mjs",
+  formAutofillStorage: "resource://autofill/FormAutofillStorage.sys.mjs",
+  FormAutofillUtils: "resource://gre/modules/shared/FormAutofillUtils.sys.mjs",
   GetPageContent: "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs",
   MAX_SELECTED_TABS:
     "chrome://browser/content/aiwindow/modules/SmartFormFillConstants.mjs",
@@ -35,7 +40,50 @@ const TAB_SELECTOR_URL =
   "chrome://browser/content/aiwindow/smartformfill-tab-select.html";
 
 /**
- * Which tabs each form of one Smart Form Fill actor draws from, and the dialog
+ * Gets saved addresses when address autofill is enabled, most recently used
+ * first.
+ *
+ * @returns {Promise<Array<object>>} The saved address records.
+ */
+export async function getSavedAddresses() {
+  if (
+    !lazy.FormAutofill.isAutofillTypeEnabled(lazy.AutofillDataTypes.ADDRESS)
+  ) {
+    return [];
+  }
+
+  try {
+    await lazy.formAutofillStorage.initialize();
+    const addresses = await lazy.formAutofillStorage.addresses.getAll();
+    return addresses.sort(
+      (a, b) => (b.timeLastUsed ?? 0) - (a.timeLastUsed ?? 0)
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Formats a saved address for display in the source editor and autocomplete.
+ *
+ * @param {object} address A saved address record.
+ * @returns {SmartFormFillAutocompleteSource & {description: string}} The label,
+ *   street description, and profile icon.
+ */
+export function getAddressDisplayData(address) {
+  const street = lazy.FormAutofillUtils.toOneLineAddress(
+    address["street-address"] ?? ""
+  );
+  const label = address.name || address.organization || address.email;
+  return {
+    label: label || lazy.FormAutofillUtils.getAddressLabel(address),
+    description: label ? street : "",
+    favicon: "chrome://browser/skin/fxa/avatar-empty.svg",
+  };
+}
+
+/**
+ * Which sources each form of one Smart Form Fill actor draws from, and the dialog
  * where the user picks them.
  */
 export class SmartFormFillTabSelector {
@@ -57,6 +105,40 @@ export class SmartFormFillTabSelector {
    * @type {Map<string, Array<SelectedTab>>}
    */
   #pickedTabsByFormId = new Map();
+
+  /**
+   * The address the user picked, by form ID. A null value means the user
+   * explicitly chose to use no address.
+   *
+   * @type {Map<string, string | null>}
+   */
+  #pickedAddressGuidsByFormId = new Map();
+
+  /**
+   * Resolves the user's choice or, before an explicit choice, picks the first
+   * address with a value for a recognized empty field.
+   *
+   * @param {FocusedForm} focusedForm The form to choose an address for.
+   * @param {Array<object>} addresses Saved addresses in most-recently-used order.
+   * @returns {object | undefined} The selected record, if available.
+   */
+  getSelectedAddress(focusedForm, addresses) {
+    const { id, fields, emptyFieldIds } = focusedForm;
+    if (this.#pickedAddressGuidsByFormId.has(id)) {
+      const guid = this.#pickedAddressGuidsByFormId.get(id);
+      return addresses.find(address => address.guid === guid);
+    }
+
+    return addresses.find(address =>
+      fields.some(
+        ({ id: fieldId, localGuess }) =>
+          emptyFieldIds.has(fieldId) &&
+          localGuess &&
+          lazy.FormAutofillUtils.isAddressField(localGuess) &&
+          address[localGuess]
+      )
+    );
+  }
 
   /**
    * @param {string} formId
@@ -93,6 +175,7 @@ export class SmartFormFillTabSelector {
    */
   forget(formId) {
     this.#pickedTabsByFormId.delete(formId);
+    this.#pickedAddressGuidsByFormId.delete(formId);
   }
 
   /**
@@ -118,12 +201,23 @@ export class SmartFormFillTabSelector {
    * @param {Array<TabData>} options.tabs Every tab the user can pick from.
    * @param {Array<SelectedTab>} options.suggestedTabs Tabs the model found
    *   relevant.
+   * @param {Array<object>} options.addresses Saved addresses the user can pick.
+   * @param {string | undefined} options.selectedAddressGuid Current address.
    * @param {string} options.pageUrl The page being filled, which is not
    *   offered as its own source.
    * @returns {Promise<SourceEditorResult> | null} How the dialog closed, or
    *   null when it could not open.
    */
-  open({ browser, chromeWindow, formId, tabs, suggestedTabs, pageUrl }) {
+  open({
+    browser,
+    chromeWindow,
+    formId,
+    tabs,
+    suggestedTabs,
+    addresses,
+    selectedAddressGuid,
+    pageUrl,
+  }) {
     if (this.#dialog || !browser || !chromeWindow?.gBrowser) {
       return null;
     }
@@ -146,10 +240,16 @@ export class SmartFormFillTabSelector {
       .filter(tab => !suggestedIds.has(tab.id) && tab.url !== pageUrl)
       .map(toDialogTab);
     const selectableIds = new Set([...suggestedIds, ...others.map(t => t.id)]);
+    const selectableAddressGuids = new Set(addresses.map(({ guid }) => guid));
 
     const dialogArguments = {
       suggestedTabs: suggested,
       otherTabs: others,
+      savedAddresses: addresses.map(address => ({
+        ...getAddressDisplayData(address),
+        guid: address.guid,
+      })),
+      selectedAddressGuid: selectedAddressGuid ?? null,
       result: null,
     };
     const { dialog, closedPromise } = chromeWindow.gBrowser
@@ -173,13 +273,15 @@ export class SmartFormFillTabSelector {
         }
       })
       .then(() => {
-        const ids = dialogArguments.result?.selectedTabIds;
+        const { selectedTabIds: ids, selectedAddressGuid: guid } =
+          dialogArguments.result ?? {};
         if (
           !Array.isArray(ids) ||
-          !ids.length ||
+          (!ids.length && !selectableAddressGuids.size) ||
           ids.length > lazy.MAX_SELECTED_TABS ||
           new Set(ids).size !== ids.length ||
-          ids.some(id => !selectableIds.has(id))
+          ids.some(id => !selectableIds.has(id)) ||
+          (guid !== null && !selectableAddressGuids.has(guid))
         ) {
           return this.#aborted
             ? lazy.SOURCE_EDITOR_RESULT.ABORTED
@@ -189,6 +291,9 @@ export class SmartFormFillTabSelector {
           formId,
           ids.map(id => ({ id }))
         );
+        if (selectableAddressGuids.size) {
+          this.#pickedAddressGuidsByFormId.set(formId, guid);
+        }
         return lazy.SOURCE_EDITOR_RESULT.DONE;
       });
   }

@@ -302,11 +302,106 @@ describe("Smart Form Fill autocomplete row item menu", () => {
   });
 
   describe("with a saved address", () => {
+    let getAddresses;
+
     beforeEach(async () => {
       await SpecialPowers.pushPrefEnv({
-        set: [["extensions.formautofill.addresses.supported", "on"]],
+        set: [
+          ["extensions.formautofill.addresses.supported", "on"],
+          ["extensions.formautofill.addresses.enabled", true],
+        ],
       });
       await formAutofillStorage.initialize();
+    });
+
+    afterEach(async () => {
+      getAddresses?.restore();
+      getAddresses = null;
+      await formAutofillStorage.addresses.removeAll();
+      await SpecialPowers.popPrefEnv();
+    });
+
+    it("reuses the saved address lookup until the popup closes", async () => {
+      const addresses = formAutofillStorage.addresses;
+      const guid = await addresses.add(TEST_ADDRESS);
+      getAddresses = sinon.spy(addresses, "getAll");
+
+      const { browser, popup } = await openLoadingAutocomplete(win, "#email");
+      const initialReadCount = getAddresses.callCount;
+      Assert.ok(initialReadCount, "Opening the popup reads the address store");
+
+      await waitForMetadataAndUpdatedRow(
+        popup,
+        mockEngineManager,
+        [FIELD_CLASSIFICATION_SCHEMA, RELEVANT_TABS_SCHEMA],
+        null,
+        []
+      );
+      Assert.equal(
+        getAddresses.callCount,
+        initialReadCount,
+        "Refreshing the open popup reuses the address lookup"
+      );
+      await closeAutocomplete(browser);
+
+      await addresses.remove(guid);
+      const { row } = await openAutocomplete(win, "#email", mockEngineManager, {
+        expectedSchemas: [],
+      });
+      Assert.ok(
+        !row.renderRoot.getElementById("secondary-action-button"),
+        "Reopening the popup reflects the removed address"
+      );
+      await closeAutocomplete(browser);
+    });
+
+    it("counts a selected address in the autocomplete label", async () => {
+      await formAutofillStorage.addresses.add(TEST_ADDRESS);
+
+      const { browser, row } = await openAutocomplete(
+        win,
+        "#email",
+        mockEngineManager
+      );
+      const [label, countLabel] = await lazy.l10n.formatValues([
+        { id: "ai-smart-form-fill-autocomplete-label" },
+        { id: "ai-smart-form-fill-autocomplete-tabs-count", args: { tabs: 1 } },
+      ]);
+
+      Assert.equal(
+        row.sourcesPillsLabel,
+        countLabel,
+        "The address counts as one source"
+      );
+      Assert.equal(
+        row.closest("richlistitem").getAttribute("aria-label"),
+        `${label} ${countLabel}`,
+        "The accessible label includes the address in the count"
+      );
+      await closeAutocomplete(browser);
+    });
+
+    it("offers Edit sources with an available but unselected address", async () => {
+      await formAutofillStorage.addresses.add({
+        "street-address": "1234 Address Way",
+        country: "US",
+      });
+
+      const { browser, row } = await openAutocomplete(
+        win,
+        "#email",
+        mockEngineManager
+      );
+      Assert.equal(win.gBrowser.tabs.length, 1, "Only the form tab is open");
+      Assert.ok(!row.sources?.length, "The form has no selected sources");
+      Assert.ok(
+        row.renderRoot.getElementById("secondary-action-button"),
+        "Edit sources is visible because a saved address is available"
+      );
+      await closeAutocomplete(browser);
+    });
+
+    it("drops the address preview left by the previously hovered row", async () => {
       await formAutofillStorage.addresses.add(TEST_ADDRESS);
 
       const tabUpdated = waitForTabChange("TabAttrModified");
@@ -315,14 +410,7 @@ describe("Smart Form Fill autocomplete row item menu", () => {
         ADDRESS_FORM_URL
       );
       await tabUpdated;
-    });
 
-    afterEach(async () => {
-      await formAutofillStorage.addresses.removeAll();
-      await SpecialPowers.popPrefEnv();
-    });
-
-    it("drops the address preview left by the previously hovered row", async () => {
       const { browser, popup, item } = await openAutocomplete(
         win,
         "#first-name",
