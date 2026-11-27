@@ -1,0 +1,11 @@
+[DEFAULT]
+prefs = ["gfx.canvas.remote.software=true"]
+
+["test_remote_software_canvas_context_loss.html"]
+subsuite = "gpu"
+skip-if = [
+  "os == 'win' && debug",
+  "verify",
+]
+
+["test_remote_software_canvas_draw.html"]

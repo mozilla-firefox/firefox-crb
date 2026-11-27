@@ -32,6 +32,7 @@ with Files("test/crossorigin/*webgl*"):
 MOCHITEST_MANIFESTS += [
     "test/crash/mochitest.toml",
     "test/crossorigin/mochitest.toml",
+    "test/mochitest-remote-software.toml",
     "test/mochitest.toml",
     "test/webgl-mochitest/mochitest-no-angle.toml",
     "test/webgl-mochitest/mochitest.toml",
