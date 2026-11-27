@@ -666,8 +666,8 @@ add_task(async function test_ml_smoke_test_llama_prompt_sensitive() {
 // legitimately changes outputs.
 const LLAMA_SMOKE_GOLDEN = {
   aarch64: {
-    text: "Suddenly, the mouse stopped! \nThe little mouse was scared, but he was scared. He had been so brave. He was scared, but he was still wearing his ",
-    hash: "a59803f3d1c9d983f14c54fadbe9de3b73a1053780f01bc7768fa2bc498f6005",
+    text: "Suddenly, the mouse stopped! \nThe little mouse was scared, but he was scared, but he was scared. He ran up to the mountain and started to cry. \nThe end",
+    hash: "51e38eaeb51ffaa2676974a6364c9fce66ae638c1bdbdecf7ae10cb907e06246",
   },
   "x86-64": {
     text: "Suddenly, the mouse stopped! \nThe old lady was surprised to see a beautiful song. The old lady was so surprised. She had never seen a little mouse and ",

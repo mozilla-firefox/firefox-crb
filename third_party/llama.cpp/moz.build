@@ -73,6 +73,8 @@ EXPORTS += [
 
 DEFINES["_GNU_SOURCE"] = 1
 DEFINES["GGML_USE_CPU"] = 1
+# Register the repacked Q4_0/Q8_0 CPU kernels built from the repack sources.
+DEFINES["GGML_USE_CPU_REPACK"] = 1
 DEFINES["GGML_VERSION"] = "\"GGML_VERSION\""
 DEFINES["GGML_COMMIT"] = "\"GGML_COMMIT\""
 # Control symbol visibility
