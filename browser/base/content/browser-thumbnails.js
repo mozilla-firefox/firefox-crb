@@ -5,161 +5,147 @@
 /**
  * Keeps thumbnails of open web pages up-to-date.
  */
-var gBrowserThumbnails = {
-  /**
-   * Pref that controls whether we can store SSL content on disk
-   */
-  PREF_DISK_CACHE_SSL: "browser.cache.disk_cache_ssl",
-
-  _captureDelayMS: 1000,
-
-  /**
-   * Used to keep track of disk_cache_ssl preference
-   */
-  _sslDiskCacheEnabled: null,
+class BrowserThumbnails {
+  #captureDelayMS = 1000;
 
   /**
    * Map of capture() timeouts assigned to their browsers.
    */
-  _timeouts: null,
+  #timeouts = null;
 
   /**
    * Top site URLs refresh timer.
    */
-  _topSiteURLsRefreshTimer: null,
+  #topSiteURLsRefreshTimer = null;
 
   /**
    * List of tab events we want to listen for.
    */
-  _tabEvents: ["TabClose", "TabSelect"],
+  #tabEvents = ["TabClose", "TabSelect"];
 
-  init: function Thumbnails_init() {
-    gBrowser.addTabsProgressListener(this);
-    Services.prefs.addObserver(this.PREF_DISK_CACHE_SSL, this);
+  #window;
 
-    this._sslDiskCacheEnabled = Services.prefs.getBoolPref(
-      this.PREF_DISK_CACHE_SSL
+  /**
+   * @param {Window} window The browser window whose tabs this keeps
+   *   thumbnails of.
+   */
+  constructor(window) {
+    this.#window = window;
+    ChromeUtils.defineLazyGetter(this, "_topSiteURLs", () =>
+      this.#getTopSiteURLs()
     );
+  }
 
-    this._tabEvents.forEach(function (aEvent) {
+  init() {
+    let { gBrowser } = this.#window;
+    gBrowser.addTabsProgressListener(this);
+
+    this.#tabEvents.forEach(function (aEvent) {
       gBrowser.tabContainer.addEventListener(aEvent, this);
     }, this);
 
-    this._timeouts = new WeakMap();
-  },
+    this.#timeouts = new WeakMap();
+  }
 
-  uninit: function Thumbnails_uninit() {
+  uninit() {
+    let { gBrowser } = this.#window;
     gBrowser.removeTabsProgressListener(this);
-    Services.prefs.removeObserver(this.PREF_DISK_CACHE_SSL, this);
 
-    if (this._topSiteURLsRefreshTimer) {
-      this._topSiteURLsRefreshTimer.cancel();
-      this._topSiteURLsRefreshTimer = null;
+    if (this.#topSiteURLsRefreshTimer) {
+      this.#topSiteURLsRefreshTimer.cancel();
+      this.#topSiteURLsRefreshTimer = null;
     }
 
-    this._tabEvents.forEach(function (aEvent) {
+    this.#tabEvents.forEach(function (aEvent) {
       gBrowser.tabContainer.removeEventListener(aEvent, this);
     }, this);
-  },
+  }
 
-  handleEvent: function Thumbnails_handleEvent(aEvent) {
+  handleEvent(aEvent) {
     switch (aEvent.type) {
       case "scroll": {
         let browser = aEvent.currentTarget;
-        if (this._timeouts.has(browser)) {
-          this._delayedCapture(browser);
+        if (this.#timeouts.has(browser)) {
+          this.#delayedCapture(browser);
         }
         break;
       }
       case "TabSelect":
-        this._delayedCapture(aEvent.target.linkedBrowser);
+        this.#delayedCapture(aEvent.target.linkedBrowser);
         break;
       case "TabClose": {
-        this._cancelDelayedCapture(aEvent.target.linkedBrowser);
+        this.#cancelDelayedCapture(aEvent.target.linkedBrowser);
         break;
       }
     }
-  },
+  }
 
-  observe: function Thumbnails_observe(subject, topic, data) {
-    switch (data) {
-      case this.PREF_DISK_CACHE_SSL:
-        this._sslDiskCacheEnabled = Services.prefs.getBoolPref(
-          this.PREF_DISK_CACHE_SSL
-        );
-        break;
-    }
-  },
-
-  clearTopSiteURLCache: function Thumbnails_clearTopSiteURLCache() {
-    if (this._topSiteURLsRefreshTimer) {
-      this._topSiteURLsRefreshTimer.cancel();
-      this._topSiteURLsRefreshTimer = null;
+  clearTopSiteURLCache() {
+    if (this.#topSiteURLsRefreshTimer) {
+      this.#topSiteURLsRefreshTimer.cancel();
+      this.#topSiteURLsRefreshTimer = null;
     }
     // Delete the defined property
     delete this._topSiteURLs;
-    ChromeUtils.defineLazyGetter(this, "_topSiteURLs", getTopSiteURLs);
-  },
+    ChromeUtils.defineLazyGetter(this, "_topSiteURLs", () =>
+      this.#getTopSiteURLs()
+    );
+  }
 
-  notify: function Thumbnails_notify() {
-    gBrowserThumbnails._topSiteURLsRefreshTimer = null;
-    gBrowserThumbnails.clearTopSiteURLCache();
-  },
+  notify() {
+    this.#topSiteURLsRefreshTimer = null;
+    this.clearTopSiteURLCache();
+  }
 
   /**
    * State change progress listener for all tabs.
    */
-  onStateChange: function Thumbnails_onStateChange(
-    aBrowser,
-    aWebProgress,
-    aRequest,
-    aStateFlags,
-    _aStatus
-  ) {
+  onStateChange(aBrowser, aWebProgress, aRequest, aStateFlags, _aStatus) {
     if (
       aStateFlags & Ci.nsIWebProgressListener.STATE_STOP &&
       aStateFlags & Ci.nsIWebProgressListener.STATE_IS_NETWORK
     ) {
-      this._delayedCapture(aBrowser);
+      this.#delayedCapture(aBrowser);
     }
-  },
+  }
 
-  async _capture(aBrowser) {
+  async #capture(aBrowser) {
     // Only capture about:newtab top sites.
     const topSites = await this._topSiteURLs;
     if (!aBrowser.currentURI || !topSites.includes(aBrowser.currentURI.spec)) {
       return;
     }
-    if (await this._shouldCapture(aBrowser)) {
+    if (await this.#shouldCapture(aBrowser)) {
       await PageThumbs.captureAndStoreIfStale(aBrowser);
     }
-  },
+  }
 
-  _delayedCapture: function Thumbnails_delayedCapture(aBrowser) {
-    if (this._timeouts.has(aBrowser)) {
-      this._cancelDelayedCallbacks(aBrowser);
+  #delayedCapture(aBrowser) {
+    if (this.#timeouts.has(aBrowser)) {
+      this.#cancelDelayedCallbacks(aBrowser);
     } else {
       aBrowser.addEventListener("scroll", this, true);
     }
 
     let idleCallback = () => {
-      this._cancelDelayedCapture(aBrowser);
-      this._capture(aBrowser);
+      this.#cancelDelayedCapture(aBrowser);
+      this.#capture(aBrowser);
     };
 
     // setTimeout to set a guarantee lower bound for the requestIdleCallback
     // (and therefore the delayed capture)
-    let timeoutId = setTimeout(() => {
-      let idleCallbackId = requestIdleCallback(idleCallback, {
-        timeout: this._captureDelayMS * 30,
+    let timeoutId = this.#window.setTimeout(() => {
+      let idleCallbackId = this.#window.requestIdleCallback(idleCallback, {
+        timeout: this.#captureDelayMS * 30,
       });
-      this._timeouts.set(aBrowser, { isTimeout: false, id: idleCallbackId });
-    }, this._captureDelayMS);
+      this.#timeouts.set(aBrowser, { isTimeout: false, id: idleCallbackId });
+    }, this.#captureDelayMS);
 
-    this._timeouts.set(aBrowser, { isTimeout: true, id: timeoutId });
-  },
+    this.#timeouts.set(aBrowser, { isTimeout: true, id: timeoutId });
+  }
 
-  _shouldCapture: async function Thumbnails_shouldCapture(aBrowser) {
+  async #shouldCapture(aBrowser) {
+    let { gBrowser } = this.#window;
     // Capture only if it's the currently selected tab and not an about: page.
     if (
       aBrowser != gBrowser.selectedBrowser ||
@@ -168,59 +154,53 @@ var gBrowserThumbnails = {
       return false;
     }
     return PageThumbs.shouldStoreThumbnail(aBrowser);
-  },
+  }
 
-  _cancelDelayedCapture: function Thumbnails_cancelDelayedCapture(aBrowser) {
-    if (this._timeouts.has(aBrowser)) {
+  #cancelDelayedCapture(aBrowser) {
+    if (this.#timeouts.has(aBrowser)) {
       aBrowser.removeEventListener("scroll", this);
-      this._cancelDelayedCallbacks(aBrowser);
-      this._timeouts.delete(aBrowser);
+      this.#cancelDelayedCallbacks(aBrowser);
+      this.#timeouts.delete(aBrowser);
     }
-  },
+  }
 
-  _cancelDelayedCallbacks: function Thumbnails_cancelDelayedCallbacks(
-    aBrowser
-  ) {
-    let timeoutData = this._timeouts.get(aBrowser);
+  #cancelDelayedCallbacks(aBrowser) {
+    let timeoutData = this.#timeouts.get(aBrowser);
 
     if (timeoutData.isTimeout) {
-      clearTimeout(timeoutData.id);
+      this.#window.clearTimeout(timeoutData.id);
     } else {
       // idle callback dispatched
-      window.cancelIdleCallback(timeoutData.id);
+      this.#window.cancelIdleCallback(timeoutData.id);
     }
-  },
-};
+  }
 
-async function getTopSiteURLs() {
-  // The _topSiteURLs getter can be expensive to run, but its return value can
-  // change frequently on new profiles, so as a compromise we cache its return
-  // value as a lazy getter for 1 minute every time it's called.
-  gBrowserThumbnails._topSiteURLsRefreshTimer = Cc[
-    "@mozilla.org/timer;1"
-  ].createInstance(Ci.nsITimer);
-  gBrowserThumbnails._topSiteURLsRefreshTimer.initWithCallback(
-    gBrowserThumbnails,
-    60 * 1000,
-    Ci.nsITimer.TYPE_ONE_SHOT
-  );
-  let sites = [];
-  // Get both the top sites returned by the query, and also any pinned sites
-  // that the user might have added manually that also need a screenshot.
-  // Also include top sites that don't have rich icons
-  let topSites = await NewTabUtils.activityStreamLinks.getTopSites();
-  sites.push(...topSites.filter(link => !(link.faviconSize >= 96)));
-  sites.push(...NewTabUtils.pinnedLinks.links);
-  return sites.reduce((urls, link) => {
-    if (link) {
-      urls.push(link.url);
-    }
-    return urls;
-  }, []);
+  async #getTopSiteURLs() {
+    // The _topSiteURLs getter can be expensive to run, but its return value can
+    // change frequently on new profiles, so as a compromise we cache its return
+    // value as a lazy getter for 1 minute every time it's called.
+    this.#topSiteURLsRefreshTimer = Cc["@mozilla.org/timer;1"].createInstance(
+      Ci.nsITimer
+    );
+    this.#topSiteURLsRefreshTimer.initWithCallback(
+      this,
+      60 * 1000,
+      Ci.nsITimer.TYPE_ONE_SHOT
+    );
+    let sites = [];
+    // Get both the top sites returned by the query, and also any pinned sites
+    // that the user might have added manually that also need a screenshot.
+    // Also include top sites that don't have rich icons
+    let topSites = await NewTabUtils.activityStreamLinks.getTopSites();
+    sites.push(...topSites.filter(link => !(link.faviconSize >= 96)));
+    sites.push(...NewTabUtils.pinnedLinks.links);
+    return sites.reduce((urls, link) => {
+      if (link) {
+        urls.push(link.url);
+      }
+      return urls;
+    }, []);
+  }
 }
 
-ChromeUtils.defineLazyGetter(
-  gBrowserThumbnails,
-  "_topSiteURLs",
-  getTopSiteURLs
-);
+var gBrowserThumbnails = new BrowserThumbnails(window);
