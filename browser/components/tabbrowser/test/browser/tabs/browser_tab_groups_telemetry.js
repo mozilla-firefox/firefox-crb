@@ -40,17 +40,8 @@ add_setup(async () => {
   win = await BrowserTestUtils.openNewBrowserWindow();
   win.gTabsPanel.init();
   gCUITestUtils = new CustomizableUITestUtils(win);
-  // The toolbar button is only registered when its pref is set at startup,
-  // so register it the same way CustomizableWidgets does.
-  CustomizableUI.createWidget({
-    id: TOOLBAR_BUTTON_ID,
-    type: "view",
-    viewId: TOOLBAR_VIEW_ID,
-    label: "Tab groups",
-  });
   CustomizableUI.addWidgetToArea(TOOLBAR_BUTTON_ID, CustomizableUI.AREA_NAVBAR);
   registerCleanupFunction(async () => {
-    CustomizableUI.destroyWidget(TOOLBAR_BUTTON_ID);
     CustomizableUI.reset();
     await BrowserTestUtils.closeWindow(win);
     await SpecialPowers.popPrefEnv();

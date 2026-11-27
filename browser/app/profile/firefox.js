@@ -3251,7 +3251,7 @@ pref("browser.urlbar.share-button.enabled", false);
 
 // Toggles the availability of the Tab Groups toolbar button.
 // Requires a restart to reflect state changes.
-pref("browser.toolbars.tab-groups.enabled", false);
+pref("browser.toolbars.tab-groups.enabled", true);
 
 pref("security.certerrors.felt-privacy-v1", true);
 

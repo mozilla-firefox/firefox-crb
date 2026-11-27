@@ -882,16 +882,9 @@ add_task(
         [ALTERNATE_MENU_PREF, true],
       ],
     });
-    CustomizableUI.createWidget({
-      id: "tab-groups-button",
-      type: "view",
-      viewId: "toolbar-tabGroupsListView",
-      l10nId: "toolbar-button-tab-groups",
-    });
 
     await assertSaveAndCloseHintAnchor("PanelUI-menu-button");
 
-    CustomizableUI.destroyWidget("tab-groups-button");
     await SpecialPowers.popPrefEnv();
   }
 );
@@ -908,12 +901,6 @@ add_task(
         [ALTERNATE_MENU_PREF, true],
       ],
     });
-    CustomizableUI.createWidget({
-      id: "tab-groups-button",
-      type: "view",
-      viewId: "toolbar-tabGroupsListView",
-      l10nId: "toolbar-button-tab-groups",
-    });
     CustomizableUI.addWidgetToArea(
       "tab-groups-button",
       CustomizableUI.AREA_NAVBAR
@@ -922,7 +909,6 @@ add_task(
     await assertSaveAndCloseHintAnchor("tab-groups-button");
 
     CustomizableUI.removeWidgetFromArea("tab-groups-button");
-    CustomizableUI.destroyWidget("tab-groups-button");
     await SpecialPowers.popPrefEnv();
   }
 );

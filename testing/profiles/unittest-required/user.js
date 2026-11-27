@@ -39,6 +39,11 @@ user_pref("browser.shell.checkDefaultBrowser", false);
 user_pref("browser.startup.page", 0); // use about:blank, not browser.startup.homepage
 // Don't show a delay when hiding the audio indicator during tests
 user_pref("browser.tabs.delayHidingAudioPlayingIconMS", 0);
+// Don't add the Tab Groups button to the toolbar the first time a tab group is
+// created, or show a hint when it's removed.
+// Tests that exercise this behavior set these prefs explicitly.
+user_pref("browser.tabs.groups.removedHintShown", true);
+user_pref("browser.toolbarbuttons.introduced.tab-groups-button", true);
 // Ensure UITour won't hit the network
 user_pref("browser.uitour.url", "http://{server}/uitour-dummy/tour");
 // Turn off Merino suggestions in the location bar so as not to trigger network

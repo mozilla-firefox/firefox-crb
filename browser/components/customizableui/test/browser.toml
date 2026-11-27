@@ -10,7 +10,6 @@ prefs = [
   "browser.urlbar.trustPanel.featureGate=false",
   "sidebar.revamp=false",
   "browser.tabs.groups.alternateMenu=true",
-  "browser.toolbars.tab-groups.enabled=true",
 ]
 
 ["browser_1003588_no_specials_in_panel.js"]

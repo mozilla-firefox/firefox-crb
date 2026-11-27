@@ -1152,14 +1152,6 @@ let closeToolbarTabGroupsList = async () => {
 // replaceGroupWithWindow should record DETACH with the correct source when
 // triggered from the toolbar button tab groups list's context menu.
 add_task(async function test_detach_group_to_new_window_toolbar() {
-  // The toolbar button is only registered when its pref is set at startup,
-  // so register it the same way CustomizableWidgets does.
-  CustomizableUI.createWidget({
-    id: "tab-groups-button",
-    type: "view",
-    viewId: "toolbar-tabGroupsListView",
-    label: "Tab groups",
-  });
   CustomizableUI.addWidgetToArea(
     "tab-groups-button",
     CustomizableUI.AREA_NAVBAR
@@ -1191,7 +1183,6 @@ add_task(async function test_detach_group_to_new_window_toolbar() {
 
   await closeToolbarTabGroupsList();
   await BrowserTestUtils.closeWindow(newWin);
-  CustomizableUI.destroyWidget("tab-groups-button");
   CustomizableUI.reset();
   await resetTelemetry();
 });
