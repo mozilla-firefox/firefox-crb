@@ -1,4 +1,5 @@
 // Non-ASCII characters: éééé
-function utf8ExternalFunction() {
+function utf8ExternalFunction(whileRunning = () => {}) {
+  whileRunning();
   return "ünïcödé漢";
 }

@@ -1,4 +1,8 @@
 // Script for testing source deduplication
+/* global captureSample */
+if (typeof captureSample === "function") {
+  captureSample();
+}
 const start = performance.now();
 let result = 0;
 while (performance.now() - start < 10) {

@@ -99,11 +99,12 @@ static void StreamTables(UniqueStacks&& aUniqueStacks, JSContext* /*aCx*/,
 }
 
 mozilla::NotNull<mozilla::UniquePtr<UniqueStacks>>
-ProfiledThreadData::PrepareUniqueStacks(
-    const ProfileBuffer& aBuffer, JSContext* aCx,
-    mozilla::FailureLatch& aFailureLatch, ProfilerCodeAddressService* aService,
-    mozilla::ProgressLogger aProgressLogger,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap) {
+ProfiledThreadData::PrepareUniqueStacks(const ProfileBuffer& aBuffer,
+                                        JSContext* aCx,
+                                        mozilla::FailureLatch& aFailureLatch,
+                                        ProfilerCodeAddressService* aService,
+                                        mozilla::ProgressLogger aProgressLogger,
+                                        JSSourceIndexer* aJSSourceIndexer) {
   if (mJITFrameInfoForPreviousJSContexts &&
       mJITFrameInfoForPreviousJSContexts->HasExpired(
           aBuffer.BufferRangeStart())) {
@@ -127,13 +128,13 @@ ProfiledThreadData::PrepareUniqueStacks(
         jitFrameInfo,
         aProgressLogger.CreateSubLoggerTo("Adding JIT info...", 90_pc,
                                           "Added JIT info"),
-        aSourceIdToIndexMap);
+        aJSSourceIndexer);
   } else {
     aProgressLogger.SetLocalProgress(90_pc, "No JIT info");
   }
 
   return mozilla::MakeNotNull<mozilla::UniquePtr<UniqueStacks>>(
-      aFailureLatch, std::move(jitFrameInfo), aService, aSourceIdToIndexMap);
+      aFailureLatch, std::move(jitFrameInfo), aService, aJSSourceIndexer);
 }
 
 void ProfiledThreadData::StreamJSON(
@@ -393,8 +394,7 @@ ThreadStreamingContext::ThreadStreamingContext(
     ProfiledThreadData& aProfiledThreadData, const ProfileBuffer& aBuffer,
     JSContext* aCx, mozilla::FailureLatch& aFailureLatch,
     ProfilerCodeAddressService* aService,
-    mozilla::ProgressLogger aProgressLogger,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap)
+    mozilla::ProgressLogger aProgressLogger, JSSourceIndexer* aJSSourceIndexer)
     : mProfiledThreadData(aProfiledThreadData),
       mJSContext(aCx),
       mSamplesDataWriter(aFailureLatch),
@@ -405,7 +405,7 @@ ThreadStreamingContext::ThreadStreamingContext(
           aProgressLogger.CreateSubLoggerFromTo(
               0_pc, "Preparing thread streaming context unique stacks...",
               99_pc, "Prepared thread streaming context Unique stacks"),
-          aSourceIdToIndexMap)) {
+          aJSSourceIndexer)) {
   if (aFailureLatch.Failed()) {
     return;
   }
@@ -457,7 +457,7 @@ void ProcessStreamingContext::AddThreadStreamingContext(
     ProfiledThreadData& aProfiledThreadData, const ProfileBuffer& aBuffer,
     JSContext* aCx, ProfilerCodeAddressService* aService,
     mozilla::ProgressLogger aProgressLogger,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap) {
+    JSSourceIndexer* aJSSourceIndexer) {
   if (mFailureLatch.Failed()) {
     return;
   }
@@ -472,5 +472,5 @@ void ProcessStreamingContext::AddThreadStreamingContext(
       aProgressLogger.CreateSubLoggerFromTo(
           1_pc, "Prepared streaming thread id", 100_pc,
           "Added thread streaming context"),
-      aSourceIdToIndexMap);
+      aJSSourceIndexer);
 }

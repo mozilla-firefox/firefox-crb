@@ -77,8 +77,7 @@ class ProfiledThreadData final {
       mozilla::FailureLatch& aFailureLatch,
       ProfilerCodeAddressService* aService,
       mozilla::ProgressLogger aProgressLogger,
-      const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap =
-          nullptr);
+      JSSourceIndexer* aJSSourceIndexer = nullptr);
 
   void StreamJSON(const ProfileBuffer& aBuffer, JSContext* aCx,
                   SpliceableJSONWriter& aWriter, const nsACString& aProcessName,
@@ -171,8 +170,7 @@ struct ThreadStreamingContext {
                          mozilla::FailureLatch& aFailureLatch,
                          ProfilerCodeAddressService* aService,
                          mozilla::ProgressLogger aProgressLogger,
-                         const nsTHashMap<SourceId, IndexIntoSourceTable>*
-                             aSourceIdToIndexMap = nullptr);
+                         JSSourceIndexer* aJSSourceIndexer = nullptr);
 
   void FinalizeWriter();
 };
@@ -190,12 +188,11 @@ class ProcessStreamingContext final : public mozilla::FailureLatch {
 
   // Add the streaming context corresponding to each profiled thread. This
   // should be called exactly the number of times specified in the constructor.
-  void AddThreadStreamingContext(
-      ProfiledThreadData& aProfiledThreadData, const ProfileBuffer& aBuffer,
-      JSContext* aCx, ProfilerCodeAddressService* aService,
-      mozilla::ProgressLogger aProgressLogger,
-      const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap =
-          nullptr);
+  void AddThreadStreamingContext(ProfiledThreadData& aProfiledThreadData,
+                                 const ProfileBuffer& aBuffer, JSContext* aCx,
+                                 ProfilerCodeAddressService* aService,
+                                 mozilla::ProgressLogger aProgressLogger,
+                                 JSSourceIndexer* aJSSourceIndexer = nullptr);
 
   // A thread id together with the buffer position at which that thread was
   // unregistered (Nothing() if it is still registered). Kept in a compact array

@@ -18,6 +18,9 @@ add_task(async function test_js_sources_deduplication() {
 
     await ProfilerTestUtils.startProfiler({ features: ["js"] });
 
+    // The script calls captureSample, so that a sample refers to its source.
+    await defineCaptureSampleInContent(contentBrowser);
+
     // Load the same script file multiple times.
     // This simulates what happens when the same source is loaded in multiple contexts.
     await SpecialPowers.spawn(contentBrowser, [], async () => {

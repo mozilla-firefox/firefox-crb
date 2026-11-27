@@ -59,8 +59,7 @@ class ProfileBuffer final {
   void AddJITInfoForRange(uint64_t aRangeStart, ProfilerThreadId aThreadId,
                           JSContext* aContext, JITFrameInfo& aJITFrameInfo,
                           mozilla::ProgressLogger aProgressLogger,
-                          const nsTHashMap<SourceId, IndexIntoSourceTable>*
-                              aSourceIdToIndexMap = nullptr) const;
+                          JSSourceIndexer* aJSSourceIndexer = nullptr) const;
 
   // Stream JSON for samples in the buffer to aWriter, using the supplied
   // UniqueStacks object.
@@ -101,11 +100,12 @@ class ProfileBuffer final {
                             double aSinceTime,
                             mozilla::ProgressLogger aProgressLogger) const;
 
-  // Stream JavaScript source table to JSON and return mapping from sourceId
-  // to index into source table.
-  nsTHashMap<SourceId, IndexIntoSourceTable> StreamSourceTableToJSON(
+  // Stream the table of the JavaScript sources that aJSSourceIndexer gave an
+  // index to, in the order of their index.
+  void StreamSourceTableToJSON(
       SpliceableJSONWriter& aWriter,
-      const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries) const;
+      const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries,
+      const JSSourceIndexer& aJSSourceIndexer) const;
 
   // Find (via |aLastSample|) the most recent sample for the thread denoted by
   // |aThreadId| and clone it, patching in the current time as appropriate.
