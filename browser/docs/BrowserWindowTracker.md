@@ -166,3 +166,26 @@ JavaScript. They implement `nsIBrowserWindowTracker` for C++: WebRTC lists the
 tabs a user can share with the first, and Places reads the search engine and
 sponsored-link attributes a browser holds for a visit with the second. Both skip
 hidden tabs and {doc}`lazy tabs </browser/components/tabbrowser/docs/lazy-browsers>`.
+
+## API reference
+
+Generated from the JSDoc in
+{searchfox}`BrowserWindowTracker.sys.mjs <browser/modules/BrowserWindowTracker.sys.mjs>`.
+
+```{js:autofunction} BrowserWindowTracker.getTopWindow
+```
+
+```{js:autofunction} BrowserWindowTracker.getOrderedWindows
+```
+
+```{js:autofunction} BrowserWindowTracker.openWindow
+```
+
+```{js:autofunction} BrowserWindowTracker.promiseOpenWindow
+```
+
+```{js:autofunction} BrowserWindowTracker.getPendingWindow
+```
+
+```{js:autofunction} BrowserWindowTracker.registerOpeningWindow
+```
