@@ -68,12 +68,6 @@ int main(int argc, char* argv[]) {
   auto unregisterRuntimeExceptionModule =
       MakeScopeExit([] { CrashReporter::UnregisterRuntimeExceptionModule(); });
 
-#ifdef HAS_DLL_BLOCKLIST
-  uint32_t initFlags = eDllBlocklistInitFlagIsChildProcess;
-  SetDllBlocklistProcessTypeFlags(initFlags, GetGeckoProcessType());
-  DllBlocklist_Initialize(initFlags);
-#endif
-
   XREChildData childData;
 
 #if defined(XP_WIN) && defined(MOZ_SANDBOX)
@@ -87,6 +81,12 @@ int main(int argc, char* argv[]) {
     childData.setTargetGeckoServices =
         mozilla::sandboxing::SetTargetGeckoServices;
   }
+#endif
+
+#ifdef HAS_DLL_BLOCKLIST
+  uint32_t initFlags = eDllBlocklistInitFlagIsChildProcess;
+  SetDllBlocklistProcessTypeFlags(initFlags, GetGeckoProcessType());
+  DllBlocklist_Initialize(initFlags);
 #endif
 
   nsresult rv = bootstrap->XRE_InitChildProcess(argc, argv, &childData);

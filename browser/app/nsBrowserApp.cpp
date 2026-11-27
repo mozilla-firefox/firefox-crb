@@ -390,9 +390,6 @@ int main(int argc, char* argv[], char* envp[]) {
 
   mozilla::TimeStamp start = mozilla::TimeStamp::Now();
 
-  AUTO_BASE_PROFILER_INIT;
-  AUTO_BASE_PROFILER_LABEL("nsBrowserApp main", OTHER);
-
   // Register an external module to report on otherwise uncatchable exceptions.
   // Note that in child processes this must be called after Gecko process type
   // has been set.
@@ -402,11 +399,11 @@ int main(int argc, char* argv[], char* envp[]) {
   auto unregisterRuntimeExceptionModule =
       MakeScopeExit([] { CrashReporter::UnregisterRuntimeExceptionModule(); });
 
-#ifdef MOZ_BROWSER_CAN_BE_CONTENTPROC
-  // We are launching as a content process, delegate to the appropriate
-  // main
-  if (GetGeckoProcessType() != GeckoProcessType_Default) {
-#  if defined(XP_WIN) && defined(MOZ_SANDBOX)
+#if defined(MOZ_BROWSER_CAN_BE_CONTENTPROC) && defined(XP_WIN) && \
+    defined(MOZ_SANDBOX)
+  sandbox::TargetServices* sandboxTargetServices = nullptr;
+  if (GetGeckoProcessType() != GeckoProcessType_Default &&
+      IsSandboxedProcess()) {
     // We need to set whether our process is supposed to have win32k locked down
     // from the command line setting before DllBlocklist_Initialize,
     // GetInitializedTargetServices and WindowsDpiInitialization.
@@ -415,8 +412,25 @@ int main(int argc, char* argv[], char* envp[]) {
     if (win32kLockedDown.isSome() && *win32kLockedDown) {
       mozilla::SetWin32kLockedDownInPolicy();
     }
-#  endif
 
+    // We need to initialize the sandbox TargetServices before any other threads
+    // are started (for example by the base profiler) and before InitXPCOMGlue,
+    // because we might need the sandbox broker to give access to some files.
+    sandboxTargetServices = sandboxing::GetInitializedTargetServices();
+    if (!sandboxTargetServices) {
+      Output("Failed to initialize the sandbox target services.");
+      return 255;
+    }
+  }
+#endif
+
+  AUTO_BASE_PROFILER_INIT;
+  AUTO_BASE_PROFILER_LABEL("nsBrowserApp main", OTHER);
+
+#ifdef MOZ_BROWSER_CAN_BE_CONTENTPROC
+  // We are launching as a content process, delegate to the appropriate
+  // main
+  if (GetGeckoProcessType() != GeckoProcessType_Default) {
 #  ifdef HAS_DLL_BLOCKLIST
     uint32_t initFlags =
         gBlocklistInitFlags | eDllBlocklistInitFlagIsChildProcess;
@@ -424,14 +438,6 @@ int main(int argc, char* argv[], char* envp[]) {
     DllBlocklist_Initialize(initFlags);
 #  endif  // HAS_DLL_BLOCKLIST
 
-#  if defined(XP_WIN) && defined(MOZ_SANDBOX)
-    // We need to initialize the sandbox TargetServices before InitXPCOMGlue
-    // because we might need the sandbox broker to give access to some files.
-    if (IsSandboxedProcess() && !sandboxing::GetInitializedTargetServices()) {
-      Output("Failed to initialize the sandbox target services.");
-      return 255;
-    }
-#  endif
 #  if defined(XP_WIN)
     // Ideally, we would be able to set our DPI awareness in
     // firefox.exe.manifest Unfortunately, that would cause Win32k calls when
@@ -454,13 +460,8 @@ int main(int argc, char* argv[], char* envp[]) {
     XREChildData childData;
 
 #  if defined(XP_WIN) && defined(MOZ_SANDBOX)
-    if (IsSandboxedProcess()) {
-      childData.sandboxTargetServices =
-          mozilla::sandboxing::GetInitializedTargetServices();
-      if (!childData.sandboxTargetServices) {
-        return 1;
-      }
-
+    if (sandboxTargetServices) {
+      childData.sandboxTargetServices = sandboxTargetServices;
       childData.setTargetGeckoServices =
           mozilla::sandboxing::SetTargetGeckoServices;
     }
