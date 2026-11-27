@@ -446,4 +446,27 @@ class nsIGlobalObject : public nsISupports {
   RefPtr<mozilla::dom::WebTaskSchedulingState> mWebTaskSchedulingState;
 };
 
+namespace mozilla::dom {
+
+// Sets a global's WebTaskSchedulingState for the guard's lifetime, then
+// restores the state it replaced, unless the global has been torn down or its
+// state changed meanwhile.
+class MOZ_RAII AutoSetWebTaskSchedulingState {
+ public:
+  AutoSetWebTaskSchedulingState(nsIGlobalObject* aGlobal,
+                                WebTaskSchedulingState* aState);
+  ~AutoSetWebTaskSchedulingState();
+
+ private:
+  bool MayRestore() const;
+
+  // Callers keep the global alive.
+  nsIGlobalObject* MOZ_NON_OWNING_REF mGlobal;
+  // Only compared with the global's state, never dereferenced.
+  WebTaskSchedulingState* MOZ_NON_OWNING_REF mSetState;
+  RefPtr<WebTaskSchedulingState> mPreviousState;
+};
+
+}  // namespace mozilla::dom
+
 #endif  // nsIGlobalObject_h_

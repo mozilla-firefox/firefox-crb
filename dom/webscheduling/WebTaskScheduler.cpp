@@ -175,8 +175,9 @@ bool WebTask::Run() {
     return false;
   }
 
-  // 11.2.2 Set event loop’s current scheduling state to state.
-  global->SetWebTaskSchedulingState(mSchedulingState);
+  // 11.2.2 Set event loop’s current scheduling state to state; restoring it
+  // afterwards stands in for 11.2.4 setting it to null.
+  AutoSetWebTaskSchedulingState schedulingState(global, mSchedulingState);
 
   JS::Rooted<JS::Value> returnVal(jsapi.cx());
 
@@ -205,9 +206,6 @@ bool WebTask::Run() {
   } else {
     mPromise->MaybeResolve(returnVal);
   }
-
-  // 11.2.4 Set event loop’s current scheduling state to null.
-  global->SetWebTaskSchedulingState(nullptr);
 
   MOZ_ASSERT(!isInList());
   return true;

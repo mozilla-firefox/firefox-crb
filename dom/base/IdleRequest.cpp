@@ -63,11 +63,10 @@ void IdleRequest::IdleRun(nsPIDOMWindowInner* aWindow,
   // unabortable task signal given "background" and realm.
   newState->SetPrioritySource(
       TaskSignal::Create(aWindow->AsGlobal(), TaskPriority::Background));
-  // Set event loop’s current scheduling state to state.
-  innerWindow->SetWebTaskSchedulingState(newState);
+  // Set event loop’s current scheduling state to state; restoring it
+  // afterwards stands in for setting it to null.
+  AutoSetWebTaskSchedulingState schedulingState(innerWindow, newState);
   callback->Call(*deadline, "requestIdleCallback handler");
-  // Set event loop’s current scheduling state to null.
-  innerWindow->SetWebTaskSchedulingState(nullptr);
 }
 
 }  // namespace mozilla::dom

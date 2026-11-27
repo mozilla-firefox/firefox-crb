@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>The current scheduling state survives callbacks run in a nested event loop</title>
+<script src="/tests/SimpleTest/SimpleTest.js"></script>
+<link rel="stylesheet" href="/tests/SimpleTest/test.css">
+<script>
+"use strict";
+
+// Spins a nested event loop until runInside has set its flag.
+function spinUntil(runInside) {
+  let done = false;
+  runInside(() => (done = true));
+  SpecialPowers.Services.tm.spinEventLoopUntil(
+    "test_scheduling_state_nested_event_loop.html",
+    () => done
+  );
+}
+
+// scheduler.yield() inherits the current scheduling state, so it rejects
+// straight away if that state's abort signal has been aborted.
+function yieldAfterAborting(controller) {
+  controller.abort("outer task aborted");
+  return scheduler.yield().then(
+    () => "resolved",
+    reason => reason
+  );
+}
+
+add_task(async function postTaskInNestedEventLoop() {
+  const controller = new TaskController();
+  let yielded;
+  await scheduler
+    .postTask(
+      () => {
+        spinUntil(done =>
+          scheduler.postTask(done, { priority: "user-blocking" })
+        );
+        yielded = yieldAfterAborting(controller);
+      },
+      { signal: controller.signal }
+    )
+    .catch(() => {});
+  is(
+    await yielded,
+    "outer task aborted",
+    "A postTask callback run in a nested event loop restores the outer task's scheduling state"
+  );
+});
+</script>

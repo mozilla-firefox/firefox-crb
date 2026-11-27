@@ -183,6 +183,30 @@ void nsIGlobalObject::SetWebTaskSchedulingState(
   mWebTaskSchedulingState = aState;
 }
 
+namespace mozilla::dom {
+
+AutoSetWebTaskSchedulingState::AutoSetWebTaskSchedulingState(
+    nsIGlobalObject* aGlobal, WebTaskSchedulingState* aState)
+    : mGlobal(aGlobal),
+      mSetState(aState),
+      mPreviousState(aGlobal->GetWebTaskSchedulingState()) {
+  mGlobal->SetWebTaskSchedulingState(aState);
+}
+
+AutoSetWebTaskSchedulingState::~AutoSetWebTaskSchedulingState() {
+  if (MayRestore()) {
+    mGlobal->SetWebTaskSchedulingState(mPreviousState);
+  }
+}
+
+// A global torn down meanwhile has dropped its state and must not get one back.
+bool AutoSetWebTaskSchedulingState::MayRestore() const {
+  return !mGlobal->IsDying() &&
+         mGlobal->GetWebTaskSchedulingState() == mSetState;
+}
+
+}  // namespace mozilla::dom
+
 void nsIGlobalObject::AddGlobalTeardownObserver(
     GlobalTeardownObserver* aObject) {
   MOZ_DIAGNOSTIC_ASSERT(aObject);
