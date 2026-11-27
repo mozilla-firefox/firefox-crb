@@ -10,6 +10,7 @@
 gbrowser
 opening-tabs
 moving-tabs-between-windows
+tab-groups
 api
 tab-events
 progress-listeners
