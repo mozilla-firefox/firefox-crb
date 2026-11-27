@@ -1812,14 +1812,8 @@ void ContentCacheInParent::MaybeNotifyIME(
   }
 
   switch (aNotification.mMessage) {
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      mPendingSelectionChange.MergeWith(aNotification);
-      break;
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-      mPendingTextChange.MergeWith(aNotification);
-      break;
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      mPendingLayoutChange.MergeWith(aNotification);
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      mPendingContentChange.MergeWith(aNotification);
       break;
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       mPendingCompositionUpdate.MergeWith(aNotification);
@@ -1849,31 +1843,10 @@ void ContentCacheInParent::FlushPendingNotifications(nsIWidget* aWidget) {
 
   nsCOMPtr<nsIWidget> widget = aWidget;
 
-  // First, text change notification should be sent because selection change
-  // notification notifies IME of current selection range in the latest content.
-  // So, IME may need the latest content before that.
-  if (mPendingTextChange.HasNotification()) {
-    IMENotification notification(mPendingTextChange);
+  if (mPendingContentChange.HasNotification()) {
+    IMENotification notification(mPendingContentChange);
     if (!widget->Destroyed()) {
-      mPendingTextChange.Clear();
-      IMEStateManager::NotifyIME(notification, widget, &mBrowserParent);
-    }
-  }
-
-  if (mPendingSelectionChange.HasNotification()) {
-    IMENotification notification(mPendingSelectionChange);
-    if (!widget->Destroyed()) {
-      mPendingSelectionChange.Clear();
-      IMEStateManager::NotifyIME(notification, widget, &mBrowserParent);
-    }
-  }
-
-  // Layout change notification should be notified after selection change
-  // notification because IME may want to query position of new caret position.
-  if (mPendingLayoutChange.HasNotification()) {
-    IMENotification notification(mPendingLayoutChange);
-    if (!widget->Destroyed()) {
-      mPendingLayoutChange.Clear();
+      mPendingContentChange.Clear();
       IMEStateManager::NotifyIME(notification, widget, &mBrowserParent);
     }
   }
@@ -1895,9 +1868,7 @@ void ContentCacheInParent::FlushPendingNotifications(nsIWidget* aWidget) {
   }
 
   if (!PendingEventsNeedingAck() && !widget->Destroyed() &&
-      (mPendingTextChange.HasNotification() ||
-       mPendingSelectionChange.HasNotification() ||
-       mPendingLayoutChange.HasNotification() ||
+      (mPendingContentChange.HasNotification() ||
        mPendingCompositionUpdate.HasNotification())) {
     FlushPendingNotifications(widget);
   }
