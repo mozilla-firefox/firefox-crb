@@ -70,12 +70,44 @@ def _crate_records(topsrcdir, topobjdir, substs, log):
     return shipped, tooling, edges, kinds
 
 
-def _manifest_records(repo, topsrcdir, log):
+def _built_predicate(topsrcdir, topobjdir):
+    """A ``directory -> bool`` telling whether this configuration builds a
+    vendored library, or None where the recursive make backend has not run.
+
+    The backend writes a backend.mk for every directory it traverses. A
+    library whose own moz.build is not traversed although its parent
+    directory is, is built for another platform or configuration only:
+    pipewire on Windows, perfetto off Android. A library without a moz.build,
+    or with a Cargo.toml under it, is kept.
+    """
+    if not os.path.isfile(os.path.join(topobjdir, "backend.mk")):
+        return None
+
+    def traversed(directory):
+        return any(
+            "backend.mk" in files
+            for _, _, files in os.walk(os.path.join(topobjdir, directory))
+        )
+
+    def is_built(directory):
+        source = os.path.join(topsrcdir, directory)
+        return (
+            not os.path.isfile(os.path.join(source, "moz.build"))
+            or traversed(directory)
+            or not traversed(os.path.dirname(directory))
+            or any("Cargo.toml" in files for _, _, files in os.walk(source))
+        )
+
+    return is_built
+
+
+def _manifest_records(repo, topsrcdir, log, is_built=None):
     """The moz.yaml records, split by whether they ship in the product.
 
     Returns (shipped, tooling, errors). The vendored Python packages and the
     test suites, benchmarks and fuzzers build or test the product rather than
-    ship in it.
+    ship in it. A library ``is_built`` says this configuration does not build
+    is in neither list.
     """
     from mozbuild.vendor.sbom import collect_records, is_tooling_path
     from mozbuild.vendor.sbom_python import VENDOR_DIR as PYTHON_VENDOR_DIR
@@ -88,7 +120,10 @@ def _manifest_records(repo, topsrcdir, log):
         if directory.startswith(PYTHON_VENDOR_DIR + "/"):
             # sbom_python describes these, vsdownload's moz.yaml included.
             continue
-        (tooling if is_tooling_path(directory) else shipped).append(record)
+        if is_tooling_path(directory):
+            tooling.append(record)
+        elif not is_built or is_built(directory):
+            shipped.append(record)
     return shipped, tooling, errors
 
 
@@ -286,7 +321,10 @@ def build_document(
 
     # The test suites, benchmarks and vendored Python packages build or test
     # the product rather than ship in it; the build tooling document has them.
-    records, manifest_tooling, errors = _manifest_records(repo, topsrcdir, log)
+    is_built = _built_predicate(topsrcdir, topobjdir)
+    records, manifest_tooling, errors = _manifest_records(
+        repo, topsrcdir, log, is_built
+    )
     if errors and strict:
         raise SbomError(f"{len(errors)} manifest(s) failed to load.")
     log(
