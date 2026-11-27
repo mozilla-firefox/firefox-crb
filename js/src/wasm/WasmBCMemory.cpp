@@ -1483,7 +1483,7 @@ static void Deallocate(BaseCompiler* bc, RegI32 rv, const Temps& temps) {
   bc->maybeFree(temps.t2);
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 using Temps = Nothing;
 
@@ -1699,7 +1699,7 @@ static void Deallocate(BaseCompiler* bc, AtomicOp op, RegI64 rv, RegI64 temp) {
   MOZ_ASSERT(temp.isInvalid());
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 static void PopAndAllocate(BaseCompiler*, AtomicOp, RegI64*, RegI64*, RegI64*) {
 }
@@ -1944,7 +1944,7 @@ static void Deallocate(BaseCompiler* bc, RegI32 rv, const Temps& temps) {
   bc->maybeFree(temps.t2);
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 using Temps = Nothing;
 
@@ -2080,7 +2080,7 @@ static void Deallocate(BaseCompiler* bc, RegI64 rd, RegI64 rv) {
   bc->freeI64(rv);
   bc->maybeFree(rd);
 }
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 static void PopAndAllocate(BaseCompiler*, RegI64*, RegI64*) {}
 static void Deallocate(BaseCompiler*, RegI64, RegI64) {}
@@ -2356,7 +2356,7 @@ static void Deallocate(BaseCompiler* bc, RegI32 rexpect, RegI32 rnew,
   bc->maybeFree(temps.t2);
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 using Temps = Nothing;
 
@@ -2597,7 +2597,7 @@ static void Deallocate(BaseCompiler* bc, RegI64 rexpect, RegI64 rnew) {
   bc->freeI64(rnew);
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 template <typename RegAddressType>
 static void PopAndAllocate(BaseCompiler* bc, RegI64* rexpect, RegI64* rnew,

@@ -2608,7 +2608,7 @@ static void QuotientI64(MacroAssembler& masm, RegI64 rhs, RegI64 srcDest,
     masm.cqo();
     masm.idivq(rhs.reg);
   }
-#  elif !defined(JS_CODEGEN_NONE) && !defined(JS_CODEGEN_WASM32)
+#  elif !defined(JS_CODEGEN_NONE)
   masm.quotient64(srcDest.reg, rhs.reg, srcDest.reg, isUnsigned);
 #  else
   MOZ_CRASH("BaseCompiler platform hook: quotientI64");
@@ -2630,7 +2630,7 @@ static void RemainderI64(MacroAssembler& masm, RegI64 rhs, RegI64 srcDest,
     masm.idivq(rhs.reg);
   }
   masm.movq(rdx, rax);
-#  elif !defined(JS_CODEGEN_NONE) && !defined(JS_CODEGEN_WASM32)
+#  elif !defined(JS_CODEGEN_NONE)
   masm.remainder64(srcDest.reg, rhs.reg, srcDest.reg, isUnsigned);
 #  else
   MOZ_CRASH("BaseCompiler platform hook: remainderI64");

@@ -33,7 +33,6 @@ all_architecture_names = set([
     "arm64",
     "loong64",
     "riscv64",
-    "wasm32",
 ])
 all_shared_architecture_names = set([
     "x86_shared",
@@ -41,7 +40,6 @@ all_shared_architecture_names = set([
     "arm64",
     "loong64",
     "riscv64",
-    "wasm32",
 ])
 
 reBeforeArg = r"(?<=[(,\s])"

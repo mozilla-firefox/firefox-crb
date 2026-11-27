@@ -258,12 +258,6 @@ elif CONFIG["JS_CODEGEN_RISCV64"]:
     ]
     if CONFIG["JS_SIMULATOR_RISCV64"]:
         UNIFIED_SOURCES += ["riscv64/Simulator-riscv64.cpp"]
-elif CONFIG["JS_CODEGEN_WASM32"]:
-    UNIFIED_SOURCES += [
-        "wasm32/CodeGenerator-wasm32.cpp",
-        "wasm32/MacroAssembler-wasm32.cpp",
-        "wasm32/Trampoline-wasm32.cpp",
-    ]
 
 # Generate jit/ABIFunctionTypeGenerated.h from jit/ABIFunctionType.yaml
 GeneratedFile(

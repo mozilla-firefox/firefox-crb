@@ -1461,7 +1461,7 @@ static bool SetGlobalJITOptions() {
   if (const char* str = gOptions.getStringOption("spectre-mitigations")) {
     if (strcmp(str, "on") == 0) {
 #if defined(JS_CODEGEN_RISCV64) || defined(JS_CODEGEN_LOONG64) || \
-    defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_WASM32)
+    defined(JS_CODEGEN_MIPS64)
       // MacroAssembler::spectreZeroRegister and MacroAssembler::spectreMovePtr
       // are not implemented for these targets.
       fprintf(
