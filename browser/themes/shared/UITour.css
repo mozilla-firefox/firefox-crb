@@ -58,6 +58,8 @@
   -moz-window-shadow: none;
 
   --panel-border-color: transparent;
+  /* The highlight container stays see-through in every regime, so the panel paints no background. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides */
   --panel-background-color: transparent;
   /* This is a buffer to compensate for the movement in the "wobble" effect,
      and for the box-shadow of #UITourHighlight. */
