@@ -141,6 +141,7 @@ class InnerConnectionAttempt final : public ConnectionAttempt,
   // Removes aId from the in-flight list and hands its establisher over.
   already_AddRefed<InnerConnectionEstablisher> TakeEndpoint(uint64_t aId);
   nsHttpTransaction* RealTransaction() const;
+  static bool NeedsExtendedCONNECT(nsHttpTransaction* aTrans);
 
   void OnEstablisherDone(
       uint64_t aId, Result<RefPtr<HttpConnectionBase>, nsresult>&& aResult);

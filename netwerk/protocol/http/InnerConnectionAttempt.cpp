@@ -332,6 +332,14 @@ InnerConnectionAttempt::TakeEndpoint(uint64_t aId) {
   return nullptr;
 }
 
+// A WebSocket or WebTransport upgrade rides an extended CONNECT stream when the
+// connection carrying it is HTTP/2.
+/* static */
+bool InnerConnectionAttempt::NeedsExtendedCONNECT(nsHttpTransaction* aTrans) {
+  return aTrans &&
+         (aTrans->IsWebsocketUpgrade() || aTrans->IsForWebTransport());
+}
+
 nsHttpTransaction* InnerConnectionAttempt::RealTransaction() const {
   return mTransaction ? mTransaction->QueryHttpTransaction() : nullptr;
 }
@@ -485,6 +493,16 @@ void InnerConnectionAttempt::Succeeded(ConnectionEntry* aEntry,
   }
 
   RefPtr<nsHttpTransaction> trans = RealTransaction();
+  if (trans && NeedsExtendedCONNECT(trans) && conn->UsingSpdy()) {
+    // On an HTTP/2 connection the upgrade has to become an extended CONNECT
+    // stream, and the entry's own dispatch already handles that, including the
+    // peer's SETTINGS not having arrived and the fallback when it turns out
+    // unsupported. Leaving the transaction pending lets ProcessPendingQForEntry
+    // pick it up once we drop out of the pool below.
+    LOG(("  leaving upgrade trans=%p pending for extended CONNECT",
+         trans.get()));
+    trans = nullptr;
+  }
   bool dispatched = false;
   if (trans) {
     RefPtr<PendingTransactionInfo> pending =
