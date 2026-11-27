@@ -307,14 +307,15 @@ class IPProtectionEngineMiddleware(
     }
 }
 
-private suspend fun IPProtectionHandler.activateAwait(countryCode: String?): Throwable? =
+private suspend fun IPProtectionHandler.activateAwait(countryCode: String?): IPProtectionHandler.RequestError? =
     suspendCancellableCoroutine { continuation ->
         activate(countryCode) { error -> continuation.resume(error) }
     }
 
-private suspend fun IPProtectionHandler.deactivateAwait(): Throwable? = suspendCancellableCoroutine { continuation ->
-    deactivate { error -> continuation.resume(error) }
-}
+private suspend fun IPProtectionHandler.deactivateAwait(): IPProtectionHandler.RequestError? =
+    suspendCancellableCoroutine { continuation ->
+        deactivate { error -> continuation.resume(error) }
+    }
 
 private fun ServiceState.isUnavailableOrUnauthenticated() =
     this == ServiceState.Unavailable || this == ServiceState.Unauthenticated

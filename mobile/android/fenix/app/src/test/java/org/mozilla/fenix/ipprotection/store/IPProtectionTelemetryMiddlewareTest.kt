@@ -10,6 +10,7 @@ import kotlin.reflect.KClass
 import kotlin.test.assertNotNull
 import mozilla.components.ExperimentalAndroidComponentsApi
 import mozilla.components.concept.engine.ipprotection.CurrentAuthProvider
+import mozilla.components.concept.engine.ipprotection.IPProtectionHandler
 import mozilla.components.concept.engine.ipprotection.ServiceState
 import mozilla.components.feature.ipprotection.store.ActivationOperation
 import mozilla.components.feature.ipprotection.store.CachedLocationStatus
@@ -110,7 +111,10 @@ class IPProtectionTelemetryMiddlewareTest {
 
         store.dispatch(IPProtectionAction.ActivationAction.ToggleFailed(ActivationOperation.Activate))
         store.dispatch(
-            IPProtectionAction.ActivationAction.ToggleFailed(ActivationOperation.Activate, RuntimeException("boom"))
+            IPProtectionAction.ActivationAction.ToggleFailed(
+                ActivationOperation.Activate,
+                IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("boom")),
+            )
         )
 
         val events = Vpn.errorEncountered.testGetValue()
@@ -126,7 +130,11 @@ class IPProtectionTelemetryMiddlewareTest {
         val store = createStore(initialStatus = AccountStatus.EnrolledAndEntitled)
 
         store.dispatch(IPProtectionAction.LocationAction.LocationSwitchFailed())
-        store.dispatch(IPProtectionAction.LocationAction.LocationSwitchFailed(RuntimeException("It's a null-pointer!")))
+        store.dispatch(
+            IPProtectionAction.LocationAction.LocationSwitchFailed(
+                IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("It's a null-pointer!"))
+            )
+        )
 
         val events = Vpn.locationSwitchError.testGetValue()
         assertNotNull(events)
@@ -140,7 +148,11 @@ class IPProtectionTelemetryMiddlewareTest {
 
         val store = createStore(initialStatus = AccountStatus.EnrolledAndEntitled)
 
-        store.dispatch(IPProtectionAction.LocationAction.LocationUpdateFailed(RuntimeException("generic-error")))
+        store.dispatch(
+            IPProtectionAction.LocationAction.LocationUpdateFailed(
+                IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("generic-error"))
+            )
+        )
 
         val events = Vpn.locationUpdateError.testGetValue()
         assertNotNull(events)
@@ -312,7 +324,11 @@ class IPProtectionTelemetryMiddlewareTest {
             val store = createStore(currentAuthProvider = authProvider)
             store.dispatch(IPProtectionAction.ActivationAction.ToggleFailed(ActivationOperation.Activate))
             store.dispatch(IPProtectionAction.LocationAction.LocationSwitchFailed())
-            store.dispatch(IPProtectionAction.LocationAction.LocationUpdateFailed(RuntimeException("generic-error")))
+            store.dispatch(
+                IPProtectionAction.LocationAction.LocationUpdateFailed(
+                    IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("generic-error"))
+                )
+            )
         }
 
         listOf(Vpn.errorEncountered, Vpn.locationSwitchError, Vpn.locationUpdateError).forEach { metric ->
