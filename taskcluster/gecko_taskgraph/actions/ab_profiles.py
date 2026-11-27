@@ -134,24 +134,6 @@ def require_trust_level(task_id, parameters, graph_config):
         )
 
 
-def require_completed(task_id, description):
-    try:
-        status = status_task(task_id)
-    except TaskclusterRestFailure as e:
-        raise Exception(
-            f"Could not find the {description} build task {task_id}."
-        ) from e
-    if not status:
-        # `mach taskgraph test-action-callback` doesn't talk to the queue.
-        return
-    state = status.get("state")
-    if state != "completed":
-        raise Exception(
-            f"The {description} build ({task_id}) is {state}, not completed. "
-            "This action needs both builds to be finished before it can run."
-        )
-
-
 def require_artifacts(task_id, description, artifacts):
     """Check now that the build's artifacts still exist.
 
@@ -168,10 +150,49 @@ def require_artifacts(task_id, description, artifacts):
         )
 
 
+def require_usable_build(task_id, description):
+    """Refuse a build that has failed, and return its state.
+
+    A build that is still pending or running is fine: the AB task depends on
+    it and only starts once it completes.
+    """
+    try:
+        status = status_task(task_id)
+    except TaskclusterRestFailure as e:
+        raise Exception(
+            f"Could not find the {description} build task {task_id}."
+        ) from e
+    if not status:
+        # `mach taskgraph test-action-callback` doesn't talk to the queue.
+        return None
+    state = status.get("state")
+    if state in ("failed", "exception"):
+        raise Exception(
+            f"The {description} build ({task_id}) is {state}. Rerun it, then "
+            "trigger this action again."
+        )
+    return state
+
+
+def check_base_build(task_id, artifacts, parameters, graph_config):
+    """Refuse a base build that the AB task could never use."""
+    state = require_usable_build(task_id, "base")
+    require_trust_level(task_id, parameters, graph_config)
+    if state == "completed":
+        require_artifacts(task_id, "base", artifacts)
+
+
 def ab_profiles_modifier(task, input):
     """Turn a profiling task into a two-run task."""
     if task.label != input["label"]:
         return task
+
+    # The base build belongs to another push, so the task graph cannot express
+    # this dependency. The optimizer adds the in-graph dependencies to this list
+    # rather than replacing it. When a build is compared against itself, the
+    # in-graph dependency already covers it, and the queue rejects duplicates.
+    if input["base_build_task_id"] != input["new_build_task_id"]:
+        task.task.setdefault("dependencies", []).append(input["base_build_task_id"])
 
     payload = task.task["payload"]
     payload["env"]["RAPTOR_AB_CONFIG"] = json.dumps(input["config"])
@@ -215,9 +236,11 @@ def ab_profiles_modifier(task, input):
     description=(
         "Run this Speedometer profiling task for two Firefox builds in one "
         "task on the same machine, so that machine differences affect the "
-        "comparison less. Both builds must exist and be finished. The base "
-        "build must come from a tree with the same or a higher trust level, so "
-        "try can compare against autoland but not the other way around."
+        "comparison less. The builds don't have to be finished: the task "
+        "waits for both. The base push's decision task has to be finished, "
+        "though. The base build must come from a tree with the same or a "
+        "higher trust level, so try can compare against autoland but not the "
+        "other way around."
     ),
     order=210,
     context=[{"test-type": "raptor"}],
@@ -298,13 +321,14 @@ def ab_profiles_action(parameters, graph_config, input, task_group_id, task_id):
             f"This push has no {build_label} task. The Firefox build must "
             "exist before this action runs."
         )
-    require_completed(label_to_taskid[build_label], "new")
+    require_usable_build(label_to_taskid[build_label], "new")
 
     base_build_task_id = resolve_base_build(input, graph_config, build_label)
-    require_completed(base_build_task_id, "base")
-    require_trust_level(base_build_task_id, parameters, graph_config)
-    require_artifacts(
-        base_build_task_id, "base", [installer_artifact, symbols_artifact]
+    check_base_build(
+        base_build_task_id,
+        [installer_artifact, symbols_artifact],
+        parameters,
+        graph_config,
     )
     if input["base_build_task_id"]:
         base_description = f"task {base_build_task_id}"
@@ -323,6 +347,8 @@ def ab_profiles_action(parameters, graph_config, input, task_group_id, task_id):
 
     input_for_action = dict(
         label=label,
+        base_build_task_id=base_build_task_id,
+        new_build_task_id=label_to_taskid[build_label],
         config={
             "order": input["order"].split(","),
             "runs": {"base": base_run, "new": new_run},
