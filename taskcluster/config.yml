@@ -296,6 +296,7 @@ treeherder:
         'concept-fetch': 'concept-fetch'
         'concept-file-importer': 'concept-file-importer'
         'concept-file-parser': 'concept-file-parser'
+        'concept-firefox-accounts': 'concept-firefox-accounts'
         'concept-llm': 'concept-llm'
         'concept-menu': 'concept-menu'
         'concept-push': 'concept-push'
