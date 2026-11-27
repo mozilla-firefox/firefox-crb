@@ -291,16 +291,13 @@ export const BrowserWindowTracker = {
       deferred,
     });
 
-    // Prevent leaks in case the window closes before we track it as an open
-    // window.
+    // Settle the promise and prevent leaks in case the window closes before
+    // delayed startup finishes.
     const topic = "browsing-context-discarded";
     const observer = aSubject => {
       if (window.browsingContext == aSubject) {
-        let pending = this.pendingWindows.get(window);
-        if (pending) {
-          this.pendingWindows.delete(window);
-          pending.deferred.resolve(window);
-        }
+        this.pendingWindows.delete(window);
+        deferred.resolve(window);
         Services.obs.removeObserver(observer, topic);
       }
     };

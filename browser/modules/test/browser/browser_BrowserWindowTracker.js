@@ -232,3 +232,33 @@ add_task(async function test_pendingWindows() {
 
   await BrowserTestUtils.closeWindow(foundWin);
 });
+
+add_task(async function test_pendingWindowClosedBeforeDelayedStartup() {
+  let win = BrowserWindowTracker.openWindow();
+  let pending = BrowserWindowTracker.getPendingWindow();
+  Assert.ok(pending, "Should be a pending window now.");
+
+  await BrowserTestUtils.waitForEvent(win, "load");
+  Assert.ok(
+    !BrowserWindowTracker.pendingWindows.has(win),
+    "The window should be tracked by now"
+  );
+  Assert.ok(
+    !win.gBrowserInit.delayedStartupFinished,
+    "Delayed startup should not have finished yet"
+  );
+
+  let closed = BrowserTestUtils.windowClosed(win);
+  win.close();
+
+  Assert.equal(
+    await pending,
+    win,
+    "The pending promise should resolve with the closed window"
+  );
+  Assert.ok(
+    !BrowserWindowTracker.getPendingWindow(),
+    "Should be no pending window now."
+  );
+  await closed;
+});

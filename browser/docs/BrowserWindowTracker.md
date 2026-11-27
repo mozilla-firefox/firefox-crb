@@ -117,11 +117,9 @@ if (!win) {
 }
 ```
 
-A window that closes before `DOMContentLoaded` resolves the promise with the
-closed window, so check `win.closed`. One that closes after `DOMContentLoaded`
-but before delayed startup finishes leaves the promise unsettled. A window
-opened some other way is pending only if its opener passed it to
-`registerOpeningWindow()`.
+A window that closes before it finishes delayed startup resolves the promise
+with the closed window, so check `win.closed`. A window opened some other way
+is pending only if its opener passed it to `registerOpeningWindow()`.
 
 The two calls leave a window in between: from `DOMContentLoaded` until delayed
 startup finishes, `getTopWindow()` returns a window whose tabs have not started
