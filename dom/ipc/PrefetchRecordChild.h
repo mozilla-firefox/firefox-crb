@@ -35,6 +35,11 @@ class PrefetchRecordChild final : public PPrefetchRecordChild {
   // TODO: wire to SpeculationRulesManager::RemoveRecord.
   void ActorDestroy(ActorDestroyReason aReason) override;
 
+  // Warns in the document's console that the prefetch was canceled for going
+  // over a size limit.
+  mozilla::ipc::IPCResult RecvReportSizeLimitExceeded(
+      const bool& aDocumentTotal, const uint32_t& aLimit);
+
  private:
   ~PrefetchRecordChild() = default;
 

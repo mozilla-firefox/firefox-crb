@@ -2606,8 +2606,9 @@ void WindowGlobalParent::AdmitPrefetchRecord(PrefetchRecordParent* aRec) {
   //     at once. Over it, the record waits in a queue, and isn't rejected.
   //  2. The budgets: how many records this document can hold in total, in
   //     flight or completed and not expired, per bucket (immediate or
-  //     non-immediate). TryStartPrefetch checks them when the record is about
-  //     to start, so a queued record is checked when it leaves the queue.
+  //     non-immediate), and how many response bytes its prefetches can receive
+  //     over its lifetime. TryStartPrefetch checks them when the record is
+  //     about to start, so a queued record is checked when it leaves the queue.
   if (InFlightPrefetchCount() >=
       StaticPrefs::
           dom_speculation_rules_max_inflight_prefetches_per_document()) {
@@ -2666,7 +2667,25 @@ void WindowGlobalParent::RemoveQueuedPrefetch(PrefetchRecordParent* aRec) {
   mQueuedImmediatePrefetches.RemoveElement(aRec);
 }
 
+void WindowGlobalParent::AddPrefetchBytesReceived(uint32_t aCount) {
+  mPrefetchBytesReceived += aCount;
+}
+
+bool WindowGlobalParent::PrefetchBytesBudgetExceeded() const {
+  return mPrefetchBytesReceived >
+         StaticPrefs::dom_speculation_rules_max_total_bytes_per_document();
+}
+
 void WindowGlobalParent::TryStartPrefetch(PrefetchRecordParent* aRec) {
+  if (PrefetchBytesBudgetExceeded()) {
+    LOG_SPECRULES(
+        ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p rejected, "
+         "total bytes budget used up (%" PRIu64 ")",
+         this, aRec, mPrefetchBytesReceived));
+    aRec->MarkCanceled();
+    return;
+  }
+
   // Immediate and non-immediate records have separate budgets. A record
   // counts against its budget while its fetch is in flight, and once
   // completed until it expires.

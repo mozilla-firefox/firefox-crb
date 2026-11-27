@@ -9,9 +9,47 @@
 #include "mozilla/dom/PrefetchLog.h"
 #include "mozilla/dom/SpeculationRulesManager.h"
 #include "mozilla/dom/WindowGlobalChild.h"
+#include "mozilla/intl/FormatBuffer.h"
+#include "mozilla/intl/LocaleService.h"
+#include "mozilla/intl/NumberFormat.h"
+#include "nsContentUtils.h"
 #include "nsGlobalWindowInner.h"
+#include "nsIScriptError.h"
 
 namespace mozilla::dom {
+
+// Formats a byte count as a localized size with its unit, e.g. "5 MB".
+static nsAutoString FormatSize(uint32_t aBytes) {
+  std::string_view unit = "byte";
+  double value = aBytes;
+  if (aBytes >= 1024 * 1024) {
+    unit = "megabyte";
+    value = aBytes / (1024.0 * 1024.0);
+  } else if (aBytes >= 1024) {
+    unit = "kilobyte";
+    value = aBytes / 1024.0;
+  }
+
+  intl::NumberFormatOptions options;
+  options.mStyle = intl::NumberFormatOptions::Style::Unit;
+  options.mUnit =
+      Some(std::make_pair(unit, intl::NumberFormatOptions::UnitDisplay::Short));
+  options.mFractionDigits = Some(std::make_pair(0, 1));
+
+  nsAutoCString locale;
+  intl::LocaleService::GetInstance()->GetAppLocaleAsBCP47(locale);
+  nsAutoString result;
+  auto formatter = intl::NumberFormat::TryCreate(locale, options);
+  if (formatter.isOk()) {
+    intl::nsTStringToBufferAdapter adapter(result);
+    if (formatter.unwrap()->format(value, adapter).isOk()) {
+      return result;
+    }
+  }
+  result.Truncate();
+  result.AppendInt(aBytes);
+  return result;
+}
 
 PrefetchRecordChild::PrefetchRecordChild(nsIURI* aURL,
                                          PrefetchAnonymizationPolicy aPolicy)
@@ -47,6 +85,32 @@ void PrefetchRecordChild::ActorDestroy(ActorDestroyReason aReason) {
     return;
   }
   srm->RemoveRecord(this);
+}
+
+mozilla::ipc::IPCResult PrefetchRecordChild::RecvReportSizeLimitExceeded(
+    const bool& aDocumentTotal, const uint32_t& aLimit) {
+  WindowGlobalChild* wgc = static_cast<WindowGlobalChild*>(Manager());
+  if (!wgc || !mURL) {
+    return IPC_OK();
+  }
+  nsGlobalWindowInner* window = wgc->GetWindowGlobal();
+  if (!window) {
+    return IPC_OK();
+  }
+  Document* doc = window->GetExtantDoc();
+  if (!doc) {
+    return IPC_OK();
+  }
+
+  AutoTArray<nsString, 2> params = {
+      NS_ConvertUTF8toUTF16(mURL->GetSpecOrDefault()), FormatSize(aLimit)};
+  nsContentUtils::ReportToConsole(
+      nsIScriptError::warningFlag, "Speculation Rules"_ns, doc,
+      PropertiesFile::DOM_PROPERTIES,
+      aDocumentTotal ? "SpeculationRulesPrefetchDocumentBytesExceeded"
+                     : "SpeculationRulesPrefetchBodyTooLarge",
+      params);
+  return IPC_OK();
 }
 
 }  // namespace mozilla::dom

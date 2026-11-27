@@ -5106,6 +5106,16 @@
   value: 5242880
   mirror: always
 
+# Maximum response body bytes a document's prefetches can receive in total over
+# the document's lifetime, counting records that were later used, evicted,
+# expired or canceled. The fetch that goes over it is cancelled with
+# NS_ERROR_FILE_TOO_BIG, and no further prefetch is started for the document.
+# Enforced in WindowGlobalParent.
+- name: dom.speculation_rules.max_total_bytes_per_document
+  type: RelaxedAtomicUint32
+  value: 20971520
+  mirror: always
+
 # Time-to-live (ms) for a completed prefetch record, measured from the
 # moment the response is fully received. Implements the 5-minute expiry
 # from the "complete a prefetch record" algorithm:
