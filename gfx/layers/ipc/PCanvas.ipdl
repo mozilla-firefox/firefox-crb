@@ -75,8 +75,9 @@ parent:
 child:
   /**
    * Notify that the canvas device used by the translator has been reset.
+   * aRestore says whether the canvases can be restored right away.
    */
-  async NotifyDeviceReset(RemoteTextureOwnerId[] aOwners);
+  async NotifyDeviceReset(RemoteTextureOwnerId[] aOwners, bool aRestore);
 
   /**
    * Deactivate remote canvas, which will cause fall back to software.
