@@ -45,7 +45,12 @@ from rich.live import Live
 from rich.text import Text
 
 from ..backend import get_backend_class
-from ..base import MozbuildObject, split_job_flags
+from ..base import (
+    MozbuildObject,
+    build_environment,
+    mozconfig_exports,
+    split_job_flags,
+)
 from ..compilation.warnings import (
     RE_STRIP_COLORS,
     WarningsCollector,
@@ -57,7 +62,6 @@ from ..telemetry import get_cpu_brand
 from ..testing import install_test_files
 from ..util import (
     FileAvoidWrite,
-    compiler_cache_env,
     construct_log_filename,
     is_running_under_coding_agent,
     resolve_target_to_make,
@@ -1564,6 +1568,10 @@ class BuildDriver(MozbuildObject):
             write_buildid(self.topobjdir, substs, os.environ, what)
             write_source_repo(self.topobjdir, self.topsrcdir, substs)
 
+            append_env = build_environment(
+                self.mozconfig["make_extra"], substs, append_env
+            )
+
             jobs = self.resolve_num_jobs(jobs, job_size)
 
             backend_cls = get_backend_class(active_backend)
@@ -1666,12 +1674,6 @@ class BuildDriver(MozbuildObject):
             elif status is None:
                 # If the backend doesn't specify a build() method, then just
                 # call client.mk directly.
-                # In automation, client.mk starts the sccache daemon, which
-                # only reads its configuration from the environment when it
-                # starts, so it needs the sccache variables in its environment.
-                # config.mk covers the sub-makes.
-                client_mk_env = dict(append_env or {})
-                client_mk_env.update(compiler_cache_env(config.substs))
                 with jobserver(jobs, substs["GMAKE"]) as makeflags:
                     status = self._run_client_mk(
                         line_handler=output.on_stdout_line,
@@ -1680,7 +1682,7 @@ class BuildDriver(MozbuildObject):
                         job_size=job_size,
                         verbose=verbose,
                         keep_going=keep_going,
-                        append_env={**client_mk_env, "MAKEFLAGS": makeflags},
+                        append_env={**(append_env or {}), "MAKEFLAGS": makeflags},
                     )
 
             self.log(
@@ -1953,12 +1955,9 @@ class BuildDriver(MozbuildObject):
         # Back when client.mk was used, `mk_add_options "export ..."` lines
         # from the mozconfig would spill into the configure environment, so
         # add that for backwards compatibility.
+        append_env.update(mozconfig_exports(self.mozconfig["make_extra"]))
         for line in self.mozconfig["make_extra"] or []:
-            if line.startswith("export "):
-                k, eq, v = line[len("export ") :].partition("=")
-                if eq == "=":
-                    append_env[k] = v
-            elif line.startswith("MOZBUILD_MANAGE_SCCACHE_DAEMON="):
+            if line.startswith("MOZBUILD_MANAGE_SCCACHE_DAEMON="):
                 sccache = line.partition("=")[2]
 
         build_site = CommandSiteManager.from_environment(
