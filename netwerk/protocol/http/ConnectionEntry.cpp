@@ -83,8 +83,8 @@ void ConnectionEntry::RemoveConnectionAttempt(ConnectionAttempt* sock,
   mConnectionAttemptPool->RemoveConnectionAttempt(sock, abandon);
 }
 
-void ConnectionEntry::CloseAllConnectionAttempts() {
-  mConnectionAttemptPool->CloseAllConnectionAttempts();
+void ConnectionEntry::CloseAllConnectionAttempts(HttpConnectionBase* aExcept) {
+  mConnectionAttemptPool->CloseAllConnectionAttempts(aExcept);
 }
 
 void ConnectionEntry::DisallowHttp2() {
@@ -645,7 +645,9 @@ void ConnectionEntry::MakeAllDontReuseExcept(HttpConnectionBase* conn) {
   // Skip for fallback entries: their DnsAndConnectSockets are for
   // FallbackTransactions whose real transactions are in the H3 entry.
   if (!mConnInfo->GetFallbackConnection()) {
-    CloseAllConnectionAttempts();
+    // Spare the attempt that produced conn; cancelling it would close the
+    // very connection this call is making room for.
+    CloseAllConnectionAttempts(conn);
   }
 }
 

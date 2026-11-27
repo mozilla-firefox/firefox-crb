@@ -15,6 +15,7 @@ namespace mozilla {
 namespace net {
 
 class ConnectionEntry;
+class HttpConnectionBase;
 
 class ConnectionAttemptPool final {
  public:
@@ -28,7 +29,7 @@ class ConnectionAttemptPool final {
       PendingTransactionInfo* pendingTransInfo, bool retryWithoutTRR = false);
   size_t Length() const { return mAttempts.Length(); }
   void RemoveConnectionAttempt(ConnectionAttempt* attempt, bool abandon);
-  void CloseAllConnectionAttempts();
+  void CloseAllConnectionAttempts(HttpConnectionBase* aExcept = nullptr);
   // calculate the number of half open sockets that have not had at least 1
   // connection complete
   uint32_t UnconnectedConnectionAttempts() const;
