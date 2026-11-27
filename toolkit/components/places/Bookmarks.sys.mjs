@@ -318,14 +318,6 @@ export var Bookmarks = Object.freeze({
         throw new Error("parentGuid must be a folder");
       }
 
-      // Set index in the appending case.
-      if (
-        insertInfo.index == this.DEFAULT_INDEX ||
-        insertInfo.index > parent._childCount
-      ) {
-        insertInfo.index = parent._childCount;
-      }
-
       let item = await insertBookmark(insertInfo, parent);
       let itemDetailMap = await getBookmarkDetailMap([item.guid]);
       let itemDetail = itemDetailMap.get(item.guid);
@@ -2201,6 +2193,17 @@ function insertBookmark(item, parent) {
           // Ensure a page exists in moz_places for this URL.
           // The IGNORE conflict can trigger on `guid`.
           await lazy.PlacesUtils.maybeInsertPlace(db, item.url);
+        }
+
+        // Count the children within the transaction, so that concurrent
+        // inserts appending to the same folder each get the next index.
+        let [row] = await db.executeCached(
+          `SELECT count(*) AS count FROM moz_bookmarks WHERE parent = :parent`,
+          { parent: parent._id }
+        );
+        let childCount = row.getResultByName("count");
+        if (item.index == Bookmarks.DEFAULT_INDEX || item.index > childCount) {
+          item.index = childCount;
         }
 
         // Adjust indices.

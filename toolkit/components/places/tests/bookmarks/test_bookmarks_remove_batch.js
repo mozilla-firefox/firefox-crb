@@ -89,7 +89,8 @@ add_task(async function test_remove_folder_with_bookmarks() {
 
   info("Check whether all bookmark-removed events called at at once or not");
   const eventsForBookmarks = notifiedEvents[0];
-  assertBookmarkRemovedEvents(eventsForBookmarks, bookmarks);
+  // Children are notified from the last position to the first.
+  assertBookmarkRemovedEvents(eventsForBookmarks, bookmarks.toReversed());
 
   info("Check whether a bookmark-removed event called for the folder");
   const eventsForFolder = notifiedEvents[1];
