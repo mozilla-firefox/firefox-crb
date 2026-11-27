@@ -81,6 +81,13 @@ class QuotaManagerDependencyFixture : public testing::Test {
   static Maybe<OriginStateMetadata> LoadDirectoryMetadataHeader(
       const OriginMetadata& aOriginMetadata);
 
+  static Maybe<OriginStateMetadata> LoadOriginStateMetadataFromDB(
+      const OriginMetadata& aOriginMetadata);
+
+  // Sets the dirty flag of the origin's row in the storage database, as if
+  // the last session had ended before the origin was flushed.
+  static void MarkOriginRowDirtyInDB(const OriginMetadata& aOriginMetadata);
+
   static uint64_t TotalDirectoryIterations();
 
   static uint64_t SaveOriginAccessTimeCount();

@@ -4464,9 +4464,8 @@
 
 # Should we try to load origin information from the secondary cache?
 #
-# When enabled, quota information may be initialized from metadata files
-# instead of scanning origin directories, if the cached data is considered
-# valid.
+# When enabled, a repository scan initializes an origin from its clean row in
+# the storage database instead of scanning its directory.
 #
 # For the L2 quota info cache to work effectively, the following pref must also
 # be enabled:

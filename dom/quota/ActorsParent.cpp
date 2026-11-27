@@ -911,6 +911,9 @@ namespace {
 
 }  // namespace
 
+Result<Ok, nsresult> UpdateFullOriginMetadataPrincipalProperties(
+    QuotaManager& aQuotaManager, FullOriginMetadata& aFullOriginMetadata);
+
 namespace {
 
 class CollectOriginsHelper final : public Runnable {
@@ -978,7 +981,9 @@ class RecordTimeDeltaHelper final : public Runnable {
  * Helper Functions
  ******************************************************************************/
 
+#ifdef DEBUG
 // Return whether the group was actually updated.
+// Debug-only postcondition check, can be removed (bug 2086486).
 Result<bool, nsresult> MaybeUpdateGroupForOrigin(
     OriginMetadata& aOriginMetadata) {
   MOZ_ASSERT(!NS_IsMainThread());
@@ -1009,37 +1014,7 @@ Result<bool, nsresult> MaybeUpdateGroupForOrigin(
 
   return updated;
 }
-
-Result<bool, nsresult> MaybeUpdateLastAccessTimeForOrigin(
-    FullOriginMetadata& aFullOriginMetadata) {
-  GECKO_TRACE_SCOPE("dom::quota", "MaybeUpdateLastAccessTimeForOrigin");
-
-  MOZ_ASSERT(!NS_IsMainThread());
-
-  if (aFullOriginMetadata.mLastAccessTime == INT64_MIN) {
-    QuotaManager* quotaManager = QuotaManager::Get();
-    MOZ_ASSERT(quotaManager);
-
-    QM_TRY_INSPECT(const auto& metadataFile,
-                   quotaManager->GetOriginDirectory(aFullOriginMetadata));
-
-    QM_TRY(MOZ_TO_RESULT(
-        metadataFile->Append(nsLiteralString(METADATA_V2_FILE_NAME))));
-
-    QM_TRY_UNWRAP(int64_t timestamp, MOZ_TO_RESULT_INVOKE_MEMBER(
-                                         metadataFile, GetLastModifiedTime));
-
-    // Need to convert from milliseconds to microseconds.
-    MOZ_ASSERT((INT64_MAX / PR_USEC_PER_MSEC) > timestamp);
-    timestamp *= int64_t(PR_USEC_PER_MSEC);
-
-    aFullOriginMetadata.mLastAccessTime = timestamp;
-
-    return true;
-  }
-
-  return false;
-}
+#endif
 
 }  // namespace
 
@@ -1514,8 +1489,18 @@ Result<int64_t, nsresult> GetTemporaryStorageLimit(nsIFile& aStorageDir) {
   return capacityLimit;
 }
 
+// INT64_MIN was written by an old GetLastModifiedTime bug for origins without
+// files and may still be present in storage database rows.
+bool HasValidLastAccessTime(const FullOriginMetadata& aFullOriginMetadata) {
+  return aFullOriginMetadata.mLastAccessTime != INT64_MIN;
+}
+
 bool IsOriginUnaccessed(const FullOriginMetadata& aFullOriginMetadata,
                         const int64_t aRecentTime) {
+  if (!HasValidLastAccessTime(aFullOriginMetadata)) {
+    return false;
+  }
+
   if (aFullOriginMetadata.mLastAccessTime > aRecentTime) {
     return false;
   }
@@ -2810,17 +2795,17 @@ void QuotaManager::InitQuotaForOrigin(
   bool cacheRowMatches = false;
 
   // Usages are accumulated as a sum, so a scan has to replace them wholesale.
-  // Timestamps accumulate as a maximum instead: a scan can only derive
-  // timestamps from file modification times, so an existing row that knows
-  // about a more recent value wins.
+  // A clean database row is the source of truth for timestamps; a scan can
+  // only derive them from file modification times, which are an
+  // approximation. A dirty or missing row is out of date, so the
+  // disk-derived value is the best available.
   FullOriginMetadata fullOriginMetadata = aFullOriginMetadata.Clone();
 
   if (aCacheMap.IsActive()) {
     Maybe<FullOriginMetadata> cachedMetadata = aCacheMap.Extract(
         fullOriginMetadata.mPersistenceType, fullOriginMetadata.mOrigin);
     if (cachedMetadata.isSome()) {
-      if (cachedMetadata->mLastAccessTime >
-          fullOriginMetadata.mLastAccessTime) {
+      if (!cachedMetadata->mDirty && HasValidLastAccessTime(*cachedMetadata)) {
         fullOriginMetadata.mLastAccessTime = cachedMetadata->mLastAccessTime;
       }
 
@@ -2859,44 +2844,35 @@ void QuotaManager::InitQuotaForOrigin(
   MOZ_ASSERT_IF(aFullOriginMetadata.mIsPrivate, !cacheRowMatches);
   originInfo->mCacheRowStale = needsCacheRow;
 
-  // A full directory scan is always performed before InitQuotaForOrigin
-  // receives a dirty origin. The two paths are:
+  // Decide whether the storage database row for this origin needs to be
+  // written. The metadata arrives here from one of three places:
   //
-  // 1. Database cache dirty origins: RestoreAndInitializeOrigin ->
-  //    ResolveRepositoryEntry -> InitializeOriginDirectory ->
-  //    InitializeOrigin (full scan via CollectEachFile).
-  // 2. On-disk .metadata-v2 dirty origins: same InitializeOriginDirectory ->
-  //    InitializeOrigin path.
+  // 1. LoadQuotaFromCache, for a clean row. The caller passes an active
+  //    reconciliation map holding that row, so cacheRowMatches is true and
+  //    nothing is enqueued.
+  // 2. InitializeOrigin, after a full directory scan. This is reached from
+  //    the InitializeRepository scan and from RestoreAndInitializeOrigin for
+  //    rows that LoadQuotaFromCache found dirty or without a valid access
+  //    time. The scan recomputed usage and possibly the access time, so the
+  //    metadata reflects the on-disk state. It is marked dirty when it
+  //    differs from what the caller started with, and with an inactive map
+  //    every scanned origin is enqueued, which also populates a fresh
+  //    database. During the InitializeRepository scan, InitializeOrigin
+  //    skips the directory walk for an origin whose row in the map is clean
+  //    and passes the row's values here instead, so the row matches and
+  //    nothing is enqueued.
+  // 3. EnsureTemporaryOriginIsInitializedInternal and the failed-origin
+  //    handling in LoadQuota, for an origin without a directory. Nothing is
+  //    enqueued because there is no on-disk state to record yet.
   //
-  // This is guaranteed because the secondary-cache shortcut in
-  // InitializeOriginDirectory requires !mAccessed, but mDirty can only be
-  // true when mAccessed is true. Dirty origins fall through to
-  // InitializeOrigin.
+  // mDirty is only ever set inside InitializeOrigin, and LoadQuotaFromCache
+  // never passes a dirty row here directly, so a dirty metadata always
+  // carries freshly scanned usage.
   //
-  // So the usage data in fullOriginMetadata reflects the actual on-disk
-  // state. Enqueuing here ensures the corrected metadata is flushed back.
-  //
-  // We set mMetadataDirty directly because the OriginInfo is not yet
-  // registered in GroupInfo, so DirtyTrackingAutoLock cannot look it up. Set
-  // mLastModifiedTime here as well to match OriginInfo::MakeDirty; otherwise,
-  // FlushDirtyOriginInfos subtracts a null TimeStamp from now.
-  //
-  // Enqueue for storage-database flush when the existing row is stale or
-  // missing.
-  //
-  // Outside a full scan, dirty origins are enqueued so corrected metadata
-  // is flushed back.  When the storage database is fresh (no origin
-  // rows, inactive reconciliation map), every origin with a directory
-  // is enqueued to populate it for the first time.
-  //
-  // During a full scan nothing is enqueued: PopulateCacheAfterScan writes
-  // every stale row right after the scan, with the usage the scan just
-  // computed. Queueing would only hold the row back until the flush
-  // quiescence threshold passes.
-  //
-  // Origins loaded directly from the storage database are already
-  // correct.  Callers pass an active reconciliation map for these, so
-  // cacheRowMatches is true and no enqueue happens.
+  // mMetadataDirty is set directly because the OriginInfo is not yet
+  // registered in GroupInfo, so DirtyTrackingAutoLock cannot look it up.
+  // mLastModifiedTime is set as well to match OriginInfo::MakeDirty;
+  // otherwise, FlushDirtyOriginInfos subtracts a null TimeStamp from now.
   if (needsCacheRow && !mFullScanInProgress &&
       (fullOriginMetadata.mDirty || !aCacheMap.IsActive()) &&
       aDirectoryExists && !mUsageModificationDisabled.load()) {
@@ -3101,16 +3077,34 @@ nsresult QuotaManager::LoadQuota() {
 
   auto RestoreAndInitializeOrigin =
       [this, &MaybeCollectUnaccessedOrigin](
-          const FullOriginMetadata& aFullOriginMetadata,
-          nsTArray<RenameAndInitInfo>& aRenameAndInitInfos)
+          const FullOriginMetadata& aFullOriginMetadata)
       -> Result<Ok, nsresult> {
+    // The row supplies the metadata; only usage is recomputed from disk.
+    // TODO: Directories of uninstalled extensions can be left behind and are
+    // rescanned here as ordinary origins. A policy lookup can't tell them
+    // apart from disabled extensions, so the check needs
+    // AddonManager.getAddonByID on the main thread.
     QM_TRY_INSPECT(const auto& originDirectory,
                    GetOriginDirectory(aFullOriginMetadata));
 
-    QM_TRY(MOZ_TO_RESULT(ResolveRepositoryEntry(
-        originDirectory, aFullOriginMetadata.mPersistenceType,
-        aRenameAndInitInfos, MaybeCollectUnaccessedOrigin,
-        OriginCacheMap::Inactive())));
+    QM_TRY_INSPECT(const bool& exists,
+                   MOZ_TO_RESULT_INVOKE_MEMBER(originDirectory, Exists));
+    if (!exists) {
+      return Err(NS_ERROR_FILE_NOT_FOUND);
+    }
+
+    if (IsBestEffortPersistenceType(aFullOriginMetadata.mPersistenceType)) {
+      MaybeCollectUnaccessedOrigin(aFullOriginMetadata);
+      AddTemporaryOrigin(aFullOriginMetadata);
+    }
+
+    // A row without a valid access time gets one derived from disk, which
+    // marks the origin dirty so the repaired value is flushed.
+    QM_TRY(MOZ_TO_RESULT(
+        InitializeOrigin(originDirectory, aFullOriginMetadata,
+                         /* aForGroup */ false,
+                         /* aDeriveAccessTimeFromDisk */
+                         !HasValidLastAccessTime(aFullOriginMetadata))));
 
     return Ok{};
   };
@@ -3201,25 +3195,17 @@ nsresult QuotaManager::LoadQuota() {
           fullOriginMetadata.FromMetadataFlags(
               static_cast<uint32_t>(metadataFlags));
 
-          QM_TRY_INSPECT(const bool& groupUpdated,
-                         MaybeUpdateGroupForOrigin(fullOriginMetadata));
-
-          (void)groupUpdated;
-
-          QM_TRY_INSPECT(
-              const bool& lastAccessTimeUpdated,
-              MaybeUpdateLastAccessTimeForOrigin(fullOriginMetadata));
-
-          (void)lastAccessTimeUpdated;
-
-          // We don't need to update the .metadata-v2 file on disk here,
-          // EnsureTemporaryOriginIsInitializedInternal is responsible for
-          // doing that. We just need to use correct group and last access
-          // time before initializing quota for the given origin.
+          // Validates the principal and rederives suffix, group and origin
+          // from the storage origin, so a stale group in the row is corrected
+          // and a row that no longer resolves fails the cache load, which
+          // falls back to a full scan.
+          QM_TRY(UpdateFullOriginMetadataPrincipalProperties(
+              *this, fullOriginMetadata));
 
           const bool needsRescan = !fullOriginMetadata.CheckIfUsageIsConsistent(
               "LoadQuotaFromCache"_ns);
-          if (fullOriginMetadata.mDirty || needsRescan) {
+          if (fullOriginMetadata.mDirty || needsRescan ||
+              !HasValidLastAccessTime(fullOriginMetadata)) {
             aDirtyOrigins.AppendElement(std::move(fullOriginMetadata));
           } else if (IsBestEffortPersistenceType(
                          /* Persistent origins are initialized separately */
@@ -3291,14 +3277,12 @@ nsresult QuotaManager::LoadQuota() {
       // code path.
       mUsageModificationDisabled.store(false);
 
-      nsTArray<RenameAndInitInfo> renameAndInitInfos;
       nsTArray<FullOriginMetadata> failedOrigins;
       for (auto& dirtyOrigin : dirtyOrigins) {
         QM_TRY(OkIf(!IsShuttingDown()), NS_ERROR_ABORT);
 
-        QM_WARNONLY_TRY_UNWRAP(
-            auto maybeOk,
-            RestoreAndInitializeOrigin(dirtyOrigin, renameAndInitInfos));
+        QM_WARNONLY_TRY_UNWRAP(auto maybeOk,
+                               RestoreAndInitializeOrigin(dirtyOrigin));
         if (!maybeOk) {
           failedOrigins.AppendElement(std::move(dirtyOrigin));
         }
@@ -3332,13 +3316,33 @@ nsresult QuotaManager::LoadQuota() {
           nsCString path = dirResult.inspect()->HumanReadablePath();
           QM_LOG(("Error %s: Could not remove directory '%s' ",
                   GetStaticErrorName(rv), path.get()));
-          // And from now on we just skip this origin until user sees the error
-          // in the logs and removes the directory manually.
-        } else {
-          AddTemporaryOrigin(failedOrigin);
-
-          InitQuotaForOrigin(failedOrigin, /* aDirectoryExists */ false);
         }
+      }
+
+      // Delete stale rows for origins that could not be restored.
+      {
+        mozStorageTransaction transaction(
+            mStorageConnection, false,
+            mozIStorageConnection::TRANSACTION_IMMEDIATE);
+
+        QM_TRY_INSPECT(const auto& stmt,
+                       MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+                           nsCOMPtr<mozIStorageStatement>, mStorageConnection,
+                           CreateStatement,
+                           "DELETE FROM origin "
+                           "WHERE repository_id = :repository_id "
+                           "AND origin = :origin"_ns));
+
+        for (const auto& failedOrigin : failedOrigins) {
+          QM_TRY(MOZ_TO_RESULT(stmt->BindInt32ByName(
+              "repository_id"_ns, failedOrigin.mPersistenceType)));
+          QM_TRY(MOZ_TO_RESULT(
+              stmt->BindUTF8StringByName("origin"_ns, failedOrigin.mOrigin)));
+          QM_TRY(MOZ_TO_RESULT(stmt->Execute()));
+          MOZ_ALWAYS_SUCCEEDS(stmt->Reset());
+        }
+
+        QM_TRY(MOZ_TO_RESULT(transaction.Commit()));
       }
 
       QM_TRY(MOZ_TO_RESULT(InitializeFlushTimer()));
@@ -3419,7 +3423,10 @@ nsresult QuotaManager::LoadQuota() {
 
   const auto endTime = recordTimeDeltaHelper->End();
 
+  // Lazy origin initialization skips the scan that determines access times,
+  // so the collected origins can't be judged unaccessed.
   if (StaticPrefs::dom_quotaManager_checkQuotaInfoLoadTime() &&
+      !QuotaPrefs::LazyOriginInitializationEnabled() &&
       static_cast<uint32_t>((endTime - startTime).ToMilliseconds()) >=
           StaticPrefs::dom_quotaManager_longQuotaInfoLoadTimeThresholdMs() &&
       !unaccessedOrigins.IsEmpty()) {
@@ -3486,8 +3493,7 @@ void QuotaManager::UnloadQuota() {
             QM_WARNONLY_TRY_UNWRAP(auto originDirectory,
                                    GetOriginDirectory(metadata));
             if (originDirectory) {
-              const nsresult rv =
-                  SettleDirectoryMetadata2(*originDirectory.ref(), metadata);
+              const nsresult rv = SettleOriginMetadata(metadata);
               MOZ_ASSERT(NS_FAILED(rv) == metadata.mDirty);
               if (NS_SUCCEEDED(rv)) {
                 originInfo->LockedSetClean();
@@ -4115,12 +4121,18 @@ nsresult QuotaManager::CreateDirectoryMetadata2(
 
   QM_TRY(MOZ_TO_RESULT(stream->Write32(kMetadataSentinel)));
 
-  QM_TRY(MOZ_TO_RESULT(stream->Write32(aFullOriginMetadata.mQuotaVersion)));
+  // Never read back by this build. Written so that older builds, which only
+  // trust the usage fields below for versions up to their own, see a version
+  // they don't accept and scan the directory instead. See kCurrentQuotaVersion.
+  QM_TRY(MOZ_TO_RESULT(stream->Write32(kCurrentQuotaVersion)));
 
-  QM_TRY(MOZ_TO_RESULT(stream->Write64(aFullOriginMetadata.mOriginUsage)));
+  // Usages are never read back from this file; the origin table is the source
+  // of truth. Write neutral values so it can't be mistaken for a usage cache,
+  // keeping the layout intact for older builds that still parse these fields.
+  QM_TRY(MOZ_TO_RESULT(stream->Write64(0)));
 
   nsCString clientUsagesText;
-  aFullOriginMetadata.mClientUsages.Serialize(clientUsagesText);
+  ClientUsageArray().Serialize(clientUsagesText);
 
   QM_TRY(MOZ_TO_RESULT(stream->WriteStringZ(clientUsagesText.get())));
 
@@ -4131,7 +4143,7 @@ nsresult QuotaManager::CreateDirectoryMetadata2(
   QM_TRY(MOZ_TO_RESULT(
       file->RenameTo(nullptr, nsLiteralString(METADATA_V2_FILE_NAME))));
 
-  // Upsert is the last step - if it fails, SettleDirectoryMetadata2
+  // Upsert is the last step - if it fails, SettleOriginMetadata
   // sets origin back dirty.
   // .metadata-v2 data is only relied on when storage database is unusable:
   // all the origins with accessed flag will be scanned regardless of the
@@ -4144,16 +4156,27 @@ nsresult QuotaManager::CreateDirectoryMetadata2(
   return NS_OK;
 }
 
-nsresult QuotaManager::SettleDirectoryMetadata2(
-    nsIFile& aDirectory, FullOriginMetadata& aFullOriginMetadata) {
+nsresult QuotaManager::UpdateOriginMetadata(
+    FullOriginMetadata& aFullOriginMetadata) {
+  AssertIsOnIOThread();
+
+  if (!aFullOriginMetadata.mIsPrivate) {
+    MOZ_ASSERT(mOriginUpserter, "We must have an origin upserter here");
+    QM_TRY(mOriginUpserter->Refresh(aFullOriginMetadata));
+  }
+
+  return NS_OK;
+}
+
+nsresult QuotaManager::SettleOriginMetadata(
+    FullOriginMetadata& aFullOriginMetadata) {
   AssertIsOnIOThread();
 
   aFullOriginMetadata.mDirty = false;
   auto resetBackToDirty = MakeScopeExit(
       [&aFullOriginMetadata]() { aFullOriginMetadata.mDirty = true; });
 
-  QM_TRY(
-      MOZ_TO_RESULT(CreateDirectoryMetadata2(aDirectory, aFullOriginMetadata)));
+  QM_TRY(MOZ_TO_RESULT(UpdateOriginMetadata(aFullOriginMetadata)));
 
   resetBackToDirty.release();
 
@@ -4177,6 +4200,10 @@ nsresult QuotaManager::RestoreDirectoryMetadata2(nsIFile* aDirectory) {
   return NS_OK;
 }
 
+// Reads the .metadata-v2 file of an origin directory. Only the storage origin
+// and the persisted flag are taken from the file; everything else in it is
+// legacy or recovery-irrelevant data. The remaining fields are still parsed so
+// that a truncated or garbled file is detected and restored by the caller.
 Result<FullOriginMetadata, nsresult> ReadFullOriginMetadataFromMetadataV2File(
     nsIFile* aDirectory) {
   MOZ_ASSERT(!NS_IsMainThread());
@@ -4190,57 +4217,44 @@ Result<FullOriginMetadata, nsresult> ReadFullOriginMetadataFromMetadataV2File(
 
   QM_TRY(ReadDirectoryMetadataHeader(*binaryStream, fullOriginMetadata));
 
-  // Legacy field, previously used for suffix. This value is no longer used,
-  // but still read and discarded to preserve compatibility with older builds
-  // that may still expect it.
+  // Legacy suffix and group fields.
   QM_TRY_INSPECT(
-      const auto& unusedData1,
+      const auto& unusedSuffix,
       MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsCString, binaryStream, ReadCString));
-  (void)unusedData1;
+  (void)unusedSuffix;
 
-  // Legacy field, previously used for group. This value is no longer used, but
-  // still read and discarded to preserve compatibility with older builds that
-  // may still expect it.
   QM_TRY_INSPECT(
-      const auto& unusedData2,
+      const auto& unusedGroup,
       MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsCString, binaryStream, ReadCString));
-  (void)unusedData2;
+  (void)unusedGroup;
 
   QM_TRY_UNWRAP(
-      fullOriginMetadata.mStorageOrigin,
+      nsCString storageOrigin,
       MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsCString, binaryStream, ReadCString));
 
-  const auto extraInfo =
-      ScopedLogExtraInfo{ScopedLogExtraInfo::kTagStorageOriginTainted,
-                         fullOriginMetadata.mStorageOrigin};
+  const auto extraInfo = ScopedLogExtraInfo{
+      ScopedLogExtraInfo::kTagStorageOriginTainted, storageOrigin};
 
-  // Legacy field, previously used for isPrivate (and before that, for isApp).
-  // This value is no longer used, but still read and discarded to preserve
-  // compatibility with older builds that may still expect it.
-  QM_TRY_INSPECT(const bool& unusedData3,
+  // Legacy isPrivate (and before that, isApp) field.
+  QM_TRY_INSPECT(const bool& unusedIsPrivate,
                  MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, ReadBoolean));
-  (void)unusedData3;
+  (void)unusedIsPrivate;
 
   QM_VERBOSEONLY_TRY_UNWRAP(const auto sentinel,
                             MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, Read32));
 
   if (sentinel) {
-    if (sentinel.ref() != kMetadataSentinel) {
-      QM_TRY(MOZ_TO_RESULT(false));
-    }
+    QM_TRY(OkIf(sentinel.ref() == kMetadataSentinel), Err(NS_ERROR_FAILURE));
 
-    QM_TRY_UNWRAP(fullOriginMetadata.mQuotaVersion,
-                  MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, Read32));
-    if (fullOriginMetadata.mAccessed &&
-        fullOriginMetadata.mQuotaVersion != kCurrentQuotaVersion) {
-      // The dirty flag is not stored in older .metadata-v2 files.
-      // Conservatively assume dirty=true (requires full scan) when the flag is
-      // missing. InitializeOrigin upgrades the version.
-      fullOriginMetadata.mDirty = true;
-    }
+    // Quota version, origin usage and client usages. Never used by this
+    // build, see kCurrentQuotaVersion.
+    QM_TRY_INSPECT(const auto& unusedQuotaVersion,
+                   MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, Read32));
+    (void)unusedQuotaVersion;
 
-    QM_TRY_UNWRAP(fullOriginMetadata.mOriginUsage,
-                  MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, Read64));
+    QM_TRY_INSPECT(const auto& unusedOriginUsage,
+                   MOZ_TO_RESULT_INVOKE_MEMBER(binaryStream, Read64));
+    (void)unusedOriginUsage;
 
     QM_TRY_INSPECT(const auto& clientUsagesText,
                    MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsCString, binaryStream,
@@ -4248,15 +4262,17 @@ Result<FullOriginMetadata, nsresult> ReadFullOriginMetadataFromMetadataV2File(
 
     ClientUsageArray clientUsages;
     QM_TRY(MOZ_TO_RESULT(clientUsages.Deserialize(clientUsagesText)));
-
-    fullOriginMetadata.mClientUsages = std::move(clientUsages);
-  } else {
-    fullOriginMetadata.mQuotaVersion = kNoQuotaVersion;
-    fullOriginMetadata.mOriginUsage = 0;
-    fullOriginMetadata.mClientUsages = ClientUsageArray();
   }
 
   QM_TRY(MOZ_TO_RESULT(binaryStream->Close()));
+
+  fullOriginMetadata.mStorageOrigin = std::move(storageOrigin);
+  fullOriginMetadata.mLastAccessTime = kDefaultLastAccessTime;
+  fullOriginMetadata.mLastMaintenanceDate = 0;
+  fullOriginMetadata.mAccessed = false;
+  fullOriginMetadata.mDirty = false;
+  fullOriginMetadata.mQuotaVersion = kNoQuotaVersion;
+  fullOriginMetadata.mOriginUsage = 0;
 
   return fullOriginMetadata;
 }
@@ -4461,22 +4477,57 @@ Result<FullOriginMetadata, nsresult> QuotaManager::LoadFullOriginMetadata(
   QM_TRY(
       UpdateFullOriginMetadataPrincipalProperties(*this, fullOriginMetadata));
 
-  QM_TRY_INSPECT(const bool& groupUpdated,
-                 MaybeUpdateGroupForOrigin(fullOriginMetadata));
-
-  // A workaround for a bug in GetLastModifiedTime implementation which should
-  // have returned the current time instead of INT64_MIN when there were no
-  // suitable files for getting last modified time.
-  QM_TRY_INSPECT(const bool& lastAccessTimeUpdated,
-                 MaybeUpdateLastAccessTimeForOrigin(fullOriginMetadata));
-
-  if (groupUpdated || lastAccessTimeUpdated) {
-    QM_TRY(MOZ_TO_RESULT(
-        SettleDirectoryMetadata2(*aDirectory, fullOriginMetadata)));
-    MOZ_ASSERT(!fullOriginMetadata.mDirty);
+#ifdef DEBUG
+  {
+    OriginMetadata copy = fullOriginMetadata;
+    QM_TRY_INSPECT(const bool& groupUpdated, MaybeUpdateGroupForOrigin(copy));
+    MOZ_ASSERT(!groupUpdated);
   }
+#endif
 
   return fullOriginMetadata;
+}
+
+Result<QuotaManager::OriginAccessTimeMap, nsresult>
+QuotaManager::LoadOriginAccessTimes() {
+  AssertIsOnIOThread();
+  MOZ_ASSERT(mStorageConnection);
+
+  QM_TRY_INSPECT(
+      const auto& stmt,
+      MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
+          nsCOMPtr<mozIStorageStatement>, mStorageConnection, CreateStatement,
+          "SELECT repository_id, origin, last_access_time "
+          "FROM origin"_ns));
+
+  OriginAccessTimeMap accessTimes;
+
+  QM_TRY(quota::CollectWhileHasResult(
+      *stmt, [&accessTimes](auto& stmt) -> Result<Ok, nsresult> {
+        QM_TRY_INSPECT(const int32_t& repositoryId,
+                       MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt32, 0));
+
+        const auto maybePersistenceType =
+            PersistenceTypeFromInt32(repositoryId, fallible);
+        QM_TRY(OkIf(maybePersistenceType.isSome()), Err(NS_ERROR_FAILURE));
+
+        OriginMetadata originMetadata;
+        originMetadata.mPersistenceType = maybePersistenceType.value();
+
+        QM_TRY_UNWRAP(originMetadata.mOrigin,
+                      MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(nsCString, stmt,
+                                                        GetUTF8String, 1));
+
+        QM_TRY_INSPECT(const int64_t& lastAccessTime,
+                       MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt64, 2));
+
+        accessTimes.InsertOrUpdate(originMetadata.GetCompositeKey(),
+                                   lastAccessTime);
+
+        return Ok{};
+      }));
+
+  return accessTimes;
 }
 
 Result<FullOriginMetadata, nsresult>
@@ -4632,7 +4683,7 @@ Result<Ok, nsresult> QuotaManager::InitializeOriginDirectory(
           // extension has been uninstalled), so remove it.
           ([&aChildDirectory](
                const nsresult) -> Result<Maybe<FullOriginMetadata>, nsresult> {
-            QM_TRY(MOZ_TO_RESULT(aChildDirectory->Remove(true)));
+            QM_WARNONLY_TRY(MOZ_TO_RESULT(aChildDirectory->Remove(true)));
             return Maybe<FullOriginMetadata>{};
           })));
 
@@ -4676,28 +4727,19 @@ Result<Ok, nsresult> QuotaManager::InitializeOriginDirectory(
   }
 
   if (aPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
-    std::forward<OriginFunc>(aOriginFunc)(metadata);
-
     AddTemporaryOrigin(metadata);
     QM_LOG(("Temporary origin added: %s, accessed: %d", metadata.mOrigin.get(),
             metadata.mAccessed));
-
-    if (StaticPrefs::dom_quotaManager_loadQuotaFromSecondaryCache() &&
-        IsInitializableQuotaVersion(metadata.mQuotaVersion) &&
-        !metadata.mAccessed &&
-        metadata.CheckIfUsageIsConsistent("InitializeOriginDirectory"_ns)) {
-      QM_LOG(("Initializing quota for: %s", metadata.mOrigin.get()));
-      InitQuotaForOrigin(metadata, /* aDirectoryExists */ true, aCacheMap);
-
-      return Ok{};
-    }
   }
-  QM_LOG(("Using secondary cache for: %s", metadata.mOrigin.get()));
 
+  QM_LOG(("Initializing quota for: %s", metadata.mOrigin.get()));
+
+  int64_t computedAccessTime = kDefaultLastAccessTime;
   QM_TRY(QM_OR_ELSE_WARN_IF(
       // Expression.
-      MOZ_TO_RESULT(InitializeOrigin(aChildDirectory, metadata,
-                                     /* aForGroup */ false, aCacheMap)),
+      MOZ_TO_RESULT(InitializeOrigin(
+          aChildDirectory, metadata, /* aForGroup */ false, aCacheMap,
+          /* aDeriveAccessTimeFromDisk */ true, computedAccessTime)),
       // Predicate.
       IsDatabaseCorruptionError,
       // Fallback.
@@ -4714,6 +4756,11 @@ Result<Ok, nsresult> QuotaManager::InitializeOriginDirectory(
 
         return Ok{};
       })));
+
+  if (aPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
+    metadata.mLastAccessTime = computedAccessTime;
+    std::forward<OriginFunc>(aOriginFunc)(metadata);
+  }
 
   return Ok{};
 }
@@ -4856,57 +4903,52 @@ nsresult QuotaManager::InitializeRepository(PersistenceType aPersistenceType,
         RETURN_STATUS_OR_RESULT(statusKeeper, NS_ERROR_ABORT);
       }
 
-      QM_TRY(
-          ([&directory, &info, this, aPersistenceType, &aOriginFunc,
-            &cacheMap]() -> Result<Ok, nsresult> {
-            const auto& metadata = info.mFullOriginMetadata;
+      QM_TRY(([&directory, &info, this, aPersistenceType, &aOriginFunc,
+               &cacheMap]() -> Result<Ok, nsresult> {
+               const auto& metadata = info.mFullOriginMetadata;
 
-            const auto extraInfo =
-                ScopedLogExtraInfo{ScopedLogExtraInfo::kTagStorageOriginTainted,
-                                   metadata.mStorageOrigin};
+               const auto extraInfo = ScopedLogExtraInfo{
+                   ScopedLogExtraInfo::kTagStorageOriginTainted,
+                   metadata.mStorageOrigin};
 
-            const auto originDirName =
-                MakeSanitizedOriginString(metadata.mOrigin);
+               const auto originDirName =
+                   MakeSanitizedOriginString(metadata.mOrigin);
 
-            // Check if targetDirectory exist.
-            QM_TRY_INSPECT(const auto& targetDirectory,
-                           CloneFileAndAppend(*directory, originDirName));
+               // Check if targetDirectory exist.
+               QM_TRY_INSPECT(const auto& targetDirectory,
+                              CloneFileAndAppend(*directory, originDirName));
 
-            QM_TRY_INSPECT(const bool& exists, MOZ_TO_RESULT_INVOKE_MEMBER(
-                                                   targetDirectory, Exists));
+               QM_TRY_INSPECT(const bool& exists, MOZ_TO_RESULT_INVOKE_MEMBER(
+                                                      targetDirectory, Exists));
 
-            if (exists) {
-              QM_TRY(MOZ_TO_RESULT(info.mOriginDirectory->Remove(true)));
+               if (exists) {
+                 QM_TRY(MOZ_TO_RESULT(info.mOriginDirectory->Remove(true)));
 
-              return Ok{};
-            }
+                 return Ok{};
+               }
 
-            QM_TRY(MOZ_TO_RESULT(
-                info.mOriginDirectory->RenameTo(nullptr, originDirName)));
+               QM_TRY(MOZ_TO_RESULT(
+                   info.mOriginDirectory->RenameTo(nullptr, originDirName)));
 
-            if (aPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
-              std::forward<OriginFunc>(aOriginFunc)(metadata);
+               if (aPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
+                 AddTemporaryOrigin(metadata);
+               }
 
-              AddTemporaryOrigin(metadata);
+               // XXX We don't check corruption here ?
+               int64_t computedAccessTime = kDefaultLastAccessTime;
+               QM_TRY(MOZ_TO_RESULT(InitializeOrigin(
+                   targetDirectory, metadata, /* aForGroup */ false, cacheMap,
+                   /* aDeriveAccessTimeFromDisk */ true, computedAccessTime)));
 
-              if (StaticPrefs::dom_quotaManager_loadQuotaFromSecondaryCache() &&
-                  IsInitializableQuotaVersion(metadata.mQuotaVersion) &&
-                  !metadata.mAccessed) {
-                InitQuotaForOrigin(metadata, /* aDirectoryExists */ true,
-                                   cacheMap);
+               if (aPersistenceType != PERSISTENCE_TYPE_PERSISTENT) {
+                 auto updatedMetadata = metadata;
+                 updatedMetadata.mLastAccessTime = computedAccessTime;
+                 std::forward<OriginFunc>(aOriginFunc)(updatedMetadata);
+               }
 
-                return Ok{};
-              }
-            }
-
-            // XXX We don't check corruption here ?
-            QM_TRY(MOZ_TO_RESULT(InitializeOrigin(targetDirectory, metadata,
-                                                  /* aForGroup */ false,
-                                                  cacheMap)));
-
-            return Ok{};
-          }()),
-          OK_IN_NIGHTLY_PROPAGATE_IN_OTHERS, statusKeeperFunc);
+               return Ok{};
+             }()),
+             OK_IN_NIGHTLY_PROPAGATE_IN_OTHERS, statusKeeperFunc);
 
       return Ok{};
     }()));
@@ -4933,14 +4975,17 @@ nsresult QuotaManager::InitializeRepository(PersistenceType aPersistenceType,
 
 nsresult QuotaManager::InitializeOrigin(
     nsIFile* aDirectory, const FullOriginMetadata& aFullOriginMetadata,
-    bool aForGroup) {
+    bool aForGroup, bool aDeriveAccessTimeFromDisk) {
+  int64_t unusedAccessTime = kDefaultLastAccessTime;
   return InitializeOrigin(aDirectory, aFullOriginMetadata, aForGroup,
-                          OriginCacheMap::Inactive());
+                          OriginCacheMap::Inactive(), aDeriveAccessTimeFromDisk,
+                          unusedAccessTime);
 }
 
 nsresult QuotaManager::InitializeOrigin(
     nsIFile* aDirectory, const FullOriginMetadata& aFullOriginMetadata,
-    bool aForGroup, OriginCacheMap& aCacheMap) {
+    bool aForGroup, OriginCacheMap& aCacheMap, bool aDeriveAccessTimeFromDisk,
+    int64_t& aComputedAccessTime) {
   GECKO_TRACE_SCOPE("dom::quota", "QuotaManager::InitializeOrigin");
 
   QM_LOG(("Starting origin initialization for: %s",
@@ -4948,15 +4993,49 @@ nsresult QuotaManager::InitializeOrigin(
 
   AssertIsOnIOThread();
 
-  QM_TRY(
-      ArtificialFailure(nsIQuotaArtificialFailure::CATEGORY_INITIALIZE_ORIGIN));
-
   // The ScopedLogExtraInfo is not set here on purpose, so the callers can
   // decide if they want to set it. The extra info can be set sooner this way
   // as well.
 
   const bool trackQuota =
       aFullOriginMetadata.mPersistenceType != PERSISTENCE_TYPE_PERSISTENT;
+
+  // A clean storage database row already holds what the directory scan would
+  // compute, so the scan is skipped and quota is initialized from the row.
+  // Dirty rows and directories without a row fall through to the scan. The
+  // row is left in the map so InitQuotaForOrigin claims it and finds it
+  // matching, which keeps PopulateCacheAfterScan from rewriting it.
+  if (trackQuota && !aForGroup &&
+      StaticPrefs::dom_quotaManager_loadQuotaFromSecondaryCache()) {
+    const FullOriginMetadata* cachedMetadata = aCacheMap.Lookup(
+        aFullOriginMetadata.mPersistenceType, aFullOriginMetadata.mOrigin);
+    if (cachedMetadata && !cachedMetadata->mDirty &&
+        HasValidLastAccessTime(*cachedMetadata) &&
+        cachedMetadata->CheckIfUsageIsConsistent("InitializeOrigin"_ns)) {
+      QM_LOG(("Skipping origin initialization for: %s (clean cache row)",
+              aFullOriginMetadata.mOrigin.get()));
+
+      // The directory metadata has been validated and is the recovery store
+      // for the persisted flag; the row is authoritative for the rest.
+      OriginStateMetadata stateMetadata(*cachedMetadata);
+      stateMetadata.mPersisted = aFullOriginMetadata.mPersisted;
+
+      const FullOriginMetadata fullOriginMetadata{
+          OriginMetadata(aFullOriginMetadata), stateMetadata,
+          cachedMetadata->mClientUsages, cachedMetadata->mOriginUsage,
+          kCurrentQuotaVersion};
+
+      InitQuotaForOrigin(fullOriginMetadata, /* aDirectoryExists */ true,
+                         aCacheMap);
+
+      aComputedAccessTime = fullOriginMetadata.mLastAccessTime;
+
+      return NS_OK;
+    }
+  }
+
+  QM_TRY(
+      ArtificialFailure(nsIQuotaArtificialFailure::CATEGORY_INITIALIZE_ORIGIN));
 
   if (trackQuota && !aForGroup &&
       QuotaPrefs::LazyOriginInitializationEnabled()) {
@@ -4972,6 +5051,7 @@ nsresult QuotaManager::InitializeOrigin(
   // get the total usage to initialize the quota.
 
   ClientUsageArray clientUsages;
+  int64_t maxLastModifiedTime = kDefaultLastAccessTime;
 
   // A keeper to defer the return only in Nightly, so that the telemetry data
   // for whole profile can be collected
@@ -4992,7 +5072,8 @@ nsresult QuotaManager::InitializeOrigin(
 
               QM_TRY(
                   ([this, &file, trackQuota, &aFullOriginMetadata,
-                    &clientUsages]() -> Result<Ok, nsresult> {
+                    &clientUsages,
+                    &maxLastModifiedTime]() -> Result<Ok, nsresult> {
                     QM_TRY_INSPECT(const auto& leafName,
                                    MOZ_TO_RESULT_INVOKE_MEMBER_TYPED(
                                        nsAutoString, file, GetLeafName));
@@ -5021,6 +5102,10 @@ nsresult QuotaManager::InitializeOrigin(
                                   /* aCanceled */ Atomic<bool>(false)));
 
                           MOZ_ASSERT(!clientUsages[clientType]);
+
+                          maxLastModifiedTime =
+                              std::max(maxLastModifiedTime,
+                                       usageInfo.LastModifiedTime());
 
                           if (usageInfo.TotalUsage()) {
                             // XXX(Bug 1683863) Until we identify the root cause
@@ -5129,6 +5214,32 @@ nsresult QuotaManager::InitializeOrigin(
     fullOriginMetadata.mOriginUsage = usage.value();
     fullOriginMetadata.mClientUsages = clientUsages;
 
+    if (aDeriveAccessTimeFromDisk) {
+      int64_t accessTime = maxLastModifiedTime;
+
+      // No client files, so the scan told us nothing about when this origin
+      // was last used. Fall back to the origin directory's own timestamp: an
+      // abandoned empty origin keeps an old value and is collected first,
+      // while a freshly created one stays out of the cleanup window.
+      if (accessTime == kDefaultLastAccessTime) {
+        QM_WARNONLY_TRY_UNWRAP(
+            const auto maybeTimestamp,
+            MOZ_TO_RESULT_INVOKE_MEMBER(aDirectory, GetLastModifiedTime));
+
+        if (maybeTimestamp) {
+          accessTime = *maybeTimestamp * int64_t(PR_USEC_PER_MSEC);
+        }
+      }
+
+      if (accessTime != kDefaultLastAccessTime) {
+        fullOriginMetadata.mLastAccessTime = accessTime;
+      } else {
+        // mLastMaintenanceDate stays at zero so that idle maintenance can
+        // run. All origins initialized this way become eligible at once, but
+        // idle maintenance is throttled and processes them incrementally.
+      }
+    }
+
     // Mark the origin dirty so the flush timer writes updated metadata
     // instead of doing synchronous I/O for every origin during init. A full
     // scan does not queue it; PopulateCacheAfterScan writes the row instead.
@@ -5138,6 +5249,8 @@ nsresult QuotaManager::InitializeOrigin(
 
     InitQuotaForOrigin(fullOriginMetadata, /* aDirectoryExists */ true,
                        aCacheMap);
+
+    aComputedAccessTime = fullOriginMetadata.mLastAccessTime;
   }
 
   SleepIfEnabled(
@@ -6537,10 +6650,7 @@ void QuotaManager::FlushDirtyOriginInfos() {
       continue;
     }
 
-    const nsCOMPtr<nsIFile>& directory = directoryResult.inspect();
-
-    if (NS_WARN_IF(NS_FAILED(
-            SettleDirectoryMetadata2(*directory, fullOriginMetadata)))) {
+    if (NS_WARN_IF(NS_FAILED(SettleOriginMetadata(fullOriginMetadata)))) {
       itemsToRequeue.AppendElement(std::move(info));
       continue;
     }
@@ -7174,8 +7284,10 @@ Result<Ok, nsresult> QuotaManager::EnsureTemporaryGroupIsInitializedInternal(
                      LoadFullOriginMetadataWithRestore(directory));
 
       // XXX Check corruption here!
-      QM_TRY(MOZ_TO_RESULT(InitializeOrigin(directory, metadata,
-                                            /* aForGroup */ true)));
+      QM_TRY(MOZ_TO_RESULT(
+          InitializeOrigin(directory, metadata,
+                           /* aForGroup */ true,
+                           /* aDeriveAccessTimeFromDisk */ true)));
     }
 
     // XXX Evict origins that exceed their group limit here.
@@ -7355,7 +7467,10 @@ QuotaManager::EnsurePersistentOriginIsInitializedInternal(
           return metadata;
         }()));
 
-    QM_TRY(MOZ_TO_RESULT(InitializeOrigin(directory, fullOriginMetadata)));
+    QM_TRY(
+        MOZ_TO_RESULT(InitializeOrigin(directory, fullOriginMetadata,
+                                       /* aForGroup */ false,
+                                       /* aDeriveAccessTimeFromDisk */ true)));
 
     mInitializedOriginsInternal.AppendElement(aOriginMetadata.mOrigin);
 
@@ -7508,7 +7623,7 @@ QuotaManager::EnsureTemporaryOriginIsInitializedInternal(
     // pref, but since the pref is intended for testing only, we do it only
     // here for now for simplicity.
     const int64_t timestamp = []() {
-      const int64_t now = PR_Now();
+      const int64_t now = NowWithMillisecondPrecision();
       const uint32_t offsetSec = StaticPrefs::
           dom_quotaManager_temporaryStorage_initialOriginAccessTimeOffsetSec();
 
@@ -7563,7 +7678,10 @@ QuotaManager::EnsureTemporaryOriginIsInitializedInternal(
 
         AddTemporaryOrigin(metadata);
 
-        QM_TRY(MOZ_TO_RESULT(InitializeOrigin(directory, metadata)));
+        QM_TRY(MOZ_TO_RESULT(
+            InitializeOrigin(directory, metadata,
+                             /* aForGroup */ false,
+                             /* aDeriveAccessTimeFromDisk */ true)));
       } else {
         InitQuotaForOrigin(fullOriginMetadata, /* aDirectoryExists */ false);
       }
@@ -7595,19 +7713,11 @@ QuotaManager::EnsureTemporaryOriginIsInitializedInternal(
       QM_TRY_INSPECT(const auto& metadata,
                      LoadFullOriginMetadataWithRestore(directory));
 
-      QM_TRY(MOZ_TO_RESULT(InitializeOrigin(directory, metadata)));
+      QM_TRY(MOZ_TO_RESULT(
+          InitializeOrigin(directory, metadata,
+                           /* aForGroup */ false,
+                           /* aDeriveAccessTimeFromDisk */ true)));
     }
-
-    // TODO: If the metadata file exists and we didn't call
-    //       LoadFullOriginMetadataWithRestore for it (because the quota info
-    //       was loaded from the cache), then the group in the metadata file
-    //       may be wrong, so it should be checked and eventually updated.
-    //       It's not a big deal that we are not doing it here, because the
-    //       origin will be marked as "accessed", so
-    //       LoadFullOriginMetadataWithRestore will be called for the metadata
-    //       file in next session in LoadQuotaFromCache.
-    //       (If a previous origin initialization failed, we actually do call
-    //       LoadFullOriginMetadataWithRestore which updates the group)
 
     return std::pair(std::move(directory), created);
   };
