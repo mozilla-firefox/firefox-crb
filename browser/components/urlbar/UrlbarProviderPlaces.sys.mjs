@@ -102,8 +102,6 @@ const lazy = XPCOMUtils.declareLazy({
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UrlbarProviderOpenTabs:
     "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
-  ProvidersManager:
-    "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs",
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
   UrlbarSearchUtils:
@@ -672,13 +670,7 @@ class Search {
     // Used by stop() to interrupt an eventual running statement.
     this.#interrupt = () => {
       // Interrupt any ongoing statement to run the search sooner.
-      if (!lazy.ProvidersManager.interruptLevel) {
-        try {
-          conn.interrupt();
-        } catch {
-          // The connection may already be closed.
-        }
-      }
+      lazy.PlacesUtils.interruptLargeCacheDBConnection();
     };
 
     // For any given search, we run these queries:

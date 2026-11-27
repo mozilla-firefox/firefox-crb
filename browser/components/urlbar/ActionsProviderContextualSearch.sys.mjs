@@ -290,14 +290,16 @@ class ProviderContextualSearch extends ActionsProvider {
     }
 
     let db = await lazy.PlacesUtils.promiseLargeCacheDBConnection();
-    let rows = await db.executeCached(
-      `
-      SELECT 1 FROM moz_places
-        WHERE rev_host BETWEEN get_unreversed_host(:host || '.') || '.' AND get_unreversed_host(:host || '.') || '/'
-        AND (foreign_count > 0
-          OR last_visit_date > strftime('%s','now','localtime','start of day','-30 days','utc') * 1000000)
-      LIMIT 1;`,
-      { host }
+    let rows = await lazy.PlacesUtils.runInLargeCacheDBCriticalSection(() =>
+      db.executeCached(
+        `
+        SELECT 1 FROM moz_places
+          WHERE rev_host BETWEEN get_unreversed_host(:host || '.') || '.' AND get_unreversed_host(:host || '.') || '/'
+          AND (foreign_count > 0
+            OR last_visit_date > strftime('%s','now','localtime','start of day','-30 days','utc') * 1000000)
+        LIMIT 1;`,
+        { host }
+      )
     );
 
     let visited = !!rows.length;

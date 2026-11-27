@@ -249,32 +249,41 @@ add_task(async function test_search_visits() {
 });
 
 add_task(async function test_search_interrupt() {
-  const { promise, reject } = Promise.withResolvers();
+  const { promise, resolve } = Promise.withResolvers();
   const mockDatabase = {
     executeCached: async (_, { query }) => {
       if (query === "First Query") {
         // Simulate a slow-running query which runs long enough to be
-        // interrupted by the next one.
-        await promise;
+        // interrupted by the next one. Interrupted statements resolve with the
+        // rows read so far.
+        return promise;
       }
       return [];
     },
-    interrupt: () => reject("interrupt() was called."),
   };
   const stub = sinon
     .stub(PlacesUtils, "promiseLargeCacheDBConnection")
     .resolves(mockDatabase);
+  const interruptStub = sinon
+    .stub(PlacesUtils, "interruptLargeCacheDBConnection")
+    .callsFake(() => resolve([]));
+  registerCleanupFunction(() => interruptStub.restore());
 
   const promiseFirstQuery = placesQuery.searchHistory("First Query");
   const promiseSecondQuery = placesQuery.searchHistory("Second Query");
-  await Assert.rejects(
-    promiseFirstQuery,
-    /interrupt/,
-    "The first query was interrupted."
+  Assert.deepEqual(
+    await promiseFirstQuery,
+    [],
+    "The first query resolved with the rows read before the interrupt."
   );
-  ok(await promiseSecondQuery, "The second query resolved normally.");
+  Assert.ok(
+    interruptStub.calledOnce,
+    "The second query interrupted the first one."
+  );
+  Assert.ok(await promiseSecondQuery, "The second query resolved normally.");
 
   stub.restore();
+  interruptStub.restore();
 });
 
 add_task(async function test_sort_by_date_and_site() {

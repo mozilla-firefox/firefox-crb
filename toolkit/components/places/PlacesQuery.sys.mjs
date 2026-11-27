@@ -221,7 +221,7 @@ export class PlacesQuery {
       ORDER BY ${orderBy}
       LIMIT ${limit > 0 ? limit : -1}`;
     if (this.#searchInProgress) {
-      db.interrupt();
+      lazy.PlacesUtils.interruptLargeCacheDBConnection();
     }
     try {
       this.#searchInProgress = true;

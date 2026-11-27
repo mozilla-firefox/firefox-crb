@@ -41,9 +41,12 @@ more results will be returned, it is not mandatory though.
 Queries can be canceled.
 
 :::{note}
-Canceling a query will issue an interrupt() on the database connection,
-terminating any running and future SQL query, unless a query is running inside
-a *runInCriticalSection* task.
+Canceling a query that is still running will issue an interrupt() on the
+database connection, terminating any running SQL query. Interrupted queries
+don't fail, they resolve with the rows read so far. While any
+*runInCriticalSection* task is running, the interrupt is skipped for all the
+queries, not only those in the task. Canceling a query that already finished
+doesn't interrupt anything.
 :::
 
 The *searchString* gets tokenized by the {searchfox}`UrlbarTokenizer <browser/components/urlbar/UrlbarTokenizer.sys.mjs>`
