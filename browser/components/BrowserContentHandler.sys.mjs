@@ -1619,11 +1619,10 @@ nsDefaultCommandLineHandler.prototype = {
         appStateBeforeClick
       );
 
-      // The user clicked "Notification settings" in the toast's "..." menu
-      // while Firefox was closed. Handle it here because respondOnClick
-      // ignores actions that the site did not declare, so it would only open
-      // the site
-      if (action == "settings") {
+      // The user clicked an item of the toast's "..." menu while Firefox was
+      // closed. Handle it here because respondOnClick ignores actions that
+      // the site did not declare, so it would only open the site
+      if (action == "snooze" || action == "settings") {
         // Windows removes the toast after the click, so remove it from
         // the notification storage too
         Cc[
@@ -1633,6 +1632,13 @@ nsDefaultCommandLineHandler.prototype = {
         ]
           .getService(Ci.nsINotificationStorage)
           .delete(originPrincipal.origin, notificationId);
+        if (action == "snooze") {
+          // Same as OnAlertDisable does when Firefox is running
+          Services.perms.removeFromPrincipal(
+            originPrincipal,
+            "desktop-notification"
+          );
+        }
         Services.obs.notifyObservers(
           originPrincipal,
           "notifications-open-settings"
