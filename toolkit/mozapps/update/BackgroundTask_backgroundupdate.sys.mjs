@@ -475,7 +475,7 @@ export async function runBackgroundTask(commandLine) {
     return EXIT_CODE.OTHER_INSTANCE;
   }
 
-  // Here we mirror specific prefs from the default profile into our temporary profile.  We want to
+  // Here we mirror specific prefs from the default profile into our persistent profile.  We want to
   // do this early because some of the prefs may impact internals such as log levels.  Generally,
   // however, we want prefs from the default profile to not impact the mechanics of checking for,
   // downloading, and applying updates, since such prefs should be be per-installation prefs, using
@@ -594,7 +594,7 @@ export async function runBackgroundTask(commandLine) {
 
   // The langpack updating mechanism expects the addons manager, but in background task mode, the
   // addons manager is not present.  Since we can't update langpacks from the background task
-  // temporary profile, we disable the langpack updating mechanism entirely.  This relies on the
+  // persistent profile, we disable the langpack updating mechanism entirely.  This relies on the
   // default profile being the only profile that schedules the OS-level background task and ensuring
   // the task is not scheduled when langpacks are present.  Non-default profiles that have langpacks
   // installed may experience the issues that motivated Bug 1647443.  If this turns out to be a

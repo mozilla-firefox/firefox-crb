@@ -73,8 +73,9 @@ class BackgroundTasks final : public nsIBackgroundTasks {
    * allow concurrent task invocation and to simplify reasoning.
    *
    * At the time of writing, we use temporary ephemeral profiles for all tasks
-   * save the `backgroundupdate` task and the test-only `notephemeralprofile`
-   * task.
+   * save the `backgroundupdate`, `defaultagent` and `message` tasks and the
+   * test-only `not_ephemeral_profile` task, which reuse a persistent profile
+   * across invocations.
    */
   static bool IsEphemeralProfileTaskName(const nsCString& aName);
 

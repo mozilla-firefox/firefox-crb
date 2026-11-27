@@ -197,11 +197,11 @@ export class BrowserToolboxLauncher extends EventEmitter {
 
     let debuggingProfileDir = Services.dirsvc.get("ProfD", Ci.nsIFile);
     if (bts?.isBackgroundTaskMode) {
-      // Background tasks run with a temporary ephemeral profile.  We move the
-      // browser toolbox profile out of that ephemeral profile so that it has
-      // alonger life then the background task profile.  This preserves
-      // breakpoints, etc, across repeated debugging invocations.  This
-      // directory is close to the background task temporary profile name(s),
+      // Most background tasks run with a temporary ephemeral profile.  We move
+      // the browser toolbox profile out of the background task profile so that
+      // it has a longer life than an ephemeral background task profile.  This
+      // preserves breakpoints, etc, across repeated debugging invocations.
+      // This directory is close to the background task temporary profile name(s),
       // but doesn't match the prefix that will get purged by the stale
       // ephemeral profile cleanup mechanism.
       //
@@ -211,6 +211,10 @@ export class BrowserToolboxLauncher extends EventEmitter {
       // `/tmp/MozillaBackgroundTask-<HASH>-success`
       // and sibling directory browser toolbox profile
       // `/tmp/MozillaBackgroundTask-<HASH>-chrome_debugger_profile-success`
+      //
+      // For tasks with a persistent profile, such as `backgroundupdate`, the
+      // browser toolbox profile is a sibling of the salted persistent profile
+      // directory instead.
       //
       // See `BackgroundTasks::Shutdown` for ephemeral profile cleanup details.
       debuggingProfileDir = debuggingProfileDir.parent;
@@ -244,7 +248,7 @@ export class BrowserToolboxLauncher extends EventEmitter {
     prefsFile.append("prefs.js");
 
     if (bts?.isBackgroundTaskMode) {
-      // Background tasks run under a temporary profile.  In order to set
+      // Background tasks don't run under the default profile.  In order to set
       // preferences for the launched browser toolbox, take the preferences from
       // the default profile.  This is the standard pattern for controlling
       // background task settings.  Without this, there'd be no way to increase

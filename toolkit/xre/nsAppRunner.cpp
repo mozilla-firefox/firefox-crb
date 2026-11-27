@@ -7116,7 +7116,7 @@ int XRE_main(int argc, char* argv[], const BootstrapConfig& aConfig) {
   mozilla::RecordShutdownEndTimeStamp();
 #ifdef MOZ_BACKGROUNDTASKS
   // This is well after the profile has been unlocked, so it's okay if this does
-  // delete this background task's temporary profile.
+  // delete this background task's profile if it is ephemeral.
   mozilla::BackgroundTasks::Shutdown();
 #endif
   return result;
