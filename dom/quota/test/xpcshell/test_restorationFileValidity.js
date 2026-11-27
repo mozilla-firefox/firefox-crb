@@ -49,8 +49,8 @@ async function testRestorationFileValidity() {
 
   // The profile contains a single origin directory in the default repository
   // populated with basic data for all quota clients. See
-  // make_secondaryCacheValidity.js for how it was produced.
-  installPackage("secondaryCacheValidity_profile");
+  // make_restorationFileValidity.js for how it was produced.
+  installPackage("restorationFileValidity_profile");
 
   info("Initializing storage");
 
