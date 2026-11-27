@@ -1886,3 +1886,121 @@ add_task(async function force_shown_feature_tour_advances_screens() {
 
   await BrowserTestUtils.closeWindow(win);
 });
+
+function getTabScopedMessage({ panel = false } = {}) {
+  const anchor = { selector: "#PanelUI-menu-button" };
+  if (panel) {
+    anchor.panel_position = {
+      anchor_attachment: "bottomcenter",
+      callout_attachment: "topright",
+    };
+  }
+  return {
+    id: "TAB_SCOPED_CALLOUT",
+    template: "feature_callout",
+    content: {
+      id: "TAB_SCOPED_CALLOUT",
+      template: "multistage",
+      transitions: false,
+      tab_scoped: "hide",
+      screens: [
+        {
+          id: "TAB_SCOPED_CALLOUT_1",
+          anchors: [anchor],
+          content: {
+            position: "callout",
+            title: { raw: "Tab scoped callout" },
+            primary_button: {
+              label: { raw: "Done" },
+              action: { dismiss: true },
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
+add_task(async function test_tab_scoped_callout_hides_and_restores() {
+  const message = getTabScopedMessage();
+  const screenId = message.content.screens[0].id;
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  win.focus();
+  const doc = win.document;
+
+  const firstTab = await openURLInNewTab(win, "https://example.com/");
+  await FeatureCalloutBroker.showFeatureCallout(
+    firstTab.linkedBrowser,
+    structuredClone(message)
+  );
+  await waitForCalloutScreen(doc, screenId);
+
+  const secondTab = await openURLInNewTab(win, "https://example.org/");
+  await BrowserTestUtils.waitForMutationCondition(
+    doc,
+    { childList: true, subtree: true, attributeFilter: ["class"] },
+    () => doc.querySelector(`${calloutSelector}.hidden`)
+  );
+  ok(
+    FeatureCalloutBroker.isCalloutShowing,
+    "Hidden tab-scoped callout still counts as showing"
+  );
+
+  await BrowserTestUtils.switchTab(win.gBrowser, firstTab);
+  await waitForCalloutScreen(doc, screenId);
+  ok(true, "Callout is shown again when switching back to its tab");
+
+  await BrowserTestUtils.switchTab(win.gBrowser, secondTab);
+  BrowserTestUtils.removeTab(firstTab);
+  await waitForCalloutRemoved(doc);
+  ok(
+    !FeatureCalloutBroker.isCalloutShowing,
+    "Callout ends when its tab is closed"
+  );
+
+  await BrowserTestUtils.closeWindow(win);
+});
+
+add_task(async function test_tab_scoped_panel_callout_hides_and_restores() {
+  const message = getTabScopedMessage({ panel: true });
+  const screenId = message.content.screens[0].id;
+  const win = await BrowserTestUtils.openNewBrowserWindow();
+  win.focus();
+  const doc = win.document;
+
+  const firstTab = await openURLInNewTab(win, "https://example.com/");
+  await FeatureCalloutBroker.showFeatureCallout(
+    firstTab.linkedBrowser,
+    structuredClone(message)
+  );
+  await waitForCalloutScreen(doc, screenId);
+  const panel = doc.querySelector(calloutSelector);
+  is(panel.localName, "panel", "Callout is a panel");
+  if (panel.state !== "open") {
+    await BrowserTestUtils.waitForPopupEvent(panel, "shown");
+  }
+
+  let hidden = BrowserTestUtils.waitForPopupEvent(panel, "hidden");
+  const secondTab = await openURLInNewTab(win, "https://example.org/");
+  await hidden;
+  ok(panel.isConnected, "Panel is kept while another tab is selected");
+  ok(
+    FeatureCalloutBroker.isCalloutShowing,
+    "Hidden tab-scoped callout still counts as showing"
+  );
+
+  let shown = BrowserTestUtils.waitForPopupEvent(panel, "shown");
+  await BrowserTestUtils.switchTab(win.gBrowser, firstTab);
+  await shown;
+  ok(
+    doc.querySelector(`${calloutSelector} .${screenId}`),
+    "Panel is shown again on the same screen"
+  );
+
+  doc.querySelector(calloutCTASelector).click();
+  await waitForCalloutRemoved(doc);
+  ok(!FeatureCalloutBroker.isCalloutShowing, "Callout ended on dismiss");
+
+  BrowserTestUtils.removeTab(secondTab);
+  await BrowserTestUtils.closeWindow(win);
+});

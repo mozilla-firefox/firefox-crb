@@ -208,7 +208,13 @@ export class _FeatureCalloutBroker {
     }
   }
 
-  /** @returns {boolean} whether a callout is currently showing. */
+  /**
+   * A tab-scoped callout hidden because its tab isn't selected still counts as
+   * showing, so only one callout exists across all windows and another one
+   * can't take its place before the user switches back.
+   *
+   * @returns {boolean} whether a callout is currently showing.
+   */
   get isCalloutShowing() {
     return [...this.#calloutMap.values()].some(({ showing }) => showing);
   }

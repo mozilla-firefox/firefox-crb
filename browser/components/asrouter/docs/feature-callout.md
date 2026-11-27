@@ -179,6 +179,12 @@ interface FeatureCallout {
     // completed (it should always be false here). As with tour_pref_name, this
     // should usually be omitted.
     tour_pref_default_value?: string;
+    // Ties a callout shown in the browser chrome to the tab it was triggered
+    // on. With "hide", the callout is hidden while another tab is selected and
+    // shown again on the same screen when the user switches back. The callout
+    // is ended if that tab is closed or moved to another window. Optional;
+    // when omitted, the callout stays visible across tab switches.
+    tab_scoped?: "hide";
     // Set to "block" to block all telemetry. Recommended to omit this.
     metrics?: string;
     // An array of screens that should be shown in sequence. The first screen

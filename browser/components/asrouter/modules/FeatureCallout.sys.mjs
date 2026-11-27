@@ -80,6 +80,8 @@ export class FeatureCallout {
     this.ready = false;
     this._positionListenersRegistered = false;
     this._panelConflictListenersRegistered = false;
+    this._scopedTab = null;
+    this._hiddenForTab = false;
     this.AWSetup = false;
     this.location = location;
     this.context = context;
@@ -165,10 +167,85 @@ export class FeatureCallout {
   }
 
   /**
+   * Ties the callout to the tab of the browser that triggered it when the
+   * message sets `content.tab_scoped: "hide"`, hiding the callout while
+   * another tab is selected and showing it again when its tab is reselected.
+   */
+  _addTabScopeListeners() {
+    // Only "hide" is supported for now. A "dismiss" value that ends the tour
+    // on tab switch could be added in the future.
+    if (this.message?.content?.tab_scoped !== "hide" || !this.win.gBrowser) {
+      return;
+    }
+    const tab = this.win.gBrowser.getTabForBrowser(this.browser);
+    if (!tab) {
+      return;
+    }
+    if (!this._scopedTab) {
+      this.win.gBrowser.tabContainer.addEventListener("TabSelect", this);
+      this.win.gBrowser.tabContainer.addEventListener("TabClose", this);
+    }
+    this._scopedTab = tab;
+    if (this.win.gBrowser.selectedTab !== tab) {
+      this._hideForTab();
+    }
+  }
+
+  _removeTabScopeListeners() {
+    if (this._scopedTab) {
+      this.win.gBrowser.tabContainer.removeEventListener("TabSelect", this);
+      this.win.gBrowser.tabContainer.removeEventListener("TabClose", this);
+      this._scopedTab = null;
+    }
+    this._hiddenForTab = false;
+  }
+
+  _hideForTab() {
+    if (!this.ready || this._hiddenForTab || !this._container) {
+      return;
+    }
+    this._hiddenForTab = true;
+    if (this._container.localName === "panel") {
+      this._container.hidePopup(true);
+    } else {
+      this._container.classList.add("hidden");
+    }
+  }
+
+  _showForTab() {
+    if (!this.ready || !this._hiddenForTab) {
+      return;
+    }
+    this._hiddenForTab = false;
+    if (!this._container) {
+      return;
+    }
+    if (this._container.localName === "panel") {
+      const anchor = this._getAnchor();
+      if (!anchor?.panel_position) {
+        this.endTour();
+        return;
+      }
+      const {
+        panel_position_string: position,
+        offset_x: x,
+        offset_y: y,
+      } = anchor.panel_position;
+      this._container.openPopup(anchor.element, { position, x, y });
+    } else {
+      this._container.classList.remove("hidden");
+      this._positionCallout();
+    }
+  }
+
+  /**
    * Close the tour when the urlbar is opened in the chrome. Set up by
    * gURLBar.controller.addListener in _addPanelConflictListeners.
    */
   onViewOpen() {
+    if (this._hiddenForTab) {
+      return;
+    }
     this.endTour();
   }
 
@@ -298,7 +375,7 @@ export class FeatureCallout {
         this.endTour();
       }
     };
-    if (this._container?.localName === "panel") {
+    if (this._container?.localName === "panel" && !this._hiddenForTab) {
       this._container.removeEventListener("popuphiding", this);
       const controller = new AbortController();
       this._container.addEventListener(
@@ -401,7 +478,7 @@ export class FeatureCallout {
           this.endTour();
         }
       };
-      if (this._container?.localName === "panel") {
+      if (this._container?.localName === "panel" && !this._hiddenForTab) {
         this._container.removeEventListener("popuphiding", this);
         const controller = new AbortController();
         this._container.addEventListener(
@@ -424,7 +501,7 @@ export class FeatureCallout {
   handleEvent(event) {
     switch (event.type) {
       case "focus": {
-        if (!this._container) {
+        if (!this._container || this._hiddenForTab) {
           return;
         }
         // If focus has fired on the feature callout window itself, or on something
@@ -456,7 +533,7 @@ export class FeatureCallout {
         if (event.key !== "Escape") {
           return;
         }
-        if (!this._container) {
+        if (!this._container || this._hiddenForTab) {
           return;
         }
         this.win.AWSendEventTelemetry?.({
@@ -478,12 +555,16 @@ export class FeatureCallout {
 
       case "resize":
       case "toggle":
+        if (this._hiddenForTab) {
+          return;
+        }
         this.win.requestAnimationFrame(() => this._positionCallout());
         break;
 
       case "popupshowing":
         // If another panel is showing, close the tour.
         if (
+          !this._hiddenForTab &&
           event.target.documentGlobal === this.win &&
           event.target !== this._container &&
           event.target.localName === "panel" &&
@@ -495,7 +576,24 @@ export class FeatureCallout {
         break;
 
       case "popuphiding":
-        if (event.target === this._container) {
+        if (event.target === this._container && !this._hiddenForTab) {
+          this.endTour();
+        }
+        break;
+
+      case "TabSelect":
+        if (event.target === this._scopedTab) {
+          this._showForTab();
+        } else {
+          this._hideForTab();
+        }
+        break;
+
+      case "TabClose":
+        // This also fires when the tab is moved to another window, in which
+        // case event.detail.adoptedBy is set. The callout belongs to this
+        // window, so the tour ends in that case too.
+        if (event.target === this._scopedTab) {
           this.endTour();
         }
         break;
@@ -1734,6 +1832,8 @@ export class FeatureCallout {
     });
     this._container?.removeEventListener("popuphiding", this);
     this._pageEventManager?.clear();
+    const wasHiddenForTab = this._hiddenForTab;
+    this._removeTabScopeListeners();
 
     // Delete almost everything to get this ready to show a different message.
     this.teardownFeatureTourProgress();
@@ -1756,7 +1856,7 @@ export class FeatureCallout {
       this.doc.querySelector(`[src="${BUNDLE_SRC}"]`)?.remove();
       // Put the focus back to the last place the user focused outside of the
       // featureCallout windows.
-      if (this.savedFocus) {
+      if (this.savedFocus && !wasHiddenForTab) {
         this.savedFocus.element.focus({
           focusVisible: this.savedFocus.focusVisible,
         });
@@ -1764,7 +1864,7 @@ export class FeatureCallout {
       this.savedFocus = null;
       this._emitEvent("end");
     };
-    if (this._container?.localName === "panel") {
+    if (this._container?.localName === "panel" && !wasHiddenForTab) {
       const controller = new AbortController();
       this._container.addEventListener(
         "popuphidden",
@@ -2172,6 +2272,7 @@ export class FeatureCallout {
           const anchor = this._getAnchor();
           const onRender = () => {
             this.ready = true;
+            this._hiddenForTab = false;
             this._pageEventManager?.clear();
             this._attachPageEventListeners(
               this.currentScreen?.content?.page_event_listeners
@@ -2189,6 +2290,7 @@ export class FeatureCallout {
             } else {
               this._container.classList.remove("hidden");
             }
+            this._addTabScopeListeners();
           };
           if (
             this._container.localName === "div" &&
