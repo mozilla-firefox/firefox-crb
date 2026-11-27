@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mozbuild.packaging import echo_command
+
 
 def nsis_build(
     config_dir: Path,
@@ -29,11 +31,9 @@ def nsis_build(
         flags.append(f"-DMOZ_BUILDID={buildid}")
     # An OutFile given after the script overrides the script's own. Given
     # before it, the script's wins.
-    if result := subprocess.run(
-        [makensis] + flags + [nsi, f'-XOutFile "{out}"'],
-        cwd=config_dir,
-        check=False,
-    ).returncode:
+    argv = [makensis] + flags + [nsi, f'-XOutFile "{out}"']
+    echo_command(argv)
+    if result := subprocess.run(argv, cwd=config_dir, check=False).returncode:
         return result
 
     if not out.exists():
