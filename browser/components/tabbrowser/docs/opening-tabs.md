@@ -151,7 +151,8 @@ soon as it exists, which is well before the load finishes — waiting for that i
 ## Calling from outside a browser window
 
 The globals exist only in the documents that load `utilityOverlay.js`. Anywhere
-else, get a window and call the method on it:
+else, get a window from {doc}`/browser/BrowserWindowTracker` and call the
+method on it:
 
 ```js
 let win =

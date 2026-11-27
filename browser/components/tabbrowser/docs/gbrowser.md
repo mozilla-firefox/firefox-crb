@@ -2,6 +2,8 @@
 
 {searchfox}`Tabbrowser.sys.mjs <browser/components/tabbrowser/Tabbrowser.sys.mjs>` defines the `Tabbrowser` class, shared across windows: as a system module it loads once per process, so there is one `Tabbrowser` class for the whole browser. The `Tabbrowser` manages tabs and provides an interface to operate on tabs. It also manages the underlying infrastructure for switching tabs, adding tabs, removing tabs, knowing about tab switches, etc. Each window creates its own `Tabbrowser` instance during startup and exposes that instance in the window scope as `gBrowser`.
 
+Front-end browser code running outside of a browser window can use {doc}`/browser/BrowserWindowTracker` to find one and access its `gBrowser`.
+
 ## What does the name gBrowser stand for?
 
 What does the *g* in `gBrowser` stand for? It's an old Mozilla convention and *g* stands for *global*. It's a way of indicating inside of the variable name that something is globally scoped. In this case it is global to the browser window and every single tab of the window will be managed through that window's `gBrowser`.
