@@ -7,6 +7,7 @@
 #include "nsLineLayout.h"
 
 #include <algorithm>
+#include <numeric>
 
 #include "LayoutLogging.h"
 #include "RubyUtils.h"
@@ -1868,7 +1869,7 @@ void nsLineLayout::PlaceTopBottomCenterFrames(PerSpanData* psd,
             pfd, lineWM, aDistanceFromStart, aLineBSize);
         nscoord startBottom = ComputeBottomAlignFrameStart(
             pfd, lineWM, aDistanceFromStart, aLineBSize);
-        pfd->mBounds.BStart(lineWM) = (startTop + startBottom) / 2;
+        pfd->mBounds.BStart(lineWM) = std::midpoint(startTop, startBottom);
         pfd->mFrame->SetRect(lineWM, pfd->mBounds, containerSize);
         break;
     }
@@ -2349,11 +2350,12 @@ void nsLineLayout::VerticalAlignFrames(PerSpanData* psd) {
             lineWM.FlowRelativeToLineRelativeFactor() * fm->XHeight();
         if (frameSpan) {
           pfd->mBounds.BStart(lineWM) =
-              baselineBCoord - (parentXHeight + pfd->mBounds.BSize(lineWM)) / 2;
+              baselineBCoord -
+              std::midpoint(parentXHeight, pfd->mBounds.BSize(lineWM));
         } else {
-          pfd->mBounds.BStart(lineWM) = baselineBCoord -
-                                        (parentXHeight + logicalBSize) / 2 +
-                                        pfd->mMargin.BStart(lineWM);
+          pfd->mBounds.BStart(lineWM) =
+              baselineBCoord - std::midpoint(parentXHeight, logicalBSize) +
+              pfd->mMargin.BStart(lineWM);
         }
         pfd->mBlockDirAlign = VALIGN_OTHER;
         break;
@@ -3631,7 +3633,7 @@ void nsLineLayout::TextAlignLine(nsLineBox* aLine, bool aIsLastLine) {
 
       case StyleTextAlign::Center:
       case StyleTextAlign::MozCenter:
-        dx = (remainingISize + hang) / 2;
+        dx = std::midpoint(remainingISize, hang);
         break;
     }
   }
