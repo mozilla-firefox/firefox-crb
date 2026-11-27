@@ -35,6 +35,8 @@ const SOURCES = {
 const BLOCKED_EVENT = "newtab-linkBlocked";
 
 const TOP_SITES_BLOCKED_SPONSORS_PREF = "browser.topsites.blockedSponsors";
+const TOP_SITES_BLOCKED_ADS_PREF =
+  "browser.newtabpage.activity-stream.unifiedAds.blockedAds";
 
 function getPlacesFeedForTest(sandbox) {
   let feed = new PlacesFeed();
@@ -146,6 +148,25 @@ add_task(async function test_addToBlockedTopSitesSponsors_invalid_pref() {
   Assert.deepEqual(new Set(["test"]), new Set(blockedSponsors));
 
   Services.prefs.clearUserPref(TOP_SITES_BLOCKED_SPONSORS_PREF);
+  sandbox.restore();
+});
+
+add_task(async function test_addToUnifiedAdsBlockedAdsList_add_to_blocklist() {
+  info(
+    "PlacesFeed.addToUnifiedAdsBlockedAdsList should add the blocked ads " +
+      "to the blocklist"
+  );
+  let sandbox = sinon.createSandbox();
+  let feed = getPlacesFeedForTest(sandbox);
+  Services.prefs.setStringPref(TOP_SITES_BLOCKED_ADS_PREF, "foo,bar");
+
+  feed.addToUnifiedAdsBlockedAdsList(["test", "test1"]);
+
+  let blockedAds = Services.prefs.getStringPref(TOP_SITES_BLOCKED_ADS_PREF);
+
+  Assert.equal("foo,bar,test,test1", blockedAds);
+
+  Services.prefs.clearUserPref(TOP_SITES_BLOCKED_ADS_PREF);
   sandbox.restore();
 });
 
@@ -274,17 +295,27 @@ add_task(async function test_onAction_BLOCK_URL() {
 add_task(async function test_onAction_BLOCK_URL_topsites_sponsors() {
   info(
     "PlacesFeed.onAction BLOCK_URL should update the blocked top " +
-      "sites sponsors"
+      "sites sponsors and block key"
   );
   let sandbox = sinon.createSandbox();
   let feed = getPlacesFeedForTest(sandbox);
   sandbox.stub(feed, "addToBlockedTopSitesSponsors");
+  sandbox.stub(feed, "addToUnifiedAdsBlockedAdsList");
 
   feed.onAction({
     type: actionTypes.BLOCK_URL,
-    data: [{ url: "foo.com", pocket_id: 1234, isSponsoredTopSite: 1 }],
+    data: [
+      {
+        url: "foo.com",
+        pocket_id: 1234,
+        isSponsoredTopSite: 1,
+        block_key: "foo",
+      },
+    ],
   });
+
   Assert.ok(feed.addToBlockedTopSitesSponsors.calledWith([{ url: "foo.com" }]));
+  Assert.ok(feed.addToUnifiedAdsBlockedAdsList.calledWith(["foo"]));
 
   sandbox.restore();
 });

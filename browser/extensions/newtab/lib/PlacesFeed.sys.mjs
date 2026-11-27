@@ -27,9 +27,6 @@ const PLACES_LINKS_CHANGED_DELAY_TIME = 1000; // time in ms to delay timer for p
 // blocked sponsors.
 const TOP_SITES_BLOCKED_SPONSORS_PREF = "browser.topsites.blockedSponsors";
 
-const PREF_UNIFIED_ADS_TILES_ENABLED =
-  "browser.newtabpage.activity-stream.unifiedAds.tiles.enabled";
-
 const PREF_UNIFIED_ADS_BLOCKED_LIST =
   "browser.newtabpage.activity-stream.unifiedAds.blockedAds";
 
@@ -384,11 +381,6 @@ export class PlacesFeed {
   }
 
   onAction(action) {
-    const unifiedAdsTilesEnabled = Services.prefs.getBoolPref(
-      PREF_UNIFIED_ADS_TILES_ENABLED,
-      false
-    );
-
     switch (action.type) {
       case at.INIT:
         // Briefly avoid loading services for observing for better startup timing
@@ -415,11 +407,7 @@ export class PlacesFeed {
 
             if (isSponsoredTopSite) {
               sponsoredTopSites.push({ url });
-
-              // Add block keys if available
-              if (unifiedAdsTilesEnabled) {
-                sponsoredBlockKeys.push(block_key);
-              }
+              sponsoredBlockKeys.push(block_key);
             }
           });
           if (sponsoredTopSites.length) {
