@@ -33,6 +33,9 @@ const PREF_URLBAR_BRANCH = "browser.urlbar.";
 // names and Nimbus feature names are both kept as keys in UrlbarPref's map. For
 // a list of Nimbus features, see toolkit/components/nimbus/FeatureManifest.yaml.
 const PREF_URLBAR_DEFAULTS = /** @type {PreferenceDefinition[]} */ ([
+  // Feature gate for the <moz-urlbar> on about:privatebrowsing.
+  ["aboutprivatebrowsing.featureGate", false],
+
   // Whether we announce to screen readers when tab-to-search results are
   // inserted.
   ["accessibility.tabToSearch.announceResults", true],
