@@ -19,9 +19,15 @@ add_task(async function () {
       case "notify-end-input-transaction":
       case "notify-focus":
       case "notify-blur":
-      case "notify-text-change":
-      case "notify-selection-change":
         notifications.push(aNotification);
+        break;
+      case "notify-content-change":
+        if (aNotification.textChanged) {
+          notifications.push({ type: "notify-text-change" });
+        }
+        if (aNotification.selectionChanged) {
+          notifications.push({ type: "notify-selection-change" });
+        }
         break;
     }
     return true;
