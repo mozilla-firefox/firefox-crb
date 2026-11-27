@@ -2895,6 +2895,24 @@ enum GetCapabilitiesExecutorSlots {
   return promise;
 }
 
+// Create a promise with default resolving functions which is already fulfilled
+// with |value|, as if it had been created pending and then resolved with
+// |value|. A primitive can't be a thenable, so this skips the resolution steps.
+[[nodiscard]] static PromiseObject* CreatePromiseObjectFulfilledWithPrimitive(
+    JSContext* cx, HandleValue value) {
+  MOZ_ASSERT(!value.isObject());
+
+  Rooted<PromiseObject*> promise(
+      cx, CreatePromiseObjectWithoutResolutionFunctions(
+              cx, PROMISE_FLAG_DEFAULT_RESOLVING_FUNCTIONS_ALREADY_RESOLVED));
+  if (!promise) {
+    return nullptr;
+  }
+
+  SettlePromise(cx, promise, value, JS::PromiseState::Fulfilled, nullptr);
+  return promise;
+}
+
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -6804,6 +6822,12 @@ static bool PromiseAllSettledKeyedRejectElementFunction(JSContext* cx,
   }
 
   // PromiseResolve
+  // Steps 3-5 for the current realm's %Promise% and a primitive, which can't be
+  // a thenable: resolving the new promise just fulfills it.
+  if (!argVal.isObject() && IsCurrentRealmPromiseConstructor(cx, C)) {
+    return CreatePromiseObjectFulfilledWithPrimitive(cx, argVal);
+  }
+
   // Step 3. Let promiseCapability be ? NewPromiseCapability(C).
   Rooted<PromiseCapability> capability(cx);
   if (!NewPromiseCapability(cx, C, &capability, true)) {
