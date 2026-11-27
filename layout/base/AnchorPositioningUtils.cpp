@@ -230,6 +230,14 @@ bool IsInitialContainingBlock(const nsIFrame* aContainingBlock) {
                                  ->GetDocElementContainingBlock();
 }
 
+bool IsInitialFixedContainingBlock(const nsIFrame* aContainingBlock) {
+  if (!aContainingBlock) {
+    return false;
+  }
+  return aContainingBlock->IsViewportFrame() ||
+         aContainingBlock->IsPageContentFrame();
+}
+
 bool IsContainingBlockGeneratedByElement(const nsIFrame* aContainingBlock) {
   // 2.1. Containing Blocks of Positioned Boxes
   // https://www.w3.org/TR/css-position-3/#def-cb
@@ -249,7 +257,15 @@ bool IsAnchorLaidOutStrictlyBeforeElement(
       aPossibleAnchor.mAnchor, aCachedAnchorTopLayerIndex);
 
   if (topLayerResult != 0) {
-    return topLayerResult > 0;
+    if (topLayerResult < 0) {
+      return false;
+    }
+    if (aPositionedFrame->StyleDisplay()->mTopLayer == StyleTopLayer::Auto) {
+      return true;
+    }
+    // Ok, not the top layer frame itself. Does our containing block escape
+    // the top layer frame?
+    return IsInitialFixedContainingBlock(aPositionedFrame->GetParent());
   }
 
   // Note: The containing block of an absolutely positioned element
