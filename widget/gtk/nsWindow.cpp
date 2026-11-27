@@ -1971,27 +1971,39 @@ void nsWindow::SetIcon(const nsAString& aIconSpec) {
     return;
   }
 
-  nsAutoCString iconName;
+  NS_ConvertUTF16toUTF8 iconUtf8(aIconSpec);
+  if (StringBeginsWith(iconUtf8, "/"_ns)) {
+    GUniquePtr<GError> error;
+    RefPtr<GdkPixbuf> icon = dont_AddRef(
+        gdk_pixbuf_new_from_file(iconUtf8.get(), getter_Transfers(error)));
+    if (icon) {
+      gtk_window_set_icon(GTK_WINDOW(mShell), icon.get());
+    } else {
+      LOG("nsWindow::SetIcon() failed to load %s: %s", iconUtf8.get(),
+          error->message);
+      SetDefaultIcon();
+    }
+    return;
+  }
+
   if (aIconSpec.EqualsLiteral("default")) {
     nsAutoString brandName;
     WidgetUtils::GetBrandShortName(brandName);
     if (brandName.IsEmpty()) {
       brandName.AssignLiteral(u"Mozilla");
     }
-    AppendUTF16toUTF8(brandName, iconName);
-    ToLowerCase(iconName);
-  } else {
-    AppendUTF16toUTF8(aIconSpec, iconName);
+    CopyUTF16toUTF8(brandName, iconUtf8);
+    ToLowerCase(iconUtf8);
   }
 
   {
     gint* iconSizes = gtk_icon_theme_get_icon_sizes(
-        gtk_icon_theme_get_default(), iconName.get());
+        gtk_icon_theme_get_default(), iconUtf8.get());
     const bool foundIcon = (iconSizes[0] != 0);
     g_free(iconSizes);
 
     if (foundIcon) {
-      gtk_window_set_icon_name(GTK_WINDOW(mShell), iconName.get());
+      gtk_window_set_icon_name(GTK_WINDOW(mShell), iconUtf8.get());
       return;
     }
   }
