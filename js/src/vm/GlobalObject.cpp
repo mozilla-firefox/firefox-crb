@@ -1055,6 +1055,7 @@ void GlobalObjectData::trace(JSTracer* trc, GlobalObject* global) {
   TraceEdge(trc, &boundFunctionShapeWithDefaultProto,
             "global-bound-function-shape");
   TraceEdge(trc, &regExpShapeWithDefaultProto, "global-regexp-shape");
+  TraceEdge(trc, &promiseShapeWithDefaultProto, "global-promise-shape");
 
   regExpRealm.trace(trc);
 
