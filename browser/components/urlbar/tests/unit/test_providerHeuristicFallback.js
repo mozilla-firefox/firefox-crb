@@ -407,7 +407,7 @@ add_task(async function () {
     ],
   });
 
-  for (let sapName of ["searchbar", "newtab_searchbar"]) {
+  for (let sapName of UrlbarShared.SEARCHBAR_SAPS) {
     info(`Forced search through ${sapName}, keyword.enabled = false`);
     query = "bacon";
     context = createContext(query, { isPrivate: false, sapName });

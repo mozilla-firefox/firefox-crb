@@ -63,13 +63,23 @@ var localProviderModules = [
     name: "UrlbarProviderAliasEngines",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderAliasEngines.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderAutofill",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderAutofill.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderBookmarkKeywords",
@@ -81,7 +91,13 @@ var localProviderModules = [
     name: "UrlbarProviderCalculator",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderCalculator.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderAiChat",
@@ -98,13 +114,24 @@ var localProviderModules = [
     name: "UrlbarProviderHeuristicFallback",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderHeuristicFallback.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderHistoryUrlHeuristic",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderHistoryUrlHeuristic.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderInputHistory",
@@ -145,7 +172,13 @@ var localProviderModules = [
     name: "UrlbarProviderRecentSearches",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderRecentSearches.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderRemoteTabs",
@@ -175,7 +208,13 @@ var localProviderModules = [
     name: "UrlbarProviderSearchSuggestions",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderSearchSuggestions.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderSemanticHistorySearch",
@@ -193,7 +232,12 @@ var localProviderModules = [
     name: "UrlbarProviderTokenAliasEngines",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderTokenAliasEngines.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "urlbar",
+    ],
   },
   {
     name: "UrlbarProviderTopSites",
@@ -205,7 +249,13 @@ var localProviderModules = [
     name: "UrlbarProviderUnitConversion",
     module:
       "moz-src:///browser/components/urlbar/UrlbarProviderUnitConversion.sys.mjs",
-    supportedSAPs: ["newtab_searchbar", "searchbar", "smartbar", "urlbar"],
+    supportedSAPs: [
+      "newtab_searchbar",
+      "private_newtab_searchbar",
+      "searchbar",
+      "smartbar",
+      "urlbar",
+    ],
   },
 ];
 

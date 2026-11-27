@@ -531,7 +531,7 @@ ${
     // reflect value of keyword.enabled or set the searchbar placeholder.
     this._setPlaceholder(null);
 
-    if (this.sapName != "newtab_searchbar") {
+    if (typeof ChromeUtils != "undefined") {
       if (this.controller.maybeInitEngineStore()) {
         // Engine store is initialized now and placeholder with
         // engine name will be set in connectedCallback.
@@ -544,10 +544,10 @@ ${
         );
       }
     } else {
-      // In newtab, we don't wait before initializing the search service.
-      // We also don't use #deferUpdatePlaceholder in newtab. This causes
-      // flicker but it should be less often because of newtab preloading
-      // and it allows us to never show the magnifying glass placeholder.
+      // In content, we don't wait before initializing the search service and
+      // don't use #deferUpdatePlaceholder. This could cause flicker, but it
+      // should be rare because of newtab preloading and it allows us to never
+      // show the magnifying glass placeholder.
       this.controller.engineStore.init().then(
         () => {
           this.searchModeSwitcher.updateSearchIcon();

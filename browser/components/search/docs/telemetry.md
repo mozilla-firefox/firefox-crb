@@ -97,6 +97,8 @@ SAP names can be:
 > - `newtab`
 > - `newtab-searchbar` Used when searching from the New Tab search bar.
 > - `newtab-search-widget` Used when searching from the New Tab search widget.
+> - `private-newtab-searchbar` Used when searching from the
+>   about:privatebrowsing search bar.
 > - `searchbar`
 > - `smartbar` Used when searching from Smart Window.
 > - `smartwindow_assistant` Used when searching from Smart Window assistant.
@@ -125,6 +127,8 @@ Possible SAPs are:
 > - `errorpage` Used when a DNS error occurs
 > - `newtab_searchbar` Used when searching from the New Tab search bar.
 > - `newtab_search_widget` Used when searching from the New Tab search widget.
+> - `private_newtab_searchbar` Used when searching from the
+>   about:privatebrowsing search bar.
 > - `searchbar`
 > - `smartbar` Used when searching from Smart Window.
 > - `smartwindow_assistant` Used when searching from Smart Window assistant.

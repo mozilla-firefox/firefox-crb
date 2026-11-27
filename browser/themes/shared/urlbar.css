@@ -1425,7 +1425,7 @@ toolbar[inactive="true"] .urlbar,
       gap: var(--space-xsmall);
     }
 
-    .urlbar:is([sap-name="searchbar"], [sap-name="newtab_searchbar"]) & {
+    .urlbar:is([sap-name="searchbar"], [sap-name="newtab_searchbar"], [sap-name="private_newtab_searchbar"]) & {
       gap: var(--space-xsmall);
     }
   }
@@ -1436,7 +1436,7 @@ toolbar[inactive="true"] .urlbar,
     top: -999px;
   }
 
-  .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"]) & {
+  .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"], [sap-name="private_newtab_searchbar"]) & {
     @media (not -moz-pref("browser.urlbar.searchModeSwitcher.featureGate")) and (not -moz-pref("browser.urlbar.scotchBonnet.enableOverride")) {
       display: none;
     }
@@ -1586,7 +1586,7 @@ toolbar[inactive="true"] .urlbar,
   max-width: var(--search-engine-name-max-width);
 
   @media not -moz-pref("browser.urlbar.unifiedSearchButton.always") {
-    .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"])[searchmode] & {
+    .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"], [sap-name="private_newtab_searchbar"])[searchmode] & {
       display: block;
     }
   }
@@ -1605,7 +1605,7 @@ toolbar[inactive="true"] .urlbar,
   align-self: center;
 
   @media not -moz-pref("browser.urlbar.unifiedSearchButton.always") {
-    .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"])[searchmode] & {
+    .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"], [sap-name="private_newtab_searchbar"])[searchmode] & {
       display: revert;
     }
   }
@@ -1620,7 +1620,7 @@ toolbar[inactive="true"] .urlbar,
     transition: 300ms transform ease-in-out;
   }
 
-  .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"])[searchmode] & {
+  .urlbar:not([sap-name="searchbar"], [sap-name="newtab_searchbar"], [sap-name="private_newtab_searchbar"])[searchmode] & {
     @media not -moz-pref("browser.urlbar.unifiedSearchButton.always") {
       display: none;
     }
