@@ -139,14 +139,19 @@ class DrawEventRecorderPrivate : public DrawEventRecorder {
     }
   }
 
+  // Process pending deletions before registration because object addresses can
+  // be reused. Call this before recording creation so any pending destruction
+  // event for the previous object is recorded first.
   void AddStoredObject(const ReferencePtr aObject) {
     ProcessPendingDeletions();
     mStoredObjects.Insert(aObject);
   }
 
   /**
-   * This is a combination of HasStoredObject and AddStoredObject, so that we
-   * only have to call ProcessPendingDeletions once, which involves locking.
+   * Like AddStoredObject, process pending deletions before registration.
+   * This also clears stale entries before checking whether a reused address is
+   * already stored. A single ProcessPendingDeletions call covers both the
+   * lookup and insertion.
    * @param aObject the object to store if not already stored
    * @return true if the object was not already stored, false if it was
    */

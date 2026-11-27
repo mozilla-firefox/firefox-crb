@@ -13,8 +13,7 @@ namespace layers {
 
 RecordedTextureData::RecordedTextureData(
     already_AddRefed<CanvasChild> aCanvasChild, gfx::IntSize aSize,
-    gfx::SurfaceFormat aFormat, TextureType aTextureType,
-    TextureType aWebglTextureType)
+    gfx::SurfaceFormat aFormat)
     : mRemoteTextureOwnerId(RemoteTextureOwnerId::GetNext()),
       mCanvasChild(aCanvasChild),
       mSize(aSize),
@@ -44,9 +43,7 @@ void RecordedTextureData::FillInfo(TextureData::Info& aInfo) const {
 void RecordedTextureData::InvalidateContents() { mInvalidContents = true; }
 
 bool RecordedTextureData::Lock(OpenMode aMode) {
-  if (!mCanvasChild->EnsureBeginTransaction()) {
-    return false;
-  }
+  mCanvasChild->EnsureBeginTransaction();
 
   if (!mDT && mDrawTargetCreationAttempted) {
     // A failed creation attempt is final for this texture.
@@ -108,9 +105,7 @@ void RecordedTextureData::Unlock() {
 
 already_AddRefed<gfx::DrawTarget> RecordedTextureData::BorrowDrawTarget() {
   if (mLockedMode & OpenMode::OPEN_WRITE) {
-    // The snapshot will be invalidated.
-    mSnapshot = nullptr;
-    DetachAndReleaseSnapshotWrapper(true);
+    DrawTargetWillChange();
   }
   return do_AddRef(mDT);
 }
@@ -127,9 +122,8 @@ void RecordedTextureData::EndDraw() {
 }
 
 void RecordedTextureData::DrawTargetWillChange() {
-  // The DrawTargetRecording will be modified, so ensure that possibly the last
-  // reference to a snapshot is discarded so that it does not inadvertently
-  // force a copy.
+  // Release our cached snapshot before drawing can trigger a copy. Preserve
+  // the cached pixels as needed if other callers still hold the wrapper.
   mSnapshot = nullptr;
   DetachAndReleaseSnapshotWrapper(true);
 }
@@ -148,14 +142,15 @@ already_AddRefed<gfx::SourceSurface> RecordedTextureData::BorrowSnapshot() {
     return nullptr;
   }
 
-  RefPtr<gfx::SourceSurface> wrapper = mCanvasChild->WrapSurface(
+  mSnapshotWrapper = mCanvasChild->WrapSurface(
       mSnapshot ? mSnapshot : mDT->Snapshot(), mRemoteTextureOwnerId);
-  mSnapshotWrapper = wrapper;
-  return wrapper.forget();
+  return do_AddRef(mSnapshotWrapper);
 }
 
 void RecordedTextureData::ReturnDrawTarget(
     already_AddRefed<gfx::DrawTarget> aDT) {
+  // Release the caller's reference here. Unlock records snapshot detachment
+  // when it caches a readback surface.
   RefPtr<gfx::DrawTarget> dt(aDT);
 }
 

@@ -86,11 +86,10 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
   }
 
   /**
-   * Ensures that we have sent a begin transaction event, since the last
-   * end transaction.
-   * @returns false on failure to begin transaction
+   * Start a local transaction if one is inactive. Record a begin event when a
+   * recorder is available.
    */
-  bool EnsureBeginTransaction();
+  void EnsureBeginTransaction();
 
   /**
    * Send an end transaction event to indicate the end of events for this frame.
@@ -98,8 +97,8 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
   void EndTransaction();
 
   /**
-   * @returns true if the canvas IPC classes have not been used for some time
-   *          and can be cleaned up.
+   * @returns true if this actor is deactivated, has no recorder, or is the
+   *          sole owner of its recorder and has no registered textures.
    */
   bool ShouldBeCleanedUp() const;
 
@@ -149,15 +148,13 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
                      bool aInvalidate = false);
 
   /**
-   * Get DataSourceSurface from the translated equivalent version of aSurface in
-   * the GPU process.
+   * Read pixels from the GPU process for a recorded surface.
    * @param aTextureOwnerId the source TextureData to read from
-   * @param aSurface the SourceSurface in this process for which we need a
-   *                 DataSourceSurface
-   * @param aDetached whether the surface is old
-   * @param aMayInvalidate whether the data may be invalidated by future changes
-   * @returns a DataSourceSurface created from data for aSurface retrieve from
-   *          GPU process
+   * @param aSurface the recorded SourceSurface in this process
+   * @param aDetached whether the surface is detached from the current snapshot
+   * @param[out] aMayInvalidate whether the returned surface's pixels may be
+   *        overwritten when its snapshot shared memory is reused
+   * @returns the readback surface, or nullptr on failure
    */
   already_AddRefed<gfx::DataSourceSurface> GetDataSurface(
       const RemoteTextureOwnerId aTextureOwnerId,
@@ -182,12 +179,19 @@ class CanvasChild final : public PCanvasChild, public SupportsWeakPtr {
   ~CanvasChild() final;
 
   size_t SizeOfDataSurfaceShmem(gfx::IntSize, gfx::SurfaceFormat aFormat);
-  bool ShouldGrowDataSurfaceShmem(size_t aSizeRequired);
+  bool NeedsNewDataSurfaceShmem(size_t aSizeRequired);
   bool EnsureDataSurfaceShmem(size_t aSizeRequired);
-  bool EnsureDataSurfaceShmem(gfx::IntSize aSize, gfx::SurfaceFormat aFormat);
+  bool AllocateAndSendDataSurfaceShmem(size_t aSizeRequired);
+
+  already_AddRefed<gfx::DataSourceSurface> ReadFromSnapshotShmem(
+      RemoteTextureOwnerId aTextureOwnerId,
+      const std::shared_ptr<ipc::ReadOnlySharedMemoryMapping>& aSnapshotShmem,
+      int32_t aStride, const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
+      bool& aMayInvalidate);
 
   static void ReleaseDataShmemHolder(void* aClosure);
 
+  void ScheduleDropFreeBuffersWhenDormant();
   void DropFreeBuffersWhenDormant();
 
   static const uint32_t kCacheDataSurfaceThreshold = 10;
