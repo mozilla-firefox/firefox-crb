@@ -22,7 +22,7 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
 
     override fun activate(
         countryCode: String?,
-        onResult: (Throwable?) -> Unit,
+        onResult: (IPProtectionHandler.RequestError?) -> Unit,
     ) {
         // `userAction` differentiates between user and system initiated actions, `false` is used by
         // the toolkit code internally; we are reporting `true`.
@@ -39,13 +39,13 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
                 },
                 { ex ->
                     logger.error("activate() failed", ex)
-                    onResult(ex)
+                    onResult(ex.intoRequestError())
                     GeckoResult.fromValue(null)
                 },
             )
     }
 
-    override fun deactivate(onResult: (Throwable?) -> Unit) {
+    override fun deactivate(onResult: (IPProtectionHandler.RequestError?) -> Unit) {
         runtime.ipProtectionController
             .deactivate()
             .then(
@@ -55,7 +55,7 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
                 },
                 { ex ->
                     logger.error("deactivate() failed", ex)
-                    onResult(ex)
+                    onResult(ex.intoRequestError())
                     GeckoResult.fromValue(null)
                 },
             )
@@ -117,7 +117,7 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
         )
     }
 
-    override fun updateCountryList(onResult: (Throwable?) -> Unit) {
+    override fun updateCountryList(onResult: (IPProtectionHandler.RequestError?) -> Unit) {
         runtime.ipProtectionController
             .getCountryList()
             .then(
@@ -127,7 +127,7 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
                 },
                 { ex ->
                     logger.error("updateCountryList() failed", ex)
-                    onResult(ex)
+                    onResult(ex.intoRequestError())
                     GeckoResult.fromValue(null)
                 },
             )
@@ -187,3 +187,11 @@ internal class GeckoIPProtectionHandler(private val runtime: GeckoRuntime) : IPP
         )
     }
 }
+
+@OptIn(ExperimentalGeckoViewApi::class)
+@kotlin.OptIn(ExperimentalAndroidComponentsApi::class)
+internal fun Throwable.intoRequestError(): IPProtectionHandler.RequestError =
+    IPProtectionHandler.RequestError(
+        errorCode = (this as? IPProtectionController.IPProxyException)?.code,
+        cause = this,
+    )

@@ -143,11 +143,12 @@ sealed class IPProtectionAction : Action {
          * Reports that the most recent activate or deactivate request failed.
          *
          * @property operation Which of the two engine requests failed.
-         * @property error The [Throwable] the engine rejected the request with, or null when the engine gave no reason.
+         * @property error The [IPProtectionHandler.RequestError] the request failed with, or null when the engine gave
+         *   no reason.
          */
         data class ToggleFailed(
             val operation: ActivationOperation,
-            val error: Throwable? = null,
+            val error: IPProtectionHandler.RequestError? = null,
         ) : ActivationAction()
 
         /**
@@ -207,16 +208,17 @@ sealed class IPProtectionAction : Action {
         /**
          * Reports that switching to a new location failed.
          *
-         * @property error The [Throwable] the engine rejected the request with, or null when the engine gave no reason.
+         * @property error The [IPProtectionHandler.RequestError] the request failed with, or null when the engine gave
+         *   no reason.
          */
-        data class LocationSwitchFailed(val error: Throwable? = null) : LocationAction()
+        data class LocationSwitchFailed(val error: IPProtectionHandler.RequestError? = null) : LocationAction()
 
         /**
          * Reports that a location list update has failed.
          *
-         * @property error The [Throwable] the engine rejected the request with.
+         * @property error The [IPProtectionHandler.RequestError] the request failed with.
          */
-        data class LocationUpdateFailed(val error: Throwable) : LocationAction()
+        data class LocationUpdateFailed(val error: IPProtectionHandler.RequestError) : LocationAction()
 
         /** Checks if the list of available locations needs to be updated due to a previously failed attempt. */
         object CheckLocations : LocationAction()
