@@ -4,12 +4,20 @@
 
 // Restart() must not replay a streaming request body: the pipe behind it is
 // not seekable, so the rewind in Restart() silently does nothing.
+//
+// Restart() also detaches the transaction from its connection without marking
+// it done, so what runs afterwards must not need the connection.
 
+#include <algorithm>
+
+#include "HttpConnectionBase.h"
 #include "HttpTrafficAnalyzer.h"
 #include "gtest/gtest.h"
 #include "mozilla/net/ClassOfService.h"
+#include "nsAHttpConnection.h"
 #include "nsHttpConnectionInfo.h"
 #include "nsHttpRequestHead.h"
+#include "nsHttpResponseHead.h"
 #include "nsHttpTransaction.h"
 #include "nsIHttpProtocolHandler.h"
 #include "nsIPipe.h"
@@ -88,6 +96,91 @@ static already_AddRefed<nsHttpTransaction> MakeTransaction(
       nsILoadInfo::IPAddressSpace::Unknown, LNAPerms{});
   MOZ_RELEASE_ASSERT(NS_SUCCEEDED(rv));
   return trans.forget();
+}
+
+// Stands in for the connection a transaction is attached to while response
+// bytes arrive. Every query gets a default answer.
+class FakeConnection final : public nsAHttpConnection {
+ public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSAHTTPCONNECTION(mNone)
+
+ private:
+  ~FakeConnection() = default;
+  RefPtr<nsAHttpConnection> mNone;
+};
+
+NS_IMPL_ISUPPORTS(FakeConnection, nsAHttpConnection)
+
+nsresult FakeConnection::OnHeadersAvailable(nsAHttpTransaction*,
+                                            nsHttpRequestHead*,
+                                            nsHttpResponseHead*, bool* reset) {
+  *reset = false;
+  return NS_OK;
+}
+void FakeConnection::CloseTransaction(nsAHttpTransaction*, nsresult) {}
+nsresult FakeConnection::TakeTransport(nsISocketTransport**,
+                                       nsIAsyncInputStream**,
+                                       nsIAsyncOutputStream**) {
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+WebTransportSessionBase* FakeConnection::GetWebTransportSession(
+    nsAHttpTransaction*) {
+  return nullptr;
+}
+bool FakeConnection::IsPersistent() { return false; }
+bool FakeConnection::IsReused() { return false; }
+void FakeConnection::DontReuse() {}
+nsresult FakeConnection::PushBack(const char*, uint32_t) {
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+already_AddRefed<HttpConnectionBase> FakeConnection::TakeHttpConnection() {
+  return nullptr;
+}
+already_AddRefed<HttpConnectionBase> FakeConnection::HttpConnection() {
+  return nullptr;
+}
+void FakeConnection::CurrentBrowserIdChanged(uint64_t) {}
+PRIntervalTime FakeConnection::LastWriteTime() { return 0; }
+
+// Hands the transaction fixed response bytes, as a stream would.
+class BufferWriter final : public nsAHttpSegmentWriter {
+ public:
+  explicit BufferWriter(const nsACString& aData) : mData(aData) {}
+
+  nsresult OnWriteSegment(char* aBuf, uint32_t aCount,
+                          uint32_t* aCountWritten) override {
+    uint32_t count = std::min<uint32_t>(aCount, mData.Length() - mOffset);
+    if (!count) {
+      return NS_BASE_STREAM_WOULD_BLOCK;
+    }
+    memcpy(aBuf, mData.get() + mOffset, count);
+    mOffset += count;
+    *aCountWritten = count;
+    return NS_OK;
+  }
+
+ private:
+  nsCString mData;
+  uint32_t mOffset = 0;
+};
+
+// Feeds aHeaders, which lack the blank line ending the header section, then
+// detaches the connection as Restart() does and closes the transaction. Close()
+// then parses the buffered headers to the end.
+static void CloseDetachedWithPartialHeaders(nsHttpTransaction* aTrans,
+                                            const nsACString& aHeaders) {
+  RefPtr<FakeConnection> conn = new FakeConnection();
+  aTrans->SetConnection(conn);
+
+  BufferWriter writer(aHeaders);
+  uint32_t written = 0;
+  ASSERT_EQ(aTrans->WriteSegments(&writer, 4096, &written), NS_OK);
+  ASSERT_FALSE(aTrans->ResponseHead())
+  << "headers should not be complete";
+
+  aTrans->SetConnection(nullptr);
+  aTrans->Close(NS_OK);
 }
 
 }  // namespace
@@ -202,6 +295,45 @@ TEST(HttpTransactionRestart, RestartRefusesStartedStreamingRequestBody)
 
     // Must hold on every attempt, not just the first.
     EXPECT_EQ(trans->Restart(), NS_ERROR_NET_RESET);
+  });
+}
+
+// The end of a final response's headers must not need the connection
+// (bug 2095682).
+TEST(HttpTransactionRestart, CloseParsesHeadersAfterDetach)
+{
+  EnsureHttpHandler();
+  RunOnSocketThread([]() {
+    RefPtr<nsHttpConnectionInfo> ci =
+        new nsHttpConnectionInfo("127.0.0.1"_ns, 443, ""_ns, ""_ns, nullptr,
+                                 OriginAttributes(), /*endToEndSSL*/ true);
+    nsHttpRequestHead reqHead;
+    RefPtr<nsHttpTransaction> trans =
+        MakeTransaction(ci, &reqHead, nullptr, /*aIsStreaming*/ false);
+
+    CloseDetachedWithPartialHeaders(
+        trans, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n"_ns);
+
+    ASSERT_TRUE(trans->ResponseHead());
+    EXPECT_EQ(trans->ResponseHead()->Status(), 200);
+  });
+}
+
+// Neither must the end of an ignored 1xx response's headers (bug 2095682).
+TEST(HttpTransactionRestart, CloseParses1xxHeadersAfterDetach)
+{
+  EnsureHttpHandler();
+  RunOnSocketThread([]() {
+    RefPtr<nsHttpConnectionInfo> ci =
+        new nsHttpConnectionInfo("127.0.0.1"_ns, 443, ""_ns, ""_ns, nullptr,
+                                 OriginAttributes(), /*endToEndSSL*/ true);
+    nsHttpRequestHead reqHead;
+    RefPtr<nsHttpTransaction> trans =
+        MakeTransaction(ci, &reqHead, nullptr, /*aIsStreaming*/ false);
+
+    CloseDetachedWithPartialHeaders(trans, "HTTP/1.1 100 Continue\r\n"_ns);
+
+    EXPECT_FALSE(trans->ResponseHead()) << "a 1xx response is not the response";
   });
 }
 
