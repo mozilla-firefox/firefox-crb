@@ -103,7 +103,7 @@ class ConnectionEntry : public SupportsWeakPtr {
   }
 
   void RemoveConnectionAttempt(ConnectionAttempt* sock, bool abandon);
-  void CloseAllConnectionAttempts();
+  void CloseAllConnectionAttempts(HttpConnectionBase* aExcept = nullptr);
   void OnConnectionAttemptConnected() {
     mConnectionAttemptPool->OnConnectionAttemptConnected();
   }
