@@ -3,11 +3,16 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+import configparser
 import json
 import logging
 import re
+import time
+from datetime import datetime, timezone
 from functools import partial
+from pathlib import Path
 
+import requests
 from taskcluster.exceptions import TaskclusterRestFailure
 from taskgraph.util.taskcluster import (
     get_artifact,
@@ -18,10 +23,11 @@ from taskgraph.util.taskcluster import (
 )
 from taskgraph.util.treeherder import join_symbol, split_symbol
 
+from .. import GECKO
 from ..util.perftest import use_raptor_ab_script
 from ..util.taskgraph import find_decision_task
 from .registry import register_callback_action
-from .util import create_tasks, fetch_graph_and_labels
+from .util import create_tasks, fetch_graph_and_labels, read_artifact, write_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +38,14 @@ ARTIFACT_REFERENCE = re.compile(r"^<([^/>]+)/(.+)>$")
 TASK_REFERENCE = re.compile(r"^<([^/>]+)>$")
 FULL_REVISION = re.compile(r"^[0-9a-f]{40}$")
 SCHEDULER_ID = re.compile(r"^(.+)-level-(\d+)$")
+
+# How long the decision task waits for the base push to land and for its
+# decision task to finish. Every task of the push waits for the decision task.
+BASE_PUSH_TIMEOUT = 10 * 60
+BASE_PUSH_POLL_INTERVAL = 30
+# How much of the decision task's maxRunTime to leave for the work after the
+# wait, so that the decision task is never killed while it waits.
+DECISION_TASK_MARGIN = 5 * 60
 
 
 def build_references(task):
@@ -251,16 +265,36 @@ def normalize_input(input):
 
 
 def schedule_ab_profiles(parameters, graph_config, input, labels):
+    decision_task_id, full_task_graph, label_to_taskid, _ = fetch_graph_and_labels(
+        parameters, graph_config
+    )
+    create_ab_tasks(
+        parameters,
+        graph_config,
+        input,
+        labels,
+        decision_task_id,
+        full_task_graph,
+        label_to_taskid,
+    )
+
+
+def create_ab_tasks(
+    parameters,
+    graph_config,
+    input,
+    labels,
+    decision_task_id,
+    full_task_graph,
+    label_to_taskid,
+    suffix="",
+):
     """Create an AB task for each of the given profiling task labels.
 
     The new build is this push's build, which is scheduled too if the push
     doesn't have it yet. Neither build has to be finished: the AB task depends
     on both and only starts once they complete.
     """
-    decision_task_id, full_task_graph, label_to_taskid, _ = fetch_graph_and_labels(
-        parameters, graph_config
-    )
-
     builds = {}
     for label in dict.fromkeys(labels):
         task = full_task_graph.tasks.get(label)
@@ -337,8 +371,147 @@ def schedule_ab_profiles(parameters, graph_config, input, labels):
         label_to_taskid,
         parameters,
         decision_task_id,
+        suffix=suffix,
         modifier=partial(ab_profiles_modifier, configs=configs),
     )
+
+
+def lando_api_domain(instance_id):
+    """Look up a Lando instance's API domain in the in-tree .lando.ini."""
+    parser = configparser.ConfigParser()
+    parser.read(Path(GECKO, ".lando.ini"))
+    for section in parser.sections():
+        if parser[section].get("instance_id", section) == instance_id:
+            return parser[section]["api_domain"]
+    raise Exception(f"Unknown Lando instance {instance_id!r}.")
+
+
+def landed_revision(domain, job_id):
+    """Return the revision a Lando landing job landed, or None until it has."""
+    try:
+        response = requests.get(f"https://{domain}/landing_jobs/{job_id}/", timeout=60)
+    except requests.RequestException as e:
+        logger.warning(f"Could not reach Lando, trying again: {e}")
+        return None
+    if response.status_code >= 500:
+        logger.warning(f"Lando returned {response.status_code}, trying again.")
+        return None
+    response.raise_for_status()
+    job = response.json()
+    if job["status"] == "LANDED":
+        return job["commit_id"]
+    if job["status"] in ("FAILED", "CANCELLED"):
+        raise Exception(
+            f"Lando landing job {job_id} is {job['status']}: {job.get('error')}"
+        )
+    return None
+
+
+def finished_decision_task(graph_config, project, revision):
+    """Return the push's decision task id, or None until that task has finished.
+
+    The index only lists a decision task once it has completed.
+    """
+    head_rev_param = "{}head_rev".format(graph_config["project-repo-param-prefix"])
+    try:
+        return find_decision_task(
+            {"project": project, head_rev_param: revision}, graph_config
+        )
+    except TaskclusterRestFailure as e:
+        if e.status_code == 404:
+            return None
+        if e.status_code and e.status_code >= 500:
+            logger.warning(f"Could not query the index, trying again: {e}")
+            return None
+        raise
+
+
+def wait_deadline(decision_task_id):
+    """Return when to stop waiting for the base push, as a time.monotonic() value.
+
+    That is BASE_PUSH_TIMEOUT from now, or earlier if the decision task would
+    otherwise get too close to its maxRunTime.
+    """
+    deadline = time.monotonic() + BASE_PUSH_TIMEOUT
+    status = status_task(decision_task_id)
+    runs = (status or {}).get("runs")
+    if not runs or not runs[-1].get("started"):
+        # `mach taskgraph` runs this outside of a task.
+        return deadline
+    started = datetime.fromisoformat(runs[-1]["started"].replace("Z", "+00:00"))
+    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    max_run_time = get_task_definition(decision_task_id)["payload"]["maxRunTime"]
+    remaining = max_run_time - elapsed - DECISION_TASK_MARGIN
+    return min(deadline, time.monotonic() + remaining)
+
+
+def wait_for(deadline, description, poll):
+    while True:
+        result = poll()
+        if result is not None:
+            return result
+        if time.monotonic() >= deadline:
+            raise Exception(f"Timed out waiting for {description}.")
+        logger.info(f"Waiting for {description}.")
+        time.sleep(BASE_PUSH_POLL_INTERVAL)
+
+
+def create_ab_tasks_from_try_config(
+    parameters, graph_config, decision_task_id, full_task_graph, label_to_taskid
+):
+    """Create the AB tasks that try_task_config's "ab" asks for.
+
+    `mach try perf --ab` pushes the base revision first and passes its
+    Lando landing job id. The base push's decision task usually finishes at about
+    the same time as this one, so this waits for it for a while.
+    """
+    config = parameters["try_task_config"]["ab"]
+    base_project = config.get("base-project", "try")
+    base_revision = config.get("base-revision")
+    if not base_revision and not (
+        config.get("base-lando-instance") and config.get("base-lando-job-id")
+    ):
+        raise Exception(
+            'try_task_config\'s "ab" needs either "base-revision", or both '
+            '"base-lando-instance" and "base-lando-job-id".'
+        )
+    deadline = wait_deadline(decision_task_id)
+    if not base_revision:
+        domain = lando_api_domain(config["base-lando-instance"])
+        job_id = config["base-lando-job-id"]
+        base_revision = wait_for(
+            deadline,
+            f"Lando landing job {job_id} of the base push",
+            partial(landed_revision, domain, job_id),
+        )
+    wait_for(
+        deadline,
+        f"the decision task of the base push {base_revision}",
+        partial(finished_decision_task, graph_config, base_project, base_revision),
+    )
+
+    input = normalize_input({
+        "base_revision": base_revision,
+        "base_project": base_project,
+        "order": config.get("order", "base,new"),
+    })
+    create_ab_tasks(
+        parameters,
+        graph_config,
+        input,
+        config["tasks"],
+        decision_task_id,
+        full_task_graph,
+        label_to_taskid,
+        suffix="ab",
+    )
+
+    # Actions and Chain of Trust read the decision task's task-graph.json and
+    # label-to-taskid.json, so these have to list the new tasks too.
+    for name in ("task-graph", "label-to-taskid"):
+        merged = read_artifact(f"{name}.json")
+        merged.update(read_artifact(f"{name}-ab.json"))
+        write_artifact(f"{name}.json", merged)
 
 
 BASE_BUILD_SCHEMA_PROPERTIES = {

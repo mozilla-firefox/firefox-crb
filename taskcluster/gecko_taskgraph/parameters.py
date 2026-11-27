@@ -27,8 +27,22 @@ class TasksRegex(Schema, kw_only=True):
     exclude: Optional[list[str]] = None
 
 
+class AbConfig(Schema, kw_only=True):
+    # Labels of the tasks to run for both builds, one after the other in one task.
+    tasks: list[str]
+    # The base push, either as a Lando landing job or as a revision.
+    base_lando_instance: Optional[str] = None
+    base_lando_job_id: Optional[int] = None
+    base_revision: Optional[str] = None
+    base_project: Optional[str] = None
+    order: Optional[Literal["base,new", "new,base"]] = None
+
+
 class TryTaskConfig(Schema, kw_only=True):
     tasks: Optional[list[str]] = None
+    # AB tasks to create once the base push has a task graph, from
+    # `mach try perf --ab`.
+    ab: Optional[AbConfig] = None
     browsertime: Optional[bool] = None
     disable_pgo: Optional[bool] = None
     env: Optional[dict[str, str]] = None
