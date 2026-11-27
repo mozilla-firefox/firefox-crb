@@ -149,3 +149,38 @@ add_task(async function test_cvv_saving_enabled_is_reported_at_startup() {
     "cvv_saving_enabled is not set when security codes aren't supported"
   );
 });
+
+add_task(async function test_cvv_saving_enabled_follows_pref_changes() {
+  Services.prefs.setStringPref(CVV_SUPPORTED_PREF, "off");
+  Services.prefs.setBoolPref(CVV_ENABLED_PREF, true);
+  Services.prefs.setBoolPref(RUST_ACTIVE_PREF, false);
+  await TestUtils.waitForTick();
+  Services.fog.testResetFOG();
+  await FormAutofillStatus.loadStorageOnIdle();
+
+  const check = async (expected, message) => {
+    await TestUtils.waitForTick();
+    Assert.equal(
+      Glean.formautofillCreditcards.cvvSavingEnabled.testGetValue(),
+      expected,
+      message
+    );
+  };
+  await check(null, "not set while security codes aren't supported");
+
+  Services.prefs.setStringPref(CVV_SUPPORTED_PREF, "on");
+  await check(null, "not set while the JSON store is serving");
+
+  Services.prefs.setBoolPref(RUST_ACTIVE_PREF, true);
+  await check(true, "set once security codes become supported");
+
+  Services.prefs.setBoolPref(CVV_ENABLED_PREF, false);
+  await check(false, "follows saving being turned off");
+
+  // Observe after FormAutofill has cached the prefs, which runs this observer
+  // ahead of the one that drops the cached value.
+  FormAutofillStatus.uninit();
+  FormAutofillStatus.init();
+  Services.prefs.setBoolPref(CVV_ENABLED_PREF, true);
+  await check(true, "follows saving being turned back on");
+});

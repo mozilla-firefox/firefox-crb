@@ -95,11 +95,14 @@ formautofill.creditcards:
     type: boolean
     lifetime: application
     description: >
-      Whether saving security codes (CVV) is turned on. Set at startup, so it
-      is sent on every metrics ping. Only set when security codes are
-      supported.
+      Whether saving security codes (CVV) is turned on. Set at startup, and
+      again whenever security codes become supported or the setting changes,
+      so it is sent on every metrics ping. Only set when security codes are
+      supported. If support is withdrawn, the last value is kept until
+      restart.
     bugs:
       - https://bugzil.la/2086225
+      - https://bugzil.la/2090318
     data_reviews:
       - https://bugzil.la/2086225
     data_sensitivity:

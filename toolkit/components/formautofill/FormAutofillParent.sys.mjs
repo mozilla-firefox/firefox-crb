@@ -96,6 +96,13 @@ ChromeUtils.defineLazyGetter(lazy, "log", () =>
 const { ENABLED_AUTOFILL_ADDRESSES_PREF, ENABLED_AUTOFILL_CREDITCARDS_PREF } =
   FormAutofill;
 
+// Every pref FormAutofill.isAutofillCreditCardCVVEnabled is computed from.
+const CVV_SAVING_PREFS = [
+  FormAutofill.SUPPORTED_AUTOFILL_CREDITCARDS_CVV_PREF,
+  FormAutofill.ENABLED_AUTOFILL_CREDITCARDS_CVV_PREF,
+  FormAutofill.CREDITCARDS_RUST_STORAGE_ACTIVE_PREF,
+];
+
 const { ADDRESSES_COLLECTION_NAME, CREDITCARDS_COLLECTION_NAME, FIELD_STATES } =
   FormAutofillUtils;
 
@@ -137,6 +144,9 @@ export let FormAutofillStatus = {
     // Only listen to credit card related preference if it is available
     if (FormAutofill.isAutofillTypeAvailable(AutofillDataTypes.CREDIT_CARD)) {
       Services.prefs.addObserver(ENABLED_AUTOFILL_CREDITCARDS_PREF, this);
+      for (const pref of CVV_SAVING_PREFS) {
+        Services.prefs.addObserver(pref, this);
+      }
     }
   },
 
@@ -162,6 +172,9 @@ export let FormAutofillStatus = {
 
     if (FormAutofill.isAutofillTypeAvailable(AutofillDataTypes.CREDIT_CARD)) {
       Services.prefs.removeObserver(ENABLED_AUTOFILL_CREDITCARDS_PREF, this);
+      for (const pref of CVV_SAVING_PREFS) {
+        Services.prefs.removeObserver(pref, this);
+      }
     }
   },
 
@@ -243,14 +256,23 @@ export let FormAutofillStatus = {
    */
   loadStorageOnIdle() {
     if (FormAutofill.isAutofillTypeAvailable(AutofillDataTypes.CREDIT_CARD)) {
-      if (FormAutofill.isAutofillCreditCardCVVSupported) {
-        Glean.formautofillCreditcards.cvvSavingEnabled.set(
-          FormAutofill.isAutofillCreditCardCVVEnabled
-        );
-      }
+      this.updateCVVSavingEnabled();
       return lazy.gFormAutofillStorage.initialize();
     }
     return undefined;
+  },
+
+  /**
+   * Reports whether saving security codes is on, while they are supported.
+   * Glean can't clear a metric, so a value already reported this session
+   * stays once support is withdrawn.
+   */
+  updateCVVSavingEnabled() {
+    if (FormAutofill.isAutofillCreditCardCVVSupported) {
+      Glean.formautofillCreditcards.cvvSavingEnabled.set(
+        FormAutofill.isAutofillCreditCardCVVEnabled
+      );
+    }
   },
 
   async updateSavedCreditCardCounts() {
@@ -282,6 +304,12 @@ export let FormAutofillStatus = {
       }
 
       case "nsPref:changed": {
+        if (CVV_SAVING_PREFS.includes(data)) {
+          // FormAutofill caches these prefs and may only drop the old value
+          // after this observer has run, so read them on the next tick.
+          Services.tm.dispatchToMainThread(() => this.updateCVVSavingEnabled());
+          break;
+        }
         // Observe pref changes and update _active cache if status is changed.
         this.updateStatus();
         break;
