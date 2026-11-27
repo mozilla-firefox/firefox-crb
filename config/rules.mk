@@ -230,6 +230,9 @@ $(PROGRAM): $(PROGOBJS) $(STATIC_LIBS) $(call resfile,$(PROGRAM)) $(GLOBAL_DEPS)
 	$(call BUILDSTATUS,START_Program $(@F))
 ifeq (clang-cl_WINNT,$(CC_TYPE)_$(OS_ARCH))
 	$(LINKER) -OUT:$@ -IMPLIB:$(basename $(@F)).lib $(WIN32_EXE_LDFLAGS) $(COMPUTED_PROGRAM_LDFLAGS) $(LDFLAGS) $(MOZ_PROGRAM_LDFLAGS) $($(notdir $@)_OBJS) $(filter %.res,$^) $(STATIC_LIBS) $(SHARED_LIBS) $(OS_LIBS)
+ifdef WINCHECKSEC
+	$(call py_action,check_binary $(@F),$@)
+endif
 else # !WINNT || !clang-cl
 	$(call EXPAND_CC_OR_CXX,$@) -o $@ $(COMPUTED_CXX_LDFLAGS) $($(notdir $@)_OBJS) $(filter %.res,$^) $(WIN32_EXE_LDFLAGS) $(LDFLAGS) $(STATIC_LIBS) $(COMPUTED_PROGRAM_LDFLAGS) $(MOZ_PROGRAM_LDFLAGS) $(SHARED_LIBS) $(OS_LIBS)
 	$(call py_action,check_binary $(@F),$@)
@@ -272,6 +275,9 @@ $(SIMPLE_PROGRAMS):
 	$(call BUILDSTATUS,START_Program $(@F))
 ifeq (clang-cl_WINNT,$(CC_TYPE)_$(OS_ARCH))
 	$(LINKER) -out:$@ $($@_OBJS) $(filter %.res,$^) $(WIN32_EXE_LDFLAGS) $(COMPUTED_PROGRAM_LDFLAGS) $(LDFLAGS) $(MOZ_PROGRAM_LDFLAGS) $(STATIC_LIBS) $(SHARED_LIBS) $(OS_LIBS)
+ifdef WINCHECKSEC
+	$(call py_action,check_binary $(@F),$@)
+endif
 else
 	$(call EXPAND_CC_OR_CXX,$@) $(COMPUTED_CXX_LDFLAGS) -o $@ $($@_OBJS) $(filter %.res,$^) $(WIN32_EXE_LDFLAGS) $(LDFLAGS) $(STATIC_LIBS) $(COMPUTED_PROGRAM_LDFLAGS) $(MOZ_PROGRAM_LDFLAGS) $(SHARED_LIBS) $(OS_LIBS)
 	$(call py_action,check_binary $(@F),$@)
