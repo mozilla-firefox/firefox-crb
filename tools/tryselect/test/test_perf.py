@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import copy
 import json
 import os
 import pathlib
@@ -2193,6 +2194,165 @@ def test_worker_override_new_only(
     assert base_config.get("worker-overrides") == expected_base_overrides
     assert check_cache.call_count == expected_cache_calls
     assert save_cache.call_count == expected_cache_calls
+
+
+AB_LABEL = (
+    "test-windows11-64-24h2-shippable/opt-browsertime-benchmark-firefox"
+    "-speedometer3-native-profiling"
+)
+AB_BUILD = "build-win64-shippable/opt"
+
+
+def ab_task(label, supports_ab_profiles=True):
+    from taskgraph.task import Task
+    from taskgraph.util import json
+
+    return Task(
+        kind="browsertime",
+        label=label,
+        attributes={"supports_ab_profiles": supports_ab_profiles},
+        task={
+            "payload": {
+                "env": {
+                    "EXTRA_MOZHARNESS_CONFIG": {
+                        "artifact-reference": json.dumps({
+                            "installer_url": "<build/public/build/target.zip>"
+                        })
+                    },
+                    "MOZ_FETCHES": {
+                        "task-reference": json.dumps([
+                            {
+                                "artifact": "public/build/target.crashreporter-symbols.zip",
+                                "task": "<build>",
+                            }
+                        ])
+                    },
+                }
+            }
+        },
+        dependencies={"build": AB_BUILD},
+    )
+
+
+def test_get_ab_tasks():
+    from taskgraph.graph import Graph
+    from taskgraph.taskgraph import TaskGraph
+
+    other = "test-linux1804-64-shippable-qr/opt-browsertime-amazon"
+    tasks = {
+        AB_LABEL: ab_task(AB_LABEL),
+        other: ab_task(other, supports_ab_profiles=False),
+    }
+    graph = TaskGraph(tasks, Graph(set(tasks), set()))
+    with mock.patch(
+        "tryselect.selectors.perf.generate_tasks", return_value=graph
+    ) as generate_tasks:
+        assert PerfParser.get_ab_tasks(None, True, [AB_LABEL, other]) == {
+            "tasks": [AB_LABEL],
+            "builds": [AB_BUILD],
+        }
+        assert PerfParser.get_ab_tasks(None, True, [other]) is None
+    generate_tasks.assert_called_with(None, full=True)
+
+
+@pytest.mark.parametrize(
+    "single_run, comparator, new_only, rejected",
+    [
+        (False, "BasePerfComparator", [], False),
+        (True, "BasePerfComparator", [], True),
+        (False, "BenchmarkComparator", [], True),
+        (False, "/path/to/custom_comparator.py", [], True),
+        (False, "BasePerfComparator", ["t-linux=gecko-t/t-linux-new"], True),
+    ],
+)
+def test_check_ab_options(single_run, comparator, new_only, rejected):
+    error = PerfParser.check_ab_options(single_run, comparator, new_only)
+    assert bool(error) == rejected
+
+
+def test_ab_rejects_comparator_before_selection():
+    with mock.patch("tryselect.selectors.perf.fzf_bootstrap") as fzf_bootstrap:
+        PerfParser.run(ab=True, comparator="BenchmarkComparator")
+    fzf_bootstrap.assert_not_called()
+
+
+@pytest.mark.parametrize("cached_base", [None, 41])
+def test_perf_push_to_try_ab(cached_base):
+    other = "test-linux1804-64-shippable-qr/opt-browsertime-amazon"
+    with mock.patch("tryselect.selectors.perf.push_to_try") as ptt, mock.patch(
+        "tryselect.selectors.perf.get_repository_object", new=mock.MagicMock()
+    ), mock.patch(
+        "tryselect.selectors.perf.PerfParser.check_cached_revision",
+        return_value=cached_base,
+    ) as ccr, mock.patch(
+        "tryselect.selectors.perf.PerfParser.save_revision_treeherder"
+    ) as srt, mock.patch(
+        "tryselect.selectors.perf.PerfParser.determine_lando_instance",
+        return_value="lando-test",
+    ), mock.patch(
+        "tryselect.selectors.perf.generate_try_task_config",
+        side_effect=lambda method, tasks, params=None: {
+            "tasks": list(tasks),
+            "params": copy.deepcopy(params),
+        },
+    ), mock.patch.object(PerfParser, "push_info", PerfPushInfo()):
+        ptt.side_effect = [
+            {"lando_instance": "lando-test", "lando_job_id": 42},
+            {"lando_instance": "lando-test", "lando_job_id": 43},
+        ]
+        PerfParser.perf_push_to_try(
+            [AB_LABEL, other],
+            [],
+            [],
+            {"try_task_config": {"rebuild": 3}},
+            False,
+            False,
+            [],
+            "BasePerfComparator",
+            [],
+            None,
+            False,
+            None,
+            ab={"tasks": [AB_LABEL], "builds": [AB_BUILD]},
+        )
+
+        base_job_id = cached_base or 42
+        pushed = [call.kwargs["try_task_config"] for call in ptt.call_args_list]
+        assert len(pushed) == (1 if cached_base else 2)
+        for config in pushed:
+            assert config["tasks"] == sorted([AB_BUILD, other])
+            assert config["params"]["try_task_config"]["rebuild"] == {other: 3}
+        new_config = pushed[-1]["params"]["try_task_config"]
+        assert new_config["ab"] == {
+            "tasks": [AB_LABEL],
+            "base-lando-instance": "lando-test",
+            "base-lando-job-id": base_job_id,
+        }
+        if not cached_base:
+            base_config = pushed[0]["params"] or {}
+            assert "ab" not in base_config.get("try_task_config", {})
+            srt.assert_called_once_with(sorted([AB_BUILD, other]), mock.ANY, False)
+        assert ccr.call_args.args[0] == sorted([AB_BUILD, other])
+
+
+@pytest.mark.parametrize(
+    "rebuild, expected",
+    [
+        (5, {"amazon": 5}),
+        ({"amazon": 3, AB_BUILD: 2}, {"amazon": 3}),
+    ],
+)
+def test_exclude_from_rebuild(rebuild, expected):
+    try_config_params = {"try_task_config": {"rebuild": rebuild}}
+    PerfParser.exclude_from_rebuild(try_config_params, ["amazon", AB_BUILD], [AB_BUILD])
+    assert try_config_params["try_task_config"]["rebuild"] == expected
+
+
+def test_exclude_from_rebuild_without_rebuild():
+    try_config_params = {"try_task_config": {}}
+    PerfParser.exclude_from_rebuild(try_config_params, [AB_BUILD], [AB_BUILD])
+    PerfParser.exclude_from_rebuild(None, [AB_BUILD], [AB_BUILD])
+    assert "rebuild" not in try_config_params["try_task_config"]
 
 
 if __name__ == "__main__":

@@ -50,6 +50,9 @@ perf arguments:
   --safari-tp           Show tests available for Safari Technology Preview(disabled by default).
   --live-sites          Run tasks with live sites (if possible). You can also use the `live-sites` variant.
   --profile             Run tasks with profiling (if possible). You can also use the `profiling` variant.
+  --ab                  Run each selected task that supports it for the base and the new build back to back in one task, so
+                        that both builds run on the same machine. For now, only Firefox Speedometer native profiling tasks
+                        support this. Neither push runs these tasks themselves, and the base push only runs their builds.
   --single-run          Run tasks without a comparison
   --worker-override-new-only WORKER_OVERRIDE
                         Like --worker-override, but only for the new revision. The base revision runs on the default
@@ -248,6 +251,22 @@ To run all the tests that triggered a given alert, use `./mach try perf --alert 
 Using the `--tests` option, you can run all tasks that run a specific test. This is based on the test name that is used in the command that runs in the task. For Raptor, this is the test specified by `--test`. For Talos, it can either be a specific test in a suite like `tp5n` from `xperf`, or the suite `xperf` can be specified. For AWSY though, there are no specific tests that can be selected so the only option to select AWSY tests is to specify `AWSY` as the test.
 
 If it's used with `--alert <NUM>`, only the tasks that run the specific test will be run on try. If it's used with `--show-all` or `--full`, you will only see the tasks that run the specific test in the fuzzy interface. Finally, if it's used without either of those, then categories of the tests that were specified will be displayed in the fuzzy interface. For example, if `--tests amazon` is used, then categories like `amazon linux firefox` or `amazon desktop` will be displayed.
+
+## Running Two Builds on the Same Machine
+
+CI machines of the same type still differ in performance. Results and profiles from two different machines can therefore differ even when the builds are the same. With `--ab`, each selected task that supports it runs the base build and the new build back to back in one task, on one machine. For now, only Firefox Speedometer 3 and Speedometer experimental native profiling tasks support this:
+
+```{eval-rst}
+.. parsed-literal::
+
+    $ ./mach try perf --ab --full -q "'firefox-speedometer3-native-profiling !custom-car"
+```
+
+Neither push runs the selected tasks themselves. The base push only runs the builds that they need. The new push gets one AB task for each selected task. Its symbol ends in `-ab`, for example `sp3-ab`, and it appears once the base push's decision task has finished, which usually takes a few minutes. The task uploads the results and profiles of the two builds under `base/` and `new/` in its `test_info` artifacts.
+
+`--ab` can't be combined with `--single-run`, because it needs a base push. It also can't be combined with `--comparator`, because a comparator can change what the two pushes compare, or with `--worker-override-new-only`, because the AB task runs both builds on one machine.
+
+If an AB task doesn't appear, the new push's decision task log says why. You can then create it with the "AB profiles" custom push action on the new push, which takes the task labels and the base revision.
 
 ## Presets
 

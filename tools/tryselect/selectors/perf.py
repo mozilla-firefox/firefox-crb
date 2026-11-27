@@ -17,6 +17,7 @@ from mozversioncontrol import get_repository_object
 
 from ..lando import get_lando_instance_id
 from ..push import generate_try_task_config, push_to_try
+from ..tasks import generate_tasks
 from ..util.fzf import (
     FZF_NOT_FOUND,
     build_base_cmd,
@@ -168,6 +169,18 @@ class PerfParser(CompareParser):
                 "default": False,
                 "help": "Run tasks with profiling (if possible). "
                 "You can also use the `profiling` variant.",
+            },
+        ],
+        [
+            ["--ab"],
+            {
+                "action": "store_true",
+                "default": False,
+                "help": "Run each selected task that supports it for the base and "
+                "the new build back to back in one task, so that both builds run "
+                "on the same machine. For now, only Firefox Speedometer native "
+                "profiling tasks support this. Neither push runs these tasks "
+                "themselves, and the base push only runs their builds.",
             },
         ],
         [
@@ -1215,6 +1228,82 @@ class PerfParser(CompareParser):
                 max(suite_counts, key=suite_counts.get)
             ]["framework"]
 
+    def get_ab_tasks(parameters, full_task_graph, selected_tasks):
+        """Find the selected tasks that can run as AB tasks.
+
+        Returns the labels of those tasks and of the builds they test, or None
+        if no selected task can run as an AB task.
+        """
+        from gecko_taskgraph.actions.ab_profiles import build_references
+
+        tg = generate_tasks(parameters, full=full_task_graph)
+        ab_tasks = sorted(
+            label
+            for label in selected_tasks
+            if label in tg.tasks
+            and tg.tasks[label].attributes.get("supports_ab_profiles")
+        )
+        if not ab_tasks:
+            return None
+        builds = set()
+        for label in ab_tasks:
+            upstream, _, _ = build_references(tg.tasks[label])
+            builds.add(tg.tasks[label].dependencies[upstream])
+        return {"tasks": ab_tasks, "builds": sorted(builds)}
+
+    def check_ab_options(single_run, comparator, worker_override_new_only=None):
+        """Return why --ab can't be used with these options, or None."""
+        if single_run:
+            return "--ab needs a base push, so --single-run can't be used."
+        if comparator != "BasePerfComparator":
+            return (
+                "--ab compares the base and new Firefox builds, so --comparator "
+                "can't be used."
+            )
+        if worker_override_new_only:
+            return (
+                "--ab runs both builds in one task on one machine, so "
+                "--worker-override-new-only can't be used."
+            )
+        return None
+
+    def exclude_from_rebuild(try_config_params, tasks, excluded):
+        """Keep the try config's rebuild count from applying to `excluded`.
+
+        A single rebuild count applies to every task listed in try_task_config,
+        and --ab lists the builds it needs there.
+        """
+        try_config = (try_config_params or {}).get("try_task_config", {})
+        rebuild = try_config.get("rebuild")
+        if isinstance(rebuild, int):
+            try_config["rebuild"] = {
+                task: rebuild for task in tasks if task not in excluded
+            }
+        elif isinstance(rebuild, dict):
+            for task in excluded:
+                rebuild.pop(task, None)
+
+    def add_ab_config(try_config_params, ab_tasks, push_to_vcs):
+        """Ask the new push's decision task to create the AB tasks.
+
+        The decision task waits for the base push and takes the base build from
+        it. A Lando push doesn't know its revision until Lando lands it, so it is
+        identified by its landing job.
+        """
+        config = {"tasks": ab_tasks}
+        if push_to_vcs:
+            if PerfParser.push_info.base_revision:
+                config["base-revision"] = PerfParser.push_info.base_revision
+        else:
+            config["base-lando-instance"] = PerfParser.determine_lando_instance()
+            if PerfParser.push_info.base_lando_commit_id:
+                config["base-lando-job-id"] = int(
+                    PerfParser.push_info.base_lando_commit_id
+                )
+        try_config_params = try_config_params or {}
+        try_config_params.setdefault("try_task_config", {})["ab"] = config
+        return try_config_params
+
     def perf_push_to_try(
         selected_tasks,
         selected_categories,
@@ -1229,6 +1318,7 @@ class PerfParser(CompareParser):
         push_to_vcs,
         metrics,
         worker_override_new_only=None,
+        ab=None,
     ):
         """Perf-specific push to try method.
 
@@ -1269,6 +1359,15 @@ class PerfParser(CompareParser):
         use_cache = base_comparator and not worker_overrides
         base_run_flag = None
 
+        base_tasks = new_tasks = selected_tasks
+        if ab:
+            # The AB tasks run both builds, so neither push runs the selected
+            # tasks themselves.
+            base_tasks = new_tasks = sorted(
+                (set(selected_tasks) - set(ab["tasks"])) | set(ab["builds"])
+            )
+            PerfParser.exclude_from_rebuild(try_config_params, base_tasks, ab["builds"])
+
         try:
             # redirect_stdout allows us to feed each line into
             # a processor that we can use to catch the revision
@@ -1284,7 +1383,7 @@ class PerfParser(CompareParser):
                 if not push_to_vcs:
                     PerfParser.push_info.base_lando_commit_id = (
                         PerfParser.check_cached_revision(
-                            selected_tasks,
+                            base_tasks,
                             compare_commit,
                             push_to_vcs,
                         )
@@ -1293,7 +1392,7 @@ class PerfParser(CompareParser):
                 else:
                     PerfParser.push_info.base_revision = (
                         PerfParser.check_cached_revision(
-                            selected_tasks, compare_commit, push_to_vcs
+                            base_tasks, compare_commit, push_to_vcs
                         )
                     )
                     base_run_flag = PerfParser.push_info.base_revision
@@ -1323,7 +1422,7 @@ class PerfParser(CompareParser):
                         f"{base_commit_message}",
                         metrics,
                         try_task_config=generate_try_task_config(
-                            "fuzzy", selected_tasks, params=base_try_config_params
+                            "fuzzy", base_tasks, params=base_try_config_params
                         ),
                         stage_changes=False,
                         dry_run=dry_run,
@@ -1350,7 +1449,7 @@ class PerfParser(CompareParser):
                             f"{base_commit_message}",
                             metrics,
                             try_task_config=generate_try_task_config(
-                                "fuzzy", selected_tasks, params=base_try_config_params
+                                "fuzzy", base_tasks, params=base_try_config_params
                             ),
                             stage_changes=False,
                             dry_run=dry_run,
@@ -1364,10 +1463,15 @@ class PerfParser(CompareParser):
 
                 if use_cache:
                     PerfParser.save_revision_treeherder(
-                        selected_tasks, compare_commit, push_to_vcs
+                        base_tasks, compare_commit, push_to_vcs
                     )
 
                 comparator_obj.teardown_base_revision()
+
+            if ab:
+                try_config_params = PerfParser.add_ab_config(
+                    try_config_params, ab["tasks"], push_to_vcs
+                )
 
             new_extra_args = list(extra_args)
             comparator_obj.setup_new_revision(new_extra_args)
@@ -1382,7 +1486,7 @@ class PerfParser(CompareParser):
                     metrics,
                     # XXX Figure out if changing `fuzzy` to `perf` will break something
                     try_task_config=generate_try_task_config(
-                        "fuzzy", selected_tasks, params=try_config_params
+                        "fuzzy", new_tasks, params=try_config_params
                     ),
                     stage_changes=False,
                     dry_run=dry_run,
@@ -1409,7 +1513,7 @@ class PerfParser(CompareParser):
                         metrics,
                         # XXX Figure out if changing `fuzzy` to `perf` will break something
                         try_task_config=generate_try_task_config(
-                            "fuzzy", selected_tasks, params=try_config_params
+                            "fuzzy", new_tasks, params=try_config_params
                         ),
                         stage_changes=False,
                         dry_run=dry_run,
@@ -1498,6 +1602,16 @@ class PerfParser(CompareParser):
         full_task_graph=True,
         **kwargs,
     ):
+        if kwargs.get("ab"):
+            error = PerfParser.check_ab_options(
+                single_run,
+                kwargs.get("comparator", "BasePerfComparator"),
+                kwargs.get("worker_override_new_only"),
+            )
+            if error:
+                print(error)
+                return
+
         # Setup fzf
         fzf = fzf_bootstrap(update)
 
@@ -1586,6 +1700,17 @@ class PerfParser(CompareParser):
                 selected_categories, categories, try_config_params, selected_tasks
             )
 
+        ab = None
+        if kwargs.get("ab"):
+            ab = PerfParser.get_ab_tasks(parameters, full_task_graph, selected_tasks)
+            if not ab:
+                print(
+                    "None of the selected tasks can run as an AB task. For now, "
+                    "only Firefox Speedometer 3 and Speedometer experimental "
+                    "native profiling tasks can."
+                )
+                return
+
         total_task_count = len(selected_tasks) * rebuild
         if total_task_count > MAX_PERF_TASKS:
             print(
@@ -1615,6 +1740,7 @@ class PerfParser(CompareParser):
             push_to_vcs,
             kwargs.get("metrics"),
             kwargs.get("worker_override_new_only"),
+            ab,
         )
 
     def run_category_checks():
@@ -1730,6 +1856,11 @@ def run(**kwargs):
             )
         print(f"Base revision's try run: {original_try_url}")
         print(f"Local revision's try run: {local_change_try_url}\n")
+        if kwargs.get("ab"):
+            print(
+                "The AB tasks appear on the local revision's try run "
+                "once the base revision's decision task has finished.\n"
+            )
 
     print(
         "If you need any help, you can find us in the #perf-help Matrix channel:\n"
