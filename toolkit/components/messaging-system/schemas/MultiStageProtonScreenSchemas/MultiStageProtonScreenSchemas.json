@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "file:///MultiStageProtonScreenSchemas.json",
   "title": "MultiStageProtonScreen",
   "description": "A non-enforcing schema for the content of a multistage screen. Keep updated with any new/removed properties to MultiStageProtonScreen.jsx.",
   "type": "object",
