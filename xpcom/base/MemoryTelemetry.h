@@ -63,6 +63,8 @@ class MemoryTelemetry final {
   nsresult FinishGatheringTotalMemory(Maybe<int64_t> aTotalMemory,
                                       const nsTArray<int64_t>& aChildSizes);
 
+  RefPtr<GatherPromise> GatherSessionThreads();
+
   // Serial queue used to run the off-main-thread parts of GatherReports.
   RefPtr<TaskQueue> mTaskQueue;
 

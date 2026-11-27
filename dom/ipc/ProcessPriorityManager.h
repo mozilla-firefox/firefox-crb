@@ -75,6 +75,15 @@ class ProcessPriorityManager final {
   static bool CurrentProcessIsForeground();
 
   /**
+   * Get the current priority of a content process.
+   *
+   * Returns PROCESS_PRIORITY_UNKNOWN if the priority manager has no live entry
+   * for it (not yet tracked, dead/dying, or ProcessPriorityManager is not
+   * initialized). Parent-process only.
+   */
+  static hal::ProcessPriority GetPriority(dom::ContentParent* aContentParent);
+
+  /**
    * Updates the contents of mHighPriorityBrowserParents to keep track of
    * the list of TabIds for this process that are high priority.
    */

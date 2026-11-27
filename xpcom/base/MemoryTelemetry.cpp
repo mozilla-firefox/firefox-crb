@@ -5,12 +5,15 @@
 #include "MemoryTelemetry.h"
 
 #include "mozilla/ClearOnShutdown.h"
+#include "mozilla/Logging.h"
 #include "nsMemoryReporterManager.h"
 #ifdef MOZ_PHC
 #  include "mozilla/PHCManager.h"
 #endif
 #include <cstdlib>
 
+#include "mozilla/ProcInfo.h"
+#include "mozilla/ProcessPriorityManager.h"
 #include "mozilla/Result.h"
 #include "mozilla/ResultExtensions.h"
 #include "mozilla/ScopeExit.h"
@@ -20,8 +23,10 @@
 #include "mozilla/TimeStamp.h"
 #include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/ContentParent.h"
+#include "mozilla/dom/RemoteType.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/glean/XpcomMetrics.h"
+#include "mozilla/ipc/GeckoChildProcessHost.h"
 #include "nsContentUtils.h"
 #include "nsGlobalWindowOuter.h"
 #include "nsIBrowserDOMWindow.h"
@@ -31,6 +36,7 @@
 #include "nsImportModule.h"
 #include "nsNetCID.h"
 #include "nsReadableUtils.h"
+#include "nsTHashMap.h"
 #include "nsThreadUtils.h"
 #include "nsXULAppAPI.h"
 #include "xpcpublic.h"
@@ -55,6 +61,11 @@ static constexpr unsigned kPokeWindowSeconds = 1;
 
 namespace {
 
+LazyLogModule sSessionThreadsLog("SessionThreads");
+#define STT_LOG(args) MOZ_LOG(sSessionThreadsLog, LogLevel::Debug, args)
+#define STT_LOG_VERBOSE(args) \
+  MOZ_LOG(sSessionThreadsLog, LogLevel::Verbose, args)
+
 enum class PrevValue : uint32_t {
 #ifdef XP_WIN
   low_memory_events_physical,
@@ -64,6 +75,55 @@ enum class PrevValue : uint32_t {
 #endif
   SIZE_,
 };
+
+// Labels mirror processtools' per-process categorization (see
+// toolkit/components/processtools/metrics.yaml).
+nsCString LabelForParent() {
+  return nsContentUtils::GetUserIsInteracting() ? "parent.active"_ns
+                                                : "parent.inactive"_ns;
+}
+
+nsCString LabelForContent(dom::ContentParent* aCp) {
+  const dom::RemoteType& remoteType = aCp->GetRemoteType();
+  if (remoteType.IsExtension()) {
+    return "extension"_ns;
+  }
+  if (remoteType.IsPrealloc()) {
+    return "prealloc"_ns;
+  }
+  if (remoteType.IsInference()) {
+    return "inference"_ns;
+  }
+  if (remoteType.IsPrivilegedAbout()) {
+    return "privilegedabout"_ns;
+  }
+  switch (ProcessPriorityManager::GetPriority(aCp)) {
+    case hal::PROCESS_PRIORITY_FOREGROUND:
+    case hal::PROCESS_PRIORITY_FOREGROUND_HIGH:
+      return "web.foreground"_ns;
+    case hal::PROCESS_PRIORITY_BACKGROUND_PERCEIVABLE:
+      return "web.background-perceivable"_ns;
+    case hal::PROCESS_PRIORITY_BACKGROUND:
+      return "web.background"_ns;
+    default:
+      return ""_ns;
+  }
+}
+
+nsCString LabelForChild(GeckoProcessType aType) {
+  switch (aType) {
+    case GeckoProcessType_GPU:
+      return "gpu"_ns;
+    case GeckoProcessType_RDD:
+      return "rdd"_ns;
+    case GeckoProcessType_Utility:
+      return "utility"_ns;
+    case GeckoProcessType_GMPlugin:
+      return "gmplugin"_ns;
+    default:
+      return ""_ns;
+  }
+}
 
 }  // anonymous namespace
 
@@ -280,11 +340,14 @@ nsresult MemoryTelemetry::GatherReports(
   // the MEMORY_TOTAL histogram.
   if (XRE_IsParentProcess() && !mGathering) {
     mGathering = true;
-    GatherTotalMemory()->Then(
-        GetCurrentSerialEventTarget(), __func__,
-        [self = RefPtr{this}](const GatherPromise::ResolveOrRejectValue&) {
-          self->mGathering = false;
-        });
+    nsTArray<RefPtr<GatherPromise>> probes;
+    probes.AppendElement(GatherTotalMemory());
+    probes.AppendElement(GatherSessionThreads());
+    GatherPromise::AllSettled(GetCurrentSerialEventTarget(), probes)
+        ->Then(GetCurrentSerialEventTarget(), __func__,
+               [self = RefPtr{this}](
+                   const GatherPromise::AllSettledPromiseType::
+                       ResolveOrRejectValue&) { self->mGathering = false; });
   }
 
   if (!Telemetry::CanRecordReleaseData()) {
@@ -583,3 +646,130 @@ nsresult MemoryTelemetry::FinishGatheringTotalMemory(
 
   return total;
 }
+
+RefPtr<MemoryTelemetry::GatherPromise> MemoryTelemetry::GatherSessionThreads() {
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(XRE_IsParentProcess());
+  MOZ_ASSERT(mGathering);
+
+  // requestId is the index into `labels`, so results map back without keying
+  // on OS pids.
+  nsTArray<ThreadCountRequest> requests;
+  nsTArray<nsCString> labels;
+
+  auto addRequest = [&](base::ProcessId aPid, nsCString aLabel
+#ifdef XP_MACOSX
+                        ,
+                        mach_port_t aChildTask
+#endif
+                    ) {
+    ThreadCountRequest request{};
+    request.requestId = labels.Length();
+    request.pid = aPid;
+#ifdef XP_MACOSX
+    request.childTask = aChildTask;
+#endif
+    requests.AppendElement(request);
+    labels.AppendElement(std::move(aLabel));
+  };
+
+  // Parent process.
+  addRequest(base::GetCurrentProcId(), LabelForParent()
+#ifdef XP_MACOSX
+                                           ,
+             mach_task_self()
+#endif
+  );
+
+  // Non-content children (GPU, RDD, Utility, GMP).
+  for (auto& proc : mozilla::ipc::GeckoChildProcessHost::GetAll()) {
+    base::ProcessId pid = proc->GetChildProcessId();
+    if (pid == 0) {
+      continue;
+    }
+    nsCString label = LabelForChild(proc->GetProcessType());
+    if (label.IsEmpty()) {
+      continue;
+    }
+#ifdef XP_MACOSX
+    const mach_port_t childTask = proc->GetChildTask();
+    if (childTask == MACH_PORT_NULL) {
+      continue;
+    }
+#endif
+    addRequest(pid, std::move(label)
+#ifdef XP_MACOSX
+                        ,
+               childTask
+#endif
+    );
+  }
+
+  // Content processes.
+  nsTArray<ContentParent*> contentParents;
+  ContentParent::GetAll(contentParents);
+  for (auto* cp : contentParents) {
+    if (!cp || cp->IsDead() || !cp->Process()) {
+      continue;
+    }
+    base::ProcessId pid = cp->Process()->GetChildProcessId();
+    if (pid == 0) {
+      continue;
+    }
+    nsCString label = LabelForContent(cp);
+    if (label.IsEmpty()) {
+      continue;
+    }
+#ifdef XP_MACOSX
+    const mach_port_t childTask = cp->Process()->GetChildTask();
+    if (childTask == MACH_PORT_NULL) {
+      continue;
+    }
+#endif
+    addRequest(pid, std::move(label)
+#ifdef XP_MACOSX
+                        ,
+               childTask
+#endif
+    );
+  }
+
+  if (requests.IsEmpty()) {
+    return GatherPromise::CreateAndResolve(Ok{}, __func__);
+  }
+
+  STT_LOG(("Sample: querying %zu processes", requests.Length()));
+  return GetThreadCounts(std::move(requests), mTaskQueue)
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          [labels = std::move(labels)](
+              ThreadCountPromise::ResolveOrRejectValue&& aValue)
+              -> RefPtr<GatherPromise> {
+            if (aValue.IsResolve()) {
+              nsTHashMap<nsCString, uint32_t> sums;
+              for (const auto& result : aValue.ResolveValue()) {
+                if (result.requestId >= labels.Length()) {
+                  continue;
+                }
+                sums.LookupOrInsert(
+                    labels[static_cast<size_t>(result.requestId)], 0u) +=
+                    result.threadCount;
+              }
+              for (const auto& entry : sums) {
+                STT_LOG_VERBOSE(("  accumulate label=%s threads=%u",
+                                 PromiseFlatCString(entry.GetKey()).get(),
+                                 entry.GetData()));
+                glean::memory::session_threads.Get(entry.GetKey())
+                    .AccumulateSingleSample(entry.GetData());
+              }
+              STT_LOG(("Sample done: %u label(s) accumulated", sums.Count()));
+            } else {
+              STT_LOG(("Sample: GetThreadCounts rejected, rv=0x%" PRIx32,
+                       static_cast<uint32_t>(aValue.RejectValue())));
+            }
+            return GatherPromise::CreateAndResolve(Ok{}, __func__);
+          });
+}
+
+#undef STT_LOG
+#undef STT_LOG_VERBOSE

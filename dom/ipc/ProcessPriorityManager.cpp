@@ -189,6 +189,12 @@ class ProcessPriorityManagerImpl final : public nsIObserver,
   void BrowserPriorityChanged(CanonicalBrowsingContext* aBC, bool aPriority);
   void BrowserPriorityChanged(BrowserParent* aBrowserParent, bool aPriority);
 
+  /**
+   * Reads the current priority from aContentParent's existing entry without
+   * creating one; PROCESS_PRIORITY_UNKNOWN if there is no entry or it is dead.
+   */
+  ProcessPriority GetPriority(ContentParent* aContentParent);
+
   ProcessPriorityManagerImpl(const ProcessPriorityManagerImpl&) = delete;
 
   const ProcessPriorityManagerImpl& operator=(
@@ -469,6 +475,19 @@ void ProcessPriorityManagerImpl::SetProcessPriority(
   if (RefPtr pppm = GetParticularProcessPriorityManager(aContentParent)) {
     pppm->SetPriorityNow(aPriority);
   }
+}
+
+ProcessPriority ProcessPriorityManagerImpl::GetPriority(
+    ContentParent* aContentParent) {
+  if (!aContentParent || aContentParent->IsDead()) {
+    return PROCESS_PRIORITY_UNKNOWN;
+  }
+  RefPtr<ParticularProcessPriorityManager> pppm =
+      mParticularManagers.Get(aContentParent->ChildID());
+  if (!pppm) {
+    return PROCESS_PRIORITY_UNKNOWN;
+  }
+  return pppm->CurrentPriority();
 }
 
 void ProcessPriorityManagerImpl::ObserveContentParentDestroyed(
@@ -1005,6 +1024,15 @@ void ProcessPriorityManager::SetProcessPriority(ContentParent* aContentParent,
 /* static */
 bool ProcessPriorityManager::CurrentProcessIsForeground() {
   return ProcessPriorityManagerChild::Singleton()->CurrentProcessIsForeground();
+}
+
+/* static */
+hal::ProcessPriority ProcessPriorityManager::GetPriority(
+    ContentParent* aContentParent) {
+  if (auto* singleton = ProcessPriorityManagerImpl::GetSingleton()) {
+    return singleton->GetPriority(aContentParent);
+  }
+  return PROCESS_PRIORITY_UNKNOWN;
 }
 
 /* static */

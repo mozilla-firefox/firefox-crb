@@ -918,6 +918,49 @@ memory:
       - memshrink-telemetry-alerts@mozilla.com
     expires: never
 
+  session_threads:
+    type: labeled_custom_distribution
+    description: >
+      Sum of OS thread counts across the live processes in a given class,
+      recorded in the parent process alongside the other memory telemetry
+      probes.
+
+      The class labels match those processtools uses for its per-process CPU
+      and energy metrics, so the two can be joined: the parent process is
+      split by user interaction (active/inactive), regular web content by
+      process priority (foreground/background/background-perceivable), and
+      every other process kind gets its own class by type (extension,
+      prealloc, inference, privilegedabout, gpu, rdd, utility, gmplugin).
+    range_min: 1
+    range_max: 16384
+    bucket_count: 100
+    histogram_type: exponential
+    unit: threads
+    labels:
+      - parent.active
+      - parent.inactive
+      - web.foreground
+      - web.background
+      - web.background-perceivable
+      - privilegedabout
+      - extension
+      - inference
+      - prealloc
+      - rdd
+      - gpu
+      - gmplugin
+      - utility
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2034081
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2034081
+    data_sensitivity:
+      - technical
+    notification_emails:
+      - jstutte@mozilla.com
+      - memshrink-telemetry-alerts@mozilla.com
+    expires: never
+
 event:
   longtask:
     type: labeled_timing_distribution
