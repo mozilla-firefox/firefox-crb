@@ -99,8 +99,12 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // Cancels the fetch and marks state=Canceled. Idempotent.
   // Called by RecvCancel, the expiry timer,
   // WindowGlobalParent::DedupePrefetchRecords and
-  // WindowGlobalParent::AdmitPrefetchRecord.
+  // WindowGlobalParent::TryStartPrefetch.
   void MarkCanceled();
+
+  // Called by WindowGlobalParent::AdmitPrefetchRecord when the record has to
+  // wait for an in-flight slot before its fetch is started.
+  void MarkQueued() { mState = PrefetchState::Queued; }
 
   // Called when a navigation activates this record.
   void MarkActivated() { mOutcome = Outcome::Used; }
