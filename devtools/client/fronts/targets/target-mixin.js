@@ -279,35 +279,13 @@ function TargetMixin(parentClass) {
      * @returns {Promise<{source: string, contentType: string}>}
      */
     async getSourceContentForResource(resourceType, resourceId) {
-      const { resourceCommand } = this.commands;
-      // @backward-compat { version 160 } `getSourceContentForResource` on the window global target actor is not supported on older servers.
-      // The `if` check for the trait as well as the fallback code (resourceType `switch check below) can be removed when 160 is no longer on
-      // the release channel.
-      if (this.getTrait("supportsGetSourceContentForResource")) {
-        const response = await super.getSourceContentForResource(
-          resourceType,
-          resourceId
-        );
-        // The source is transfered as a front, either an array buffer for wasm
-        // binaries or a long string for everything else.
-        return response ? readSourceResponse(response) : null;
-      }
-
-      switch (resourceType) {
-        case resourceCommand.TYPES.STYLESHEET: {
-          const stylesheetsFront = await this.getFront("stylesheets");
-          const sourceStr = await stylesheetsFront.getText(resourceId);
-          return { source: await sourceStr.string(), contentType: "text/css" };
-        }
-        case resourceCommand.TYPES.SOURCE: {
-          const sourceFront = this.threadFront.source({
-            actor: resourceId,
-          });
-          const { source, contentType } = await sourceFront.source();
-          return { source, contentType };
-        }
-      }
-      return null;
+      const response = await super.getSourceContentForResource(
+        resourceType,
+        resourceId
+      );
+      // The source is transfered as a front, either an array buffer for wasm
+      // binaries or a long string for everything else.
+      return response ? readSourceResponse(response) : null;
     }
 
     get client() {

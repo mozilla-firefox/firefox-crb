@@ -788,10 +788,6 @@ class WindowGlobalTargetActor extends BaseTargetActor {
         navigation: true,
         // Supports navigation by index
         navigationByIndex: true,
-        // @backward-compat { version 160 } Supports getting the source content for a given
-        // resource (stylesheet, source, html).
-        // Remove once all clients are on version 160 or higher.
-        supportsGetSourceContentForResource: true,
       },
     };
 
