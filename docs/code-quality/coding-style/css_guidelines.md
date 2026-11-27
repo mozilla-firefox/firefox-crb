@@ -169,6 +169,20 @@ directly in it; it needs no `& {}`.
 }
 ```
 
+Keep the `@media` block at the top level when the rule would hold nothing
+outside it. While the condition doesn't match, the style engine skips a
+top-level `@media` block entirely. A selector with a nested `@media` block
+stays in the cascade data and is matched against elements even when it has no
+declarations of its own.
+
+```css
+@media -moz-pref("browser.example.enabled") {
+  .legacy-panel {
+    display: none;
+  }
+}
+```
+
 ### Other formatting
 
 - Put declarations before nested rules.
