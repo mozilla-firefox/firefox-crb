@@ -310,9 +310,9 @@ class IMEContentObserver final : public nsStubMutationObserver,
                                        bool aCausedBySelectionEvent,
                                        bool aOccurredDuringComposition);
   enum class Immediately : bool { No, Yes };
-  void PostPositionChangeNotification(Immediately aImmediately);
-  void MaybeNotifyIMEOfPositionChange(Immediately aImmediately);
-  void CancelNotifyingIMEOfPositionChange();
+  void PostLayoutChangeNotification(Immediately aImmediately);
+  void MaybeNotifyIMEOfLayoutChange(Immediately aImmediately);
+  void CancelNotifyingIMEOfLayoutChange();
   void PostCompositionEventHandledNotification();
 
   void ContentAdded(nsINode* aContainer, nsIContent* aFirstContent,
@@ -380,7 +380,7 @@ class IMEContentObserver final : public nsStubMutationObserver,
     return mIMENotificationRequests && mIMENotificationRequests->contains(
                                            IMENotificationRequest::TextChange);
   }
-  bool NeedsPositionChangeNotification() const {
+  bool NeedsLayoutChangeNotification() const {
     return mIMENotificationRequests &&
            mIMENotificationRequests->contains(
                IMENotificationRequest::LayoutChange);
@@ -389,14 +389,14 @@ class IMEContentObserver final : public nsStubMutationObserver,
     mNeedsToNotifyIMEOfFocusSet = false;
     mNeedsToNotifyIMEOfTextChange = false;
     mNeedsToNotifyIMEOfSelectionChange = false;
-    mTicksUntilNotifyIMEOfPositionChange = 0;
+    mTicksUntilNotifyIMEOfLayoutChange = 0;
     mNeedsToNotifyIMEOfCompositionEventHandled = false;
     mTextChangeData.Clear();
   }
   bool NeedsToNotifyIMEOfSomething() const {
     return mNeedsToNotifyIMEOfFocusSet || mNeedsToNotifyIMEOfTextChange ||
            mNeedsToNotifyIMEOfSelectionChange ||
-           mTicksUntilNotifyIMEOfPositionChange ||
+           mTicksUntilNotifyIMEOfLayoutChange ||
            mNeedsToNotifyIMEOfCompositionEventHandled;
   }
 
@@ -436,9 +436,8 @@ class IMEContentObserver final : public nsStubMutationObserver,
    protected:
     enum ChangeEventType {
       eChangeEventType_Focus,
-      eChangeEventType_Selection,
-      eChangeEventType_Text,
-      eChangeEventType_Position,
+      eChangeEventType_Content,
+      eChangeEventType_ContentLayoutChangeOnly,
       eChangeEventType_CompositionEventHandled
     };
 
@@ -480,9 +479,13 @@ class IMEContentObserver final : public nsStubMutationObserver,
 
    private:
     MOZ_CAN_RUN_SCRIPT void SendFocusSet();
-    MOZ_CAN_RUN_SCRIPT void SendSelectionChange();
-    void SendTextChange();
-    void SendPositionChange();
+    enum class ContentChangeEventType {
+      Text,
+      Selection,
+      Layout,
+    };
+    using ContentChangeEventTypes = EnumSet<ContentChangeEventType>;
+    MOZ_CAN_RUN_SCRIPT void SendContentChange(ContentChangeEventTypes);
     void SendCompositionEventHandled();
 
     bool mIsRunning;
@@ -870,7 +873,7 @@ class IMEContentObserver final : public nsStubMutationObserver,
 
   // If this is set to non-zero, we need to notify IME of a position change when
   // it becomes 0.
-  uint8_t mTicksUntilNotifyIMEOfPositionChange = 0;
+  uint8_t mTicksUntilNotifyIMEOfLayoutChange = 0;
 
   bool mIsObserving = false;
   bool mIsTextControl = false;

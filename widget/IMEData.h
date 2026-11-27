@@ -968,8 +968,10 @@ std::ostream& operator<<(std::ostream& aStream,
                          const InputContextAction::Cause& aCause);
 std::ostream& operator<<(std::ostream& aStream,
                          const InputContextAction::FocusChange& aFocusChange);
+std::string format_as(const IMENotification::SelectionChangeData& aData);
 std::ostream& operator<<(std::ostream& aStream,
                          const IMENotification::SelectionChangeData& aData);
+std::string format_as(const IMENotification::TextChangeData& aData);
 std::ostream& operator<<(std::ostream& aStream,
                          const IMENotification::TextChangeData& aData);
 
