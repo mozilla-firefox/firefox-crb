@@ -1135,6 +1135,61 @@ add_task(async function testUploadedProfilesFeatures() {
       }
     );
 
+    info("Testing that the share button shares the profile URL");
+    if (!("share" in window.navigator)) {
+      ok(
+        !document.querySelector(".share-profile-button"),
+        "There is no share button when the Web Share API is unavailable"
+      );
+    }
+
+    // Stub the Web Share API to record what is shared and control the outcome.
+    let shareResult = Promise.withResolvers();
+    const sharedData = [];
+    window.navigator.share = data => {
+      sharedData.push(data);
+      return shareResult.promise;
+    };
+    await window.gUploadedProfilesManager.refresh();
+
+    const firstProfileItem = document.querySelector(".uploaded-profile-item");
+    const shareButton = firstProfileItem.querySelector(".share-profile-button");
+    is(
+      shareButton.dataset.l10nId,
+      "about-logging-share-uploaded-profile",
+      "Share button should have correct l10n ID"
+    );
+    const profilesError = document.querySelector("#uploaded-profiles-error");
+
+    shareButton.click();
+    Assert.deepEqual(
+      sharedData,
+      [{ url: firstProfileItem.querySelector(".uploaded-profile-url").href }],
+      "The URL of the profile is shared"
+    );
+
+    info("Dismissing the share dialog doesn't show an error");
+    shareResult.reject(new window.DOMException("Dismissed", "AbortError"));
+    await TestUtils.waitForTick();
+    ok(profilesError.hidden, "No error is shown after dismissing the dialog");
+
+    info("A failing share shows an error");
+    shareResult = Promise.withResolvers();
+    shareButton.click();
+    shareResult.reject(new window.DOMException("Failed", "DataError"));
+    await BrowserTestUtils.waitForMutationCondition(
+      profilesError,
+      { attributes: true, attributeFilter: ["hidden"] },
+      () => !profilesError.hidden
+    );
+    ok(true, "An error is shown when sharing fails");
+
+    info("A successful share hides the error");
+    shareResult = Promise.withResolvers();
+    shareButton.click();
+    ok(profilesError.hidden, "The error is hidden when sharing again");
+    shareResult.resolve();
+
     // Test actual deletion by clicking the delete button and handling the confirmation prompt
     info("Testing profile deletion with confirmation prompt");
 

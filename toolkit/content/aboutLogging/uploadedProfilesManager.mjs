@@ -111,10 +111,12 @@ export class UploadedProfilesManager {
     // Append at the end of the main content
     mainContent.append(this.#container);
 
-    // Add event delegation for delete buttons
+    // Add event delegation for share and delete buttons
     this.#profilesList.addEventListener("click", event => {
       if (event.target.classList.contains("delete-profile-button")) {
         this.#handleDeleteClick(event);
+      } else if (event.target.classList.contains("share-profile-button")) {
+        this.#handleShareClick(event);
       }
     });
   }
@@ -210,6 +212,16 @@ export class UploadedProfilesManager {
       const profileActions = document.createElement("div");
       profileActions.className = "uploaded-profile-actions";
 
+      if ("share" in navigator) {
+        const shareButton = document.createElement("moz-button");
+        shareButton.className = "share-profile-button";
+        document.l10n.setAttributes(
+          shareButton,
+          "about-logging-share-uploaded-profile"
+        );
+        profileActions.append(shareButton);
+      }
+
       const deleteButton = document.createElement("moz-button");
       deleteButton.className = "delete-profile-button";
       document.l10n.setAttributes(
@@ -225,6 +237,28 @@ export class UploadedProfilesManager {
 
       this.#profilesList.append(profileItem);
     });
+  }
+
+  /**
+   * Handle click on share button. This uses the Web Share API.
+   *
+   * @param {Event} event
+   */
+  async #handleShareClick(event) {
+    const profileItem = event.target.closest(".uploaded-profile-item");
+    const url = profileItem.querySelector(".uploaded-profile-url").href;
+
+    try {
+      this.#hideError();
+      await navigator.share({ url });
+    } catch (error) {
+      // The share promise rejects with an AbortError when the user dismisses
+      // the share dialog.
+      if (error.name !== "AbortError") {
+        console.error("Error sharing profile:", error);
+        this.#showError(String(error));
+      }
+    }
   }
 
   /**
