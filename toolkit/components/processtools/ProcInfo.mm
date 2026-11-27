@@ -24,6 +24,30 @@ static void GetTimeBase(mach_timebase_info_data_t* timebase) {
 
 namespace mozilla {
 
+#ifdef XP_MACOSX
+// Owns the thread port array returned by task_threads(): releases the send
+// right for each thread and frees the array on destruction.
+struct ScopedThreadList {
+  thread_act_port_array_t mList = nullptr;
+  mach_msg_type_number_t mCount = 0;
+
+  ScopedThreadList() = default;
+  ScopedThreadList(const ScopedThreadList&) = delete;
+  ScopedThreadList& operator=(const ScopedThreadList&) = delete;
+
+  ~ScopedThreadList() {
+    if (mCount == 0) {
+      return;
+    }
+    for (mach_msg_type_number_t i = 0; i < mCount; ++i) {
+      mach_port_deallocate(mach_task_self(), mList[i]);
+    }
+    vm_deallocate(mach_task_self(), (vm_address_t)mList,
+                  sizeof(thread_t) * mCount);
+  }
+};
+#endif  // XP_MACOSX
+
 nsresult GetCurrentProcessMemoryUsage(uint64_t* aResult) {
   if (!aResult) {
     return NS_ERROR_INVALID_ARG;
@@ -191,6 +215,41 @@ ProcInfoPromise::ResolveOrRejectValue GetProcInfoSync(
   }
 
   result.SetResolve(std::move(gathered));
+  return result;
+}
+
+ThreadCountPromise::ResolveOrRejectValue GetThreadCountsSync(
+    nsTArray<ThreadCountRequest>&& aRequests) {
+  ThreadCountPromise::ResolveOrRejectValue result;
+
+  CopyableTArray<ThreadCountResult> counts;
+#ifdef XP_MACOSX
+  counts.SetCapacity(aRequests.Length());
+
+  for (const auto& request : aRequests) {
+    MOZ_ASSERT(request.childTask != MACH_PORT_NULL,
+               "GetThreadCounts requires a valid task port on macOS - pass "
+               "GetChildTask() for children, mach_task_self() for the current "
+               "process.");
+    if (request.childTask == MACH_PORT_NULL) {
+      continue;
+    }
+
+    ScopedThreadList threads;
+    if (task_threads(request.childTask, &threads.mList, &threads.mCount) !=
+        KERN_SUCCESS) {
+      // Most likely the process is gone; skip it (see GetThreadCounts docs).
+      continue;
+    }
+
+    counts.AppendElement(
+        ThreadCountResult{request.requestId, uint32_t(threads.mCount)});
+  }
+#else
+  (void)aRequests;
+#endif
+
+  result.SetResolve(std::move(counts));
   return result;
 }
 

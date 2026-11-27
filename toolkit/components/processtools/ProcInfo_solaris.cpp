@@ -122,4 +122,13 @@ ProcInfoPromise::ResolveOrRejectValue GetProcInfoSync(
   return result;
 }
 
+ThreadCountPromise::ResolveOrRejectValue GetThreadCountsSync(
+    nsTArray<ThreadCountRequest>&& aRequests) {
+  // Not implemented on this platform.
+  (void)aRequests;
+  ThreadCountPromise::ResolveOrRejectValue result;
+  result.SetResolve(CopyableTArray<ThreadCountResult>());
+  return result;
+}
+
 }  // namespace mozilla
