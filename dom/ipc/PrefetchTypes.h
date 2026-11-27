@@ -21,6 +21,8 @@ namespace mozilla::dom {
 // Spec: https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record
 // (the `state` field).
 enum class PrefetchState : uint8_t {
+  // Accepted, but waiting for an in-flight slot before the fetch is started.
+  Queued,
   Ongoing,
   Completed,
   Canceled,
