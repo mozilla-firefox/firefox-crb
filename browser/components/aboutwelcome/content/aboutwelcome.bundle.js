@@ -2296,14 +2296,32 @@ class ProtonScreen extends (react__WEBPACK_IMPORTED_MODULE_0___default().PureCom
   }
 }
 const localizableThingPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
-  // A raw, untranslated string or a $l10n object.
-  raw: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)]),
+  // A raw, untranslated string (typically used for EN-only experiments) or
+  // an $l10n object.
+  raw: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    $l10n: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      // A unique identifier for the string. It can only contain letters,
+      // numbers, and hyphens (-).
+      id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // The text of the string.
+      text: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // A comment used to provide more context to localizers.
+      comment: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    })
+  })]),
   // Fluent string identifier from a .ftl file.
   string_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
   // Arguments for Fluent strings that have variables.
   args: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
   // A string to use as the element's aria-label attribute value.
   aria_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // If true, uses the installed lang pack for the Fluent strings.
+  useLangPack: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // Inline icons inside localized strings. Each entry maps a Fluent
+  // data-l10n-name to an icon object.
+  inline_icons: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // Adds zap style and content.
+  zap: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)]),
   // CSS overrides for configurable styles.
   ...Object.fromEntries(_MSLocalized__WEBPACK_IMPORTED_MODULE_1__.CONFIGURABLE_STYLES.map(key => [key, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)])]))
 })]);
@@ -2320,21 +2338,21 @@ const actionPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___defa
   dismiss: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // If true, the action needs to be awaited. Must be true if 'dismiss' is
   // set to 'actionResult'.
-  needsAwait: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  needsAwait: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // If true, navigates to the next step.
   navigate: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
-  // If true, go back to the previous step.
+  // If true, goes back to the previous step.
   goBack: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // If true, the actions for selected checkbox/radio selections are
   // performed in series. Set to true if this action is for the primary
   // button and the 'multiselect' tile is used.
-  collectSelect: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  collectSelect: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // If true, collects all text input on action.
-  collectTextInput: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  collectTextInput: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // If true, collects content toggle state on action.
-  collectContentToggleState: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  collectContentToggleState: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
   // Indicates that the action should navigate to a different screen.
-  advance_screens: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  advance_screens: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The behavior of the screen navigation. Behaves like 'dismiss'.
     behavior: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
     // How many screens and in which direction to advance. Positive integers
@@ -2343,48 +2361,623 @@ const actionPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___defa
     // The id of the screen to advance to. Id takes priority if both id and
     // direction are provided.
     id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
-  })
+  }),
+  // If true, adds flow parameters to the action.
+  addFlowParams: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // If true, sends dismiss telemetry when the action is performed.
+  sendDismissTelemetry: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // page_event_listeners actions only. If true, repositions the callout.
+  reposition: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
+  // If true, only fires on the screen's first view.
+  once: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // For tile actions only. The theme to apply. '<event>' uses the selected
+  // element's value.
+  theme: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // For tile actions only. '<event>' handles the selected element's value as
+  // a picker selection.
+  picker: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // For tile actions only. If true, saves the active theme as the initial
+  // theme to revert to.
+  persistActiveTheme: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
 });
 const buttonPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
-  // The text to show inside the button.
+  // The text to show inside the button. For dismiss buttons, it is optionally
+  // used to control the aria attributes and tooltip.
   label: localizableThingPropTypes,
-  // The JEXL targeting for conditional button display.
+  // The JEXL targeting for conditional button display. Only available for
+  // secondary buttons.
   targeting: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
   // The special message action invoked if the button is clicked.
   action: actionPropTypes,
-  // If true, shows an arrow icon next to the label.
+  // If true, shows an arrow icon next to the label. Only available for primary
+  // and secondary buttons.
   has_arrow_icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // If true, disables the button. If set to 'hasActiveMultiSelect', disables
   // the button until the user selects something in the multiselect tiles. If
   // set to 'hasTextInput', disables the button while the textarea tile is
   // empty or exceeds the character limit. If set to 'hasActiveSingleSelect',
   // disables the button until the user selects an option in the single-select
-  // tile.
-  disabled: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
-  // Overrides the style of the primary or secondary button.
+  // tile (only available for primary buttons). If set to 'hasPinnedSite',
+  // disables the button until the screen has had at least one successful pin
+  // (only available for primary buttons).
+  disabled: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["hasActiveMultiSelect", "hasTextInput", "hasActiveSingleSelect", "hasPinnedSite"]), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)]),
+  // Overrides the style of the button. "link" is only available for additional
+  // buttons.
   style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["primary", "secondary", "link"]),
-  // The text for the RTAMO install button, provided in the primary_button.
+  // The text for the RTAMO install button, provided in the primary button.
   install_complete_label: localizableThingPropTypes,
-  // If true, the primary_button will be focused when the screen is displayed.
+  // If true, the primary button will be focused when the screen is displayed.
   should_focus_button: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-  // If there are several buttons, this property of an additional_button can
+  // If there are several buttons, this property of an additional button can
   // control the orientation of all the buttons.
   flow: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["row", "column"]),
   // Extra text to show before a secondary button.
   text: localizableThingPropTypes,
-  // If there are several buttons, this property of an additional_button can
+  // If there are several buttons, this property of an additional button can
   // control the justification and alignment of the buttons row/column.
   // Defaults to 'end'.
   alignment: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["end", "start", "space-between"]),
   // The size of the dismiss_button (20px, 24px, 32px). Defaults to 32px.
   size: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["x-small", "small", "large"]),
-  // If true, adds a background to the dismiss_button.
+  // If true, adds a background to the dismiss button.
   background: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // CSS override for the marginBlock property.
   marginBlock: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
   // CSS override for the marginInline property.
   marginInline: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
 });
+const textPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([localizableThingPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([
+// Plain text.
+(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // Embedded URL link. Dispatches OPEN_URL with `args: href`.
+  href: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // OPEN_URL `where` argument. Defaults to "tab". Only meaningful
+  // alongside `href`.
+  where: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Inline link key. Resolved against
+  // `screen.content[link_key].action`. Mutually exclusive with
+  // `href`; if both are set, `href` wins.
+  link_key: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // An action to dispatch when the link is clicked, specified
+  // inline rather than looked up by key. Takes precedence over
+  // `href` and `link_key`. When `href` is also set it is still
+  // rendered on the anchor (so the link has a visible target and
+  // context menu), but the click dispatches this action instead of
+  // OPEN_URL.
+  action: actionPropTypes,
+  // Reported as the telemetry `source` when this segment's link is
+  // clicked. Only used alongside `action`; `link_key` segments
+  // report the link key instead.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // A raw, untranslated string (typically used for EN-only
+  // experiments) or an $l10n object.
+  raw: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    $l10n: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      // A unique identifier for the string. It can only contain
+      // letters, numbers, and hyphens (-).
+      id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // The text of the string.
+      text: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // A comment used to provide more context to localizers.
+      comment: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    })
+  })]),
+  // Fluent string identifier from a .ftl file.
+  string_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Arguments for Fluent strings that have variables.
+  args: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // A string to use as the element's aria-label attribute value.
+  aria_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // If true, uses the installed lang pack for the Fluent strings.
+  useLangPack: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // Inline icons inside localized strings. Each entry maps a
+  // Fluent data-l10n-name to an icon object.
+  inline_icons: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // Adds zap style and content.
+  zap: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)]),
+  // CSS overrides for configurable styles.
+  ...Object.fromEntries(_MSLocalized__WEBPACK_IMPORTED_MODULE_1__.CONFIGURABLE_STYLES.map(key => [key, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)])]))
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  // The URL of the inline image.
+  imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Optional alternative URL used in RTL locales.
+  rtlImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // <img> alt text. Defaults to ''. Not backed by Fluent, so set it here
+  // rather than in a Fluent string.
+  alt: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+})]))]);
+const sharedContentTilesProps = {
+  // CSS overrides of the content tile. Any CSS properties starting with '--'
+  // are also allowed.
+  style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // The content tile id.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The content tile header.
+  header: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The tile header title.
+    title: localizableThingPropTypes,
+    // The tile header subtitle.
+    subtitle: localizableThingPropTypes,
+    // The tile header title if the tile type is a textbox and the
+    // contentToggleChecked is false.
+    alternateTitle: localizableThingPropTypes,
+    // CSS overrides of the tile header.
+    style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      ...Object.fromEntries(_ContentTiles__WEBPACK_IMPORTED_MODULE_10__.HEADER_STYLES.map(key => [key, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)])]))
+    }),
+    // If true, adds the link-style class to the tile header.
+    linkStyle: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
+  }),
+  // The content tile title.
+  title: localizableThingPropTypes,
+  // The content tile subtitle.
+  subtitle: localizableThingPropTypes
+};
+const addonsPickerDataPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The addon container key ID.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The name of the addon.
+  name: localizableThingPropTypes,
+  // The type of the addon.
+  type: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The description of the addon.
+  description: localizableThingPropTypes,
+  // The icon of the addon.
+  icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The optional author of the addon.
+  author: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    byLine: localizableThingPropTypes,
+    id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    name: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  // The label for the addon install button.
+  install_label: localizableThingPropTypes,
+  // The complete label for the addon install button.
+  install_complete_label: localizableThingPropTypes,
+  // The action for the addon install button.
+  action: actionPropTypes,
+  // The source ID inside the click button telemetry ping sent by the
+  // addon install button.
+  source_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+});
+const singleSelectDataPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // Optionally used to control the aria description.
+  description: localizableThingPropTypes,
+  // If true, prevents the single-select tile from being clickable and usable.
+  inert: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // The icon displayed for the single select tile.
+  icon: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    background: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  // The id of the single select tile.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Text displayed in the single select tile with label-text styling.
+  label: localizableThingPropTypes,
+  // Items or text displayed below the label text.
+  body: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([localizableThingPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    items: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+      text: localizableThingPropTypes,
+      style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
+    }))
+  })]),
+  // Text displayed below the label and body texts with subtitle-text
+  // styling.
+  subtitle: localizableThingPropTypes,
+  // The theme to be applied when the tile is clicked.
+  theme: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Optional hover tooltip for the single select tile.
+  tooltip: localizableThingPropTypes,
+  // Optional type defined for the single select tile for styling.
+  type: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Optional flair text.
+  flair: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    centered: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    spacer: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    text: localizableThingPropTypes
+  }),
+  // CSS overrides for the single select tile.
+  style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // Optional button that can be added to the single select tile.
+  tilebutton: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    label: localizableThingPropTypes,
+    style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["primary", "secondary"]),
+    action: actionPropTypes
+  }),
+  // JEXL targeting evaluated to determine whether or not to display this
+  // single select tile item.
+  targeting: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The pill inside the pill navigation component corresponding to this single
+  // select tile.
+  pill: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    label: localizableThingPropTypes,
+    icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  })
+});
+const multiSelectDataPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // A unique id for this multiselect item.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The type of multiselect item.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["checkbox", "radio"]),
+  // Required for radio types. Set the same group for radios to ensure
+  // only one of them can be selected at a time.
+  group: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The default checked/unchecked value of the multiselect item.
+  defaultValue: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // The JEXL targeting that determines whether or not to show this
+  // multiselect item.
+  targeting: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The label for the multiselect item.
+  label: localizableThingPropTypes,
+  // Supporting copy for the item, rendered as a paragraph after the
+  // label and wired to the checkbox with `aria-describedby`. In the
+  // "select-card" and "grouped-card" designs it becomes a second,
+  // deemphasized line beneath the label.
+  description: localizableThingPropTypes,
+  // The special message action performed when the user clicks the
+  // primary button.
+  action: actionPropTypes,
+  // If true, randomizes the order of the multiselect items. By
+  // default, the items appear in the order they're listed in the data
+  // array.
+  randomize: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // CSS overrides for the div box containing the item and label.
+  style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+  // An optional icon that can replace the checkbox/radio buttons using
+  // CSS overrides.
+  icon: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
+  }),
+  // A note shown below the item when it is unchecked, which disappears
+  // when checked. The note is rendered in an `aria-live` region that
+  // is always present in the DOM, so assistive technology announces it
+  // when it appears. It is laid out as a full-width row beneath the
+  // item, so it is meant for wide surfaces such as about:welcome or a
+  // fullscreen Spotlight. It is not compatible with
+  // `multiSelectItemDesign: "picker"`, and is not recommended in a
+  // feature callout panel, which is too narrow for it.
+  uncheckedNotice: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    title: localizableThingPropTypes,
+    subtitle: localizableThingPropTypes,
+    iconURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  })
+});
+const actionChecklistDataPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The key of the action checklist item.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The source ID used in telemetry pings.
+  source_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // JEXL targeting that is evaluated to determine if this action item has been
+  // completed or not.
+  targeting: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Text for the action checklist item.
+  label: localizableThingPropTypes,
+  // The special message action invoked when the action checklist item is
+  // clicked.
+  action: actionPropTypes,
+  // If true, shows the external link icon.
+  showExternalLinkIcon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
+});
+const pinnableSitesDataPropTypes = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The pinnable site item key.
+  id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The name of the pinnable site item.
+  name: localizableThingPropTypes,
+  // The description of the pinnable site item.
+  description: localizableThingPropTypes,
+  // The URL of the icon inside the pinnable site item.
+  iconUrl: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // The pinnable site URL.
+  url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Sent in PIN_SITE telemetry ping.
+  personalized: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // The title of the pinnable site item.
+  title: localizableThingPropTypes
+});
+const tilePropType = prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in ContentTiles.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["link"]).isRequired,
+  // The action for link, single-select, or theme tiles.
+  action: actionPropTypes,
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in AddonsPicker.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["addons-picker"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([addonsPickerDataPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(addonsPickerDataPropTypes)]),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in SingleSelect.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["theme", "single-select"]).isRequired,
+  category: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["theme", "single-select"])
+  }),
+  // The action for link, single-select, or theme tiles.
+  action: actionPropTypes,
+  // The id of an item inside `data` that will be the default selected
+  // item.
+  selected: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // If true and applicable, automatically triggers the action for the
+  // default selected tile.
+  autoTrigger: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // Optional. Currently for single-select tiles only. Visual layout for
+  // the tile's items; 'carousel' lays the items out in a single row,
+  // centered on the selected item, with pill navigation above. The row has
+  // two sizes: in a modal at least 800px wide the selected card is
+  // enlarged and its neighbours peek in at a smaller size, and below that
+  // every card takes the smaller size and the selection is marked by its
+  // outline alone.
+  layout: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["carousel"]),
+  // Optional. Currently for single-select tiles only, and only applies
+  // when 'layout' is 'carousel'. Accessible name for the carousel pill
+  // navigation.
+  pill_nav_label: localizableThingPropTypes,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([singleSelectDataPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(singleSelectDataPropTypes)]),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in MobileDownloads.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["mobile_downloads"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // An optional QR code to display in the tile to encourage users to
+    // download Firefox.
+    QR_code: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      image_url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      alt_text: localizableThingPropTypes
+    }),
+    // An optional email link that users can use to email themselves a
+    // download link.
+    email: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      link_text: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    })
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in MultiSelect.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["multiselect"]).isRequired,
+  // Alternate presentations for the multiselect items.
+  multiSelectItemDesign: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["picker", "select-card", "grouped-card"]),
+  // Optional text for a multistage multiselect label.
+  label: localizableThingPropTypes,
+  // Optional text for a multistage multiselect footer label.
+  footer: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    checkedLabel: localizableThingPropTypes,
+    unCheckAllLabel: localizableThingPropTypes
+  }),
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([multiSelectDataPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(multiSelectDataPropTypes)]),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in TextAreaTile.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["textarea"]).isRequired,
+  // Tile configurations needed for the tile type. Using this tile type
+  // requires a `write_in_microsurvey: true` inside the message content to
+  // apply the write-in microsurvey data policy. This is REQUIRED for all
+  // write-in microsurveys. Messages using the textarea tile should always
+  // set this to true. It prevents `client_id` from being recorded with any
+  // telemetry events for the message, recording a unique `impression_id`
+  // instead. It also sends the events on the `microsurvey` ping instead of the
+  // `messaging-system` ping, which is anonymized by OHTTP, has stricter access
+  // control, and is retained for a shorter period. It still allows counting
+  // unique impressions and joining pings from the same message, but it can't
+  // be joined to any other telemetry data. So all events coming from a message
+  // with this set to true will be joinable by `impression_id`, but
+  // disconnected from other datasets. Optional; defaults to false if omitted.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The textarea tile id.
+    id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The character limit set for the textarea.
+    character_limit: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
+    // CSS overrides for the textarea container div.
+    container_style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // CSS overrides for the textarea character counter div.
+    char_counter_style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // CSS overrides for the textarea.
+    textarea_style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // The number of rows for the textarea.
+    rows: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
+    // The number of columns for the textarea.
+    column: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
+    // Optional placeholder text in the textarea.
+    placeholder: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in
+  // EmbeddedMigrationWizard.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["migration-wizard"]).isRequired,
+  // Optional configuration options for the migration wizard.
+  migration_wizard_options: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // If true, force show import all options.
+    force_show_import_all: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    // The title string for the option expander.
+    option_expander_title_string: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // If true, hides the option expander subtitle.
+    hide_option_expander_subtitle: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    // The success message string after import completion.
+    data_import_complete_success_string: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The header string for the selection section.
+    selection_header_string: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The subheader string for the selection section.
+    selection_subheader_string: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // If true, hides the select all option.
+    hide_select_all: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    // The inline margin for checkboxes.
+    checkbox_margin_inline: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The block margin for checkboxes.
+    checkbox_margin_block: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The text string for the import button.
+    import_button_string: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The CSS class for the import button.
+    import_button_class: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The font size for the header.
+    header_font_size: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The font weight for the header.
+    header_font_weight: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The block margin for the header.
+    header_margin_block: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The font size for the subheader.
+    subheader_font_size: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The font weight for the subheader.
+    subheader_font_weight: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The block margin for the subheader.
+    subheader_margin_block: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in
+  // EmbeddedThemePicker.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["theme-picker"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The install source for this theme picker component.
+    installSource: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in ActionChecklist.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["action_checklist"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([actionChecklistDataPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(actionChecklistDataPropTypes)]),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in EmbeddedBrowser.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["embedded_browser"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The URL to open inside the embedded browser component.
+    url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // CSS overrides for the embedded browser component.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in
+  // EmbeddedBackupRestore.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["backup_restore"]).isRequired,
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in
+  // EmbeddedFxBackupOptIn.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["fx_backup_file_path", "fx_backup_password"]).isRequired,
+  // Configuration options for the embedded Fx Backup opt-in component.
+  options: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // If true, then this is the file chooser screen.
+    hide_password_input: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    // If true, hides the secondary button.
+    hide_secondary_button: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+    // The l10n id for the file path label.
+    file_path_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The l10n id for the turn on backup header.
+    turn_on_backup_header: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The l10n id for the create password label.
+    create_password_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The l10n id for the confirmation label for turning on backup.
+    turn_on_backup_confirm_btn_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The l10n id for the cancellation label for turning on backup.
+    turn_on_backup_cancel_btn_label: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in
+  // ConfirmationChecklist.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["confirmation-checklist"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // CSS overrides for the confirmation checklist container.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // The confirmation checklist items.
+    items: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      // The icon for this confirmation checklist item.
+      icon: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+        background: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+      }),
+      // The text for this confirmation checklist item.
+      text: localizableThingPropTypes,
+      // The subtext for this confirmation checklist item. Can support
+      // <a data-l10n-name></a> markers inside the Fluent string that can
+      // be paired with `link_keys`.
+      subtext: localizableThingPropTypes,
+      // Each item corresponds to a <a data-l10n-name></a> marker inside
+      // the subtext Fluent string.
+      link_keys: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf((prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string))
+    }))
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in PinnableSitesList.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["pinnable_sites"]).isRequired,
+  // Where the tile draws its sites from. 'curated' (the default) uses the
+  // authored 'data' array. 'topFrecentSites' replaces it with the user's
+  // own most-used origins, computed locally from history. Currently only
+  // supported in Spotlight.
+  source: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["curated", "topFrecentSites"]),
+  // How many tiles the surface shows. Defaults to 5.
+  slots: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
+  // Only when source is 'topFrecentSites'. The fewest personalized origins
+  // the tile must produce for the message to be shown at all. When the
+  // user's history yields fewer, the message is withheld and records no
+  // impression. Defaults to 0, which permits an entirely backfilled,
+  // curated tile. A value above 'slots' always withholds the message, as
+  // does a tile left with no sites at all.
+  minPersonalized: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
+  // When personalization yields fewer origins than 'slots', fill the
+  // remaining slots from the authored 'data' array rather than leaving
+  // them blank. Defaults to true.
+  backfill: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // A label for an optional pin button.
+  pinButtonLabel: localizableThingPropTypes,
+  // If true, applies the always-visible styling on the pinnable sites
+  // list.
+  alwaysShowPinButton: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([pinnableSitesDataPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(pinnableSitesDataPropTypes)]),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in ContentToggle.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["content-toggle"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The tile data id.
+    id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // The content toggle label.
+    label: localizableThingPropTypes,
+    // If false, hides the content toggle label.
+    visible: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in TextBoxTile.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["textbox"]).isRequired,
+  // Tile configurations needed for the tile type.
+  data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The tile data id.
+    id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // Content inside the textbox-input.
+    content: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // Alternate content inside the textbox-input when the content is
+    // toggled.
+    alternateContent: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // CSS overrides for the textbox-input.
+    style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      backgroundColor: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      maxHeight: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    })
+  }),
+  ...sharedContentTilesProps
+}), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+  // The type of tile. More details can be found in LinkParagraph.jsx.
+  type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["text"]).isRequired,
+  // The paragraph text.
+  text: textPropTypes,
+  // Optional paragraph style.
+  font_styles: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  // Each item corresponds to a <a data-l10n-name></a> marker inside
+  // the text Fluent string.
+  link_keys: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf((prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)),
+  ...sharedContentTilesProps
+})]);
 const screenContentShape = {
   // The layout position of the screen.
   position: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["center", "center-large", "split", "callout", "card-stack"]),
@@ -2398,34 +2991,34 @@ const screenContentShape = {
   // background has any animated content.
   background_static: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
   // The hero image in the content.
-  hero_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  hero_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The default URL of the hero image.
-    static_url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The URL of the static hero image, provided if the default hero image
     // has animated content.
-    url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    static_url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
   }),
   // The image to insert into the secondary section background
   // if the screen is a card stack. "Float" is the default
   // and uses the "background" property under the hood, so no
   // extra URLs are needed.
-  card_stack_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  card_stack_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The image type; 'float' is a centered floating image (default),
     // 'bleed' is an image designed to bleed over the bottom edge of the
     // card, and 'banner' is a wider image that will bleed over two edges,
     // and convert to a centered image at smaller widths.
     type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["float", "bleed", "banner"]),
-    // The static CSS background to use with the 'bleed' image type
+    // The static CSS background to use with the 'bleed' image type.
     background_uncropped: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The static CSS background to use at the middle breakpoint
-    // for the 'banner' image type
+    // for the 'banner' image type.
     background_medium: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The static CSS background to use at the smallest breakpoint
-    // for the 'banner' image type
+    // for the 'banner' image type.
     background_small: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
   }),
   // A single checkbox action.
-  checkbox: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  checkbox: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The text to show next to the checkbox.
     label: localizableThingPropTypes,
     // The default value of the checkbox.
@@ -2439,13 +3032,13 @@ const screenContentShape = {
   secondary_button: buttonPropTypes,
   // The secondary button(s) that are displayed at the top of the screen, above
   // the main content.
-  secondary_button_top: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().array)]),
+  secondary_button_top: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([buttonPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(buttonPropTypes)]),
   // The additional button.
   additional_button: buttonPropTypes,
   // The dismiss button.
   dismiss_button: buttonPropTypes,
   // A submenu button that can be attached to another button.
-  submenu_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  submenu_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // Optionally used to control the aria label and can be used to override
     // CSS styles.
     label: localizableThingPropTypes,
@@ -2453,9 +3046,9 @@ const screenContentShape = {
     // the button it's attached to.
     style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["primary", "secondary"]),
     // The dropdown menu that appears when the user clicks the split button.
-    submenu: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-      // Submenu can have 3 types of items.
-      type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["action", "menu", "separator"]),
+    submenu: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      // A submenu item can be one of three types.
+      type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["action", "menu", "separator"]).isRequired,
       // The id used to identify the submenu item in telemetry.
       id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       // The text to show inside the submenu item.
@@ -2485,7 +3078,7 @@ const screenContentShape = {
   // A layout variant for the screen. 'inline' is a single row layout that
   // works well in tandem with title_logo. 'last-card' is the final card-stack
   // screen, with the title and subtitle split around a centered image slot.
-  layout: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  layout: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["inline", "last-card", "survey"]),
   // If true, adds a colorful gradient border to the screen. This is only
   // supported for screens with 'hide_arrow' set to true. There is no effect
   // if HCM or a custom theme add-on is enabled.
@@ -2495,13 +3088,13 @@ const screenContentShape = {
   // 'absolute_position' or 'arrow_position'. There is no effect if HCM or a
   // custom theme add-on is enabled.
   zap_shadow: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-  // If present, a custom gradient to use in conjuction with the
+  // If present, a custom gradient to use in conjunction with the
   // 'background' and 'zap_border' properties. Only applied if
   // both other properties are present.
   zap_border_gradient: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
   // An optional object representing a large illustration to show above other
   // content.
-  logo: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  logo: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The image URL.
     imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode image URL.
@@ -2510,13 +3103,12 @@ const screenContentShape = {
     reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    // A video URL, played once, rendered instead of the image ones above.
-    // Ignored (falls back to the image URLs above) for users who prefer reduced
-    // motion.
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
     videoURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // Right-to-left replacements for any of the URLs above, applied over them
     // when the document is RTL. Omitted keys keep their base value.
-    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
       imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       darkModeImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
@@ -2524,16 +3116,24 @@ const screenContentShape = {
       videoURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
     }),
     // The <img> alt text.
-    alt: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)]),
+    alt: localizableThingPropTypes,
     // The CSS style overriding the width property.
-    width: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    width: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the height property.
-    height: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    height: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The CSS style overriding the marginBlock property.
+    marginBlock: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The CSS style overriding the marginInline property.
+    marginInline: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The style of the image container.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // More style overrides applied to the <img> element.
+    imgStyle: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
   }),
   // An optional object representing an illustration anchored to a corner of the
   // screen. The fullscreen center-large layout anchors it to the window; every
   // other layout anchors it to the card.
-  corner_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  corner_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The image URL.
     imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode image URL.
@@ -2544,7 +3144,7 @@ const screenContentShape = {
     darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // Right-to-left replacements for any of the URLs above, applied over them
     // when the document is RTL. Omitted keys keep their base value.
-    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
       imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       darkModeImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
@@ -2556,13 +3156,13 @@ const screenContentShape = {
     // that physical corner.
     position: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["bottom-left", "bottom-right", "top-left", "top-right", "bottom-start", "bottom-end", "top-start", "top-end"]),
     // The CSS style overriding the width property.
-    width: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    width: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the height property.
-    height: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    height: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the marginBlock property.
-    marginBlock: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    marginBlock: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the marginInline property.
-    marginInline: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    marginInline: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // CSS overrides applied to the illustration container. Avoid 'translate'
     // and 'scale' when using 'entrance_animation', which animates those two
     // properties and would be overridden by them. 'transform' is unaffected.
@@ -2571,7 +3171,7 @@ const screenContentShape = {
     // direction is derived from 'position', so a 'bottom-left' illustration
     // rises and a 'top-left' one descends. Every type degrades to an
     // opacity-only fade for users who prefer reduced motion.
-    entrance_animation: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    entrance_animation: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
       // The animation to run. Defaults to 'none'.
       type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["none", "fade", "slide-block", "slide-inline", "slide-corner", "zoom"]),
       // The CSS length the illustration travels, for the 'slide-*' types.
@@ -2585,7 +3185,7 @@ const screenContentShape = {
   }),
   // An optional image shown in the center image slot of the 'last-card'
   // layout, revealed once the text split animation completes.
-  center_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  center_image: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The image URL.
     imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode image URL.
@@ -2595,32 +3195,39 @@ const screenContentShape = {
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // Right-to-left replacements for any of the URLs above, applied over them
-    // when the document is RTL. Any keys ommitted keep their base values.
-    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    // when the document is RTL. Any keys omitted keep their base values.
+    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
       imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       darkModeImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
     }),
     // The <img> alt text.
-    alt: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)]),
+    alt: localizableThingPropTypes,
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
+    videoURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The CSS width of the image slot. The split animation and margins adapt
     // to it. Defaults to 120px.
-    width: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    width: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS height of the image slot. Defaults to 120px.
-    height: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    height: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the marginBlock property. Useful for aligning
     // the image's focal point with the text. Only applies when the text is
     // split around the image, not when stacked at narrow breakpoints.
-    marginBlock: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    marginBlock: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the marginInline property. Only applies when
     // the text is split around the image, not when stacked at narrow breakpoints.
-    marginInline: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    marginInline: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The style of the image container.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // More style overrides applied to the <img> element.
+    imgStyle: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
   }),
   // The text for the headline.
   title: localizableThingPropTypes,
   // An optional object representing an icon to show next to the title.
-  title_logo: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  title_logo: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The image URL.
     imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode image URL.
@@ -2629,17 +3236,36 @@ const screenContentShape = {
     reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // Right-to-left replacements for any of the URLs above, applied over them
+    // when the document is RTL. Any keys omitted keep their base values.
+    rtl: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      imageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      darkModeImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      reducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      darkModeReducedMotionImageURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    }),
     // The <img> alt text.
-    alt: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)]),
+    alt: localizableThingPropTypes,
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
+    videoURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
     // The CSS style overriding the width property.
-    width: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    width: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The CSS style overriding the height property.
-    height: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    height: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The CSS style overriding the marginBlock property.
+    marginBlock: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    // The CSS style overriding the marginInline property.
+    marginInline: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
     // The logo alignment relative to the title.
-    alignment: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["top", "center", "bottom"])
+    alignment: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["top", "center", "bottom"]),
+    // The style of the image container.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // More style overrides applied to the <img> element.
+    imgStyle: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
   }),
   // Optional styling for the title.
-  title_style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  title_style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["fancy", "shine", "fancy shine"]),
   // The text to show below the title.
   subtitle: localizableThingPropTypes,
   // An extra block of configurable content below the title/subtitle but above
@@ -2650,58 +3276,46 @@ const screenContentShape = {
     type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["text", "image"]),
     // The paragraph text. Can be either a localizableThing that can be
     // combined with 'link_key's to attach actions to the
-    // `<a data-l10n-name='...'> or an array of either raw strings or a
+    // `<a data-l10n-name='...'>` or an array of either raw strings or a
     // localizableThing with 'href'/'link_key'/neither.
-    text: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([localizableThingPropTypes, (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().array)]),
+    text: textPropTypes,
     // A list of the link keys that exist in screen.content. The value of
     // that key must be an object with an 'action' property and the
     // 'string_id' in the 'text' object must refer to a Fluent string that
     // contains an anchor element with `data-l10n-name='LINK_KEY_NAME'`.
     link_keys: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf((prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)),
     // Optional paragraph style.
-    font_styles: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    font_styles: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["legal"])
   })),
   // Optionally used to override the aria attributes or tooltip of the steps
   // indicator. Not recommended.
-  steps_indicator: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  steps_indicator: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     string_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
   }),
-  // Tile object(s) to display in the screen.
-  tiles: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().array), prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-    // The type of tile. More details can be found in ContentTiles.jsx.
-    type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["link", "textbox", "multiselect", "single-select", "theme", "backup_restore", "addons-picker", "migration-wizard", "mobile_downloads", "textarea", "theme-picker", "embedded_browser", "fx_backup_file_path", "fx_backup_password", "confirmation-checklist", "pinnable_sites", "content-toggle", "action_checklist"]).isRequired,
-    // CSS overrides of the tile container. Any CSS properties starting with
-    // '--' are also allowed.
-    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
-    // Optional, currently for single-select tiles only. Visual layout for
-    // the tile's items.
-    layout: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["carousel"]),
-    // Optional, currently for single-select tiles only. Accessible name for
-    // the carousel pill navigation.
-    pill_nav_label: localizableThingPropTypes,
-    // Array of tile configurations needed for the tile type.
-    data: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().array), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)])
-  })]),
+  // Tile object(s) to display on the screen, rendered in ContentTiles.jsx.
+  tiles: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(tilePropType), tilePropType]),
   // The tiles container.
-  tiles_container: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  tiles_container: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The position of the tiles container relative to supporting content like
     // 'above_button_content'. By default, it comes before the supporting
     // content.
-    position: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    position: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["after_supporting_content"]),
     // CSS overrides.
-    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object)
+    style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      ...Object.fromEntries(_ContentTiles__WEBPACK_IMPORTED_MODULE_10__.CONTAINER_STYLES.map(key => [key, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)])]))
+    })
   }),
   // The header for a tiles container.
   tiles_header: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
-    title: localizableThingPropTypes
+    title: localizableThingPropTypes.isRequired
   }),
-  // If true, applies the reverse split layout onto the screen (i.e. inverts
+  // If true, applies the reverse split layout onto the screen (i.e., inverts
   // the visual order of the split screens).
   reverse_split: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // The <img> alt text.
   image_alt_text: localizableThingPropTypes,
   // The hero text.
-  hero_text: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([localizableThingPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  hero_text: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([localizableThingPropTypes, prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     title: localizableThingPropTypes,
     subtitle: localizableThingPropTypes
   })]),
@@ -2717,9 +3331,9 @@ const screenContentShape = {
   action_buttons_above_content: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)]),
   // If true, adds noodle illustrations that peek out behind the screen.
   has_noodles: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-  // If true, sets narrow attribute to the outer element of the screen.
+  // If true, sets the narrow attribute on the outer element of the screen.
   narrow: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-  // The language switcher component that appears of there is a language
+  // The language switcher component that appears if there is a language
   // mismatch screen.
   languageSwitcher: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     downloading: localizableThingPropTypes,
@@ -2731,38 +3345,53 @@ const screenContentShape = {
     action: actionPropTypes
   }),
   // Displays the OnboardingVideo component.
-  video_container: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
-  // Overrides all text color of the screen.
+  video_container: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The URL of the video to play.
+    video_url: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+    // If true, autoplay is enabled for the video.
+    autoPlay: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
+  }),
+  // Overrides all text color on the screen.
   text_color: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["light", "dark"]),
-  // If true, overrides the spotlight screen styling to look like the system
+  // If true, overrides the Spotlight screen styling to look like the system
   // prompt style.
   isSystemPromptStyleSpotlight: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // CSS overrides for the screen style.
   screen_style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
-    overflow: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    display: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    height: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    width: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    padding: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    overflow: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    display: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    height: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    width: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    padding: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
+    justifyContent: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)])
   }),
-  // If true, prevents the spotlight from entering responsive design mode at
+  // If true, prevents the Spotlight from entering responsive design mode at
   // widths less than 800px.
   no_rdm: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // The CSS override for the paddingBlock styling for split layout contents.
-  split_content_padding_block: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  split_content_padding_block: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
   // The CSS override for the paddingInline styling for split layout contents.
-  split_content_padding_inline: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  split_content_padding_inline: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOfType([(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string), (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number)]),
   // Text below the subtitle that can include hyperlinks.
-  cta_paragraph: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  cta_paragraph: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    // The text to be displayed.
     text: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
       // The Fluent string id for the paragraph text.
       string_id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-      // The name of the '<a data-l10n-name'=''></a>' marker inside the
+      // The name of the `<a data-l10n-name=''></a>` marker inside the
       // string_id.
       string_name: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
     }),
-    // The special message action to be invoked when the cta text is clicked.
-    action: actionPropTypes
+    // The special message action to be invoked when the CTA text is clicked.
+    action: actionPropTypes,
+    // CSS style overrides for the paragraph text.
+    style: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
+    // The icon to be displayed next to the CTA text.
+    icon: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+      iconURL: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string)
+    }),
+    // If true, applies the info-tile styling to the CTA paragraph.
+    info_tile: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
   }),
   // Info text displayed at the bottom of the screen.
   info_text: localizableThingPropTypes,
@@ -2771,18 +3400,18 @@ const screenContentShape = {
   isEncryptedBackup: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
   // The action for the migration start event as part of the embedded migration
   // wizard component within about:welcome.
-  migrate_start: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-    action: actionPropTypes
+  migrate_start: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    action: actionPropTypes.isRequired
   }),
   // The action for the migration close event as part of the embedded migration
   // wizard component within about:welcome.
-  migrate_close: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-    action: actionPropTypes
+  migrate_close: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    action: actionPropTypes.isRequired
   }),
   // The subtitle text for the action checklist.
   action_checklist_subtitle: localizableThingPropTypes,
   // The remove checklist button in the action checklist.
-  remove_checklist_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  remove_checklist_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
     // The text inside the remove checklist button.
     label: localizableThingPropTypes,
     // The id used to identify the button in telemetry.
@@ -2791,52 +3420,79 @@ const screenContentShape = {
     action: actionPropTypes
   }),
   // A submenu button with a button type of 'more'.
-  more_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-    // Submenu can have 3 types of items.
-    type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["action", "menu", "separator"]),
-    // The id used to identify the submenu item in telemetry.
-    id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    // The text to show inside the submenu item.
-    label: localizableThingPropTypes,
-    // Used only for type 'action'. The special message action invoked if
-    // the submenu item is clicked.
-    action: actionPropTypes,
-    // An optional URL specifying an icon to show next to the label.
-    icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-    // Used only for type 'menu'. The submenu items to show when the user
-    // hovers over this item. Recursive.
-    submenu: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf((prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object))
+  more_button: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    submenu: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+      // A submenu item can be one of three types.
+      type: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["action", "menu", "separator"]),
+      // The id used to identify the submenu item in telemetry.
+      id: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // The text to show inside the submenu item.
+      label: localizableThingPropTypes,
+      // Used only for type 'action'. The special message action invoked if
+      // the submenu item is clicked.
+      action: actionPropTypes,
+      // An optional URL specifying an icon to show next to the label.
+      icon: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+      // Used only for type 'menu'. The submenu items to show when the user
+      // hovers over this item. Recursive.
+      submenu: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf((prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object))
+    })),
+    // Overrides the style of the button.
+    style: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["primary", "secondary"])
   }),
+  // A skip button that is passed into the EmbeddedBackupRestore content tile.
+  skip_button: buttonPropTypes,
   // An optional array of event listeners to add to the page where the screen
   // is shown.
-  page_event_listeners: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-    params: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+  page_event_listeners: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().arrayOf(prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+    params: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
       // The event type string. Supports any DOM event type, timeout and
-      // interval for timers, internal feature callout events 'touradvance'
-      // and 'tourend'.
+      // interval for timers, and internal feature callout events
+      // 'touradvance' and 'tourend'.
       type: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
       // The target selector.
       selector: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
-      options: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
-        // If true, handles events in capturing phase.
+      // addEventListener options.
+      options: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().exact({
+        // If true, handles events in the capture phase.
         capture: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-        // If true, removes listener after first event.
+        // If true, removes the listener after the first event.
         once: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
-        // If true, prevents default action in event handler.
+        // If true, prevents the default action in the event handler.
         preventDefault: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
         // Used only for timeout and interval event types to invoke the action
         // on a timer.
         interval: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().number),
-        // If true, extends addEventListener to all windows.
+        // If true, adds the listener to all windows.
         every_window: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool)
       })
     }),
+    // The special message action to be invoked.
     action: actionPropTypes
   })),
+  // A special message action that fires automatically when the screen is first
+  // shown.
+  impression_action: actionPropTypes,
+  // An action to perform when the Escape key is pressed, or when a page event
+  // listener invokes an action containing `dismiss: true`. Unnecessary if
+  // your message has a dismiss_button.
+  dismiss_action: actionPropTypes,
+  // By default, hitting Escape will dismiss the callout, whether it is focused
+  // or not. Setting this to true will stop keypresses from dispatching up to
+  // the callout from outside it, though they will still work when the callout
+  // is focused. Best to leave this as-is.
+  ignorekeys: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // Set to true for RTAMO screens in about:welcome.
+  isRtamo: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().bool),
+  // The CSS backdrop for the content.
+  backdrop: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().string),
+  backup_show_filepicker: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().shape({
+    action: actionPropTypes
+  }),
   // Add any `link_key` properties that are used in messages in
-  //    OnboardingMessageProvider.sys.mjs
-  //    FeatureCalloutMessages.sys.mjs
-  //    PanelTestProvider.sys.mjs
+  //    OnboardingMessageProvider.sys.mjs,
+  //    FeatureCalloutMessages.sys.mjs, and
+  //    PanelTestProvider.sys.mjs,
   // to prevent the propTypes validation unit test from throwing an invalid
   // prop error.
   here: (prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().object),
@@ -4996,7 +5652,9 @@ const LinkParagraph = props => {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CONTAINER_STYLES: () => (/* binding */ CONTAINER_STYLES),
 /* harmony export */   ContentTiles: () => (/* binding */ ContentTiles),
+/* harmony export */   HEADER_STYLES: () => (/* binding */ HEADER_STYLES),
 /* harmony export */   getTileImpressionContext: () => (/* binding */ getTileImpressionContext)
 /* harmony export */ });
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1);

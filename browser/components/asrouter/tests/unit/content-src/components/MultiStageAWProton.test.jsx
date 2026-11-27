@@ -48,7 +48,7 @@ describe("MultiStageAboutWelcomeProton module", () => {
           },
           { content: screen.content },
           "prop",
-          "MultiStageProtonScreen"
+          screen.id
         );
       }
 

@@ -22,7 +22,7 @@ import { ContentToggle } from "./ContentToggle";
 import { TextBoxTile } from "./TextBoxTile";
 import { LinkParagraph } from "./LinkParagraph";
 
-const HEADER_STYLES = [
+export const HEADER_STYLES = [
   "backgroundColor",
   "border",
   "padding",
@@ -40,7 +40,7 @@ const TILE_STYLES = [
   "paddingInline",
 ];
 
-const CONTAINER_STYLES = [
+export const CONTAINER_STYLES = [
   "padding",
   "margin",
   "marginBlock",

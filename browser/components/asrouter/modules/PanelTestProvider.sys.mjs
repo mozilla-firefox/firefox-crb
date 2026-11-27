@@ -2654,7 +2654,6 @@ const MESSAGES = () => [
             tiles: {
               type: "confirmation-checklist",
               data: {
-                inert: true,
                 style: { width: "500px" },
                 items: [
                   {
@@ -2747,7 +2746,6 @@ const MESSAGES = () => [
             tiles: {
               type: "confirmation-checklist",
               data: {
-                inert: true,
                 style: { width: "500px" },
                 items: [
                   {
