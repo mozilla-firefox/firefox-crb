@@ -268,7 +268,7 @@ class ArenaCollection {
       return false;
     }
 
-    mDefaultArena = CreateArena(/* aIsPrivate = */ false, &params);
+    mDefaultArena = CreateArena(ArenaType::DEFAULT, &params);
     if (!mDefaultArena) {
       return false;
     }
@@ -298,9 +298,10 @@ class ArenaCollection {
   }
 
   // The requested arena must exist.
-  inline arena_t* GetPrivateArena(arena_id_t aArenaId);
+  inline arena_t* GetPrivateArena(arena_id_t aArenaId) MOZ_EXCLUDES(mLock);
 
-  arena_t* CreateArena(bool aIsPrivate, arena_params_t* aParams)
+  enum ArenaType { DEFAULT, THREAD_LOCAL, PRIVATE };
+  arena_t* CreateArena(ArenaType aArenaType, arena_params_t* aParams)
       MOZ_EXCLUDES(mLock);
 
   void DisposeArena(arena_t* aArena) MOZ_EXCLUDES(mLock) {
@@ -559,7 +560,6 @@ class ArenaCollection {
   }
 
   arena_t* mDefaultArena = nullptr;
-  arena_id_t mLastPublicArenaId MOZ_GUARDED_BY(mLock) = 0;
 
   // Accessing mArenas and mPrivateArenas can only be done while holding mLock.
   Tree mArenas MOZ_GUARDED_BY(mLock);
@@ -690,7 +690,8 @@ static inline arena_t* thread_local_arena(bool enabled) {
     // with `false`, except maybe at shutdown.
     arena_params_t params;
     params.mLabel = "Thread local";
-    arena = gArenas.CreateArena(/* aIsPrivate = */ false, &params);
+    arena =
+        gArenas.CreateArena(ArenaCollection::ArenaType::THREAD_LOCAL, &params);
   }
 
   if (!arena) {
@@ -3188,20 +3189,20 @@ arena_t::~arena_t() {
   mId = 0;
 }
 
-arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
+arena_t* ArenaCollection::CreateArena(ArenaType aArenaType,
                                       arena_params_t* aParams) {
-  if (!mArenaIdKey && mDefaultArena) {
-    // If this call isn't creating the default arena (because the default
-    // arena is already set) but mArenaIdKey isn't yet available, then this
-    // CreateArena call is racing with initialisation.  If this happens then
-    // fefuse to create an arena, which isn't ideal however this situation
-    // is incredibly rare
+  if (!mArenaIdKey && aArenaType != ArenaType::DEFAULT) {
+    // If this call isn't creating the default arena but mArenaIdKey isn't
+    // yet available, then this CreateArena call is racing with
+    // initialisation.  If this happens then fefuse to create an arena,
+    // which isn't ideal however this situation is incredibly rare
     return nullptr;
   }
 
   // Allocate the memory for the arena before taking any locks, since it
   // will use the base allocator locks and could run a system call.
-  arena_t* ret = new (fallible) arena_t(aParams, aIsPrivate);
+  arena_t* ret =
+      new (fallible) arena_t(aParams, aArenaType == ArenaType::PRIVATE);
   if (!ret) {
     // Only reached if there is an OOM error.
     _malloc_message(_getprogname(), ": (malloc) Error initializing arena\n");
@@ -3222,21 +3223,27 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
     ret->mIsDeferredPurgeEnabled = mIsDeferredPurgeEnabled;
   }
 
-  // For public arenas, it's fine to just use incrementing arena id
-  if (!aIsPrivate) {
-    ret->mId = mLastPublicArenaId++;
-    mArenas.Insert(ret);
-    return ret;
+  if (aArenaType == ArenaType::DEFAULT) {
+    MOZ_ASSERT(!mDefaultArena);
+    // When the default arena is being created mArenaIdKey hasn't been
+    // created yet, so the default arena always has ID 0.
+    MOZ_ASSERT(!mArenaIdKey);
+    ret->mId = 0;
+  } else {
+    // Slightly obfuscate the id by XORing a key generated once, and rotate
+    // the bits by an amount also generated once.
+    ret->mId = std::rotr(reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey,
+                         mArenaIdRotation);
+    // It's impossible to generate an ID of 0, see InitCrypt().
+    MOZ_ASSERT(ret->mId != 0);
   }
 
-  // For private arenas, slightly obfuscate the id by XORing a key generated
-  // once, and rotate the bits by an amount also generated once.
-  MOZ_ASSERT(mArenaIdKey);
-  ret->mId = std::rotr(reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey,
-                       mArenaIdRotation);
-  // It's impossible to generate an ID of 0, see InitCrypt().
-  MOZ_ASSERT(ret->mId != 0);
-  mPrivateArenas.Insert(ret);
+  if (aArenaType == ArenaType::PRIVATE) {
+    mPrivateArenas.Insert(ret);
+  } else {
+    mArenas.Insert(ret);
+  }
+
   return ret;
 }
 
@@ -4077,22 +4084,34 @@ inline arena_t* ArenaCollection::GetPrivateArena(arena_id_t aArenaId) {
     return nullptr;
   }
 
+  // The default arena cannot be returned this way.
+  MOZ_ASSERT(aArenaId != 0);
+
   // This function is not expected to be called before at least one private
   // arena was created.
   // coverity[missing_lock]
   MOZ_RELEASE_ASSERT(mArenaIdKey);
+
   arena_t* result = reinterpret_cast<arena_t*>(
       std::rotl(aArenaId, mArenaIdRotation) ^ mArenaIdKey);
   MOZ_RELEASE_ASSERT(result);
   MOZ_DIAGNOSTIC_ASSERT(result->mMagic == ARENA_MAGIC);
   MOZ_RELEASE_ASSERT(result->mId == aArenaId);
+  // The arena must be a private arena.
+  MOZ_RELEASE_ASSERT(result->mIsPrivate);
+#ifdef MOZ_DEBUG
+  MutexAutoLock lock(mLock);
+  MOZ_ASSERT(mPrivateArenas.Search(aArenaId));
+#endif
+
   return result;
 }
 
 inline arena_id_t MozJemalloc::moz_create_arena_with_params(
     arena_params_t* aParams) {
   if (malloc_init()) {
-    arena_t* arena = gArenas.CreateArena(/* IsPrivate = */ true, aParams);
+    arena_t* arena =
+        gArenas.CreateArena(ArenaCollection::ArenaType::PRIVATE, aParams);
     if (arena) {
       return arena->mId;
     }
