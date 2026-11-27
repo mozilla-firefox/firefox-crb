@@ -673,12 +673,15 @@ struct IMENotification final {
   IMENotification(const IMENotification& aOther) = default;
   ~IMENotification() { Clear(); }
 
-  MOZ_IMPLICIT IMENotification(IMEMessage aMessage) : mMessage(aMessage) {}
+  MOZ_IMPLICIT IMENotification(IMEMessage aMessage)
+      : mMessage(aMessage),
+        mLayoutChanged(aMessage == NOTIFY_IME_OF_POSITION_CHANGE) {}
 
   IMENotification& operator=(const IMENotification& aOther) = default;
 
   void Clear() {
     mMessage = NOTIFY_IME_OF_NOTHING;
+    mLayoutChanged = false;
     mTextChangeData.reset();
     mSelectionChangeData.reset();
     mMouseButtonEventData.reset();
@@ -702,6 +705,7 @@ struct IMENotification final {
     if (aNotification.mSelectionChangeData) {
       mSelectionChangeData = aNotification.mSelectionChangeData;
     }
+    mLayoutChanged |= aNotification.mLayoutChanged;
     if (aNotification.mMouseButtonEventData) {
       if (!mMouseButtonEventData) {
         mMouseButtonEventData.emplace(
@@ -954,6 +958,9 @@ struct IMENotification final {
 
   // NOTIFY_IME_OF_TEXT_CHANGE specific data
   Maybe<TextChangeData> mTextChangeData;
+
+  // NOTIFY_IME_OF_POSITION_CHANGE specific data
+  bool mLayoutChanged = false;
 
   // NOTIFY_IME_OF_MOUSE_BUTTON_EVENT specific data
   Maybe<MouseButtonEventData> mMouseButtonEventData;

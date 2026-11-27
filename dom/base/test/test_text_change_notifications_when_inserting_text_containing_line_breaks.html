@@ -26,12 +26,14 @@ SimpleTest.waitForFocus(async () => {
       case "request-to-cancel":
         aTIP.cancelComposition();
         break;
-      case "notify-text-change":
-        textChanges.push({
-          offset: aNotification.offset,
-          removedLength: aNotification.removedLength,
-          addedLength: aNotification.addedLength
-        });
+      case "notify-content-change":
+        if (aNotification.textChanged) {
+          textChanges.push({
+            textChangeOffset: aNotification.textChangeOffset,
+            removedLength: aNotification.removedLength,
+            addedLength: aNotification.addedLength
+          });
+        }
         break;
     }
     return true;
@@ -46,7 +48,9 @@ SimpleTest.waitForFocus(async () => {
       return "[]";
     }
     function stringifyTextChange(aChange) {
-      return `{ offset: ${aChange.offset}, removedLength: ${aChange.removedLength}, addedLength: ${aChange.addedLength} }`;
+      return `{ textChangeOffset: ${aChange.textChangeOffset}, removedLength: ${
+        aChange.removedLength
+      }, addedLength: ${aChange.addedLength} }`;
     }
     let result = "";
     for (const change of aChanges) {
@@ -94,7 +98,7 @@ SimpleTest.waitForFocus(async () => {
           stringifyTextChanges(textChanges),
           stringifyTextChanges([
             {
-              offset: insertionOffset,
+              textChangeOffset: insertionOffset,
               removedLength: rightTextLength,
               addedLength: insertingText.length + rightTextLength,
             },
@@ -115,7 +119,7 @@ SimpleTest.waitForFocus(async () => {
             {
               // At undoing, the offset is always same as the inserted offset because we keep the
               // left node at joining nodes so that simply removing the inserted data.
-              offset: insertionOffset,
+              textChangeOffset: insertionOffset,
               // Removed length should be the length of inserted text and the text length of the
               // right node at split because its data is once removed to move into the left `Text`.
               removedLength: insertingText.length + rightTextLength,

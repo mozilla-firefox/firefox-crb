@@ -44,35 +44,41 @@ interface nsITextInputProcessorNotification : nsISupports
    *   This is notified when an editable editor loses focus and Gecko stops
    *   observing the changes in the content.
    *
-   * "notify-text-change" (optional)
-   *   This is notified when text in the focused editor is modified.
+   * "notify-content-change" (optional)
+   *   This is notified when text content and/or selection range in the focused
+   *   editor and/or the focused element's position or size is changed.
    *   Some attributes below are available to retrieve the detail.
    *   IME shouldn't change DOM tree, focus nor something when this is notified.
    *   Note that when there is no chance to notify you of some text changes
-   *   safely, this represents all changes as a change.
-   *
-   * "notify-selection-change" (optional)
-   *   This is notified when selection in the focused editor is changed.
-   *   Some attributes below are available to retrieve the detail.
-   *   IME shouldn't change DOM tree, focus nor something when this is notified.
-   *   Note that when there was no chance to notify you of this safely, this
-   *   represents the latest selection change.
-   *
-   * "notify-position-change" (optional)
-   *   This is notified when layout is changed in the editor or the window
-   *   is moved.
-   *   IME shouldn't change DOM tree, focus nor something when this is notified.
-   *   Note that when there was no chance to notify you of this safely, this
-   *   represents the latest layout change.
+   *   safely, this represents all changes as a change, the latest selection
+   *   change.
    */
   readonly attribute ACString type;
 
   /**
-   * This attribute has a vaild value when type is "notify-selection-change".
+   * This return true if the type is "notify-content-change" and a text change
+   * occurred.
+   */
+  readonly attribute boolean textChanged;
+
+  /**
+   * This return true if the type is "notify-content-change" and a selection
+   * change occurred.
+   */
+  readonly attribute boolean selectionChanged;
+
+  /**
+   * This return true if the type is "notify-content-change" and a layout change
+   * occurred.
+   */
+  readonly attribute boolean layoutChanged;
+
+  /**
+   * This attribute has a valid value when selectionChanged is true.
    * This is true if selection has a range.  Otherwise, i.e., there is no
    * range such as after calling Selection.removeAllRanges, this is false.
    */
-  readonly attribute boolean hasRange;
+  readonly attribute boolean hasSelectionRange;
 
   /**
    * Be careful, line breakers in the editor are treated as native line
@@ -83,89 +89,93 @@ interface nsITextInputProcessorNotification : nsISupports
    */
 
   /**
-   * This attribute has a valid value when type is "notify-text-change", or
-   * is "notify-selection-change" and hasRange is true.
-   * This is offset of the start of modified text range if type is
-   * "notify-text-change".  Or offset of start of selection if type is
-   * "notify-selection-change".
+   * This attribute has a valid value when textChanged is true.
+   * This is offset of the start of modified text range.
    */
-  readonly attribute unsigned long offset;
+  readonly attribute unsigned long textChangeOffset;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change"
-   * and hasRange is true.
+   * This attribute has a valid value when selectionChanged is true.
+   * This is offset of start of selection.
+   */
+  readonly attribute unsigned long selectionOffset;
+
+  /**
+   * This attribute has a valid value when selectionChanged is true and
+   * hasSelectionRange is true.
    * This is selected text.  I.e., the length is selected length and
    * it's empty if the selection is collapsed.
    */
-  readonly attribute AString text;
+  readonly attribute AString selectedText;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change".
+   * This attribute has a valid value when selectionChanged is true.
    * This is set to true when the selection is collapsed or no range.
    * Otherwise, false.
    */
-  readonly attribute boolean collapsed;
+  readonly attribute boolean selectionCollapsed;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change"
-   * and hasRange is true.
+   * This attribute has a valid value when selectionChanged is true and
+   * hasSelectionRange is true.
    * This is selected length.  I.e., if this is 0, collapsed is set to true.
    */
-  readonly attribute uint32_t length;
+  readonly attribute uint32_t selectionLength;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change"
-   * and hasRange is true.
+   * This attribute has a valid value when selectionChanged is true and
+   * hasSelectionRange is true.
    * When selection is created from latter point to former point, this is
    * set to true.  Otherwise, false.
-   * I.e., if this is true, offset + length is the anchor of selection.
+   * I.e., if this is true, selectionOffset + selectionLength is the anchor of
+   * selection.
    */
-  readonly attribute boolean reversed;
+  readonly attribute boolean selectionRangeReversed;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change".
+   * This attribute has a valid value when selectionChanged is true.
    * This indicates the start of the selection's writing mode.
    * The value can be "horizontal-tb", "vertical-rl" or "vertical-lr".
    */
   readonly attribute ACString writingMode;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change".
+   * This attribute has a valid value when selectionChanged is true.
    * If the selection change was caused by composition, this is set to true.
    * Otherwise, false.
    */
   readonly attribute boolean causedByComposition;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change".
+   * This attribute has a valid value when selectionChanged is true.
    * If the selection change was caused by selection event, this is set to true.
    * Otherwise, false.
    */
   readonly attribute boolean causedBySelectionEvent;
 
   /**
-   * This attribute has a valid value when type is "notify-selection-change".
+   * This attribute has a valid value when selectionChanged is true.
    * If the selection change occurred during composition, this is set to true.
    * Otherwise, false.
    */
   readonly attribute boolean occurredDuringComposition;
 
   /**
-   * This attribute has a valid value when type is "notify-text-change".
+   * This attribute has a valid value when textChanged is true.
    * This is removed text length by the change(s).  If this is empty, new text
    * was just inserted.  Otherwise, the text is replaced with new text.
    */
   readonly attribute unsigned long removedLength;
 
   /**
-   * This attribute has a valid value when type is "notify-text-change".
+   * This attribute has a valid value when textChanged is true.
    * This is added text length by the change(s).  If this is empty, old text
    * was just deleted.  Otherwise, the text replaces the old text.
    */
   readonly attribute unsigned long addedLength;
 
   /**
-   * This attribute has a valid value when type is "notify-text-change".
+   * This attribute has a valid value when textChanged is true.
    * If the text change(s) was caused only by composition, this is set to true.
    * Otherwise, false.  I.e., if one of text changes are caused by JS or
    * modifying without composition, this is set to false.
@@ -173,7 +183,7 @@ interface nsITextInputProcessorNotification : nsISupports
   readonly attribute boolean causedOnlyByComposition;
 
   /**
-   * This attribute has a valid value when type is "notify-text-change".
+   * This attribute has a valid value when textChanged is true.
    * If at least one text change not caused by composition occurred during
    * composition, this is set to true.  Otherwise, false.
    * Note that this is set to false when new change is caused by neither
@@ -186,7 +196,7 @@ interface nsITextInputProcessorNotification : nsISupports
   readonly attribute boolean includingChangesDuringComposition;
 
   /**
-   * This attribute has a valid value when type is "notify-text-change".
+   * This attribute has a valid value when textChanged is true.
    * If at least one text change occurred when there was no composition, this
    * is set to true.  Otherwise, false.
    */
