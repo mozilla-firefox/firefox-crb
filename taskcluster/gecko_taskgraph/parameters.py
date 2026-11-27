@@ -80,6 +80,7 @@ class GeckoParametersSchema(Schema, kw_only=True, rename=None):
     release_history: dict[str, dict]
     release_partners: Optional[list[str]]
     release_partner_config: Optional[dict]
+    release_partner_config_is_explicit: bool = False
     release_type: str
     release_product: Optional[str]
     shipping: bool
@@ -132,6 +133,7 @@ def get_defaults(repo_root=None):
         "release_history": {},
         "release_partners": [],
         "release_partner_config": None,
+        "release_partner_config_is_explicit": False,
         "release_product": None,
         "release_type": "nightly",
         # This refers to the upstream repo rather than the local checkout, so

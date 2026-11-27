@@ -17,11 +17,18 @@ from gecko_taskgraph.actions.registry import register_callback_action
 from gecko_taskgraph.decision import taskgraph_decision
 from gecko_taskgraph.util.attributes import RELEASE_PROMOTION_PROJECTS
 from gecko_taskgraph.util.partials import populate_release_history
+from gecko_taskgraph.util.partner_releases import (
+    get_partner_upload_tasks,
+    record_partner_upload_tasks,
+)
 from gecko_taskgraph.util.partners import (
     fix_partner_config,
     get_partner_config_by_url,
+    get_partner_config_entries,
+    get_partner_config_subset,
     get_partner_url_config,
     get_token,
+    merge_partner_configs,
 )
 from gecko_taskgraph.util.taskgraph import (
     find_decision_task,
@@ -43,15 +50,128 @@ def get_partner_config(partner_url_config, github_token):
     return partner_config
 
 
-def get_previous_partner_config(previous_graph_ids):
-    # The rightmost graph wins, as with the combined full task graphs below.
-    for graph_id in reversed(previous_graph_ids):
-        previous_parameters = get_artifact(graph_id, "public/parameters.yml")
-        partner_config = previous_parameters.get("release_partner_config")
-        if partner_config:
-            logger.info("Re-using the partner config resolved by %s", graph_id)
-            return partner_config
-    return None
+def index_partner_publication_config(config, previous_graph_ids):
+    if not isinstance(config, dict) or config.keys() - {
+        "release-partner-repack",
+        "release-partner-attribution",
+        "release-eme-free-repack",
+    }:
+        raise ValueError("Invalid release_partner_config for publication")
+
+    selected = {}
+    try:
+        for kind, partner, subpartner, entry in get_partner_config_entries(config):
+            key = kind, partner, subpartner
+            entry = publication_config_entry(config, kind, entry)
+            graph_id = entry.pop("graph_id", None)
+            if not isinstance(graph_id, str) or graph_id not in previous_graph_ids:
+                raise ValueError(
+                    f"Partner source graph {graph_id!r} for {partner}/{subpartner} "
+                    "is missing from previous_graph_ids"
+                )
+            if key in selected:
+                raise ValueError(
+                    f"Partner selected more than once: {partner}/{subpartner}"
+                )
+            if "upload_tasks" in entry:
+                raise ValueError(
+                    f"Use a source graph, not upload_tasks, for {partner}/{subpartner}"
+                )
+            selected[key] = graph_id, entry
+    except (AttributeError, KeyError, TypeError) as exc:
+        raise ValueError("Invalid release_partner_config for publication") from exc
+    return selected
+
+
+def publication_config_entry(config, kind, entry):
+    if kind == "release-partner-attribution":
+        return config[kind].get("defaults", {}) | entry
+    return dict(entry)
+
+
+def select_partner_config(config, graph_id, selected, found):
+    result = {}
+    for kind, partner, subpartner, entry in get_partner_config_entries(config):
+        key = (kind, partner, subpartner)
+        if key not in selected or selected[key][0] != graph_id:
+            continue
+
+        saved = publication_config_entry(config, kind, entry)
+        saved.pop("graph_id", None)
+        saved.pop("upload_tasks", None)
+        if saved != selected[key][1]:
+            raise ValueError(
+                f"Config for {partner}/{subpartner} does not match source graph {graph_id}"
+            )
+
+        found.add(key)
+        if kind == "release-partner-attribution":
+            attribution = result.setdefault(
+                kind, {"defaults": config[kind]["defaults"], "configs": []}
+            )
+            attribution["configs"].append(entry)
+        else:
+            result.setdefault(kind, {}).setdefault(partner, {})[subpartner] = entry
+    return result
+
+
+def get_previous_partner_config(
+    previous_graph_ids, parameters, previous_graphs=None, *, explicit_config=None
+):
+    selected = (
+        index_partner_publication_config(explicit_config, previous_graph_ids)
+        if explicit_config is not None
+        else None
+    )
+    source_graph_ids = {graph_id for graph_id, _ in (selected or {}).values()}
+    found = set()
+    configs = []
+    for graph_id in previous_graph_ids:
+        if selected is not None and graph_id not in source_graph_ids:
+            continue
+        previous = get_artifact(graph_id, "public/parameters.yml")
+        config = previous.get("release_partner_config")
+        if not config:
+            continue
+        for key in ("project", "head_rev", "version", "build_number"):
+            if previous.get(key) != parameters[key]:
+                raise ValueError(f"Previous graph {graph_id} has a different {key}")
+        enabled_kinds = [
+            kind
+            for kind, flag in (
+                ("release-partner-repack", "release_enable_partner_repack"),
+                ("release-partner-attribution", "release_enable_partner_attribution"),
+                ("release-eme-free-repack", "release_enable_emefree"),
+            )
+            if previous.get(flag, True)
+        ]
+        config = get_partner_config_subset(
+            config, previous.get("release_partners"), enabled_kinds
+        )
+        if selected is not None:
+            config = select_partner_config(config, graph_id, selected, found)
+        needs_uploads = any(
+            kind in ("release-partner-repack", "release-partner-attribution")
+            and entry.get("publish_to_releases")
+            and not entry.get("upload_tasks")
+            for kind, _, _, entry in get_partner_config_entries(config)
+        )
+        if needs_uploads:
+            graph = (
+                previous_graphs[graph_id]
+                if previous_graphs is not None
+                else get_artifact(graph_id, "public/full-task-graph.json")
+            )
+            labels = get_artifact(graph_id, "public/label-to-taskid.json")
+            record_partner_upload_tasks(config, graph, labels)
+        configs.append(config)
+    if selected is not None:
+        for kind, partner, subpartner in sorted(selected.keys() - found):
+            graph_id, _ = selected[kind, partner, subpartner]
+            raise ValueError(
+                f"{graph_id} has no saved {kind} config for {partner}/{subpartner}"
+            )
+    return merge_partner_configs(configs)
 
 
 def get_flavors(graph_config, param):
@@ -220,8 +340,16 @@ def get_flavors(graph_config, param):
             },
             "release_partner_config": {
                 "type": "object",
-                "description": "Partner configuration to use for partner repacks.",
-                "properties": {},
+                "description": (
+                    "Resolved partner configuration. For Firefox push and ship, "
+                    "send the full configuration for the phase with a graph_id "
+                    "on each entry. An empty object selects no partner builds."
+                ),
+                "properties": {
+                    "release-partner-repack": {"type": "object"},
+                    "release-partner-attribution": {"type": "object"},
+                    "release-eme-free-repack": {"type": "object"},
+                },
                 "additionalProperties": True,
             },
             "release_enable_emefree": {
@@ -273,6 +401,13 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     rebuild_kinds = input.get(
         "rebuild_kinds", promotion_config.get("rebuild-kinds", [])
     )
+    if release_promotion_flavor in (
+        "promote_firefox_partner_repack",
+        "promote_firefox_partner_attribution",
+    ):
+        rebuild_kinds = list(
+            dict.fromkeys(rebuild_kinds + promotion_config["rebuild-kinds"])
+        )
     do_not_optimize = input.get(
         "do_not_optimize", promotion_config.get("do-not-optimize", [])
     )
@@ -294,6 +429,22 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     # Build previous_graph_ids from ``previous_graph_ids``, ``revision``,
     # or the action parameters.
     previous_graph_ids = input.get("previous_graph_ids")
+    is_firefox_publication = release_promotion_flavor in (
+        "push_firefox",
+        "ship_firefox",
+    )
+    if is_firefox_publication:
+        if not previous_graph_ids:
+            raise ValueError("Firefox publication requires explicit previous_graph_ids")
+    explicit_partner_config = None
+    if is_firefox_publication and "release_partner_config" in input:
+        explicit_partner_config = input["release_partner_config"]
+        if not isinstance(explicit_partner_config, dict):
+            raise ValueError("release_partner_config must be an object")
+        if input.get("release_partners"):
+            raise ValueError(
+                "Use release_partner_config without release_partners for publication"
+            )
     if not previous_graph_ids:
         revision = input.get("revision")
         if revision:
@@ -310,6 +461,9 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
 
     # Download parameters from the first decision task
     parameters = get_artifact(previous_graph_ids[0], "public/parameters.yml")
+    parameters["build_number"] = int(input["build_number"])
+    if input.get("version"):
+        parameters["version"] = input["version"]
 
     # Download and combine full task graphs from each of the previous_graph_ids.
     # Sometimes previous relpro action tasks will add tasks, like partials,
@@ -317,13 +471,23 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     # important. The rightmost graph should take precedence in the case of
     # conflicts.
     combined_full_task_graph = {}
+    previous_graphs = {}
     for graph_id in previous_graph_ids:
         full_task_graph = get_artifact(graph_id, "public/full-task-graph.json")
+        previous_graphs[graph_id] = full_task_graph
         combined_full_task_graph.update(full_task_graph)
     _, combined_full_task_graph = TaskGraph.from_json(combined_full_task_graph)
     parameters["existing_tasks"] = find_existing_tasks_from_previous_kinds(
         combined_full_task_graph, previous_graph_ids, rebuild_kinds
     )
+    selected_partner_config = None
+    if explicit_partner_config is not None:
+        selected_partner_config = get_previous_partner_config(
+            previous_graph_ids,
+            parameters,
+            previous_graphs,
+            explicit_config=explicit_partner_config,
+        )
     parameters["do_not_optimize"] = do_not_optimize
     parameters["target_tasks_method"] = target_tasks_method
     parameters["build_number"] = int(input["build_number"])
@@ -355,10 +519,25 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
         reuse_partner_config = False
     else:
         # for promotion or ship phases, we use the action input to turn the repacks/attribution off
-        release_enable_partner_repack = input["release_enable_partner_repack"]
-        release_enable_partner_attribution = input["release_enable_partner_attribution"]
-        release_enable_emefree = input["release_enable_emefree"]
+        release_enable_partner_repack = input.get(
+            "release_enable_partner_repack", False
+        )
+        release_enable_partner_attribution = input.get(
+            "release_enable_partner_attribution", False
+        )
+        release_enable_emefree = input.get("release_enable_emefree", False)
         reuse_partner_config = True
+
+    if selected_partner_config is not None:
+        release_enable_partner_repack = bool(
+            selected_partner_config.get("release-partner-repack")
+        )
+        release_enable_partner_attribution = bool(
+            selected_partner_config.get("release-partner-attribution")
+        )
+        release_enable_emefree = bool(
+            selected_partner_config.get("release-eme-free-repack")
+        )
 
     partner_url_config = get_partner_url_config(parameters, graph_config)
     if (
@@ -380,22 +559,53 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     parameters["release_enable_emefree"] = release_enable_emefree
 
     partner_config = input.get("release_partner_config")
-    if not partner_config and any([
+    if selected_partner_config is not None:
+        partner_config = selected_partner_config
+    elif not partner_config and any([
         release_enable_partner_repack,
         release_enable_partner_attribution,
         release_enable_emefree,
     ]):
         if reuse_partner_config:
-            partner_config = get_previous_partner_config(previous_graph_ids)
+            partner_config = get_previous_partner_config(
+                previous_graph_ids, parameters, previous_graphs
+            )
         if not partner_config:
+            if is_firefox_publication:
+                raise ValueError("No saved partner configuration in previous_graph_ids")
             github_token = get_token(parameters)
             partner_config = get_partner_config(partner_url_config, github_token)
-    if partner_config:
+    if partner_config or selected_partner_config is not None:
         parameters["release_partner_config"] = fix_partner_config(partner_config)
     parameters["release_partners"] = input.get("release_partners")
+    parameters["release_partner_config_is_explicit"] = (
+        explicit_partner_config is not None
+    )
+    enabled_kinds = [
+        kind
+        for kind, enabled in (
+            ("release-partner-repack", release_enable_partner_repack),
+            ("release-partner-attribution", release_enable_partner_attribution),
+            ("release-eme-free-repack", release_enable_emefree),
+        )
+        if enabled
+    ]
+    parameters["release_partner_config"] = get_partner_config_subset(
+        parameters.get("release_partner_config") or {},
+        parameters["release_partners"],
+        enabled_kinds,
+    )
 
-    if input["version"]:
-        parameters["version"] = input["version"]
+    if release_promotion_flavor.startswith("promote_"):
+        for _, _, _, entry in get_partner_config_entries(
+            parameters["release_partner_config"]
+        ):
+            entry.pop("upload_tasks", None)
+
+    if is_firefox_publication:
+        get_partner_upload_tasks(
+            parameters["release_partner_config"], require_uploads=True
+        )
 
     parameters["dontbuild"] = False
     # make parameters read-only

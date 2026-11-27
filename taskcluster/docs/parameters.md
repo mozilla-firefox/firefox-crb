@@ -273,6 +273,11 @@ syntax or reading a project-specific configuration file).
 
 : List of partners to repack or attribute if a subset of the whole config. A null value defaults to all.
 
+`release_partner_config_is_explicit`
+
+: True when the action supplied its complete publication config and verified
+  the source graph for each entry.
+
 `release_partner_config`
 
 : Configuration for partner repacks & attribution, as well as EME-free repacks.

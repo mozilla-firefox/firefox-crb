@@ -903,7 +903,11 @@ DECISION_PARAMETERS = {
 }
 
 
-PARTNER_DECISION_PARAMETERS = DECISION_PARAMETERS | {"release_type": "release"}
+PARTNER_DECISION_PARAMETERS = DECISION_PARAMETERS | {
+    "release_type": "release",
+    "version": "160.0",
+    "build_number": 1,
+}
 
 # Only en-US: fix_partner_config() intersects locales with l10n-changesets.json,
 # whose contents vary by branch and get trimmed altogether by `mach try release`.
@@ -1297,6 +1301,134 @@ def test_release_promotion_reuses_previous_partner_config(
     assert decision_parameters["release_partner_config"] == PARTNER_CONFIG
 
 
+@pytest.mark.parametrize("flavor", ["push_firefox", "ship_firefox"])
+@pytest.mark.parametrize("select_partner", [True, False])
+def test_firefox_publication_uses_explicit_partner_selection(
+    mocker, monkeypatch, responses, run_action, flavor, select_partner
+):
+    entry = {
+        "build_number": 4,
+        "locales": ["en-US"],
+        "platforms": ["win32-shippable"],
+        "publish_to_releases": True,
+        "upload_tasks": ["selected-upload"],
+    }
+    kind = "release-partner-repack"
+    selected = {name: value for name, value in entry.items() if name != "upload_tasks"}
+    selected["graph_id"] = "promote-task-id"
+    lookup, params = run_partner_release_promotion(
+        mocker,
+        monkeypatch,
+        responses,
+        run_action,
+        flavor=flavor,
+        previous_graph_ids=["decision-task-id", "promote-task-id", "respin"],
+        previous_parameters={"decision-task-id": {}}
+        | (
+            {
+                "promote-task-id": {
+                    "release_partner_config": {
+                        kind: {"acme": {"one": entry, "omitted": entry}}
+                    }
+                }
+            }
+            if select_partner
+            else {}
+        ),
+        input_overrides={
+            "next_version": "160.0.1",
+            "release_partner_config": {kind: {"acme": {"one": selected}}}
+            if select_partner
+            else {},
+        },
+    )
+
+    lookup.assert_not_called()
+    assert params["release_enable_partner_repack"] == select_partner
+    assert params["release_partner_config"] == (
+        {kind: {"acme": {"one": entry}}} if select_partner else {}
+    )
+
+
+@pytest.mark.parametrize(
+    "changes,match",
+    [
+        ({"graph_id": "missing"}, "missing from previous_graph_ids"),
+        ({"build_number": 7}, "does not match source graph"),
+        ({"platforms": ["win64-shippable"]}, "does not match source graph"),
+        ({"locales": ["de"]}, "does not match source graph"),
+        ({"publish_to_releases": False}, "does not match source graph"),
+        ({"upload_tasks": ["unchecked"]}, "not upload_tasks"),
+    ],
+)
+def test_partner_config_rejects_inconsistent_references(mocker, changes, match):
+    from gecko_taskgraph.actions import release_promotion
+
+    kind = "release-partner-repack"
+    entry = {
+        "build_number": 1,
+        "platforms": ["win32-shippable"],
+        "locales": ["en-US"],
+        "publish_to_releases": True,
+        "upload_tasks": ["completed-upload"],
+    }
+    selection = {k: v for k, v in entry.items() if k != "upload_tasks"}
+    selection.update({"graph_id": "promote"} | changes)
+    mocker.patch.object(
+        release_promotion,
+        "get_artifact",
+        return_value=PARTNER_DECISION_PARAMETERS
+        | {"release_partner_config": {kind: {"acme": {"one": entry}}}},
+    )
+    with pytest.raises(ValueError, match=match):
+        release_promotion.get_previous_partner_config(
+            ["promote"],
+            PARTNER_DECISION_PARAMETERS,
+            explicit_config={kind: {"acme": {"one": selection}}},
+        )
+
+
+def test_explicit_partner_config_keeps_attribution_defaults(mocker):
+    from gecko_taskgraph.actions import release_promotion
+
+    kind = "release-partner-attribution"
+    defaults = {"source": "mozilla", "medium": "distribution"}
+    entry = {
+        "campaign": "acme",
+        "content": "test-001",
+        "build_number": 1,
+        "locales": ["en-US"],
+        "platforms": ["win32-shippable"],
+        "publish_to_releases": True,
+    }
+    mocker.patch.object(
+        release_promotion,
+        "get_artifact",
+        return_value=PARTNER_DECISION_PARAMETERS
+        | {
+            "release_partner_config": {
+                kind: {
+                    "defaults": defaults,
+                    "configs": [entry | {"upload_tasks": ["attribution-upload"]}],
+                }
+            }
+        },
+    )
+    result = release_promotion.get_previous_partner_config(
+        ["promote"],
+        PARTNER_DECISION_PARAMETERS,
+        explicit_config={
+            kind: {
+                "defaults": {},
+                "configs": [defaults | entry | {"graph_id": "promote"}],
+            }
+        },
+    )
+    assert result[kind]["configs"] == [
+        defaults | entry | {"upload_tasks": ["attribution-upload"]}
+    ]
+
+
 def test_release_promotion_looks_up_partner_config_without_a_previous_one(
     mocker, monkeypatch, responses, run_action, parameters
 ):
@@ -1330,6 +1462,112 @@ def test_release_promotion_partner_repack_flavor_refreshes_partner_config(
     )
 
     get_partner_config.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("project", "other"),
+        ("head_rev", "other"),
+        ("version", "other"),
+        ("build_number", 9),
+    ],
+)
+def test_previous_partner_graph_identity(responses, key, value):
+    from gecko_taskgraph.actions.release_promotion import get_previous_partner_config
+
+    previous = PARTNER_DECISION_PARAMETERS | {
+        "release_partner_config": PARTNER_CONFIG,
+        key: value,
+    }
+    mock_parameters_artifact(responses, "other-graph", previous)
+    with pytest.raises(ValueError, match=f"different {key}"):
+        get_previous_partner_config(["other-graph"], PARTNER_DECISION_PARAMETERS)
+
+
+def test_previous_partner_graphs_preserve_colliding_upload_labels(responses):
+    from gecko_taskgraph.actions.release_promotion import get_previous_partner_config
+
+    graphs = {}
+    for graph_id, campaign, number in [
+        ("first-graph", "first", 3),
+        ("second-graph", "second", 7),
+    ]:
+        config = {
+            "release-partner-attribution": {
+                "defaults": {},
+                "configs": [
+                    {
+                        "campaign": campaign,
+                        "content": "one",
+                        "locales": ["en-US"],
+                        "platforms": ["win32-shippable"],
+                        "publish_to_releases": True,
+                        "build_number": number,
+                    }
+                ],
+            }
+        }
+        mock_parameters_artifact(
+            responses,
+            graph_id,
+            PARTNER_DECISION_PARAMETERS | {"release_partner_config": config},
+        )
+        mock_artifact(
+            responses,
+            graph_id,
+            "label-to-taskid.json",
+            json={"shared-platform-label": f"{campaign}-upload"},
+        )
+        graphs[graph_id] = {
+            "shared-platform-label": {
+                "kind": "release-partner-attribution-beetmover",
+                "task": {
+                    "payload": {
+                        "upstreamArtifacts": [
+                            {
+                                "locale": f"partner-repacks/{campaign}/one/v{number}/win32/en-US"
+                            }
+                        ]
+                    }
+                },
+            }
+        }
+    result = get_previous_partner_config(
+        list(graphs), PARTNER_DECISION_PARAMETERS, graphs
+    )
+    assert {
+        entry["campaign"]: entry["upload_tasks"]
+        for entry in result["release-partner-attribution"]["configs"]
+    } == {"first": ["first-upload"], "second": ["second-upload"]}
+
+
+def test_previous_partner_graphs_merge_selected_partners(responses):
+    from copy import deepcopy
+
+    from gecko_taskgraph.actions.release_promotion import get_previous_partner_config
+
+    initial = deepcopy(PARTNER_CONFIG)
+    initial["release-partner-repack"]["other"] = {"two": {"build_number": 2}}
+    respin = deepcopy(PARTNER_CONFIG)
+    respin["release-partner-repack"]["acme"]["acme-001"]["build_number"] = 7
+    respin["release-partner-repack"]["other"] = {"two": {"build_number": 99}}
+    mock_parameters_artifact(
+        responses,
+        "initial",
+        PARTNER_DECISION_PARAMETERS | {"release_partner_config": initial},
+    )
+    mock_parameters_artifact(
+        responses,
+        "respin",
+        PARTNER_DECISION_PARAMETERS
+        | {"release_partner_config": respin, "release_partners": ["acme"]},
+    )
+    result = get_previous_partner_config(
+        ["initial", "respin"], PARTNER_DECISION_PARAMETERS
+    )
+    assert result["release-partner-repack"]["acme"]["acme-001"]["build_number"] == 7
+    assert result["release-partner-repack"]["other"]["two"]["build_number"] == 2
 
 
 def test_backfill_standard(mocker, run_action):
