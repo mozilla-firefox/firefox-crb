@@ -20,6 +20,8 @@ support-files = [
   "doc_short_duration.html",
   "doc_simple_animation.html",
   "doc_special_colors.html",
+  "doc_view_transition_cross_document_end.html",
+  "doc_view_transition_cross_document_start.html",
   "doc_zero_playback_rate.html",
   "head.js",
   "keyframes-graph_keyframe-marker_head.js",
@@ -280,6 +282,11 @@ fail-if = [
 ["browser_animation_timing_negative-playback-rate_summary-graph.js"]
 
 ["browser_animation_timing_zero-playback-rate.js"]
+fail-if = [
+  "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
+]
+
+["browser_animation_view-transition-cross-document.js"]
 fail-if = [
   "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
 ]
