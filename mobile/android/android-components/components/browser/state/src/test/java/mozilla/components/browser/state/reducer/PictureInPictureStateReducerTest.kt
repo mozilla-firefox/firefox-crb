@@ -8,6 +8,7 @@ import mozilla.components.browser.state.action.PictureInPictureAction
 import mozilla.components.browser.state.selector.findTab
 import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.PictureInPictureSession
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.PictureInPictureWindowState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.concept.engine.EngineSession
@@ -25,10 +26,13 @@ class PictureInPictureStateReducerTest {
         val result =
             PictureInPictureStateReducer.reduce(
                 BrowserState(tabs = listOf(tab())),
-                PictureInPictureAction.RequestAction("tab"),
+                PictureInPictureAction.RequestAction("tab", PictureInPictureSource.ADDRESS_BAR),
             )
 
-        assertEquals(PictureInPictureWindowState(requestedTabId = "tab"), result.pictureInPictureWindow)
+        assertEquals(
+            PictureInPictureWindowState(requestedTabId = "tab", source = PictureInPictureSource.ADDRESS_BAR),
+            result.pictureInPictureWindow,
+        )
     }
 
     @Test
@@ -39,12 +43,84 @@ class PictureInPictureStateReducerTest {
                 pictureInPictureWindow = PictureInPictureWindowState(session = session),
             )
 
-        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.RequestAction("tab"))
+        val result =
+            PictureInPictureStateReducer.reduce(
+                state,
+                PictureInPictureAction.RequestAction("tab", PictureInPictureSource.ADDRESS_BAR),
+            )
 
         assertEquals(
-            PictureInPictureWindowState(session = session, requestedTabId = "tab"),
+            PictureInPictureWindowState(
+                session = session,
+                requestedTabId = "tab",
+                source = PictureInPictureSource.ADDRESS_BAR,
+            ),
             result.pictureInPictureWindow,
         )
+    }
+
+    @Test
+    fun `GIVEN no session WHEN the request is consumed THEN the source is cleared`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(requestedTabId = "tab", source = PictureInPictureSource.FULLSCREEN),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ConsumeRequestAction("tab"))
+
+        assertEquals(PictureInPictureWindowState(), result.pictureInPictureWindow)
+    }
+
+    @Test
+    fun `GIVEN a session WHEN the request is consumed THEN the source is kept`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(
+                        session = session,
+                        requestedTabId = "tab",
+                        source = PictureInPictureSource.FULLSCREEN,
+                    ),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ConsumeRequestAction("tab"))
+
+        assertEquals(PictureInPictureSource.FULLSCREEN, result.pictureInPictureWindow.source)
+    }
+
+    @Test
+    fun `GIVEN no pending request WHEN the session exits THEN the source is cleared`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(session = session, source = PictureInPictureSource.FULLSCREEN),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ExitAction("tab"))
+
+        assertEquals(PictureInPictureWindowState(), result.pictureInPictureWindow)
+    }
+
+    @Test
+    fun `GIVEN a pending request WHEN the session exits THEN the source is kept`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(
+                        session = session,
+                        requestedTabId = "other",
+                        source = PictureInPictureSource.FULLSCREEN,
+                    ),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ExitAction("tab"))
+
+        assertEquals(PictureInPictureSource.FULLSCREEN, result.pictureInPictureWindow.source)
     }
 
     @Test

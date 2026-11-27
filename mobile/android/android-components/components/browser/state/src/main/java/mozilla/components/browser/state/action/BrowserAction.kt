@@ -18,6 +18,7 @@ import mozilla.components.browser.state.state.CustomTabSessionState
 import mozilla.components.browser.state.state.EngineState
 import mozilla.components.browser.state.state.LoadRequestState
 import mozilla.components.browser.state.state.MediaSessionState
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.ReaderState
 import mozilla.components.browser.state.state.SearchState
 import mozilla.components.browser.state.state.SecurityInfo
@@ -1530,8 +1531,11 @@ sealed class PictureInPictureAction : BrowserAction() {
     /**
      * Asks the engine for the video the tab with the given [tabId] is playing, to be shown in the picture-in-picture
      * window.
+     *
+     * @property source Where the window is requested from.
      */
-    data class RequestAction(override val tabId: String) : PictureInPictureAction(), ActionWithTab
+    data class RequestAction(override val tabId: String, val source: PictureInPictureSource) :
+        PictureInPictureAction(), ActionWithTab
 
     /**
      * The engine is done with the [RequestAction] for the tab with the given [tabId], whether a video is showing
