@@ -356,6 +356,8 @@ tasks:
         variants:
             - 1proc
             - webrender-sw+1proc
+            - standalone+1proc
+            - repeat+1proc
         run-on-projects:
             by-variant:
                 webrender-sw+1proc:
@@ -363,7 +365,30 @@ tasks:
                         android-em.*/debug: built-projects
                         linux.*64/debug: built-projects
                         default: []
+                standalone+1proc:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
+                repeat+1proc:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
                 1proc: built-projects
+        max-run-time:
+            by-variant:
+                standalone+1proc: 5400
+                repeat+1proc: 7200
+                default: 3600
         mozharness:
             mochitest-flavor: a11y
 
@@ -598,20 +623,50 @@ tasks:
                 macosx.*: system
                 default: default
         loopback-video: true
+        variants:
+            - standalone
+            - repeat
         run-on-projects:
-            by-test-platform:
-                android.*: []
-                .*-wayland.*: []
-                default: built-projects
+            by-variant:
+                standalone:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
+                repeat:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
+                default:
+                    by-test-platform:
+                        android.*: []
+                        .*-wayland.*: []
+                        default: built-projects
         tier: default
         max-run-time:
-            by-test-platform:
-                .*-tsan.*: 2700
-                linux.*/debug: 2700
-                windows.*-ccov.*: 2700
-                windows.*-asan.*: 2700
-                windows.*/debug: 2700
-                default: 1800
+            by-variant:
+                standalone: 5400
+                repeat:
+                    by-test-platform:
+                        .*/debug: 5400
+                        default: 3600
+                default:
+                    by-test-platform:
+                        .*-tsan.*: 2700
+                        linux.*/debug: 2700
+                        windows.*-ccov.*: 2700
+                        windows.*-asan.*: 2700
+                        windows.*/debug: 2700
+                        default: 1800
         mozharness:
             mochitest-flavor: browser
             chunked:
@@ -635,12 +690,30 @@ tasks:
         treeherder-symbol: M(mda-bc)
         schedules-component: mochitest-browser-media
         loopback-video: true
-        variants: ["wmf-media-engine"]
+        variants: ["wmf-media-engine", "standalone", "repeat"]
         run-on-projects:
             by-variant:
                 wmf-media-engine:
                     by-test-platform:
                         windows11.*: built-projects
+                        default: []
+                standalone:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
+                repeat:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
                         default: []
                 default:
                     by-test-platform:
@@ -648,9 +721,13 @@ tasks:
                         default: built-projects
         tier: default
         max-run-time:
-            by-test-platform:
-                .*-tsan.*: 1800
-                default: 1200
+            by-variant:
+                standalone: 5400
+                repeat: 2400
+                default:
+                    by-test-platform:
+                        .*-tsan.*: 1800
+                        default: 1200
         mozharness:
             mochitest-flavor: browser
         instance-size: default
@@ -1097,10 +1174,18 @@ tasks:
         treeherder-symbol: M(mda)
         schedules-component: mochitest-plain
         max-run-time:
-            by-test-platform:
-                windows.*-ccov.*: 7200
-                linux.*64-tsan/opt: 7200
-                default: 5400
+            by-variant:
+                standalone:
+                    by-test-platform:
+                        windows.*-ccov.*: 7200
+                        linux.*64-tsan/opt: 7200
+                        default: 5400
+                repeat: 10800
+                default:
+                    by-test-platform:
+                        windows.*-ccov.*: 7200
+                        linux.*64-tsan/opt: 7200
+                        default: 5400
         variants:
             - media-gpu
             - no-fission
@@ -1111,8 +1196,28 @@ tasks:
             - msix
             - geckoview-isolated-process
             - geckoview-java-media
+            - standalone
+            - repeat
         run-on-projects:
             by-variant:
+                standalone:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
+                repeat:
+                    by-test-platform:
+                        linux.*-64-shippable/opt: ['mozilla-central']
+                        linux.*-64/debug: ['autoland', 'mozilla-central']
+                        linux.*-64/opt: ['autoland']
+                        windows.*-64-[^-/]+-shippable/opt: ['mozilla-central']
+                        windows.*-64-[^-/]+/debug: ['autoland', 'mozilla-central']
+                        windows.*-64-[^-/]+/opt: ['autoland']
+                        default: []
                 geckoview-isolated-process:
                     by-test-platform:
                         android-em.*/debug: built-projects
@@ -1176,6 +1281,17 @@ tasks:
         chunks: dynamic
         default-chunks:
             by-variant:
+                standalone:
+                    by-test-platform:
+                        .*-asan.*: 12
+                        .*-ccov.*: 9
+                        .*-tsan.*: 15
+                        .*/debug.*: 9
+                        default: 6
+                repeat:
+                    by-test-platform:
+                        .*/debug.*: 6
+                        default: 4
                 wmf-media-engine: 1
                 media-gpu: 1
                 default:

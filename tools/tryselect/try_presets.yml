@@ -161,8 +161,8 @@ android-fullstack:
         # Miscellaneous Tests
         - "^test-android !shippable '64 'em-14 !zygote 'gtest | 'cpp | 'geckoview-junit"
         # Mochitests
-        - "^test-android !shippable !cf !gli !iso      'em-14 'media | 'plain !repeat"
-        - "^test-android !shippable !cf !gli !iso !swr 'hw 'media 'debug !repeat"
+        - "^test-android !shippable !cf !gli !iso      'em-14 'media | 'plain !standalone !repeat"
+        - "^test-android !shippable !cf !gli !iso !swr 'hw 'media 'debug !standalone !repeat"
         - "^test-android !shippable !cf !gli !iso !swr 'hw 'mochitest-webgl"
         # Reftests
         - "^test-android !shippable !iso 'em-14 'geckoview-crashtest | 'geckoview-reftest !nogpu !ioi"
@@ -187,8 +187,8 @@ android-geckoview:
         # Miscellaneous Tests
         - "^test-android !shippable '64 'em-14 !zygote 'gtest | 'cpp | 'geckoview-junit"
         # Mochitests
-        - "^test-android !shippable !cf !gli !iso      'em-14 'media | 'plain !repeat"
-        - "^test-android !shippable !cf !gli !iso !swr 'hw 'media 'debug !repeat"
+        - "^test-android !shippable !cf !gli !iso      'em-14 'media | 'plain !standalone !repeat"
+        - "^test-android !shippable !cf !gli !iso !swr 'hw 'media 'debug !standalone !repeat"
         - "^test-android !shippable !cf !gli !iso !swr 'hw 'mochitest-webgl"
         # Reftests
         - "^test-android !shippable !iso 'em-14 'geckoview-crashtest | 'geckoview-reftest !nogpu !ioi"
@@ -264,7 +264,7 @@ desktop-frontend:
         - "'browser-chrome     !standalone !repeat !spi !asan !tsan !msix !a11y !swr | 'linux"
         - "'mochitest-chrome   !standalone !repeat !spi !asan !tsan             !swr !gpu"
         - "'xpcshell                       !spi !asan !tsan !msix !nofis !condprof !android"
-        - "'browser-a11y | 'mochitest-a11y !spi !asan !tsan !no-cache   !swr"
+        - "'browser-a11y | 'mochitest-a11y !standalone !repeat !spi !asan !tsan !no-cache   !swr"
         - "'marionette                          !asan       !source !headless !swr"
         - "'firefox-ui-functional               !asan !tsan"
 
@@ -449,9 +449,9 @@ media-full:
         signal a media change needs. Push opt-only via a separate preset
         (or via autoland) when validating timing-sensitive changes.
     query:
-        - "mochitest-media !dfpi !nofis"
+        - "mochitest-media !dfpi !nofis !standalone !repeat"
         - "mochitest-media android !spi !swr !lite"
-        - "mochitest-browser-media"
+        - "mochitest-browser-media !standalone !repeat"
         - "web-platform-tests !dfpi !nofis !wdspec"
         - "web-platform-tests android !wdspec !spi !swr !lite"
         - "crashtest !wdspec !nofis"
@@ -527,7 +527,7 @@ remote-protocol:
         - "'awsy-base"
         - "'firefox-ui"
         - "'marionette !swr | harness"
-        - "'mochitest-browser !spi !swr !nofis !repeat '-1$"
+        - "'mochitest-browser !spi !swr !nofis !standalone !repeat '-1$"
         - "'mochitest-remote !spi !swr"
         - "'platform 'reftest !swr !nofis | 'android !-lite -1$"
         - "'platform 'wdspec !swr"
