@@ -51,6 +51,13 @@ struct JSSourceEntry {
 // This structure contains additional information gathered while generating the
 // profile json and iterating the buffer.
 struct ProfileGenerationAdditionalInformation {
+  // The source map URLs and the source text of all the JS sources in one IPC
+  // message are limited to this many bytes, and sources beyond it are sent
+  // without them. The receiving process has to map them all at once, and a
+  // 32-bit parent process can't always find room for a very large region.
+  static constexpr size_t kMaxIPCSourceBufferLength =
+      (sizeof(void*) == 4 ? 16 : 64) * 1024 * 1024;
+
   ProfileGenerationAdditionalInformation() = default;
   explicit ProfileGenerationAdditionalInformation(
       SharedLibraryInfo&& aSharedLibraries,
