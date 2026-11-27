@@ -8,16 +8,29 @@
 #include "js/StructuredClone.h"
 #include "mozilla/SnappyUncompressInputStream.h"
 #include "mozilla/StaticPrefs_dom.h"
+#include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "nsError.h"
+#include "nsIAddonPolicyService.h"
 
 namespace mozilla::dom::indexedDB {
 
-EnumSet<ValidatePrincipalOptions> PrincipalValidationOptions() {
+EnumSet<ValidatePrincipalOptions> PrincipalValidationOptions(
+    const mozilla::ipc::PrincipalInfo& aPrincipalInfo) {
   EnumSet<ValidatePrincipalOptions> options;
   if (StaticPrefs::dom_indexedDB_testing_allowContentSystem() &&
       xpc::IsInAutomation()) {
     options += ValidatePrincipalOptions::AllowNotLoadedOrigin;
     options += ValidatePrincipalOptions::AlwaysAllowSystem;
+  }
+  // When a WebExtension accesses `browser.storage.local`, that is backed by
+  // direct in-content access to IndexedDB with a special userContextId.
+  // Because of this, all processes are allowed to access extension IndexedDB,
+  // so long as that userContextId is in-use.
+  if (aPrincipalInfo.type() ==
+          mozilla::ipc::PrincipalInfo::TContentPrincipalInfo &&
+      aPrincipalInfo.get_ContentPrincipalInfo().attrs().mUserContextId ==
+          uint32_t(nsIAddonPolicyService::STORAGE_LOCAL_USER_CONTEXT_ID)) {
+    options += ValidatePrincipalOptions::AlwaysAllowExtension;
   }
   return options;
 }

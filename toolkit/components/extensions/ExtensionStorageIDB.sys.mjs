@@ -19,11 +19,6 @@ const lazy = XPCOMUtils.declareLazy({
   },
 });
 
-// The userContextID reserved for the extension storage (its purpose is ensuring that the IndexedDB
-// storage used by the browser.storage.local API is not directly accessible from the extension code,
-// it is defined and reserved as "userContextIdInternal.webextStorageLocal" in ContextualIdentityService.sys.mjs).
-const WEBEXT_STORAGE_USER_CONTEXT_ID = -1 >>> 0;
-
 const IDB_NAME = "webExtensions-storage-local";
 const IDB_DATA_STORENAME = "storage-local-data";
 const IDB_VERSION = 1;
@@ -788,7 +783,7 @@ export var ExtensionStorageIDB = {
 
   getStoragePrincipal(extension) {
     return extension.createPrincipal(extension.baseURI, {
-      userContextId: WEBEXT_STORAGE_USER_CONTEXT_ID,
+      userContextId: Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID,
     });
   },
 

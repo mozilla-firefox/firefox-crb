@@ -9201,8 +9201,9 @@ Factory::AllocPBackgroundIDBFactoryRequestParent(
   MOZ_ASSERT(principalInfo.type() == PrincipalInfo::TSystemPrincipalInfo ||
              principalInfo.type() == PrincipalInfo::TContentPrincipalInfo);
 
-  if (!BackgroundParent::ValidatePrincipalInfo(Manager(), principalInfo,
-                                               PrincipalValidationOptions())) {
+  if (!BackgroundParent::ValidatePrincipalInfo(
+          Manager(), principalInfo,
+          PrincipalValidationOptions(principalInfo))) {
     IPC_FAIL(this, "Invalid principal!");
     return nullptr;
   }
@@ -9289,7 +9290,8 @@ mozilla::ipc::IPCResult Factory::RecvGetDatabases(
              aPrincipalInfo.type() == PrincipalInfo::TContentPrincipalInfo);
 
   QM_TRY(MOZ_TO_RESULT(BackgroundParent::ValidatePrincipalInfo(
-             Manager(), aPrincipalInfo, PrincipalValidationOptions())),
+             Manager(), aPrincipalInfo,
+             PrincipalValidationOptions(aPrincipalInfo))),
          QM_IPC_FAIL(this));
 
   PersistenceType persistenceType =
