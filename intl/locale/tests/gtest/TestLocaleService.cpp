@@ -43,32 +43,24 @@ TEST(Intl_Locale_LocaleService, GetAppLocalesAsBCP47)
   ASSERT_FALSE(appLocales.IsEmpty());
 }
 
-TEST(Intl_Locale_LocaleService, GetAppLocalesAsLangTags)
-{
-  nsTArray<nsCString> appLocales;
-  LocaleService::GetInstance()->GetAppLocalesAsLangTags(appLocales);
-
-  ASSERT_FALSE(appLocales.IsEmpty());
-}
-
-TEST(Intl_Locale_LocaleService, GetAppLocalesAsLangTags_lastIsPresent)
+TEST(Intl_Locale_LocaleService, GetAppLocalesAsBCP47_lastIsPresent)
 {
   nsAutoCString lastFallbackLocale;
   LocaleService::GetInstance()->GetLastFallbackLocale(lastFallbackLocale);
 
   nsTArray<nsCString> appLocales;
-  LocaleService::GetInstance()->GetAppLocalesAsLangTags(appLocales);
+  LocaleService::GetInstance()->GetAppLocalesAsBCP47(appLocales);
 
   ASSERT_TRUE(appLocales.Contains(lastFallbackLocale));
 }
 
-TEST(Intl_Locale_LocaleService, GetAppLocaleAsLangTag)
+TEST(Intl_Locale_LocaleService, GetAppLocaleAsBCP47)
 {
   nsTArray<nsCString> appLocales;
-  LocaleService::GetInstance()->GetAppLocalesAsLangTags(appLocales);
+  LocaleService::GetInstance()->GetAppLocalesAsBCP47(appLocales);
 
   nsAutoCString locale;
-  LocaleService::GetInstance()->GetAppLocaleAsLangTag(locale);
+  LocaleService::GetInstance()->GetAppLocaleAsBCP47(locale);
 
   ASSERT_TRUE(appLocales[0] == locale);
 }
