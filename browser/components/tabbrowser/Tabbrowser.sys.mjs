@@ -10703,7 +10703,7 @@ class TabProgressListener {
             this.#documentGlobal.gInitialPages.includes(
               originalLocation.spec
             ) &&
-            originalLocation != "about:blank" &&
+            originalLocation.spec != "about:blank" &&
             this._browser.initialPageLoadedFromUserAction !=
               originalLocation.spec &&
             this._browser.currentURI &&
