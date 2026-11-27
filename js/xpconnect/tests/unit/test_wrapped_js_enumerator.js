@@ -69,3 +69,21 @@ add_task(async function test_wrapped_js_enumerator() {
     }
   }
 });
+
+add_task(async function test_wrapped_js_iterator_survives_gc() {
+  let array = [1, 2, 3];
+
+  for (let wrapEnumerator of [wrapEnumerator1, wrapEnumerator2]) {
+    let result = [];
+    for (let value of wrapEnumerator(array.values())) {
+      result.push(value);
+      // Collecting without calls to next() in between releases the
+      // nsIJSEnumerator held by the iterator's XPCWrappedNative tearoff.
+      Cu.forceGC();
+      Cu.forceCC();
+      Cu.forceGC();
+    }
+
+    deepEqual(result, array, "Got correct result");
+  }
+});

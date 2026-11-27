@@ -310,16 +310,20 @@ nsresult nsXPCWrappedJS::DelegatedQueryInterface(REFNSIID aIID,
     return NS_OK;
   }
 
+  auto hasNoQueryInterface = [&]() {
+    bool found;
+    XPCJSContext* xpccx = ccx.GetContext();
+    return JS_HasPropertyById(aes.cx(), obj,
+                              xpccx->GetStringID(xpccx->IDX_QUERY_INTERFACE),
+                              &found) &&
+           !found;
+  };
+
   // If we're asked to QI to nsISimpleEnumerator and the wrapped object does not
   // have a QueryInterface method, assume it is a JS iterator, and wrap it into
   // an equivalent nsISimpleEnumerator.
   if (aIID.Equals(NS_GET_IID(nsISimpleEnumerator))) {
-    bool found;
-    XPCJSContext* xpccx = ccx.GetContext();
-    if (JS_HasPropertyById(aes.cx(), obj,
-                           xpccx->GetStringID(xpccx->IDX_QUERY_INTERFACE),
-                           &found) &&
-        !found) {
+    if (hasNoQueryInterface()) {
       nsresult rv;
       nsCOMPtr<nsIJSEnumerator> jsEnum;
       if (!XPCConvert::JSObject2NativeInterface(
@@ -347,8 +351,14 @@ nsresult nsXPCWrappedJS::DelegatedQueryInterface(REFNSIID aIID,
   // Check if the desired interface is a function interface. If so, we don't
   // want to QI, because the function almost certainly doesn't have a
   // QueryInterface property, and doesn't need one.
+  // A JS iterator wrapped as an nsIJSEnumerator (see the nsISimpleEnumerator
+  // case above) has no QueryInterface method either. Its nsIJSEnumerator
+  // wrapper can be released while its root wrapper stays alive (e.g. when GC
+  // sweeps the XPCWrappedNative tearoff holding it), so we have to be able to
+  // QI the root to nsIJSEnumerator again.
   const nsXPTInterfaceInfo* info = nsXPTInterfaceInfo::ByIID(aIID);
-  if (info && info->IsFunction()) {
+  if ((info && info->IsFunction()) ||
+      (aIID.Equals(NS_GET_IID(nsIJSEnumerator)) && hasNoQueryInterface())) {
     RefPtr<nsXPCWrappedJS> wrapper;
     nsresult rv =
         nsXPCWrappedJS::GetNewOrUsed(ccx, obj, aIID, getter_AddRefs(wrapper));
