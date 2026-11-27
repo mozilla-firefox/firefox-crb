@@ -897,7 +897,8 @@ Result<NavigationIsolationOptions, nsresult> IsolationOptionsForNavigation(
   // each-other.
   if (!aParentWindow && aCurrentRemoteType.IsExtension() &&
       behavior != IsolationBehavior::Extension &&
-      behavior != IsolationBehavior::Anywhere) {
+      behavior != IsolationBehavior::Anywhere &&
+      aTopBC->Group()->GetIsForWebExtension()) {
     MOZ_LOG(gProcessIsolationLog, LogLevel::Verbose,
             ("Forcing BC replacement to leave extension BrowsingContextGroup "
              "%" PRIx64 " on navigation",
