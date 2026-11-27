@@ -17,7 +17,7 @@ import { HeroImage } from "./HeroImage";
 import { OnboardingVideo } from "./OnboardingVideo";
 import { AdditionalCTA } from "./AdditionalCTA";
 import { LinkParagraph } from "./LinkParagraph";
-import { ContentTiles } from "./ContentTiles";
+import { ContentTiles, CONTAINER_STYLES, HEADER_STYLES } from "./ContentTiles";
 import { InstallButton } from "./InstallButton";
 import { SubmenuButton } from "./SubmenuButton";
 
@@ -1420,14 +1420,35 @@ export class ProtonScreen extends React.PureComponent {
 const localizableThingPropTypes = PropTypes.oneOfType([
   PropTypes.string,
   PropTypes.exact({
-    // A raw, untranslated string or a $l10n object.
-    raw: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+    // A raw, untranslated string (typically used for EN-only experiments) or
+    // an $l10n object.
+    raw: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.exact({
+        $l10n: PropTypes.exact({
+          // A unique identifier for the string. It can only contain letters,
+          // numbers, and hyphens (-).
+          id: PropTypes.string,
+          // The text of the string.
+          text: PropTypes.string,
+          // A comment used to provide more context to localizers.
+          comment: PropTypes.string,
+        }),
+      }),
+    ]),
     // Fluent string identifier from a .ftl file.
     string_id: PropTypes.string,
     // Arguments for Fluent strings that have variables.
     args: PropTypes.object,
     // A string to use as the element's aria-label attribute value.
     aria_label: PropTypes.string,
+    // If true, uses the installed lang pack for the Fluent strings.
+    useLangPack: PropTypes.bool,
+    // Inline icons inside localized strings. Each entry maps a Fluent
+    // data-l10n-name to an icon object.
+    inline_icons: PropTypes.object,
+    // Adds zap style and content.
+    zap: PropTypes.oneOfType([PropTypes.bool, PropTypes.string]),
     // CSS overrides for configurable styles.
     ...Object.fromEntries(
       CONFIGURABLE_STYLES.map(key => [
@@ -1451,21 +1472,24 @@ const actionPropTypes = PropTypes.exact({
   dismiss: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
   // If true, the action needs to be awaited. Must be true if 'dismiss' is
   // set to 'actionResult'.
-  needsAwait: PropTypes.bool,
+  needsAwait: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
   // If true, navigates to the next step.
   navigate: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
-  // If true, go back to the previous step.
+  // If true, goes back to the previous step.
   goBack: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
   // If true, the actions for selected checkbox/radio selections are
   // performed in series. Set to true if this action is for the primary
   // button and the 'multiselect' tile is used.
-  collectSelect: PropTypes.bool,
+  collectSelect: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
   // If true, collects all text input on action.
-  collectTextInput: PropTypes.bool,
+  collectTextInput: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
   // If true, collects content toggle state on action.
-  collectContentToggleState: PropTypes.bool,
+  collectContentToggleState: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.bool,
+  ]),
   // Indicates that the action should navigate to a different screen.
-  advance_screens: PropTypes.shape({
+  advance_screens: PropTypes.exact({
     // The behavior of the screen navigation. Behaves like 'dismiss'.
     behavior: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
     // How many screens and in which direction to advance. Positive integers
@@ -1475,48 +1499,655 @@ const actionPropTypes = PropTypes.exact({
     // direction are provided.
     id: PropTypes.string,
   }),
+  // If true, adds flow parameters to the action.
+  addFlowParams: PropTypes.bool,
+  // If true, sends dismiss telemetry when the action is performed.
+  sendDismissTelemetry: PropTypes.bool,
+  // page_event_listeners actions only. If true, repositions the callout.
+  reposition: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
+  // If true, only fires on the screen's first view.
+  once: PropTypes.bool,
+  // For tile actions only. The theme to apply. '<event>' uses the selected
+  // element's value.
+  theme: PropTypes.string,
+  // For tile actions only. '<event>' handles the selected element's value as
+  // a picker selection.
+  picker: PropTypes.string,
+  // For tile actions only. If true, saves the active theme as the initial
+  // theme to revert to.
+  persistActiveTheme: PropTypes.bool,
 });
 
 const buttonPropTypes = PropTypes.exact({
-  // The text to show inside the button.
+  // The text to show inside the button. For dismiss buttons, it is optionally
+  // used to control the aria attributes and tooltip.
   label: localizableThingPropTypes,
-  // The JEXL targeting for conditional button display.
+  // The JEXL targeting for conditional button display. Only available for
+  // secondary buttons.
   targeting: PropTypes.string,
   // The special message action invoked if the button is clicked.
   action: actionPropTypes,
-  // If true, shows an arrow icon next to the label.
+  // If true, shows an arrow icon next to the label. Only available for primary
+  // and secondary buttons.
   has_arrow_icon: PropTypes.bool,
   // If true, disables the button. If set to 'hasActiveMultiSelect', disables
   // the button until the user selects something in the multiselect tiles. If
   // set to 'hasTextInput', disables the button while the textarea tile is
   // empty or exceeds the character limit. If set to 'hasActiveSingleSelect',
   // disables the button until the user selects an option in the single-select
-  // tile.
-  disabled: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
-  // Overrides the style of the primary or secondary button.
+  // tile (only available for primary buttons). If set to 'hasPinnedSite',
+  // disables the button until the screen has had at least one successful pin
+  // (only available for primary buttons).
+  disabled: PropTypes.oneOfType([
+    PropTypes.oneOf([
+      "hasActiveMultiSelect",
+      "hasTextInput",
+      "hasActiveSingleSelect",
+      "hasPinnedSite",
+    ]),
+    PropTypes.bool,
+  ]),
+  // Overrides the style of the button. "link" is only available for additional
+  // buttons.
   style: PropTypes.oneOf(["primary", "secondary", "link"]),
-  // The text for the RTAMO install button, provided in the primary_button.
+  // The text for the RTAMO install button, provided in the primary button.
   install_complete_label: localizableThingPropTypes,
-  // If true, the primary_button will be focused when the screen is displayed.
+  // If true, the primary button will be focused when the screen is displayed.
   should_focus_button: PropTypes.bool,
-  // If there are several buttons, this property of an additional_button can
+  // If there are several buttons, this property of an additional button can
   // control the orientation of all the buttons.
   flow: PropTypes.oneOf(["row", "column"]),
   // Extra text to show before a secondary button.
   text: localizableThingPropTypes,
-  // If there are several buttons, this property of an additional_button can
+  // If there are several buttons, this property of an additional button can
   // control the justification and alignment of the buttons row/column.
   // Defaults to 'end'.
   alignment: PropTypes.oneOf(["end", "start", "space-between"]),
   // The size of the dismiss_button (20px, 24px, 32px). Defaults to 32px.
   size: PropTypes.oneOf(["x-small", "small", "large"]),
-  // If true, adds a background to the dismiss_button.
+  // If true, adds a background to the dismiss button.
   background: PropTypes.bool,
   // CSS override for the marginBlock property.
   marginBlock: PropTypes.string,
   // CSS override for the marginInline property.
   marginInline: PropTypes.string,
 });
+
+const sharedContentTilesProps = {
+  // CSS overrides of the content tile. Any CSS properties starting with '--'
+  // are also allowed.
+  style: PropTypes.object,
+  // The content tile id.
+  id: PropTypes.string,
+  // The content tile header.
+  header: PropTypes.exact({
+    // The tile header title.
+    title: localizableThingPropTypes,
+    // The tile header subtitle.
+    subtitle: localizableThingPropTypes,
+    // The tile header title if the tile type is a textbox and the
+    // contentToggleChecked is false.
+    alternateTitle: localizableThingPropTypes,
+    // CSS overrides of the tile header.
+    style: PropTypes.exact({
+      ...Object.fromEntries(
+        HEADER_STYLES.map(key => [
+          key,
+          PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        ])
+      ),
+    }),
+    // If true, adds the link-style class to the tile header.
+    linkStyle: PropTypes.bool,
+  }),
+  // The content tile title.
+  title: localizableThingPropTypes,
+  // The content tile subtitle.
+  subtitle: localizableThingPropTypes,
+};
+
+const addonsPickerDataPropTypes = PropTypes.exact({
+  // The addon container key ID.
+  id: PropTypes.string,
+  // The name of the addon.
+  name: localizableThingPropTypes,
+  // The type of the addon.
+  type: PropTypes.string,
+  // The description of the addon.
+  description: localizableThingPropTypes,
+  // The icon of the addon.
+  icon: PropTypes.string,
+  // The optional author of the addon.
+  author: PropTypes.exact({
+    byLine: localizableThingPropTypes,
+    id: PropTypes.string,
+    name: PropTypes.string,
+  }),
+  // The label for the addon install button.
+  install_label: localizableThingPropTypes,
+  // The complete label for the addon install button.
+  install_complete_label: localizableThingPropTypes,
+  // The action for the addon install button.
+  action: actionPropTypes,
+  // The source ID inside the click button telemetry ping sent by the
+  // addon install button.
+  source_id: PropTypes.string,
+});
+
+const singleSelectDataPropTypes = PropTypes.exact({
+  // Optionally used to control the aria description.
+  description: localizableThingPropTypes,
+  // If true, prevents the single-select tile from being clickable and usable.
+  inert: PropTypes.bool,
+  // The icon displayed for the single select tile.
+  icon: PropTypes.shape({ background: PropTypes.string }),
+  // The id of the single select tile.
+  id: PropTypes.string,
+  // Text displayed in the single select tile with label-text styling.
+  label: localizableThingPropTypes,
+  // Items or text displayed below the label text.
+  body: PropTypes.oneOfType([
+    localizableThingPropTypes,
+    PropTypes.exact({
+      items: PropTypes.arrayOf(
+        PropTypes.exact({
+          icon: PropTypes.object,
+          text: localizableThingPropTypes,
+          style: PropTypes.object,
+        })
+      ),
+    }),
+  ]),
+  // Text displayed below the label and body texts with subtitle-text
+  // styling.
+  subtitle: localizableThingPropTypes,
+  // The theme to be applied when the tile is clicked.
+  theme: PropTypes.string,
+  // Optional hover tooltip for the single select tile.
+  tooltip: localizableThingPropTypes,
+  // Optional type defined for the single select tile for styling.
+  type: PropTypes.string,
+  // Optional flair text.
+  flair: PropTypes.shape({
+    centered: PropTypes.bool,
+    spacer: PropTypes.bool,
+    text: localizableThingPropTypes,
+  }),
+  // CSS overrides for the single select tile.
+  style: PropTypes.object,
+  // Optional button that can be added to the single select tile.
+  tilebutton: PropTypes.shape({
+    label: localizableThingPropTypes,
+    style: PropTypes.oneOf(["primary", "secondary"]),
+    action: actionPropTypes,
+  }),
+  // JEXL targeting evaluated to determine whether or not to display this
+  // single select tile item.
+  targeting: PropTypes.string,
+  // The pill inside the pill navigation component corresponding to this single
+  // select tile.
+  pill: PropTypes.exact({
+    label: localizableThingPropTypes,
+    icon: PropTypes.string,
+  }),
+});
+
+const multiSelectDataPropTypes = PropTypes.exact({
+  // A unique id for this multiselect item.
+  id: PropTypes.string,
+  // The type of multiselect item.
+  type: PropTypes.oneOf(["checkbox", "radio"]),
+  // Required for radio types. Set the same group for radios to ensure
+  // only one of them can be selected at a time.
+  group: PropTypes.string,
+  // The default checked/unchecked value of the multiselect item.
+  defaultValue: PropTypes.bool,
+  // The JEXL targeting that determines whether or not to show this
+  // multiselect item.
+  targeting: PropTypes.string,
+  // The label for the multiselect item.
+  label: localizableThingPropTypes,
+  // Supporting copy for the item, rendered as a paragraph after the
+  // label and wired to the checkbox with `aria-describedby`. In the
+  // "select-card" and "grouped-card" designs it becomes a second,
+  // deemphasized line beneath the label.
+  description: localizableThingPropTypes,
+  // The special message action performed when the user clicks the
+  // primary button.
+  action: actionPropTypes,
+  // If true, randomizes the order of the multiselect items. By
+  // default, the items appear in the order they're listed in the data
+  // array.
+  randomize: PropTypes.bool,
+  // CSS overrides for the div box containing the item and label.
+  style: PropTypes.object,
+  // An optional icon that can replace the checkbox/radio buttons using
+  // CSS overrides.
+  icon: PropTypes.exact({ style: PropTypes.object }),
+  // A note shown below the item when it is unchecked, which disappears
+  // when checked. The note is rendered in an `aria-live` region that
+  // is always present in the DOM, so assistive technology announces it
+  // when it appears. It is laid out as a full-width row beneath the
+  // item, so it is meant for wide surfaces such as about:welcome or a
+  // fullscreen Spotlight. It is not compatible with
+  // `multiSelectItemDesign: "picker"`, and is not recommended in a
+  // feature callout panel, which is too narrow for it.
+  uncheckedNotice: PropTypes.exact({
+    title: localizableThingPropTypes,
+    subtitle: localizableThingPropTypes,
+    iconURL: PropTypes.string,
+  }),
+});
+
+const actionChecklistDataPropTypes = PropTypes.exact({
+  // The key of the action checklist item.
+  id: PropTypes.string,
+  // The source ID used in telemetry pings.
+  source_id: PropTypes.string,
+  // JEXL targeting that is evaluated to determine if this action item has been
+  // completed or not.
+  targeting: PropTypes.string,
+  // Text for the action checklist item.
+  label: localizableThingPropTypes,
+  // The special message action invoked when the action checklist item is
+  // clicked.
+  action: actionPropTypes,
+  // If true, shows the external link icon.
+  showExternalLinkIcon: PropTypes.bool,
+});
+
+const pinnableSitesDataPropTypes = PropTypes.exact({
+  // The pinnable site item key.
+  id: PropTypes.string,
+  // The name of the pinnable site item.
+  name: localizableThingPropTypes,
+  // The description of the pinnable site item.
+  description: localizableThingPropTypes,
+  // The URL of the icon inside the pinnable site item.
+  iconUrl: PropTypes.string,
+  // The pinnable site URL.
+  url: PropTypes.string,
+  // Sent in PIN_SITE telemetry ping.
+  personalized: PropTypes.bool,
+  // The title of the pinnable site item.
+  title: localizableThingPropTypes,
+});
+
+const tilePropType = PropTypes.oneOfType([
+  PropTypes.exact({
+    // The type of tile. More details can be found in ContentTiles.jsx.
+    type: PropTypes.oneOf(["link"]).isRequired,
+    // The action for link, single-select, or theme tiles.
+    action: actionPropTypes,
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in AddonsPicker.jsx.
+    type: PropTypes.oneOf(["addons-picker"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.oneOfType([
+      addonsPickerDataPropTypes,
+      PropTypes.arrayOf(addonsPickerDataPropTypes),
+    ]),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in SingleSelect.jsx.
+    type: PropTypes.oneOf(["theme", "single-select"]).isRequired,
+    category: PropTypes.exact({
+      type: PropTypes.oneOf(["theme", "single-select"]),
+    }),
+    // The action for link, single-select, or theme tiles.
+    action: actionPropTypes,
+    // The id of an item inside `data` that will be the default selected
+    // item.
+    selected: PropTypes.string,
+    // If true and applicable, automatically triggers the action for the
+    // default selected tile.
+    autoTrigger: PropTypes.bool,
+    // Optional. Currently for single-select tiles only. Visual layout for
+    // the tile's items; 'carousel' lays the items out in a single row,
+    // centered on the selected item, with pill navigation above. The row has
+    // two sizes: in a modal at least 800px wide the selected card is
+    // enlarged and its neighbours peek in at a smaller size, and below that
+    // every card takes the smaller size and the selection is marked by its
+    // outline alone.
+    layout: PropTypes.oneOf(["carousel"]),
+    // Optional. Currently for single-select tiles only, and only applies
+    // when 'layout' is 'carousel'. Accessible name for the carousel pill
+    // navigation.
+    pill_nav_label: localizableThingPropTypes,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.oneOfType([
+      singleSelectDataPropTypes,
+      PropTypes.arrayOf(singleSelectDataPropTypes),
+    ]),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in MobileDownloads.jsx.
+    type: PropTypes.oneOf(["mobile_downloads"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // An optional QR code to display in the tile to encourage users to
+      // download Firefox.
+      QR_code: PropTypes.exact({
+        image_url: PropTypes.string,
+        alt_text: localizableThingPropTypes,
+      }),
+      // An optional email link that users can use to email themselves a
+      // download link.
+      email: PropTypes.exact({
+        link_text: PropTypes.string,
+      }),
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in MultiSelect.jsx.
+    type: PropTypes.oneOf(["multiselect"]).isRequired,
+    // Alternate presentations for the multiselect items.
+    multiSelectItemDesign: PropTypes.oneOf([
+      "picker",
+      "select-card",
+      "grouped-card",
+    ]),
+    // Optional text for a multistage multiselect label.
+    label: localizableThingPropTypes,
+    // Optional text for a multistage multiselect footer label.
+    footer: PropTypes.exact({
+      checkedLabel: localizableThingPropTypes,
+      unCheckAllLabel: localizableThingPropTypes,
+    }),
+    // Tile configurations needed for the tile type.
+    data: PropTypes.oneOfType([
+      multiSelectDataPropTypes,
+      PropTypes.arrayOf(multiSelectDataPropTypes),
+    ]),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in TextAreaTile.jsx.
+    type: PropTypes.oneOf(["textarea"]).isRequired,
+    // Tile configurations needed for the tile type. Using this tile type
+    // requires a `write_in_microsurvey: true` inside the message content to
+    // apply the write-in microsurvey data policy. This is REQUIRED for all
+    // write-in microsurveys. Messages using the textarea tile should always
+    // set this to true. It prevents `client_id` from being recorded with any
+    // telemetry events for the message, recording a unique `impression_id`
+    // instead. It also sends the events on the `microsurvey` ping instead of the
+    // `messaging-system` ping, which is anonymized by OHTTP, has stricter access
+    // control, and is retained for a shorter period. It still allows counting
+    // unique impressions and joining pings from the same message, but it can't
+    // be joined to any other telemetry data. So all events coming from a message
+    // with this set to true will be joinable by `impression_id`, but
+    // disconnected from other datasets. Optional; defaults to false if omitted.
+    data: PropTypes.exact({
+      // The textarea tile id.
+      id: PropTypes.string,
+      // The character limit set for the textarea.
+      character_limit: PropTypes.number,
+      // CSS overrides for the textarea container div.
+      container_style: PropTypes.object,
+      // CSS overrides for the textarea character counter div.
+      char_counter_style: PropTypes.object,
+      // CSS overrides for the textarea.
+      textarea_style: PropTypes.object,
+      // The number of rows for the textarea.
+      rows: PropTypes.number,
+      // The number of columns for the textarea.
+      column: PropTypes.number,
+      // Optional placeholder text in the textarea.
+      placeholder: PropTypes.string,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in
+    // EmbeddedMigrationWizard.jsx.
+    type: PropTypes.oneOf(["migration-wizard"]).isRequired,
+    // Optional configuration options for the migration wizard.
+    migration_wizard_options: PropTypes.exact({
+      // If true, force show import all options.
+      force_show_import_all: PropTypes.bool,
+      // The title string for the option expander.
+      option_expander_title_string: PropTypes.string,
+      // If true, hides the option expander subtitle.
+      hide_option_expander_subtitle: PropTypes.bool,
+      // The success message string after import completion.
+      data_import_complete_success_string: PropTypes.string,
+      // The header string for the selection section.
+      selection_header_string: PropTypes.string,
+      // The subheader string for the selection section.
+      selection_subheader_string: PropTypes.string,
+      // If true, hides the select all option.
+      hide_select_all: PropTypes.bool,
+      // The inline margin for checkboxes.
+      checkbox_margin_inline: PropTypes.string,
+      // The block margin for checkboxes.
+      checkbox_margin_block: PropTypes.string,
+      // The text string for the import button.
+      import_button_string: PropTypes.string,
+      // The CSS class for the import button.
+      import_button_class: PropTypes.string,
+      // The font size for the header.
+      header_font_size: PropTypes.string,
+      // The font weight for the header.
+      header_font_weight: PropTypes.string,
+      // The block margin for the header.
+      header_margin_block: PropTypes.string,
+      // The font size for the subheader.
+      subheader_font_size: PropTypes.string,
+      // The font weight for the subheader.
+      subheader_font_weight: PropTypes.string,
+      // The block margin for the subheader.
+      subheader_margin_block: PropTypes.string,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in
+    // EmbeddedThemePicker.jsx.
+    type: PropTypes.oneOf(["theme-picker"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // The install source for this theme picker component.
+      installSource: PropTypes.string,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in ActionChecklist.jsx.
+    type: PropTypes.oneOf(["action_checklist"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.oneOfType([
+      actionChecklistDataPropTypes,
+      PropTypes.arrayOf(actionChecklistDataPropTypes),
+    ]),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in EmbeddedBrowser.jsx.
+    type: PropTypes.oneOf(["embedded_browser"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // The URL to open inside the embedded browser component.
+      url: PropTypes.string,
+      // CSS overrides for the embedded browser component.
+      style: PropTypes.object,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in
+    // EmbeddedBackupRestore.jsx.
+    type: PropTypes.oneOf(["backup_restore"]).isRequired,
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in
+    // EmbeddedFxBackupOptIn.jsx.
+    type: PropTypes.oneOf(["fx_backup_file_path", "fx_backup_password"])
+      .isRequired,
+    // Configuration options for the embedded Fx Backup opt-in component.
+    options: PropTypes.exact({
+      // If true, then this is the file chooser screen.
+      hide_password_input: PropTypes.bool,
+      // If true, hides the secondary button.
+      hide_secondary_button: PropTypes.bool,
+      // The l10n id for the file path label.
+      file_path_label: PropTypes.string,
+      // The l10n id for the turn on backup header.
+      turn_on_backup_header: PropTypes.string,
+      // The l10n id for the create password label.
+      create_password_label: PropTypes.string,
+      // The l10n id for the confirmation label for turning on backup.
+      turn_on_backup_confirm_btn_label: PropTypes.string,
+      // The l10n id for the cancellation label for turning on backup.
+      turn_on_backup_cancel_btn_label: PropTypes.string,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in
+    // ConfirmationChecklist.jsx.
+    type: PropTypes.oneOf(["confirmation-checklist"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // CSS overrides for the confirmation checklist container.
+      style: PropTypes.object,
+      // The confirmation checklist items.
+      items: PropTypes.arrayOf(
+        PropTypes.exact({
+          // The icon for this confirmation checklist item.
+          icon: PropTypes.shape({
+            background: PropTypes.string,
+          }),
+          // The text for this confirmation checklist item.
+          text: localizableThingPropTypes,
+          // The subtext for this confirmation checklist item. Can support
+          // <a data-l10n-name></a> markers inside the Fluent string that can
+          // be paired with `link_keys`.
+          subtext: localizableThingPropTypes,
+          // Each item corresponds to a <a data-l10n-name></a> marker inside
+          // the subtext Fluent string.
+          link_keys: PropTypes.arrayOf(PropTypes.string),
+        })
+      ),
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in PinnableSitesList.jsx.
+    type: PropTypes.oneOf(["pinnable_sites"]).isRequired,
+    // Where the tile draws its sites from. 'curated' (the default) uses the
+    // authored 'data' array. 'topFrecentSites' replaces it with the user's
+    // own most-used origins, computed locally from history. Currently only
+    // supported in Spotlight.
+    source: PropTypes.oneOf(["curated", "topFrecentSites"]),
+    // How many tiles the surface shows. Defaults to 5.
+    slots: PropTypes.number,
+    // Only when source is 'topFrecentSites'. The fewest personalized origins
+    // the tile must produce for the message to be shown at all. When the
+    // user's history yields fewer, the message is withheld and records no
+    // impression. Defaults to 0, which permits an entirely backfilled,
+    // curated tile. A value above 'slots' always withholds the message, as
+    // does a tile left with no sites at all.
+    minPersonalized: PropTypes.number,
+    // When personalization yields fewer origins than 'slots', fill the
+    // remaining slots from the authored 'data' array rather than leaving
+    // them blank. Defaults to true.
+    backfill: PropTypes.bool,
+    // A label for an optional pin button.
+    pinButtonLabel: localizableThingPropTypes,
+    // If true, applies the always-visible styling on the pinnable sites
+    // list.
+    alwaysShowPinButton: PropTypes.bool,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.oneOfType([
+      pinnableSitesDataPropTypes,
+      PropTypes.arrayOf(pinnableSitesDataPropTypes),
+    ]),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in ContentToggle.jsx.
+    type: PropTypes.oneOf(["content-toggle"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // The tile data id.
+      id: PropTypes.string,
+      // The content toggle label.
+      label: localizableThingPropTypes,
+      // If false, then hides the content toggle label.
+      visible: PropTypes.bool,
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in TextBoxTile.jsx.
+    type: PropTypes.oneOf(["textbox"]).isRequired,
+    // Tile configurations needed for the tile type.
+    data: PropTypes.exact({
+      // The tile data id.
+      id: PropTypes.string,
+      // Content inside the textbox-input.
+      content: PropTypes.string,
+      // Alternate content inside the textbox-input when the content is
+      // toggled.
+      alternateContent: PropTypes.string,
+      // CSS overrides for the textbox-input.
+      style: PropTypes.exact({
+        backgroundColor: PropTypes.string,
+        maxHeight: PropTypes.string,
+      }),
+    }),
+    ...sharedContentTilesProps,
+  }),
+  PropTypes.exact({
+    // The type of tile. More details can be found in LinkParagraph.jsx.
+    type: PropTypes.oneOf(["text"]).isRequired,
+    // The paragraph text.
+    text: PropTypes.oneOfType([
+      localizableThingPropTypes,
+      PropTypes.arrayOf(
+        PropTypes.oneOfType([
+          // Plain text.
+          PropTypes.string,
+          PropTypes.exact({
+            // Embedded URL link. Dispatches OPEN_URL with `args: href`.
+            href: PropTypes.string,
+            // OPEN_URL `where` argument. Defaults to "tab". Only meaningful
+            // alongside `href`.
+            where: PropTypes.string,
+            // Inline link key. Resolved against
+            // `screen.content[link_key].action`. Mutually exclusive with
+            // `href`; if both are set, `href` wins.
+            link_key: PropTypes.string,
+            // An action to dispatch when the link is clicked, specified
+            // inline rather than looked up by key. Takes precedence over
+            // `href` and `link_key`. When `href` is also set it is still
+            // rendered on the anchor (so the link has a visible target and
+            // context menu), but the click dispatches this action instead of
+            // OPEN_URL.
+            action: actionPropTypes,
+            // Reported as the telemetry `source` when this segment's link is
+            // clicked. Only used alongside `action`; `link_key` segments
+            // report the link key instead.
+            id: PropTypes.string,
+            ...localizableThingPropTypes,
+          }),
+        ])
+      ),
+    ]),
+    // Optional paragraph style.
+    font_styles: PropTypes.string,
+    // Each item corresponds to a <a data-l10n-name></a> marker inside
+    // the text Fluent string.
+    link_keys: PropTypes.arrayOf(PropTypes.string),
+    ...sharedContentTilesProps,
+  }),
+]);
 
 export const screenContentShape = {
   // The layout position of the screen.
@@ -1537,34 +2168,34 @@ export const screenContentShape = {
   // background has any animated content.
   background_static: PropTypes.string,
   // The hero image in the content.
-  hero_image: PropTypes.shape({
+  hero_image: PropTypes.exact({
     // The default URL of the hero image.
-    static_url: PropTypes.string,
+    url: PropTypes.string,
     // The URL of the static hero image, provided if the default hero image
     // has animated content.
-    url: PropTypes.string,
+    static_url: PropTypes.string,
   }),
   // The image to insert into the secondary section background
   // if the screen is a card stack. "Float" is the default
   // and uses the "background" property under the hood, so no
   // extra URLs are needed.
-  card_stack_image: PropTypes.shape({
+  card_stack_image: PropTypes.exact({
     // The image type; 'float' is a centered floating image (default),
     // 'bleed' is an image designed to bleed over the bottom edge of the
     // card, and 'banner' is a wider image that will bleed over two edges,
     // and convert to a centered image at smaller widths.
     type: PropTypes.oneOf(["float", "bleed", "banner"]),
-    // The static CSS background to use with the 'bleed' image type
+    // The static CSS background to use with the 'bleed' image type.
     background_uncropped: PropTypes.string,
     // The static CSS background to use at the middle breakpoint
-    // for the 'banner' image type
+    // for the 'banner' image type.
     background_medium: PropTypes.string,
     // The static CSS background to use at the smallest breakpoint
-    // for the 'banner' image type
+    // for the 'banner' image type.
     background_small: PropTypes.string,
   }),
   // A single checkbox action.
-  checkbox: PropTypes.shape({
+  checkbox: PropTypes.exact({
     // The text to show next to the checkbox.
     label: localizableThingPropTypes,
     // The default value of the checkbox.
@@ -1579,15 +2210,15 @@ export const screenContentShape = {
   // The secondary button(s) that are displayed at the top of the screen, above
   // the main content.
   secondary_button_top: PropTypes.oneOfType([
-    PropTypes.object,
-    PropTypes.array,
+    buttonPropTypes,
+    PropTypes.arrayOf(buttonPropTypes),
   ]),
   // The additional button.
   additional_button: buttonPropTypes,
   // The dismiss button.
   dismiss_button: buttonPropTypes,
   // A submenu button that can be attached to another button.
-  submenu_button: PropTypes.shape({
+  submenu_button: PropTypes.exact({
     // Optionally used to control the aria label and can be used to override
     // CSS styles.
     label: localizableThingPropTypes,
@@ -1596,8 +2227,8 @@ export const screenContentShape = {
     style: PropTypes.oneOf(["primary", "secondary"]),
     // The dropdown menu that appears when the user clicks the split button.
     submenu: PropTypes.arrayOf(
-      PropTypes.shape({
-        // Submenu can have 3 types of items.
+      PropTypes.exact({
+        // A submenu item can be one of three types.
         type: PropTypes.oneOf(["action", "menu", "separator"]),
         // The id used to identify the submenu item in telemetry.
         id: PropTypes.string,
@@ -1629,7 +2260,7 @@ export const screenContentShape = {
   // A layout variant for the screen. 'inline' is a single row layout that
   // works well in tandem with title_logo. 'last-card' is the final card-stack
   // screen, with the title and subtitle split around a centered image slot.
-  layout: PropTypes.string,
+  layout: PropTypes.oneOf(["inline", "last-card", "survey"]),
   // If true, adds a colorful gradient border to the screen. This is only
   // supported for screens with 'hide_arrow' set to true. There is no effect
   // if HCM or a custom theme add-on is enabled.
@@ -1639,13 +2270,13 @@ export const screenContentShape = {
   // 'absolute_position' or 'arrow_position'. There is no effect if HCM or a
   // custom theme add-on is enabled.
   zap_shadow: PropTypes.bool,
-  // If present, a custom gradient to use in conjuction with the
+  // If present, a custom gradient to use in conjunction with the
   // 'background' and 'zap_border' properties. Only applied if
   // both other properties are present.
   zap_border_gradient: PropTypes.string,
   // An optional object representing a large illustration to show above other
   // content.
-  logo: PropTypes.shape({
+  logo: PropTypes.exact({
     // The image URL.
     imageURL: PropTypes.string,
     // The dark mode image URL.
@@ -1654,13 +2285,12 @@ export const screenContentShape = {
     reducedMotionImageURL: PropTypes.string,
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: PropTypes.string,
-    // A video URL, played once, rendered instead of the image ones above.
-    // Ignored (falls back to the image URLs above) for users who prefer reduced
-    // motion.
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
     videoURL: PropTypes.string,
     // Right-to-left replacements for any of the URLs above, applied over them
     // when the document is RTL. Omitted keys keep their base value.
-    rtl: PropTypes.shape({
+    rtl: PropTypes.exact({
       imageURL: PropTypes.string,
       darkModeImageURL: PropTypes.string,
       reducedMotionImageURL: PropTypes.string,
@@ -1668,16 +2298,24 @@ export const screenContentShape = {
       videoURL: PropTypes.string,
     }),
     // The <img> alt text.
-    alt: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+    alt: localizableThingPropTypes,
     // The CSS style overriding the width property.
-    width: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the height property.
-    height: PropTypes.string,
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The CSS style overriding the marginBlock property.
+    marginBlock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The CSS style overriding the marginInline property.
+    marginInline: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The style of the image container.
+    style: PropTypes.object,
+    // More style overrides applied to the <img> element.
+    imgStyle: PropTypes.object,
   }),
   // An optional object representing an illustration anchored to a corner of the
   // screen. The fullscreen center-large layout anchors it to the window; every
   // other layout anchors it to the card.
-  corner_image: PropTypes.shape({
+  corner_image: PropTypes.exact({
     // The image URL.
     imageURL: PropTypes.string,
     // The dark mode image URL.
@@ -1688,7 +2326,7 @@ export const screenContentShape = {
     darkModeReducedMotionImageURL: PropTypes.string,
     // Right-to-left replacements for any of the URLs above, applied over them
     // when the document is RTL. Omitted keys keep their base value.
-    rtl: PropTypes.shape({
+    rtl: PropTypes.exact({
       imageURL: PropTypes.string,
       darkModeImageURL: PropTypes.string,
       reducedMotionImageURL: PropTypes.string,
@@ -1709,13 +2347,13 @@ export const screenContentShape = {
       "top-end",
     ]),
     // The CSS style overriding the width property.
-    width: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the height property.
-    height: PropTypes.string,
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the marginBlock property.
-    marginBlock: PropTypes.string,
+    marginBlock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the marginInline property.
-    marginInline: PropTypes.string,
+    marginInline: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // CSS overrides applied to the illustration container. Avoid 'translate'
     // and 'scale' when using 'entrance_animation', which animates those two
     // properties and would be overridden by them. 'transform' is unaffected.
@@ -1724,7 +2362,7 @@ export const screenContentShape = {
     // direction is derived from 'position', so a 'bottom-left' illustration
     // rises and a 'top-left' one descends. Every type degrades to an
     // opacity-only fade for users who prefer reduced motion.
-    entrance_animation: PropTypes.shape({
+    entrance_animation: PropTypes.exact({
       // The animation to run. Defaults to 'none'.
       type: PropTypes.oneOf([
         "none",
@@ -1745,7 +2383,7 @@ export const screenContentShape = {
   }),
   // An optional image shown in the center image slot of the 'last-card'
   // layout, revealed once the text split animation completes.
-  center_image: PropTypes.shape({
+  center_image: PropTypes.exact({
     // The image URL.
     imageURL: PropTypes.string,
     // The dark mode image URL.
@@ -1755,32 +2393,39 @@ export const screenContentShape = {
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: PropTypes.string,
     // Right-to-left replacements for any of the URLs above, applied over them
-    // when the document is RTL. Any keys ommitted keep their base values.
-    rtl: PropTypes.shape({
+    // when the document is RTL. Any keys omitted keep their base values.
+    rtl: PropTypes.exact({
       imageURL: PropTypes.string,
       darkModeImageURL: PropTypes.string,
       reducedMotionImageURL: PropTypes.string,
       darkModeReducedMotionImageURL: PropTypes.string,
     }),
     // The <img> alt text.
-    alt: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+    alt: localizableThingPropTypes,
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
+    videoURL: PropTypes.string,
     // The CSS width of the image slot. The split animation and margins adapt
     // to it. Defaults to 120px.
-    width: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS height of the image slot. Defaults to 120px.
-    height: PropTypes.string,
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the marginBlock property. Useful for aligning
     // the image's focal point with the text. Only applies when the text is
     // split around the image, not when stacked at narrow breakpoints.
-    marginBlock: PropTypes.string,
+    marginBlock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the marginInline property. Only applies when
     // the text is split around the image, not when stacked at narrow breakpoints.
-    marginInline: PropTypes.string,
+    marginInline: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The style of the image container.
+    style: PropTypes.object,
+    // More style overrides applied to the <img> element.
+    imgStyle: PropTypes.object,
   }),
   // The text for the headline.
   title: localizableThingPropTypes,
   // An optional object representing an icon to show next to the title.
-  title_logo: PropTypes.shape({
+  title_logo: PropTypes.exact({
     // The image URL.
     imageURL: PropTypes.string,
     // The dark mode image URL.
@@ -1789,17 +2434,36 @@ export const screenContentShape = {
     reducedMotionImageURL: PropTypes.string,
     // The dark mode reduced motion image URL.
     darkModeReducedMotionImageURL: PropTypes.string,
+    // Right-to-left replacements for any of the URLs above, applied over them
+    // when the document is RTL. Any keys omitted keep their base values.
+    rtl: PropTypes.exact({
+      imageURL: PropTypes.string,
+      darkModeImageURL: PropTypes.string,
+      reducedMotionImageURL: PropTypes.string,
+      darkModeReducedMotionImageURL: PropTypes.string,
+    }),
     // The <img> alt text.
-    alt: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+    alt: localizableThingPropTypes,
+    // A video URL, played once, instead of the images above. Ignored (falls
+    // back to the image URLs above) for users who prefer reduced motion.
+    videoURL: PropTypes.string,
     // The CSS style overriding the width property.
-    width: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The CSS style overriding the height property.
-    height: PropTypes.string,
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The CSS style overriding the marginBlock property.
+    marginBlock: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    // The CSS style overriding the marginInline property.
+    marginInline: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     // The logo alignment relative to the title.
     alignment: PropTypes.oneOf(["top", "center", "bottom"]),
+    // The style of the image container.
+    style: PropTypes.object,
+    // More style overrides applied to the <img> element.
+    imgStyle: PropTypes.object,
   }),
   // Optional styling for the title.
-  title_style: PropTypes.string,
+  title_style: PropTypes.oneOf(["fancy", "shine", "fancy shine"]),
   // The text to show below the title.
   subtitle: localizableThingPropTypes,
   // An extra block of configurable content below the title/subtitle but above
@@ -1811,75 +2475,108 @@ export const screenContentShape = {
       type: PropTypes.oneOf(["text", "image"]),
       // The paragraph text. Can be either a localizableThing that can be
       // combined with 'link_key's to attach actions to the
-      // `<a data-l10n-name='...'> or an array of either raw strings or a
+      // `<a data-l10n-name='...'>` or an array of either raw strings or a
       // localizableThing with 'href'/'link_key'/neither.
-      text: PropTypes.oneOfType([localizableThingPropTypes, PropTypes.array]),
+      text: PropTypes.oneOfType([
+        localizableThingPropTypes,
+        PropTypes.arrayOf(
+          PropTypes.oneOfType([
+            PropTypes.string,
+            PropTypes.exact({
+              // An embedded URL link. Dispatches OPEN_URL with 'args: href'.
+              href: PropTypes.string,
+              // The 'where' argument for the OPEN_URL action.
+              where: PropTypes.string,
+              // Inline link key.
+              link_key: PropTypes.string,
+              // An action to dispatch when the link is clicked, specified
+              // inline rather than looked up by key. Takes precedence over
+              // `href` and `link_key`. When `href` is also set it is still
+              // rendered on the anchor (so the link has a visible target and
+              // context menu), but the click dispatches this action instead of
+              // OPEN_URL.
+              action: actionPropTypes,
+              // Reported as the telemetry `source` when this segment's link is
+              // clicked. Only used alongside `action`; `link_key` segments
+              // report the link key instead.
+              id: PropTypes.string,
+              // A raw, untranslated string (typically used for EN-only
+              // experiments) or an $l10n object.
+              raw: PropTypes.oneOfType([
+                PropTypes.string,
+                PropTypes.exact({
+                  $l10n: PropTypes.exact({
+                    // A unique identifier for the string. It can only contain
+                    // letters, numbers, and -.
+                    id: PropTypes.string,
+                    // The text of the string.
+                    text: PropTypes.string,
+                    // A comment used to provide more context to localizers.
+                    comment: PropTypes.string,
+                  }),
+                }),
+              ]),
+              // Fluent string identifier from a .ftl file.
+              string_id: PropTypes.string,
+              // Arguments for Fluent strings that have variables.
+              args: PropTypes.object,
+              // A string to use as the element's aria-label attribute value.
+              aria_label: PropTypes.string,
+              // If true, use the installed lang pack for the Fluent strings.
+              useLangPack: PropTypes.bool,
+              // Inline icons inside localized strings. Each entry maps a
+              // Fluent data-l10n-name to an icon object.
+              inline_icons: PropTypes.object,
+              // Adds zap style and content.
+              zap: PropTypes.oneOfType([PropTypes.bool, PropTypes.string]),
+              // CSS overrides for configurable styles.
+              ...Object.fromEntries(
+                CONFIGURABLE_STYLES.map(key => [
+                  key,
+                  PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+                ])
+              ),
+            }),
+          ])
+        ),
+      ]),
       // A list of the link keys that exist in screen.content. The value of
       // that key must be an object with an 'action' property and the
       // 'string_id' in the 'text' object must refer to a Fluent string that
       // contains an anchor element with `data-l10n-name='LINK_KEY_NAME'`.
       link_keys: PropTypes.arrayOf(PropTypes.string),
       // Optional paragraph style.
-      font_styles: PropTypes.string,
+      font_styles: PropTypes.oneOf(["legal"]),
     })
   ),
   // Optionally used to override the aria attributes or tooltip of the steps
   // indicator. Not recommended.
-  steps_indicator: PropTypes.shape({
+  steps_indicator: PropTypes.exact({
     string_id: PropTypes.string,
   }),
-  // Tile object(s) to display in the screen.
-  tiles: PropTypes.oneOfType([
-    PropTypes.array,
-    PropTypes.shape({
-      // The type of tile. More details can be found in ContentTiles.jsx.
-      type: PropTypes.oneOf([
-        "link",
-        "textbox",
-        "multiselect",
-        "single-select",
-        "theme",
-        "backup_restore",
-        "addons-picker",
-        "migration-wizard",
-        "mobile_downloads",
-        "textarea",
-        "theme-picker",
-        "embedded_browser",
-        "fx_backup_file_path",
-        "fx_backup_password",
-        "confirmation-checklist",
-        "pinnable_sites",
-        "content-toggle",
-        "action_checklist",
-      ]).isRequired,
-      // CSS overrides of the tile container. Any CSS properties starting with
-      // '--' are also allowed.
-      style: PropTypes.object,
-      // Optional, currently for single-select tiles only. Visual layout for
-      // the tile's items.
-      layout: PropTypes.oneOf(["carousel"]),
-      // Optional, currently for single-select tiles only. Accessible name for
-      // the carousel pill navigation.
-      pill_nav_label: localizableThingPropTypes,
-      // Array of tile configurations needed for the tile type.
-      data: PropTypes.oneOfType([PropTypes.array, PropTypes.object]),
-    }),
-  ]),
+  // Tile object(s) to display on the screen, rendered in ContentTiles.jsx.
+  tiles: PropTypes.oneOfType([PropTypes.arrayOf(tilePropType), tilePropType]),
   // The tiles container.
-  tiles_container: PropTypes.shape({
+  tiles_container: PropTypes.exact({
     // The position of the tiles container relative to supporting content like
     // 'above_button_content'. By default, it comes before the supporting
     // content.
-    position: PropTypes.string,
+    position: PropTypes.oneOf(["after_supporting_content"]),
     // CSS overrides.
-    style: PropTypes.object,
+    style: PropTypes.exact({
+      ...Object.fromEntries(
+        CONTAINER_STYLES.map(key => [
+          key,
+          PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        ])
+      ),
+    }),
   }),
   // The header for a tiles container.
   tiles_header: PropTypes.exact({
     title: localizableThingPropTypes,
   }),
-  // If true, applies the reverse split layout onto the screen (i.e. inverts
+  // If true, applies the reverse split layout onto the screen (i.e., inverts
   // the visual order of the split screens).
   reverse_split: PropTypes.bool,
   // The <img> alt text.
@@ -1887,7 +2584,7 @@ export const screenContentShape = {
   // The hero text.
   hero_text: PropTypes.oneOfType([
     localizableThingPropTypes,
-    PropTypes.shape({
+    PropTypes.exact({
       title: localizableThingPropTypes,
       subtitle: localizableThingPropTypes,
     }),
@@ -1911,9 +2608,9 @@ export const screenContentShape = {
   ]),
   // If true, adds noodle illustrations that peek out behind the screen.
   has_noodles: PropTypes.bool,
-  // If true, sets narrow attribute to the outer element of the screen.
+  // If true, sets the narrow attribute to the outer element of the screen.
   narrow: PropTypes.bool,
-  // The language switcher component that appears of there is a language
+  // The language switcher component that appears if there is a language
   // mismatch screen.
   languageSwitcher: PropTypes.exact({
     downloading: localizableThingPropTypes,
@@ -1925,38 +2622,59 @@ export const screenContentShape = {
     action: actionPropTypes,
   }),
   // Displays the OnboardingVideo component.
-  video_container: PropTypes.object,
-  // Overrides all text color of the screen.
+  video_container: PropTypes.exact({
+    // The URL of the video to play.
+    video_url: PropTypes.string,
+    // If true, autoplay is enabled for the video.
+    autoPlay: PropTypes.bool,
+  }),
+  // Overrides all text color on the screen.
   text_color: PropTypes.oneOf(["light", "dark"]),
-  // If true, overrides the spotlight screen styling to look like the system
+  // If true, overrides the Spotlight screen styling to look like the system
   // prompt style.
   isSystemPromptStyleSpotlight: PropTypes.bool,
   // CSS overrides for the screen style.
   screen_style: PropTypes.exact({
-    overflow: PropTypes.string,
-    display: PropTypes.string,
-    height: PropTypes.string,
-    width: PropTypes.string,
-    padding: PropTypes.string,
+    overflow: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    display: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    padding: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    justifyContent: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   }),
-  // If true, prevents the spotlight from entering responsive design mode at
+  // If true, prevents the Spotlight from entering responsive design mode at
   // widths less than 800px.
   no_rdm: PropTypes.bool,
   // The CSS override for the paddingBlock styling for split layout contents.
-  split_content_padding_block: PropTypes.string,
+  split_content_padding_block: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+  ]),
   // The CSS override for the paddingInline styling for split layout contents.
-  split_content_padding_inline: PropTypes.string,
+  split_content_padding_inline: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+  ]),
   // Text below the subtitle that can include hyperlinks.
-  cta_paragraph: PropTypes.shape({
+  cta_paragraph: PropTypes.exact({
+    // The text to be displayed.
     text: PropTypes.shape({
       // The Fluent string id for the paragraph text.
       string_id: PropTypes.string,
-      // The name of the '<a data-l10n-name'=''></a>' marker inside the
+      // The name of the `<a data-l10n-name=''></a>` marker inside the
       // string_id.
       string_name: PropTypes.string,
     }),
-    // The special message action to be invoked when the cta text is clicked.
+    // The special message action to be invoked when the CTA text is clicked.
     action: actionPropTypes,
+    // CSS style overrides for the paragraph text.
+    style: PropTypes.object,
+    // The icon to be displayed next to the CTA text.
+    icon: PropTypes.shape({
+      iconURL: PropTypes.string,
+    }),
+    // If true, applies the info-tile styling to the CTA paragraph.
+    info_tile: PropTypes.bool,
   }),
   // Info text displayed at the bottom of the screen.
   info_text: localizableThingPropTypes,
@@ -1965,14 +2683,14 @@ export const screenContentShape = {
   isEncryptedBackup: PropTypes.bool,
   // The action for the migration start event as part of the embedded migration
   // wizard component within about:welcome.
-  migrate_start: PropTypes.shape({ action: actionPropTypes }),
+  migrate_start: PropTypes.exact({ action: actionPropTypes }),
   // The action for the migration close event as part of the embedded migration
   // wizard component within about:welcome.
-  migrate_close: PropTypes.shape({ action: actionPropTypes }),
+  migrate_close: PropTypes.exact({ action: actionPropTypes }),
   // The subtitle text for the action checklist.
   action_checklist_subtitle: localizableThingPropTypes,
   // The remove checklist button in the action checklist.
-  remove_checklist_button: PropTypes.shape({
+  remove_checklist_button: PropTypes.exact({
     // The text inside the remove checklist button.
     label: localizableThingPropTypes,
     // The id used to identify the button in telemetry.
@@ -1981,55 +2699,79 @@ export const screenContentShape = {
     action: actionPropTypes,
   }),
   // A submenu button with a button type of 'more'.
-  more_button: PropTypes.shape({
-    // Submenu can have 3 types of items.
-    type: PropTypes.oneOf(["action", "menu", "separator"]),
-    // The id used to identify the submenu item in telemetry.
-    id: PropTypes.string,
-    // The text to show inside the submenu item.
-    label: localizableThingPropTypes,
-    // Used only for type 'action'. The special message action invoked if
-    // the submenu item is clicked.
-    action: actionPropTypes,
-    // An optional URL specifying an icon to show next to the label.
-    icon: PropTypes.string,
-    // Used only for type 'menu'. The submenu items to show when the user
-    // hovers over this item. Recursive.
-    submenu: PropTypes.arrayOf(PropTypes.object),
+  more_button: PropTypes.exact({
+    submenu: PropTypes.arrayOf(
+      PropTypes.exact({
+        // Submenu can have 3 types of items.
+        type: PropTypes.oneOf(["action", "menu", "separator"]),
+        // The id used to identify the submenu item in telemetry.
+        id: PropTypes.string,
+        // The text to show inside the submenu item.
+        label: localizableThingPropTypes,
+        // Used only for type 'action'. The special message action invoked if
+        // the submenu item is clicked.
+        action: actionPropTypes,
+        // An optional URL specifying an icon to show next to the label.
+        icon: PropTypes.string,
+        // Used only for type 'menu'. The submenu items to show when the user
+        // hovers over this item. Recursive.
+        submenu: PropTypes.arrayOf(PropTypes.object),
+      })
+    ),
+    // Overrides the style of the button.
+    style: PropTypes.oneOf(["primary", "secondary"]),
   }),
+  // A skip button that is passed into the EmbeddedBackupRestore content tile.
+  skip_button: buttonPropTypes,
   // An optional array of event listeners to add to the page where the screen
   // is shown.
   page_event_listeners: PropTypes.arrayOf(
-    PropTypes.shape({
-      params: PropTypes.shape({
+    PropTypes.exact({
+      params: PropTypes.exact({
         // The event type string. Supports any DOM event type, timeout and
-        // interval for timers, internal feature callout events 'touradvance'
-        // and 'tourend'.
+        // interval for timers, and internal feature callout events
+        // 'touradvance' and 'tourend'.
         type: PropTypes.string,
         // The target selector.
         selector: PropTypes.string,
-        options: PropTypes.shape({
-          // If true, handles events in capturing phase.
+        // addEventListener options.
+        options: PropTypes.exact({
+          // If true, handles events in the capture phase.
           capture: PropTypes.bool,
-          // If true, removes listener after first event.
+          // If true, removes the listener after first event.
           once: PropTypes.bool,
-          // If true, prevents default action in event handler.
+          // If true, prevents the default action in event handler.
           preventDefault: PropTypes.bool,
           // Used only for timeout and interval event types to invoke the action
           // on a timer.
           interval: PropTypes.number,
-          // If true, extends addEventListener to all windows.
+          // If true, adds the listener to all windows.
           every_window: PropTypes.bool,
         }),
       }),
+      // The special message action to be invoked.
       action: actionPropTypes,
     })
   ),
+  // A special message action that fires automatically when the screen is first
+  // shown.
+  impression_action: actionPropTypes,
+  // An action to perform when the Escape key is pressed, or when a page event
+  // listener invokes an action containing `dismiss: true`. Unnecessary if
+  // your message has a dismiss_button.
+  dismiss_action: actionPropTypes,
+  // By default, hitting Escape will dismiss the callout, whether it is focused
+  // or not. Setting this to true will stop keypresses from dispatching up to
+  // the callout from outside it, though they will still work when the callout
+  // is focused. Best to leave this as-is.
+  ignorekeys: PropTypes.bool,
+  // Set to true for RTAMO screens in about:welcome.
+  isRtamo: PropTypes.bool,
 
   // Add any `link_key` properties that are used in messages in
-  //    OnboardingMessageProvider.sys.mjs
-  //    FeatureCalloutMessages.sys.mjs
-  //    PanelTestProvider.sys.mjs
+  //    OnboardingMessageProvider.sys.mjs,
+  //    FeatureCalloutMessages.sys.mjs, and
+  //    PanelTestProvider.sys.mjs,
   // to prevent the propTypes validation unit test from throwing an invalid
   // prop error.
   here: PropTypes.object,

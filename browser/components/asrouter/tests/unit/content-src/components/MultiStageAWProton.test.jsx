@@ -12,6 +12,7 @@ import MultiStageProtonScreenSchema from "../../../../../../../toolkit/component
 import React from "react";
 import { mount } from "enzyme";
 import PropTypes from "prop-types";
+// import ReactPropTypesSecret from "prop-types/lib/ReactPropTypesSecret";
 
 describe("MultiStageAboutWelcomeProton module", () => {
   let sandbox;
@@ -48,7 +49,7 @@ describe("MultiStageAboutWelcomeProton module", () => {
           },
           { content: screen.content },
           "prop",
-          "MultiStageProtonScreen"
+          screen.id
         );
       }
 
@@ -96,6 +97,246 @@ describe("MultiStageAboutWelcomeProton module", () => {
           `In schema but missing from propTypes: [${inSchemaOnly.join(", ")}]`
       );
     });
+
+    // // PropTypes validators can't be inspected directly, so this probes the
+    // // screen content propTypes with values derived from the schema and reads
+    // // the results back from their error messages. Inside a
+    // // PropTypes.oneOfType the nested errors are swallowed, so keys that exist
+    // // only in the propTypes can't be detected there.
+    // it("screen content propTypes match the documentation schema's nested shapes, types and enums", () => {
+    //   const LINK_KEYS = [
+    //     "here",
+    //     "settings",
+    //     "ios",
+    //     "android",
+    //     "terms_of_use",
+    //     "privacy_notice",
+    //     "learn-more",
+    //     "email_link",
+    //   ];
+    //   const PROBE_KEY = "__schema_probe__";
+    //   const NOT_IN_ENUM = "__not_in_schema_enum__";
+    //   const TYPE_ORDER = ["number", "string", "boolean", "array", "object"];
+    //   const WRONG_VALUE = {
+    //     number: 12345,
+    //     string: "probe",
+    //     boolean: true,
+    //     array: [],
+    //     object: {},
+    //   };
+    //   const { $defs } = MultiStageProtonScreenSchema;
+
+    //   const refName = node => node?.$ref?.replace("#/$defs/", "");
+    //   const resolve = rawNode => {
+    //     let node = rawNode;
+    //     while (node?.$ref) {
+    //       node = $defs[refName(node)];
+    //     }
+    //     return node;
+    //   };
+    //   const alternatives = node => resolve(node)?.oneOf ?? resolve(node)?.anyOf;
+    //   const objectView = rawNode => {
+    //     const node = resolve(rawNode);
+    //     if (node?.allOf) {
+    //       const views = node.allOf.map(objectView).filter(Boolean);
+    //       return views.length
+    //         ? {
+    //             properties: Object.assign({}, ...views.map(v => v.properties)),
+    //             hasProperties: views.some(v => v.hasProperties),
+    //             required: views.flatMap(v => v.required),
+    //           }
+    //         : null;
+    //     }
+    //     if (node?.type === "object" || node?.properties) {
+    //       return {
+    //         properties: node.properties ?? {},
+    //         hasProperties: !!node.properties,
+    //         required: node.required ?? [],
+    //       };
+    //     }
+    //     return null;
+    //   };
+    //   const allowedTypes = rawNode => {
+    //     const node = resolve(rawNode);
+    //     const alts = alternatives(node);
+    //     if (alts) {
+    //       return new Set(alts.flatMap(alt => [...allowedTypes(alt)]));
+    //     }
+    //     if (node?.enum) {
+    //       return new Set(node.enum.map(value => typeof value));
+    //     }
+    //     if (objectView(node)) {
+    //       return new Set(["object"]);
+    //     }
+    //     return new Set(
+    //       [].concat(node?.type ?? []).map(t => (t === "integer" ? "number" : t))
+    //     );
+    //   };
+    //   const sample = rawNode => {
+    //     const node = resolve(rawNode);
+    //     const alts = alternatives(node);
+    //     if (alts) {
+    //       return sample(alts[0]);
+    //     }
+    //     if (node?.enum) {
+    //       return node.enum[0];
+    //     }
+    //     const view = objectView(node);
+    //     if (view) {
+    //       return Object.fromEntries(
+    //         view.required.map(key => [key, sample(view.properties[key])])
+    //       );
+    //     }
+    //     const [type] = allowedTypes(node);
+    //     return { string: "probe", number: 1, boolean: true, array: [] }[type];
+    //   };
+    //   const propTypesError = content => {
+    //     const error = MultiStageProtonScreen.propTypes.content(
+    //       { content },
+    //       "content",
+    //       "SchemaProbe",
+    //       "prop",
+    //       "content",
+    //       ReactPropTypesSecret
+    //     );
+    //     return error ? error.message : null;
+    //   };
+    //   const firstLine = message => message.split("\n")[0];
+
+    //   const problems = [];
+    //   const visitedDefs = new Set();
+
+    //   // `put` wraps a value at `path` into a full, otherwise schema-valid
+    //   // screen content object. `siblingTypes` are the types accepted by other
+    //   // alternatives of an enclosing oneOf/anyOf, which a probe must avoid.
+    //   const walk = (rawNode, path, put, siblingTypes = new Set()) => {
+    //     const defName = refName(rawNode);
+    //     const node = resolve(rawNode);
+    //     if (!node) {
+    //       return;
+    //     }
+
+    //     const valid = sample(node);
+    //     if (valid !== undefined) {
+    //       const error = propTypesError(put(valid));
+    //       if (error) {
+    //         problems.push(
+    //           `${path}: schema-valid value ${JSON.stringify(valid)} is rejected by propTypes: ${firstLine(error)}`
+    //         );
+    //       }
+    //     }
+
+    //     const allowed = allowedTypes(node);
+    //     const wrongType = TYPE_ORDER.find(
+    //       type => allowed.size && !allowed.has(type) && !siblingTypes.has(type)
+    //     );
+    //     if (wrongType && !propTypesError(put(WRONG_VALUE[wrongType]))) {
+    //       problems.push(
+    //         `${path}: propTypes accept a ${wrongType}, but the schema only allows ${[...allowed].join(" or ")}`
+    //       );
+    //     }
+
+    //     if (node.enum) {
+    //       for (const value of node.enum) {
+    //         const error = propTypesError(put(value));
+    //         if (error) {
+    //           problems.push(
+    //             `${path}: schema enum value ${JSON.stringify(value)} is rejected by propTypes: ${firstLine(error)}`
+    //           );
+    //         }
+    //       }
+    //       if (!siblingTypes.has("string")) {
+    //         const error = propTypesError(put(NOT_IN_ENUM));
+    //         const listed = error?.match(/expected one of (\[.*?\])\./);
+    //         if (!error) {
+    //           problems.push(
+    //             `${path}: propTypes accept values outside the schema enum ${JSON.stringify(node.enum)}`
+    //           );
+    //         } else if (listed) {
+    //           const extra = JSON.parse(listed[1]).filter(
+    //             value => !node.enum.includes(value)
+    //           );
+    //           if (extra.length) {
+    //             problems.push(
+    //               `${path}: propTypes enum allows ${JSON.stringify(extra)}, missing from the schema enum`
+    //             );
+    //           }
+    //         }
+    //       }
+    //     }
+
+    //     if (defName) {
+    //       if (visitedDefs.has(defName)) {
+    //         return;
+    //       }
+    //       visitedDefs.add(defName);
+    //     }
+
+    //     const alts = alternatives(node);
+    //     if (alts) {
+    //       alts.forEach((alt, index) => {
+    //         const others = new Set(
+    //           alts
+    //             .filter((_, i) => i !== index)
+    //             .flatMap(other => [...allowedTypes(other)])
+    //         );
+    //         walk(alt, `${path}<${index}>`, put, others);
+    //       });
+    //       return;
+    //     }
+
+    //     const view = objectView(node);
+    //     if (view) {
+    //       const base = sample(node);
+    //       if (view.hasProperties) {
+    //         const error = propTypesError(put({ ...base, [PROBE_KEY]: 1 }));
+    //         const validKeys = error?.includes(`key \`${PROBE_KEY}\``)
+    //           ? error.match(/Valid keys: (\[[\s\S]*\])/)
+    //           : null;
+    //         if (validKeys) {
+    //           const schemaKeys = Object.keys(view.properties);
+    //           const propTypeKeys = JSON.parse(validKeys[1]).filter(
+    //             key => path !== "content" || !LINK_KEYS.includes(key)
+    //           );
+    //           const onlyInPropTypes = propTypeKeys.filter(
+    //             key => !schemaKeys.includes(key)
+    //           );
+    //           const onlyInSchema = schemaKeys.filter(
+    //             key => !propTypeKeys.includes(key)
+    //           );
+    //           if (onlyInPropTypes.length) {
+    //             problems.push(
+    //               `${path}: keys in propTypes but missing from the schema: [${onlyInPropTypes.join(", ")}]`
+    //             );
+    //           }
+    //           if (onlyInSchema.length) {
+    //             problems.push(
+    //               `${path}: keys in the schema but missing from propTypes: [${onlyInSchema.join(", ")}]`
+    //             );
+    //           }
+    //         }
+    //       }
+    //       for (const [key, child] of Object.entries(view.properties)) {
+    //         walk(child, `${path}.${key}`, value =>
+    //           put({ ...base, [key]: value })
+    //         );
+    //       }
+    //       return;
+    //     }
+
+    //     if (node.type === "array" && node.items) {
+    //       walk(node.items, `${path}[]`, value => put([value]));
+    //     }
+    //   };
+
+    //   walk(MultiStageProtonScreenSchema.properties.content, "content", v => v);
+
+    //   assert.deepEqual(
+    //     problems,
+    //     [],
+    //     `MultiStageProtonScreen.jsx propTypes and MultiStageProtonScreenSchemas.json disagree (${problems.length}):\n${problems.join("\n")}`
+    //   );
+    // });
 
     it("should render MultiStageProton Screen", () => {
       const SCREEN_PROPS = {

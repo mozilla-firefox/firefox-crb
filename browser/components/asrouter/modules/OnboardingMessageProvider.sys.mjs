@@ -1112,7 +1112,6 @@ const BASE_MESSAGES = () => [
             tiles: {
               type: "confirmation-checklist",
               data: {
-                inert: true,
                 style: { width: "500px" },
                 items: [
                   {
@@ -1217,7 +1216,6 @@ const BASE_MESSAGES = () => [
             tiles: {
               type: "confirmation-checklist",
               data: {
-                inert: true,
                 style: { width: "500px" },
                 items: [
                   {

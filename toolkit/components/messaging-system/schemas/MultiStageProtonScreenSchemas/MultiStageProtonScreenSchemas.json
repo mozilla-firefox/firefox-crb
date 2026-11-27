@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2019-09/schema",
   "title": "MultiStageProtonScreen",
-  "description": "A non-enforcing schema for the content of a multistage screen. Keep updated with any new/removed properties to MultiStageProtonScreen.jsx.",
+  "description": "A schema for the content of a multistage screen. Keep updated with any new/removed properties in MultiStageProtonScreen.jsx.",
   "type": "object",
-  "required": ["id"],
+  "required": ["id", "content"],
   "additionalProperties": true,
   "properties": {
     "id": {
@@ -60,6 +60,7 @@
         },
         "hero_image": {
           "type": "object",
+          "additionalProperties": false,
           "description": "The hero image in the content.",
           "properties": {
             "url": {
@@ -74,29 +75,31 @@
         },
         "card_stack_image": {
           "type": "object",
-          "description": "The image to insert into the secondary section background if the screen is a card stack.",
+          "additionalProperties": false,
+          "description": "The image to insert into the secondary section background if the screen is a card stack. 'Float' is the default and uses the 'background' property under the hood, so no extra URLs are needed.",
           "properties": {
             "type": {
               "type": "string",
-              "description": "The style of the image, which determines how it will fill the container and behave at breakpoints. Defaults to float.",
+              "description": "The style of the image, which determines how it will fill the container and behave at breakpoints; 'float' is a centered floating image (default), 'bleed' is an image designed to bleed over the bottom edge of the card, and 'banner' is a wider image that will bleed over two edges, and convert to a centered image at smaller widths.",
               "enum": ["float", "bleed", "banner"]
             },
             "background_uncropped": {
               "type": "string",
-              "description": "The static CSS background to use with the 'bleed' image type"
+              "description": "The static CSS background to use with the 'bleed' image type."
             },
             "background_medium": {
               "type": "string",
-              "description": "The static CSS background to use at the middle breakpoint with the banner image type"
+              "description": "The static CSS background to use at the middle breakpoint with the banner image type."
             },
             "background_small": {
               "type": "string",
-              "description": "The static CSS background to use at the smallest breakpoint with the banner image type"
+              "description": "The static CSS background to use at the smallest breakpoint with the banner image type."
             }
           }
         },
         "checkbox": {
           "type": "object",
+          "additionalProperties": false,
           "description": "A single checkbox action.",
           "properties": {
             "label": {
@@ -114,7 +117,6 @@
           }
         },
         "primary_button": {
-          "type": "object",
           "description": "The primary button.",
           "required": ["label"],
           "properties": {
@@ -126,16 +128,12 @@
               "$ref": "#/$defs/action",
               "description": "The special message action invoked if the primary button is clicked."
             },
-            "targeting": {
-              "type": "string",
-              "description": "The JEXL targeting for conditional button display."
-            },
             "has_arrow_icon": {
               "type": "boolean",
               "description": "If true, shows an arrow icon next to the label."
             },
             "disabled": {
-              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit. If 'hasActiveSingleSelect', disables the button until the user selects an option in the single-select tile.",
+              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit. If 'hasActiveSingleSelect', disables the button until the user selects an option in the single-select tile. If set to 'hasPinnedSite', disables the button until the screen has had at least one successful pin.",
               "oneOf": [
                 { "type": "boolean" },
                 {
@@ -143,7 +141,8 @@
                   "enum": [
                     "hasActiveMultiSelect",
                     "hasTextInput",
-                    "hasActiveSingleSelect"
+                    "hasActiveSingleSelect",
+                    "hasPinnedSite"
                   ]
                 }
               ]
@@ -152,6 +151,14 @@
               "type": "string",
               "description": "Overrides the style of the button.",
               "enum": ["primary", "secondary"]
+            },
+            "install_complete_label": {
+              "$ref": "#/$defs/localizableThing",
+              "description": "The text for the RTAMO install button, provided in the primary button."
+            },
+            "should_focus_button": {
+              "type": "boolean",
+              "description": "If true, the primary button will be focused when the screen is displayed."
             }
           }
         },
@@ -177,16 +184,12 @@
               "description": "If true, shows an arrow icon next to the label."
             },
             "disabled": {
-              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit. If 'hasActiveSingleSelect', disables the button until the user selects an option in the single-select tile.",
+              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit.",
               "oneOf": [
                 { "type": "boolean" },
                 {
                   "type": "string",
-                  "enum": [
-                    "hasActiveMultiSelect",
-                    "hasTextInput",
-                    "hasActiveSingleSelect"
-                  ]
+                  "enum": ["hasActiveMultiSelect", "hasTextInput"]
                 }
               ]
             },
@@ -257,21 +260,13 @@
               "$ref": "#/$defs/action",
               "description": "The special message action invoked if the additional button is clicked."
             },
-            "targeting": {
-              "type": "string",
-              "description": "The JEXL targeting for conditional button display."
-            },
             "disabled": {
-              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit. If 'hasActiveSingleSelect', disables the button until the user selects an option in the single-select tile.",
+              "description": "If true, disables the button. If 'hasActiveMultiSelect', disables the button until the user selects something in the multiselect tiles. If 'hasTextInput', disables the button while the textarea tile is empty or exceeds the character limit.",
               "oneOf": [
                 { "type": "boolean" },
                 {
                   "type": "string",
-                  "enum": [
-                    "hasActiveMultiSelect",
-                    "hasTextInput",
-                    "hasActiveSingleSelect"
-                  ]
+                  "enum": ["hasActiveMultiSelect", "hasTextInput"]
                 }
               ]
             },
@@ -282,7 +277,7 @@
             },
             "flow": {
               "type": "string",
-              "description": "If there are several buttons, this property can control the orietnation of the buttons.",
+              "description": "If there are several buttons, this property can control the orientation of the buttons.",
               "enum": ["row", "column"]
             },
             "alignment": {
@@ -302,7 +297,7 @@
             },
             "action": {
               "$ref": "#/$defs/action",
-              "description": "The special message action invoked if the primary button is clicked."
+              "description": "The special message action invoked if the dismiss button is clicked."
             },
             "size": {
               "type": "string",
@@ -325,6 +320,7 @@
         },
         "submenu_button": {
           "type": "object",
+          "additionalProperties": false,
           "description": "A submenu button that can be attached to another button.",
           "properties": {
             "label": {
@@ -343,8 +339,8 @@
             },
             "submenu": {
               "type": "array",
-              "description": "The dropdown menu that appear when the user clicks the split button.",
-              "$ref": "#/$defs/submenuItem"
+              "description": "The dropdown menu that appears when the user clicks the split button.",
+              "items": { "$ref": "#/$defs/submenuItem" }
             }
           }
         },
@@ -365,13 +361,13 @@
           "description": "The callout card width as a CSS value. Defaults to 400px."
         },
         "padding": {
-          "description": "The callout card padding as a CSS value. Defaults to 16px.",
+          "description": "The callout card padding as a CSS value.",
           "oneOf": [{ "type": "string" }, { "type": "number" }]
         },
         "layout": {
           "type": "string",
           "description": "A layout variant for the screen. 'inline' is a single row layout that works well in tandem with title_logo. 'last-card' is the final card-stack screen, with the title and subtitle split around a centered image slot.",
-          "enum": ["inline", "last-card"]
+          "enum": ["inline", "last-card", "survey"]
         },
         "zap_border": {
           "type": "boolean",
@@ -387,6 +383,7 @@
         },
         "logo": {
           "type": "object",
+          "additionalProperties": false,
           "description": "An optional object representing a large illustration to show above other content.",
           "properties": {
             "imageURL": {
@@ -407,10 +404,11 @@
             },
             "videoURL": {
               "type": "string",
-              "description": "A video URL, played once, rendered instead of the image ones above. Ignored (falls back to the image URLs above) for users who prefer reduced motion."
+              "description": "A video URL, played once, instead of the images above. Ignored (falls back to the image URLs above) for users who prefer reduced motion."
             },
             "rtl": {
               "type": "object",
+              "additionalProperties": false,
               "description": "Right-to-left replacements for any of the URLs above, applied over them when the document is RTL. Omitted keys keep their base value.",
               "properties": {
                 "imageURL": { "type": "string" },
@@ -421,29 +419,38 @@
               }
             },
             "alt": {
-              "type": "string",
-              "description": "The <img> alt text."
+              "description": "The <img> alt text.",
+              "$ref": "#/$defs/localizableThing"
             },
             "width": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the width property."
             },
             "height": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the height property."
             },
             "marginBlock": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginBlock property."
             },
             "marginInline": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginInline property."
+            },
+            "style": {
+              "type": "object",
+              "description": "The style of the image container."
+            },
+            "imgStyle": {
+              "type": "object",
+              "description": "More style overrides applied to the <img> element."
             }
           }
         },
         "center_image": {
           "type": "object",
+          "additionalProperties": false,
           "description": "An optional image shown in the center image slot of the 'last-card' layout, revealed once the text split animation completes.",
           "properties": {
             "imageURL": {
@@ -464,6 +471,7 @@
             },
             "rtl": {
               "type": "object",
+              "additionalProperties": false,
               "description": "Right-to-left replacements for any of the URLs above, applied over them when the document is RTL. Omitted keys keep their base value.",
               "properties": {
                 "imageURL": { "type": "string" },
@@ -473,29 +481,42 @@
               }
             },
             "alt": {
-              "type": "string",
-              "description": "The <img> alt text."
+              "description": "The <img> alt text.",
+              "$ref": "#/$defs/localizableThing"
             },
             "width": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS width of the image slot. The split animation and margins adapt to it. Defaults to 120px."
             },
             "height": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS height of the image slot. Defaults to 120px."
             },
             "marginBlock": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginBlock property. Useful for aligning the image's focal point with the text. Does not apply on narrow breakpoints."
             },
             "marginInline": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginInline property. Does not apply on narrow breakpoints."
+            },
+            "style": {
+              "type": "object",
+              "description": "The style of the image container."
+            },
+            "imgStyle": {
+              "type": "object",
+              "description": "More style overrides applied to the <img> element."
+            },
+            "videoURL": {
+              "type": "string",
+              "description": "A video URL, played once, instead of the images above. Ignored (falls back to the image URLs above) for users who prefer reduced motion."
             }
           }
         },
         "corner_image": {
           "type": "object",
+          "additionalProperties": false,
           "description": "An optional object representing an illustration anchored to a corner of the screen. The fullscreen center-large layout anchors it to the window; every other layout anchors it to the card.",
           "properties": {
             "imageURL": {
@@ -516,6 +537,7 @@
             },
             "rtl": {
               "type": "object",
+              "additionalProperties": false,
               "description": "Right-to-left replacements for any of the URLs above, applied over them when the document is RTL. Omitted keys keep their base value.",
               "properties": {
                 "imageURL": { "type": "string" },
@@ -539,19 +561,19 @@
               ]
             },
             "width": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the width property."
             },
             "height": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the height property."
             },
             "marginBlock": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginBlock property."
             },
             "marginInline": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginInline property."
             },
             "style": {
@@ -560,6 +582,7 @@
             },
             "entrance_animation": {
               "type": "object",
+              "additionalProperties": false,
               "description": "How the illustration animates in each time the screen is entered. The direction is derived from 'position', so a 'bottom-left' illustration rises and a 'top-left' one descends. Every type degrades to an opacity-only fade for users who prefer reduced motion.",
               "properties": {
                 "type": {
@@ -596,6 +619,7 @@
         },
         "title_logo": {
           "type": "object",
+          "additionalProperties": false,
           "description": "An optional object representing an icon to show next to the title.",
           "properties": {
             "imageURL": {
@@ -614,37 +638,60 @@
               "type": "string",
               "description": "The dark mode reduced motion image URL."
             },
+            "rtl": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Right-to-left replacements for any of the URLs above, applied over them when the document is RTL. Omitted keys keep their base value.",
+              "properties": {
+                "imageURL": { "type": "string" },
+                "darkModeImageURL": { "type": "string" },
+                "reducedMotionImageURL": { "type": "string" },
+                "darkModeReducedMotionImageURL": { "type": "string" }
+              }
+            },
             "alt": {
-              "type": "string",
-              "description": "The <img> alt text."
+              "description": "The <img> alt text.",
+              "$ref": "#/$defs/localizableThing"
             },
             "width": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the width property."
             },
             "height": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the height property."
             },
             "marginBlock": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginBlock property."
             },
             "marginInline": {
-              "type": "string",
+              "oneOf": [{ "type": "string" }, { "type": "number" }],
               "description": "The CSS style overriding the marginInline property."
             },
             "alignment": {
               "type": "string",
               "description": "The logo alignment relative to the title.",
               "enum": ["top", "bottom", "center"]
+            },
+            "style": {
+              "type": "object",
+              "description": "The style of the image container."
+            },
+            "imgStyle": {
+              "type": "object",
+              "description": "More style overrides applied to the <img> element."
+            },
+            "videoURL": {
+              "type": "string",
+              "description": "A video URL, played once, instead of the images above. Ignored (falls back to the image URLs above) for users who prefer reduced motion."
             }
           }
         },
         "title_style": {
           "type": "string",
           "description": "Optional styling for the title.",
-          "enum": ["fancy shine"]
+          "enum": ["fancy", "shine", "fancy shine"]
         },
         "subtitle": {
           "$ref": "#/$defs/localizableThing",
@@ -672,26 +719,49 @@
                   {
                     "type": "array",
                     "description": "An array of either raw strings or a localizableThing with 'href'/'link_key'/neither.",
-                    "properties": {
-                      "href": {
-                        "type": "string",
-                        "description": "An embedded URL link. Dispatches OPEN_URL with 'args: href'."
-                      },
-                      "where": {
-                        "type": "string",
-                        "description": "The 'where' argument for the OPEN_URL action."
-                      },
-                      "link_key": {
-                        "type": "string",
-                        "description": "Inline link key."
-                      }
+                    "items": {
+                      "oneOfType": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "allOf": [
+                            { "$ref": "#/$defs/localizableThing" },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "href": {
+                                  "type": "string",
+                                  "description": "An embedded URL link. Dispatches OPEN_URL with 'args: href'."
+                                },
+                                "where": {
+                                  "type": "string",
+                                  "description": "The 'where' argument for the OPEN_URL action."
+                                },
+                                "link_key": {
+                                  "type": "string",
+                                  "description": "Inline link key."
+                                },
+                                "action": {
+                                  "description": "An action to dispatch when the link is clicked, specified inline rather than looked up by key. Takes precedence over `href` and `link_key`. When `href` is also set it is still rendered on the anchor (so the link has a visible target and context menu), but the click dispatches this action instead of OPEN_URL.",
+                                  "$ref": "#/$defs/action"
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "description": "Reported as the telemetry `source` when this segment's link is clicked. Only used alongside `action`; `link_key` segments report the link key instead."
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   }
                 ]
               },
               "link_keys": {
                 "type": "array",
-                "description": "A list of the link keys that exist in screen.content. The value of that key must be an object with an 'action' property and the 'string_id' in the 'text' object must refer to a Fluent string that contains an anchor element with `data-l10n-name='LINK_KEY_NAME'`."
+                "description": "A list of the link keys that exist in screen.content. The value of that key must be an object with an 'action' property and the 'string_id' in the 'text' object must refer to a Fluent string that contains an anchor element with `data-l10n-name='LINK_KEY_NAME'`.",
+                "items": { "type": "string" }
               },
               "font_styles": {
                 "type": "string",
@@ -703,6 +773,7 @@
         },
         "steps_indicator": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Optionally used to override the aria attributes or tooltip of the steps indicator. Not recommended.",
           "properties": {
             "string_id": {
@@ -711,7 +782,7 @@
           }
         },
         "tiles": {
-          "description": "The tiles configuration for selection screens.",
+          "description": "Tile object(s) to display on the screen, rendered in ContentTiles.jsx.",
           "oneOf": [
             { "$ref": "#/$defs/tile" },
             { "type": "array", "items": { "$ref": "#/$defs/tile" } }
@@ -719,6 +790,7 @@
         },
         "tiles_container": {
           "type": "object",
+          "additionalProperties": false,
           "description": "The tiles container.",
           "properties": {
             "position": {
@@ -733,20 +805,41 @@
           }
         },
         "tiles_header": {
+          "type": "object",
+          "required": ["title"],
+          "additionalProperties": false,
           "description": "The header for a tiles container.",
-          "$ref": "#/$defs/localizableThing"
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/localizableThing"
+            }
+          }
         },
         "reverse_split": {
           "type": "boolean",
-          "description": "If true, applies the reverse split layout onto the screen (i.e. inverts the visual order of the split screens)."
+          "description": "If true, applies the reverse split layout onto the screen (i.e., inverts the visual order of the split screens)."
         },
         "image_alt_text": {
           "description": "The <img> alt text.",
           "$ref": "#/$defs/localizableThing"
         },
         "hero_text": {
+          "additionalProperties": false,
           "description": "The hero text.",
-          "$ref": "#/$defs/localizableThing"
+          "oneOf": [
+            { "$ref": "#/$defs/localizableThing" },
+            {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "$ref": "#/$defs/localizableThing"
+                },
+                "subtitle": {
+                  "$ref": "#/$defs/localizableThing"
+                }
+              }
+            }
+          ]
         },
         "main_content_style": {
           "type": "object",
@@ -775,11 +868,12 @@
         },
         "narrow": {
           "type": "boolean",
-          "description": "If true, sets narrow attribute to the outer element of the screen."
+          "description": "If true, sets the narrow attribute to the outer element of the screen."
         },
         "languageSwitcher": {
           "type": "object",
-          "description": "The language switcher component that appears of there is a language mismatch screen.",
+          "additionalProperties": false,
+          "description": "The language switcher component that appears if there is a language mismatch screen.",
           "properties": {
             "downloading": {
               "$ref": "#/$defs/localizableThing"
@@ -806,35 +900,68 @@
         },
         "video_container": {
           "type": "object",
-          "description": "Displays the OnboardingVideo component."
+          "additionalProperties": false,
+          "description": "Displays the OnboardingVideo component.",
+          "properties": {
+            "video_url": {
+              "type": "string",
+              "description": "The URL of the video to play."
+            },
+            "autoPlay": {
+              "type": "boolean",
+              "description": "If true, autoplay is enabled for the video."
+            }
+          }
         },
         "text_color": {
           "type": "string",
-          "description": "Overrides all text color of the screen.",
+          "description": "Overrides all text color on the screen.",
           "enum": ["light", "dark"]
         },
         "isSystemPromptStyleSpotlight": {
           "type": "boolean",
-          "description": "If true, overrides the spotlight screen styling to look like the system prompt style."
+          "description": "If true, overrides the Spotlight screen styling to look like the system prompt style."
         },
         "screen_style": {
           "type": "object",
-          "description": "CSS overrides for the screen style."
+          "additionalProperties": false,
+          "description": "CSS overrides for the screen style.",
+          "properties": {
+            "overflow": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            },
+            "display": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            },
+            "height": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            },
+            "width": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            },
+            "padding": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            },
+            "justifyContent": {
+              "oneOf": [{ "type": "string" }, { "type": "number" }]
+            }
+          }
         },
         "no_rdm": {
           "type": "boolean",
-          "description": "If true, prevents the spotlight from entering responsive design mode at widths less than 800px."
+          "description": "If true, prevents the Spotlight from entering responsive design mode at widths less than 800px."
         },
         "split_content_padding_block": {
-          "type": "string",
+          "oneOf": [{ "type": "string" }, { "type": "number" }],
           "description": "The CSS override for the paddingBlock styling for split layout contents."
         },
         "split_content_padding_inline": {
-          "type": "string",
+          "oneOf": [{ "type": "string" }, { "type": "number" }],
           "description": "The CSS override for the paddingInline styling for split layout contents."
         },
         "cta_paragraph": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Text below the subtitle that can include hyperlinks.",
           "properties": {
             "text": {
@@ -847,14 +974,31 @@
                 },
                 "string_name": {
                   "type": "string",
-                  "description": "The name of the '<a data-l10n-name'=''></a>' marker inside the string_id."
+                  "description": "The name of the `<a data-l10n-name=''></a>` marker inside the string_id."
                 }
               }
             },
             "action": {
               "type": "object",
-              "description": "The special message action to be invoked when the cta text is clicked.",
+              "description": "The special message action to be invoked when the CTA text is clicked.",
               "$ref": "#/$defs/action"
+            },
+            "info_tile": {
+              "type": "boolean",
+              "description": "If true, applies the info-tile styling to the CTA paragraph."
+            },
+            "icon": {
+              "type": "object",
+              "description": "The icon to be displayed next to the CTA text.",
+              "properties": {
+                "iconURL": {
+                  "type": "string"
+                }
+              }
+            },
+            "style": {
+              "type": "object",
+              "description": "CSS overrides for the CTA paragraph."
             }
           }
         },
@@ -867,12 +1011,26 @@
           "description": "If true, displays the encrypted backup method as part of the 'fx_backup_file_path' or 'fx_backup_password' tile type."
         },
         "migrate_start": {
+          "type": "object",
+          "required": ["action"],
+          "additionalProperties": false,
           "description": "The action for the migration start event as part of the embedded migration wizard component within about:welcome.",
-          "$ref": "#/$defs/action"
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/action"
+            }
+          }
         },
         "migrate_close": {
+          "type": "object",
+          "required": ["action"],
+          "additionalProperties": false,
           "description": "The action for the migration close event as part of the embedded migration wizard component within about:welcome.",
-          "$ref": "#/$defs/action"
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/action"
+            }
+          }
         },
         "action_checklist_subtitle": {
           "description": "The subtitle text for the action checklist.",
@@ -880,6 +1038,7 @@
         },
         "remove_checklist_button": {
           "type": "object",
+          "additionalProperties": false,
           "description": "The remove checklist button in the action checklist.",
           "properties": {
             "label": {
@@ -903,6 +1062,29 @@
             "submenu": {
               "type": "array",
               "items": { "$ref": "#/$defs/submenuItem" }
+            },
+            "style": {
+              "type": "string",
+              "description": "Overrides the style of the button.",
+              "enum": ["primary", "secondary"]
+            }
+          }
+        },
+        "skip_button": {
+          "type": "object",
+          "description": "A skip button that is passed into the EmbeddedBackupRestore content tile.",
+          "properties": {
+            "label": {
+              "$ref": "#/$defs/localizableThing",
+              "description": "The text to show inside the skip button."
+            },
+            "action": {
+              "$ref": "#/$defs/action",
+              "description": "The special message action invoked if the skip button is clicked."
+            },
+            "has_arrow_icon": {
+              "type": "boolean",
+              "description": "If true, shows an arrow icon next to the label."
             }
           }
         },
@@ -911,13 +1093,15 @@
           "description": "An optional array of event listeners to add to the page where the screen is shown.",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
               "params": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "type": {
                     "type": "string",
-                    "description": "The event type string. Supports any DOM event type, timeout and interval for timers, internal feature callout events 'touradvance' and 'tourend'."
+                    "description": "The event type string. Supports any DOM event type, timeout and interval for timers, and internal feature callout events 'touradvance' and 'tourend'."
                   },
                   "selector": {
                     "type": "string",
@@ -925,19 +1109,20 @@
                   },
                   "options": {
                     "type": "object",
+                    "additionalProperties": false,
                     "description": "addEventListener options.",
                     "properties": {
                       "capture": {
                         "type": "boolean",
-                        "description": "If true, handles events in capturing phase."
+                        "description": "If true, handles events in the capture phase."
                       },
                       "once": {
                         "type": "boolean",
-                        "description": "If true, removes listener after first event."
+                        "description": "If true, removes the listener after first event."
                       },
                       "preventDefault": {
                         "type": "boolean",
-                        "description": "If true, prevents default action in event handler."
+                        "description": "If true, prevents the default action in event handler."
                       },
                       "interval": {
                         "type": "number",
@@ -945,7 +1130,7 @@
                       },
                       "every_window": {
                         "type": "boolean",
-                        "description": "If true, extends addEventListener to all windows."
+                        "description": "If true, adds the listener to all windows."
                       }
                     }
                   }
@@ -957,6 +1142,22 @@
               }
             }
           }
+        },
+        "impression_action": {
+          "description": "A special message action that fires automatically when the screen is first shown.",
+          "$ref": "#/$defs/action"
+        },
+        "dismiss_action": {
+          "description": "An action to perform when the Escape key is pressed, or when a page event listener invokes an action containing `dismiss: true`. Unnecessary if your message has a dismiss_button.",
+          "$ref": "#/$defs/action"
+        },
+        "ignorekeys": {
+          "type": "boolean",
+          "description": "By default, hitting Escape will dismiss the callout, whether it is focused or not. Setting this to true will stop keypresses from dispatching up to the callout from outside it, though they will still work when the callout is focused. Best to leave this as-is."
+        },
+        "isRtamo": {
+          "type": "boolean",
+          "description": "Set to true for RTAMO screens in about:welcome."
         }
       }
     }
@@ -972,8 +1173,34 @@
           "type": "object",
           "properties": {
             "raw": {
-              "type": "string",
-              "description": "A raw, untranslated string, typically used for EN-only experiments."
+              "description": "A raw, untranslated string (typically used for EN-only experiments) or an $l10n object.",
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "$l10n": {
+                      "type": "object",
+                      "required": ["id", "text", "comment"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "A unique identifier for the string. It can only contain letters, numbers, and hyphens (-)."
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "The text of the string."
+                        },
+                        "comment": {
+                          "type": "string",
+                          "description": "A comment used to provide more context to localizers."
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
             },
             "string_id": {
               "type": "string",
@@ -987,45 +1214,17 @@
               "type": "string",
               "description": "A string to use as the element's aria-label attribute value."
             },
-            "color": {
-              "type": "string",
-              "description": "A CSS override for the color property."
+            "useLangPack": {
+              "type": "boolean",
+              "description": "If true, uses the installed lang pack for the Fluent strings."
             },
-            "fontSize": {
-              "type": "string",
-              "description": "A CSS override for the fontSize property."
+            "inline_icons": {
+              "type": "object",
+              "description": "Inline icons inside localized strings. Each entry maps a Fluent data-l10n-name to an icon object."
             },
-            "fontWeight": {
-              "type": "string",
-              "description": "A CSS override for the fontWeight property."
-            },
-            "letterSpacing": {
-              "type": "string",
-              "description": "A CSS override for the letterSpacing property."
-            },
-            "lineHeight": {
-              "type": "string",
-              "description": "A CSS override for the lineHeight property."
-            },
-            "marginBlock": {
-              "type": "string",
-              "description": "A CSS override for the marginBlock property."
-            },
-            "marginInline": {
-              "type": "string",
-              "description": "A CSS override for the marginInline property."
-            },
-            "paddingBlock": {
-              "type": "string",
-              "description": "A CSS override for the paddingBlock property."
-            },
-            "paddingInline": {
-              "type": "string",
-              "description": "A CSS override for the paddingInline property."
-            },
-            "whiteSpace": {
-              "type": "string",
-              "description": "A CSS override for the whiteSpace property."
+            "zap": {
+              "oneOf": [{ "type": "string" }, { "type": "boolean" }],
+              "description": "Adds zap style and content."
             }
           },
           "additionalProperties": true
@@ -1034,7 +1233,6 @@
     },
     "anchor": {
       "type": "object",
-      "required": ["selector", "panel_position"],
       "properties": {
         "selector": {
           "type": "string",
@@ -1113,8 +1311,8 @@
           "description": "If true, skips applying the [open] style to the anchor element when the callout is shown."
         },
         "arrow_width": {
-          "type": "number",
-          "description": "The width of the arrow in a number of pixels. Defulats to 33.94113 (which corresponds to a triangle with 24px edges)"
+          "oneOf": [{ "type": "number" }, { "type": "string" }],
+          "description": "The width of the arrow in pixels. Defaults to 33.94113 (which corresponds to a triangle with 24px edges)."
         },
         "arrow_corner_distance": {
           "type": "number",
@@ -1130,7 +1328,7 @@
             },
             "use_defaults": {
               "type": "boolean",
-              "description": "If 'selector' is provided and the element can't be found, and this is set to false, nothing will be selected. If 'selector' is not provided, this must be true. Defaults to true."
+              "description": "If 'selector' is provided and the element can't be found, and this is set to false, nothing will be focused. If 'selector' is not provided, this must be true. Defaults to true."
             }
           }
         }
@@ -1138,6 +1336,7 @@
     },
     "action": {
       "type": "object",
+      "additionalProperties": false,
       "description": "The special message action to perform.",
       "properties": {
         "type": {
@@ -1149,23 +1348,36 @@
           "description": "The data to pass to the action if needed."
         },
         "dismiss": {
-          "description": "If true, dismisses the callout/tour. Can be used in addition to or instead of a special message action type. If set to 'actionResult', the callout will only be dismissed after the special message action has resolved successfully, will only take effect for certain special message ids, and requires setting 'needsAwait' to true.",
+          "description": "If true, dismisses the screen. Can be used in addition to or instead of a special message action type. If set to 'actionResult', the callout will only be dismissed after the special message action has resolved successfully, will only take effect for certain special message ids, and requires setting 'needsAwait' to true.",
           "oneOf": [{ "type": "string" }, { "type": "boolean" }]
         },
         "needsAwait": {
-          "type": "boolean",
-          "description": "If true, the action needs to be awaited. Must be true if 'dismiss' is set to 'actionResult'."
+          "description": "If true, the action needs to be awaited. Must be true if 'dismiss' is set to 'actionResult'.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }]
         },
         "navigate": {
           "description": "If true, navigates to the next step.",
           "oneOf": [{ "type": "boolean" }, { "type": "string" }]
         },
+        "goBack": {
+          "description": "If true, goes back to the previous step.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }]
+        },
         "collectSelect": {
-          "type": "boolean",
-          "description": "If true, the actions for selected checkbox/radio selections are performed in series. Set to true if this action is for the primary button and the 'multiselect' tile is used."
+          "description": "If true, the actions for selected checkbox/radio selections are performed in series. Set to true if this action is for the primary button and the 'multiselect' tile is used.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }]
+        },
+        "collectTextInput": {
+          "description": "If true, collects all text input on action.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }]
+        },
+        "collectContentToggleState": {
+          "description": "If true, collects content toggle state on action.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }]
         },
         "advance_screens": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Indicates that the action should navigate to a different screen.",
           "properties": {
             "behavior": {
@@ -1181,6 +1393,34 @@
               "description": "The id of the screen to advance to. Id takes priority if both id and direction are provided."
             }
           }
+        },
+        "addFlowParams": {
+          "type": "boolean",
+          "description": "If true, adds flow parameters to the action."
+        },
+        "sendDismissTelemetry": {
+          "type": "boolean",
+          "description": "If true, sends dismiss telemetry when the action is performed."
+        },
+        "reposition": {
+          "oneOf": [{ "type": "string" }, { "type": "boolean" }],
+          "description": "page_event_listeners actions only. If true, repositions the callout."
+        },
+        "once": {
+          "type": "boolean",
+          "description": "If true, only fires on the screen's first view."
+        },
+        "theme": {
+          "type": "string",
+          "description": "For tile actions only. The theme to apply. '<event>' uses the selected element's value."
+        },
+        "picker": {
+          "type": "string",
+          "description": "For tile actions only. '<event>' handles the selected element's value as a picker selection."
+        },
+        "persistActiveTheme": {
+          "type": "boolean",
+          "description": "For tile actions only. If true, saves the active theme as the initial theme to revert to."
         }
       }
     },
@@ -1191,7 +1431,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Submenu can have 3 types of items.",
+          "description": "A submenu item can be one of three types.",
           "enum": ["action", "menu", "separator"]
         },
         "id": {
@@ -1212,75 +1452,1123 @@
         },
         "submenu": {
           "type": "array",
-          "description": "Used only for type 'menu'. The submenu items to show when the user hovers over this item.",
+          "description": "Used only for type 'menu'. The submenu items to show when the user hovers over this item. Recursive.",
           "items": { "$ref": "#/$defs/submenuItem" }
         }
       }
     },
     "tile": {
+      "description": "A content tile. Each tile type has its own definition, selected by the tile's 'type'.",
+      "oneOf": [
+        { "$ref": "#/$defs/linkTile" },
+        { "$ref": "#/$defs/addonsPickerTile" },
+        { "$ref": "#/$defs/singleSelectTile" },
+        { "$ref": "#/$defs/mobileDownloadsTile" },
+        { "$ref": "#/$defs/multiSelectTile" },
+        { "$ref": "#/$defs/textareaTile" },
+        { "$ref": "#/$defs/migrationWizardTile" },
+        { "$ref": "#/$defs/themePickerTile" },
+        { "$ref": "#/$defs/actionChecklistTile" },
+        { "$ref": "#/$defs/embeddedBrowserTile" },
+        { "$ref": "#/$defs/backupRestoreTile" },
+        { "$ref": "#/$defs/fxBackupTile" },
+        { "$ref": "#/$defs/confirmationChecklistTile" },
+        { "$ref": "#/$defs/pinnableSitesTile" },
+        { "$ref": "#/$defs/contentToggleTile" },
+        { "$ref": "#/$defs/textboxTile" },
+        { "$ref": "#/$defs/textTile" }
+      ]
+    },
+    "sharedTileProps": {
       "type": "object",
-      "description": "A tile object. More details can be found in ContentTiles.jsx.",
+      "description": "Shared properties inside a tile object.",
+      "properties": {
+        "style": {
+          "type": "object",
+          "description": "CSS overrides of the content tile. Any CSS properties starting with '--' are also allowed."
+        },
+        "id": {
+          "type": "string",
+          "description": "The content tile id."
+        },
+        "header": {
+          "type": "object",
+          "description": "The content tile header.",
+          "properties": {
+            "title": {
+              "description": "The tile header title.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "subtitle": {
+              "description": "The tile header subtitle.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "alternateTitle": {
+              "description": "The tile header title if the tile type is a textbox and the contentToggleChecked is false.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "style": {
+              "type": "object",
+              "description": "CSS overrides of the tile header."
+            },
+            "linkStyle": {
+              "type": "boolean",
+              "description": "If true, adds the link-style class to the tile header."
+            }
+          }
+        },
+        "title": {
+          "description": "The content tile title.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "subtitle": {
+          "description": "The content tile subtitle.",
+          "$ref": "#/$defs/localizableThing"
+        }
+      }
+    },
+    "addonsPickerData": {
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "description": "The type of tile.",
-          "enum": [
-            "link",
-            "textbox",
-            "multiselect",
-            "single-select",
-            "theme",
-            "backup_restore",
-            "addons-picker",
-            "migration-wizard",
-            "mobile_downloads",
-            "textarea",
-            "theme-picker",
-            "embedded_browser",
-            "fx_backup_file_path",
-            "fx_backup_password",
-            "confirmation-checklist",
-            "pinnable_sites",
-            "content-toggle"
+          "description": "The type of the addon."
+        },
+        "description": {
+          "description": "The description of the addon.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "id": {
+          "type": "string",
+          "description": "The addon container key ID."
+        },
+        "name": {
+          "description": "The name of the addon.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "icon": {
+          "type": "string",
+          "description": "The icon of the addon."
+        },
+        "author": {
+          "type": "object",
+          "description": "The optional author of the addon.",
+          "properties": {
+            "byLine": { "$ref": "#/$defs/localizableThing" },
+            "id": { "type": "string" },
+            "name": { "type": "string" }
+          }
+        },
+        "install_label": {
+          "description": "The label for the addon install button.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "install_complete_label": {
+          "description": "The complete label for the addon install button.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "action": {
+          "description": "The action for the addon install button.",
+          "$ref": "#/$defs/action"
+        },
+        "source_id": {
+          "type": "string",
+          "description": "The source ID inside the click button telemetry ping sent by the addon install button."
+        }
+      }
+    },
+    "singleSelectData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Optional type defined for the single select tile for styling."
+        },
+        "description": {
+          "description": "Optionally used to control the aria description.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "inert": {
+          "type": "boolean",
+          "description": "If true, prevents the single-select tile from being clickable and usable."
+        },
+        "icon": {
+          "type": "object",
+          "description": "The icon displayed for the single select tile.",
+          "properties": {
+            "background": { "type": "string" }
+          }
+        },
+        "id": {
+          "type": "string",
+          "description": "The id of the single select tile."
+        },
+        "label": {
+          "description": "Text displayed in the single select tile with label-text styling.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "body": {
+          "description": "Items or text displayed below the label text.",
+          "anyOf": [
+            { "$ref": "#/$defs/localizableThing" },
+            {
+              "type": "object",
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "icon": { "type": "object" },
+                      "text": { "$ref": "#/$defs/localizableThing" },
+                      "style": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
           ]
+        },
+        "subtitle": {
+          "description": "Text displayed below the label and body texts with subtitle-text styling.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "theme": {
+          "type": "string",
+          "description": "The theme to be applied when the tile is clicked."
+        },
+        "tooltip": {
+          "description": "Optional hover tooltip for the single select tile.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "flair": {
+          "type": "object",
+          "description": "Optional flair text.",
+          "properties": {
+            "centered": { "type": "boolean" },
+            "spacer": { "type": "boolean" },
+            "text": { "$ref": "#/$defs/localizableThing" }
+          }
         },
         "style": {
           "type": "object",
-          "description": "CSS overrides of the tile container. Any CSS properties starting with '--' are also allowed."
+          "description": "CSS overrides for the single select tile."
         },
-        "layout": {
+        "tilebutton": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional button that can be added to the single select tile.",
+          "properties": {
+            "label": {
+              "$ref": "#/$defs/localizableThing"
+            },
+            "style": {
+              "type": "string",
+              "enum": ["primary", "secondary"]
+            },
+            "action": {
+              "$ref": "#/$defs/action"
+            }
+          }
+        },
+        "targeting": {
           "type": "string",
-          "description": "Optional. Currently for single-select tiles only. Visual layout for the tile's items; 'carousel' lays the items out in a single row, centered on the selected item, with pill navigation above. The row has two sizes: in a modal at least 800px wide the selected card is enlarged and its neighbours peek in at a smaller size, and below that every card takes the smaller size and the selection is marked by its outline alone.",
-          "enum": ["carousel"]
+          "description": "JEXL targeting evaluated to determine whether or not to display this single select tile item."
         },
-        "pill_nav_label": {
-          "$ref": "#/$defs/localizableThing",
-          "description": "Optional. Currently for single-select tiles only, and only applies when 'layout' is 'carousel'. Accessible name for the carousel pill navigation."
-        },
-        "data": {
-          "type": "array",
-          "description": "Tile-specific data, determined by tile type. Most types take an array of items, one per rendered row, while a few (embedded_browser, theme-picker) take an object. Settings for the tile itself are siblings of this field."
-        },
-        "source": {
-          "type": "string",
-          "description": "pinnable_sites only. Where the tile draws its sites from. 'curated' (the default) uses the authored 'data' array. 'topFrecentSites' replaces it with the user's own most-used origins, computed locally from history. Currently only supported in Spotlight.",
-          "enum": ["curated", "topFrecentSites"]
-        },
-        "slots": {
-          "type": "integer",
-          "description": "pinnable_sites only. How many tiles the surface shows. Defaults to 5.",
-          "minimum": 1
-        },
-        "minPersonalized": {
-          "type": "integer",
-          "description": "pinnable_sites only, and only when source is 'topFrecentSites'. The fewest personalized origins the tile must produce for the message to be shown at all. When the user's history yields fewer, the message is withheld and records no impression. Defaults to 0, which permits an entirely backfilled, curated tile. A value above 'slots' always withholds the message, as does a tile left with no sites at all.",
-          "minimum": 0
-        },
-        "backfill": {
-          "type": "boolean",
-          "description": "pinnable_sites only. When personalization yields fewer origins than 'slots', fill the remaining slots from the authored 'data' array rather than leaving them blank. Defaults to true."
+        "pill": {
+          "type": "object",
+          "description": "The pill inside the pill navigation component corresponding to this single select tile.",
+          "properties": {
+            "label": { "$ref": "#/$defs/localizableThing" },
+            "icon": { "type": "string" }
+          }
         }
       }
+    },
+    "multiSelectData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of multiselect item.",
+          "enum": ["checkbox", "radio"]
+        },
+        "description": {
+          "description": "Supporting copy for the item, rendered as a paragraph after the label and wired to the checkbox with `aria-describedby`. In the \"select-card\" and \"grouped-card\" designs it becomes a second, deemphasized line beneath the label.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "id": {
+          "type": "string",
+          "description": "A unique id for this multiselect item."
+        },
+        "group": {
+          "type": "string",
+          "description": "Required for radio types. Set the same group for radios to ensure only one of them can be selected at a time."
+        },
+        "defaultValue": {
+          "type": "boolean",
+          "description": "The default checked/unchecked value of the multiselect item."
+        },
+        "targeting": {
+          "type": "string",
+          "description": "The JEXL targeting that determines whether or not to show this multiselect item."
+        },
+        "label": {
+          "description": "The label for the multiselect item.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "action": {
+          "description": "The special message action performed when the user clicks the primary button.",
+          "$ref": "#/$defs/action"
+        },
+        "randomize": {
+          "type": "boolean",
+          "description": "If true, randomizes the order of the multiselect items. By default, the items appear in the order they're listed in the data array."
+        },
+        "style": {
+          "type": "object",
+          "description": "CSS overrides for the div box containing the item and label."
+        },
+        "icon": {
+          "type": "object",
+          "description": "An optional icon that can replace the checkbox/radio buttons using CSS overrides.",
+          "properties": {
+            "style": { "type": "object" }
+          }
+        },
+        "uncheckedNotice": {
+          "type": "object",
+          "description": "A note shown below the item when it is unchecked, which disappears when checked. The note is rendered in an `aria-live` region that is always present in the DOM, so assistive technology announces it when it appears. It is laid out as a full-width row beneath the item, so it is meant for wide surfaces such as about:welcome or a fullscreen Spotlight. It is not compatible with `multiSelectItemDesign: \"picker\"`, and is not recommended in a feature callout panel, which is too narrow for it.",
+          "properties": {
+            "title": { "$ref": "#/$defs/localizableThing" },
+            "subtitle": { "$ref": "#/$defs/localizableThing" },
+            "iconURL": { "type": "string" }
+          }
+        }
+      }
+    },
+    "actionChecklistData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The key of the action checklist item."
+        },
+        "source_id": {
+          "type": "string",
+          "description": "The source ID used in telemetry pings."
+        },
+        "targeting": {
+          "type": "string",
+          "description": "JEXL targeting that is evaluated to determine if this action item has been completed or not."
+        },
+        "label": {
+          "description": "Text for the action checklist item.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "action": {
+          "description": "The special message action invoked when the action checklist item is clicked.",
+          "$ref": "#/$defs/action"
+        },
+        "showExternalLinkIcon": {
+          "type": "boolean",
+          "description": "If true, shows the external link icon."
+        }
+      }
+    },
+    "pinnableSitesData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "The description of the pinnable site item.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "id": {
+          "type": "string",
+          "description": "The pinnable site item key."
+        },
+        "name": {
+          "description": "The name of the pinnable site item.",
+          "$ref": "#/$defs/localizableThing"
+        },
+        "iconUrl": {
+          "type": "string",
+          "description": "The URL of the icon inside the pinnable site item."
+        },
+        "url": {
+          "type": "string",
+          "description": "The pinnable site URL."
+        },
+        "personalized": {
+          "type": "boolean",
+          "description": "Sent in PIN_SITE telemetry ping."
+        },
+        "title": {
+          "description": "The title of the pinnable site item.",
+          "$ref": "#/$defs/localizableThing"
+        }
+      }
+    },
+    "linkTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in ContentTiles.jsx.",
+              "enum": ["link"]
+            },
+            "action": {
+              "description": "The action for link, single-select, or theme tiles.",
+              "$ref": "#/$defs/action"
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "addonsPickerTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in AddonsPicker.jsx.",
+              "enum": ["addons-picker"]
+            },
+            "data": {
+              "description": "Tile configurations needed for the tile type.",
+              "oneOf": [
+                { "$ref": "#/$defs/addonsPickerData" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/addonsPickerData" }
+                }
+              ]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "singleSelectTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in SingleSelect.jsx.",
+              "enum": ["theme", "single-select"]
+            },
+            "category": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["theme", "single-select"] }
+              }
+            },
+            "action": {
+              "description": "The action for link, single-select, or theme tiles.",
+              "$ref": "#/$defs/action"
+            },
+            "selected": {
+              "type": "string",
+              "description": "The id of an item inside `data` that will be the default selected item."
+            },
+            "autoTrigger": {
+              "type": "boolean",
+              "description": "If true and applicable, automatically triggers the action for the default selected tile."
+            },
+            "layout": {
+              "type": "string",
+              "description": "Optional. Currently for single-select tiles only. Visual layout for the tile's items; 'carousel' lays the items out in a single row, centered on the selected item, with pill navigation above. The row has two sizes: in a modal at least 800px wide the selected card is enlarged and its neighbours peek in at a smaller size, and below that every card takes the smaller size and the selection is marked by its outline alone.",
+              "enum": ["carousel"]
+            },
+            "pill_nav_label": {
+              "description": "Optional. Currently for single-select tiles only, and only applies when 'layout' is 'carousel'. Accessible name for the carousel pill navigation.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "data": {
+              "description": "Tile configurations needed for the tile type.",
+              "oneOf": [
+                { "$ref": "#/$defs/singleSelectData" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/singleSelectData" }
+                }
+              ]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "mobileDownloadsTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in MobileDownloads.jsx.",
+              "enum": ["mobile_downloads"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "QR_code": {
+                  "type": "object",
+                  "description": "An optional QR code to display in the tile to encourage users to download Firefox.",
+                  "properties": {
+                    "image_url": { "type": "string" },
+                    "alt_text": { "$ref": "#/$defs/localizableThing" }
+                  }
+                },
+                "email": {
+                  "type": "object",
+                  "description": "An optional email link that users can use to email themselves a download link.",
+                  "properties": {
+                    "link_text": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "multiSelectTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in MultiSelect.jsx.",
+              "enum": ["multiselect"]
+            },
+            "multiSelectItemDesign": {
+              "type": "string",
+              "description": "Alternate presentations for the multiselect items.",
+              "enum": ["picker", "select-card", "grouped-card"]
+            },
+            "label": {
+              "description": "Optional text for a multistage multiselect label.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "footer": {
+              "type": "object",
+              "description": "Optional text for a multistage multiselect footer label.",
+              "properties": {
+                "checkedLabel": { "$ref": "#/$defs/localizableThing" },
+                "unCheckAllLabel": { "$ref": "#/$defs/localizableThing" }
+              }
+            },
+            "data": {
+              "description": "Tile configurations needed for the tile type.",
+              "oneOf": [
+                { "$ref": "#/$defs/multiSelectData" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/multiSelectData" }
+                }
+              ]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "textareaTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in TextAreaTile.jsx.",
+              "enum": ["textarea"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type. Using this tile type requires a `write_in_microsurvey: true` inside the message content to apply the write-in microsurvey data policy. This is REQUIRED for all write-in microsurveys. Messages using the textarea tile should always set this to true. It prevents `client_id` from being recorded with any telemetry events for the message, recording a unique `impression_id` instead. It also sends the events on the `microsurvey` ping instead of the `messaging-system` ping, which is anonymized by OHTTP, has stricter access control, and is retained for a shorter period. It still allows counting unique impressions and joining pings from the same message, but it can't be joined to any other telemetry data. So all events coming from a message with this set to true will be joinable by `impression_id`, but disconnected from other datasets. Optional; defaults to false if omitted.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The textarea tile id."
+                },
+                "character_limit": {
+                  "type": "number",
+                  "description": "The character limit set for the textarea."
+                },
+                "container_style": {
+                  "type": "object",
+                  "description": "CSS overrides for the textarea container div."
+                },
+                "char_counter_style": {
+                  "type": "object",
+                  "description": "CSS overrides for the textarea character counter div."
+                },
+                "textarea_style": {
+                  "type": "object",
+                  "description": "CSS overrides for the textarea."
+                },
+                "rows": {
+                  "type": "number",
+                  "description": "The number of rows for the textarea."
+                },
+                "column": {
+                  "type": "number",
+                  "description": "The number of columns for the textarea."
+                },
+                "placeholder": {
+                  "type": "string",
+                  "description": "Optional placeholder text in the textarea."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "migrationWizardTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in EmbeddedMigrationWizard.jsx.",
+              "enum": ["migration-wizard"]
+            },
+            "migration_wizard_options": {
+              "type": "object",
+              "description": "Optional configuration options for the migration wizard.",
+              "properties": {
+                "force_show_import_all": {
+                  "type": "boolean",
+                  "description": "If true, force show import all options."
+                },
+                "option_expander_title_string": {
+                  "type": "string",
+                  "description": "The title string for the option expander."
+                },
+                "hide_option_expander_subtitle": {
+                  "type": "boolean",
+                  "description": "If true, hides the option expander subtitle."
+                },
+                "data_import_complete_success_string": {
+                  "type": "string",
+                  "description": "The success message string after import completion."
+                },
+                "selection_header_string": {
+                  "type": "string",
+                  "description": "The header string for the selection section."
+                },
+                "selection_subheader_string": {
+                  "type": "string",
+                  "description": "The subheader string for the selection section."
+                },
+                "hide_select_all": {
+                  "type": "boolean",
+                  "description": "If true, hides the select all option."
+                },
+                "checkbox_margin_inline": {
+                  "type": "string",
+                  "description": "The inline margin for checkboxes."
+                },
+                "checkbox_margin_block": {
+                  "type": "string",
+                  "description": "The block margin for checkboxes."
+                },
+                "import_button_string": {
+                  "type": "string",
+                  "description": "The text string for the import button."
+                },
+                "import_button_class": {
+                  "type": "string",
+                  "description": "The CSS class for the import button."
+                },
+                "header_font_size": {
+                  "type": "string",
+                  "description": "The font size for the header."
+                },
+                "header_font_weight": {
+                  "type": "string",
+                  "description": "The font weight for the header."
+                },
+                "header_margin_block": {
+                  "type": "string",
+                  "description": "The block margin for the header."
+                },
+                "subheader_font_size": {
+                  "type": "string",
+                  "description": "The font size for the subheader."
+                },
+                "subheader_font_weight": {
+                  "type": "string",
+                  "description": "The font weight for the subheader."
+                },
+                "subheader_margin_block": {
+                  "type": "string",
+                  "description": "The block margin for the subheader."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "themePickerTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in EmbeddedThemePicker.jsx.",
+              "enum": ["theme-picker"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "installSource": {
+                  "type": "string",
+                  "description": "The install source for this theme picker component."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "actionChecklistTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in ActionChecklist.jsx.",
+              "enum": ["action_checklist"]
+            },
+            "data": {
+              "description": "Tile configurations needed for the tile type.",
+              "oneOf": [
+                { "$ref": "#/$defs/actionChecklistData" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/actionChecklistData" }
+                }
+              ]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "embeddedBrowserTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in EmbeddedBrowser.jsx.",
+              "enum": ["embedded_browser"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "The URL to open inside the embedded browser component."
+                },
+                "style": {
+                  "type": "object",
+                  "description": "CSS overrides for the embedded browser component."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "backupRestoreTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in EmbeddedBackupRestore.jsx.",
+              "enum": ["backup_restore"]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "fxBackupTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in EmbeddedFxBackupOptIn.jsx.",
+              "enum": ["fx_backup_file_path", "fx_backup_password"]
+            },
+            "options": {
+              "type": "object",
+              "description": "Configuration options for the embedded Fx Backup opt-in component.",
+              "properties": {
+                "hide_password_input": {
+                  "type": "boolean",
+                  "description": "If true, then this is the file chooser screen."
+                },
+                "hide_secondary_button": {
+                  "type": "boolean",
+                  "description": "If true, hides the secondary button."
+                },
+                "file_path_label": {
+                  "type": "string",
+                  "description": "The l10n id for the file path label."
+                },
+                "turn_on_backup_header": {
+                  "type": "string",
+                  "description": "The l10n id for the turn on backup header."
+                },
+                "create_password_label": {
+                  "type": "string",
+                  "description": "The l10n id for the create password label."
+                },
+                "turn_on_backup_confirm_btn_label": {
+                  "type": "string",
+                  "description": "The l10n id for the confirmation label for turning on backup."
+                },
+                "turn_on_backup_cancel_btn_label": {
+                  "type": "string",
+                  "description": "The l10n id for the cancellation label for turning on backup."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "confirmationChecklistTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in ConfirmationChecklist.jsx.",
+              "enum": ["confirmation-checklist"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "description": "The confirmation checklist items.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "icon": {
+                        "type": "object",
+                        "description": "The icon for this confirmation checklist item.",
+                        "properties": {
+                          "background": { "type": "string" }
+                        }
+                      },
+                      "text": {
+                        "description": "The text for this confirmation checklist item.",
+                        "$ref": "#/$defs/localizableThing"
+                      },
+                      "subtext": {
+                        "description": "The subtext for this confirmation checklist item. Can support <a data-l10n-name></a> markers inside the Fluent string that can be paired with `link_keys`.",
+                        "$ref": "#/$defs/localizableThing"
+                      },
+                      "link_keys": {
+                        "type": "array",
+                        "description": "Each item corresponds to a <a data-l10n-name></a> marker inside the subtext Fluent string.",
+                        "items": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "style": {
+                  "type": "object",
+                  "description": "CSS overrides for the confirmation checklist container."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "pinnableSitesTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in PinnableSitesList.jsx.",
+              "enum": ["pinnable_sites"]
+            },
+            "source": {
+              "type": "string",
+              "description": "Where the tile draws its sites from. 'curated' (the default) uses the authored 'data' array. 'topFrecentSites' replaces it with the user's own most-used origins, computed locally from history. Currently only supported in Spotlight.",
+              "enum": ["curated", "topFrecentSites"]
+            },
+            "slots": {
+              "type": "number",
+              "description": "How many tiles the surface shows. Defaults to 5."
+            },
+            "minPersonalized": {
+              "type": "number",
+              "description": "Only when source is 'topFrecentSites'. The fewest personalized origins the tile must produce for the message to be shown at all. When the user's history yields fewer, the message is withheld and records no impression. Defaults to 0, which permits an entirely backfilled, curated tile. A value above 'slots' always withholds the message, as does a tile left with no sites at all."
+            },
+            "backfill": {
+              "type": "boolean",
+              "description": "When personalization yields fewer origins than 'slots', fill the remaining slots from the authored 'data' array rather than leaving them blank. Defaults to true."
+            },
+            "pinButtonLabel": {
+              "description": "A label for an optional pin button.",
+              "$ref": "#/$defs/localizableThing"
+            },
+            "alwaysShowPinButton": {
+              "type": "boolean",
+              "description": "If true, applies the always-visible styling on the pinnable sites list."
+            },
+            "data": {
+              "description": "Tile configurations needed for the tile type.",
+              "oneOf": [
+                { "$ref": "#/$defs/pinnableSitesData" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/pinnableSitesData" }
+                }
+              ]
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "contentToggleTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in ContentToggle.jsx.",
+              "enum": ["content-toggle"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The tile data id."
+                },
+                "label": {
+                  "description": "The content toggle label.",
+                  "$ref": "#/$defs/localizableThing"
+                },
+                "visible": {
+                  "type": "boolean",
+                  "description": "If false, then hides the content toggle label."
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "textboxTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in TextBoxTile.jsx.",
+              "enum": ["textbox"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Tile configurations needed for the tile type.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The tile data id."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Content inside the textbox-input."
+                },
+                "alternateContent": {
+                  "type": "string",
+                  "description": "Alternate content inside the textbox-input when the content is toggled."
+                },
+                "style": {
+                  "type": "object",
+                  "description": "CSS overrides for the textbox-input.",
+                  "properties": {
+                    "backgroundColor": { "type": "string" },
+                    "maxHeight": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "textTile": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/sharedTileProps" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The type of tile. More details can be found in LinkParagraph.jsx.",
+              "enum": ["text"]
+            },
+            "text": {
+              "description": "The paragraph text.",
+              "oneOf": [
+                { "$ref": "#/$defs/localizableThing" },
+                {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      { "type": "string" },
+                      {
+                        "allOf": [
+                          { "$ref": "#/$defs/localizableThing" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "href": {
+                                "type": "string",
+                                "description": "Embedded URL link. Dispatches OPEN_URL with `args: href`."
+                              },
+                              "where": {
+                                "type": "string",
+                                "description": "OPEN_URL `where` argument. Defaults to \"tab\". Only meaningful alongside `href`."
+                              },
+                              "link_key": {
+                                "type": "string",
+                                "description": "Inline link key. Resolved against `screen.content[link_key].action`. Mutually exclusive with `href`; if both are set, `href` wins."
+                              },
+                              "action": {
+                                "description": "An action to dispatch when the link is clicked, specified inline rather than looked up by key. Takes precedence over `href` and `link_key`. When `href` is also set it is still rendered on the anchor (so the link has a visible target and context menu), but the click dispatches this action instead of OPEN_URL.",
+                                "$ref": "#/$defs/action"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "Reported as the telemetry `source` when this segment's link is clicked. Only used alongside `action`; `link_key` segments report the link key instead."
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "font_styles": {
+              "type": "string",
+              "description": "Optional paragraph style."
+            },
+            "link_keys": {
+              "type": "array",
+              "description": "Each item corresponds to a <a data-l10n-name></a> marker inside the text Fluent string.",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
     }
   }
 }
