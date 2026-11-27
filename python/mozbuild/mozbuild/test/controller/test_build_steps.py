@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import unittest
 from unittest import mock
 
@@ -56,11 +57,89 @@ class TestSelectBuildSteps(unittest.TestCase):
             select_build_steps(["all"], ARTIFACT, "some/dir"), ([], ["all"])
         )
 
+    def test_select_build_steps_fat_aar(self):
+        self.assertEqual(
+            select_build_steps(
+                None, {**ARTIFACT, "MOZ_ANDROID_FAT_AAR_ARCHITECTURES": ["x86_64"]}
+            ),
+            (["artifact", "android-fat-aar-artifact"], None),
+        )
+
+    def test_select_build_steps_fat_aar_disabled(self):
+        with self.assertRaisesRegex(
+            ValueError, "Not enabled in this build: android-fat-aar-artifact"
+        ):
+            select_build_steps(["android-fat-aar-artifact"], ARTIFACT)
+
 
 class TestBuildStepCommand(unittest.TestCase):
-    def _command(self, substs, verbose=False):
+    def _command(self, substs, verbose=False, step="artifact", environ=None):
         return build_step_command(
-            "artifact", {"PYTHON3": "python3", **substs}, "/src", verbose
+            step,
+            {"PYTHON3": "python3", **substs},
+            environ or {},
+            "/src",
+            "/obj",
+            verbose,
+        )
+
+    def test_build_step_command_fat_aar(self):
+        self.assertEqual(
+            self._command(
+                {"MOZ_ANDROID_FAT_AAR_ARCHITECTURES": ["armeabi-v7a", "x86_64"]},
+                step="android-fat-aar-artifact",
+                environ={
+                    "MOZ_ANDROID_FAT_AAR_ARMEABI_V7A": "/fetches/arm.zip",
+                    "MOZ_ANDROID_FAT_AAR_ARM64_V8A": "/fetches/arm64.zip",
+                    "MOZ_ANDROID_FAT_AAR_X86_64": "/fetches/x86_64.zip",
+                },
+            ),
+            [
+                "python3",
+                "-m",
+                "mozbuild.action.fat_aar",
+                "--android-architectures",
+                "armeabi-v7a",
+                "x86_64",
+                "--armeabi-v7a",
+                "/fetches/arm.zip",
+                "--x86-64",
+                "/fetches/x86_64.zip",
+                "--distdir",
+                "/obj/dist/fat-aar",
+            ],
+        )
+
+    def test_build_step_command_fat_aar_desktop(self):
+        self.assertEqual(
+            self._command(
+                {
+                    "MOZ_ANDROID_FAT_AAR_ARCHITECTURES": ["arm64-v8a"],
+                    "MOZ_ANDROID_FAT_AAR_DESKTOP_ARCHITECTURES": ["linux-x86-64"],
+                },
+                verbose=True,
+                step="android-fat-aar-artifact",
+                environ={
+                    "MOZ_ANDROID_FAT_AAR_ARM64_V8A": "/fetches/arm64.zip",
+                    "MOZ_ANDROID_FAT_AAR_DESKTOP_LINUX_X86_64": "/fetches/linux.zip",
+                },
+            ),
+            [
+                "python3",
+                "-m",
+                "mozbuild.action.fat_aar",
+                "--android-architectures",
+                "arm64-v8a",
+                "--desktop-architectures",
+                "linux-x86-64",
+                "--arm64-v8a",
+                "/fetches/arm64.zip",
+                "--linux-x86-64",
+                "/fetches/linux.zip",
+                "--distdir",
+                "/obj/dist/fat-aar",
+                "-v",
+            ],
         )
 
     def test_build_step_command_artifact(self):
@@ -114,10 +193,38 @@ class TestBuildStepCommand(unittest.TestCase):
 
     def test_build_step_command_unknown(self):
         with self.assertRaisesRegex(ValueError, "Unknown build step: faster"):
-            build_step_command("faster", {"PYTHON3": "python3"}, "/src", False)
+            self._command({}, step="faster")
 
 
 class TestRunBuildSteps(unittest.TestCase):
+    def test_run_build_steps_append_env(self):
+        driver = mock.Mock(topsrcdir="/src", topobjdir="/obj")
+        driver.run_process.return_value = 0
+        with mock.patch.dict(os.environ, {}, clear=True):
+            BuildDriver._run_build_steps(
+                driver,
+                ["android-fat-aar-artifact"],
+                {"PYTHON3": "python3", "MOZ_ANDROID_FAT_AAR_ARCHITECTURES": ["x86_64"]},
+                mock.Mock(),
+                False,
+                {"MOZ_ANDROID_FAT_AAR_X86_64": "/fetches/x86_64.zip"},
+            )
+
+        self.assertEqual(
+            driver.run_process.call_args.args[0],
+            [
+                "python3",
+                "-m",
+                "mozbuild.action.fat_aar",
+                "--android-architectures",
+                "x86_64",
+                "--x86-64",
+                "/fetches/x86_64.zip",
+                "--distdir",
+                "/obj/dist/fat-aar",
+            ],
+        )
+
     def _run(self, status):
         driver = mock.Mock(topsrcdir="/src", topobjdir="/obj")
         driver.run_process.return_value = status
