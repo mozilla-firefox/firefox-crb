@@ -171,6 +171,16 @@ class _PackageApplicationTestCase(unittest.TestCase):
 
 
 class TestPackageApplication(_PackageApplicationTestCase):
+    def test_unknown_mode(self):
+        with self.assertRaisesRegex(ValueError, "unknown mode bogus, expected one of"):
+            self._run(mode="bogus")
+
+    def test_install_mode_unsupported(self):
+        rc, calls, _ = self._run(mode="install")
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls["stage"].call_count, 0)
+
     def test_step_order(self):
         order = []
 
@@ -463,6 +473,13 @@ class TestPackageApplication(_PackageApplicationTestCase):
         )
         self.assertEqual(_package_name(tmp), b"firefox-156.0a1.en-US.win64.zip\n")
 
+    def test_archive_simple_package_name(self):
+        _, calls, tmp = self._run(simple_package_name="target")
+
+        argv = calls["archive"].call_args.args[0]
+        self.assertEqual(argv[argv.index("--basename") + 1], "target")
+        self.assertEqual(_package_name(tmp), b"target.zip\n")
+
     def test_archive_extra_args(self):
         _, calls, _ = self._run(package_extra_args=["--strong-compression"])
 
@@ -746,6 +763,11 @@ class TestLangpack(_PackageApplicationTestCase):
         self.assertEqual(rc, 2)
         self.assertEqual(calls["l10n_stage"].call_count, 0)
         self.assertEqual(calls["package_langpack"].call_count, 0)
+
+    def test_langpack_stage_mode(self):
+        _, calls, _ = self._run(langpack=True, mode="stage")
+
+        self.assertEqual(calls["l10n_stage"].call_count, 0)
 
     def test_langpack_stage_failure(self):
         def fail(calls):
