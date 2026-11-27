@@ -127,6 +127,47 @@ RefPtr<ProcInfoPromise> GetProcInfo(nsTArray<ProcInfoRequest>&& aRequests) {
   return promise;
 }
 
+RefPtr<ThreadCountPromise> GetThreadCounts(
+    nsTArray<ThreadCountRequest>&& aRequests, nsIEventTarget* aTarget) {
+#ifdef DEBUG
+  // Duplicate pids would collapse in the Windows snapshot lookup.
+  for (size_t i = 0; i < aRequests.Length(); ++i) {
+    for (size_t j = i + 1; j < aRequests.Length(); ++j) {
+      MOZ_ASSERT(aRequests[i].pid != aRequests[j].pid,
+                 "GetThreadCounts requires a unique pid per request.");
+    }
+  }
+#endif
+
+  auto holder = std::make_unique<MozPromiseHolder<ThreadCountPromise>>();
+  RefPtr<ThreadCountPromise> promise = holder->Ensure(__func__);
+
+  nsCOMPtr<nsIEventTarget> target = aTarget;
+  if (!target) {
+    target = do_GetService(NS_STREAMTRANSPORTSERVICE_CONTRACTID);
+    if (!target) {
+      NS_WARNING("Failed to get stream transport service");
+      holder->Reject(NS_ERROR_NOT_AVAILABLE, __func__);
+      return promise;
+    }
+  }
+
+  RefPtr<nsIRunnable> r = NS_NewRunnableFunction(
+      __func__,
+      [holder = std::move(holder),
+       requests = std::move(aRequests)]() mutable -> void {
+        holder->ResolveOrReject(GetThreadCountsSync(std::move(requests)),
+                                __func__);
+      });
+
+  nsresult rv = target->Dispatch(r.forget(), NS_DISPATCH_NORMAL);
+  if (NS_FAILED(rv)) {
+    NS_WARNING("Failed to dispatch the GetThreadCounts runnable.");
+  }
+
+  return promise;
+}
+
 nsCString GetUtilityActorName(const UtilityActorName aActorName) {
   switch (aActorName) {
     case UtilityActorName::Unknown:

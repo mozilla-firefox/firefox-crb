@@ -13,6 +13,8 @@
 #include "mozilla/HashTable.h"
 #include "mozilla/MozPromise.h"
 
+class nsIEventTarget;
+
 namespace mozilla {
 
 namespace ipc {
@@ -261,6 +263,49 @@ RefPtr<ProcInfoPromise> GetProcInfo(nsTArray<ProcInfoRequest>&& aRequests);
  */
 ProcInfoPromise::ResolveOrRejectValue GetProcInfoSync(
     nsTArray<ProcInfoRequest>&& aRequests);
+
+/**
+ * Identifies one process to count threads for; input to GetThreadCounts.
+ */
+struct ThreadCountRequest {
+  // Opaque, caller-chosen; echoed back in the matching ThreadCountResult.
+  uint64_t requestId;
+  // Must be unique within a request batch (asserted in debug): the Windows
+  // backend keys its snapshot lookup by pid.
+  base::ProcessId pid;
+#ifdef XP_MACOSX
+  mach_port_t childTask;
+#endif  // XP_MACOSX
+};
+
+struct ThreadCountResult {
+  uint64_t requestId;
+  uint32_t threadCount;
+};
+
+typedef MozPromise<CopyableTArray<ThreadCountResult>, nsresult, true>
+    ThreadCountPromise;
+
+/**
+ * Count the OS threads owned by each requested process.
+ *
+ * Does not wake up child processes. Processes that cannot be queried (e.g.
+ * exited) are dropped, so results are unordered and may be fewer than the
+ * requests, each tagged with its requestId.
+ *
+ * `aTarget`, if non-null, is the background event target the (potentially
+ * slow) syscalls are dispatched to, e.g. a caller's existing TaskQueue. When
+ * null, the stream transport service is used. It must not be the main thread.
+ */
+RefPtr<ThreadCountPromise> GetThreadCounts(
+    nsTArray<ThreadCountRequest>&& aRequests,
+    nsIEventTarget* aTarget = nullptr);
+
+/**
+ * Synchronous version of GetThreadCounts.
+ */
+ThreadCountPromise::ResolveOrRejectValue GetThreadCountsSync(
+    nsTArray<ThreadCountRequest>&& aRequests);
 
 /**
  * Utility function: copy data from a `ProcInfo` and into either a

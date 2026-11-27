@@ -15,6 +15,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 #define NANOPERSEC 1000000000.
 
@@ -356,6 +357,34 @@ ProcInfoPromise::ResolveOrRejectValue GetProcInfoSync(
 
   // ... and we're done!
   result.SetResolve(std::move(gathered));
+  return result;
+}
+
+ThreadCountPromise::ResolveOrRejectValue GetThreadCountsSync(
+    nsTArray<ThreadCountRequest>&& aRequests) {
+  ThreadCountPromise::ResolveOrRejectValue result;
+
+  CopyableTArray<ThreadCountResult> counts;
+  counts.SetCapacity(aRequests.Length());
+
+  for (const auto& request : aRequests) {
+    nsAutoCString taskPath;
+    taskPath.AppendPrintf("/proc/%u/task", unsigned(request.pid));
+
+    // task/ has one subdirectory per thread, each bumping the directory's
+    // hardlink count; subtracting the 2 links for "." and ".." yields the
+    // thread count without reading the directory.
+    struct stat statBuf;
+    if (stat(taskPath.get(), &statBuf) != 0 || statBuf.st_nlink < 2) {
+      // Most likely the process is gone; skip it (see GetThreadCounts docs).
+      continue;
+    }
+
+    counts.AppendElement(
+        ThreadCountResult{request.requestId, uint32_t(statBuf.st_nlink - 2)});
+  }
+
+  result.SetResolve(std::move(counts));
   return result;
 }
 
