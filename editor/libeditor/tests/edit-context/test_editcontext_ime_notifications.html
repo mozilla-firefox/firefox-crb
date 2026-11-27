@@ -32,7 +32,19 @@ TIPListener.setCallback(() => {
   } catch (e) {
     return false;
   }
-  notifications.push(notification.type);
+  if (notification.type == "notify-content-change") {
+    if (notification.textChanged) {
+      notifications.push("notify-text-change");
+    }
+    if (notification.selectionChanged) {
+      notifications.push("notify-selection-change");
+    }
+    if (notification.layoutChanged) {
+      notifications.push("notify-position-change");
+    }
+  } else {
+    notifications.push(notification.type);
+  }
   if (onReceiveNotification) {
     onReceiveNotification(notification.type);
   }
