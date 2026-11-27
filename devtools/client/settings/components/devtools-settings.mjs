@@ -41,24 +41,27 @@ export class DevToolsSettings extends MozLitElement {
       "disabled" in setting && setting.disabled
         ? conditions[setting.disabled]({ toolbox, setting })
         : false;
+    const locked =
+      "pref" in setting && Services.prefs.prefIsLocked(setting.pref);
     if ("pref" in setting) {
       return html`
         <devtools-settings-pref
           pref=${setting.pref}
           change-action=${setting.changeAction ?? nothing}
         >
-          ${this.#renderControl(setting, disabled)}
+          ${this.#renderControl(setting, disabled, locked)}
         </devtools-settings-pref>
       `;
     }
-    return this.#renderControl(setting, disabled);
+    return this.#renderControl(setting, disabled, locked);
   }
 
   /**
    * @param {Setting} setting
    * @param {boolean} disabled
+   * @param {boolean} locked
    */
-  #renderControl(setting, disabled) {
+  #renderControl(setting, disabled, locked) {
     const { type } = setting;
     switch (type) {
       case "boolean":
@@ -67,7 +70,7 @@ export class DevToolsSettings extends MozLitElement {
             id=${setting.id}
             data-l10n-id=${setting.l10nId ?? nothing}
             label=${setting.label ?? nothing}
-            .disabled=${disabled}
+            .disabled=${disabled || locked}
           >
             ${disabled && setting.disabledL10nId
               ? html`<span
@@ -83,7 +86,7 @@ export class DevToolsSettings extends MozLitElement {
             id=${setting.id}
             data-l10n-id=${setting.l10nId ?? nothing}
             label=${setting.label ?? nothing}
-            .disabled=${disabled}
+            .disabled=${disabled || locked}
           >
             ${setting.options.map(
               option => html`
