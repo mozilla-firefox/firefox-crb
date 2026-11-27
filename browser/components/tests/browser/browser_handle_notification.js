@@ -214,6 +214,50 @@ add_task(async function test_settings() {
   assertClickTelemetry("settings", "unknown");
 });
 
+add_task(async function test_disable() {
+  Services.fog.testResetFOG();
+
+  let principal =
+    Services.scriptSecurityManager.createContentPrincipalFromOrigin(
+      "https://example.com"
+    );
+  Services.perms.addFromPrincipal(
+    principal,
+    "desktop-notification",
+    Services.perms.ALLOW_ACTION
+  );
+  registerCleanupFunction(() =>
+    Services.perms.removeFromPrincipal(principal, "desktop-notification")
+  );
+
+  let tabCount = gBrowser.tabs.length;
+  let settingsTabPromise = BrowserTestUtils.waitForNewTab(
+    gBrowser,
+    SETTINGS_URL
+  );
+
+  simulateNotificationClickWithExistingWindow({
+    action: "snooze",
+    origin: "https://example.com",
+  });
+
+  let settingsTab = await settingsTabPromise;
+  ok(settingsTab, "Settings tab should be opened.");
+  is(gBrowser.tabs.length, tabCount + 1, "Only the settings tab should open.");
+  BrowserTestUtils.removeTab(settingsTab);
+
+  is(
+    Services.perms.testPermissionFromPrincipal(
+      principal,
+      "desktop-notification"
+    ),
+    Services.perms.UNKNOWN_ACTION,
+    "The notification permission should be removed."
+  );
+
+  assertClickTelemetry("disable", "unknown");
+});
+
 add_task(async function test_settings_initial_load() {
   Services.fog.testResetFOG();
 

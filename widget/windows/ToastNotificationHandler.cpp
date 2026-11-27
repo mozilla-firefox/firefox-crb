@@ -22,6 +22,7 @@
 #include "mozilla/JSONStringWriteFuncs.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Result.h"
+#include "mozilla/Services.h"
 #include "mozilla/TimeStamp.h"
 #include "mozilla/Tokenizer.h"
 #include "mozilla/WindowsVersion.h"
@@ -31,6 +32,8 @@
 #include "nsDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
 #include "nsIDUtils.h"
+#include "nsIObserverService.h"
+#include "nsIPrincipal.h"
 #include "nsIStringBundle.h"
 #include "nsIToolkitProfile.h"
 #include "nsIToolkitProfileService.h"
@@ -907,6 +910,22 @@ ToastNotificationHandler::OnActivate(
       mAlertCallbacks->OnAlertSettings();
     } else if (actionValue && *actionValue == kAlertActionDisable) {
       mAlertCallbacks->OnAlertDisable();
+
+      // Without a browser window the user would see no result, so show the
+      // notification settings like when Firefox was closed
+      nsCOMPtr<nsIWindowMediator> winMediator(
+          do_GetService(NS_WINDOWMEDIATOR_CONTRACTID));
+      nsCOMPtr<mozIDOMWindowProxy> navWin;
+      if (winMediator) {
+        winMediator->GetMostRecentBrowserWindow(getter_AddRefs(navWin));
+      }
+      nsCOMPtr<nsIObserverService> obs =
+          mozilla::services::GetObserverService();
+      nsCOMPtr<nsIPrincipal> principal;
+      mAlertNotification->GetPrincipal(getter_AddRefs(principal));
+      if (!navWin && obs && principal) {
+        obs->NotifyObservers(principal, "notifications-open-settings", nullptr);
+      }
     } else if (mClickable) {
       nsIAlertCallbacks::ApplicationState state = GetApplicationState();
 
