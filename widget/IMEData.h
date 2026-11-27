@@ -1001,10 +1001,6 @@ struct IMENotification final {
       // end of the changed text.
       return mAddedEndOffset;
     }
-
-#ifdef DEBUG
-    void Test();
-#endif  // #ifdef DEBUG
   };
 
   // TextChangeDataBase cannot have constructors because they are used in union.

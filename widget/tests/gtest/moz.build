@@ -2,9 +2,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, you can obtain one at http://mozilla.org/MPL/2.0/.
 
+with Files("*TestIME*"):
+    BUG_COMPONENT = ("Core", "DOM: UI Events & Focus Handling")
+
 UNIFIED_SOURCES = [
     "TestFilePickerInputProtection.cpp",
     "TestGfxInfo.cpp",
+    "TestIMENotification.cpp",
     "TestTimeConverter.cpp",
     "TestTouchResampler.cpp",
     "TestWidgetMouseEventCtors.cpp",
