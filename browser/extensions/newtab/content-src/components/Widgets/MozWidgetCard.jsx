@@ -99,13 +99,6 @@ export function MozWidgetCard({
     [impressionRef, cardRef]
   );
 
-  /**
-   * @backward-compat { version 161 }
-   * moz-widget gained the widget-error and widget-ready events in 161. On 160
-   * they never fire, so a framed widget there shows no message and records
-   * neither widgets_error nor widgets_ready. Nothing breaks; remove this note
-   * once 161 reaches Release.
-   */
   useEffect(() => {
     const card = widgetRef.current;
     if (!card) {

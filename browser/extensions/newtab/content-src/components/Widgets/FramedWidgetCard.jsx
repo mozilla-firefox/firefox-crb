@@ -118,12 +118,6 @@ export function FramedWidgetCard(props) {
   if (widgetOrigin === "null") {
     widgetOrigin = null;
   }
-  /**
-   * @backward-compat { version 161 }
-   * moz-widget gained reportError() and reportReady() in 161. On 160 they are
-   * missing, so the optional calls do nothing. Drop the `?.` once 161 reaches
-   * Release.
-   */
   useEffect(() => {
     if (!widgetOrigin) {
       return undefined;
@@ -149,10 +143,10 @@ export function FramedWidgetCard(props) {
           typeof reason === "string" &&
           REASON_PATTERN.test(reason)
         ) {
-          cardRef.current.reportError?.(reason);
+          cardRef.current.reportError(reason);
         }
       } else if (event.data.type === READY_MESSAGE && !cardRef.current.error) {
-        cardRef.current.reportReady?.();
+        cardRef.current.reportReady();
       }
     }
     window.addEventListener("message", handleMessage);

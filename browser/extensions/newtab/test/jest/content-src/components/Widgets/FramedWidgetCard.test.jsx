@@ -334,49 +334,6 @@ describe("<FramedWidgetCard>", () => {
       expect(card.reportError).not.toHaveBeenCalled();
       expect(card.reportReady).not.toHaveBeenCalled();
     });
-
-    it.each([159, 160])("reports nothing on %i", version => {
-      const { card, dispatch } = renderWebCard();
-      if (version === 160) {
-        card.frame = iframe;
-      }
-
-      postWidgetMessage();
-      postWidgetMessage({
-        data: {
-          channel: "extension_widget_widget",
-          type: "widget_ready",
-          payload: { protocol: 1 },
-        },
-      });
-      const [observer] = observerInstances;
-      act(() => {
-        observer.callback([{ isIntersecting: true, target: card }], observer);
-      });
-
-      expect(card.querySelector(".widget-error")).toBeNull();
-      expect(dispatch).toHaveBeenCalledWith(
-        expect.objectContaining({ type: at.WIDGETS_IMPRESSION })
-      );
-      expect(
-        dispatch.mock.calls.filter(
-          ([action]) =>
-            action.type === at.WIDGETS_ERROR || action.type === at.WIDGETS_READY
-        )
-      ).toHaveLength(0);
-
-      stubReports(card);
-      postWidgetMessage({
-        data: {
-          channel: "extension_widget_widget",
-          type: "widget_ready",
-          payload: { protocol: 1 },
-        },
-      });
-      expect(card.reportReady).toHaveBeenCalledTimes(1);
-      postWidgetMessage();
-      expect(card.reportError).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe("menu items", () => {
