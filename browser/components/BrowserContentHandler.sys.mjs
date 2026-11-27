@@ -1619,6 +1619,27 @@ nsDefaultCommandLineHandler.prototype = {
         appStateBeforeClick
       );
 
+      // The user clicked "Notification settings" in the toast's "..." menu
+      // while Firefox was closed. Handle it here because respondOnClick
+      // ignores actions that the site did not declare, so it would only open
+      // the site
+      if (action == "settings") {
+        // Windows removes the toast after the click, so remove it from
+        // the notification storage too
+        Cc[
+          originPrincipal.privateBrowsingId
+            ? "@mozilla.org/memoryNotificationStorage;1"
+            : "@mozilla.org/notificationStorage;1"
+        ]
+          .getService(Ci.nsINotificationStorage)
+          .delete(originPrincipal.origin, notificationId);
+        Services.obs.notifyObservers(
+          originPrincipal,
+          "notifications-open-settings"
+        );
+        return;
+      }
+
       const handler = Cc["@mozilla.org/notification-handler;1"].getService(
         Ci.nsINotificationHandler
       );
