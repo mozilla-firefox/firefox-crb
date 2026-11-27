@@ -109,6 +109,13 @@ export class BackupUIParent extends JSWindowActorParent {
     }
   }
 
+  async #setDefaultParentDirPath() {
+    let defaultPath = lazy.BackupService.DEFAULT_PARENT_DIR_PATH;
+    if (defaultPath) {
+      await this.#bs.setParentDirPath(defaultPath);
+    }
+  }
+
   /**
    * Handles messages sent by BackupUIChild.
    *
@@ -143,17 +150,14 @@ export class BackupUIParent extends JSWindowActorParent {
       return await this.#triggerCreateBackup({ reason: "manual" });
     } else if (message.name == "EnableScheduledBackups") {
       try {
-        let { password, source } = message.data;
+        let { password, source, useDefaultLocation } = message.data;
 
         // Persist the default backup directory path to the pref if the user
         // hasn't explicitly chosen one. We do this here rather than in
         // actorCreated() to avoid mutating the browser.backup.location pref
         // as a side effect of opening about:preferences.
-        if (!this.#bs.state.backupDirPath) {
-          let defaultPath = lazy.BackupService.DEFAULT_PARENT_DIR_PATH;
-          if (defaultPath) {
-            await this.#bs.setParentDirPath(defaultPath);
-          }
+        if (useDefaultLocation || !this.#bs.state.backupDirPath) {
+          await this.#setDefaultParentDirPath();
         }
 
         if (!this.#bs.state.backupDirPath) {

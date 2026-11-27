@@ -253,6 +253,7 @@ export default class TurnOnScheduledBackups extends MozLitElement {
   handleConfirm() {
     let detail = {
       source: this.source,
+      useDefaultLocation: this.showDefaultFilePath,
     };
 
     if (this._showPasswordOptions && this._passwordsMatch) {
