@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.lib.state.ext.flowScoped
 
@@ -41,7 +42,10 @@ class PictureInPictureWindowFeature(
         scope =
             store.flowScoped(dispatcher = mainDispatcher) { flow ->
                 flow
-                    .map { state -> state.pictureInPictureWindow.session != null }
+                    .map { state ->
+                        val session = state.pictureInPictureWindow.session
+                        session != null && session.source != PictureInPictureSource.FULLSCREEN
+                    }
                     .distinctUntilChanged()
                     .collect { hasSession ->
                         if (hasSession) {
