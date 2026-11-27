@@ -69,6 +69,7 @@
 #include "mozilla/dom/ipc/StructuredCloneData.h"
 #include "mozilla/glean/CaptchadetectionMetrics.h"
 #include "mozilla/glean/DomMediaMetrics.h"
+#include "mozilla/glean/DomMetrics.h"
 #include "mozilla/glean/DomSecurityMetrics.h"
 #include "mozilla/glean/DomUseCounterMetrics.h"
 #include "mozilla/glean/GeckoviewMetrics.h"
@@ -2616,6 +2617,10 @@ void WindowGlobalParent::AdmitPrefetchRecord(PrefetchRecordParent* aRec) {
         ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p queued", this,
          aRec));
     aRec->MarkQueued();
+    glean::speculation_rules::prefetch_limited
+        .EnumGet(
+            glean::speculation_rules::PrefetchLimitedLabel::eInflightQueued)
+        .Add();
     (aRec->IsImmediate() ? mQueuedImmediatePrefetches
                          : mQueuedNonImmediatePrefetches)
         .AppendElement(aRec);
@@ -2682,6 +2687,10 @@ void WindowGlobalParent::TryStartPrefetch(PrefetchRecordParent* aRec) {
         ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p rejected, "
          "total bytes budget used up (%" PRIu64 ")",
          this, aRec, mPrefetchBytesReceived));
+    glean::speculation_rules::prefetch_limited
+        .EnumGet(
+            glean::speculation_rules::PrefetchLimitedLabel::eTotalBytesExceeded)
+        .Add();
     aRec->MarkCanceled();
     return;
   }
@@ -2725,6 +2734,12 @@ void WindowGlobalParent::TryStartPrefetch(PrefetchRecordParent* aRec) {
           ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p rejected, "
            "%s budget full (%u)",
            this, aRec, immediate ? "immediate" : "non-immediate", limit));
+      if (immediate) {
+        glean::speculation_rules::prefetch_limited
+            .EnumGet(glean::speculation_rules::PrefetchLimitedLabel::
+                         eImmediateBudgetFull)
+            .Add();
+      }
       aRec->MarkCanceled();
       return;
     }
@@ -2732,6 +2747,10 @@ void WindowGlobalParent::TryStartPrefetch(PrefetchRecordParent* aRec) {
         ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p evicting "
          "oldest non-immediate rec=%p",
          this, aRec, oldestCompleted));
+    glean::speculation_rules::prefetch_limited
+        .EnumGet(glean::speculation_rules::PrefetchLimitedLabel::
+                     eNonImmediateEvicted)
+        .Add();
     oldestCompleted->MarkCanceled();
   }
 

@@ -494,6 +494,12 @@ PrefetchRecordParent::OnDataAvailable(nsIRequest* aRequest,
                     dom_speculation_rules_max_total_bytes_per_document()
               : StaticPrefs::dom_speculation_rules_max_body_bytes());
     }
+    if (totalCapExceeded) {
+      glean::speculation_rules::prefetch_limited
+          .EnumGet(glean::speculation_rules::PrefetchLimitedLabel::
+                       eTotalBytesExceeded)
+          .Add();
+    }
     if (mChannel) {
       mChannel->Cancel(NS_ERROR_FILE_TOO_BIG);
     } else {

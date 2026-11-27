@@ -1339,3 +1339,35 @@ speculation_rules:
       - sning@mozilla.com
       - acreskey@mozilla.com
     expires: never
+
+  prefetch_limited:
+    type: labeled_counter
+    labels:
+      - immediate_budget_full
+      - non_immediate_evicted
+      - inflight_queued
+      - total_bytes_exceeded
+    description: >
+      Speculation Rules prefetch records affected by a per-document prefetch
+      limit, counted once per record and limit. A record can be counted under
+      more than one label, for instance when it is queued and later rejected.
+
+      immediate_budget_full: an immediate record was not fetched, because the
+      document already had as many immediate prefetches, in flight or
+      completed and not expired, as allowed.
+      non_immediate_evicted: a completed non-immediate record was discarded to
+      make room for a newer one.
+      inflight_queued: a record had to wait, because the document already had
+      as many prefetches in flight as allowed.
+      total_bytes_exceeded: a record was not fetched, or its fetch was
+      cancelled, because the document's prefetches had received as much data
+      as allowed.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093286
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2093286
+    notification_emails:
+      - smayya@mozilla.com
+      - sning@mozilla.com
+      - acreskey@mozilla.com
+    expires: 188

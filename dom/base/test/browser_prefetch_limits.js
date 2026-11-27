@@ -140,6 +140,23 @@ function assertServedFromNetwork(navigation, message) {
   Assert.equal(navigation.hits, 2, `${message}: fetched again.`);
 }
 
+// Metrics added locally can't be tested in artifact builds. See bug 1836686.
+const CAN_TEST_GLEAN = !Services.prefs.getBoolPref(
+  "telemetry.fog.artifact_build",
+  false
+);
+
+function assertLimited(label, expected, message) {
+  if (!CAN_TEST_GLEAN) {
+    return;
+  }
+  Assert.equal(
+    Glean.speculationRules.prefetchLimited[label].testGetValue() ?? 0,
+    expected,
+    `${message} (${label})`
+  );
+}
+
 // Content console messages are forwarded to the parent's console service.
 function consoleWarningObserved(predicate) {
   return new Promise(resolve => {
@@ -167,6 +184,7 @@ add_setup(async function () {
 
 add_task(async function test_immediate_prefetches_are_capped() {
   for (const limit of [1, 3]) {
+    Services.fog.testResetFOG();
     await SpecialPowers.pushPrefEnv({
       set: [["dom.speculation_rules.max_immediate_prefetches", limit]],
     });
@@ -190,6 +208,11 @@ add_task(async function test_immediate_prefetches_are_capped() {
       requested.length,
       limit,
       `With a budget of ${limit}, only ${limit} of 5 immediate prefetches are fetched.`
+    );
+    assertLimited(
+      "immediate_budget_full",
+      5 - limit,
+      "Every rejected immediate prefetch is counted"
     );
 
     BrowserTestUtils.removeTab(tab);
@@ -304,7 +327,13 @@ add_task(async function test_non_immediate_budget_evicts_oldest_first() {
     { index: 3, kept: true },
   ];
   for (const { index, kept } of expected) {
+    Services.fog.testResetFOG();
     const { prefetched, navigation } = await pressAllThenNavigate(index);
+    assertLimited(
+      "non_immediate_evicted",
+      2,
+      "Every evicted prefetch is counted"
+    );
     Assert.deepEqual(
       prefetched,
       [1, 1, 1, 1],
@@ -321,6 +350,7 @@ add_task(async function test_non_immediate_budget_evicts_oldest_first() {
 });
 
 add_task(async function test_non_immediate_budget_never_evicts_inflight() {
+  Services.fog.testResetFOG();
   await SpecialPowers.pushPrefEnv({
     set: [["dom.speculation_rules.max_non_immediate_prefetches", 1]],
   });
@@ -344,6 +374,7 @@ add_task(async function test_non_immediate_budget_never_evicts_inflight() {
     0,
     "With only an in-flight prefetch to evict, the new candidate is rejected."
   );
+  assertLimited("non_immediate_evicted", 0, "Nothing is evicted");
 
   assertServedFromPrefetch(
     await navigate(browser, inflight),
@@ -452,6 +483,7 @@ function watchPrefetches(targets) {
 }
 
 add_task(async function test_inflight_prefetches_are_limited() {
+  Services.fog.testResetFOG();
   await SpecialPowers.pushPrefEnv({
     set: [["dom.speculation_rules.max_inflight_prefetches_per_document", 2]],
   });
@@ -472,6 +504,11 @@ add_task(async function test_inflight_prefetches_are_limited() {
     await Promise.all(targets.map(hits)),
     [1, 1, 1, 1, 1],
     "The queued prefetches are all fetched as slots free up."
+  );
+  assertLimited(
+    "inflight_queued",
+    3,
+    "Every prefetch that had to wait is counted"
   );
 
   BrowserTestUtils.removeTab(tab);
@@ -599,6 +636,7 @@ add_task(async function test_navigation_doesnt_wait_for_queued_prefetch() {
 });
 
 add_task(async function test_total_prefetch_bytes_are_capped() {
+  Services.fog.testResetFOG();
   await SpecialPowers.pushPrefEnv({
     set: [
       // One at a time, so a prefetch only starts once the previous one ended.
@@ -659,6 +697,68 @@ add_task(async function test_total_prefetch_bytes_are_capped() {
   );
   const third = targets.find(t => !watch.order.includes(t.url));
   Assert.equal(await hits(third), 0, "The remaining target isn't fetched.");
+  assertLimited(
+    "total_bytes_exceeded",
+    2,
+    "The canceled fetch and the rejected record are both counted"
+  );
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_many_queued_prefetches_all_complete() {
+  Services.fog.testResetFOG();
+  await SpecialPowers.pushPrefEnv({
+    set: [["dom.speculation_rules.max_inflight_prefetches_per_document", 3]],
+  });
+
+  // Well within the immediate budget, but ten times the in-flight limit, so
+  // the queue is drained over many rounds. Each response is held back long
+  // enough for every record to be queued before the first one completes.
+  const targets = Array.from({ length: 30 }, (_, i) =>
+    newTarget(`t${i}`, "&slow=200")
+  );
+  const watch = watchPrefetches(targets);
+  const statuses = new Map();
+  const stopped = TestUtils.topicObserved("http-on-stop-request", subject => {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    if (targets.some(t => t.url === channel.URI.spec) && isPrefetch(channel)) {
+      statuses.set(channel.URI.spec, channel.status);
+    }
+    return statuses.size === targets.length;
+  });
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate: targets }),
+    waitForLoad: true,
+  });
+  await stopped;
+  watch.stop();
+
+  Assert.equal(watch.maxInFlight, 3, "At most 3 prefetches are in flight.");
+  Assert.ok(
+    [...statuses.values()].every(status => status === Cr.NS_OK),
+    "Every prefetch completes."
+  );
+  Assert.deepEqual(
+    await Promise.all(targets.map(hits)),
+    targets.map(() => 1),
+    "Every target is fetched once."
+  );
+  assertLimited(
+    "inflight_queued",
+    targets.length - 3,
+    "Every prefetch beyond the in-flight limit had to wait"
+  );
+  assertLimited("immediate_budget_full", 0, "No prefetch is rejected");
+
+  // The last one to start waited longest in the queue.
+  const last = targets.find(t => t.url === watch.order.at(-1));
+  assertServedFromPrefetch(
+    await navigate(tab.linkedBrowser, last),
+    "The last queued prefetch is kept"
+  );
 
   BrowserTestUtils.removeTab(tab);
   await SpecialPowers.popPrefEnv();
