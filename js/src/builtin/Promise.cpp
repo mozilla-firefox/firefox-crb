@@ -2923,6 +2923,13 @@ enum GetCapabilitiesExecutorSlots {
   return promise;
 }
 
+// Whether |C| is the original Promise constructor of the current realm, so
+// that constructing a promise with it is unobservable.
+static bool IsCurrentRealmPromiseConstructor(JSContext* cx, JSObject* C) {
+  return IsNativeFunction(C, PromiseConstructor) &&
+         C->nonCCWRealm() == cx->realm();
+}
+
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -2956,8 +2963,7 @@ enum GetCapabilitiesExecutorSlots {
   // For Promise.all and Promise.race we can only optimize away the creation
   // of the GetCapabilitiesExecutor function, and directly allocate the
   // result promise instead of invoking the Promise constructor.
-  if (IsNativeFunction(cVal, PromiseConstructor) &&
-      cVal.toObject().nonCCWRealm() == cx->realm()) {
+  if (IsCurrentRealmPromiseConstructor(cx, C)) {
     PromiseObject* promise;
     if (canOmitResolutionFunctions) {
       promise = CreatePromiseObjectWithoutResolutionFunctions(cx);
