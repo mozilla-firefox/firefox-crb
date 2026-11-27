@@ -72,6 +72,21 @@ add_task(async function test_windows_create_update_roundtrip_top_and_left() {
         width: 90,
         height: 120,
       });
+
+      // On X11, right after the window is mapped, the window manager may not
+      // have placed its frame yet, and the window is reported at 0,0 until it
+      // does.
+      for (
+        let i = 0;
+        i < 100 && !isWayland && win.left === 0 && win.top === 0;
+        ++i
+      ) {
+        browser.test.log(`Waiting for the window to be placed (${i})`);
+        // eslint-disable-next-line mozilla/no-arbitrary-setTimeout
+        await new Promise(r => setTimeout(r, 50));
+        win = await browser.windows.get(win.id);
+      }
+
       assertDimension(30, win.top, "windows.create() preserves top");
       assertDimension(60, win.left, "windows.create() preserves left");
 
