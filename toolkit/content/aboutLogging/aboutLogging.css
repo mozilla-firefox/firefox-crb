@@ -176,9 +176,12 @@ input[type="text"] {
 }
 
 .uploaded-profile-actions {
+  display: flex;
+  gap: 1em;
   margin-inline-start: 1em;
 }
 
+.share-profile-button,
 .delete-profile-button {
   /* moz-button doesn't have proper styles for Android and it doesn't appear
    * clickable there. Making this look like a clickable element. This will be
