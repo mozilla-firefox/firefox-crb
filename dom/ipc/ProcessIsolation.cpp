@@ -418,6 +418,19 @@ static IsolationBehavior IsolationBehaviorForURI(nsIURI* aURI,
 }
 
 /**
+ * Depending on the browser's configuration, webextension subframes may load
+ * within the same process as their embedder. This controls content script
+ * synchronous access to the extension content.
+ */
+static bool CanHostExtensionContent(const RemoteType& aRemoteType) {
+  // Only "web-like" content can be matched by content scripts.
+  return !StaticPrefs::extensions_webextensions_remote() ||
+         !FissionAutostart() || aRemoteType.IsExtension() ||
+         aRemoteType.IsWeb() || aRemoteType.IsFile() ||
+         aRemoteType.IsPrivilegedMozilla();
+}
+
+/**
  * Helper method for logging the origin of a principal as a string.
  */
 static nsAutoCString OriginString(nsIPrincipal* aPrincipal) {
@@ -827,16 +840,7 @@ Result<NavigationIsolationOptions, nsresult> IsolationOptionsForNavigation(
   if (auto* addonPolicy =
           BasePrincipal::Cast(resultOrPrecursor)->AddonPolicy()) {
     if (aParentWindow) {
-      // As a temporary measure, extension iframes loaded within web content
-      // must be loaded within the same process as their parent document, such
-      // that content scripts can synchronously access them. The same applies
-      // to file:// process remote types and privilegedmozilla (in particular
-      // for the subset extensions that will be allowed to access FxA web pages)
-      // and when the extension process is completely disabled through prefs.
-      const RemoteType& parentRemoteType = aParentWindow->GetRemoteType();
-      if (!ExtensionPolicyService::GetSingleton().UseRemoteExtensions() ||
-          parentRemoteType.IsWeb() || parentRemoteType.IsFile() ||
-          parentRemoteType.IsPrivilegedMozilla()) {
+      if (CanHostExtensionContent(aParentWindow->GetRemoteType())) {
         MOZ_LOG(gProcessIsolationLog, LogLevel::Verbose,
                 ("Loading extension subframe in same process as parent"));
         behavior = IsolationBehavior::Inherit;
@@ -1713,14 +1717,15 @@ bool ValidatePrincipalCouldPotentiallyBeLoadedBy(
     return true;
   }
 
-  // Web content can contain extension content frames and contain extension
-  // content scripts, so any content process may send us an extension's
-  // principal.
+  // We can load a moz-extension principal in any process which can host
+  // extension content (e.g. due to a content script loading a subframe).
+  //
   // NOTE: We don't check AddonPolicy here, as that can disappear if the add-on
   // is disabled or uninstalled. As this is a lax check, looking at the scheme
   // should be sufficient.
   if (originScheme == "moz-extension"_ns) {
-    return true;
+    return aOptions.contains(ValidatePrincipalOptions::AlwaysAllowExtension) ||
+           CanHostExtensionContent(aRemoteType);
   }
 
   // All other content principal schemes are always loaded via. the parent
