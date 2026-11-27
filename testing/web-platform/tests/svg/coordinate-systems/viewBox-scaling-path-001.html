@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<title>A path under a large viewBox scale is drawn where its scaled coordinates are</title>
+<link rel="help" href="https://svgwg.org/svg2-draft/coords.html#ViewBoxAttribute">
+<link rel="match" href="viewBox-scaling-path-001-ref.html">
+<meta name="assert" content="The viewBox scales the polygon by 100 horizontally and by 500 vertically. Small errors in the position of the polygon in its user space must not become visible offsets.">
+<svg width="250" height="250" viewBox="0 0.1 2.5 0.5" preserveAspectRatio="none">
+  <polygon fill="blue" points="0.3123,0.2234 2.0123,0.2234 1.7,0.4134 0.6,0.4134"/>
+</svg>
