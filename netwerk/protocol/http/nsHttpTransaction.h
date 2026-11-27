@@ -225,6 +225,12 @@ class nsHttpTransaction final : public nsAHttpTransaction,
   bool IsWebsocketUpgrade();
 
   void OnProxyConnectComplete(ProxyConnectResponseHead* aResponseHead) override;
+
+  // Installs a CONNECT response read by the inner connection's setup driver,
+  // so nsHttpChannel runs ProcessResponse and its proxy-auth and
+  // ProcessFailedProxyConnect paths, instead of seeing a connection error.
+  void InjectProxyConnectResponse(const nsHttpResponseHead& aHead,
+                                  const nsACString& aBody);
   void SetFlat407Headers(const nsACString& aHeaders);
 
   void UpdateConnectionInfo(nsHttpConnectionInfo* aConnInfo);

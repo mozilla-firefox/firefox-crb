@@ -787,6 +787,16 @@ nsresult nsHttpConnection::AddTransaction(nsAHttpTransaction* httpTransaction,
   return NS_OK;
 }
 
+void nsHttpConnection::DetachSetupTransaction(nsAHttpTransaction* aDriver) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  if (!aDriver || mTransaction != aDriver) {
+    return;
+  }
+  LOG(("nsHttpConnection::DetachSetupTransaction [this=%p trans=%p]", this,
+       aDriver));
+  mTransaction = nullptr;
+}
+
 void nsHttpConnection::SwapTransaction(nsAHttpTransaction* aOld,
                                        nsAHttpTransaction* aNew) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
