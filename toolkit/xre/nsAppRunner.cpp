@@ -183,6 +183,7 @@
 #include "mozilla/StartupTimeline.h"
 #include "mozilla/LateWriteChecks.h"
 
+#include <atomic>
 #include <stdlib.h>
 #include <string_view>
 
@@ -942,18 +943,20 @@ static const char kPrefFissionAutostartSession[] = "fission.autostart.session";
 // processes to initialize gFissionAutostart.
 
 static bool gFissionAutostart = false;
-static bool gFissionAutostartInitialized = false;
+static std::atomic<bool> gFissionAutostartInitialized = false;
 static nsIXULRuntime::FissionDecisionStatus gFissionDecisionStatus;
 static void EnsureFissionAutostartInitialized() {
-  if (gFissionAutostartInitialized) {
+  if (gFissionAutostartInitialized.load(std::memory_order_acquire)) {
     return;
   }
-  gFissionAutostartInitialized = true;
+  MOZ_RELEASE_ASSERT(NS_IsMainThread(),
+                     "FissionAutostart must be initialized on the main thread");
 
   if (!XRE_IsParentProcess()) {
     // This pref is configured for the current session by the parent process.
     gFissionAutostart = Preferences::GetBool(kPrefFissionAutostartSession,
                                              false, PrefValueKind::Default);
+    gFissionAutostartInitialized.store(true, std::memory_order_release);
     return;
   }
 
@@ -984,6 +987,8 @@ static void EnsureFissionAutostartInitialized() {
                                    : nsIXULRuntime::eFissionDisabledByDefault;
     }
   }
+
+  gFissionAutostartInitialized.store(true, std::memory_order_release);
 
   // Content processes cannot run the same logic as we're running in the parent
   // process, as the current value of various preferences may have changed
@@ -6556,6 +6561,9 @@ nsresult XREMain::XRE_mainRun() {
     // nsObserverService.
     EnsureWin32kInitialized();
 #endif
+
+    // Needs to be called on the main thread to read & write prefs
+    EnsureFissionAutostartInitialized();
 
     // As FilePreferences need the profile directory, we must initialize right
     // here.

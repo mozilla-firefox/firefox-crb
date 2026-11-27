@@ -15,6 +15,7 @@
 
 #include "nsIAppShell.h"
 #include "nsIToolkitProfile.h"
+#include "nsIXULRuntime.h"
 
 #ifdef XP_WIN
 #  include <process.h>
@@ -565,6 +566,10 @@ nsresult XRE_InitChildProcess(int aArgc, char* aArgv[],
 
       mozilla::FilePreferences::InitDirectoriesAllowlist();
       mozilla::FilePreferences::InitPrefs();
+
+      // Ensure FissionAutostart is initialized on the main thread in all child
+      // processes.
+      (void)mozilla::FissionAutostart();
 
 #if defined(MOZ_SANDBOX)
       AddContentSandboxLevelAnnotation();
