@@ -361,12 +361,12 @@
   },
   "button/background/color/hover": {
     "light": "{Colors$color/violet-desaturated/20}",
-    "dark": "{Colors$color/violet-desaturated/50}",
+    "dark": "{Colors$color/violet-desaturated/60}",
     "forcedColors": "{HCM Theme$SelectedItemText}"
   },
   "button/background/color/active": {
     "light": "{Colors$color/violet-desaturated/30}",
-    "dark": "{Colors$color/violet-desaturated/40}",
+    "dark": "{Colors$color/violet-desaturated/70}",
     "forcedColors": "{HCM Theme$SelectedItemText}"
   },
   "button/border/color": {
