@@ -174,6 +174,16 @@ class PackagePaths:
         self.jsshell = mozpath.join(dist_dir, substs["JSSHELL_NAME"])
 
 
+def configured_package_paths(
+    *, substs: Mapping[str, str], topobjdir: str
+) -> PackagePaths:
+    return PackagePaths(
+        substs=substs,
+        dist_dir=mozpath.join(topobjdir, "dist"),
+        ab_cd=substs.get("MOZ_UI_LOCALE", "en-US"),
+    )
+
+
 def files_to_upload(
     *,
     substs: Mapping[str, str],
