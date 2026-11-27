@@ -318,14 +318,6 @@ export var Bookmarks = Object.freeze({
         throw new Error("parentGuid must be a folder");
       }
 
-      // Set index in the appending case.
-      if (
-        insertInfo.index == this.DEFAULT_INDEX ||
-        insertInfo.index > parent._childCount
-      ) {
-        insertInfo.index = parent._childCount;
-      }
-
       let item = await insertBookmark(insertInfo, parent);
       let itemDetailMap = await getBookmarkDetailMap([item.guid]);
       let itemDetail = itemDetailMap.get(item.guid);
@@ -2203,13 +2195,15 @@ function insertBookmark(item, parent) {
           await lazy.PlacesUtils.maybeInsertPlace(db, item.url);
         }
 
+        let index = item.index == Bookmarks.DEFAULT_INDEX ? null : item.index;
+
         // Adjust indices.
         await db.executeCached(
           `UPDATE moz_bookmarks SET position = position + 1
          WHERE parent = :parent
          AND position >= :index
         `,
-          { parent: parent._id, index: item.index }
+          { parent: parent._id, index }
         );
 
         let syncChangeDelta =
@@ -2219,20 +2213,25 @@ function insertBookmark(item, parent) {
             item.source
           );
 
-        // Insert the bookmark into the database.
-        await db.executeCached(
+        // Insert the bookmark into the database. The position is clamped to the
+        // child count read in this transaction, so that concurrent inserts
+        // appending to the same folder each get the next position.
+        let [row] = await db.executeCached(
           `INSERT INTO moz_bookmarks (fk, type, parent, position, title,
                                     dateAdded, lastModified, guid,
                                     syncChangeCounter, syncStatus)
          VALUES (CASE WHEN :url ISNULL THEN NULL ELSE (SELECT id FROM moz_places WHERE url_hash = hash(:url) AND url = :url) END,
-                 :type, :parent, :index, NULLIF(:title, ''), :date_added,
+                 :type, :parent,
+                 (SELECT MIN(IFNULL(:index, count(*)), count(*)) FROM moz_bookmarks WHERE parent = :parent),
+                 NULLIF(:title, ''), :date_added,
                  :last_modified, :guid, :syncChangeCounter, :syncStatus)
+         RETURNING position
         `,
           {
             url: item.hasOwnProperty("url") ? item.url.href : null,
             type: item.type,
             parent: parent._id,
-            index: item.index,
+            index,
             title: item.title,
             date_added: lazy.PlacesUtils.toPRTime(item.dateAdded),
             last_modified: lazy.PlacesUtils.toPRTime(item.lastModified),
@@ -2241,6 +2240,7 @@ function insertBookmark(item, parent) {
             syncStatus,
           }
         );
+        item.index = row.getResultByName("position");
 
         // Mark all affected separators as changed
         await adjustSeparatorsSyncCounter(

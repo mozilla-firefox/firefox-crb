@@ -556,7 +556,7 @@ add_task(async function test_bookmarks() {
         checkOnCreated(
           results[3].id,
           bookmarkGuids.unfiledGuid,
-          0,
+          3,
           "EFF",
           "http://eff.org/",
           results[3].dateAdded
@@ -564,7 +564,7 @@ add_task(async function test_bookmarks() {
         checkOnCreated(
           results[2].id,
           bookmarkGuids.unfiledGuid,
-          0,
+          2,
           "Mozilla Folder",
           undefined,
           results[2].dateAdded,
@@ -573,7 +573,7 @@ add_task(async function test_bookmarks() {
         checkOnCreated(
           results[1].id,
           bookmarkGuids.unfiledGuid,
-          0,
+          1,
           "Example",
           "http://example.org/",
           results[1].dateAdded
@@ -624,7 +624,7 @@ add_task(async function test_bookmarks() {
             checkOnCreated(
               newBookmarks[3].id,
               createdFolderId,
-              0,
+              3,
               "Firefox",
               "http://allizom.org/firefox/",
               newBookmarks[3].dateAdded
@@ -632,7 +632,7 @@ add_task(async function test_bookmarks() {
             checkOnCreated(
               newBookmarks[2].id,
               createdFolderId,
-              0,
+              2,
               "Mozilla Corporation",
               "http://allizom.com/",
               newBookmarks[2].dateAdded
@@ -640,7 +640,7 @@ add_task(async function test_bookmarks() {
             checkOnCreated(
               newBookmarks[1].id,
               createdFolderId,
-              0,
+              1,
               "",
               "data:",
               newBookmarks[1].dateAdded,
@@ -722,7 +722,7 @@ add_task(async function test_bookmarks() {
           "Expected number of bookmarks returned by getSubTree"
         );
         browser.test.assertEq(
-          "Firefox",
+          "Mozilla",
           children[0].title,
           "Bookmark has the expected title"
         );
@@ -747,27 +747,27 @@ add_task(async function test_bookmarks() {
           "Bookmark has the expected index"
         );
         browser.test.assertEq(
-          "Mozilla Corporation",
-          children[2].title,
-          "Bookmark has the expected title"
-        );
-        browser.test.assertEq(
           "",
-          children[3].title,
+          children[2].title,
           "Separator has the expected title"
         );
         browser.test.assertEq(
           "data:",
-          children[3].url,
+          children[2].url,
           "Separator has the expected url"
         );
         browser.test.assertEq(
           "separator",
-          children[3].type,
+          children[2].type,
           "Separator has the expected type"
         );
         browser.test.assertEq(
-          "Mozilla",
+          "Mozilla Corporation",
+          children[3].title,
+          "Bookmark has the expected title"
+        );
+        browser.test.assertEq(
+          "Firefox",
           children[4].title,
           "Bookmark has the expected title"
         );
@@ -812,7 +812,7 @@ add_task(async function test_bookmarks() {
           "Expected number of results returned for url search"
         );
         checkBookmark(
-          { title: "Example", url: "http://example.org/", index: 2 },
+          { title: "Example", url: "http://example.org/", index: 1 },
           results[0]
         );
 
@@ -826,7 +826,7 @@ add_task(async function test_bookmarks() {
           "Expected number of results returned for url search"
         );
         checkBookmark(
-          { title: "Example", url: "http://example.org/", index: 2 },
+          { title: "Example", url: "http://example.org/", index: 1 },
           results[0]
         );
 
@@ -843,7 +843,7 @@ add_task(async function test_bookmarks() {
           {
             title: "EFF",
             url: "http://eff.org/",
-            index: 0,
+            index: 3,
             parentId: bookmarkGuids.unfiledGuid,
           },
           results[0]
@@ -980,7 +980,7 @@ add_task(async function test_bookmarks() {
           {
             title: "Mozilla Corporation",
             url: "http://allizom.com/",
-            index: 2,
+            index: 3,
           },
           results[0]
         );
@@ -998,7 +998,7 @@ add_task(async function test_bookmarks() {
           {
             title: "Mozilla Corporation",
             url: "http://allizom.com/",
-            index: 2,
+            index: 3,
           },
           results[0]
         );
@@ -1016,7 +1016,7 @@ add_task(async function test_bookmarks() {
           {
             title: "Mozilla Corporation",
             url: "http://allizom.com/",
-            index: 2,
+            index: 3,
           },
           results[0]
         );
@@ -1031,7 +1031,7 @@ add_task(async function test_bookmarks() {
           "Expected number of results returned for title field"
         );
         checkBookmark(
-          { title: "Mozilla", url: "http://allizom.org/", index: 4 },
+          { title: "Mozilla", url: "http://allizom.org/", index: 0 },
           results[0]
         );
 
@@ -1045,7 +1045,7 @@ add_task(async function test_bookmarks() {
           "Expected number of results returned for title and query fields"
         );
         checkBookmark(
-          { title: "Mozilla", url: "http://allizom.org/", index: 4 },
+          { title: "Mozilla", url: "http://allizom.org/", index: 0 },
           results[0]
         );
 
@@ -1093,7 +1093,7 @@ add_task(async function test_bookmarks() {
         let childCount = results[1].length;
 
         browser.test.assertEq(
-          2,
+          3,
           corporationBookmark.index,
           "Bookmark has the expected index"
         );
@@ -1117,7 +1117,7 @@ add_task(async function test_bookmarks() {
               createdFolderId,
               createdFolderId,
               0,
-              2
+              3
             );
 
             return browser.bookmarks.move(corporationBookmark.id, {
@@ -1269,7 +1269,7 @@ add_task(async function test_bookmarks() {
             checkOnRemoved(
               createdFolderId,
               bookmarkGuids.unfiledGuid,
-              1,
+              2,
               "Mozilla Folder"
             );
 
