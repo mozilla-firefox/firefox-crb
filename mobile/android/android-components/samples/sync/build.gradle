@@ -46,6 +46,7 @@ android {
 
 dependencies {
     implementation project(':components:browser-storage-sync')
+    implementation project(':components:concept-firefox-accounts')
     implementation project(':components:concept-storage')
     implementation project(':components:concept-toolbar')
     implementation project(':components:lib-dataprotect')

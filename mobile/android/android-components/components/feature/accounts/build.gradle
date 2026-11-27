@@ -23,6 +23,8 @@ tasks.matching { it.name.startsWith("explodeAssetSource") }.configureEach { t ->
 }
 
 dependencies {
+    api project(':components:concept-firefox-accounts')
+
     implementation project(":components:browser-state")
     implementation project(':components:concept-engine')
     implementation project(':components:feature-tabs')
