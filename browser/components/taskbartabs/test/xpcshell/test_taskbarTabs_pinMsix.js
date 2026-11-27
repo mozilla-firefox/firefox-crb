@@ -70,6 +70,7 @@ add_task(async function test_pinCreatesDesktopEntry() {
   const parsedURI = Services.io.newURI("https://www.example.com");
   const taskbarTab = createTaskbarTab(gRegistry, parsedURI, 0);
   sinon.resetHistory();
+  await saveTaskbarTabIconFile(taskbarTab);
 
   Assert.equal(
     (await TaskbarTabsPin.pinTaskbarTab(taskbarTab)).shortcut,
@@ -90,6 +91,7 @@ add_task(async function test_pinUnusualName() {
     },
   });
   sinon.resetHistory();
+  await saveTaskbarTabIconFile(invalidTaskbarTab);
 
   Assert.equal(
     (await TaskbarTabsPin.pinTaskbarTab(invalidTaskbarTab)).shortcut,

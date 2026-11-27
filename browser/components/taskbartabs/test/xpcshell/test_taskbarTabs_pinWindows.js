@@ -13,8 +13,6 @@ ChromeUtils.defineESModuleGetters(this, {
     "moz-src:///browser/components/taskbartabs/TaskbarTabsPinWin.sys.mjs",
   TaskbarTabsRegistry:
     "moz-src:///browser/components/taskbartabs/TaskbarTabsRegistry.sys.mjs",
-  TaskbarTabsUtils:
-    "moz-src:///browser/components/taskbartabs/TaskbarTabsUtils.sys.mjs",
   XPCOMUtils: "resource://gre/modules/XPCOMUtils.sys.mjs",
 });
 
@@ -53,19 +51,15 @@ const registry = createInMemoryRegistry();
 do_get_profile();
 
 async function attemptPin(aTaskbarTab, aDestFolder, aShortcutRelativePath) {
+  await saveTaskbarTabIconFile(aTaskbarTab);
   Assert.equal(
-    (
-      await TaskbarTabsPin.pinTaskbarTab(
-        aTaskbarTab,
-        await TaskbarTabsUtils.getDefaultIcon()
-      )
-    ).shortcut,
+    (await TaskbarTabsPin.pinTaskbarTab(aTaskbarTab)).shortcut,
     aShortcutRelativePath,
     "pinTaskbarTab returned expected relative path."
   );
   ok(
-    ShellService.writeShortcutIcon.calledOnce,
-    `Icon creation should have been called.`
+    !ShellService.writeShortcutIcon.called,
+    `Pinning should use the icon that was already saved.`
   );
   ok(
     kMockNativeShellService.createShortcut.calledOnce,
@@ -201,19 +195,14 @@ add_task(async function test_pin_rejected() {
   const parsedURI = Services.io.newURI("https://www.example.com");
   const taskbarTab = createTaskbarTab(registry, parsedURI, 0);
   const { pinShortcutToTaskbar } = kMockNativeShellService;
+  await saveTaskbarTabIconFile(taskbarTab);
 
   pinShortcutToTaskbar.resolves(Ci.nsIWindowsShellService.PINNED);
-  let result = await TaskbarTabsPin.pinTaskbarTab(
-    taskbarTab,
-    await TaskbarTabsUtils.getDefaultIcon()
-  );
+  let result = await TaskbarTabsPin.pinTaskbarTab(taskbarTab);
   Assert.equal(result.rejected, false, "An accepted pin is not rejected");
 
   pinShortcutToTaskbar.resolves(Ci.nsIWindowsShellService.REJECTED);
-  result = await TaskbarTabsPin.pinTaskbarTab(
-    taskbarTab,
-    await TaskbarTabsUtils.getDefaultIcon()
-  );
+  result = await TaskbarTabsPin.pinTaskbarTab(taskbarTab);
   Assert.equal(result.rejected, true, "A declined pin is reported");
   Assert.ok(result.shortcut, "The shortcut path is still returned");
 
@@ -226,12 +215,10 @@ add_task(async function test_pin_error_returns_shortcut() {
   const taskbarTab = createTaskbarTab(registry, parsedURI, 0);
   const { pinShortcutToTaskbar } = kMockNativeShellService;
   sinon.resetHistory();
+  await saveTaskbarTabIconFile(taskbarTab);
 
   pinShortcutToTaskbar.rejects(new Error("Pin failed"));
-  let result = await TaskbarTabsPin.pinTaskbarTab(
-    taskbarTab,
-    await TaskbarTabsUtils.getDefaultIcon()
-  );
+  let result = await TaskbarTabsPin.pinTaskbarTab(taskbarTab);
 
   Assert.strictEqual(
     result.shortcut,

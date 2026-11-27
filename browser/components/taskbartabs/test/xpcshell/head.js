@@ -8,7 +8,24 @@ const head = {};
 ChromeUtils.defineESModuleGetters(head, {
   TaskbarTabsRegistry:
     "moz-src:///browser/components/taskbartabs/TaskbarTabsRegistry.sys.mjs",
+  TaskbarTabsUtils:
+    "moz-src:///browser/components/taskbartabs/TaskbarTabsUtils.sys.mjs",
 });
+
+/**
+ * Creates the file where the icon of a Taskbar Tab is saved, which pinning
+ * needs to find.
+ *
+ * (This function is also in browser/head.js.)
+ *
+ * @param {TaskbarTab} aTaskbarTab
+ *   The Taskbar Tab to create the icon file for.
+ */
+async function saveTaskbarTabIconFile(aTaskbarTab) {
+  let iconFile = head.TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id);
+  await IOUtils.makeDirectory(iconFile.parent.path);
+  await IOUtils.writeUTF8(iconFile.path, "");
+}
 
 /**
  * Creates a new Taskbar Tab within the registry, and asserts that it does not

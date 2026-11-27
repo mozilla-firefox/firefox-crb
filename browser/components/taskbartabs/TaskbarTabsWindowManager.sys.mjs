@@ -17,6 +17,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 XPCOMUtils.defineLazyServiceGetters(lazy, {
+  GfxInfo: ["@mozilla.org/gfx/info;1", Ci.nsIGfxInfo],
   WindowsUIUtils: ["@mozilla.org/windows-ui-utils;1", Ci.nsIWindowsUIUtils],
 });
 
@@ -68,16 +69,7 @@ export class TaskbarTabsWindowManager {
     let tabId = getTabId(aTab);
     let windowId = getWindowId(originWindow);
 
-    let extraOptions = Cc["@mozilla.org/hash-property-bag;1"].createInstance(
-      Ci.nsIWritablePropertyBag2
-    );
-    extraOptions.setPropertyAsAString("taskbartab", aTaskbarTab.id);
-    if (AppConstants.platform === "linux") {
-      let windowClass = getInitialLinuxWindowClass(aTaskbarTab);
-      if (windowClass) {
-        extraOptions.setPropertyAsAString("taskbartabclass", windowClass);
-      }
-    }
+    let extraOptions = createWindowOptions(aTaskbarTab);
 
     let args = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
     args.appendElement(aTab);
@@ -100,16 +92,7 @@ export class TaskbarTabsWindowManager {
     );
     url.data = aTaskbarTab.startUrl;
 
-    let extraOptions = Cc["@mozilla.org/hash-property-bag;1"].createInstance(
-      Ci.nsIWritablePropertyBag2
-    );
-    extraOptions.setPropertyAsAString("taskbartab", aTaskbarTab.id);
-    if (AppConstants.platform === "linux") {
-      let windowClass = getInitialLinuxWindowClass(aTaskbarTab);
-      if (windowClass) {
-        extraOptions.setPropertyAsAString("taskbartabclass", windowClass);
-      }
-    }
+    let extraOptions = createWindowOptions(aTaskbarTab);
 
     let userContextId = Cc["@mozilla.org/supports-PRUint32;1"].createInstance(
       Ci.nsISupportsPRUint32
@@ -444,6 +427,44 @@ function getTabId(aTab) {
  */
 function getWindowId(aWindow) {
   return aWindow.docShell.outerWindowID;
+}
+
+/**
+ * Creates the options that mark a new window as a Taskbar Tab window.
+ *
+ * @param {TaskbarTab} aTaskbarTab - The Taskbar Tab the window is for.
+ * @returns {nsIWritablePropertyBag2} The options of the window.
+ */
+function createWindowOptions(aTaskbarTab) {
+  let extraOptions = Cc["@mozilla.org/hash-property-bag;1"].createInstance(
+    Ci.nsIWritablePropertyBag2
+  );
+  extraOptions.setPropertyAsAString("taskbartab", aTaskbarTab.id);
+  if (AppConstants.platform === "linux") {
+    setLinuxWindowIconOption(extraOptions, aTaskbarTab);
+    let windowClass = getInitialLinuxWindowClass(aTaskbarTab);
+    if (windowClass) {
+      extraOptions.setPropertyAsAString("taskbartabclass", windowClass);
+    }
+  }
+  return extraOptions;
+}
+
+/**
+ * Passes the saved icon of a Taskbar Tab to its new window. GTK only applies
+ * a window icon on X11. On Wayland, the icon comes from the desktop entry.
+ *
+ * @param {nsIWritablePropertyBag2} aExtraOptions - The options of the window.
+ * @param {TaskbarTab} aTaskbarTab - The Taskbar Tab the window is for.
+ */
+function setLinuxWindowIconOption(aExtraOptions, aTaskbarTab) {
+  if (lazy.GfxInfo.windowProtocol === "wayland") {
+    return;
+  }
+  aExtraOptions.setPropertyAsAString(
+    "taskbartabicon",
+    lazy.TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTab.id).path
+  );
 }
 
 /**

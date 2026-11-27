@@ -88,6 +88,21 @@ export const TaskbarTabsUtils = {
   },
 
   /**
+   * Returns the file where the icon of a Taskbar Tab is saved.
+   *
+   * @param {string} aTaskbarTabId - The ID of the Taskbar Tab.
+   * @returns {nsIFile} The icon file, which might not exist yet.
+   */
+  getTaskbarTabIconFile(aTaskbarTabId) {
+    let iconFile = this.getTaskbarTabsFolder();
+    iconFile.append("icons");
+    iconFile.append(
+      aTaskbarTabId + "." + lazy.ShellService.shortcutIconType.extension
+    );
+    return iconFile;
+  },
+
+  /**
    * Checks if the window is a Taskbar Tabs window.
    *
    * @param {Window} aWin - The window to inspect.
