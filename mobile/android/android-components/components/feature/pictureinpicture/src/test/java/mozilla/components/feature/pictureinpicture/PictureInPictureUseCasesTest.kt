@@ -12,6 +12,7 @@ import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.ContentState
 import mozilla.components.browser.state.state.EngineState
 import mozilla.components.browser.state.state.PictureInPictureSession
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
@@ -52,6 +53,28 @@ class PictureInPictureUseCasesTest {
 
         middleware.assertLastAction(PictureInPictureAction.RequestAction::class) { action ->
             assertEquals("other", action.tabId)
+        }
+    }
+
+    @Test
+    fun `WHEN requesting without a source THEN the address bar is the source`() {
+        val useCases = PictureInPictureUseCases(createStore(selectedTabId = "selected"))
+
+        useCases.request()
+
+        middleware.assertLastAction(PictureInPictureAction.RequestAction::class) { action ->
+            assertEquals(PictureInPictureSource.ADDRESS_BAR, action.source)
+        }
+    }
+
+    @Test
+    fun `WHEN requesting with a source THEN that source is requested`() {
+        val useCases = PictureInPictureUseCases(createStore(selectedTabId = "selected"))
+
+        useCases.request("other", PictureInPictureSource.FULLSCREEN)
+
+        middleware.assertLastAction(PictureInPictureAction.RequestAction::class) { action ->
+            assertEquals(PictureInPictureSource.FULLSCREEN, action.source)
         }
     }
 
