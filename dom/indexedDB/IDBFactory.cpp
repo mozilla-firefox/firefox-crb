@@ -470,7 +470,8 @@ already_AddRefed<Promise> IDBFactory::Databases(JSContext* const aCx,
 
   // If this request would fail in the parent process, fail early in content.
   if (!BackgroundChild::ValidatePrincipalInfo(
-          *mPrincipalInfo, indexedDB::PrincipalValidationOptions())) {
+          *mPrincipalInfo,
+          indexedDB::PrincipalValidationOptions(*mPrincipalInfo))) {
     promise->MaybeRejectWithSecurityError(kAccessError);
     return promise.forget();
   }
@@ -738,7 +739,8 @@ RefPtr<IDBOpenDBRequest> IDBFactory::OpenInternal(
 
   // If this request would fail in the parent process, fail early in content.
   if (!BackgroundChild::ValidatePrincipalInfo(
-          principalInfo, indexedDB::PrincipalValidationOptions())) {
+          principalInfo,
+          indexedDB::PrincipalValidationOptions(principalInfo))) {
     aRv.ThrowSecurityError(kAccessError);
     return nullptr;
   }

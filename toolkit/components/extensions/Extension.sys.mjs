@@ -179,11 +179,6 @@ const PRIVATE_ALLOWED_PERMISSION = "internal:privateBrowsingAllowed";
 const SVG_CONTEXT_PROPERTIES_PERMISSION =
   "internal:svgContextPropertiesAllowed";
 
-// The userContextID reserved for the extension storage (its purpose is ensuring that the IndexedDB
-// storage used by the browser.storage.local API is not directly accessible from the extension code,
-// it is defined and reserved as "userContextIdInternal.webextStorageLocal" in ContextualIdentityService.sys.mjs).
-const WEBEXT_STORAGE_USER_CONTEXT_ID = -1 >>> 0;
-
 // The maximum time to wait for extension child shutdown blockers to complete.
 const CHILD_SHUTDOWN_TIMEOUT_MS = 8000;
 
@@ -610,7 +605,7 @@ var ExtensionAddonObserver = {
       // Clear any storage.local data stored in the IDBBackend.
       let storagePrincipal =
         Services.scriptSecurityManager.createContentPrincipal(baseURI, {
-          userContextId: WEBEXT_STORAGE_USER_CONTEXT_ID,
+          userContextId: Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID,
         });
       Services.qms.clearStoragesForPrincipal(storagePrincipal);
 

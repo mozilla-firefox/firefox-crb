@@ -14,6 +14,14 @@
 interface nsIAddonPolicyService : nsISupports
 {
   /**
+   * The userContextID reserved for the extension storage.
+   * Used to ensure that the IndexedDB storage used by the browser.storage.local
+   * API is not directly accessible from the extension code.
+   * Reserved as "userContextIdInternal.webextStorageLocal" by `fxcontainers`.
+   */
+  const unsigned long STORAGE_LOCAL_USER_CONTEXT_ID = 0xFFFFFFFF;
+
+  /**
    * Returns the default content security policy which applies to extension
    * documents which do not specify any custom policies.
    */

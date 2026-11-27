@@ -11,11 +11,16 @@
 class JSStructuredCloneData;
 class nsIInputStream;
 
+namespace mozilla::ipc {
+class PrincipalInfo;
+}  // namespace mozilla::ipc
+
 namespace mozilla::dom::indexedDB {
 
 static constexpr uint32_t kFileCopyBufferSize = 32768;
 
-EnumSet<ValidatePrincipalOptions> PrincipalValidationOptions();
+EnumSet<ValidatePrincipalOptions> PrincipalValidationOptions(
+    const mozilla::ipc::PrincipalInfo& aPrincipalInfo);
 
 nsresult ClampResultCode(nsresult aResultCode);
 
