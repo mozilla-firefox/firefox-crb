@@ -147,7 +147,8 @@ enum class ValidatePrincipalOptions {
   AllowNullPtr,
 
   // Allow the principal to be an expanded principal.
-  // Sub-principals will each be validated.
+  // The first sub-principal will be validated, and the second (if present) will
+  // be checked to ensure it is a moz-extension principal.
   AllowExpanded,
 
   // Allow the system principal if it is in the process' LoadedOriginSet.
