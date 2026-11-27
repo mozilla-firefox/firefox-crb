@@ -18612,6 +18612,18 @@ void Document::ReportTrustedTypesReadiness() {
     return;
   }
 
+  // Documents that are not web pages are counted apart, so that the labels
+  // still add up to content_documents_destroyed.
+  const bool excluded =
+      IsInitialDocument() || IsSyntheticDocument() ||
+      (IsHTMLOrXHTML() &&
+       (AsHTMLDocument()->IsPlainText() || AsHTMLDocument()->IsViewSource())) ||
+      (mDocumentURI->SchemeIs("about") && !NS_IsAboutSrcdoc(mDocumentURI));
+  if (excluded) {
+    glean::security::trusted_types_readiness.Get("excluded-document"_ns).Add();
+    return;
+  }
+
   const char* ttcsp = "none";
   const char* strict = "none";
   if (nsIContentSecurityPolicy* policy =

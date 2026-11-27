@@ -16,13 +16,18 @@ function snapshot() {
   };
 }
 
-async function loadAndDestroy(query, expectedLabel, expectedDocuments = 1) {
+function loadAndDestroy(query, expectedLabel, expectedDocuments = 1) {
+  return loadURLAndDestroy(
+    `${PAGE}?${query}`,
+    expectedLabel,
+    expectedDocuments
+  );
+}
+
+async function loadURLAndDestroy(url, expectedLabel, expectedDocuments = 1) {
   await Services.fog.testFlushAllChildren();
   const before = snapshot();
-  const tab = await BrowserTestUtils.openNewForegroundTab(
-    gBrowser,
-    `${PAGE}?${query}`
-  );
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, url);
   await BrowserTestUtils.removeTab(tab);
   let after;
   const delta = label =>
@@ -47,6 +52,7 @@ async function loadAndDestroy(query, expectedLabel, expectedDocuments = 1) {
     "At most one label per destroyed document"
   );
   Assert.equal(delta("__other__"), 0, "No invalid label recorded");
+  delta.labels = Object.keys(after.labels);
   return delta;
 }
 
@@ -184,5 +190,47 @@ add_task(async function test_subdocument() {
     "The top-level document records doc-top"
   );
   Assert.greaterOrEqual(delta(sub), 1, "The frame's document records doc-sub");
+  await SpecialPowers.popPrefEnv();
+});
+
+// Documents that are not web pages only record excluded-document, unless
+// document.open() made an initial about:blank a regular document.
+add_task(async function test_excluded_documents() {
+  await SpecialPowers.pushPrefEnv({ set: [[PREF, true]] });
+  const excluded = "excluded-document";
+  const top =
+    "doc-top_htmlsink-none_writesink-none_ttcsp-none_strictcsp-none_created-0_used-0_lib-0_js-0";
+  let delta = await loadAndDestroy(
+    "csp=none&script=plain&blankframe=1",
+    top,
+    2
+  );
+  Assert.greaterOrEqual(delta(top), 1, "The top-level document is labeled");
+  Assert.greaterOrEqual(delta(excluded), 1, "The blank frame is excluded");
+
+  const sub =
+    "doc-sub_htmlsink-none_writesink-none_ttcsp-none_strictcsp-none_created-0_used-0_lib-0_js-0";
+  delta = await loadAndDestroy(
+    "csp=none&script=blank_write&blankframe=1",
+    sub,
+    2
+  );
+  Assert.greaterOrEqual(delta(sub), 1, "An opened frame is labeled doc-sub");
+
+  for (const url of [
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "data:text/plain,Plain text",
+    `view-source:${PAGE}?csp=none&script=plain`,
+  ]) {
+    delta = await loadURLAndDestroy(url, excluded);
+    Assert.greaterOrEqual(delta(excluded), 1, `${url} is excluded`);
+    Assert.equal(
+      delta.labels
+        .filter(l => l.startsWith("doc-"))
+        .reduce((sum, l) => sum + delta(l), 0),
+      0,
+      `${url} records no doc- label`
+    );
+  }
   await SpecialPowers.popPrefEnv();
 });
