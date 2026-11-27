@@ -633,6 +633,36 @@ describe("ContentSection", () => {
       ).not.toBeInTheDocument();
     });
 
+    it("passes onClose to the WidgetsManagementPanel", () => {
+      const onClose = jest.fn();
+      const { container } = render(
+        <WrapWithProvider
+          state={{
+            ...WALLPAPER_STATE,
+            Prefs: {
+              ...WALLPAPER_STATE.Prefs,
+              values: {
+                ...WALLPAPER_STATE.Prefs.values,
+                widgetStudioAvailable: true,
+              },
+            },
+          }}
+        >
+          <ContentSection
+            {...DEFAULT_PROPS}
+            {...NOVA_PROPS}
+            mayHaveWidgets={true}
+            showWidgetsManagementPanel={true}
+            onClose={onClose}
+          />
+        </WrapWithProvider>
+      );
+
+      fireEvent.click(container.querySelector(".widget-studio-cta moz-button"));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
     describe("web notifications toggle", () => {
       function renderWith({ mayHave = true, enabled = false } = {}) {
         return render(

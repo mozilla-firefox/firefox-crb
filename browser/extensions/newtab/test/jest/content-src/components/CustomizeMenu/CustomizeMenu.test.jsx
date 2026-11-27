@@ -238,26 +238,36 @@ describe("<CustomizeMenu>", () => {
     expect(mockFocus).toHaveBeenCalledTimes(1);
   });
 
-  it("focuses the personalize button when onExited is called", () => {
-    const customizeMenuRef = React.createRef();
-    render(
-      <WrapWithProvider state={DEFAULT_STATE}>
-        <CustomizeMenu
-          ref={customizeMenuRef}
-          {...DEFAULT_PROPS}
-          showing={false}
-        />
-      </WrapWithProvider>
-    );
-    const instance = customizeMenuRef.current;
-    const mockFocus = jest.fn();
-    instance.personalizeButtonRef.current = { focus: mockFocus };
-    instance.dialogRef.current = { open: false };
-    act(() => {
-      instance.onExited();
-    });
-    expect(mockFocus).toHaveBeenCalledTimes(1);
-  });
+  it.each([
+    [true, 1],
+    [false, 0],
+  ])(
+    "when the page has focus is %s, onExited focuses the personalize button %s times",
+    (pageHasFocus, expectedCalls) => {
+      const hasFocus = jest
+        .spyOn(document, "hasFocus")
+        .mockReturnValue(pageHasFocus);
+      const customizeMenuRef = React.createRef();
+      render(
+        <WrapWithProvider state={DEFAULT_STATE}>
+          <CustomizeMenu
+            ref={customizeMenuRef}
+            {...DEFAULT_PROPS}
+            showing={false}
+          />
+        </WrapWithProvider>
+      );
+      const instance = customizeMenuRef.current;
+      const mockFocus = jest.fn();
+      instance.personalizeButtonRef.current = { focus: mockFocus };
+      instance.dialogRef.current = { open: false };
+      act(() => {
+        instance.onExited();
+      });
+      expect(mockFocus).toHaveBeenCalledTimes(expectedCalls);
+      hasFocus.mockRestore();
+    }
+  );
 
   it("calls close() on the dialog when onExited is called and dialog is open", () => {
     const customizeMenuRef = React.createRef();
