@@ -3994,10 +3994,10 @@ locked_profiler_stream_json_for_this_process(
   nsTArray<mozilla::JSSourceEntry> jsSourceEntries =
       ActivePS::GatherJSSources(aLock);
 
-  // Always stream the sources table that is shared between the threads, and get
-  // the UUID to index mappings needed for frame serialization.
-  nsTHashMap<SourceId, IndexIntoSourceTable> sourceIdToIndexMap =
-      buffer.StreamSourceTableToJSON(aWriter, jsSourceEntries);
+  // Frames and markers get the index of their source while they're streamed,
+  // and the source table, shared between the threads, is streamed afterwards
+  // with only the sources that they refer to.
+  JSSourceIndexer jsSourceIndexer(jsSourceEntries);
 
   // Lists the samples for each thread profile
   aWriter.StartArrayProperty("threads");
@@ -4026,7 +4026,7 @@ locked_profiler_stream_json_for_this_process(
       MOZ_RELEASE_ASSERT(thread.mProfiledThreadData);
       processStreamingContext.AddThreadStreamingContext(
           *thread.mProfiledThreadData, buffer, thread.mJSContext, aService,
-          std::move(progressLogger), &sourceIdToIndexMap);
+          std::move(progressLogger), &jsSourceIndexer);
       if (aWriter.Failed()) {
         return Err(ProfilerError::JsonGenerationFailed);
       }
@@ -4103,6 +4103,13 @@ locked_profiler_stream_json_for_this_process(
   }
   aWriter.EndArray();
 
+  buffer.StreamSourceTableToJSON(aWriter, jsSourceEntries, jsSourceIndexer);
+  nsTArray<mozilla::JSSourceEntry> usedJSSourceEntries(
+      jsSourceIndexer.UsedEntries().Length());
+  for (size_t entryIndex : jsSourceIndexer.UsedEntries()) {
+    usedJSSourceEntries.AppendElement(std::move(jsSourceEntries[entryIndex]));
+  }
+
   SLOW_DOWN_FOR_TESTING();
 
   aWriter.StartArrayProperty("pausedRanges");
@@ -4148,12 +4155,8 @@ locked_profiler_stream_json_for_this_process(
   }
 #endif  // DEBUG
 
-  // The source table above needed every sourceId. From here on, the sources
-  // are only looked up by id, so copies with the same id can go.
-  ProfileGenerationAdditionalInformation additionalInfo{
-      std::move(sharedLibraryInfo), std::move(jsSourceEntries)};
-  additionalInfo.DeduplicateJSSourceEntries();
-  return std::move(additionalInfo);
+  return ProfileGenerationAdditionalInformation{std::move(sharedLibraryInfo),
+                                                std::move(usedJSSourceEntries)};
 }
 
 // Keep this internal function non-static, so it may be used by tests.

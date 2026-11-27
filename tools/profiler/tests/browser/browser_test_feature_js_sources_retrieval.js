@@ -12,10 +12,14 @@ add_task(async function test_js_sources_in_profile_additional_info() {
   await BrowserTestUtils.withNewTab(url, async contentBrowser => {
     await ProfilerTestUtils.startProfiler({ features: ["js"] });
     // Execute some JavaScript to create sources
+    // A source is only included in the profile if a sample or a marker stack
+    // refers to it, so each script below calls captureSample.
+    await defineCaptureSampleInContent(contentBrowser);
     await SpecialPowers.spawn(contentBrowser, [], () => {
       content.window.eval(`
         function testSourceFunction() {
           console.log("This is a test function");
+          captureSample();
           return 42;
         }
         testSourceFunction();
@@ -79,10 +83,12 @@ add_task(async function test_js_sources_different_types() {
   await BrowserTestUtils.withNewTab(url, async contentBrowser => {
     await ProfilerTestUtils.startProfiler({ features: ["js"] });
     // Execute different types of JavaScript to test source collection
+    await defineCaptureSampleInContent(contentBrowser);
     await SpecialPowers.spawn(contentBrowser, [], () => {
       // Inline script
       content.window.eval(`
         function inlineFunction() {
+          captureSample();
           return "inline";
         }
         inlineFunction();
@@ -92,6 +98,7 @@ add_task(async function test_js_sources_different_types() {
       content.window.eval(`
         (function() {
           console.log("anonymous function");
+          captureSample();
         })();
       `);
     });
@@ -152,15 +159,19 @@ add_task(async function test_js_sources_external_scripts() {
   const url = BASE_URL + "page_with_external_js.html";
   await BrowserTestUtils.withNewTab(url, async contentBrowser => {
     await ProfilerTestUtils.startProfiler({ features: ["js"] });
-    // Wait for page to load and execute scripts
+    // Wait for page to load, then run both scripts while profiling.
+    await SpecialPowers.spawn(contentBrowser, [], async () => {
+      if (content.document.readyState !== "complete") {
+        await new Promise(resolve =>
+          content.window.addEventListener("load", resolve, { once: true })
+        );
+      }
+    });
+    await defineCaptureSampleInContent(contentBrowser);
     await SpecialPowers.spawn(contentBrowser, [], () => {
-      return new Promise(resolve => {
-        if (content.document.readyState === "complete") {
-          resolve();
-        } else {
-          content.window.addEventListener("load", resolve);
-        }
-      });
+      const page = content.wrappedJSObject;
+      page.inlineFunction(page.captureSample);
+      page.externalFunction(page.captureSample);
     });
 
     // Get profile data
@@ -239,7 +250,13 @@ add_task(async function test_js_sources_utf8_external_script() {
 
   await ProfilerTestUtils.startProfiler({ features: ["js"] });
   const url = BASE_URL + "page_with_utf8_external_js.html";
-  await BrowserTestUtils.withNewTab(url, async () => {
+  await BrowserTestUtils.withNewTab(url, async contentBrowser => {
+    await defineCaptureSampleInContent(contentBrowser);
+    await SpecialPowers.spawn(contentBrowser, [], () => {
+      const page = content.wrappedJSObject;
+      page.utf8ExternalFunction(page.captureSample);
+    });
+
     Services.profiler.Pause();
     const profileData =
       await Services.profiler.getProfileDataAsGzippedArrayBuffer();
@@ -323,6 +340,7 @@ add_task(async function test_js_sources_large_source_text() {
   const url = BASE_URL + "simple.html";
   await BrowserTestUtils.withNewTab(url, async contentBrowser => {
     await ProfilerTestUtils.startProfiler({ features: ["js"] });
+    await defineCaptureSampleInContent(contentBrowser);
     const { largeSources, largeSourceMapURL } = await SpecialPowers.spawn(
       contentBrowser,
       [],
@@ -331,9 +349,9 @@ add_task(async function test_js_sources_large_source_text() {
         // Use lengths that aren't a multiple of 4, so that the source texts
         // packed after these ones in the buffer don't start at aligned offsets.
         const largeSources = [
-          `var largeAsciiSource = 1; // ${"a".repeat(100001)}`,
-          `var largeNonAsciiSource = 2; // ${"漢".repeat(50001)}`,
-          `var largeSourceMapSource = 3;\n//# sourceMappingURL=${sourceMapURL}`,
+          `var largeAsciiSource = 1; captureSample(); // ${"a".repeat(100001)}`,
+          `var largeNonAsciiSource = 2; captureSample(); // ${"漢".repeat(50001)}`,
+          `var largeSourceMapSource = 3; captureSample();\n//# sourceMappingURL=${sourceMapURL}`,
         ];
         for (const source of largeSources) {
           content.window.eval(source);

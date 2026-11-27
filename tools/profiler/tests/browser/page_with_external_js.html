@@ -9,7 +9,8 @@
   <p>This page loads an external JavaScript file to test JS source collection.</p>
 
   <script>
-    function inlineFunction() {
+    function inlineFunction(whileRunning = () => {}) {
+      whileRunning();
       // Do some work for ~2ms to generate samples
       const start = performance.now();
       let result = 0;

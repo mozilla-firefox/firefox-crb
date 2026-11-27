@@ -1,5 +1,6 @@
 // This is an external function
-function externalFunction() {
+function externalFunction(whileRunning = () => {}) {
+  whileRunning();
   // Do some work for ~2ms to generate samples
   const start = performance.now();
   let result = 0;

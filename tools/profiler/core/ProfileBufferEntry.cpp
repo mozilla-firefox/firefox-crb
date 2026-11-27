@@ -353,8 +353,7 @@ bool UniqueStacks::FrameKey::JITFrameData::operator==(
 UniqueStacks::UniqueStacks(
     FailureLatch& aFailureLatch, JITFrameInfo&& aJITFrameInfo,
     ProfilerCodeAddressService* aCodeAddressService /* = nullptr */,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>*
-        aSourceIdToIndexMap /* = nullptr */)
+    JSSourceIndexer* aJSSourceIndexer /* = nullptr */)
     : mUniqueStrings(std::move(aJITFrameInfo)
                          .MoveUniqueStringsWithNewFailureLatch(aFailureLatch)),
       mCodeAddressService(aCodeAddressService),
@@ -362,7 +361,7 @@ UniqueStacks::UniqueStacks(
       mStackTableWriter(aFailureLatch),
       mJITInfoRanges(std::move(aJITFrameInfo)
                          .MoveRangesWithNewFailureLatch(aFailureLatch)),
-      mSourceIdToIndexMap(aSourceIdToIndexMap) {
+      mJSSourceIndexer(aJSSourceIndexer) {
   if (!mUniqueStrings) {
     SetFailure("Did not get mUniqueStrings from JITFrameInfo");
     return;
@@ -538,7 +537,7 @@ void UniqueStacks::StreamNonJITFrame(const FrameKey& aFrame) {
 
   const NormalFrameData& data = aFrame.mData.as<NormalFrameData>();
   writer.StringElement(LOCATION,
-                       data.GetLocationWithSourceIndex(mSourceIdToIndexMap));
+                       data.GetLocationWithSourceIndex(mJSSourceIndexer));
   writer.BoolElement(RELEVANT_FOR_JS, data.mRelevantForJS);
 
   // It's okay to convert uint64_t to double here because DOM always creates IDs
@@ -565,11 +564,11 @@ void UniqueStacks::StreamNonJITFrame(const FrameKey& aFrame) {
   }
 }
 
-static void StreamJITFrame(
-    JSContext* /*aContext*/, SpliceableJSONWriter& aWriter,
-    UniqueJSONStrings& aUniqueStrings, const JS::ProfiledFrameHandle& aJITFrame,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap =
-        nullptr) {
+static void StreamJITFrame(JSContext* /*aContext*/,
+                           SpliceableJSONWriter& aWriter,
+                           UniqueJSONStrings& aUniqueStrings,
+                           const JS::ProfiledFrameHandle& aJITFrame,
+                           JSSourceIndexer* aJSSourceIndexer = nullptr) {
   enum Schema : uint32_t {
     LOCATION = 0,
     RELEVANT_FOR_JS = 1,
@@ -585,8 +584,8 @@ static void StreamJITFrame(
 
   uint32_t sourceId = aJITFrame.sourceId();
   nsCString labelWithSourceIndex(aJITFrame.label());
-  if (sourceId && aSourceIdToIndexMap) {
-    auto index = aSourceIdToIndexMap->MaybeGet(sourceId);
+  if (sourceId && aJSSourceIndexer) {
+    auto index = aJSSourceIndexer->IndexFor(sourceId);
     if (index) {
       labelWithSourceIndex.AppendLiteral("[");
       labelWithSourceIndex.AppendInt(*index);
@@ -624,16 +623,14 @@ static void StreamJITFrame(
   writer.IntElement(SUBCATEGORY, info.mSubcategoryIndex);
 }
 
-static nsCString JSONForJITFrame(
-    JSContext* aContext, const JS::ProfiledFrameHandle& aJITFrame,
-    UniqueJSONStrings& aUniqueStrings,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap =
-        nullptr) {
+static nsCString JSONForJITFrame(JSContext* aContext,
+                                 const JS::ProfiledFrameHandle& aJITFrame,
+                                 UniqueJSONStrings& aUniqueStrings,
+                                 JSSourceIndexer* aJSSourceIndexer = nullptr) {
   nsCString json;
   JSONStringRefWriteFunc jw(json);
   SpliceableJSONWriter writer(jw, aUniqueStrings.SourceFailureLatch());
-  StreamJITFrame(aContext, writer, aUniqueStrings, aJITFrame,
-                 aSourceIdToIndexMap);
+  StreamJITFrame(aContext, writer, aUniqueStrings, aJITFrame, aJSSourceIndexer);
   return json;
 }
 
@@ -641,7 +638,7 @@ void JITFrameInfo::AddInfoForRange(
     uint64_t aRangeStart, uint64_t aRangeEnd, JSContext* aCx,
     const std::function<void(const std::function<void(void*, uint64_t)>&)>&
         aJITAddressProvider,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap) {
+    JSSourceIndexer* aJSSourceIndexer) {
   if (mLocalFailureLatchSource.Failed()) {
     return;
   }
@@ -696,7 +693,7 @@ void JITFrameInfo::AddInfoForRange(
         if (!jitFrameToFrameJSONMap.add(
                 frameEntry, jitFrameKey,
                 JSONForJITFrame(aCx, handle, *mUniqueStrings,
-                                aSourceIdToIndexMap))) {
+                                aJSSourceIndexer))) {
           mLocalFailureLatchSource.SetFailure(
               "OOM in JITFrameInfo::AddInfoForRange adding jit->frame map");
           return;
@@ -1825,8 +1822,7 @@ void ProfileBuffer::StreamSamplesAndMarkersToJSON(
 void ProfileBuffer::AddJITInfoForRange(
     uint64_t aRangeStart, ProfilerThreadId aThreadId, JSContext* aContext,
     JITFrameInfo& aJITFrameInfo, mozilla::ProgressLogger aProgressLogger,
-    const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap)
-    const {
+    JSSourceIndexer* aJSSourceIndexer) const {
   // We can only process JitReturnAddr entries if we have a JSContext.
   MOZ_RELEASE_ASSERT(aContext);
 
@@ -1925,7 +1921,7 @@ void ProfileBuffer::AddJITInfoForRange(
           }
         });
       },
-      aSourceIdToIndexMap);
+      aJSSourceIndexer);
 }
 
 void ProfileBuffer::StreamMarkersToJSON(
@@ -2635,10 +2631,40 @@ void ProfileBuffer::DiscardSamplesBeforeTime(double aTime) {
   (void)aTime;
 }
 
-nsTHashMap<SourceId, IndexIntoSourceTable>
-ProfileBuffer::StreamSourceTableToJSON(
+JSSourceIndexer::JSSourceIndexer(
+    const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries)
+    : mJSSourceEntries(aJSSourceEntries) {
+  for (size_t i = 0; i < aJSSourceEntries.Length(); ++i) {
+    const SourceId sourceId = aJSSourceEntries[i].sourceData.sourceId();
+    if (sourceId != 0) {
+      MOZ_ASSERT(!mEntryForSourceId.Contains(sourceId),
+                 "Duplicate sourceId detected! This indicates sourceId "
+                 "collision between different sources.");
+      mEntryForSourceId.InsertOrUpdate(sourceId, i);
+    }
+  }
+}
+
+mozilla::Maybe<IndexIntoSourceTable> JSSourceIndexer::IndexFor(
+    SourceId aSourceId) {
+  auto entryIndex = mEntryForSourceId.MaybeGet(aSourceId);
+  if (!entryIndex) {
+    return mozilla::Nothing();
+  }
+  // Sources with the same id (a hash of the path and the contents) share an
+  // entry in the table. A hash collision, while extremely unlikely, would make
+  // two distinct sources share an entry.
+  return mozilla::Some(
+      mIndexForId.LookupOrInsertWith(mJSSourceEntries[*entryIndex].id, [&] {
+        mUsedEntries.AppendElement(*entryIndex);
+        return IndexIntoSourceTable(mUsedEntries.Length() - 1);
+      }));
+}
+
+void ProfileBuffer::StreamSourceTableToJSON(
     SpliceableJSONWriter& aWriter,
-    const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries) const {
+    const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries,
+    const JSSourceIndexer& aJSSourceIndexer) const {
   enum Schema : uint32_t {
     ID = 0,
     FILENAME = 1,
@@ -2646,7 +2672,6 @@ ProfileBuffer::StreamSourceTableToJSON(
     START_COLUMN = 3,
     SOURCE_MAP_URL = 4
   };
-  nsTHashMap<SourceId, IndexIntoSourceTable> sourceIdToIndexMap;
 
   aWriter.StartObjectProperty("sources");
   {
@@ -2660,61 +2685,30 @@ ProfileBuffer::StreamSourceTableToJSON(
       schema.WriteField("sourceMapURL");
     }
 
-    // Write data array and build sourceId-to-index mapping.
-    // Deduplicate sources with the same hash (same filepath and source text).
-    // Note: hash collisions are theoretically possible but extremely unlikely;
-    // in the rare case of a collision, two distinct sources would share an
-    // entry in the table.
     aWriter.StartArrayProperty("data");
-    nsTHashMap<nsCStringHashKey, IndexIntoSourceTable> hashToIndexMap;
-    uint32_t index = 0;
-    for (const auto& entry : aJSSourceEntries) {
-      IndexIntoSourceTable targetIndex;
-      auto hashEntry = hashToIndexMap.Lookup(entry.id);
-
-      if (hashEntry) {
-        // We've seen this hash before, reuse the existing index.
-        targetIndex = hashEntry.Data();
-      } else {
-        // New hash, write it to the sources table.
-        aWriter.StartArrayElement();
-        {
-          // TODO: Use AutoArraySchemaWithStringsWriter to write string indexes
-          // into string table once we have "process global" string table.
-          // Currently string tables are per-thread.
-          aWriter.StringElement(MakeStringSpan(entry.id.get()));
-          aWriter.StringElement(MakeStringSpan(entry.sourceData.filePath()));
-          aWriter.IntElement(entry.sourceData.startLine());
-          aWriter.IntElement(entry.sourceData.startColumn());
-          if (entry.sourceData.sourceMapURLLength() > 0) {
-            aWriter.StringElement(
-                NS_ConvertUTF16toUTF8(entry.sourceData.sourceMapURL()));
-          }
-          // If you add a new element after sourceMapURL, make sure to write a
-          // null element for sourceMapURL when it's empty.
+    for (size_t entryIndex : aJSSourceIndexer.UsedEntries()) {
+      const mozilla::JSSourceEntry& entry = aJSSourceEntries[entryIndex];
+      aWriter.StartArrayElement();
+      {
+        // TODO: Use AutoArraySchemaWithStringsWriter to write string indexes
+        // into string table once we have "process global" string table.
+        // Currently string tables are per-thread.
+        aWriter.StringElement(MakeStringSpan(entry.id.get()));
+        aWriter.StringElement(MakeStringSpan(entry.sourceData.filePath()));
+        aWriter.IntElement(entry.sourceData.startLine());
+        aWriter.IntElement(entry.sourceData.startColumn());
+        if (entry.sourceData.sourceMapURLLength() > 0) {
+          aWriter.StringElement(
+              NS_ConvertUTF16toUTF8(entry.sourceData.sourceMapURL()));
         }
-        aWriter.EndArray();
-
-        targetIndex = index;
-        hashToIndexMap.InsertOrUpdate(entry.id, index);
-        index++;
+        // If you add a new element after sourceMapURL, make sure to write a
+        // null element for sourceMapURL when it's empty.
       }
-
-      // Map this sourceId to the target index (may be shared with other
-      // sourceIds that have the same content).
-      if (entry.sourceData.sourceId() != 0) {
-        MOZ_ASSERT(!sourceIdToIndexMap.Contains(entry.sourceData.sourceId()),
-                   "Duplicate sourceId detected! This indicates sourceId "
-                   "collision between different sources.");
-        sourceIdToIndexMap.InsertOrUpdate(entry.sourceData.sourceId(),
-                                          targetIndex);
-      }
+      aWriter.EndArray();
     }
     aWriter.EndArray();
   }
   aWriter.EndObject();
-
-  return sourceIdToIndexMap;
 }
 
 // END ProfileBuffer
