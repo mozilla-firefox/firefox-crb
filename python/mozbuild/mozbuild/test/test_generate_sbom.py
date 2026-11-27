@@ -246,6 +246,33 @@ class TestBuildDocument(unittest.TestCase):
         self.assertIn("dom/webgpu/tests/cts", tooling)
         self.assertNotIn("third_party/js/PKI.js", tooling)
 
+    def test_crates_for_other_platforms_leave_both_documents(self):
+        def kinds(*args, target=None, **kwargs):
+            return {("hyper", "1.0.0"): ["tooling"]} if target else KINDS
+
+        product, tooling = self.target_documents(kinds)
+        self.assertNotIn("cargo:serde@1.0.200", product)
+        self.assertIn("third_party/js/PKI.js", product)
+        self.assertNotIn("cargo:serde@1.0.200", tooling)
+
+    def test_crates_this_platform_only_builds_for_tooling(self):
+        def kinds(*args, target=None, **kwargs):
+            return {("serde", "1.0.200"): ["tooling"]} if target else KINDS
+
+        product, tooling = self.target_documents(kinds)
+        self.assertNotIn("cargo:serde@1.0.200", product)
+        self.assertIn("cargo:serde@1.0.200", tooling)
+
+    def target_documents(self, kinds):
+        substs = {"RUST_TARGET": "aarch64-linux-android"}
+        with mock.patch(
+            "mozbuild.vendor.sbom_cargo.collect_dependency_kinds", side_effect=kinds
+        ):
+            return (
+                self.refs(self.build(substs=substs)),
+                self.refs(self.tooling_document(substs=substs)),
+            )
+
     def test_rejected_arguments(self):
         output = os.path.join(self.topsrcdir, "sbom.json")
         for arguments in (
