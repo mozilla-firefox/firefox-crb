@@ -120,14 +120,15 @@ Otherwise, it will depend on `repackage-signing`.
 The legacy implementation (called "Funsize") used `mbsdiff` for
 diffing. The `zucchini_partial_rollout` transform controls which
 implementation is active for each release channel, based on the
-`ZUCCHINI_PARTIALS_PROJECTS` set:
+version (see `uses_legacy_partials`):
 
-- **mozilla-central**, **mozilla-beta** and **mozilla-release**: use
-  `partials-zucchini`
-- **elsewhere**, including ESR channels: uses legacy `partials`
+- **ESR code** (the version ends with `esr`), including ESR channels,
+  future ESR branches and try pushes of ESR code: uses legacy `partials`
+- **elsewhere**: uses `partials-zucchini`
 
-Each branch reads its own copy of the transform, so a change to this set
-on mozilla-central only reaches beta and release by riding the trains.
+Each branch reads its own copy of the transform, so a change to this
+check on mozilla-central only reaches other branches by riding the
+trains or through uplifts.
 
 The transform exposes two sequences:
 
@@ -139,5 +140,5 @@ The transform exposes two sequences:
   `partials` (legacy) and `partials-zucchini`, so on legacy projects it
   drops the zucchini-derived signing tasks while keeping the legacy ones.
 
-To move another channel to zucchini partials, add it to the
-`ZUCCHINI_PARTIALS_PROJECTS` set in the rollout transform.
+To move ESR channels to zucchini partials, change `uses_legacy_partials`
+in the rollout transform.
