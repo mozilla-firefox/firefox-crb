@@ -2,6 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
+import io
+import os
 import unittest
 from shutil import rmtree
 from tempfile import mkdtemp
@@ -67,6 +70,18 @@ class TestPackageAction(unittest.TestCase):
                 "-",
                 "firefox",
             ],
+        )
+
+    def test_tar_verbose(self):
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"BUILD_VERBOSE_LOG": "1"}):
+            with contextlib.redirect_stdout(out):
+                self._tar_argv("bsdtar 3.5.3 - libarchive 3.5.3\n")
+
+        self.assertEqual(
+            out.getvalue(),
+            "tar -c --owner=0 --group=0 --numeric-owner --exclude=.mkdir.done "
+            "-f - firefox\n",
         )
 
 
