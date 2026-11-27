@@ -280,10 +280,9 @@ function TargetMixin(parentClass) {
      */
     async getSourceContentForResource(resourceType, resourceId) {
       const { resourceCommand } = this.commands;
-      // @backward-compat { version 160 } `getSourceContentForResource` on the window global target actor is not supported on older servers.
-      // The `if` check for the trait as well as the fallback code (resourceType `switch check below) can be removed when 160 is no longer on
-      // the release channel.
-      if (this.getTrait("supportsGetSourceContentForResource")) {
+      // Only window global target actors support the `getSourceContentForResource` request,
+      // so we need to call the parent implementation for other target types.
+      if (this.isBrowsingContext) {
         const response = await super.getSourceContentForResource(
           resourceType,
           resourceId
