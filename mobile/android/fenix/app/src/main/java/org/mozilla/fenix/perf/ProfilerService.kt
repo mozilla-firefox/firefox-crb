@@ -58,6 +58,10 @@ class ProfilerService : Service() {
     }
     private var stateReceiver: BroadcastReceiver? = null
 
+    // Whether enableProfilerProvider() enabled the provider, so that disableProfilerProvider()
+    // has to reset it.
+    private var providerEnabledByService = false
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -170,17 +174,31 @@ class ProfilerService : Service() {
     }
 
     /**
-     * The Profiler Content Provider is set to false in the manifest to make sure it does not initialize during startup.
-     * So, it has to instantiated whenever the Service starts.
+     * Make sure that the ProfilerProvider is enabled while profiling. Nightly enables it in its manifest. Other builds
+     * disable it there so that it isn't created during startup, and enable it here. Every change of its state makes the
+     * system broadcast PACKAGE_CHANGED, and the receivers in other processes then compete with the profiled app for the
+     * CPUs, so the state is only changed where needed.
      */
     private fun enableProfilerProvider() {
         try {
             val componentName = ComponentName(this, ProfilerProvider::class.java)
-            packageManager.setComponentEnabledSetting(
-                componentName,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP,
-            )
+            val setting = packageManager.getComponentEnabledSetting(componentName)
+            if (setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+                return
+            }
+            if (setting != PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
+                // Clear the disabled state that earlier versions left behind after profiling.
+                setProfilerProviderState(componentName, PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+            }
+            // In the default state, this is the value from the manifest.
+            val enabledByManifest =
+                packageManager.getProviderInfo(componentName, PackageManager.MATCH_DISABLED_COMPONENTS).enabled
+            if (!enabledByManifest) {
+                setProfilerProviderState(componentName, PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
+                providerEnabledByService = true
+            }
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.log(Log.Priority.WARN, PROFILER_SERVICE_LOG, e, "ProfilerProvider not found")
         } catch (e: IllegalArgumentException) {
             Log.log(Log.Priority.WARN, PROFILER_SERVICE_LOG, e, "Failed to enable ProfilerProvider")
         } catch (e: SecurityException) {
@@ -188,20 +206,24 @@ class ProfilerService : Service() {
         }
     }
 
-    /** Since it the provider isn't managed by the manifest, it also has to be manually disabled. */
+    /** Undo what [enableProfilerProvider] changed, so that the manifest decides again. */
     private fun disableProfilerProvider() {
+        if (!providerEnabledByService) {
+            return
+        }
         try {
             val componentName = ComponentName(this, ProfilerProvider::class.java)
-            packageManager.setComponentEnabledSetting(
-                componentName,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP,
-            )
-            Log.log(Log.Priority.DEBUG, PROFILER_SERVICE_LOG, message = "ProfilerProvider disabled")
+            setProfilerProviderState(componentName, PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+            providerEnabledByService = false
+            Log.log(Log.Priority.DEBUG, PROFILER_SERVICE_LOG, message = "ProfilerProvider reset to its manifest state")
         } catch (e: IllegalArgumentException) {
             Log.log(Log.Priority.WARN, PROFILER_SERVICE_LOG, e, "Failed to disable ProfilerProvider")
         } catch (e: SecurityException) {
             Log.log(Log.Priority.WARN, PROFILER_SERVICE_LOG, e, "Permission denied to disable ProfilerProvider")
         }
+    }
+
+    private fun setProfilerProviderState(componentName: ComponentName, state: Int) {
+        packageManager.setComponentEnabledSetting(componentName, state, PackageManager.DONT_KILL_APP)
     }
 }

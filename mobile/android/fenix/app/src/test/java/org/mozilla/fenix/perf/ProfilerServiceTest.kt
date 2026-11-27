@@ -6,8 +6,11 @@ package org.mozilla.fenix.perf
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ProviderInfo
 import android.os.Build
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
@@ -232,5 +235,73 @@ class ProfilerServiceTest {
         )
         assertFalse("Service should not be foreground-stopped after null action", shadowService.isForegroundStopped)
         assertFalse("Service should not be self-stopped after null action", shadowService.isStoppedBySelf)
+    }
+
+    private val providerComponent: ComponentName
+        get() = ComponentName(context, ProfilerProvider::class.java)
+
+    private val providerSetting: Int
+        get() = context.packageManager.getComponentEnabledSetting(providerComponent)
+
+    private fun enableProviderInManifest() {
+        val providerInfo =
+            ProviderInfo(
+                    context.packageManager.getProviderInfo(providerComponent, PackageManager.MATCH_DISABLED_COMPONENTS)
+                )
+                .apply { enabled = true }
+        Shadows.shadowOf(context.packageManager).addOrUpdateProvider(providerInfo)
+    }
+
+    private fun startProfilerService() {
+        serviceController = Robolectric.buildService(ProfilerService::class.java)
+        serviceController.create()
+        service = serviceController.get()
+        service.onStartCommand(Intent(context, ProfilerService::class.java), 0, 1)
+    }
+
+    private fun sendProfilerStoppedBroadcast() {
+        val broadcast =
+            Intent(INTENT_PROFILER_STATE_CHANGED).apply {
+                putExtra(ProfilerService.IS_PROFILER_ACTIVE, false)
+                setPackage(context.packageName)
+            }
+        context.sendBroadcast(broadcast)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test
+    fun `GIVEN the manifest disables the provider WHEN profiling starts and stops THEN the provider is enabled and then reset`() {
+        startProfilerService()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_ENABLED, providerSetting)
+
+        sendProfilerStoppedBroadcast()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, providerSetting)
+    }
+
+    @Test
+    fun `GIVEN the manifest enables the provider WHEN profiling starts and stops THEN its state is not changed`() {
+        enableProviderInManifest()
+
+        startProfilerService()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, providerSetting)
+
+        sendProfilerStoppedBroadcast()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, providerSetting)
+    }
+
+    @Test
+    fun `GIVEN an earlier session left the provider disabled WHEN profiling starts THEN the manifest state is restored`() {
+        enableProviderInManifest()
+        context.packageManager.setComponentEnabledSetting(
+            providerComponent,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP,
+        )
+
+        startProfilerService()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, providerSetting)
+
+        sendProfilerStoppedBroadcast()
+        assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, providerSetting)
     }
 }
