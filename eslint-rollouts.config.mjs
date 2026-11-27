@@ -376,6 +376,7 @@ export default [
     ignores: [
       "browser/components/sessionstore/SessionStore.sys.mjs",
       "browser/components/tabbrowser/Tabbrowser.sys.mjs",
+      "browser/modules/BrowserWindowTracker.sys.mjs",
       "browser/modules/URILoadingHelper.sys.mjs",
       "devtools/client/settings/**",
       "devtools/shared/css/parsing-utils.js",
@@ -549,6 +550,7 @@ export default [
     ignores: [
       "browser/components/sessionstore/SessionStore.sys.mjs",
       "browser/components/tabbrowser/Tabbrowser.sys.mjs",
+      "browser/modules/BrowserWindowTracker.sys.mjs",
       "browser/modules/URILoadingHelper.sys.mjs",
       "devtools/client/settings/**",
       "devtools/shared/css/parsing-utils.js",
