@@ -42,6 +42,7 @@ add_task(test_concurrent_http_connect_tunnels);
 // add_task(test_http_connect_stream_closure);
 add_task(test_http_connect_websocket);
 add_task(test_connect_udp);
+add_task(test_connect_udp_refused);
 add_task(test_http_connect_fallback);
 add_task(test_http_connect_only);
 add_task(test_https_connect_only);

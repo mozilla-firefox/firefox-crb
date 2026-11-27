@@ -1442,8 +1442,6 @@ impl HttpServer for Http3ConnectProxyServer {
                     session,
                     headers,
                 }) => {
-                    session.response(&SessionAcceptAction::Accept, now).unwrap();
-
                     let host_hdr = headers.iter().find(|&h| h.name() == ":path").unwrap();
                     let path_str = host_hdr.value_utf8().unwrap();
                     let path_parts: Vec<&str> = path_str.split('/').collect();
@@ -1454,6 +1452,22 @@ impl HttpServer for Http3ConnectProxyServer {
                     }
 
                     let target_host = path_parts[4];
+
+                    // A target this proxy refuses, so tests can see a rejected
+                    // CONNECT-UDP.
+                    if target_host == "refused.example.com" {
+                        session
+                            .response(
+                                &SessionAcceptAction::Reject(
+                                    [Header::new(":status", "403")].to_vec(),
+                                ),
+                                now,
+                            )
+                            .unwrap();
+                        continue;
+                    }
+
+                    session.response(&SessionAcceptAction::Accept, now).unwrap();
                     let target_port = match path_parts[5].trim_end_matches('/').parse::<u16>() {
                         Ok(port) => port,
                         Err(_) => {
