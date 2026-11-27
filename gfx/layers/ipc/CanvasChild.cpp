@@ -110,9 +110,7 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
         mRecordedSurface(aRecordedSuface),
         mCanvasChild(aCanvasChild),
         mRecorder(aRecorder) {
-    // It's important that AddStoredObject is called first because that will
-    // run any pending processing required by recorded objects that have been
-    // deleted off the main thread.
+    // Register the wrapper before recording its alias.
     mRecorder->AddStoredObject(this);
     mRecorder->RecordEvent(RecordedAddSurfaceAlias(this, aRecordedSuface));
   }
@@ -157,7 +155,7 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
 
   already_AddRefed<gfx::DataSourceSurface> GetDataSurface() final {
     MutexAutoLock lock(mDataSurfaceLock);
-    EnsureDataSurfaceOnMainThread(lock);
+    PrepareDataSurfaceForAccess(lock);
     return do_AddRef(mDataSourceSurface);
   }
 
@@ -167,7 +165,7 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
 
     if (aInvalidate) {
       MutexAutoLock lock(mDataSurfaceLock);
-      InvalidateDataSurface(lock);
+      CopyDataSurfaceIfNeeded(lock);
     }
   }
 
@@ -213,31 +211,28 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
   }
 
  private:
-  void InvalidateDataSurface(const MutexAutoLock& aProofOfLock)
+  void CopyDataSurfaceIfNeeded(const MutexAutoLock& aProofOfLock)
       MOZ_REQUIRES(mDataSurfaceLock) {
-    // The data is about to be invalidated and must be copied before it is
-    // modified.
     if (mDataSourceSurface && mMayInvalidate) {
+      // Replace the cached view before its snapshot buffer can be reused.
+      // A failed copy discards that view as well.
       mDataSourceSurface =
           gfx::Factory::CopyDataSourceSurface(mDataSourceSurface);
       mMayInvalidate = false;
     }
   }
 
-  void EnsureDataSurfaceOnMainThread(const MutexAutoLock& aProofOfLock)
+  // Only the main thread can fetch data. Other threads can use the cached
+  // surface, copying it first if its shared memory may be overwritten.
+  void PrepareDataSurfaceForAccess(const MutexAutoLock& aProofOfLock)
       MOZ_REQUIRES(mDataSurfaceLock) {
-    if (NS_IsMainThread()) {
-      // The data can only be retrieved on the main thread.
-      if (!mDataSourceSurface) {
-        mDataSourceSurface = mCanvasChild->GetDataSurface(
-            mTextureOwnerId, mRecordedSurface, mDetached, mMayInvalidate);
-      }
-    } else {
-      // If data is going to be accessed on another thread, then copy the data
-      // if necessary before access. This avoids the main thread accidentally
-      // trying to invalidate the data surface while the other thread is still
-      // accessing it.
-      InvalidateDataSurface(aProofOfLock);
+    if (!NS_IsMainThread()) {
+      CopyDataSurfaceIfNeeded(aProofOfLock);
+      return;
+    }
+    if (!mDataSourceSurface) {
+      mDataSourceSurface = mCanvasChild->GetDataSurface(
+          mTextureOwnerId, mRecordedSurface, mDetached, mMayInvalidate);
     }
   }
 
@@ -269,6 +264,7 @@ class SourceSurfaceCanvasRecording final : public gfx::SourceSurface {
   Mutex mDataSurfaceLock{"SourceSurfaceCanvasRecording::mDataSurfaceLock"};
   RefPtr<gfx::DataSourceSurface> mDataSourceSurface
       MOZ_GUARDED_BY(mDataSurfaceLock);
+  // The cached data uses snapshot shmem whose contents may be overwritten.
   bool mMayInvalidate MOZ_GUARDED_BY(mDataSurfaceLock) = false;
   bool mDetached = false;
   ReferencePtr mExportID;
@@ -290,7 +286,7 @@ class CanvasDataShmemHolder {
 
     RefPtr<dom::StrongWorkerRef> workerRef = dom::StrongWorkerRef::Create(
         aWorkerRef->Private(), "CanvasChild::DataShmemHolder",
-        [this]() { DestroyWorker(); });
+        [this]() { OnWorkerShutdown(); });
     if (NS_WARN_IF(!workerRef)) {
       return false;
     }
@@ -301,45 +297,19 @@ class CanvasDataShmemHolder {
   }
 
   void Destroy() {
-    class DestroyRunnable final : public dom::WorkerThreadRunnable {
-     public:
-      explicit DestroyRunnable(CanvasDataShmemHolder* aShmemHolder)
-          : dom::WorkerThreadRunnable("CanvasDataShmemHolder::Destroy"),
-            mShmemHolder(aShmemHolder) {}
-
-      bool WorkerRun(JSContext* aCx,
-                     dom::WorkerPrivate* aWorkerPrivate) override {
-        mShmemHolder->Destroy();
-        return true;
-      }
-
-      void PostRun(JSContext* aCx, dom::WorkerPrivate* aWorkerPrivate,
-                   bool aRunResult) override {}
-
-      bool PreDispatch(dom::WorkerPrivate* aWorkerPrivate) override {
-        return true;
-      }
-
-      void PostDispatch(dom::WorkerPrivate* aWorkerPrivate,
-                        bool aDispatchResult) override {}
-
-     private:
-      CanvasDataShmemHolder* mShmemHolder;
-    };
-
-    mMutex.Lock();
+    ReleasableMutexAutoLock lock(mMutex);
 
     if (mCanvasChild) {
       if (mWorkerRef) {
         if (!mWorkerRef->Private()->IsOnCurrentThread()) {
           auto task = MakeRefPtr<DestroyRunnable>(this);
           dom::WorkerPrivate* worker = mWorkerRef->Private();
-          mMutex.Unlock();
+          lock.Unlock();
           task->Dispatch(worker);
           return;
         }
       } else if (!NS_IsMainThread()) {
-        mMutex.Unlock();
+        lock.Unlock();
         NS_DispatchToMainThread(NS_NewRunnableFunction(
             "CanvasDataShmemHolder::Destroy", [this]() { Destroy(); }));
         return;
@@ -350,17 +320,45 @@ class CanvasDataShmemHolder {
       mWorkerRef = nullptr;
     }
 
-    mMutex.Unlock();
+    lock.Unlock();
     delete this;
   }
 
-  void DestroyWorker() {
+  void OnWorkerShutdown() {
     MutexAutoLock lock(mMutex);
+    // Skip returning the buffer to CanvasChild after worker shutdown.
+    // Keep the mapping alive until the surface releases this holder.
     mCanvasChild = nullptr;
     mWorkerRef = nullptr;
   }
 
  private:
+  class DestroyRunnable final : public dom::WorkerThreadRunnable {
+   public:
+    explicit DestroyRunnable(CanvasDataShmemHolder* aShmemHolder)
+        : dom::WorkerThreadRunnable("CanvasDataShmemHolder::Destroy"),
+          mShmemHolder(aShmemHolder) {}
+
+    bool WorkerRun(JSContext* aCx,
+                   dom::WorkerPrivate* aWorkerPrivate) override {
+      mShmemHolder->Destroy();
+      return true;
+    }
+
+    void PostRun(JSContext* aCx, dom::WorkerPrivate* aWorkerPrivate,
+                 bool aRunResult) override {}
+
+    bool PreDispatch(dom::WorkerPrivate* aWorkerPrivate) override {
+      return true;
+    }
+
+    void PostDispatch(dom::WorkerPrivate* aWorkerPrivate,
+                      bool aDispatchResult) override {}
+
+   private:
+    CanvasDataShmemHolder* mShmemHolder;
+  };
+
   Mutex mMutex;
   std::shared_ptr<ipc::ReadOnlySharedMemoryMapping> mShmem;
   RefPtr<CanvasChild> mCanvasChild MOZ_GUARDED_BY(mMutex);
@@ -443,7 +441,7 @@ bool CanvasChild::EnsureRecorder(gfx::IntSize aSize, gfx::SurfaceFormat aFormat,
     return false;
   }
 
-  EnsureDataSurfaceShmem(aSize, aFormat);
+  EnsureDataSurfaceShmem(SizeOfDataSurfaceShmem(aSize, aFormat));
 
   return true;
 }
@@ -471,15 +469,13 @@ void CanvasChild::Destroy() {
   mWorkerRef = nullptr;
 }
 
-bool CanvasChild::EnsureBeginTransaction() {
+void CanvasChild::EnsureBeginTransaction() {
   NS_ASSERT_OWNINGTHREAD(CanvasChild);
 
   if (!mIsInTransaction) {
     RecordEvent(RecordedCanvasBeginTransaction());
     mIsInTransaction = true;
   }
-
-  return true;
 }
 
 void CanvasChild::EndTransaction() {
@@ -489,23 +485,8 @@ void CanvasChild::EndTransaction() {
     RecordEvent(RecordedCanvasEndTransaction());
     mIsInTransaction = false;
     mDormant = false;
-  } else if (mRecorder) {
-    // Schedule to drop free buffers if we have no non-empty transactions.
-    if (!mDormant) {
-      mDormant = true;
-      if (!mDormantTimer) {
-        mDormantTimer = NS_NewTimer(GetCurrentSerialEventTarget());
-      }
-      if (mDormantTimer) {
-        mDormantTimer->InitWithNamedFuncCallback(
-            [](nsITimer*, void* aClosure) {
-              static_cast<CanvasChild*>(aClosure)->DropFreeBuffersWhenDormant();
-            },
-            this, StaticPrefs::gfx_canvas_remote_drop_buffer_milliseconds(),
-            nsITimer::TYPE_ONE_SHOT,
-            "CanvasChild::DropFreeBuffersWhenDormant"_ns);
-      }
-    }
+  } else if (mRecorder && !mDormant) {
+    ScheduleDropFreeBuffersWhenDormant();
   }
 
   // If we are continuously drawing/recording, then we need to periodically
@@ -519,9 +500,27 @@ void CanvasChild::EndTransaction() {
   ++mTransactionsSinceGetDataSurface;
 }
 
+void CanvasChild::ScheduleDropFreeBuffersWhenDormant() {
+  // Mark the actor dormant before arming the timer so subsequent empty
+  // transactions do not rearm it.
+  mDormant = true;
+  if (!mDormantTimer) {
+    mDormantTimer = NS_NewTimer(GetCurrentSerialEventTarget());
+  }
+  if (mDormantTimer) {
+    mDormantTimer->InitWithNamedFuncCallback(
+        [](nsITimer*, void* aClosure) {
+          static_cast<CanvasChild*>(aClosure)->DropFreeBuffersWhenDormant();
+        },
+        this, StaticPrefs::gfx_canvas_remote_drop_buffer_milliseconds(),
+        nsITimer::TYPE_ONE_SHOT, "CanvasChild::DropFreeBuffersWhenDormant"_ns);
+  }
+}
+
 void CanvasChild::DropFreeBuffersWhenDormant() {
   NS_ASSERT_OWNINGTHREAD(CanvasChild);
-  // Drop any free buffers if we have not had any non-empty transactions.
+  // A non-empty transaction may have cleared mDormant since the timer was
+  // armed.
   if (mDormant && mRecorder) {
     mRecorder->DropFreeBuffers();
     // Notify CanvasTranslator it is dormant.
@@ -546,7 +545,8 @@ bool CanvasChild::ShouldBeCleanedUp() const {
     return true;
   }
 
-  // We can only be cleaned up if nothing else references our recorder.
+  // With a recorder, keep the actor alive while textures are registered or
+  // other objects still reference the recorder.
   return !mRecorder || (mRecorder->hasOneRef() && mTextureInfo.empty());
 }
 
@@ -560,6 +560,8 @@ already_AddRefed<gfx::DrawTargetRecording> CanvasChild::CreateDrawTarget(
     return nullptr;
   }
 
+  // The recorder uses this small local target for backend queries. Replay
+  // creates the remote draw target at the recorded canvas size.
   RefPtr<gfx::DrawTarget> dummyDt = gfx::Factory::CreateDrawTarget(
       gfx::BackendType::SKIA, gfx::IntSize(1, 1), aFormat);
   RefPtr<gfx::DrawTargetRecording> dt = MakeAndAddRef<gfx::DrawTargetRecording>(
@@ -583,9 +585,9 @@ size_t CanvasChild::SizeOfDataSurfaceShmem(gfx::IntSize aSize,
              : 0;
 }
 
-bool CanvasChild::ShouldGrowDataSurfaceShmem(size_t aSizeRequired) {
-  return aSizeRequired > 0 && (!mDataSurfaceShmemAvailable ||
-                               mDataSurfaceShmem->Size() < aSizeRequired);
+bool CanvasChild::NeedsNewDataSurfaceShmem(size_t aSizeRequired) {
+  return !mDataSurfaceShmemAvailable ||
+         mDataSurfaceShmem->Size() < aSizeRequired;
 }
 
 bool CanvasChild::EnsureDataSurfaceShmem(size_t aSizeRequired) {
@@ -595,60 +597,59 @@ bool CanvasChild::EnsureDataSurfaceShmem(size_t aSizeRequired) {
     return false;
   }
 
-  if (ShouldGrowDataSurfaceShmem(aSizeRequired)) {
-    if (!mRecorder || mRecorder->HasFailed()) {
-      return false;
-    }
-
-    auto shmemHandle = ipc::shared_memory::Create(aSizeRequired);
-    if (!shmemHandle) {
-      return false;
-    }
-
-    auto roMapping = shmemHandle.AsReadOnly().Map();
-    if (!roMapping) {
-      return false;
-    }
-
-    // The translator only accepts the new buffer while paused, so we must not
-    // send it unless the pause was actually recorded.
-    RecordEvent(RecordedPauseTranslation());
-    if (mRecorder->HasFailed()) {
-      return false;
-    }
-
-    auto id = ++mNextDataSurfaceShmemId;
-    if (!id) {
-      // If ids overflow, ensure that zero is reserved.
-      id = ++mNextDataSurfaceShmemId;
-    }
-    if (!SendSetDataSurfaceBuffer(id, std::move(shmemHandle))) {
-      return false;
-    }
-
-    mDataSurfaceShmem = std::make_shared<ipc::ReadOnlySharedMemoryMapping>(
-        std::move(roMapping));
-    mDataSurfaceShmemAvailable = true;
+  if (NeedsNewDataSurfaceShmem(aSizeRequired) &&
+      !AllocateAndSendDataSurfaceShmem(aSizeRequired)) {
+    return false;
   }
 
   MOZ_RELEASE_ASSERT(mDataSurfaceShmemAvailable);
   return true;
 }
 
-bool CanvasChild::EnsureDataSurfaceShmem(gfx::IntSize aSize,
-                                         gfx::SurfaceFormat aFormat) {
-  size_t sizeRequired = SizeOfDataSurfaceShmem(aSize, aFormat);
-  if (!sizeRequired) {
+bool CanvasChild::AllocateAndSendDataSurfaceShmem(size_t aSizeRequired) {
+  if (!mRecorder || mRecorder->HasFailed()) {
     return false;
   }
 
-  return EnsureDataSurfaceShmem(sizeRequired);
+  auto shmemHandle = ipc::shared_memory::Create(aSizeRequired);
+  if (!shmemHandle) {
+    return false;
+  }
+
+  // CanvasChild reads through this mapping. The translator receives the
+  // writable handle so it can write the readback pixels.
+  auto roMapping = shmemHandle.AsReadOnly().Map();
+  if (!roMapping) {
+    return false;
+  }
+
+  // Record the pause before sending the new buffer. The translator accepts
+  // it while paused and resumes replay after mapping the handle.
+  RecordEvent(RecordedPauseTranslation());
+  if (mRecorder->HasFailed()) {
+    return false;
+  }
+
+  auto id = ++mNextDataSurfaceShmemId;
+  if (!id) {
+    // If ids overflow, ensure that zero is reserved.
+    id = ++mNextDataSurfaceShmemId;
+  }
+  if (!SendSetDataSurfaceBuffer(id, std::move(shmemHandle))) {
+    return false;
+  }
+
+  // Replace the current mapping only after the IPC send succeeds. The
+  // translator maps its handle when it processes the message.
+  mDataSurfaceShmem =
+      std::make_shared<ipc::ReadOnlySharedMemoryMapping>(std::move(roMapping));
+  mDataSurfaceShmemAvailable = true;
+  return true;
 }
 
 void CanvasChild::RecordEvent(const gfx::RecordedEvent& aEvent) {
   NS_ASSERT_OWNINGTHREAD(CanvasChild);
 
-  // We drop mRecorder in ActorDestroy to break the reference cycle.
   if (!mRecorder) {
     return;
   }
@@ -675,9 +676,7 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
     mTransactionsSinceGetDataSurface = 0;
   }
 
-  if (!EnsureBeginTransaction()) {
-    return nullptr;
-  }
+  EnsureBeginTransaction();
 
   gfx::IntSize ssSize = aSurface->GetSize();
   gfx::SurfaceFormat ssFormat = aSurface->GetFormat();
@@ -691,35 +690,17 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
     return nullptr;
   }
 
-  // Shmem is only valid if the surface is the latest snapshot (not detached).
+  // The texture's snapshot shmem can only serve the latest snapshot.
+  // Use the readback path below if the snapshot is detached or the buffer
+  // is missing or too small.
   if (!aDetached) {
-    // If there is a shmem associated with this snapshot id, then we want to try
-    // to use that directly instead of allocating a new shmem for retrieval.
-    // Also check that it meets the size required.
     auto it = mTextureInfo.find(aTextureOwnerId);
     if (it != mTextureInfo.end() && it->second.mSnapshotShmem &&
         !NS_WARN_IF(sizeRequired > it->second.mSnapshotShmem->Size())) {
-      const auto* shmemPtr = it->second.mSnapshotShmem->DataAs<uint8_t>();
-      MOZ_RELEASE_ASSERT(shmemPtr);
-      mRecorder->RecordEvent(RecordedPrepareShmem(aTextureOwnerId));
-      auto checkpoint = CreateCheckpoint();
-      if (NS_WARN_IF(!mRecorder->WaitForCheckpoint(checkpoint))) {
-        return nullptr;
-      }
-      auto* closure =
-          new CanvasDataShmemHolder(it->second.mSnapshotShmem, this);
-      if (NS_WARN_IF(!closure->Init(mWorkerRef))) {
-        delete closure;
-        return nullptr;
-      }
-      // We can cast away the const of `shmemPtr` to match the call because the
-      // DataSourceSurface will not be written to.
-      RefPtr<gfx::DataSourceSurface> dataSurface =
-          gfx::Factory::CreateWrappingDataSourceSurface(
-              const_cast<uint8_t*>(shmemPtr), stride.value(), ssSize, ssFormat,
-              ReleaseDataShmemHolder, closure);
-      aMayInvalidate = true;
-      return dataSurface.forget();
+      // Propagate failures from the selected snapshot readback path.
+      return ReadFromSnapshotShmem(aTextureOwnerId, it->second.mSnapshotShmem,
+                                   stride.value(), ssSize, ssFormat,
+                                   aMayInvalidate);
     }
   }
 
@@ -741,6 +722,8 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
     return nullptr;
   }
 
+  // Keep this buffer unavailable while the surface holds it. The release
+  // callback can make it reusable if it is still the current buffer.
   mDataSurfaceShmemAvailable = false;
 
   const auto* data = mDataSurfaceShmem->DataAs<uint8_t>();
@@ -752,6 +735,37 @@ already_AddRefed<gfx::DataSourceSurface> CanvasChild::GetDataSurface(
           const_cast<uint8_t*>(data), stride.value(), ssSize, ssFormat,
           ReleaseDataShmemHolder, closure);
   aMayInvalidate = false;
+  return dataSurface.forget();
+}
+
+already_AddRefed<gfx::DataSourceSurface> CanvasChild::ReadFromSnapshotShmem(
+    RemoteTextureOwnerId aTextureOwnerId,
+    const std::shared_ptr<ipc::ReadOnlySharedMemoryMapping>& aSnapshotShmem,
+    int32_t aStride, const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
+    bool& aMayInvalidate) {
+  const auto* shmemPtr = aSnapshotShmem->DataAs<uint8_t>();
+  MOZ_RELEASE_ASSERT(shmemPtr);
+  // Wait for the translator to bring the snapshot buffer up to date before
+  // exposing its pixels.
+  mRecorder->RecordEvent(RecordedPrepareShmem(aTextureOwnerId));
+  auto checkpoint = CreateCheckpoint();
+  if (NS_WARN_IF(!mRecorder->WaitForCheckpoint(checkpoint))) {
+    return nullptr;
+  }
+  auto* closure = new CanvasDataShmemHolder(aSnapshotShmem, this);
+  if (NS_WARN_IF(!closure->Init(mWorkerRef))) {
+    delete closure;
+    return nullptr;
+  }
+  // We can cast away the const of `shmemPtr` to match the call because the
+  // DataSourceSurface will not be written to.
+  RefPtr<gfx::DataSourceSurface> dataSurface =
+      gfx::Factory::CreateWrappingDataSourceSurface(
+          const_cast<uint8_t*>(shmemPtr), aStride, aSize, aFormat,
+          ReleaseDataShmemHolder, closure);
+  // The holder keeps the mapping alive. The translator can still overwrite
+  // its contents when it uses the same buffer for a later snapshot.
+  aMayInvalidate = true;
   return dataSurface.forget();
 }
 

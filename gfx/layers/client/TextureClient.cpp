@@ -305,8 +305,7 @@ TextureData* TextureData::Create(TextureForwarder* aAllocator,
           TexTypeForWebgl(aKnowsCompositor, /* aIsWebglOop */ true);
       if (canvasChild->EnsureRecorder(aSize, aFormat, textureType,
                                       webglTextureType)) {
-        return new RecordedTextureData(canvasChild.forget(), aSize, aFormat,
-                                       textureType, webglTextureType);
+        return new RecordedTextureData(canvasChild.forget(), aSize, aFormat);
       }
     }
     // If we must be remote, but there is no canvas child, then falling back

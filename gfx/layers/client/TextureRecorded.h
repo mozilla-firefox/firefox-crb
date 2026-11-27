@@ -15,9 +15,7 @@ namespace layers {
 class RecordedTextureData final : public TextureData {
  public:
   RecordedTextureData(already_AddRefed<CanvasChild> aCanvasChild,
-                      gfx::IntSize aSize, gfx::SurfaceFormat aFormat,
-                      TextureType aTextureType,
-                      TextureType aWebglTextureType = TextureType::Unknown);
+                      gfx::IntSize aSize, gfx::SurfaceFormat aFormat);
 
   void FillInfo(TextureData::Info& aInfo) const final;
 
