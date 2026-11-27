@@ -1572,6 +1572,14 @@ ArenaPurgeResult arena_t::PurgeLoop(PurgeCondition aCond, const char* aCaller,
         break;
       }
 
+      // The arena reused dirty pages within the reuse grace time, so it will
+      // likely reuse more soon. A target purge only releases pages that were
+      // unused since the last purge, so this does not stop it.
+      if (aCond != PurgeToTarget && aReuseGraceMS &&
+          GetTimestampNS() - mLastPageReuseNS < reuseGraceNS) {
+        break;
+      }
+
       spare_chunk = PurgeGetSpareChunk(purge_stats);
       if (!spare_chunk) {
         dirty_chunk = PurgeGetDirtyChunk(purge_stats);
@@ -1595,14 +1603,6 @@ ArenaPurgeResult arena_t::PurgeLoop(PurgeCondition aCond, const char* aCaller,
                            aKeepGoing, aClosure);
     }
     if (pr != NotDone) {
-      break;
-    }
-
-    // The arena reused dirty pages within the reuse grace time, so it will
-    // likely reuse more soon. A target purge only releases pages that were
-    // unused since the last purge, so this does not stop it.
-    if (aCond != PurgeToTarget && aReuseGraceMS &&
-        GetTimestampNS() - mLastPageReuseNS < reuseGraceNS) {
       break;
     }
 
@@ -2252,7 +2252,6 @@ void* arena_t::MallocSmall(size_t aSize, bool aZero) {
   }
   MOZ_DIAGNOSTIC_ASSERT(aSize == bin->mSizeClass);
 
-  size_t num_dirty_before, num_dirty_after;
   {
     MaybeMutexAutoLock lock(mLock);
 
@@ -2271,9 +2270,11 @@ void* arena_t::MallocSmall(size_t aSize, bool aZero) {
     MOZ_ASSERT(!mRandomizeSmallAllocations || mPRNG ||
                (mIsPRNGInitializing && !isInitializingThread));
 
-    num_dirty_before = mNumDirty;
+    size_t num_dirty_before = mNumDirty;
     run = GetNonFullBinRun(bin);
-    num_dirty_after = mNumDirty;
+    if (mNumDirty < num_dirty_before) {
+      NotifyPageReuse();
+    }
     mMinimumNumDirty = std::min(mMinimumNumDirty, mNumDirty);
     if (MOZ_UNLIKELY(!run)) {
       return nullptr;
@@ -2290,9 +2291,6 @@ void* arena_t::MallocSmall(size_t aSize, bool aZero) {
     mStats.allocated_small += aSize;
     mStats.operations++;
   }
-  if (num_dirty_after < num_dirty_before) {
-    NotifyPageReuse();
-  }
   if (!aZero) {
     ApplyZeroOrJunk(ret, aSize);
   } else {
@@ -2308,21 +2306,19 @@ void* arena_t::MallocLarge(size_t aSize, bool aZero) {
   // Large allocation.
   aSize = PAGE_CEILING(aSize);
 
-  size_t num_dirty_before, num_dirty_after;
   {
     MaybeMutexAutoLock lock(mLock);
-    num_dirty_before = mNumDirty;
+    size_t num_dirty_before = mNumDirty;
     ret = AllocRun(aSize, true, aZero);
-    num_dirty_after = mNumDirty;
     mMinimumNumDirty = std::min(mMinimumNumDirty, mNumDirty);
+    if (mNumDirty < num_dirty_before) {
+      NotifyPageReuse();
+    }
     if (!ret) {
       return nullptr;
     }
     mStats.allocated_large += aSize;
     mStats.operations++;
-  }
-  if (num_dirty_after < num_dirty_before) {
-    NotifyPageReuse();
   }
 
   if (!aZero) {
@@ -2354,10 +2350,9 @@ void* arena_t::PallocLarge(size_t aAlignment, size_t aSize, size_t aAllocSize) {
   MOZ_ASSERT((aSize & gPageSizeMask) == 0);
   MOZ_ASSERT((aAlignment & gPageSizeMask) == 0);
 
-  size_t num_dirty_before, num_dirty_after;
   {
     MaybeMutexAutoLock lock(mLock);
-    num_dirty_before = mNumDirty;
+    size_t num_dirty_before = mNumDirty;
     ret = AllocRun(aAllocSize, true, false);
     if (!ret) {
       return nullptr;
@@ -2387,14 +2382,13 @@ void* arena_t::PallocLarge(size_t aAlignment, size_t aSize, size_t aAllocSize) {
         TrimRunTail(chunk, (arena_run_t*)ret, aSize + trailsize, aSize, false);
       }
     }
-    num_dirty_after = mNumDirty;
     mMinimumNumDirty = std::min(mMinimumNumDirty, mNumDirty);
+    if (mNumDirty < num_dirty_before) {
+      NotifyPageReuse();
+    }
 
     mStats.allocated_large += aSize;
     mStats.operations++;
-  }
-  if (num_dirty_after < num_dirty_before) {
-    NotifyPageReuse();
   }
   // Note that since Bug 1488780we don't attempt purge dirty memory on this code
   // path. In general there won't be dirty memory above the threshold after an
@@ -2882,12 +2876,7 @@ void arena_t::RestartMaxPurgeDelay() {
   mLastPurgeNS = GetTimestampNS();
 }
 
-inline void arena_t::NotifyPageReuse() {
-  // Note that there is a chance here for a race between threads calling
-  // GetTimeStampNS in a different order than writing it to the Atomic,
-  // resulting in mLastPageReuseNS going potentially backwards.
-  // Our use case is not sensitive to small deviations, the worse that can
-  // happen is a slightly earlier purge.
+void arena_t::NotifyPageReuse() MOZ_REQUIRES(mLock) {
   mLastPageReuseNS = GetTimestampNS();
 }
 
@@ -2915,7 +2904,6 @@ bool arena_t::RallocGrowLarge(arena_chunk_t* aChunk, void* aPtr, size_t aSize,
   size_t pageind = (uintptr_t(aPtr) - uintptr_t(aChunk)) >> gPageSize2Pow;
   size_t npages = aOldSize >> gPageSize2Pow;
 
-  size_t num_dirty_before, num_dirty_after;
   {
     MaybeMutexAutoLock lock(mLock);
     MOZ_DIAGNOSTIC_ASSERT(aOldSize ==
@@ -2928,7 +2916,7 @@ bool arena_t::RallocGrowLarge(arena_chunk_t* aChunk, void* aPtr, size_t aSize,
          (CHUNK_MAP_ALLOCATED | CHUNK_MAP_BUSY)) == 0 &&
         (aChunk->mPageMap[pageind + npages].bits & ~gPageSizeMask) >=
             aSize - aOldSize) {
-      num_dirty_before = mNumDirty;
+      size_t num_dirty_before = mNumDirty;
       // The next run is available and sufficiently large.  Split the
       // following run, then merge the first part with the existing
       // allocation.
@@ -2948,14 +2936,13 @@ bool arena_t::RallocGrowLarge(arena_chunk_t* aChunk, void* aPtr, size_t aSize,
 
       mStats.allocated_large += aSize - aOldSize;
       mStats.operations++;
-      num_dirty_after = mNumDirty;
       mMinimumNumDirty = std::min(mMinimumNumDirty, mNumDirty);
+      if (mNumDirty < num_dirty_before) {
+        NotifyPageReuse();
+      }
     } else {
       return false;
     }
-  }
-  if (num_dirty_after < num_dirty_before) {
-    NotifyPageReuse();
   }
   return true;
 }
@@ -4174,6 +4161,8 @@ may_purge_now_result_t ArenaCollection::MayPurgeSteps(
       return may_purge_now_result_t::Done;
     }
     for (arena_t& arena : mOutstandingPurges) {
+      MutexAutoLock arena_lock(arena.mLock);
+
       if (now - arena.mLastPageReuseNS >= minPurgeDelayNS) {
         found = &arena;
         break;
