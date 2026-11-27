@@ -102,6 +102,13 @@ class ConnectionEntry : public SupportsWeakPtr {
     return mConnectionAttemptPool->Length();
   }
 
+  nsresult StartInnerConnectionEstablishment(
+      nsAHttpTransaction* trans, uint32_t caps, HttpConnectionBase* outerConn,
+      PendingTransactionInfo* pendingTransInfo) {
+    return mConnectionAttemptPool->StartInnerConnectionEstablishment(
+        this, trans, caps, outerConn, pendingTransInfo);
+  }
+
   void RemoveConnectionAttempt(ConnectionAttempt* sock, bool abandon);
   void CloseAllConnectionAttempts(HttpConnectionBase* aExcept = nullptr);
   void OnConnectionAttemptConnected() {

@@ -15,6 +15,7 @@
 #include "ConnectionEntry.h"
 #include "DnsAndConnectSocket.h"
 #include "HappyEyeballsConnectionAttempt.h"
+#include "InnerConnectionAttempt.h"
 #include "nsHttpConnectionMgr.h"
 #include "nsHttpHandler.h"
 
@@ -77,6 +78,18 @@ nsresult ConnectionAttemptPool::AdoptConnectionAttempt(
     pendingTransInfo->RememberConnectionAttempt(connAttempt);
   }
   return NS_OK;
+}
+
+nsresult ConnectionAttemptPool::StartInnerConnectionEstablishment(
+    ConnectionEntry* entry, nsAHttpTransaction* trans, uint32_t caps,
+    HttpConnectionBase* outerConn, PendingTransactionInfo* pendingTransInfo) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  MOZ_ASSERT(pendingTransInfo);
+
+  RefPtr<ConnectionAttempt> connAttempt = new InnerConnectionAttempt(
+      trans->ConnectionInfo(), trans, caps, outerConn);
+
+  return AdoptConnectionAttempt(entry, connAttempt, pendingTransInfo);
 }
 
 void ConnectionAttemptPool::InsertIntoConnectionAttempts(

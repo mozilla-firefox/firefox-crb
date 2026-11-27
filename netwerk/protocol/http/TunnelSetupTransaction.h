@@ -67,7 +67,7 @@ class TunnelSetupTransaction final : public SpeculativeTransaction {
                          uint32_t* aCountWritten) override;
   void SetProxyConnectFailed() override { mProxyConnectFailed = true; }
   // Http2StreamTunnel calls this on an HTTP_1_1_REQUIRED reset.
-  // NullHttpTransaction ignores it, so record it for the caller to pass on.
+  // NullHttpTransaction ignores it, so record it for the attempt to pass on.
   void DisableHttp2ForProxy() override { mHttp2ProxyDisabled = true; }
   bool Http2ForProxyDisabled() const { return mHttp2ProxyDisabled; }
   void OnProxyConnectComplete(ProxyConnectResponseHead* aHead) override;
