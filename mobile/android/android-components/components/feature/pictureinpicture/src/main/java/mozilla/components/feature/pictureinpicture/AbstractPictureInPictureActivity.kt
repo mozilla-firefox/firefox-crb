@@ -13,6 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import mozilla.components.browser.state.selector.findCustomTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.Engine
+import mozilla.components.concept.engine.EngineView
+import mozilla.components.feature.pictureinpicture.ext.tryEnterPictureInPictureMode
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.utils.SwitchTabIntent
@@ -29,6 +31,7 @@ abstract class AbstractPictureInPictureActivity : AppCompatActivity() {
     private val logger = Logger("PictureInPictureActivity")
 
     private val pictureInPictureSessionFeature = ViewBoundFeatureWrapper<PictureInPictureSessionFeature>()
+    private var engineView: EngineView? = null
 
     /**
      * Invoked when the user expands the window, to bring the browser back on the tab the video came from. Unless the
@@ -58,6 +61,7 @@ abstract class AbstractPictureInPictureActivity : AppCompatActivity() {
             return
         }
         val engineView = engine.createView(this)
+        this.engineView = engineView
         setContentView(engineView.asView())
         pictureInPictureSessionFeature.set(
             PictureInPictureSessionFeature(
@@ -77,19 +81,11 @@ abstract class AbstractPictureInPictureActivity : AppCompatActivity() {
         if (isInPictureInPictureMode || isFinishing) {
             return
         }
-        if (!tryEnterPictureInPictureMode()) {
+        if (!tryEnterPictureInPictureMode(buildPipParams())) {
             logger.debug("Refused picture-in-picture mode, finishing")
             finish()
         }
     }
-
-    private fun tryEnterPictureInPictureMode(): Boolean =
-        try {
-            enterPictureInPictureMode(buildPipParams())
-        } catch (e: IllegalStateException) {
-            logger.warn("Entering picture-in-picture mode failed", e)
-            false
-        }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
@@ -97,6 +93,12 @@ abstract class AbstractPictureInPictureActivity : AppCompatActivity() {
         if (!isInPictureInPictureMode) {
             finish()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        engineView?.release()
+        engineView = null
     }
 
     private fun buildPipParams(): PictureInPictureParams = PictureInPictureParams.Builder().build()

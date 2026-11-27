@@ -101,13 +101,13 @@ class PictureInPictureSessionFeatureTest {
     }
 
     @Test
-    fun `GIVEN the window is up WHEN the feature stops THEN the view is released and the window closes`() {
+    fun `GIVEN the window is up WHEN the feature stops THEN the window closes and the view is kept`() {
         request("tab")
         enter("tab", mock())
 
         feature.stop()
 
-        verify(engineView).release()
+        verify(engineView, never()).release()
         captureActionsMiddleware.assertLastAction(PictureInPictureAction.CloseWindowAction::class) {}
         assertNull(store.state.pictureInPictureWindow.session)
     }
@@ -116,7 +116,6 @@ class PictureInPictureSessionFeatureTest {
     fun `GIVEN no video was requested WHEN the feature stops THEN nothing is dispatched`() {
         feature.stop()
 
-        verify(engineView, never()).release()
         captureActionsMiddleware.assertNotDispatched(PictureInPictureAction.CloseWindowAction::class)
     }
 

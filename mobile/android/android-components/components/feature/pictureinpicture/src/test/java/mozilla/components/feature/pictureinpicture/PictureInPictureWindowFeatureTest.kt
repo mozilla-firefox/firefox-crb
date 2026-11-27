@@ -95,14 +95,23 @@ class PictureInPictureWindowFeatureTest {
         verify(context, never()).startActivity(any())
     }
 
-    private fun startAndRequest(tabId: String) {
+    @Test
+    fun `GIVEN a video is requested from fullscreen WHEN its session arrives THEN the window is not started`() {
+        startAndRequest("tab", PictureInPictureSource.FULLSCREEN)
+
+        enter("tab")
+
+        verify(context, never()).startActivity(any())
+    }
+
+    private fun startAndRequest(tabId: String, source: PictureInPictureSource = PictureInPictureSource.ADDRESS_BAR) {
         feature.start()
-        request(tabId)
+        request(tabId, source)
         testDispatcher.scheduler.advanceUntilIdle()
     }
 
-    private fun request(tabId: String) {
-        store.dispatch(PictureInPictureAction.RequestAction(tabId, PictureInPictureSource.ADDRESS_BAR))
+    private fun request(tabId: String, source: PictureInPictureSource = PictureInPictureSource.ADDRESS_BAR) {
+        store.dispatch(PictureInPictureAction.RequestAction(tabId, source))
     }
 
     private fun enter(tabId: String) {

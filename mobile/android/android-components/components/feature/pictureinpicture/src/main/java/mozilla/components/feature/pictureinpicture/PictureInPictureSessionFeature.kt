@@ -19,7 +19,8 @@ import mozilla.components.support.base.feature.LifecycleAwareFeature
 
 /**
  * Renders the session cloning a video into [engineView] while its picture-in-picture window is up. Rendering begins on
- * [start] and the window goes down on [stop].
+ * [start] and the window goes down on [stop]. The feature can be started again after a stop, so the owner of
+ * [engineView] releases it.
  *
  * See also [PictureInPictureWindowFeature], which starts the [AbstractPictureInPictureActivity] this feature renders
  * the video in.
@@ -77,7 +78,6 @@ class PictureInPictureSessionFeature(
         currentScope.cancel()
         scope = null
         renderedSession = null
-        engineView.release()
         pictureInPictureUseCases.closeWindow()
     }
 

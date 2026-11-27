@@ -99,6 +99,7 @@ import mozilla.components.feature.findinpage.view.FindInPageBar
 import mozilla.components.feature.intent.ext.EXTRA_SESSION_ID
 import mozilla.components.feature.ipprotection.IPProtectionWarningBinding
 import mozilla.components.feature.media.fullscreen.MediaSessionFullscreenFeature
+import mozilla.components.feature.pictureinpicture.FullScreenPictureInPictureFeature
 import mozilla.components.feature.privatemode.feature.SecureWindowFeature
 import mozilla.components.feature.prompts.PromptFeature
 import mozilla.components.feature.prompts.PromptFeature.Companion.PIN_REQUEST
@@ -364,6 +365,8 @@ abstract class BaseBrowserFragment :
     }
 
     private var pipFeature: PictureInPictureFeature? = null
+    private var isPictureInPictureWindowAvailable = false
+    private var fullScreenPipFeature: FullScreenPictureInPictureFeature? = null
 
     var customTabSessionId: String? = null
         private set
@@ -959,13 +962,28 @@ abstract class BaseBrowserFragment :
             view = view,
         )
 
-        pipFeature =
-            PictureInPictureFeature(
-                store = store,
-                activity = requireActivity(),
-                crashReporting = context.components.analytics.crashReporter,
-                tabId = customTabSessionId,
-            )
+        isPictureInPictureWindowAvailable = requireComponents.settings.isPictureInPictureWindowAvailable
+        if (isPictureInPictureWindowAvailable) {
+            val fullScreenPipFeature =
+                FullScreenPictureInPictureFeature(
+                    activity = activity,
+                    store = store,
+                    engine = context.components.core.engine,
+                    pictureInPictureUseCases = context.components.useCases.pictureInPictureUseCases,
+                    sessionUseCases = context.components.useCases.sessionUseCases,
+                    tabId = customTabSessionId,
+                )
+            this.fullScreenPipFeature = fullScreenPipFeature
+            viewLifecycleOwner.lifecycle.addObserver(fullScreenPipFeature)
+        } else {
+            pipFeature =
+                PictureInPictureFeature(
+                    store = store,
+                    activity = requireActivity(),
+                    crashReporting = context.components.analytics.crashReporter,
+                    tabId = customTabSessionId,
+                )
+        }
 
         biometricPromptFeature.set(
             feature =
@@ -2393,7 +2411,12 @@ abstract class BaseBrowserFragment :
         return requireComponents.core.store.state.findCustomTabOrSelectedTab(customTabSessionId)
     }
 
-    override fun onHomePressed() = pipFeature?.onHomePressed() ?: false
+    override fun onHomePressed() =
+        if (isPictureInPictureWindowAvailable) {
+            fullScreenPipFeature?.onHomePressed() ?: false
+        } else {
+            pipFeature?.onHomePressed() ?: false
+        }
 
     /** Exit fullscreen mode when exiting PIP mode */
     private fun pipModeChanged(session: SessionState) {
@@ -2405,7 +2428,11 @@ abstract class BaseBrowserFragment :
 
     final override fun onPictureInPictureModeChanged(isInPipMode: Boolean) {
         if (isInPipMode) MediaState.pictureInPicture.record(NoExtras())
-        pipFeature?.onPictureInPictureModeChanged(isInPipMode)
+        if (isPictureInPictureWindowAvailable) {
+            fullScreenPipFeature?.onPictureInPictureModeChanged(isInPipMode)
+        } else {
+            pipFeature?.onPictureInPictureModeChanged(isInPipMode)
+        }
     }
 
     @VisibleForTesting
