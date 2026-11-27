@@ -309,6 +309,11 @@ ${
    * @type {UrlbarSapName}
    */
   #sapName;
+  /**
+   * Whether connectedCallback ran past the connectPref check and
+   * disconnectedCallback has not run since.
+   */
+  #connected = false;
   _overrideValue = "";
   _actionOverrideKeyCount = 0;
   _lastValidURLStr = "";
@@ -583,7 +588,28 @@ ${
    */
   sapDisconnectedCallback() {}
 
+  /**
+   * The pref controlling whether this element is enabled or null if
+   * it is always enabled.
+   *
+   * @type {?string}
+   */
+  get connectPref() {
+    if (this.getAttribute("sap-name") == "private_newtab_searchbar") {
+      return "aboutprivatebrowsing.featureGate";
+    }
+    return null;
+  }
+
+  #shouldConnect() {
+    return !this.connectPref || UrlbarPrefs.get(this.connectPref);
+  }
+
   connectedCallback() {
+    if (!this.#shouldConnect()) {
+      return;
+    }
+    this.#connected = true;
     if (!this.controller) {
       this.#init();
     }
@@ -663,6 +689,10 @@ ${
   }
 
   disconnectedCallback() {
+    if (!this.#connected) {
+      return;
+    }
+    this.#connected = false;
     this.sapDisconnectedCallback();
 
     this.searchModeSwitcher.disconnect();
@@ -921,6 +951,16 @@ ${
    */
   onPrefChanged(pref) {
     switch (pref) {
+      case this.connectPref: {
+        if (this.isConnected && this.#shouldConnect() != this.#connected) {
+          if (this.#connected) {
+            this.disconnectedCallback();
+          } else {
+            this.connectedCallback();
+          }
+        }
+        break;
+      }
       case "keyword.enabled":
         this.updatePlaceholder();
         break;

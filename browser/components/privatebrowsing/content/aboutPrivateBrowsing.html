@@ -10,7 +10,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src chrome:; img-src chrome: blob:; object-src 'none';"
+      content="default-src chrome:; img-src chrome: blob: data:; object-src 'none';"
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="chrome://browser/skin/privatebrowsing/favicon.svg" />
@@ -24,7 +24,14 @@
       href="chrome://browser/skin/privatebrowsing/aboutPrivateBrowsing.css"
       media="all"
     />
+    <link
+      rel="stylesheet"
+      href="chrome://browser/skin/urlbar.css"
+      media="all"
+    />
     <link rel="localization" href="branding/brand.ftl" />
+    <link rel="localization" href="browser/browser.ftl" />
+    <link rel="localization" href="preview/enUS-searchFeatures.ftl" />
     <link rel="localization" href="toolkit/branding/brandings.ftl" />
     <link rel="localization" href="toolkit/global/mozPromo.ftl" />
     <link rel="localization" href="browser/aboutPrivateBrowsing.ftl" />
@@ -44,6 +51,14 @@
     <script
       type="module"
       src="chrome://global/content/elements/moz-button.mjs"
+    ></script>
+    <script
+      src="chrome://global/content/elements/panel-list.mjs"
+      type="module"
+    ></script>
+    <script
+      type="module"
+      src="chrome://browser/content/urlbar/UrlbarInput.mjs"
     ></script>
   </head>
 
@@ -102,6 +117,14 @@
       ></p>
       <div class="search-inner-wrapper">
         <content-search-handoff-ui></content-search-handoff-ui>
+        <moz-urlbar
+          class="urlbar"
+          role="group"
+          pageproxystate="invalid"
+          unifiedsearchbutton-available
+          in-page
+          sap-name="private_newtab_searchbar"
+        />
       </div>
       <div class="info-border">
         <div class="info">
