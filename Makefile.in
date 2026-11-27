@@ -54,9 +54,6 @@ ifdef BUILD_VERBOSE_LOG
 verbose_flag = -v
 endif
 
-recurse_artifact:
-	$(PYTHON3) $(topsrcdir)/mach --log-no-times artifact install$(if $(MOZ_ARTIFACT_BUILD_SYMBOLS), --symbols$(addprefix =,$(filter full,$(MOZ_ARTIFACT_BUILD_SYMBOLS)))) $(if $(ENABLE_TESTS),,--no-tests) $(verbose_flag)
-
 ifdef MOZ_ANDROID_FAT_AAR_ARCHITECTURES
 recurse_android-fat-aar-artifact:
 	$(call py_action,fat_aar,--android-architectures $(MOZ_ANDROID_FAT_AAR_ARCHITECTURES) \
