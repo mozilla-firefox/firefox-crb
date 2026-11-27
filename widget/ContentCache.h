@@ -516,9 +516,7 @@ class ContentCacheInParent final : public ContentCache {
         aCompositionId);
   }
 
-  IMENotification mPendingSelectionChange;
-  IMENotification mPendingTextChange;
-  IMENotification mPendingLayoutChange;
+  IMENotification mPendingContentChange;
   IMENotification mPendingCompositionUpdate;
 
 #if MOZ_DIAGNOSTIC_ASSERT_ENABLED
