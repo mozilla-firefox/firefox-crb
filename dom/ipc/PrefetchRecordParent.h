@@ -55,6 +55,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // https://wicg.github.io/nav-speculation/prefetch.html#start-a-referrer-initiated-navigational-prefetch
   void Init(WindowGlobalParent* aWGP, const SpeculativePrefetchArgs& aArgs);
 
+  // Opens the prefetch channel for a record that Init accepted.
+  void StartFetch(WindowGlobalParent* aWGP);
+
   // Accessors for prefetch record fields
   // (https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record) used
   // by Find / Wait / Activation algorithms.
@@ -83,6 +86,7 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   bool FinalResponseHadNetworkTransfer() const {
     return mFinalResponseHadNetworkTransfer;
   }
+  bool IsImmediate() const { return mIsImmediate; }
 
   // (https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-cancel-and-discard).
   mozilla::ipc::IPCResult RecvCancel();
@@ -158,6 +162,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   nsString mIsolatedPartitionKey;
   bool mHadConflictingCredentials = false;
   bool mIsEligibleForPrefetch = false;
+  bool mIsImmediate = false;
+  // Origin attributes the prefetch channel is opened with, computed by Init.
+  OriginAttributes mFetchOriginAttributes;
 
   // Only moves forward, and unlike mState it survives a later MarkCanceled.
   enum class Outcome : uint8_t { NotStarted, Incomplete, Unused, Used };
