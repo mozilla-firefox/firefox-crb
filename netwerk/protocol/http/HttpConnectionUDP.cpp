@@ -810,9 +810,11 @@ nsresult HttpConnectionUDP::OnHeadersAvailable(nsAHttpTransaction* trans,
   MOZ_ASSERT(NS_SUCCEEDED(rv));
 
   uint16_t responseStatus = responseHead->Status();
-  nsHttpTransaction* hTrans = trans->QueryHttpTransaction();
   if (mState == HttpConnectionState::SETTING_UP_TUNNEL) {
-    HandleTunnelResponse(hTrans, *responseHead, reset);
+    // Not necessarily an nsHttpTransaction: the inner connection's setup
+    // driver is a NullHttpTransaction, and only the nsAHttpTransaction
+    // virtuals are needed here.
+    HandleTunnelResponse(trans, *responseHead, reset);
     return NS_OK;
   }
 
@@ -835,8 +837,8 @@ nsresult HttpConnectionUDP::OnHeadersAvailable(nsAHttpTransaction* trans,
 }
 
 void HttpConnectionUDP::HandleTunnelResponse(
-    nsHttpTransaction* aHttpTransaction, const nsHttpResponseHead& responseHead,
-    bool* reset) {
+    nsAHttpTransaction* aHttpTransaction,
+    const nsHttpResponseHead& responseHead, bool* reset) {
   LOG(("HttpConnectionUDP::HandleTunnelResponse mIsInTunnel=%d", mIsInTunnel));
   MOZ_ASSERT(TunnelSetupInProgress());
   MOZ_ASSERT(mIsInTunnel);
@@ -1116,11 +1118,13 @@ void HttpConnectionUDP::CloseTransaction(nsAHttpTransaction* trans,
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
 
   if (NS_SUCCEEDED(reason) || (reason == NS_BASE_STREAM_CLOSED)) {
-    if (aIsShutdown && mHttp3Session) {
+    // Hold the session: closing it can drop the last reference to this
+    // connection, whose teardown clears mHttp3Session under us.
+    if (RefPtr<Http3Session> session = mHttp3Session; aIsShutdown && session) {
       // The underlying socket has been closed. Cancel the Http3Session timer
       // to prevent it from firing on the now-closed socket.
-      mHttp3Session->SetCleanShutdown(true);
-      mHttp3Session->Close(reason);
+      session->SetCleanShutdown(true);
+      session->Close(reason);
     }
     return;
   }
@@ -1137,13 +1141,15 @@ void HttpConnectionUDP::CloseTransaction(nsAHttpTransaction* trans,
   }
 
   mDontReuse = true;
-  if (mHttp3Session) {
+  // Close() re-enters through the session's teardown and can clear
+  // mHttp3Session, so everything below goes through the local reference.
+  if (RefPtr<Http3Session> session = mHttp3Session) {
     // When proxy connnect failed, we call Http3Session::SetCleanShutdown to
     // force Http3Session to release this UDP connection.
-    mHttp3Session->SetCleanShutdown(aIsShutdown || transInQueue ||
-                                    (mIsInTunnel && !mProxyConnectSucceeded));
-    mHttp3Session->Close(reason);
-    if (!mHttp3Session->IsClosed()) {
+    session->SetCleanShutdown(aIsShutdown || transInQueue ||
+                              (mIsInTunnel && !mProxyConnectSucceeded));
+    session->Close(reason);
+    if (!session->IsClosed()) {
       // During closing phase we still keep mHttp3Session session,
       // to resend CLOSE_CONNECTION frames.
       return;
