@@ -250,7 +250,16 @@ add_task(async function test_tabs_event_page() {
     }
     browser.test.onMessage.addListener(async msg => {
       if (msg === "createTab") {
-        await browser.tabs.create({url: "about:blank"});
+        const tabPromise = browser.tabs.create({url: "about:blank"});
+        await new Promise(resolve => {
+          browser.tabs.onUpdated.addListener(async function listener(tabId, changeInfo) {
+            if (changeInfo.status === "complete" && tabId === (await tabPromise).id) {
+              browser.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          });
+        });
+        browser.test.sendMessage("tabLoaded");
       }
     });
     browser.test.sendMessage("ready");
@@ -274,6 +283,10 @@ add_task(async function test_tabs_event_page() {
   info("Wait for tabs.onCreated listener call");
   extension.sendMessage("createTab");
   await extension.awaitMessage("onCreated");
+  // The tab keeps firing tabs.onUpdated until its load completes, which would
+  // wake the event page right after it is terminated below.
+  info("Wait for the new tab to finish loading");
+  await extension.awaitMessage("tabLoaded");
 
   // on startup, all event listeners should not be primed
   await assertPersistentListeners(extension, apiNs, apiEvents, { primed: false });
