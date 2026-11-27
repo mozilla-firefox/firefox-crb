@@ -390,7 +390,7 @@ class TSFTextStore final : public TSFTextStoreBase,
       Collapse(aOffsetToCollapse);
     }
 
-    explicit Selection(const SelectionChangeDataBase& aSelectionChangeData) {
+    explicit Selection(const SelectionChangeData& aSelectionChangeData) {
       SetSelection(aSelectionChangeData);
     }
 
@@ -414,7 +414,7 @@ class TSFTextStore final : public TSFTextStoreBase,
       mACP->style.fInterimChar = FALSE;
     }
 
-    bool SetSelection(const SelectionChangeDataBase& aSelectionChangeData) {
+    bool SetSelection(const SelectionChangeData& aSelectionChangeData) {
       MOZ_ASSERT(aSelectionChangeData.IsInitialized());
       if (!aSelectionChangeData.HasRange()) {
         if (mACP.isNothing()) {
@@ -535,7 +535,7 @@ class TSFTextStore final : public TSFTextStoreBase,
     }
 
     bool EqualsExceptDirection(
-        const SelectionChangeDataBase& aChangedSelection) const {
+        const SelectionChangeData& aChangedSelection) const {
       MOZ_ASSERT(aChangedSelection.IsInitialized());
       if (mACP.isNothing()) {
         return aChangedSelection.HasRange();

@@ -12,7 +12,7 @@
 
 /**
  * This file is intended for declaring classes which store DOM content data for
- * widget classes.  Those data should be retrived by `WidgetQueryContentEvent`,
+ * widget classes.  Those data should be retrieved by `WidgetQueryContentEvent`,
  * notified with `IMENotification`, or set assumed data as result of dispatching
  * widget events such as `WidgetKeyboardEvent`, `WidgetCompositionEvent`,
  * `WidgetSelectionEvent` etc.
@@ -27,10 +27,9 @@ namespace mozilla {
  */
 class ContentSelection {
  public:
-  using SelectionChangeDataBase =
-      widget::IMENotification::SelectionChangeDataBase;
+  using SelectionChangeData = widget::IMENotification::SelectionChangeData;
   ContentSelection() = default;
-  explicit ContentSelection(const SelectionChangeDataBase& aSelectionChangeData)
+  explicit ContentSelection(const SelectionChangeData& aSelectionChangeData)
       : mOffsetAndData(Some(aSelectionChangeData.ToUint32OffsetAndData())),
         mWritingMode(aSelectionChangeData.GetWritingMode()) {}
   explicit ContentSelection(const QueryContentResult&);

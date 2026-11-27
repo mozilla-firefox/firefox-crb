@@ -593,7 +593,7 @@ void GeckoEditableSupport::SendIMEDummyKeyEvent(nsIWidget* aWidget,
 }
 
 void GeckoEditableSupport::AddIMETextChange(
-    const IMENotification::TextChangeDataBase& aChange) {
+    const IMENotification::TextChangeData& aChange) {
   mIMEPendingTextChange.MergeWith(aChange);
 
   // We may not be in the middle of flushing,
@@ -794,10 +794,12 @@ void GeckoEditableSupport::FlushIMEText(FlushChangesFlag aFlags) {
   // Use 'INT32_MAX / 2' here because subsequent text changes might combine
   // with this text change, and overflow might occur if we just use
   // INT32_MAX.
+  constexpr uint32_t kEnoughLargeEndOffset = INT32_MAX / 2;
   IMENotification notification(NOTIFY_IME_OF_TEXT_CHANGE);
-  notification.mTextChangeData.mStartOffset = 0;
-  notification.mTextChangeData.mRemovedEndOffset = INT32_MAX / 2;
-  notification.mTextChangeData.mAddedEndOffset = INT32_MAX / 2;
+  notification.mTextChangeData.emplace(
+      0, kEnoughLargeEndOffset, kEnoughLargeEndOffset,
+      /* aCausedByComposition = */ false,
+      /* aOccurredDuringComposition = */ false);
   NotifyIME(mDispatcher, notification);
 
   FlushIMEChanges(aFlags);
@@ -1388,11 +1390,11 @@ nsresult GeckoEditableSupport::NotifyIME(
       ALOGIME("IME: NOTIFY_IME_OF_SELECTION_CHANGE: SelectionChangeData=%s",
               ToString(aNotification.mSelectionChangeData).c_str());
 
-      if (aNotification.mSelectionChangeData.HasRange()) {
+      if (aNotification.mSelectionChangeData->HasRange()) {
         mCachedSelection.mStartOffset = static_cast<int32_t>(
-            aNotification.mSelectionChangeData.AnchorOffset());
+            aNotification.mSelectionChangeData->AnchorOffset());
         mCachedSelection.mEndOffset = static_cast<int32_t>(
-            aNotification.mSelectionChangeData.FocusOffset());
+            aNotification.mSelectionChangeData->FocusOffset());
       } else {
         mCachedSelection.Reset();
       }
@@ -1409,7 +1411,7 @@ nsresult GeckoEditableSupport::NotifyIME(
       /* Make sure Java's selection is up-to-date */
       PostFlushIMEChanges();
       mIMESelectionChanged = true;
-      AddIMETextChange(aNotification.mTextChangeData);
+      AddIMETextChange(aNotification.mTextChangeData.ref());
       break;
     }
 

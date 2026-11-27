@@ -26,9 +26,7 @@ namespace mozilla::widget {
 
 class TSFTextStoreBase : public ITextStoreACP {
  protected:
-  using SelectionChangeDataBase = IMENotification::SelectionChangeDataBase;
   using SelectionChangeData = IMENotification::SelectionChangeData;
-  using TextChangeDataBase = IMENotification::TextChangeDataBase;
   using TextChangeData = IMENotification::TextChangeData;
 
  public: /*IUnknown*/
