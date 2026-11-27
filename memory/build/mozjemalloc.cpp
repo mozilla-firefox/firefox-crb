@@ -660,7 +660,7 @@ void jemalloc_set_profiler_callbacks(
 // Begin arena.
 
 static inline arena_t* thread_local_arena(bool enabled) {
-  arena_t* arena;
+  arena_t* arena = nullptr;
 
   if (enabled) {
     // The arena will essentially be leaked if this function is
@@ -670,9 +670,12 @@ static inline arena_t* thread_local_arena(bool enabled) {
     arena_params_t params;
     params.mLabel = "Thread local";
     arena = gArenas.CreateArena(/* aIsPrivate = */ false, &params);
-  } else {
+  }
+
+  if (!arena) {
     arena = gArenas.GetDefault();
   }
+
   thread_arena.set(arena);
   return arena;
 }
@@ -3171,14 +3174,9 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
   arena_t* ret = new (fallible) arena_t(aParams, aIsPrivate);
   if (!ret) {
     // Only reached if there is an OOM error.
-
-    // OOM here is quite inconvenient to propagate, since dealing with it
-    // would require a check for failure in the fast path.  Instead, punt
-    // by using the first arena.
-    // In practice, this is an extremely unlikely failure.
     _malloc_message(_getprogname(), ": (malloc) Error initializing arena\n");
 
-    return mDefaultArena;
+    return nullptr;
   }
 
   MutexAutoLock lock(mLock);
@@ -4069,8 +4067,11 @@ inline arena_id_t MozJemalloc::moz_create_arena_with_params(
     arena_params_t* aParams) {
   if (malloc_init()) {
     arena_t* arena = gArenas.CreateArena(/* IsPrivate = */ true, aParams);
-    return arena->mId;
+    if (arena) {
+      return arena->mId;
+    }
   }
+
   return 0;
 }
 
