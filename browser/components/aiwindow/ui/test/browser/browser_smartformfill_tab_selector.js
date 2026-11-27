@@ -15,6 +15,9 @@ const { MAX_SELECTED_TABS } = ChromeUtils.importESModule(
 const { NonPrivateTabs } = ChromeUtils.importESModule(
   "resource:///modules/OpenTabs.sys.mjs"
 );
+const { formAutofillStorage } = ChromeUtils.importESModule(
+  "resource://autofill/FormAutofillStorage.sys.mjs"
+);
 
 const OTHER_SOURCE_URL = "https://example.net/";
 
@@ -78,29 +81,22 @@ async function openTabSelector(win, browser, row) {
   return { dialogManager, dialogWindow, tabSelector };
 }
 
-function getDialogTab(tabSelector, url) {
-  const groups = tabSelector.renderRoot.querySelectorAll("moz-box-group");
-  const tabLists = [tabSelector.suggestedTabs, tabSelector.otherTabs];
-
-  for (let listIndex = 0; listIndex < tabLists.length; listIndex++) {
-    const tabIndex = tabLists[listIndex].findIndex(tab => tab.url === url);
-    if (tabIndex !== -1) {
-      return {
-        tab: tabLists[listIndex][tabIndex],
-        toggle: groups[listIndex].querySelectorAll("moz-toggle")[tabIndex],
-      };
-    }
+function getTabToggleByUrl(tabSelector, url) {
+  const row = [...tabSelector.renderRoot.querySelectorAll("moz-box-item")].find(
+    item => item.description === url
+  );
+  const toggle = row?.querySelector("moz-toggle");
+  if (!toggle) {
+    throw new Error(`Could not find dialog tab toggle for ${url}`);
   }
-
-  throw new Error(`Could not find dialog tab for ${url}`);
+  return toggle;
 }
 
 async function toggleTab(tabSelector, url) {
-  const { tab, toggle } = getDialogTab(tabSelector, url);
-  const previousPressed = tab.pressed;
-
+  const toggle = getTabToggleByUrl(tabSelector, url);
   await toggle.updateComplete;
   Assert.ok(!toggle.disabled, `The toggle for ${url} should be enabled`);
+  const previousPressed = toggle.pressed;
 
   const toggled = BrowserTestUtils.waitForEvent(toggle, "toggle");
   toggle.buttonEl.click();
@@ -108,7 +104,7 @@ async function toggleTab(tabSelector, url) {
   await tabSelector.updateComplete;
 
   Assert.notEqual(
-    getDialogTab(tabSelector, url).tab.pressed,
+    getTabToggleByUrl(tabSelector, url).pressed,
     previousPressed,
     `The pressed state for ${url} should change`
   );
@@ -225,7 +221,7 @@ describe("Smart Form Fill tab selector", () => {
       "The relevant source should be shown as suggested"
     );
     Assert.ok(
-      getDialogTab(tabSelector, SOURCE_URL).toggle.pressed,
+      getTabToggleByUrl(tabSelector, SOURCE_URL).pressed,
       "The suggested tab should initially be selected"
     );
     Assert.ok(
@@ -233,7 +229,7 @@ describe("Smart Form Fill tab selector", () => {
       "The other open tab should be shown"
     );
     Assert.ok(
-      !getDialogTab(tabSelector, OTHER_SOURCE_URL).toggle.pressed,
+      !getTabToggleByUrl(tabSelector, OTHER_SOURCE_URL).pressed,
       "The other tab should initially be unselected"
     );
     Assert.ok(
@@ -251,6 +247,120 @@ describe("Smart Form Fill tab selector", () => {
       dialogWindow
     );
     await closeAutocomplete(browser);
+  });
+
+  describe("with saved addresses", () => {
+    const guids = [];
+
+    beforeEach(async () => {
+      await SpecialPowers.pushPrefEnv({
+        set: [
+          ["extensions.formautofill.addresses.supported", "on"],
+          ["extensions.formautofill.addresses.enabled", true],
+        ],
+      });
+
+      await formAutofillStorage.initialize();
+      const addresses = formAutofillStorage.addresses;
+      guids.push(
+        await addresses.add({
+          name: "Ana Souza",
+          "street-address": "1234 Address Way",
+          email: "ana@example.com",
+          country: "US",
+        })
+      );
+      guids.push(
+        await addresses.add({
+          name: "Sam Rivera",
+          "street-address": "4321 Address Way",
+          email: "sam@example.com",
+          country: "US",
+        })
+      );
+      await addresses.notifyUsed(guids[0]);
+    });
+
+    afterEach(async () => {
+      for (const guid of guids.splice(0)) {
+        await formAutofillStorage.addresses.remove(guid);
+      }
+      await SpecialPowers.popPrefEnv();
+    });
+
+    it("shows saved addresses before tabs and keeps the chosen address", async () => {
+      await openForm(win);
+
+      const { browser, popup, row } = await openAutocomplete(
+        win,
+        "#email",
+        mockEngineManager,
+        { selectedSourceUrl: SOURCE_URL }
+      );
+      const { dialogManager, dialogWindow, tabSelector } =
+        await openTabSelector(win, browser, row);
+
+      const [addressGroup, suggestedGroup] =
+        tabSelector.renderRoot.querySelectorAll("moz-box-group");
+      Assert.ok(
+        addressGroup.matches(".ai-smart-form-fill-saved-addresses") &&
+          suggestedGroup.matches(".ai-smart-form-fill-suggested-tabs"),
+        "Saved addresses section precede Suggested tabs section"
+      );
+      const toggles = addressGroup.querySelectorAll("moz-toggle");
+      Assert.equal(toggles.length, 2, "Both saved addresses have a toggle");
+      const [firstToggle, secondToggle] = toggles;
+      const firstAddress = firstToggle.closest("moz-box-item");
+      Assert.equal(
+        firstAddress.label,
+        "Ana Souza",
+        "The selector shows the full name saved in the address"
+      );
+      Assert.equal(
+        firstAddress.description,
+        "1234 Address Way",
+        "The selector shows the street name saved in the address"
+      );
+      Assert.equal(
+        firstAddress.iconSrc,
+        "chrome://browser/skin/fxa/avatar-empty.svg",
+        "It uses the Form Autofill profile icon"
+      );
+      Assert.ok(
+        firstToggle.pressed,
+        "The most recently used address is initially selected"
+      );
+      Assert.ok(
+        !secondToggle.pressed,
+        "The other address is initially not selected"
+      );
+      await secondToggle.updateComplete;
+      secondToggle.buttonEl.click();
+      await tabSelector.updateComplete;
+      Assert.ok(
+        !firstToggle.pressed,
+        "Selecting another address clears the default selection"
+      );
+      Assert.ok(secondToggle.pressed, "The second address can be selected");
+      Assert.ok(
+        getTabToggleByUrl(tabSelector, SOURCE_URL).pressed,
+        "Selecting an address doesn't affect the suggested tab selection"
+      );
+
+      const restoredRow = await activateDialogButtonAndWaitForAutocomplete(
+        dialogManager,
+        popup,
+        tabSelector,
+        "ai-smart-form-fill-accept-tab-select-button",
+        dialogWindow
+      );
+      Assert.equal(
+        getSourceLabels(restoredRow)[0],
+        "Sam Rivera",
+        "The popup shows the address chosen in the source editor"
+      );
+      await closeAutocomplete(browser);
+    });
   });
 
   it("disables Done when no tabs are selected", async () => {
@@ -358,13 +468,13 @@ describe("Smart Form Fill tab selector", () => {
 
     const lastOtherURL = otherURLs.at(-1);
     Assert.ok(
-      getDialogTab(tabSelector, lastOtherURL).toggle.disabled,
+      getTabToggleByUrl(tabSelector, lastOtherURL).disabled,
       "An unselected tab should be disabled at the limit"
     );
 
     await toggleTab(tabSelector, SOURCE_URL);
     Assert.ok(
-      !getDialogTab(tabSelector, lastOtherURL).toggle.disabled,
+      !getTabToggleByUrl(tabSelector, lastOtherURL).disabled,
       "An unselected tab should be enabled after another is deselected"
     );
 

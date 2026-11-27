@@ -456,8 +456,7 @@ smartwindow-onboarding-save =
     .label = Save and go
 
 ## Smart Form Fill
-## Generates values for form fields from one or more sources, which are tabs
-## selected by the user.
+## Generates values for form fields from tabs and saved addresses.
 
 # Accessible name for the Smart Form Fill autocomplete row, read by screen
 # readers only. Should match the visible ai-smart-form-fill-autocomplete-sources-label.
@@ -481,6 +480,7 @@ ai-smart-form-fill-autocomplete-tabs-count =
 ai-smart-form-fill-edit-sources-button = Edit sources
 # Title of the dialog for choosing sources.
 ai-smart-form-fill-edit-sources-title = Edit sources
+ai-smart-form-fill-saved-addresses-heading = Saved addresses
 ai-smart-form-fill-suggested-tabs-heading = Suggested tabs
 ai-smart-form-fill-other-tabs-heading = Other tabs
 
@@ -488,6 +488,11 @@ ai-smart-form-fill-other-tabs-heading = Other tabs
 #   $tabTitle (string) - Title of the tab controlled by the toggle
 ai-smart-form-fill-tab-select-toggle =
     .aria-label = Toggle tab selection for “{ $tabTitle }”
+
+# Variables:
+#   $address (string) - Name and street of the saved address
+ai-smart-form-fill-address-select-toggle =
+    .aria-label = Toggle saved address selection for “{ $address }”
 
 ai-smart-form-fill-cancel-tab-select-button =
     .label = Cancel
