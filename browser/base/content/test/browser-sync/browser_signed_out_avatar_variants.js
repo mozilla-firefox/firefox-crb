@@ -34,7 +34,7 @@ const SIGNED_IN_ICON = "avatar.svg";
  *   The assertion message to display.
  */
 function assertCurrentIcon(win, iconFilename, message) {
-  let image = win.document.querySelector("#fxa-avatar-image");
+  let image = win.document.querySelector("#fxa-toolbar-menu-button");
   let avatarURL = win.getComputedStyle(image).listStyleImage;
   let expectedURL = `url("chrome://browser/skin/fxa/${iconFilename}")`;
   Assert.equal(avatarURL, expectedURL, message);

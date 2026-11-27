@@ -206,12 +206,12 @@ toolbarbutton[crop] {
 }
 
 toolbar[mode="icons"] .toolbarbutton-text,
-toolbar[mode="text"] .toolbarbutton-icon,
+toolbar[mode="text"] *|*.toolbarbutton-icon,
 html|label.toolbarbutton-badge:empty {
   display: none;
 }
 
-.toolbarbutton-icon,
+*|*.toolbarbutton-icon,
 .toolbarbutton-text,
 .toolbarbutton-badge-stack,
 .treecol-text,
