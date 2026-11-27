@@ -651,7 +651,7 @@ bool ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
 
 bool ContentCacheInChild::SetSelection(
     nsIWidget* aWidget,
-    const IMENotification::SelectionChangeDataBase& aSelectionChangeData) {
+    const IMENotification::SelectionChangeData& aSelectionChangeData) {
   MOZ_LOG(
       sContentCacheLog, LogLevel::Info,
       ("0x%p SetSelection(aSelectionChangeData=%s), mText=%s", this,
