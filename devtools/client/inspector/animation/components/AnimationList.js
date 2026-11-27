@@ -51,8 +51,9 @@ class AnimationList extends PureComponent {
       {
         className: "animation-list",
       },
-      animations.map((animation, index) =>
+      ...animations.map((animation, index) =>
         AnimationItem({
+          key: animation.actorId,
           animation,
           dispatch,
           getAnimatedPropertyMap,
