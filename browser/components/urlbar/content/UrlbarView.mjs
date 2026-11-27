@@ -3462,7 +3462,11 @@ export class UrlbarView {
       // Keep the selected row in view in the inputs whose results list is
       // scrollable. `block: "nearest"` is a no-op when the row is already
       // visible. Scoped to those to avoid changing classic urlbar behavior.
-      if (["smartbar", "newtab_searchbar"].includes(this.input.sapName)) {
+      if (
+        ["smartbar", "newtab_searchbar", "private_newtab_searchbar"].includes(
+          this.input.sapName
+        )
+      ) {
         (row ?? element).scrollIntoView({ block: "nearest" });
       }
     }
