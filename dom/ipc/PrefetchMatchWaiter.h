@@ -20,10 +20,11 @@ namespace mozilla::dom {
 class PrefetchRecordParent;
 class WindowGlobalParent;
 
-// Promise resolved with the matching PrefetchRecordParent* on success,
-// or nullptr if the timeout expires before a match is found.
+// Promise resolved with the matching PrefetchRecordParent* on success, or
+// rejected with the reason the wait ended without one.
 using PrefetchMatchPromise =
-    MozPromise<RefPtr<PrefetchRecordParent>, nsresult, /* IsExclusive */ true>;
+    MozPromise<RefPtr<PrefetchRecordParent>, PrefetchNavigationResult,
+               /* IsExclusive */ true>;
 
 // Background: when a navigation's URL matches a prefetch that is still in
 // flight, the spec has the navigation wait for that prefetch to finish
@@ -37,8 +38,8 @@ using PrefetchMatchPromise =
 // on WindowGlobalParent when a navigation arrives and finds no completed
 // match yet, but at least one ongoing prefetch record could still become
 // one. It resolves its promise with the matching record once that record
-// completes, with nullptr once no ongoing record could still match (so the
-// navigation can fall back to a normal fetch), or with nullptr when the
+// completes, and rejects it once no ongoing record could still match (so the
+// navigation can fall back to a normal fetch), or when the
 // dom.speculation_rules.wait_timeout_ms timeout fires first.
 //
 // Thread safety: must be used on the main thread only.
@@ -69,9 +70,12 @@ class PrefetchMatchWaiter final {
                       TimeDuration aTimeout);
   ~PrefetchMatchWaiter();
 
-  // Resolves exactly once (atomic exchange guard). Cancels timer, resolves
-  // promise with aMatch (nullptr on timeout), and removes self from WGP.
-  void Resolve(PrefetchRecordParent* aMatch);
+  // Settles exactly once (atomic exchange guard). Cancels timer, resolves
+  // promise with aMatch, or rejects it with aReason if aMatch is null, and
+  // removes self from WGP.
+  void Resolve(
+      PrefetchRecordParent* aMatch,
+      PrefetchNavigationResult aReason = PrefetchNavigationResult::WaitTimeout);
 
   RefPtr<WindowGlobalParent> mWGP;
   nsCOMPtr<nsIURI> mURI;

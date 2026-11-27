@@ -438,6 +438,8 @@ class DocumentLoadListener : public nsIInterfaceRequestor,
   // Copies the prefetch's cookies into the destination partition and marks
   // the navigation timing as activated from a prefetch.
   void ActivateFromPrefetch(dom::PrefetchRecordParent* aRec);
+  // Counts how a navigation covered by a prefetch candidate ended.
+  void RecordPrefetchNavigationResult(dom::PrefetchNavigationResult aResult);
   // Waits on aPromise (from TryActivateFromPrefetch), activates from the
   // resolved record if any, then calls AsyncOpen on mChannel. Does nothing if
   // the load was cancelled while waiting.

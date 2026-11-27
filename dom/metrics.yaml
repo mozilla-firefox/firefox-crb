@@ -1374,3 +1374,40 @@ speculation_rules:
       - sning@mozilla.com
       - acreskey@mozilla.com
     expires: never
+
+  prefetch_navigation_result:
+    type: labeled_counter
+    labels:
+      - served
+      - cache_miss
+      - expired
+      - hint_mismatch
+      - wait_timeout
+      - http_error
+      - too_large
+      - network_error
+      - canceled
+      - dry_run
+      - navigation_canceled
+    description: >
+      Result of each navigation eligible for a Speculation Rules prefetch:
+      served, or the reason it was not.
+
+      served: read from a prefetch record's response.
+      cache_miss: matched a prefetch record, but its response was not reused.
+      expired: older than dom.speculation_rules.record_expiry_ms.
+      hint_mismatch: matched only through the No-Vary-Search hint.
+      wait_timeout: still in flight after dom.speculation_rules.wait_timeout_ms.
+      http_error: non-2xx response.
+      too_large: over dom.speculation_rules.max_body_bytes.
+      network_error: network failure.
+      canceled: canceled otherwise, e.g. superseded or a refused redirect.
+      dry_run: not fetched, in the experiment's control branch.
+      navigation_canceled: navigation canceled while waiting.
+    bugs:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2096661
+    data_reviews:
+      - https://bugzilla.mozilla.org/show_bug.cgi?id=2096661
+    notification_emails:
+      - acreskey@mozilla.com
+    expires: never

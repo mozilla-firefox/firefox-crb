@@ -2481,6 +2481,24 @@ bool WindowGlobalParent::HasMatchingPrefetchCandidate(nsIURI* aURI) {
   return false;
 }
 
+PrefetchNavigationResult WindowGlobalParent::PrefetchNotServedReason(
+    nsIURI* aURI) {
+  Maybe<PrefetchNavigationResult> result;
+  nsTArray<PPrefetchRecordParent*> managed;
+  ManagedPPrefetchRecordParent(managed);
+  for (auto* p : managed) {
+    auto* rec = static_cast<PrefetchRecordParent*>(p);
+    if (rec->IsEligibleForPrefetch() && rec->MatchesCandidateURL(aURI)) {
+      PrefetchNavigationResult reason = rec->NotServedReason(aURI);
+      if (!result || reason < *result) {
+        result = Some(reason);
+      }
+    }
+  }
+  // No candidate left: its rule was removed during the wait.
+  return result.valueOr(PrefetchNavigationResult::Canceled);
+}
+
 void WindowGlobalParent::RemoveWaiter(PrefetchMatchWaiter* aWaiter) {
   mPrefetchWaiters.RemoveElement(aWaiter);
   LOG_SPECRULES(

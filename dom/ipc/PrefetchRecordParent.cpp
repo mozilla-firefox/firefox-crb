@@ -151,6 +151,7 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
          "(0x%" PRIx32 ")",
          this, static_cast<uint32_t>(rv)));
     mState = PrefetchState::Canceled;
+    mCancelReason = PrefetchNavigationResult::NetworkError;
     return;
   }
 
@@ -172,6 +173,7 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
         ("PrefetchRecordParent::Init: this=%p AsyncOpen failed (0x%" PRIx32 ")",
          this, static_cast<uint32_t>(rv)));
     mState = PrefetchState::Canceled;
+    mCancelReason = PrefetchNavigationResult::NetworkError;
     mChannel = nullptr;
     return;
   }
@@ -395,6 +397,28 @@ bool PrefetchRecordParent::MatchesCandidateURL(nsIURI* aURL) const {
   return MatchesNoVarySearchHint(aURL);
 }
 
+PrefetchNavigationResult PrefetchRecordParent::NotServedReason(
+    nsIURI* aURL) const {
+  switch (mState) {
+    case PrefetchState::DryRun:
+      return PrefetchNavigationResult::DryRun;
+    case PrefetchState::Canceled:
+      return mCancelReason;
+    case PrefetchState::Ongoing:
+      return PrefetchNavigationResult::WaitTimeout;
+    case PrefetchState::Completed:
+      if (!MatchesURL(aURL)) {
+        return PrefetchNavigationResult::HintMismatch;
+      }
+      // Unexpired means it completed just after the wait gave up.
+      return mExpiryTime < TimeStamp::Now()
+                 ? PrefetchNavigationResult::Expired
+                 : PrefetchNavigationResult::WaitTimeout;
+  }
+  MOZ_ASSERT_UNREACHABLE("Unknown PrefetchState");
+  return PrefetchNavigationResult::Canceled;
+}
+
 nsString PrefetchRecordParent::ComputePartitionKeyForChannel(
     nsIChannel* aChannel) const {
   nsCOMPtr<nsIURI> uri;
@@ -483,7 +507,13 @@ PrefetchRecordParent::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
     LOG_SPECRULES_WARN(
         ("PrefetchRecordParent::OnStopRequest: this=%p failed 0x%" PRIx32, this,
          static_cast<uint32_t>(aStatus)));
-    MarkCanceled();
+    PrefetchNavigationResult reason = PrefetchNavigationResult::NetworkError;
+    if (aStatus == NS_ERROR_FILE_TOO_BIG) {
+      reason = PrefetchNavigationResult::TooLarge;
+    } else if (aStatus == NS_BINDING_ABORTED) {
+      reason = PrefetchNavigationResult::Canceled;
+    }
+    MarkCanceled(reason);
     return NS_OK;
   }
 
@@ -497,7 +527,7 @@ PrefetchRecordParent::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
           ("PrefetchRecordParent::OnStopRequest: this=%p final status %u does "
            "not support prefetch; discarding",
            this, status));
-      MarkCanceled();
+      MarkCanceled(PrefetchNavigationResult::HttpError);
       return NS_OK;
     }
   }
@@ -645,7 +675,7 @@ void PrefetchRecordParent::ReleaseCacheToken() {
   }
 }
 
-void PrefetchRecordParent::MarkCanceled() {
+void PrefetchRecordParent::MarkCanceled(PrefetchNavigationResult aReason) {
   // Implements "cancel and discard a prefetch record".
   // Spec:
   // https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-cancel-and-discard
@@ -654,9 +684,11 @@ void PrefetchRecordParent::MarkCanceled() {
     return;
   }
 
-  LOG_SPECRULES(("PrefetchRecordParent::MarkCanceled: this=%p", this));
+  LOG_SPECRULES(("PrefetchRecordParent::MarkCanceled: this=%p reason=%s", this,
+                 PrefetchNavigationResultLabel(aReason).get()));
 
   mState = PrefetchState::Canceled;  // Step 3: set state to "canceled"
+  mCancelReason = aReason;
   ReleaseCacheToken();
 
   if (mChannel) {  // Step 4: abort the fetch controller
