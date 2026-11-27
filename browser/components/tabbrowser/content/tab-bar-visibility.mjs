@@ -42,10 +42,7 @@ export const TabBarVisibility = {
     // a titlebar? When the tabs toolbar is hidden they form the top edge of the
     // window, so they share the titlebar's background and inactive styling.
     let isTitlebar = CustomTitlebar.enabled && hideTabsToolbar;
-    let titlebarIds = Services.prefs.getBoolPref("browser.nova.enabled")
-      ? ["nav-bar", "PersonalToolbar"]
-      : ["nav-bar"];
-    for (let id of titlebarIds) {
+    for (let id of ["nav-bar", "PersonalToolbar"]) {
       document
         .getElementById(id)
         .classList.toggle("browser-titlebar", isTitlebar);
