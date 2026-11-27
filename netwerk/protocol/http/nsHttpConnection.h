@@ -219,6 +219,12 @@ class nsHttpConnection final : public HttpConnectionBase,
       TunnelSetupTransaction* aDriver,
       HttpConnectionBase** aInnerConnection) override;
 
+  // Drop the transaction that drove this connection's setup without closing
+  // it, so a real transaction can be Activate()d in its place. For the
+  // synchronous inner-connection handover, where the driver is still on the
+  // stack; see InnerConnectionAttempt::Succeeded.
+  void DetachSetupTransaction(nsAHttpTransaction* aDriver);
+
   // Replace the transaction this H1 connection is currently driving.
   // Analog of Http2Session::SwapTransaction / Http3Session::SwapTransaction:
   // used by the HE / 0-RTT adopt path when a HappyEyeballsTransaction shim
