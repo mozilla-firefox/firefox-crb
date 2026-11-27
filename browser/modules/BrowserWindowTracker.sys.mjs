@@ -388,6 +388,8 @@ export const BrowserWindowTracker = {
     // If the opener window is maximized, we want to skip the animation, since
     // we're going to be taking up most of the screen anyways, and we want to
     // optimize for showing the user a useful window as soon as possible.
+    // Without an opener both sides are undefined and compare equal, so the
+    // animation is skipped then too.
     if (openerWindow?.windowState == openerWindow?.STATE_MAXIMIZED) {
       windowFeatures += ",suppressanimation";
     }
