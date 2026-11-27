@@ -3227,9 +3227,8 @@ arena_t* ArenaCollection::CreateArena(bool aIsPrivate,
   // For private arenas, slightly obfuscate the id by XORing a key generated
   // once, and rotate the bits by an amount also generated once.
   MOZ_ASSERT(mArenaIdKey);
-  arena_id_t id = reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey;
-  ret->mId =
-      (id >> mArenaIdRotation) | (id << (sizeof(void*) * 8 - mArenaIdRotation));
+  ret->mId = std::rotr(reinterpret_cast<arena_id_t>(ret) ^ mArenaIdKey,
+                       mArenaIdRotation);
   mPrivateArenas.Insert(ret);
   return ret;
 }
@@ -4075,9 +4074,8 @@ inline arena_t* ArenaCollection::GetPrivateArena(arena_id_t aArenaId) {
   // arena was created.
   // coverity[missing_lock]
   MOZ_RELEASE_ASSERT(mArenaIdKey);
-  arena_id_t id = (aArenaId << mArenaIdRotation) |
-                  (aArenaId >> (sizeof(void*) * 8 - mArenaIdRotation));
-  arena_t* result = reinterpret_cast<arena_t*>(id ^ mArenaIdKey);
+  arena_t* result = reinterpret_cast<arena_t*>(
+      std::rotl(aArenaId, mArenaIdRotation) ^ mArenaIdKey);
   MOZ_RELEASE_ASSERT(result);
   MOZ_DIAGNOSTIC_ASSERT(result->mMagic == ARENA_MAGIC);
   MOZ_RELEASE_ASSERT(result->mId == aArenaId);
