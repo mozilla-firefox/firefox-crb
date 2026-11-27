@@ -32,6 +32,7 @@ const lazy = XPCOMUtils.declareLazy({
   AppUpdater: "resource://gre/modules/AppUpdater.sys.mjs",
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
   DoHConfigController: "moz-src:///toolkit/components/doh/DoHConfig.sys.mjs",
+  DoHController: "moz-src:///toolkit/components/doh/DoHController.sys.mjs",
   DownloadUtils: "resource://gre/modules/DownloadUtils.sys.mjs",
   ExtensionSettingsStore:
     "resource://gre/modules/ExtensionSettingsStore.sys.mjs",
@@ -3423,14 +3424,139 @@ Preferences.addSetting({
   },
 });
 
+const DOH_HEURISTIC_STATUS = {
+  google: { l10nId: "preferences-doh-heuristic-google" },
+  youtube: { l10nId: "preferences-doh-heuristic-youtube" },
+  zscalerCanary: { l10nId: "preferences-doh-heuristic-zscaler-canary" },
+  canary: {
+    l10nId: "preferences-doh-heuristic-canary",
+    supportPage: "doh-status",
+  },
+  browserParent: {
+    l10nId: "preferences-doh-heuristic-browser-parent",
+    supportPage: "doh-status",
+  },
+  policy: {
+    l10nId: "preferences-doh-heuristic-policy",
+    supportPage: "managed-browser-firefox",
+  },
+  vpn: { l10nId: "preferences-doh-heuristic-vpn", supportPage: "doh-status" },
+  proxy: {
+    l10nId: "preferences-doh-heuristic-proxy",
+    supportPage: "prefs-connection-settings",
+  },
+  nrpt: { l10nId: "preferences-doh-heuristic-nrpt" },
+};
+
+/**
+ * @param {{l10nId: string, supportPage?: string}} status
+ * @returns {object} A list item option for the status box.
+ */
+function dohHeuristicListItem({ l10nId, supportPage }) {
+  let options = [{ control: "span", l10nId }];
+  if (supportPage) {
+    options.push(
+      { control: "span", controlAttrs: { ".textContent": " " } },
+      {
+        control: "a",
+        controlAttrs: { is: "moz-support-link", "support-page": supportPage },
+      }
+    );
+  }
+  return { control: "li", options };
+}
+
+/**
+ * @param {number} mode The effective TRR mode, not 2 or 3.
+ * @returns {?object} The status box config explaining why DoH is off, or null
+ *   if there is no specific reason.
+ */
+function getDoHOffStatus(mode) {
+  let { reason, trippedHeuristics } = lazy.DoHController.offReason;
+  if (reason == "policyDisabled") {
+    return { l10nId: "preferences-doh-status-item-off-policy" };
+  }
+  if (mode == Ci.nsIDNSService.MODE_TRROFF) {
+    return { l10nId: "preferences-doh-status-item-off-user" };
+  }
+  switch (reason) {
+    case "rollback": {
+      let region = Services.prefs.getStringPref("doh-rollout.home-region", "");
+      if (!region) {
+        return { l10nId: "preferences-doh-status-item-off-region-unknown" };
+      }
+      return {
+        l10nId: "preferences-doh-status-item-off-region",
+        l10nArgs: {
+          region: new Intl.DisplayNames(undefined, { type: "region" }).of(
+            region
+          ),
+        },
+      };
+    }
+    case "manuallyDisabled":
+      return { l10nId: "preferences-doh-status-item-off-manual" };
+    case "incomplete":
+      return { l10nId: "preferences-doh-status-item-off-pending" };
+    case "disabled": {
+      let statuses = trippedHeuristics
+        .map(heuristic => DOH_HEURISTIC_STATUS[heuristic])
+        .filter(Boolean);
+      if (!statuses.length) {
+        return null;
+      }
+      return {
+        options: [
+          {
+            control: "span",
+            l10nId: "preferences-doh-status-item-off-heuristics",
+            slot: "message",
+          },
+          {
+            control: "ul",
+            slot: "message",
+            options: statuses.map(dohHeuristicListItem),
+          },
+        ],
+      };
+    }
+  }
+  return null;
+}
+
 Preferences.addSetting({
   id: "dohStatusBox",
   deps: ["dohMode", "dohURL"],
+  setup(emitChange) {
+    Services.obs.addObserver(emitChange, "doh:off-reason-changed");
+    return () =>
+      Services.obs.removeObserver(emitChange, "doh:off-reason-changed");
+  },
   getControlConfig: config => {
     let l10nId = "preferences-doh-status-item-off";
     let l10nArgs = {};
     let supportPage = "";
     let controlAttrs = { type: "info" };
+    // Clears a previous heuristics list.
+    let options;
+
+    let mode = Services.dns.currentTrrMode;
+    if (
+      mode != Ci.nsIDNSService.MODE_TRRFIRST &&
+      mode != Ci.nsIDNSService.MODE_TRRONLY
+    ) {
+      let offStatus = getDoHOffStatus(mode);
+      if (offStatus) {
+        return {
+          ...config,
+          l10nArgs,
+          supportPage,
+          controlAttrs,
+          options,
+          ...offStatus,
+        };
+      }
+    }
 
     let trrURI = Services.dns.currentTrrURI;
     let hostname = URL.parse(trrURI)?.hostname;
@@ -3456,7 +3582,6 @@ Preferences.addSetting({
       }
     }
 
-    let mode = Services.dns.currentTrrMode;
     if (
       (mode == Ci.nsIDNSService.MODE_TRRFIRST ||
         mode == Ci.nsIDNSService.MODE_TRRONLY) &&
@@ -3530,6 +3655,7 @@ Preferences.addSetting({
       l10nArgs,
       supportPage,
       controlAttrs,
+      options,
     };
   },
 });
