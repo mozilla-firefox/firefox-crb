@@ -158,6 +158,7 @@
 #include "nsError.h"
 #include "nsFlexContainerFrame.h"
 #include "nsFocusManager.h"
+#include "nsFrameLoaderOwner.h"
 #include "nsFrameSelection.h"
 #include "nsGkAtoms.h"
 #include "nsGlobalWindowOuter.h"
@@ -1396,6 +1397,17 @@ bool PresShell::NeedsFocusFixUp() const {
   // focusable areas.
   if (auto* area = HTMLAreaElement::FromNode(currentFocus)) {
     if (nsFocusManager::IsAreaElementFocusable(*area)) {
+      return false;
+    }
+  }
+
+  // Like other browsers, a focused frame element in a content document keeps
+  // focus when it stops being rendered. Chrome documents keep the fixup, so
+  // that keyboard input doesn't go to hidden chrome panels.
+  // An <object> or <embed> showing an image has no browsing context.
+  if (RefPtr<nsFrameLoaderOwner> owner = do_QueryObject(currentFocus)) {
+    if (owner->GetExtantBrowsingContext() && !currentFocus->GetPrimaryFrame() &&
+        !nsContentUtils::IsChromeDoc(mDocument)) {
       return false;
     }
   }

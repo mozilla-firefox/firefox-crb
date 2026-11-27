@@ -427,7 +427,10 @@ skip-if = [
 support-files = ["file_focus_design_mode_inner.html"]
 
 ["test_focus_display_none_xorigin_iframe.html"]
-support-files = ["file_focus_display_none_xorigin_iframe_inner.html"]
+support-files = [
+  "file_focus_display_none_xorigin_iframe_inner.html",
+  "file_focus_display_none_xorigin_iframe_middle.html",
+]
 skip-if = [
   "http2",
   "http3",

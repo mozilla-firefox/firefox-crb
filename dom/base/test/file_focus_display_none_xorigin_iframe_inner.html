@@ -10,6 +10,14 @@ window.onmessage = function(e) {
   if (e.data === "focus") {
     input.focus();
     window.parent.postMessage("done", "*");
+  } else if (e.data === "focuswindow") {
+    window.focus();
+    window.parent.postMessage("done", "*");
+  } else if (e.data === "getfocus") {
+    window.parent.postMessage(document.hasFocus(), "*");
   }
 };
+if (location.search == "?announce") {
+  window.onload = () => window.parent.postMessage("ready", "*");
+}
 </script>
