@@ -38,10 +38,6 @@
       this.pageCount = 0;
       this._pageStack = [];
 
-      this._bundle = Services.strings.createBundle(
-        "chrome://global/locale/wizard.properties"
-      );
-
       this.addEventListener(
         "keypress",
         event => {
@@ -408,29 +404,31 @@
         document.l10n.setAttributes(labelElement, id);
       } else {
         // Otherwise, make sure we remove any fluent IDs leftover:
-        if (labelElement.hasAttribute("data-l10n-id")) {
-          labelElement.removeAttribute("data-l10n-id");
-        }
+        labelElement.removeAttribute("data-l10n-id");
+        labelElement.removeAttribute("data-l10n-args");
         // And use the label attribute or the default:
-        var label = this.currentPage.getAttribute("label") || "";
-        if (!label && this.onFirstPage && this._bundle) {
-          if (AppConstants.platform == "macosx") {
-            label = this._bundle.GetStringFromName("default-first-title-mac");
-          } else {
-            label = this._bundle.formatStringFromName("default-first-title", [
-              this.title,
-            ]);
-          }
-        } else if (!label && this.onLastPage && this._bundle) {
-          if (AppConstants.platform == "macosx") {
-            label = this._bundle.GetStringFromName("default-last-title-mac");
-          } else {
-            label = this._bundle.formatStringFromName("default-last-title", [
-              this.title,
-            ]);
-          }
+        let label = this.currentPage.getAttribute("label");
+        let isMac = AppConstants.platform == "macosx";
+        let args = isMac ? null : { title: this.title };
+        if (!label && this.onFirstPage) {
+          document.l10n.setAttributes(
+            labelElement,
+            isMac
+              ? "wizard-macos-default-first-title"
+              : "wizard-default-first-title",
+            args
+          );
+        } else if (!label && this.onLastPage) {
+          document.l10n.setAttributes(
+            labelElement,
+            isMac
+              ? "wizard-macos-default-last-title"
+              : "wizard-default-last-title",
+            args
+          );
+        } else {
+          labelElement.textContent = label || "";
         }
-        labelElement.textContent = label;
       }
       let headerDescEl = this._wizardHeader.querySelector(
         ".wizard-header-description"

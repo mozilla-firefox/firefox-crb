@@ -35,3 +35,12 @@ wizard-linux-button-cancel =
   .label = Cancel
 wizard-win-button-cancel =
   .label = Cancel
+
+## Default headers for the first and last page of a wizard.
+## Variables:
+##   $title (String) - The title of the wizard window.
+
+wizard-default-first-title = Welcome to the { $title }
+wizard-default-last-title = Completing the { $title }
+wizard-macos-default-first-title = Introduction
+wizard-macos-default-last-title = Conclusion
