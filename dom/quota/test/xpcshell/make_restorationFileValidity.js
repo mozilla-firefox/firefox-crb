@@ -22,7 +22,7 @@ const { SimpleDBUtils } = ChromeUtils.importESModule(
   "resource://testing-common/dom/simpledb/test/modules/SimpleDBUtils.sys.mjs"
 );
 
-async function makeSecondaryCacheValidity() {
+async function makeRestorationFileValidity() {
   const principal = PrincipalUtils.createPrincipal("http://example42.com");
 
   // IndexedDB
@@ -169,6 +169,6 @@ async function testSteps() {
         ["dom.storage.client_validation", false],
       ],
     },
-    makeSecondaryCacheValidity
+    makeRestorationFileValidity
   );
 }
