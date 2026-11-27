@@ -431,7 +431,14 @@ class MenuFragment : BottomSheetDialogFragment() {
         dispatch: (MenuStoreAction) -> Unit,
     ): MenuItemsRegistry {
         val isBrowserMenu = args.accessPoint == MenuAccessPoint.Browser || args.accessPoint == MenuAccessPoint.Preview
-        val customizationInfo = if (isBrowserMenu) readMenuCustomization() else null
+        val followsBrowserMenu =
+            when (args.accessPoint) {
+                MenuAccessPoint.Browser,
+                MenuAccessPoint.Preview,
+                MenuAccessPoint.Home -> true
+                MenuAccessPoint.External -> false
+            }
+        val customizationInfo = if (followsBrowserMenu) readMenuCustomization() else null
         val customizedSectionsInfo = if (isBrowserMenu) readSectionsCustomization() else emptyMap()
         val customizeMenuBannerSession =
             CustomizeMenuBannerSession(
@@ -462,7 +469,7 @@ class MenuFragment : BottomSheetDialogFragment() {
                     customizationInfo = customizationInfo,
                     customizedSectionsInfo = customizedSectionsInfo,
                 )
-            MenuAccessPoint.Home -> HomeMenuConfiguration.sections()
+            MenuAccessPoint.Home -> HomeMenuConfiguration.sections(customizationInfo = customizationInfo)
             MenuAccessPoint.External ->
                 CustomTabMenuConfiguration.sections(
                     isToolbarAtBottom = requireContext().isToolbarAtBottom(),
