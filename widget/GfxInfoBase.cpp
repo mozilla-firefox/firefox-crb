@@ -2042,6 +2042,12 @@ GfxInfoBase::GetUsingAcceleratedCanvas(bool* aOutValue) {
 }
 
 NS_IMETHODIMP
+GfxInfoBase::GetUsingRemoteCanvas(bool* aOutValue) {
+  *aOutValue = gfx::gfxVars::UseRemoteCanvas2D();
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 GfxInfoBase::GetTextScaleFactor(float* aOutValue) {
   *aOutValue = LookAndFeel::GetTextScaleFactor();
   return NS_OK;

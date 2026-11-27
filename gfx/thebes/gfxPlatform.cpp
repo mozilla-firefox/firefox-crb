@@ -1238,7 +1238,7 @@ bool gfxPlatform::IsHeadless() {
 
 /* static */
 bool gfxPlatform::UseRemoteCanvas() {
-  return XRE_IsContentProcess() && gfx::gfxVars::UseAcceleratedCanvas2D();
+  return XRE_IsContentProcess() && gfx::gfxVars::UseRemoteCanvas2D();
 }
 
 /* static */
@@ -3384,6 +3384,25 @@ void gfxPlatform::InitBackdropFilterConfig() {
           StaticPrefs::GetPrefName_layout_css_backdrop_filter_force_enabled()));
 }
 
+// Set when remote canvas is disabled because it is broken or because there is
+// no GPU process, as opposed to acceleration not being wanted.
+static bool sRemoteCanvas2DDisabled = false;
+
+static void UpdateRemoteCanvas2D() {
+  bool remote = gfxVars::UseAcceleratedCanvas2D();
+  if (!remote && !sRemoteCanvas2DDisabled &&
+      StaticPrefs::gfx_canvas_remote_software() &&
+      gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
+    // Remote canvas can draw with software in the GPU process.
+    remote = true;
+  }
+  gfxVars::SetUseRemoteCanvas2D(remote);
+}
+
+static void RemoteCanvas2DPrefChangeCallback(const char*, void*) {
+  UpdateRemoteCanvas2D();
+}
+
 static void AcceleratedCanvas2DPrefChangeCallback(const char*, void*) {
   FeatureState& feature = gfxConfig::GetFeature(Feature::ACCELERATED_CANVAS2D);
 
@@ -3422,6 +3441,7 @@ static void AcceleratedCanvas2DPrefChangeCallback(const char*, void*) {
   }
 
   gfxVars::SetUseAcceleratedCanvas2D(feature.IsEnabled());
+  UpdateRemoteCanvas2D();
 }
 
 void gfxPlatform::InitAcceleratedCanvas2DConfig() {
@@ -3440,6 +3460,10 @@ void gfxPlatform::InitAcceleratedCanvas2DConfig() {
       AcceleratedCanvas2DPrefChangeCallback,
       nsDependentCString(
           StaticPrefs::GetPrefName_gfx_canvas_accelerated_force_enabled()));
+  Preferences::RegisterCallback(
+      RemoteCanvas2DPrefChangeCallback,
+      nsDependentCString(
+          StaticPrefs::GetPrefName_gfx_canvas_remote_software()));
 }
 
 bool gfxPlatform::AccelerateLayersByDefault() {
@@ -4148,6 +4172,7 @@ void gfxPlatform::DisableAcceleratedCanvasForFallback(
     gfxConfig::Disable(Feature::ACCELERATED_CANVAS2D, aStatus, aMessage,
                        aFailureId);
     gfxVars::SetUseAcceleratedCanvas2D(false);
+    UpdateRemoteCanvas2D();
   }
 }
 
@@ -4155,7 +4180,9 @@ void gfxPlatform::DisableAcceleratedCanvasForFallback(
 void gfxPlatform::DisableAllCanvasForFallback(FeatureStatus aStatus,
                                               const char* aMessage,
                                               const nsACString& aFailureId) {
+  sRemoteCanvas2DDisabled = true;
   DisableAcceleratedCanvasForFallback(aStatus, aMessage, aFailureId);
+  UpdateRemoteCanvas2D();
 
   if (gfxVars::AllowWebGPU() &&
       !StaticPrefs::dom_webgpu_allow_in_parent_AtStartup()) {
@@ -4195,12 +4222,14 @@ void gfxPlatform::DisableGPUProcess() {
 }
 
 /* static */ void gfxPlatform::DisableRemoteCanvas() {
+  sRemoteCanvas2DDisabled = true;
   if (gfxVars::UseAcceleratedCanvas2D()) {
     gfxConfig::ForceDisable(Feature::ACCELERATED_CANVAS2D,
                             FeatureStatus::Failed, "Disabled by runtime error",
                             "FEATURE_ACCELERATED_CANVAS2D_RUNTIME_ERROR"_ns);
     gfxVars::SetUseAcceleratedCanvas2D(false);
   }
+  UpdateRemoteCanvas2D();
 }
 
 void gfxPlatform::ImportCachedContentDeviceData() {
