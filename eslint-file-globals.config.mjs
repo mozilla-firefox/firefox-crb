@@ -99,7 +99,6 @@ export default [
       "browser/base/content/browser-menubar.js",
       "browser/base/content/browser-pagestyle.js",
       "browser/base/content/browser-places.js",
-      "browser/base/content/browser-profiles.js",
       "browser/base/content/browser-safebrowsing.js",
       "browser/base/content/browser-siteIdentity.js",
       "browser/base/content/browser-sitePermissionPanel.js",

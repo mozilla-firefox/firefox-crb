@@ -451,6 +451,7 @@ export interface Modules {
   "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs": typeof import("moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs"),
   "moz-src:///browser/components/places/PlacesUIUtils.sys.mjs": typeof import("moz-src:///browser/components/places/PlacesUIUtils.sys.mjs"),
   "moz-src:///browser/components/privatebrowsing/ResetPBMPanel.sys.mjs": typeof import("moz-src:///browser/components/privatebrowsing/ResetPBMPanel.sys.mjs"),
+  "moz-src:///browser/components/profiles/BrowserProfiles.sys.mjs": typeof import("moz-src:///browser/components/profiles/BrowserProfiles.sys.mjs"),
   "moz-src:///browser/components/protections/ContentBlockingPrefs.sys.mjs": typeof import("moz-src:///browser/components/protections/ContentBlockingPrefs.sys.mjs"),
   "moz-src:///browser/components/protections/PrivacyMetricsService.sys.mjs": typeof import("moz-src:///browser/components/protections/PrivacyMetricsService.sys.mjs"),
   "moz-src:///browser/components/protocolhandler/WebProtocolHandlerRegistrar.sys.mjs": typeof import("moz-src:///browser/components/protocolhandler/WebProtocolHandlerRegistrar.sys.mjs"),

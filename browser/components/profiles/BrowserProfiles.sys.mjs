@@ -2,7 +2,44 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-class BrowserProfiles {
+import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
+
+const lazy = XPCOMUtils.declareLazy({
+  PanelMultiView:
+    "moz-src:///browser/components/customizableui/PanelMultiView.sys.mjs",
+  PanelView:
+    "moz-src:///browser/components/customizableui/PanelMultiView.sys.mjs",
+  SelectableProfileService:
+    "resource:///modules/profiles/SelectableProfileService.sys.mjs",
+});
+
+/**
+ * Manages the profile menus of a browser window. Each window has its own
+ * instance, which `forWindow` creates on first use and `init` sets up.
+ */
+export class BrowserProfiles {
+  static #instances = new WeakMap();
+
+  /**
+   * @param {Window} window
+   * @returns {BrowserProfiles} The window's instance.
+   */
+  static forWindow(window) {
+    let instance = BrowserProfiles.#instances.get(window);
+    if (!instance) {
+      instance = new BrowserProfiles(window);
+      BrowserProfiles.#instances.set(window, instance);
+    }
+    return instance;
+  }
+
+  /**
+   * @param {Window} window
+   */
+  static init(window) {
+    return BrowserProfiles.forWindow(window).init();
+  }
+
   #window;
 
   #subViewProfile;
@@ -30,27 +67,27 @@ class BrowserProfiles {
       "chrome://browser/locale/browser.properties"
     );
 
-    this.profilesButton = PanelMultiView.getViewNode(
+    this.profilesButton = lazy.PanelMultiView.getViewNode(
       document,
       "appMenu-profiles-button"
     );
-    this.appMenuCreateProfileButton = PanelMultiView.getViewNode(
+    this.appMenuCreateProfileButton = lazy.PanelMultiView.getViewNode(
       document,
       "appMenu-create-profile-button"
     );
-    this.fxaMenuProfileButtonsContainer = PanelMultiView.getViewNode(
+    this.fxaMenuProfileButtonsContainer = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-profile-buttons"
     );
-    this.fxaMenuProfilesHeaderLabel = PanelMultiView.getViewNode(
+    this.fxaMenuProfilesHeaderLabel = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-profiles-header-label"
     );
-    this.fxaMenuProfilesSeparator = PanelMultiView.getViewNode(
+    this.fxaMenuProfilesSeparator = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-profiles-separator"
     );
-    this.fxaMenuAllProfilesPanel = PanelMultiView.getViewNode(
+    this.fxaMenuAllProfilesPanel = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-all-profiles"
     );
@@ -58,14 +95,17 @@ class BrowserProfiles {
       "command",
       this.handleCommand
     );
-    this.subview = PanelMultiView.getViewNode(document, "PanelUI-profiles");
+    this.subview = lazy.PanelMultiView.getViewNode(
+      document,
+      "PanelUI-profiles"
+    );
     this.subview.addEventListener("command", this.handleCommand);
 
     PanelUI.mainView.addEventListener("ViewShowing", () =>
       this.#onPanelShowing(this.profilesButton)
     );
 
-    let fxaPanelView = PanelMultiView.getViewNode(document, "PanelUI-fxa");
+    let fxaPanelView = lazy.PanelMultiView.getViewNode(document, "PanelUI-fxa");
     fxaPanelView.addEventListener("ViewShowing", () =>
       this.#onFxaMenuPanelShowing()
     );
@@ -81,25 +121,25 @@ class BrowserProfiles {
       this.handleCommand
     );
 
-    PanelMultiView.getViewNode(
+    lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-create-profile"
     ).addEventListener("command", this.handleCommand);
 
     // moz-button emits "click" rather than "command".
-    PanelMultiView.getViewNode(
+    lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-create-profile-confirm-button"
     ).addEventListener("click", this.handleCommand);
 
-    this.toggleProfileMenus(SelectableProfileService?.isEnabled);
+    this.toggleProfileMenus(lazy.SelectableProfileService?.isEnabled);
 
-    if (SelectableProfileService) {
+    if (lazy.SelectableProfileService) {
       let listener = (event, isEnabled) => this.toggleProfileMenus(isEnabled);
 
-      SelectableProfileService.on("enableChanged", listener);
+      lazy.SelectableProfileService.on("enableChanged", listener);
       this.#window.addEventListener("unload", () =>
-        SelectableProfileService.off("enableChanged", listener)
+        lazy.SelectableProfileService.off("enableChanged", listener)
       );
     }
   }
@@ -111,7 +151,7 @@ class BrowserProfiles {
   }
 
   async #onPanelShowing(profilesButton) {
-    if (!SelectableProfileService?.isEnabled) {
+    if (!lazy.SelectableProfileService?.isEnabled) {
       profilesButton.hidden = true;
       this.appMenuCreateProfileButton.hidden = true;
       return;
@@ -119,8 +159,8 @@ class BrowserProfiles {
 
     // If the feature is preffed on, but we haven't created profiles yet, the
     // service will not be initialized.
-    let profiles = SelectableProfileService.initialized
-      ? await SelectableProfileService.getAllProfiles()
+    let profiles = lazy.SelectableProfileService.initialized
+      ? await lazy.SelectableProfileService.getAllProfiles()
       : [];
     if (!profiles.length) {
       profilesButton.hidden = true;
@@ -131,16 +171,17 @@ class BrowserProfiles {
 
     profilesButton.hidden = false;
 
-    let { themeBg, themeFg } = SelectableProfileService.currentProfile.theme;
+    let { themeBg, themeFg } =
+      lazy.SelectableProfileService.currentProfile.theme;
     profilesButton.style.setProperty("--appmenu-profiles-theme-bg", themeBg);
     profilesButton.style.setProperty("--appmenu-profiles-theme-fg", themeFg);
     profilesButton.setAttribute(
       "label",
-      SelectableProfileService.currentProfile.name
+      lazy.SelectableProfileService.currentProfile.name
     );
     profilesButton.setAttribute(
       "image",
-      await SelectableProfileService.currentProfile.getAvatarURL(16)
+      await lazy.SelectableProfileService.currentProfile.getAvatarURL(16)
     );
   }
 
@@ -162,13 +203,13 @@ class BrowserProfiles {
       separator.hidden = false;
     };
 
-    if (!SelectableProfileService?.isEnabled) {
+    if (!lazy.SelectableProfileService?.isEnabled) {
       hideProfilesSection();
       return;
     }
 
-    let profiles = SelectableProfileService.initialized
-      ? await SelectableProfileService.getAllProfiles()
+    let profiles = lazy.SelectableProfileService.initialized
+      ? await lazy.SelectableProfileService.getAllProfiles()
       : [];
 
     while (container.lastChild) {
@@ -193,7 +234,7 @@ class BrowserProfiles {
       return;
     }
 
-    let currentProfileId = SelectableProfileService.currentProfile?.id;
+    let currentProfileId = lazy.SelectableProfileService.currentProfile?.id;
     profiles.sort((a, b) => {
       if (a.id === currentProfileId) {
         return -1;
@@ -211,7 +252,7 @@ class BrowserProfiles {
         "subviewbutton-iconic",
         "profile-item"
       );
-      if (profile.id === SelectableProfileService.currentProfile?.id) {
+      if (profile.id === lazy.SelectableProfileService.currentProfile?.id) {
         btn.classList.add("subviewbutton-nav");
       }
       btn.setAttribute("closemenu", "none");
@@ -239,7 +280,7 @@ class BrowserProfiles {
 
   async #populateAllProfilesPanel() {
     let { document } = this.#window;
-    const list = PanelMultiView.getViewNode(
+    const list = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-all-profiles-list"
     );
@@ -248,11 +289,11 @@ class BrowserProfiles {
       list.lastChild.remove();
     }
 
-    let profiles = SelectableProfileService.initialized
-      ? await SelectableProfileService.getAllProfiles()
+    let profiles = lazy.SelectableProfileService.initialized
+      ? await lazy.SelectableProfileService.getAllProfiles()
       : [];
 
-    let currentProfileId = SelectableProfileService.currentProfile?.id;
+    let currentProfileId = lazy.SelectableProfileService.currentProfile?.id;
     profiles.sort((a, b) => {
       if (a.id === currentProfileId) {
         return -1;
@@ -321,8 +362,8 @@ class BrowserProfiles {
   async onPopupShowing() {
     let { document } = this.#window;
     let menuPopup = document.getElementById("menu_ProfilesPopup");
-    let profiles = await SelectableProfileService.getAllProfiles();
-    let currentProfile = SelectableProfileService.currentProfile;
+    let profiles = await lazy.SelectableProfileService.getAllProfiles();
+    let currentProfile = lazy.SelectableProfileService.currentProfile;
     let insertionPoint = document.getElementById("menu_newProfile");
     let existingItems = [
       ...menuPopup.querySelectorAll(":scope > menuitem[profileid]"),
@@ -367,7 +408,7 @@ class BrowserProfiles {
 
   manageProfiles() {
     let { toOpenWindowByType } = this.#window;
-    return SelectableProfileService.maybeSetupDataStore().then(() => {
+    return lazy.SelectableProfileService.maybeSetupDataStore().then(() => {
       toOpenWindowByType(
         "about:profilemanager",
         "about:profilemanager",
@@ -378,21 +419,21 @@ class BrowserProfiles {
 
   copyProfile() {
     const profile =
-      this.#subViewProfile ?? SelectableProfileService.currentProfile;
-    SelectableProfileService.maybeSetupDataStore().then(() => {
+      this.#subViewProfile ?? lazy.SelectableProfileService.currentProfile;
+    lazy.SelectableProfileService.maybeSetupDataStore().then(() => {
       profile.copyProfile();
     });
   }
 
   createNewProfile(source) {
-    SelectableProfileService.createNewProfile(true, null, source);
+    lazy.SelectableProfileService.createNewProfile(true, null, source);
   }
 
   updateView(target) {
     let { PanelUI } = this.#window;
     const closestPanelView = target.closest("panelview");
     const panelView = closestPanelView
-      ? PanelView.forNode(closestPanelView)
+      ? lazy.PanelView.forNode(closestPanelView)
       : null;
     const wasKeyboardActivation = panelView?._doingKeyboardActivation ?? false;
     this.populateSubView();
@@ -406,25 +447,25 @@ class BrowserProfiles {
     let { PanelUI } = this.#window;
     const profileId = parseInt(target.getAttribute("profileid"), 10);
     this.#subViewProfile = profileId
-      ? await SelectableProfileService.getProfile(profileId)
+      ? await lazy.SelectableProfileService.getProfile(profileId)
       : null;
     this.populateSubView(this.#subViewProfile);
     PanelUI.showSubView("PanelUI-profiles", target);
   }
 
   launchProfile(aEvent) {
-    SelectableProfileService.getProfile(
+    lazy.SelectableProfileService.getProfile(
       aEvent.target.getAttribute("profileid")
     ).then(profile => {
-      SelectableProfileService.launchInstance(profile);
+      lazy.SelectableProfileService.launchInstance(profile);
     });
   }
 
   async openTabsInProfile(aEvent, tabsToOpen) {
-    let profile = await SelectableProfileService.getProfile(
+    let profile = await lazy.SelectableProfileService.getProfile(
       aEvent.target.getAttribute("profileid")
     );
-    SelectableProfileService.launchInstance(
+    lazy.SelectableProfileService.launchInstance(
       profile,
       tabsToOpen.map(tab => tab.linkedBrowser.currentURI.spec)
     );
@@ -598,7 +639,7 @@ class BrowserProfiles {
       aEvent.target.classList.contains("profile-item") &&
       aEvent.target.hasAttribute("profileid") &&
       aEvent.target.getAttribute("profileid") !==
-        String(SelectableProfileService.currentProfile?.id)
+        String(lazy.SelectableProfileService.currentProfile?.id)
     ) {
       this.#window.gSync.emitFxaToolbarTelemetry(
         aEvent.target.closest("#PanelUI-fxa-menu-all-profiles-list")
@@ -623,17 +664,17 @@ class BrowserProfiles {
     let profiles = [];
     let currentProfile = null;
 
-    if (SelectableProfileService.initialized) {
-      profiles = await SelectableProfileService.getAllProfiles();
-      currentProfile = SelectableProfileService.currentProfile;
+    if (lazy.SelectableProfileService.initialized) {
+      profiles = await lazy.SelectableProfileService.getAllProfiles();
+      currentProfile = lazy.SelectableProfileService.currentProfile;
     }
 
     const targetProfile = displayProfile ?? currentProfile;
     const showProfileInfo = displayProfile !== null || profiles.length >= 1;
 
-    let subview = PanelMultiView.getViewNode(document, "PanelUI-profiles");
+    let subview = lazy.PanelMultiView.getViewNode(document, "PanelUI-profiles");
 
-    let backButton = PanelMultiView.getViewNode(
+    let backButton = lazy.PanelMultiView.getViewNode(
       document,
       "profiles-appmenu-back-button"
     );
@@ -646,18 +687,18 @@ class BrowserProfiles {
     const subviewBody = subview.querySelector(".panel-subview-body");
     subviewBody.hidden = !targetProfile;
 
-    let currentProfileCard = PanelMultiView.getViewNode(
+    let currentProfileCard = lazy.PanelMultiView.getViewNode(
       document,
       "current-profile"
     );
     currentProfileCard.hidden = !targetProfile;
 
-    let profilesHeader = PanelMultiView.getViewNode(
+    let profilesHeader = lazy.PanelMultiView.getViewNode(
       document,
       "PanelUI-profiles-header"
     );
 
-    let editThisProfileButton = PanelMultiView.getViewNode(
+    let editThisProfileButton = lazy.PanelMultiView.getViewNode(
       document,
       "profiles-edit-this-profile-button"
     );
@@ -673,7 +714,7 @@ class BrowserProfiles {
 
     // Automatically created by PanelMultiView.
     const headerSeparator = profilesHeader.nextElementSibling;
-    let footerSeparator = PanelMultiView.getViewNode(
+    let footerSeparator = lazy.PanelMultiView.getViewNode(
       document,
       "footer-separator"
     );
@@ -682,7 +723,7 @@ class BrowserProfiles {
       footerSeparator.id = "footer-separator";
     }
 
-    let createProfileButton = PanelMultiView.getViewNode(
+    let createProfileButton = lazy.PanelMultiView.getViewNode(
       document,
       "profiles-create-profile-button"
     );
@@ -699,7 +740,7 @@ class BrowserProfiles {
       );
     }
 
-    let copyProfileButton = PanelMultiView.getViewNode(
+    let copyProfileButton = lazy.PanelMultiView.getViewNode(
       document,
       "profiles-copy-profile-button"
     );
@@ -711,7 +752,7 @@ class BrowserProfiles {
       copyProfileButton.setAttribute("data-l10n-id", "appmenu-copy-profile");
     }
 
-    let manageProfilesButton = PanelMultiView.getViewNode(
+    let manageProfilesButton = lazy.PanelMultiView.getViewNode(
       document,
       "profiles-manage-profiles-button"
     );
@@ -733,13 +774,13 @@ class BrowserProfiles {
       profilesHeader.style.backgroundColor = "var(--appmenu-profiles-theme-bg)";
       profilesHeader.style.color = "var(--appmenu-profiles-theme-fg)";
 
-      let headerText = PanelMultiView.getViewNode(
+      let headerText = lazy.PanelMultiView.getViewNode(
         document,
         "profiles-header-content"
       );
       headerText.textContent = targetProfile.name;
 
-      let profileIconEl = PanelMultiView.getViewNode(
+      let profileIconEl = lazy.PanelMultiView.getViewNode(
         document,
         "profile-icon-image"
       );
@@ -766,15 +807,18 @@ class BrowserProfiles {
       for (let item of subview.querySelectorAll(".profiles-subview-item")) {
         item.remove();
       }
-      PanelMultiView.getViewNode(
+      lazy.PanelMultiView.getViewNode(
         document,
         "profiles-subview-list-start-separator"
       )?.remove();
-      PanelMultiView.getViewNode(
+      lazy.PanelMultiView.getViewNode(
         document,
         "profiles-subview-list-header"
       )?.remove();
-      PanelMultiView.getViewNode(document, "profiles-subview-list")?.remove();
+      lazy.PanelMultiView.getViewNode(
+        document,
+        "profiles-subview-list"
+      )?.remove();
 
       let hasOtherProfiles = false;
       if (displayProfile === null) {
@@ -843,12 +887,12 @@ class BrowserProfiles {
 
   async populateMoveTabMenu(menuPopup) {
     let { document } = this.#window;
-    if (!SelectableProfileService.initialized) {
+    if (!lazy.SelectableProfileService.initialized) {
       return;
     }
 
-    const profiles = await SelectableProfileService.getAllProfiles();
-    const currentProfile = SelectableProfileService.currentProfile;
+    const profiles = await lazy.SelectableProfileService.getAllProfiles();
+    const currentProfile = lazy.SelectableProfileService.currentProfile;
 
     const separator = document.getElementById("moveTabSeparator");
     separator.hidden = profiles.length < 2;
@@ -890,5 +934,3 @@ class BrowserProfiles {
     }
   }
 }
-
-var gProfiles = new BrowserProfiles(window);

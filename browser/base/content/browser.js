@@ -308,11 +308,12 @@ XPCOMUtils.defineLazyScriptGetter(
   "gPageStyleMenu",
   "chrome://browser/content/browser-pagestyle.js"
 );
-XPCOMUtils.defineLazyScriptGetter(
-  this,
-  "gProfiles",
-  "chrome://browser/content/browser-profiles.js"
-);
+ChromeUtils.defineLazyGetter(this, "gProfiles", () => {
+  let { BrowserProfiles } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/profiles/BrowserProfiles.sys.mjs"
+  );
+  return BrowserProfiles.forWindow(window);
+});
 
 // lazy service getters
 

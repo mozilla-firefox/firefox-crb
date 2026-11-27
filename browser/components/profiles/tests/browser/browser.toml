@@ -65,4 +65,6 @@ skip-if = [
 
 ["browser_update_profile_on_window_switch.js"]
 
+["browser_window_instances.js"]
+
 ["browser_window_title_test.js"]

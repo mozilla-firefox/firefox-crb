@@ -126,7 +126,7 @@ category browser-window-idle-tasks chrome://browser/content/browser-gestureSuppo
 category browser-window-idle-tasks chrome://browser/content/browser-gestureSupport.js#gHistorySwipeAnimation gHistorySwipeAnimation.init
 category browser-window-idle-tasks moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs NewTabPagePreloading.maybeCreatePreloadedBrowser
 category browser-window-idle-tasks chrome://browser/content/browser-graphics-utils.js gGfxUtils.init
-category browser-window-idle-tasks chrome://browser/content/browser-profiles.js gProfiles.init
+category browser-window-idle-tasks moz-src:///browser/components/profiles/BrowserProfiles.sys.mjs BrowserProfiles.init
 category browser-window-idle-tasks moz-src:///browser/components/downloads/DownloadsCommon.sys.mjs DownloadsCommon.initializeForWindow
 
 category browser-window-location-change chrome://browser/content/browser-places.js BookmarkingUI.onLocationChange
