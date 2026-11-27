@@ -310,6 +310,7 @@ struct arena_t : public BaseAllocClass {
   // counted in mNumDirty and other counters.
   mozilla::DoublyLinkedList<arena_chunk_t, mozilla::DirtyChunkListTrait> mSpares
       MOZ_GUARDED_BY(mLock);
+  size_t mNumSpares = 0;
 
   // A per-arena opt-in to randomize the offset of small allocations
   // Needs no lock, read-only.
