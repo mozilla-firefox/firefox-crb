@@ -254,33 +254,22 @@ parent:
       returns (IMENotificationRequests requests);
 
     /**
-     * Notifies chrome that there has been a change in text content
-     * One call can encompass both a delete and an insert operation
-     * Only called when NotifyIMEFocus returns PR_TRUE for mWantUpdates
+     * Notifies chrome that there has been at least a change in text content,
+     * selection and/or layout.
      *
      *  contentCache Cache of content
      *  notification Whole data of the notification
      */
-    [Nested=inside_cpow] async NotifyIMETextChange(ContentCache contentCache,
-                                                   IMENotification notification);
+    [Nested=inside_cpow] async NotifyIMEContentChange(ContentCache contentCache,
+                                                      IMENotification notification);
 
     /**
-     * Notifies chrome that there is a IME compostion rect updated
+     * Notifies chrome that there is a IME composition rect updated
      *
      *  contentCache Cache of content
      */
     [Nested=inside_cpow] async NotifyIMECompositionUpdate(ContentCache contentCache,
                                                           IMENotification notification);
-
-    /**
-     * Notifies chrome that there has been a change in selection
-     * Only called when NotifyIMEFocus returns PR_TRUE for mWantUpdates
-     *
-     *  contentCache Cache of content
-     *  notification Whole data of the notification
-     */
-    [Nested=inside_cpow] async NotifyIMESelection(ContentCache contentCache,
-                                                  IMENotification notification);
 
     /**
      * Notifies chrome of updating its content cache.
@@ -297,14 +286,6 @@ parent:
      */
     [Nested=inside_cpow] sync NotifyIMEMouseButtonEvent(IMENotification notification)
       returns (bool consumedByIME);
-
-    /**
-     * Notifies chrome to position change
-     *
-     *  contentCache Cache of content
-     */
-    [Nested=inside_cpow] async NotifyIMEPositionChange(ContentCache contentCache,
-                                                       IMENotification notification);
 
     /**
      * Requests chrome to commit or cancel composition of IME.

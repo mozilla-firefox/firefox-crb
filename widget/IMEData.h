@@ -205,19 +205,20 @@ namespace widget {
  * Preference for receiving IME updates
  *
  * If mWantUpdates is not empty, IMEContentObserver will observe text
- * change and/or selection change and call nsIWidget::NotifyIME() with
- * NOTIFY_IME_OF_SELECTION_CHANGE and/or NOTIFY_IME_OF_TEXT_CHANGE.
+ * change or layout change and call nsIWidget::NotifyIME() with
+ * NOTIFY_IME_OF_CONTENT_CHANGE.
  * Please note that the text change observing cost is very expensive especially
  * on an HTML editor has focus.
  * If the IME implementation on a particular platform doesn't care about
- * NOTIFY_IME_OF_SELECTION_CHANGE and/or NOTIFY_IME_OF_TEXT_CHANGE,
- * they should set mWantUpdates to empty to avoid the cost.
+ * NOTIFY_IME_OF_CONTENT_CHANGE, they should not set mWantUpdates to contain
+ * TextChange nor LayoutChange to save its computation cost and the frequency
+ * of the notifications.
  * If the IME implementation needs notifications even while our process is
  * inactive, it should also set NotifyDuringInactive.
  */
 enum class IMENotificationRequest : uint8_t {
   TextChange,
-  PositionChange,
+  LayoutChange,
   // NOTIFY_MOUSE_BUTTON_EVENT_ON_CHAR is used when mouse button is pressed
   // or released on a character in the focused editor.  The notification is
   // notified to IME as a mouse event.  If it's consumed by IME, NotifyIME()
@@ -241,7 +242,7 @@ namespace widget {
 
 using IMENotificationRequests = EnumSet<IMENotificationRequest>;
 inline constexpr const IMENotificationRequests AllIMENotificationRequests = {
-    IMENotificationRequest::TextChange, IMENotificationRequest::PositionChange,
+    IMENotificationRequest::TextChange, IMENotificationRequest::LayoutChange,
     IMENotificationRequest::MouseEventOnChar};
 
 /**
@@ -636,10 +637,10 @@ enum IMEMessage : int8_t {
   NOTIFY_IME_OF_FOCUS,
   // An editable content is losing focus
   NOTIFY_IME_OF_BLUR,
-  // Selection in the focused editable content is changed
-  NOTIFY_IME_OF_SELECTION_CHANGE,
-  // Text in the focused editable content is changed
-  NOTIFY_IME_OF_TEXT_CHANGE,
+  // The text and/or selection in the focused editable element is changed and/or
+  // the focused editable element's size, offset or scroll position in its
+  // content may be changed.
+  NOTIFY_IME_OF_CONTENT_CHANGE,
   // Notified when a dispatched composition event is handled by the
   // contents.  This must be notified after the other notifications.
   // Note that if a remote process has focus, this is notified only once when
@@ -652,8 +653,6 @@ enum IMEMessage : int8_t {
   //       should tread the blur notification as including this if there is
   //       pending composition events.
   NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED,
-  // Position or size of focused element may be changed.
-  NOTIFY_IME_OF_POSITION_CHANGE,
   // Mouse button event is fired on a character in focused editor
   NOTIFY_IME_OF_MOUSE_BUTTON_EVENT,
   // Request to commit current composition to IME
@@ -673,9 +672,7 @@ struct IMENotification final {
   IMENotification(const IMENotification& aOther) = default;
   ~IMENotification() { Clear(); }
 
-  MOZ_IMPLICIT IMENotification(IMEMessage aMessage)
-      : mMessage(aMessage),
-        mLayoutChanged(aMessage == NOTIFY_IME_OF_POSITION_CHANGE) {}
+  MOZ_IMPLICIT IMENotification(IMEMessage aMessage) : mMessage(aMessage) {}
 
   IMENotification& operator=(const IMENotification& aOther) = default;
 
@@ -718,7 +715,6 @@ struct IMENotification final {
 
   IMEMessage mMessage = NOTIFY_IME_OF_NOTHING;
 
-  // NOTIFY_IME_OF_SELECTION_CHANGE specific data
   struct SelectionChangeData {
     // Selection range.
     uint32_t mOffset = UINT32_MAX;
@@ -953,13 +949,9 @@ struct IMENotification final {
     Modifiers mModifiers = 0;  // MODIFIER_NONE, defined in BasicEvents.h
   };
 
-  // NOTIFY_IME_OF_SELECTION_CHANGE specific data
+  // NOTIFY_IME_OF_CONTENT_CHANGE specific data
   Maybe<SelectionChangeData> mSelectionChangeData;
-
-  // NOTIFY_IME_OF_TEXT_CHANGE specific data
   Maybe<TextChangeData> mTextChangeData;
-
-  // NOTIFY_IME_OF_POSITION_CHANGE specific data
   bool mLayoutChanged = false;
 
   // NOTIFY_IME_OF_MOUSE_BUTTON_EVENT specific data

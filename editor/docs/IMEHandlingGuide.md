@@ -587,18 +587,8 @@ something useful to handle IME. Note that some of them are notified only when
 `nsIWidget::GetIMEUpdatePreference()` returns flags which request the
 notifications.
 
-`NOTIFY_IME_OF_TEXT_CHANGE`, `NOTIFY_IME_OF_SELECTION_CHANGE`,
-`NOTIFY_IME_OF_POSITION_CHANGE` and
-`NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED` are always sent by following order:
-
-1. `NOTIFY_IME_OF_TEXT_CHANGE`
-2. `NOTIFY_IME_OF_SELECTION_CHANGE`
-3. `NOTIFY_IME_OF_POSITION_CHANGE`
-4. `NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED`
-
-If sending one of above notifications causes higher priority notification, the
-sender should abort to send remaining notifications and restart from high
-priority notification again.
+`NOTIFY_IME_OF_CONTENT_CHANGE` is always sent before
+`NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED`.
 
 Additionally, all notifications except `NOTIFY_IME_OF_BLUR` should be sent
 only when it's safe to run script since the notification may cause querying
@@ -635,59 +625,58 @@ When `widget` wants notifications during inactive, `widget` includes
 If this notification is tried to sent before sending `NOTIFY_IME_OF_FOCUS`,
 all pending notifications and `NOTIFY_IME_OF_BLUR` itself are canceled.
 
-### NOTIFY_IME_OF_TEXT_CHANGE
+### NOTIFY_IME_OF_CONTENT_CHANGE
 
-When text of focused editor is changed, this is sent to `widget` with a range
-of the change. But this is sent only when result of
-`nsIWidget::GetIMEUpdatePreference()` includes `NOTIFY_TEXT_CHANGE`.
+When text and/or selection of focused editor is changed and/or reflow or scroll
+occurs in the document, this is sent to `widget` with a range
+of the text change and/or the selection range.
 
-If two or more text changes occurred after previous
-`NOTIFY_IME_OF_TEXT_CHANGE` or `NOTIFY_IME_OF_FOCUS`, the ranges of all
-changes are merged. E.g., if first change is from `1` to `5` and second
-change is from `5` to `10`, the notified range is from `1` to `10`.
+Text change data may be sent only when `nsIWidget::GetIMEUpdatePreference()`
+result includes `IMENotificationRequest::TextChange`.
+
+If a text change occurs, `IMENotification::mTextChangeData` is set and it stores
+the merged text changes after the last `NOTIFY_IME_OF_CONTENT_CHANGE` or
+`NOTIFY_IME_OF_FOCUS`. For example, if first change is from `1` to `5` and
+second change is from `5` to `10`, the notified range is from `1` to `10`.
 
 If all merged text changes were caused by composition,
-`IMENotification::mTextChangeData::mCausedOnlyByComposition` is set to true.
+`IMENotification::mTextChangeData->mCausedOnlyByComposition` is set to true.
 This is useful if native IME handler wants to ignore all text changes which are
 expected by native IME.
 
 If at least one text change of the merged text changes was caused by current
 composition,
-`IMENotification::mTextChangeData::mIncludingChangesDuringComposition` is set
+`IMENotification::mTextChangeData->mIncludingChangesDuringComposition` is set
 to true. This is useful if native IME handler wants to ignore delayed text
 change notifications.
 
 If at least one text change of the merged text changes was caused when there
 was no composition,
-`IMENotification::mTextChangeData::mIncludingChangesWithoutComposition` is
+`IMENotification::mTextChangeData->mIncludingChangesWithoutComposition` is
 set to true.
 
-### NOTIFY_IME_OF_SELECTION_CHANGE
-
-When selection (or caret position) is changed in focused editor, widget is
-notified of this.
+If a selection change occurs, `IMENotification::mSelectionChangeData` is set
+and it stores the latest selection range.
 
 If the last selection change was occurred by a composition event event
-handling, `IMENotification::mSelectionChangeData::mCausedByComposition` is
+handling, `IMENotification::mSelectionChangeData->mCausedByComposition` is
 set to true. This is useful if native IME handler wants to ignore the last
 selection change which is expected by native IME.
 
 If the last selection change was occurred by an `eSetSelection` event,
-`IMENotification::mSelectionChangeData::mCausedBySelectionEvent` is set to
+`IMENotification::mSelectionChangeData->mCausedBySelectionEvent` is set to
 true. This is useful if native IME handler wants to ignore the last selection
 change which was requested by native IME.
 
 If the last selection is occurred during a composition,
-`IMENotification::mSelectionChangeData::mOccurredDuringComposition` is set to
+`IMENotification::mSelectionChangeData->mOccurredDuringComposition` is set to
 true. This is useful if native IME handler wants to ignore the last selection
 change which occurred by web application's `compositionstart` or
 `compositionupdate` event handler before inserting composition string.
 
-### NOTIFY_IME_OF_POSITION_CHANGE
-
-When reflow or scroll occurs in the document, this is sent to widget, but this
-is sent only when result of `nsIWidget::GetIMEUpdatePreference()` includes
-`NOTIFY_POSITION_CHANGE`.
+Layout change may be sent only when `nsIWidget::GetIMEUpdatePreference()` result
+includes `IMENotificationRequest::LayoutChange`. When a layout change occurred,
+`IMENotification::mLayoutChanged` is set to `true`.
 
 This might be useful to update a candidate window position or something.
 

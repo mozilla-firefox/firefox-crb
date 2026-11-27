@@ -23,7 +23,7 @@ namespace mozilla {
 /**
  * ContentSelection stores DOM selection in flattened text by
  * ContentEventHandler.  It should be retrieved with `eQuerySelectedText` event,
- * notified with `NOTIFY_IME_OF_SELECTION_CHANGE` or set by widget itself.
+ * notified with `NOTIFY_IME_OF_CONTENT_CHANGE` or set by widget itself.
  */
 class ContentSelection {
  public:

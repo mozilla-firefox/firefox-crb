@@ -692,18 +692,19 @@ IMContextWrapper::NotifyIME(TextEventDispatcher* aTextEventDispatcher,
     case NOTIFY_IME_OF_BLUR:
       OnFocusChangeInGecko(false);
       return NS_OK;
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      OnLayoutChange();
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      if (aNotification.mSelectionChangeData.isSome()) {
+        nsWindow* const window =
+            static_cast<nsWindow*>(aTextEventDispatcher->GetWidget());
+        OnSelectionChange(window, aNotification);
+      }
+      if (aNotification.mLayoutChanged) {
+        OnLayoutChange();
+      }
       return NS_OK;
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       OnUpdateComposition();
       return NS_OK;
-    case NOTIFY_IME_OF_SELECTION_CHANGE: {
-      nsWindow* window =
-          static_cast<nsWindow*>(aTextEventDispatcher->GetWidget());
-      OnSelectionChange(window, aNotification);
-      return NS_OK;
-    }
     default:
       return NS_ERROR_NOT_IMPLEMENTED;
   }
@@ -738,7 +739,7 @@ NS_IMETHODIMP_(IMENotificationRequests)
 IMContextWrapper::GetIMENotificationRequests() {
   // If it's not enabled, we don't need position change notification.
   return IsEnabled()
-             ? IMENotificationRequests{IMENotificationRequest::PositionChange}
+             ? IMENotificationRequests{IMENotificationRequest::LayoutChange}
              : IMENotificationRequests{};
 }
 
