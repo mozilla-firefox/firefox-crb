@@ -33,6 +33,7 @@ dependencies {
     implementation libs.kotlinx.coroutines
     implementation libs.kotlinx.serialization.json
 
+    testImplementation project(':components:concept-firefox-accounts')
     testImplementation project(':components:support-test')
     testImplementation project(':components:support-test-fakes')
     testImplementation project(':components:support-test-libstate')

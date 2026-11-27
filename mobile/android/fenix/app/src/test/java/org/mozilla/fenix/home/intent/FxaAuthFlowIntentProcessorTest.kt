@@ -22,9 +22,9 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import mozilla.components.concept.fxa.FxaScope
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.SyncConfig
-import mozilla.components.service.fxa.FxaScope
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.runner.RunWith
