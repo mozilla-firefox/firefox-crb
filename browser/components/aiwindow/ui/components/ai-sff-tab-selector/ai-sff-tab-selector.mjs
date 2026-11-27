@@ -11,12 +11,14 @@ import {
 import { MAX_SELECTED_TABS } from "chrome://browser/content/aiwindow/modules/SmartFormFillConstants.mjs";
 
 /**
- * Interface for choosing tabs to use in Smart Form Fill
+ * Interface for choosing sources to use in Smart Form Fill
  */
 export class AiSffTabSelector extends MozLitElement {
   static properties = {
     suggestedTabs: { type: Array },
     otherTabs: { type: Array },
+    savedAddresses: { type: Array },
+    selectedAddressGuid: { type: String },
   };
 
   constructor() {
@@ -24,6 +26,8 @@ export class AiSffTabSelector extends MozLitElement {
 
     this.suggestedTabs = [];
     this.otherTabs = [];
+    this.savedAddresses = [];
+    this.selectedAddressGuid = null;
   }
 
   get #selectedTabIds() {
@@ -43,9 +47,16 @@ export class AiSffTabSelector extends MozLitElement {
     this.otherTabs = this.#updateTab(this.otherTabs, tabId, pressed);
   }
 
+  #canConfirmSourceSelection(selectedTabCount) {
+    return (
+      selectedTabCount <= MAX_SELECTED_TABS &&
+      (selectedTabCount > 0 || Boolean(this.savedAddresses.length))
+    );
+  }
+
   #handleAccept() {
     const selectedTabIds = this.#selectedTabIds;
-    if (!selectedTabIds.length || selectedTabIds.length > MAX_SELECTED_TABS) {
+    if (!this.#canConfirmSourceSelection(selectedTabIds.length)) {
       return;
     }
 
@@ -53,7 +64,10 @@ export class AiSffTabSelector extends MozLitElement {
       new CustomEvent("tabs-selected", {
         bubbles: true,
         composed: true,
-        detail: { selectedTabIds },
+        detail: {
+          selectedTabIds,
+          selectedAddressGuid: this.selectedAddressGuid,
+        },
       })
     );
   }
@@ -67,46 +81,80 @@ export class AiSffTabSelector extends MozLitElement {
     );
   }
 
-  #renderTabList(tabLabelFluentId, tabs, selectedTabCount, scrollable = false) {
+  #renderSourceList(heading, className, items) {
     return html`
-      <moz-box-group
-        type="list"
-        class=${scrollable
-          ? "tab-selector-tabs-scrollable ai-smart-form-fill-other-tabs"
-          : "ai-smart-form-fill-suggested-tabs"}
-      >
+      <moz-box-group type="list" class=${className}>
         <moz-box-item slot="header">
-          <h2
-            class="tab-selector-list-heading"
-            data-l10n-id=${tabLabelFluentId}
-          ></h2>
+          <h2 class="tab-selector-list-heading" data-l10n-id=${heading}></h2>
         </moz-box-item>
-
-        ${repeat(
-          tabs,
-          tab => tab.id,
-          tab => html`
-            <moz-box-item
-              .label=${tab.title || tab.url}
-              .description=${tab.url}
-              .iconSrc=${tab.favicon}
-            >
-              <moz-toggle
-                slot="actions"
-                data-l10n-id="ai-smart-form-fill-tab-select-toggle"
-                data-l10n-args=${JSON.stringify({
-                  tabTitle: tab.title,
-                })}
-                .pressed=${tab.pressed}
-                .disabled=${selectedTabCount >= MAX_SELECTED_TABS &&
-                !tab.pressed}
-                @toggle=${event => this.#handleTabToggle(event, tab.id)}
-              ></moz-toggle>
-            </moz-box-item>
-          `
-        )}
+        ${items}
       </moz-box-group>
     `;
+  }
+
+  #renderSavedAddresses() {
+    return this.#renderSourceList(
+      "ai-smart-form-fill-saved-addresses-heading",
+      "tab-selector-tabs-scrollable ai-smart-form-fill-saved-addresses",
+      repeat(
+        this.savedAddresses,
+        address => address.guid,
+        address => html`
+          <moz-box-item
+            .label=${address.label}
+            .description=${address.description}
+            .iconSrc=${address.favicon}
+          >
+            <moz-toggle
+              slot="actions"
+              data-l10n-id="ai-smart-form-fill-address-select-toggle"
+              data-l10n-args=${JSON.stringify({
+                address: [address.label, address.description]
+                  .filter(Boolean)
+                  .join(", "),
+              })}
+              .pressed=${this.selectedAddressGuid === address.guid}
+              @toggle=${event => {
+                this.selectedAddressGuid = event.currentTarget.pressed
+                  ? address.guid
+                  : null;
+              }}
+            ></moz-toggle>
+          </moz-box-item>
+        `
+      )
+    );
+  }
+
+  #renderTabList(tabLabelFluentId, tabs, selectedTabCount, scrollable = false) {
+    return this.#renderSourceList(
+      tabLabelFluentId,
+      scrollable
+        ? "tab-selector-tabs-scrollable ai-smart-form-fill-other-tabs"
+        : "ai-smart-form-fill-suggested-tabs",
+      repeat(
+        tabs,
+        tab => tab.id,
+        tab => html`
+          <moz-box-item
+            .label=${tab.title || tab.url}
+            .description=${tab.url}
+            .iconSrc=${tab.favicon}
+          >
+            <moz-toggle
+              slot="actions"
+              data-l10n-id="ai-smart-form-fill-tab-select-toggle"
+              data-l10n-args=${JSON.stringify({
+                tabTitle: tab.title,
+              })}
+              .pressed=${tab.pressed}
+              .disabled=${selectedTabCount >= MAX_SELECTED_TABS && !tab.pressed}
+              @toggle=${event => this.#handleTabToggle(event, tab.id)}
+            ></moz-toggle>
+          </moz-box-item>
+        `
+      )
+    );
   }
 
   render() {
@@ -124,6 +172,7 @@ export class AiSffTabSelector extends MozLitElement {
           data-l10n-id="ai-smart-form-fill-edit-sources-title"
         ></h1>
 
+        ${this.savedAddresses.length ? this.#renderSavedAddresses() : nothing}
         ${this.suggestedTabs?.length
           ? this.#renderTabList(
               "ai-smart-form-fill-suggested-tabs-heading",
@@ -150,8 +199,7 @@ export class AiSffTabSelector extends MozLitElement {
             data-l10n-id="ai-smart-form-fill-accept-tab-select-button"
             type="primary"
             size="large"
-            .disabled=${selectedTabCount == 0 ||
-            selectedTabCount > MAX_SELECTED_TABS}
+            .disabled=${!this.#canConfirmSourceSelection(selectedTabCount)}
             @click=${this.#handleAccept}
           ></moz-button>
         </moz-button-group>

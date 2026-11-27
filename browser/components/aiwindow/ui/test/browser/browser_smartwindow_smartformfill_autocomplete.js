@@ -304,9 +304,40 @@ describe("Smart Form Fill autocomplete row item menu", () => {
   describe("with a saved address", () => {
     beforeEach(async () => {
       await SpecialPowers.pushPrefEnv({
-        set: [["extensions.formautofill.addresses.supported", "on"]],
+        set: [
+          ["extensions.formautofill.addresses.supported", "on"],
+          ["extensions.formautofill.addresses.enabled", true],
+        ],
       });
       await formAutofillStorage.initialize();
+    });
+
+    afterEach(async () => {
+      await formAutofillStorage.addresses.removeAll();
+      await SpecialPowers.popPrefEnv();
+    });
+
+    it("offers Edit sources with an available but unselected address", async () => {
+      await formAutofillStorage.addresses.add({
+        "street-address": "1234 Address Way",
+        country: "US",
+      });
+
+      const { browser, row } = await openAutocomplete(
+        win,
+        "#email",
+        mockEngineManager
+      );
+      Assert.equal(win.gBrowser.tabs.length, 1, "Only the form tab is open");
+      Assert.ok(!row.sources?.length, "The form has no selected sources");
+      Assert.ok(
+        row.renderRoot.getElementById("secondary-action-button"),
+        "Edit sources is visible because a saved address is available"
+      );
+      await closeAutocomplete(browser);
+    });
+
+    it("drops the address preview left by the previously hovered row", async () => {
       await formAutofillStorage.addresses.add(TEST_ADDRESS);
 
       const tabUpdated = waitForTabChange("TabAttrModified");
@@ -315,14 +346,7 @@ describe("Smart Form Fill autocomplete row item menu", () => {
         ADDRESS_FORM_URL
       );
       await tabUpdated;
-    });
 
-    afterEach(async () => {
-      await formAutofillStorage.addresses.removeAll();
-      await SpecialPowers.popPrefEnv();
-    });
-
-    it("drops the address preview left by the previously hovered row", async () => {
       const { browser, popup, item } = await openAutocomplete(
         win,
         "#first-name",

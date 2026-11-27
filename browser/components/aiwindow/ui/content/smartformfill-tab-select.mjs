@@ -21,13 +21,13 @@ const tabSelector = document.querySelector("ai-sff-tab-selector");
 
 tabSelector.suggestedTabs = dialogArguments.suggestedTabs;
 tabSelector.otherTabs = dialogArguments.otherTabs;
+tabSelector.savedAddresses = dialogArguments.savedAddresses;
+tabSelector.selectedAddressGuid = dialogArguments.selectedAddressGuid;
 
 document.mozSubdialogReady = tabSelector.updateComplete;
 
 tabSelector.addEventListener("tabs-selected", event => {
-  dialogArguments.result = {
-    selectedTabIds: event.detail.selectedTabIds,
-  };
+  dialogArguments.result = event.detail;
   window.close();
 });
 
