@@ -78,4 +78,4 @@ package-langpack-%: LANGPACK_FILE=$(ABS_DIST)/$(PKG_LANGPACK_PATH)$(PKG_LANGPACK
 package-langpack-%: AB_CD=$*
 package-langpack-%:
 	$(NSINSTALL) -D $(DIST)/$(PKG_LANGPACK_PATH)
-	$(call py_action,package_langpack,--locale=$* --xpi-stage=$(DIST)/xpi-stage/locale-$* --metadata=$(LANGPACK_METADATA) --output=$(LANGPACK_FILE) --eid='$(MOZ_LANGPACK_EID)' --app-version=$(MOZ_APP_VERSION) --max-app-ver=$(MOZ_APP_MAXVERSION) --app-name='$(MOZ_APP_DISPLAYNAME)' --l10n-basedir='$(L10NBASEDIR)' $(addprefix --include=,$(PKG_ZIP_DIRS)) --include=manifest.json)
+	$(call py_action,package_langpack,--locale=$* --xpi-stage=$(DIST)/xpi-stage/locale-$* --metadata=$(LANGPACK_METADATA) --output=$(LANGPACK_FILE) --eid='$(MOZ_LANGPACK_EID)' --app-version=$(MOZ_APP_VERSION) --max-app-ver=$(MOZ_APP_MAXVERSION) --app-name='$(MOZ_APP_DISPLAYNAME)' --l10n-basedir='$(L10NBASEDIR)' $(addprefix --include=,$(PKG_ZIP_DIRS)))
