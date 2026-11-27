@@ -442,10 +442,7 @@ There's currently only a single exception of the BCP47 used, and that's
 a legacy "ja-JP-mac" locale. The "mac" is a variant and BCP47 requires all variants
 to be 5-8 character long.
 
-Gecko supports the limitation by accepting the 3-letter variants in our APIs and also
-provides a special {js}`appLocalesAsLangTags` method which returns this locale in that form.
-({js}`appLocalesAsBCP47` will canonicalize it and turn into `"ja-JP-macos"`).
-
+Gecko supports the limitation by accepting the 3-letter variants in our APIs.
 Usage of language negotiation etc. shouldn't rely on this behavior.
 
 ## Events

@@ -8150,8 +8150,6 @@ interface mozILocaleService extends nsISupports {
   readonly defaultLocale: string;
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_lastFallbackLocale) --> */
   readonly lastFallbackLocale: string;
-  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocalesAsLangTags) --> */
-  readonly appLocalesAsLangTags: string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocalesAsBCP47) --> */
   readonly appLocalesAsBCP47: string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_regionalPrefsLocales) --> */
@@ -8160,8 +8158,6 @@ interface mozILocaleService extends nsISupports {
   readonly webExposedLocales: string[];
   /** <!-- binding_to(idl, method, XPIDL_mozILocaleService_negotiateLanguages) --> */
   negotiateLanguages(aRequested: string[], aAvailable: string[], aDefaultLocale?: string, langNegStrategy?: i32): string[];
-  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocaleAsLangTag) --> */
-  readonly appLocaleAsLangTag: string;
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocaleAsBCP47) --> */
   readonly appLocaleAsBCP47: string;
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_requestedLocales) --> */
