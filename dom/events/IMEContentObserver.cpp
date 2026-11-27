@@ -769,35 +769,35 @@ void IMEContentObserver::OnSelectionChange(Selection& aSelection) {
 }
 
 void IMEContentObserver::ScrollPositionChanged() {
-  if (!NeedsPositionChangeNotification()) {
+  if (!NeedsLayoutChangeNotification()) {
     return;
   }
 
   // This may occur continuously. So, let's wait for some things to query the
   // result because it'll require to flush the layout and compute the character
   // rects with the expensive paths.
-  MaybeNotifyIMEOfPositionChange(Immediately::No);
+  MaybeNotifyIMEOfLayoutChange(Immediately::No);
 }
 
 NS_IMETHODIMP
 IMEContentObserver::Reflow(DOMHighResTimeStamp aStart,
                            DOMHighResTimeStamp aEnd) {
-  if (!NeedsPositionChangeNotification()) {
+  if (!NeedsLayoutChangeNotification()) {
     return NS_OK;
   }
 
-  MaybeNotifyIMEOfPositionChange(Immediately::Yes);
+  MaybeNotifyIMEOfLayoutChange(Immediately::Yes);
   return NS_OK;
 }
 
 NS_IMETHODIMP
 IMEContentObserver::ReflowInterruptible(DOMHighResTimeStamp aStart,
                                         DOMHighResTimeStamp aEnd) {
-  if (!NeedsPositionChangeNotification()) {
+  if (!NeedsLayoutChangeNotification()) {
     return NS_OK;
   }
 
-  MaybeNotifyIMEOfPositionChange(Immediately::Yes);
+  MaybeNotifyIMEOfLayoutChange(Immediately::Yes);
   return NS_OK;
 }
 
@@ -1131,7 +1131,7 @@ void IMEContentObserver::EditContextSelectionChanged() {
 }
 
 void IMEContentObserver::EditContextPositionChanged() {
-  MaybeNotifyIMEOfPositionChange(Immediately::No);
+  MaybeNotifyIMEOfLayoutChange(Immediately::No);
 }
 
 void IMEContentObserver::ContentAdded(nsINode* aContainer,
@@ -1597,34 +1597,19 @@ void IMEContentObserver::MaybeNotifyIMEOfSelectionChange(
   FlushMergeableNotifications();
 }
 
-void IMEContentObserver::MaybeNotifyIMEOfPositionChange(
+void IMEContentObserver::MaybeNotifyIMEOfLayoutChange(
     Immediately aImmediately) {
   MOZ_LOG(sIMECOLog, LogLevel::Verbose,
-          ("0x%p MaybeNotifyIMEOfPositionChange()", this));
-  // If reflow is caused by ContentEventHandler during PositionChangeEvent
-  // sending NOTIFY_IME_OF_CONTENT_CHANGE, we don't need to notify IME of it
-  // again since ContentEventHandler returns the result including this reflow's
-  // result.
-  // FIXME: NOTIFY_IME_OF_CONTENT_CHANGE may be for a text change or a selection
-  // change now. So, this does wrong. However, this is not required anymore
-  // once we send text, selection and/or layout change with a notification.
-  // Therefore, this will be removed by the following patch.
-  if (mIsHandlingQueryContentEvent &&
-      mSendingNotification == NOTIFY_IME_OF_CONTENT_CHANGE) {
-    MOZ_LOG(sIMECOLog, LogLevel::Verbose,
-            ("0x%p   MaybeNotifyIMEOfPositionChange(), ignored since caused by "
-             "ContentEventHandler during sending NOTIFY_IME_OF_CONTENT_CHANGE",
-             this));
-    return;
-  }
-  PostPositionChangeNotification(aImmediately);
+          ("0x%p MaybeNotifyIMEOfLayoutChange()", this));
+
+  PostLayoutChangeNotification(aImmediately);
   FlushMergeableNotifications();
 }
 
-void IMEContentObserver::CancelNotifyingIMEOfPositionChange() {
+void IMEContentObserver::CancelNotifyingIMEOfLayoutChange() {
   MOZ_LOG(sIMECOLog, LogLevel::Debug,
-          ("0x%p CancelNotifyIMEOfPositionChange()", this));
-  mTicksUntilNotifyIMEOfPositionChange = 0;
+          ("0x%p CancelNotifyIMEOfLayoutChange()", this));
+  mTicksUntilNotifyIMEOfLayoutChange = 0;
 }
 
 void IMEContentObserver::MaybeNotifyCompositionEventHandled(
@@ -1671,7 +1656,7 @@ bool IMEContentObserver::UpdateSelectionCache(bool aRequireFlush /* = true */) {
   return true;
 }
 
-void IMEContentObserver::PostPositionChangeNotification(
+void IMEContentObserver::PostLayoutChangeNotification(
     Immediately aImmediately) {
   MOZ_LOG(sIMECOLog, LogLevel::Debug,
           ("0x%p PostPositionChangeNotification(aImmediately=%s)", this,
@@ -1680,15 +1665,15 @@ void IMEContentObserver::PostPositionChangeNotification(
   // If we need to send the notification immediately, we should do it in the
   // next tick.
   if (aImmediately == Immediately::Yes) {
-    mTicksUntilNotifyIMEOfPositionChange = 1u;
+    mTicksUntilNotifyIMEOfLayoutChange = 1u;
     return;
   }
 
   // Otherwise, we should send the notification after some ticks. To avoid
   // delaying IME UI updates too much, apply the delay only when there is no
   // pending position change notification.
-  if (!mTicksUntilNotifyIMEOfPositionChange) {
-    mTicksUntilNotifyIMEOfPositionChange = static_cast<
+  if (!mTicksUntilNotifyIMEOfLayoutChange) {
+    mTicksUntilNotifyIMEOfLayoutChange = static_cast<
         uint8_t>(std::min<uint32_t>(
         StaticPrefs::
             intl_ime_content_observer_notifications_position_change_ticks_after_scrolling(),
@@ -1795,9 +1780,8 @@ void IMEContentObserver::FlushMergeableNotifications() {
   if (mNeedsToNotifyIMEOfTextChange && !NeedsTextChangeNotification()) {
     CancelNotifyingIMEOfTextChange();
   }
-  if (mTicksUntilNotifyIMEOfPositionChange &&
-      !NeedsPositionChangeNotification()) {
-    CancelNotifyingIMEOfPositionChange();
+  if (mTicksUntilNotifyIMEOfLayoutChange && !NeedsLayoutChangeNotification()) {
+    CancelNotifyingIMEOfLayoutChange();
   }
 
   if (!NeedsToNotifyIMEOfSomething()) {
@@ -1874,7 +1858,8 @@ bool IMEContentObserver::AChangeEvent::CanNotifyIME(
   }
 
   const LogLevel debugOrVerbose =
-      aChangeEventType == ChangeEventType::eChangeEventType_Position
+      aChangeEventType ==
+              ChangeEventType::eChangeEventType_ContentLayoutChangeOnly
           ? LogLevel::Verbose
           : LogLevel::Debug;
 
@@ -1927,7 +1912,8 @@ bool IMEContentObserver::AChangeEvent::CanNotifyIME(
 bool IMEContentObserver::AChangeEvent::IsSafeToNotifyIME(
     ChangeEventType aChangeEventType) const {
   const LogLevel warningOrVerbose =
-      aChangeEventType == ChangeEventType::eChangeEventType_Position
+      aChangeEventType ==
+              ChangeEventType::eChangeEventType_ContentLayoutChangeOnly
           ? LogLevel::Verbose
           : LogLevel::Warning;
 
@@ -2050,50 +2036,46 @@ IMEContentObserver::IMENotificationSender::Run() {
       observer->mNeedsToNotifyIMEOfTextChange ||
       observer->mNeedsToNotifyIMEOfSelectionChange ||
       observer->mNeedsToNotifyIMEOfCompositionEventHandled ||
-      observer->mTicksUntilNotifyIMEOfPositionChange == 1;
-  if (observer->mNeedsToNotifyIMEOfTextChange) {
-    observer->mNeedsToNotifyIMEOfTextChange = false;
-    SendTextChange();
-  }
+      observer->mTicksUntilNotifyIMEOfLayoutChange == 1;
 
-  // If a text change notification causes another text change again, we should
-  // notify IME of that before sending a selection change notification.
-  if (!observer->mNeedsToNotifyIMEOfTextChange) {
-    // Be aware, PuppetWidget depends on the order of this. A selection change
-    // notification should not be sent before a text change notification because
-    // PuppetWidget shouldn't query new text content every selection change.
-    if (observer->mNeedsToNotifyIMEOfSelectionChange) {
-      observer->mNeedsToNotifyIMEOfSelectionChange = false;
-      SendSelectionChange();
+  const ContentChangeEventTypes contentChangedTypes = [&]() {
+    ContentChangeEventTypes types;
+    if (observer->mNeedsToNotifyIMEOfTextChange) {
+      types += ContentChangeEventType::Text;
     }
-  }
-
-  // If a text change notification causes another text change again or a
-  // selection change notification causes either a text change or another
-  // selection change, we should notify IME of those before sending a position
-  // change notification.
-  if (observer->mTicksUntilNotifyIMEOfPositionChange &&
-      !observer->mNeedsToNotifyIMEOfTextChange &&
-      !observer->mNeedsToNotifyIMEOfSelectionChange) {
-    observer->mTicksUntilNotifyIMEOfPositionChange--;
+    if (observer->mNeedsToNotifyIMEOfSelectionChange) {
+      types += ContentChangeEventType::Selection;
+    }
     // If text or selection is changed, IME may need to the latest layout
-    // information immediately. Thus, we need to send position change
+    // information immediately. Thus, we need to send a layout change
     // notification right now.  Otherwise, we should put it off to stop
     // notifying too many position change notifications during a scroll or a
     // layout change caused by the web app.
-    if (allowToNotifyIMEOfPositionChange) {
-      observer->mTicksUntilNotifyIMEOfPositionChange = 0;
-      SendPositionChange();
-    } else {
-      // If we need to notify IME of a position change later, we should enqueue
-      // this again to save the cost of creating new sender and notify IME of
-      // the other things at that time.
-      if (observer->mQueuedSender != this) {
-        observer->mQueuedSender = new IMENotificationSender(observer);
-      }
-      observer->mQueuedSender->Dispatch(observer->mDocShell);
-      return NS_OK;
+    if (allowToNotifyIMEOfPositionChange &&
+        observer->mTicksUntilNotifyIMEOfLayoutChange) {
+      types += ContentChangeEventType::Layout;
     }
+    return types;
+  }();
+
+  if (!contentChangedTypes.isEmpty()) {
+    observer->mNeedsToNotifyIMEOfTextChange =
+        observer->mNeedsToNotifyIMEOfSelectionChange = false;
+    observer->mTicksUntilNotifyIMEOfLayoutChange = 0;
+    SendContentChange(contentChangedTypes);
+  }
+
+  // If we need to notify IME of a layout change later, we should enqueue
+  // this again to save the cost of creating new sender and notify IME of
+  // the other things at that time.
+  if (!allowToNotifyIMEOfPositionChange &&
+      observer->mTicksUntilNotifyIMEOfLayoutChange) {
+    observer->mTicksUntilNotifyIMEOfLayoutChange--;
+    if (observer->mQueuedSender != this) {
+      observer->mQueuedSender = new IMENotificationSender(observer);
+    }
+    observer->mQueuedSender->Dispatch(observer->mDocShell);
+    return NS_OK;
   }
 
   // Composition event handled notification should be sent after all the
@@ -2101,7 +2083,7 @@ IMEContentObserver::IMENotificationSender::Run() {
   // events are handled completely.
   if (!observer->mNeedsToNotifyIMEOfTextChange &&
       !observer->mNeedsToNotifyIMEOfSelectionChange &&
-      !observer->mTicksUntilNotifyIMEOfPositionChange) {
+      !observer->mTicksUntilNotifyIMEOfLayoutChange) {
     if (observer->mNeedsToNotifyIMEOfCompositionEventHandled) {
       observer->mNeedsToNotifyIMEOfCompositionEventHandled = false;
       SendCompositionEventHandled();
@@ -2187,190 +2169,109 @@ void IMEContentObserver::IMENotificationSender::SendFocusSet() {
        this));
 }
 
-void IMEContentObserver::IMENotificationSender::SendSelectionChange() {
+void IMEContentObserver::IMENotificationSender::SendContentChange(
+    ContentChangeEventTypes aTypes) {
   RefPtr<IMEContentObserver> observer = GetObserver();
   if (!observer) {
     return;
   }
 
-  if (!CanNotifyIME(eChangeEventType_Selection)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendSelectionChange(), Warning, "
-             "does not send notification due to impossible to notify IME of "
-             "selection change",
-             this));
+  const ChangeEventType changeEventType =
+      aTypes.size() == 1 && aTypes.contains(ContentChangeEventType::Layout)
+          ? eChangeEventType_ContentLayoutChangeOnly
+          : eChangeEventType_Content;
+  if (!CanNotifyIME(changeEventType)) {
+    MOZ_LOG_FMT(sIMECOLog, LogLevel::Warning,
+                "{}   IMENotificationSender::SendContentChange(), Warning, "
+                "does not send notification due to impossible to notify IME of "
+                "selection change",
+                static_cast<void*>(this));
     return;
   }
 
-  if (!IsSafeToNotifyIME(eChangeEventType_Selection)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendSelectionChange(), Warning, "
-             "does not send notification due to unsafe, retrying to send "
-             "NOTIFY_IME_OF_SELECTION_CHANGE...",
-             this));
-    observer->PostSelectionChangeNotification();
+  if (!IsSafeToNotifyIME(changeEventType)) {
+    MOZ_LOG_FMT(sIMECOLog, LogLevel::Warning,
+                "{}   IMENotificationSender::SendContentChange(), Warning, "
+                "does not send notification due to unsafe, retrying to send "
+                "NOTIFY_IME_OF_CONTENT_CHANGE...",
+                static_cast<void*>(this));
+    if (aTypes.contains(ContentChangeEventType::Text)) {
+      observer->PostTextChangeNotification();
+    }
+    if (aTypes.contains(ContentChangeEventType::Selection)) {
+      observer->PostSelectionChangeNotification();
+    }
+    if (aTypes.contains(ContentChangeEventType::Layout)) {
+      observer->PostLayoutChangeNotification(Immediately::Yes);
+    }
     return;
   }
-
-  SelectionChangeData lastSelChangeData(observer->mSelectionData);
-  if (NS_WARN_IF(!observer->UpdateSelectionCache())) {
-    MOZ_LOG(sIMECOLog, LogLevel::Error,
-            ("0x%p   IMENotificationSender::SendSelectionChange(), FAILED, due "
-             "to UpdateSelectionCache() failure",
-             this));
-    return;
-  }
-
-  // The state may be changed since querying content causes flushing layout.
-  if (!CanNotifyIME(eChangeEventType_Selection)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Error,
-            ("0x%p   IMENotificationSender::SendSelectionChange(), FAILED, due "
-             "to flushing layout having changed something",
-             this));
-    return;
-  }
-
-  // If the selection isn't changed actually, we shouldn't notify IME of
-  // selection change.
-  const SelectionChangeData& newSelChangeData = observer->mSelectionData;
-  if (lastSelChangeData.IsInitialized() &&
-      lastSelChangeData.EqualsRangeAndDirectionAndWritingMode(
-          newSelChangeData)) {
-    MOZ_LOG(
-        sIMECOLog, LogLevel::Debug,
-        ("0x%p IMENotificationSender::SendSelectionChange(), not notifying IME "
-         "of NOTIFY_IME_OF_SELECTION_CHANGE due to not changed actually",
-         this));
-    return;
-  }
-
-  MOZ_LOG(sIMECOLog, LogLevel::Info,
-          ("0x%p IMENotificationSender::SendSelectionChange(), sending "
-           "NOTIFY_IME_OF_SELECTION_CHANGE... newSelChangeData=%s",
-           this, ToString(newSelChangeData).c_str()));
 
   IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
-  notification.mSelectionChangeData = Some(observer->mSelectionData);
+  if (aTypes.contains(ContentChangeEventType::Selection)) {
+    SelectionChangeData lastSelChangeData(observer->mSelectionData);
+    if (NS_WARN_IF(!observer->UpdateSelectionCache())) {
+      MOZ_LOG_FMT(
+          sIMECOLog, LogLevel::Error,
+          "{}   IMENotificationSender::SendContentChange(), FAILED, due "
+          "to UpdateSelectionCache() failure",
+          static_cast<void*>(this));
+      return;
+    }
+
+    // The state may be changed since querying content causes flushing layout.
+    if (!CanNotifyIME(changeEventType)) {
+      MOZ_LOG_FMT(
+          sIMECOLog, LogLevel::Error,
+          "{}   IMENotificationSender::SendContentChange(), FAILED, due "
+          "to flushing layout having changed something",
+          static_cast<void*>(this));
+      return;
+    }
+
+    // If the selection isn't changed actually, we shouldn't notify IME of
+    // selection change.
+    const SelectionChangeData& newSelChangeData = observer->mSelectionData;
+    if (lastSelChangeData.IsInitialized() &&
+        lastSelChangeData.EqualsRangeAndDirectionAndWritingMode(
+            newSelChangeData)) {
+      if (aTypes.size() == 1) {
+        MOZ_LOG_FMT(sIMECOLog, LogLevel::Debug,
+                    "{} IMENotificationSender::SendContentChange(), not "
+                    "notifying IME of NOTIFY_IME_OF_CONTENT_CHANGE due to not "
+                    "changed actually",
+                    static_cast<void*>(this));
+        return;
+      }
+    } else {
+      notification.mSelectionChangeData = Some(observer->mSelectionData);
+    }
+  }
+
+  if (aTypes.contains(ContentChangeEventType::Text)) {
+    notification.mTextChangeData = Some(observer->mTextChangeData);
+    observer->mTextChangeData.Clear();
+  }
+
+  notification.mLayoutChanged = aTypes.contains(ContentChangeEventType::Layout);
+
+  MOZ_LOG_FMT(
+      sIMECOLog, LogLevel::Info,
+      "{} IMENotificationSender::SendContentChange(), sending "
+      "NOTIFY_IME_OF_CONTENT_CHANGE... notification={{ "
+      "mTextChangeData={}, mSelectionChangeData={}, mLayoutChanged={} }}",
+      static_cast<void*>(this), notification.mTextChangeData,
+      notification.mSelectionChangeData, notification.mLayoutChanged);
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
   observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
   IMEStateManager::NotifyIME(notification, observer->mWidget);
   observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
 
-  MOZ_LOG(sIMECOLog, LogLevel::Debug,
-          ("0x%p   IMENotificationSender::SendSelectionChange(), sent "
-           "NOTIFY_IME_OF_SELECTION_CHANGE",
-           this));
-}
-
-void IMEContentObserver::IMENotificationSender::SendTextChange() {
-  RefPtr<IMEContentObserver> observer = GetObserver();
-  if (!observer) {
-    return;
-  }
-
-  if (!CanNotifyIME(eChangeEventType_Text)) {
-    MOZ_LOG(
-        sIMECOLog, LogLevel::Warning,
-        ("0x%p   IMENotificationSender::SendTextChange(), Warning, does not "
-         "send notification due to impossible to notify IME of text change",
-         this));
-    return;
-  }
-
-  if (!IsSafeToNotifyIME(eChangeEventType_Text)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendTextChange(), Warning, does "
-             "not send notification due to unsafe, retrying to send "
-             "NOTIFY_IME_OF_TEXT_CHANGE...",
-             this));
-    observer->PostTextChangeNotification();
-    return;
-  }
-
-  // If text change notification is unnecessary anymore, just cancel it.
-  if (!observer->NeedsTextChangeNotification()) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendTextChange(), Warning, "
-             "canceling sending NOTIFY_IME_OF_TEXT_CHANGE",
-             this));
-    observer->CancelNotifyingIMEOfTextChange();
-    return;
-  }
-
-  MOZ_LOG(sIMECOLog, LogLevel::Info,
-          ("0x%p IMENotificationSender::SendTextChange(), sending "
-           "NOTIFY_IME_OF_TEXT_CHANGE... mIMEContentObserver={ "
-           "mTextChangeData=%s }",
-           this, ToString(observer->mTextChangeData).c_str()));
-
-  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
-  notification.mTextChangeData = Some(observer->mTextChangeData);
-  observer->mTextChangeData.Clear();
-
-  MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
-  observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
-  IMEStateManager::NotifyIME(notification, observer->mWidget);
-  observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
-
-  MOZ_LOG(sIMECOLog, LogLevel::Debug,
-          ("0x%p   IMENotificationSender::SendTextChange(), sent "
-           "NOTIFY_IME_OF_TEXT_CHANGE",
-           this));
-}
-
-void IMEContentObserver::IMENotificationSender::SendPositionChange() {
-  RefPtr<IMEContentObserver> observer = GetObserver();
-  if (!observer) {
-    return;
-  }
-
-  if (!CanNotifyIME(eChangeEventType_Position)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Verbose,
-            ("0x%p   IMENotificationSender::SendPositionChange(), Warning, "
-             "does not send notification due to impossible to notify IME of "
-             "position change",
-             this));
-    return;
-  }
-
-  if (!IsSafeToNotifyIME(eChangeEventType_Position)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Verbose,
-            ("0x%p   IMENotificationSender::SendPositionChange(), Warning, "
-             "does not send notification due to unsafe, retrying to send "
-             "NOTIFY_IME_OF_POSITION_CHANGE...",
-             this));
-    observer->PostPositionChangeNotification(Immediately::Yes);
-    return;
-  }
-
-  // If position change notification is unnecessary anymore, just cancel it.
-  if (!observer->NeedsPositionChangeNotification()) {
-    MOZ_LOG(sIMECOLog, LogLevel::Verbose,
-            ("0x%p   IMENotificationSender::SendPositionChange(), Warning, "
-             "canceling sending NOTIFY_IME_OF_POSITION_CHANGE",
-             this));
-    observer->CancelNotifyingIMEOfPositionChange();
-    return;
-  }
-
-  MOZ_LOG(sIMECOLog, LogLevel::Info,
-          ("0x%p IMENotificationSender::SendPositionChange(), sending "
-           "NOTIFY_IME_OF_POSITION_CHANGE...",
-           this));
-
-  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
-  notification.mLayoutChanged = true;
-
-  MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
-  observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
-  IMEStateManager::NotifyIME(notification, observer->mWidget);
-  observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
-
-  MOZ_LOG(sIMECOLog, LogLevel::Debug,
-          ("0x%p   IMENotificationSender::SendPositionChange(), sent "
-           "NOTIFY_IME_OF_POSITION_CHANGE",
-           this));
+  MOZ_LOG_FMT(sIMECOLog, LogLevel::Debug,
+              "{}   IMENotificationSender::SendContentChange(), sent "
+              "NOTIFY_IME_OF_CONTENT_CHANGE",
+              static_cast<void*>(this));
 }
 
 void IMEContentObserver::IMENotificationSender::SendCompositionEventHandled() {
@@ -2380,28 +2281,31 @@ void IMEContentObserver::IMENotificationSender::SendCompositionEventHandled() {
   }
 
   if (!CanNotifyIME(eChangeEventType_CompositionEventHandled)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendCompositionEventHandled(), "
-             "Warning, does not send notification due to impossible to notify "
-             "IME of composition event handled",
-             this));
+    MOZ_LOG_FMT(
+        sIMECOLog, LogLevel::Warning,
+        "{}   IMENotificationSender::SendCompositionEventHandled(), "
+        "Warning, does not send notification due to impossible to notify "
+        "IME of composition event handled",
+        static_cast<void*>(this));
     return;
   }
 
   if (!IsSafeToNotifyIME(eChangeEventType_CompositionEventHandled)) {
-    MOZ_LOG(sIMECOLog, LogLevel::Warning,
-            ("0x%p   IMENotificationSender::SendCompositionEventHandled(), "
-             "Warning, does not send notification due to unsafe, retrying to "
-             "send NOTIFY_IME_OF_POSITION_CHANGE...",
-             this));
+    MOZ_LOG_FMT(
+        sIMECOLog, LogLevel::Warning,
+        "{}   IMENotificationSender::SendCompositionEventHandled(), "
+        "Warning, does not send notification due to unsafe, retrying to "
+        "send NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED...",
+        static_cast<void*>(this));
     observer->PostCompositionEventHandledNotification();
     return;
   }
 
-  MOZ_LOG(sIMECOLog, LogLevel::Info,
-          ("0x%p IMENotificationSender::SendCompositionEventHandled(), sending "
-           "NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED...",
-           this));
+  MOZ_LOG_FMT(
+      sIMECOLog, LogLevel::Info,
+      "{} IMENotificationSender::SendCompositionEventHandled(), sending "
+      "NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED...",
+      static_cast<void*>(this));
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
   observer->mSendingNotification = NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED;
@@ -2410,10 +2314,10 @@ void IMEContentObserver::IMENotificationSender::SendCompositionEventHandled() {
       observer->mWidget);
   observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
 
-  MOZ_LOG(sIMECOLog, LogLevel::Debug,
-          ("0x%p   IMENotificationSender::SendCompositionEventHandled(), sent "
-           "NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED",
-           this));
+  MOZ_LOG_FMT(sIMECOLog, LogLevel::Debug,
+              "{}   IMENotificationSender::SendCompositionEventHandled(), sent "
+              "NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED",
+              static_cast<void*>(this));
 }
 
 /******************************************************************************
