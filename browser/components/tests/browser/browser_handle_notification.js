@@ -183,3 +183,63 @@ add_task(async function test_basic_initial_load() {
 
   assertClickTelemetry("body", "closed");
 });
+
+const SETTINGS_URL = "about:preferences#permissionsData";
+
+function findTab(win, url) {
+  return win.gBrowser.tabs.find(
+    tab => tab.linkedBrowser.currentURI.spec === url
+  );
+}
+
+add_task(async function test_settings() {
+  Services.fog.testResetFOG();
+
+  let tabCount = gBrowser.tabs.length;
+  let settingsTabPromise = BrowserTestUtils.waitForNewTab(
+    gBrowser,
+    SETTINGS_URL
+  );
+
+  simulateNotificationClickWithExistingWindow({
+    action: "settings",
+    origin: "https://example.com",
+  });
+
+  let settingsTab = await settingsTabPromise;
+  ok(settingsTab, "Settings tab should be opened.");
+  is(gBrowser.tabs.length, tabCount + 1, "Only the settings tab should open.");
+  BrowserTestUtils.removeTab(settingsTab);
+
+  assertClickTelemetry("settings", "unknown");
+});
+
+add_task(async function test_settings_initial_load() {
+  Services.fog.testResetFOG();
+
+  let controller = new AbortController();
+  let { signal } = controller;
+
+  BrowserTestUtils.concealWindow(window, { signal });
+
+  let newWinPromise = BrowserTestUtils.waitForNewWindow();
+
+  simulateNotificationClickWithNewWindow({
+    action: "settings",
+    origin: "https://example.com",
+  });
+
+  let newWin = await newWinPromise;
+  ok(newWin, "New window should be opened.");
+
+  await TestUtils.waitForCondition(
+    () => findTab(newWin, SETTINGS_URL),
+    "Settings page should be opened in the new window."
+  );
+  ok(!findTab(newWin, "https://example.com/"), "No site tab should open.");
+  await BrowserTestUtils.closeWindow(newWin);
+
+  controller.abort();
+
+  assertClickTelemetry("settings", "closed");
+});

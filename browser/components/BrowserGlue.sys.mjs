@@ -1695,7 +1695,7 @@ BrowserGlue.prototype = {
   /**
    * Open preferences even if there are no open windows.
    */
-  _openPreferences(...args) {
+  async _openPreferences(...args) {
     let chromeWindow = lazy.BrowserWindowTracker.getTopWindow({
       allowFromInactiveWorkspace: true,
     });
@@ -1706,7 +1706,11 @@ BrowserGlue.prototype = {
 
     if (AppConstants.platform == "macosx") {
       Services.appShell.hiddenDOMWindow.openPreferences(...args);
+      return;
     }
+
+    chromeWindow = await lazy.BrowserWindowTracker.promiseOpenWindow();
+    chromeWindow.openPreferences(...args);
   },
 
   QueryInterface: ChromeUtils.generateQI([
