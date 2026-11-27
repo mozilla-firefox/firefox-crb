@@ -24,6 +24,8 @@ supporting self-references and bundled schema.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from argparse import ArgumentParser
 from itertools import chain
@@ -54,9 +56,16 @@ class SchemaDefinition(NamedTuple):
     #: If a list, only the named definitions will be bundled.
     bundle_common: Union[bool, list[str]]
 
+    #: Whether to bundle the multistage screen schema and its definitions.
+    bundle_screen: bool
+
     #: The testing corpus for the schema.
     test_corpus: dict[str, Path]
 
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+TOPSRCDIR = SCRIPT_DIR.parents[4]
+MACH = TOPSRCDIR / "mach"
 
 SCHEMA_DIR = Path("..", "templates")
 
@@ -102,6 +111,7 @@ SCHEMAS = [
             ),
         },
         bundle_common=True,
+        bundle_screen=True,
         test_corpus={
             "ReachExperiments": Path("corpus", "ReachExperiments.messages.json"),
             # These are generated via extract-test-corpus.js
@@ -123,6 +133,7 @@ SCHEMAS = [
             ),
         },
         bundle_common=True,
+        bundle_screen=False,
         # These are generated via extract-test-corpus.js
         test_corpus={
             # Just the "toast_notification" messages.
@@ -135,6 +146,14 @@ SCHEMAS = [
 
 COMMON_SCHEMA_NAME = "FxMSCommon.schema.json"
 COMMON_SCHEMA_PATH = Path(COMMON_SCHEMA_NAME)
+
+SCREEN_SCHEMA_NAME = "MultiStageProtonScreenSchemas.json"
+SCREEN_SCHEMA_PATH = (
+    TOPSRCDIR
+    / "toolkit/components/messaging-system/schemas/MultiStageProtonScreenSchemas"
+    / SCREEN_SCHEMA_NAME
+)
+SCREEN_DEF_NAME = "MultiStageProtonScreen"
 
 
 class NestedRefResolver(jsonschema.RefResolver):
@@ -180,73 +199,64 @@ def patch_schema(schema, bundled_id, schema_id=None):
     nor does it support bundled schemas. We rewrite the schema so that all
     relative refs are transformed into absolute refs via the schema's `$id`.
 
-    Additionally, we merge in the contents of FxMSCommon.schema.json, so all
-    refs relative to that schema will be transformed to become relative to this
-    schema.
+    Additionally, we merge in the contents of FxMSCommon.schema.json and
+    MultiStageProtonScreenSchemas.json, so all refs relative to those schemas
+    will be transformed to become relative to this schema
 
     See-also: https://github.com/python-jsonschema/jsonschema/issues/313
     """
     if schema_id is None:
         schema_id = schema["$id"]
 
-    def patch_impl(schema):
-        ref = schema.get("$ref")
+    def patch_ref(ref):
+        uri = urlparse(ref)
+        if uri.scheme == "" and uri.netloc == "" and uri.path == "" and uri.fragment:
+            return f"{schema_id}#{uri.fragment}"
+        if (uri.scheme, uri.path) == ("file", f"/{COMMON_SCHEMA_NAME}"):
+            return f"{bundled_id}#{uri.fragment}"
+        if (uri.scheme, uri.path) == ("file", f"/{SCREEN_SCHEMA_NAME}"):
+            fragment = uri.fragment
+            if not fragment.startswith("/$defs/"):
+                fragment = f"/$defs/{SCREEN_DEF_NAME}{fragment}"
+            return f"{bundled_id}#{fragment}"
+        return ref
 
-        if ref:
-            uri = urlparse(ref)
-            if (
-                uri.scheme == ""
-                and uri.netloc == ""
-                and uri.path == ""
-                and uri.fragment != ""
-            ):
-                schema["$ref"] = f"{schema_id}#{uri.fragment}"
-            elif (uri.scheme, uri.path) == ("file", f"/{COMMON_SCHEMA_NAME}"):
-                schema["$ref"] = f"{bundled_id}#{uri.fragment}"
-
-        # If `schema` is object-like, inspect each of its indivual properties
-        # and patch them.
-        properties = schema.get("properties")
-        if properties:
-            for prop in properties.keys():
-                patch_impl(properties[prop])
-
-        # If `schema` is array-like, inspect each of its items and patch them.
-        items = schema.get("items")
-        if items:
-            patch_impl(items)
-
-        # Patch each `if`, `then`, `else`, and `not` sub-schema that is present.
-        for key in ("if", "then", "else", "not"):
-            if key in schema:
-                patch_impl(schema[key])
-
-        # Patch the items of each `oneOf`, `allOf`, and `anyOf` sub-schema that
-        # is present.
-        for key in ("oneOf", "allOf", "anyOf"):
-            subschema = schema.get(key)
-            if subschema:
-                for i, alternate in enumerate(subschema):
-                    patch_impl(alternate)
-
-    # Patch the top-level type defined in the schema.
-    patch_impl(schema)
-
-    # Patch each named definition in the schema.
-    for key in ("$defs", "definitions"):
-        defns = schema.get(key)
-        if defns:
-            for defn_name, defn_value in defns.items():
-                patch_impl(defn_value)
+    for node in iter_refs(schema):
+        node["$ref"] = patch_ref(node["$ref"])
 
     return schema
+
+
+def iter_refs(node):
+    """Yield every subschema within `node` that has a `$ref`."""
+    if isinstance(node, dict):
+        if isinstance(node.get("$ref"), str):
+            yield node
+        for value in node.values():
+            yield from iter_refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from iter_refs(item)
+
+
+def check_refs(schema):
+    """Check that every `$ref` in the bundled schema resolves"""
+    resolver = NestedRefResolver(schema)
+    for node in iter_refs(schema):
+        try:
+            resolver.resolve(node["$ref"])
+        except jsonschema.exceptions.RefResolutionError as e:
+            raise ValueError(
+                f"{schema['$id']} has an unresolvable $ref: {node['$ref']}"
+            ) from e
 
 
 def bundle_schema(schema_def: SchemaDefinition):
     """Create a bundled schema based on the schema definition."""
     # Patch each message type schema to resolve all self-references to be
-    # absolute and rewrite # references to FxMSCommon.schema.json to be relative
-    # to the new schema (because we are about to bundle its definitions).
+    # absolute and rewrite # references to FxMSCommon.schema.json and
+    # MultiStageProtonScreenSchemas.json to be relative to the new schema
+    # (because we are about to bundle their definitions).
     defs = {
         name: patch_schema(read_schema(path), bundled_id=schema_def.schema_id)
         for name, path in schema_def.message_types.items()
@@ -274,6 +284,27 @@ def bundle_schema(schema_def: SchemaDefinition):
             for name, dfn in common_schema["$defs"].items()
             if dfn_filter(name)
         })
+
+    # Bundle the multistage screen schema
+    if schema_def.bundle_screen:
+        screen_schema = patch_schema(
+            read_schema(SCREEN_SCHEMA_PATH),
+            bundled_id=schema_def.schema_id,
+            schema_id=schema_def.schema_id,
+        )
+        screen_defs = screen_schema.pop("$defs")
+        del screen_schema["$schema"]
+        del screen_schema["$id"]
+        screen_defs[SCREEN_DEF_NAME] = screen_schema
+
+        collisions = defs.keys() & screen_defs.keys()
+        if collisions:
+            raise ValueError(
+                f"{SCREEN_SCHEMA_NAME} definitions collide with existing "
+                f"definitions: {', '.join(sorted(collisions))}"
+            )
+
+        defs.update(screen_defs)
 
     # Ensure all bundled schemas have an $id so that $refs inside the
     # bundled schema work correctly (i.e, they will reference the subschema
@@ -434,8 +465,9 @@ def validate_corpus(schema_def: SchemaDefinition, schema: dict[str, Any]):
         except FileNotFoundError as e:
             if not provider_path.parent.exists():
                 new_exc = Exception(
-                    f"Could not find {provider_path}: Did you run "
-                    "`mach xpcshell extract-test-corpus.js` ?"
+                    f"Could not find {provider_path}: generate it with "
+                    "extract-test-corpus.js, or run --check without "
+                    "--skip-extract."
                 )
                 raise new_exc from e
 
@@ -453,11 +485,24 @@ def validate_corpus(schema_def: SchemaDefinition, schema: dict[str, Any]):
         print()
 
 
-def main(check=False):
+def extract_corpus():
+    """Generate the test corpus by running extract-test-corpus.js."""
+    print("Extracting test corpus with extract-test-corpus.js ...")
+    subprocess.run(
+        [sys.executable, str(MACH), "xpcshell", "extract-test-corpus.js"],
+        check=True,
+    )
+
+
+def main(check=False, skip_extract=False):
     """Generate Nimbus feature schemas for Firefox Messaging System."""
+    if check and not skip_extract:
+        extract_corpus()
+
     for schema_def in SCHEMAS:
         print(f"Generating {schema_def.schema_path} ...")
         schema = bundle_schema(schema_def)
+        check_refs(schema)
 
         if check:
             print(f"Checking {schema_def.schema_path} ...")
@@ -478,6 +523,13 @@ if __name__ == "__main__":
         help="Check that the generated schemas have not changed and run validation tests.",
         default=False,
     )
+    parser.add_argument(
+        "--skip-extract",
+        action="store_true",
+        help="With --check, use the existing test corpus instead of regenerating it.",
+        default=False,
+    )
     args = parser.parse_args()
 
-    main(args.check)
+    os.chdir(SCRIPT_DIR)
+    main(args.check, args.skip_extract)
