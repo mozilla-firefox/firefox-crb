@@ -10,7 +10,8 @@
 #include "GLUploadHelpers.h"
 #include "GeckoProfiler.h"
 #include "GfxTexturesReporter.h"  // for GfxTexturesReporter
-#include "gfx2DGlue.h"            // for ContentForFormat, etc
+#include "ScopedGLHelpers.h"
+#include "gfx2DGlue.h"  // for ContentForFormat, etc
 #include "mozilla/ScopeExit.h"
 #include "mozilla/UniquePtrExtensions.h"
 #include "mozilla/gfx/2D.h"        // for DataSourceSurface
@@ -564,6 +565,22 @@ SurfaceDescriptor SurfaceTextureHost::GetSurfaceDescriptor() {
 ////////////////////////////////////////////////////////////////////////
 // AndroidHardwareBufferTextureSource
 
+already_AddRefed<AndroidHardwareBufferTextureSource>
+AndroidHardwareBufferTextureSource::Create(
+    TextureSourceProvider* aProvider,
+    AndroidHardwareBuffer* aAndroidHardwareBuffer, gfx::SurfaceFormat aFormat,
+    GLenum aTarget, GLenum aWrapMode, gfx::IntSize aSize) {
+  RefPtr<AndroidHardwareBufferTextureSource> source =
+      new AndroidHardwareBufferTextureSource(aProvider, aAndroidHardwareBuffer,
+                                             aFormat, aTarget, aWrapMode,
+                                             aSize);
+  auto* gl = source->gl();
+  if (!gl || !gl->MakeCurrent() || !source->EnsureEGLImage()) {
+    return nullptr;
+  }
+  return source.forget();
+}
+
 AndroidHardwareBufferTextureSource::AndroidHardwareBufferTextureSource(
     TextureSourceProvider* aProvider,
     AndroidHardwareBuffer* aAndroidHardwareBuffer, gfx::SurfaceFormat aFormat,
@@ -665,16 +682,27 @@ bool AndroidHardwareBufferTextureSource::EnsureEGLImage() {
     mEGLImage = egl->fCreateImage(
         EGL_NO_CONTEXT, LOCAL_EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attrs);
   }
-  MOZ_ASSERT(mEGLImage);
+  if (!mEGLImage) {
+    gfxCriticalNoteOnce << "AHB compositor: failed to create EGLImage";
+    return false;
+  }
 
+  gl::GLContext::LocalErrorScope errorScope(*mGL);
   mGL->fGenTextures(1, &mTextureHandle);
-  mGL->fBindTexture(LOCAL_GL_TEXTURE_EXTERNAL, mTextureHandle);
-  mGL->fTexParameteri(LOCAL_GL_TEXTURE_EXTERNAL, LOCAL_GL_TEXTURE_WRAP_T,
-                      LOCAL_GL_CLAMP_TO_EDGE);
-  mGL->fTexParameteri(LOCAL_GL_TEXTURE_EXTERNAL, LOCAL_GL_TEXTURE_WRAP_S,
-                      LOCAL_GL_CLAMP_TO_EDGE);
-  mGL->fEGLImageTargetTexture2D(LOCAL_GL_TEXTURE_EXTERNAL, mEGLImage);
-
+  if (mTextureHandle) {
+    gl::ScopedBindTexture scopedTexture(mGL, mTextureHandle, mTextureTarget);
+    mGL->fTexParameteri(mTextureTarget, LOCAL_GL_TEXTURE_WRAP_T, mWrapMode);
+    mGL->fTexParameteri(mTextureTarget, LOCAL_GL_TEXTURE_WRAP_S, mWrapMode);
+    mGL->fEGLImageTargetTexture2D(mTextureTarget, mEGLImage);
+  }
+  const GLenum error = errorScope.GetError();
+  if (!mTextureHandle || error != LOCAL_GL_NO_ERROR) {
+    gfxCriticalNoteOnce << "AHB compositor: failed to bind EGLImage, GL error: "
+                        << error;
+    DeleteTextureHandle();
+    DestroyEGLImage();
+    return false;
+  }
   return true;
 }
 
@@ -707,17 +735,15 @@ void AndroidHardwareBufferTextureSource::BindTexture(
     return;
   }
 
-  if (!EnsureEGLImage()) {
-    return;
-  }
-
   gl->fActiveTexture(aTextureUnit);
   gl->fBindTexture(mTextureTarget, mTextureHandle);
 
   ApplySamplingFilterToBoundTexture(gl, aSamplingFilter, mTextureTarget);
 }
 
-bool AndroidHardwareBufferTextureSource::IsValid() const { return !!gl(); }
+bool AndroidHardwareBufferTextureSource::IsValid() const {
+  return mTextureHandle != 0;
+}
 
 void AndroidHardwareBufferTextureSource::DeallocateDeviceData() {
   DestroyEGLImage();
