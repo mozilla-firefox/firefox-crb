@@ -15,6 +15,7 @@ from gecko_taskgraph.transforms.beetmover_push_to_release import (
     make_beetmover_push_to_release_description,
 )
 from gecko_taskgraph.util.partners import merge_partner_configs
+from gecko_taskgraph.util.verify import verify_partner_push_graph
 
 
 def test_merge_partner_configs_preserves_unrelated_entries():
@@ -165,13 +166,86 @@ def test_missing_recorded_uploads_are_rejected(upload_config, uploads):
         get_partner_upload_tasks(config, require_uploads=True)
 
 
+@pytest.mark.parametrize(
+    "state,flavor,version,passes",
+    [
+        ("completed", "push_firefox", "160.0", True),
+        ("completed", "ship_firefox", "160.0", True),
+        ("failed", "push_firefox", "160.0", False),
+        ("running", "push_firefox", "160.0", False),
+        ("completed", "push_firefox_partner", "160.0", False),
+        ("completed", "push_firefox", "other", False),
+    ],
+)
+def test_partner_push_requires_completed_regular_push(
+    mocker, state, flavor, version, passes
+):
+    from gecko_taskgraph.util import partner_releases as releases
+
+    params = {
+        "project": "try",
+        "head_rev": "abc",
+        "version": "160.0",
+        "build_number": 2,
+    }
+    definitions = {
+        "supplied": {
+            "extra": {
+                "action": {
+                    "name": "release-promotion",
+                    "context": {"input": {"release_promotion_flavor": flavor}},
+                }
+            }
+        },
+        "push-task": {
+            "payload": {"product": "firefox", "version": version, "build_number": 2}
+        },
+    }
+    mocker.patch.object(
+        releases, "get_task_definition", side_effect=definitions.__getitem__
+    )
+    mocker.patch.object(
+        releases,
+        "get_artifact",
+        side_effect=lambda task, name: (
+            params
+            if name.endswith("parameters.yml")
+            else {"firefox-push-to-release": "push-task"}
+        ),
+    )
+    queue = mocker.Mock()
+    queue.status.return_value = {"status": {"state": state}}
+    mocker.patch.object(releases, "get_taskcluster_client", return_value=queue)
+    assert releases.find_completed_release_push(["supplied"], params) == (
+        "push-task" if passes else None
+    )
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [[], ["firefox-push-to-release"], ["firefox-push-to-release", "checksums"]],
+)
+def test_verify_partner_push_graph(labels):
+    from pytest_taskgraph import make_graph
+
+    graph = make_graph(*(make_task(label=label) for label in labels))
+    params = {"target_tasks_method": "push_partner"}
+    if labels == ["firefox-push-to-release"]:
+        verify_partner_push_graph(None, graph, {}, None, params)
+    else:
+        with pytest.raises(
+            ValueError, match="must schedule only firefox-push-to-release"
+        ):
+            verify_partner_push_graph(None, graph, {}, None, params)
+
+
 def test_promotion_does_not_require_already_uploaded_partners(upload_config, mocker):
     import gecko_taskgraph.transforms.beetmover_push_to_release as push
 
     mocker.patch.object(push, "get_beetmover_bucket_scope", return_value="bucket")
     mocker.patch.object(push, "add_scope_prefix", return_value="action")
     upload_config.params.update(
-        target_tasks_method="promote_desktop", existing_tasks={}
+        target_tasks_method="promote_partner", existing_tasks={}
     )
     upload_config.params["release_partner_config"]["release-partner-repack"]["acme"][
         "one"

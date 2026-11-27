@@ -2,6 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from taskgraph.util.taskcluster import (
+    get_artifact,
+    get_task_definition,
+    get_taskcluster_client,
+)
 
 from gecko_taskgraph.util.partners import (
     get_partner_config_entries,
@@ -68,3 +73,36 @@ def get_partner_upload_tasks(partner_config, *, require_uploads=False):
         if uploads:
             task_ids.update(uploads)
     return sorted(task_ids)
+
+
+def find_completed_release_push(previous_graph_ids, parameters):
+    """Find a completed regular Firefox push in the graphs chosen by the caller."""
+    queue = get_taskcluster_client("queue")
+    for graph_id in previous_graph_ids:
+        action = get_task_definition(graph_id).get("extra", {}).get("action", {})
+        flavor = (
+            action.get("context", {}).get("input", {}).get("release_promotion_flavor")
+        )
+        if action.get("name") != "release-promotion" or flavor not in (
+            "push_firefox",
+            "ship_firefox",
+        ):
+            continue
+        previous = get_artifact(graph_id, "public/parameters.yml")
+        if any(
+            previous.get(key) != parameters[key]
+            for key in ("project", "head_rev", "version", "build_number")
+        ):
+            continue
+        labels = get_artifact(graph_id, "public/label-to-taskid.json")
+        task_id = labels.get("firefox-push-to-release")
+        if not task_id or queue.status(task_id)["status"]["state"] != "completed":
+            continue
+        payload = get_task_definition(task_id).get("payload", {})
+        if all((
+            payload.get("product") == "firefox",
+            payload.get("version") == parameters["version"],
+            payload.get("build_number") == parameters["build_number"],
+        )):
+            return task_id
+    return None

@@ -18,6 +18,7 @@ from gecko_taskgraph.decision import taskgraph_decision
 from gecko_taskgraph.util.attributes import RELEASE_PROMOTION_PROJECTS
 from gecko_taskgraph.util.partials import populate_release_history
 from gecko_taskgraph.util.partner_releases import (
+    find_completed_release_push,
     get_partner_upload_tasks,
     record_partner_upload_tasks,
 )
@@ -404,6 +405,7 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     if release_promotion_flavor in (
         "promote_firefox_partner_repack",
         "promote_firefox_partner_attribution",
+        "push_firefox_partner",
     ):
         rebuild_kinds = list(
             dict.fromkeys(rebuild_kinds + promotion_config["rebuild-kinds"])
@@ -432,6 +434,7 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     is_firefox_publication = release_promotion_flavor in (
         "push_firefox",
         "ship_firefox",
+        "push_firefox_partner",
     )
     if is_firefox_publication:
         if not previous_graph_ids:
@@ -465,6 +468,14 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     if input.get("version"):
         parameters["version"] = input["version"]
 
+    previous_partner_config = None
+    if release_promotion_flavor == "push_firefox_partner":
+        if find_completed_release_push(previous_graph_ids, parameters) is None:
+            raise ValueError(
+                "Partner publication requires a completed regular Firefox push in previous_graph_ids"
+            )
+        parameters["enable_always_target"] = False
+
     # Download and combine full task graphs from each of the previous_graph_ids.
     # Sometimes previous relpro action tasks will add tasks, like partials,
     # that didn't exist in the first full_task_graph, so combining them is
@@ -480,14 +491,19 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     parameters["existing_tasks"] = find_existing_tasks_from_previous_kinds(
         combined_full_task_graph, previous_graph_ids, rebuild_kinds
     )
-    selected_partner_config = None
-    if explicit_partner_config is not None:
-        selected_partner_config = get_previous_partner_config(
+    if (
+        release_promotion_flavor == "push_firefox_partner"
+        or explicit_partner_config is not None
+    ):
+        previous_partner_config = get_previous_partner_config(
             previous_graph_ids,
             parameters,
             previous_graphs,
             explicit_config=explicit_partner_config,
         )
+    selected_partner_config = (
+        previous_partner_config if explicit_partner_config is not None else None
+    )
     parameters["do_not_optimize"] = do_not_optimize
     parameters["target_tasks_method"] = target_tasks_method
     parameters["build_number"] = int(input["build_number"])
@@ -517,6 +533,15 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
         release_enable_partner_attribution = True
         release_enable_emefree = False
         reuse_partner_config = False
+    elif release_promotion_flavor == "push_firefox_partner":
+        release_enable_partner_repack = bool(
+            previous_partner_config.get("release-partner-repack")
+        )
+        release_enable_partner_attribution = bool(
+            previous_partner_config.get("release-partner-attribution")
+        )
+        release_enable_emefree = False
+        reuse_partner_config = True
     else:
         # for promotion or ship phases, we use the action input to turn the repacks/attribution off
         release_enable_partner_repack = input.get(
@@ -558,7 +583,7 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
     )
     parameters["release_enable_emefree"] = release_enable_emefree
 
-    partner_config = input.get("release_partner_config")
+    partner_config = input.get("release_partner_config") or previous_partner_config
     if selected_partner_config is not None:
         partner_config = selected_partner_config
     elif not partner_config and any([
@@ -606,6 +631,17 @@ def release_promotion_action(parameters, graph_config, input, task_group_id, tas
         get_partner_upload_tasks(
             parameters["release_partner_config"], require_uploads=True
         )
+
+    if release_promotion_flavor == "push_firefox_partner":
+        if release_enable_emefree:
+            raise ValueError("Partner-only push cannot publish EME-free builds")
+        if not any(
+            entry.get("publish_to_releases")
+            for _, _, _, entry in get_partner_config_entries(
+                parameters["release_partner_config"]
+            )
+        ):
+            raise ValueError("No published partners selected for the partner push")
 
     parameters["dontbuild"] = False
     # make parameters read-only

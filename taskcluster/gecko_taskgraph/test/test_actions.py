@@ -1234,6 +1234,7 @@ def run_partner_release_promotion(
     flavor,
     previous_graph_ids,
     previous_parameters,
+    input_overrides=None,
 ):
     taskgraph_decision = mocker.patch(
         "gecko_taskgraph.actions.release_promotion.taskgraph_decision"
@@ -1273,7 +1274,8 @@ def run_partner_release_promotion(
             "release_enable_partner_repack": True,
             "release_enable_partner_attribution": False,
             "release_enable_emefree": False,
-        },
+        }
+        | (input_overrides or {}),
     )
 
     taskgraph_decision.assert_called_once()
@@ -1462,6 +1464,71 @@ def test_release_promotion_partner_repack_flavor_refreshes_partner_config(
     )
 
     get_partner_config.assert_called_once()
+
+
+def test_explicit_partner_push_uses_saved_configuration(
+    mocker, monkeypatch, responses, run_action
+):
+    from copy import deepcopy
+
+    config = deepcopy(PARTNER_CONFIG)
+    config["release-partner-repack"]["acme"]["acme-001"].update(
+        build_number=7, publish_to_releases=True, upload_tasks=["recorded-upload"]
+    )
+    check = mocker.patch(
+        "gecko_taskgraph.actions.release_promotion.find_completed_release_push",
+        return_value="completed-push",
+    )
+    lookup, params = run_partner_release_promotion(
+        mocker,
+        monkeypatch,
+        responses,
+        run_action,
+        flavor="push_firefox_partner",
+        previous_graph_ids=["decision-task-id", "partner-promote"],
+        previous_parameters={
+            "decision-task-id": {},
+            "partner-promote": {"release_partner_config": config},
+        },
+        input_overrides={
+            "rebuild_kinds": [],
+            "release_partner_config": {
+                "release-partner-repack": {
+                    "acme": {
+                        "acme-001": {
+                            key: value
+                            for key, value in config["release-partner-repack"]["acme"][
+                                "acme-001"
+                            ].items()
+                            if key != "upload_tasks"
+                        }
+                        | {"graph_id": "partner-promote"}
+                    }
+                }
+            },
+        },
+    )
+    lookup.assert_not_called()
+    check.assert_called_once()
+    assert params["release_partner_config"] == config
+    assert params["target_tasks_method"] == "push_partner"
+    assert params["enable_always_target"] is False
+    assert params["release_enable_partner_repack"] is True
+    assert params["release_enable_partner_attribution"] is False
+    assert not any(
+        name in params
+        for name in [
+            "release_partner_build_number",
+            "release_partner_build_numbers",
+            "release_partner_push_to_release",
+        ]
+    )
+    from gecko_taskgraph.actions import release_promotion as promotion
+
+    assert (
+        "release-beetmover-push-to-release"
+        in promotion.find_existing_tasks_from_previous_kinds.call_args.args[2]
+    )
 
 
 @pytest.mark.parametrize(

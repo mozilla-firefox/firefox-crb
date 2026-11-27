@@ -74,6 +74,17 @@ def verify_dependency_tiers(task, taskgraph, scratch_pad, graph_config, paramete
 verifications.add("optimized_task_graph")(verify_always_optimized)
 
 
+@verifications.add("optimized_task_graph")
+def verify_partner_push_graph(task, taskgraph, scratch_pad, graph_config, parameters):
+    if task is not None or parameters.get("target_tasks_method") != "push_partner":
+        return
+    labels = sorted(task.label for task in taskgraph.tasks.values())
+    if labels != ["firefox-push-to-release"]:
+        raise ValueError(
+            f"Partner push must schedule only firefox-push-to-release, got {labels}"
+        )
+
+
 def profiled_verifications(name, *args, **kwargs):
     """Run the verifications of a generation phase, recording a marker covering
     them in the resource usage profile."""
