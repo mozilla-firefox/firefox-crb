@@ -387,9 +387,8 @@ std::ostream& operator<<(std::ostream& aStream,
   return aStream;
 }
 
-std::ostream& operator<<(
-    std::ostream& aStream,
-    const IMENotification::SelectionChangeDataBase& aData) {
+std::ostream& operator<<(std::ostream& aStream,
+                         const IMENotification::SelectionChangeData& aData) {
   if (!aData.IsInitialized()) {
     aStream << "{ IsInitialized()=false }";
     return aStream;
@@ -399,11 +398,11 @@ std::ostream& operator<<(
     return aStream;
   }
   aStream << "{ mOffset=" << aData.mOffset;
-  if (aData.mString->Length() > 20) {
-    aStream << ", mString.Length()=" << aData.mString->Length();
+  if (aData.mString.Length() > 20) {
+    aStream << ", mString.Length()=" << aData.mString.Length();
   } else {
-    aStream << ", mString=\"" << NS_ConvertUTF16toUTF8(*aData.mString)
-            << "\" (Length()=" << aData.mString->Length() << ")";
+    aStream << ", mString=\"" << NS_ConvertUTF16toUTF8(aData.mString)
+            << "\" (Length()=" << aData.mString.Length() << ")";
   }
 
   aStream << ", GetWritingMode()=" << aData.GetWritingMode()
@@ -418,7 +417,7 @@ std::ostream& operator<<(
 }
 
 std::ostream& operator<<(std::ostream& aStream,
-                         const IMENotification::TextChangeDataBase& aData) {
+                         const IMENotification::TextChangeData& aData) {
   if (!aData.IsValid()) {
     aStream << "{ IsValid()=false }";
     return aStream;
@@ -509,10 +508,10 @@ void NativeIMEContext::InitWithRawNativeIMEContext(void* aRawNativeIMEContext) {
 }
 
 /******************************************************************************
- * IMENotification::SelectionChangeDataBase
+ * IMENotification::SelectionChangeData
  ******************************************************************************/
 
-void IMENotification::SelectionChangeDataBase::Assign(
+void IMENotification::SelectionChangeData::Assign(
     const WidgetQueryContentEvent& aQuerySelectedTextEvent) {
   MOZ_ASSERT(aQuerySelectedTextEvent.mMessage == eQuerySelectedText);
   MOZ_ASSERT(aQuerySelectedTextEvent.Succeeded());
@@ -523,28 +522,28 @@ void IMENotification::SelectionChangeDataBase::Assign(
   }
   if ((mHasRange = aQuerySelectedTextEvent.FoundSelection())) {
     mOffset = aQuerySelectedTextEvent.mReply->StartOffset();
-    *mString = aQuerySelectedTextEvent.mReply->DataRef();
+    mString = aQuerySelectedTextEvent.mReply->DataRef();
     mReversed = aQuerySelectedTextEvent.mReply->mReversed;
     SetWritingMode(aQuerySelectedTextEvent.mReply->WritingModeRef());
   } else {
     mOffset = UINT32_MAX;
-    mString->Truncate();
+    mString.Truncate();
     mReversed = false;
     // Let's keep the writing mode for avoiding temporarily changing the
     // writing mode at no selection range.
   }
 }
 
-void IMENotification::SelectionChangeDataBase::SetWritingMode(
+void IMENotification::SelectionChangeData::SetWritingMode(
     const WritingMode& aWritingMode) {
   mWritingModeBits = aWritingMode.GetBits();
 }
 
-WritingMode IMENotification::SelectionChangeDataBase::GetWritingMode() const {
+WritingMode IMENotification::SelectionChangeData::GetWritingMode() const {
   return WritingMode(mWritingModeBits);
 }
 
-bool IMENotification::SelectionChangeDataBase::EqualsRange(
+bool IMENotification::SelectionChangeData::EqualsRange(
     const ContentSelection& aContentSelection) const {
   if (aContentSelection.HasRange() != HasRange()) {
     return false;
@@ -553,21 +552,21 @@ bool IMENotification::SelectionChangeDataBase::EqualsRange(
     return true;
   }
   return mOffset == aContentSelection.OffsetAndDataRef().StartOffset() &&
-         *mString == aContentSelection.OffsetAndDataRef().DataRef();
+         mString == aContentSelection.OffsetAndDataRef().DataRef();
 }
 
-bool IMENotification::SelectionChangeDataBase::EqualsRangeAndWritingMode(
+bool IMENotification::SelectionChangeData::EqualsRangeAndWritingMode(
     const ContentSelection& aContentSelection) const {
   return EqualsRange(aContentSelection) &&
          mWritingModeBits == aContentSelection.WritingModeRef().GetBits();
 }
 
 /******************************************************************************
- * IMENotification::TextChangeDataBase
+ * IMENotification::TextChangeData
  ******************************************************************************/
 
-void IMENotification::TextChangeDataBase::MergeWith(
-    const IMENotification::TextChangeDataBase& aOther) {
+void IMENotification::TextChangeData::MergeWith(
+    const IMENotification::TextChangeData& aOther) {
   MOZ_ASSERT(aOther.IsValid(), "Merging data must store valid data");
   MOZ_ASSERT(aOther.mStartOffset <= aOther.mRemovedEndOffset,
              "end of removed text must be same or larger than start");
@@ -607,8 +606,8 @@ void IMENotification::TextChangeDataBase::MergeWith(
   // offset of inserted text in the new text but |oldData.mAddedEndOffset|
   // doesn't include any changes of the text before |newData.mAddedEndOffset|.
 
-  const TextChangeDataBase& newData = aOther;
-  const TextChangeDataBase oldData = *this;
+  const TextChangeData& newData = aOther;
+  const TextChangeData oldData = *this;
 
   // mCausedOnlyByComposition should be true only when all changes are caused
   // by composition.
