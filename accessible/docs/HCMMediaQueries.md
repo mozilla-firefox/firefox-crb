@@ -10,10 +10,20 @@ If you work with an AI agent, the in-tree {doc}`accessibility-frontend-review </
 
 ### Forced Colors
 
-The `forced-colors` media query has two values: `active` and `none`. The resolved value of this media query is determined by the browser based on user settings (OS and Firefox).
+The `forced-colors` media query has three values: `none`, `active` and `requested`. The browser resolves it from user settings (OS and Firefox), and resolves it differently in browser chrome than in web content.
 
 * The `none` state indicates documents can use any colors to render content.
-* The `active` state indicates a user has OS or browser settings that limit the color palette available to the User Agent.
+* The `active` state indicates a user has OS or browser settings that limit the color palette available to the User Agent, and Firefox forces colors. Web content reaches this state through user settings, and browser chrome only when chrome JS sets `window.browsingContext.forcedColorsOverride = "active"`.
+* The `requested` state indicates Windows High Contrast Mode is on in browser chrome. Firefox does not force colors there, so chrome style sheets have to use system colors themselves. Only chrome style sheets can parse this value.
+
+| Query | Browser chrome | Web content |
+|---|---|---|
+| `(forced-colors: none)` | Matches unless Windows HCM is on or the override is active | Matches unless colors are forced |
+| `(forced-colors: active)` | Matches only under the override | Matches when colors are forced |
+| `(forced-colors: requested)` | Matches when Windows HCM is on | Doesn't parse |
+| `(forced-colors)` | Matches when Windows HCM is on or under the override | Matches when colors are forced |
+
+Write the boolean `@media (forced-colors)`, the only form that works in both. The [use-boolean-forced-colors-query](/code-quality/lint/linters/stylelint-plugin-mozilla/rules/use-boolean-forced-colors-query.md) stylelint rule reports `(forced-colors: active)`, and [High contrast mode](/code-quality/coding-style/css_guidelines.md#high-contrast-mode) in the CSS guidelines describes how each state is reached.
 
 In Firefox's default configuration, the `active` state is triggered when a user has enabled Windows High Contrast Mode or [Firefox High Contrast Mode](/accessible/ColorsAndHighContrastMode.md#user-customisable-colors-dialog) (FF HCM). Both of these forced-colors modes offer users a limited amount of color customisation. In Windows, users can override seven colors, and with Firefox High Contrast Mode users can override four. MacOS's "Increase Contrast" setting does **not** trigger `forced-colors: active` because it does not limit the color palette available to UA's.
 > **NOTE:** MacOS's "Increase Contrast" setting **will** trigger `forced-colors: active` (in non-chrome web content) if it is enabled in combination with FF HCM's "Only with High Contrast Themes" option. This is also true on Linux. Because [FF HCM defaults to "Never" on non-Windows platforms](https://searchfox.org/mozilla-central/rev/896042a1a71066254ceb5291f016ca3dbca21cb7/modules/libpref/init/StaticPrefList.yaml#1195-1199), enabling "Increase Contrast" or Linux High Contrast Themes alone will not trigger `forced-colors: active`. Similarly, if a user disables FF HCM while Win HCM is enabled, `forced-colors` (in content) will evaluate to `none`.
