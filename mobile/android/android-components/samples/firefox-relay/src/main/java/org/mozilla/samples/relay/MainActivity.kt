@@ -20,7 +20,6 @@ import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceType
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.PeriodicSyncConfig
 import mozilla.components.concept.sync.Profile
@@ -176,7 +175,7 @@ open class MainActivity : AppCompatActivity(), LoginFragment.OnLoginCompleteList
 
     override fun onLoginComplete(code: String, state: String, action: String, fragment: LoginFragment) {
         lifecycleScope.launch {
-            val authType = action.takeIf { it.isNotEmpty() }?.toAuthType() ?: AuthType.Signin
+            val authType = action.takeIf { it.isNotEmpty() }?.toAuthType() ?: AuthType.Signin()
             accountManager.finishAuthentication(FxaAuthData(authType, code = code, state = state))
             supportFragmentManager.popBackStack()
         }

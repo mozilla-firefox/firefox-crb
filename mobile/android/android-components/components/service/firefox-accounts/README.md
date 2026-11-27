@@ -144,7 +144,7 @@ val accountObserver = object : AccountObserver {
         // prompt user to re-authenticate
     }
 
-    override fun onAuthenticated(account: OAuthAccount) = launch {
+    override fun onAuthenticated(account: OAuthAccount, authType: AuthType) = launch {
         // logged-in successfully; display account details
     }
 
@@ -271,7 +271,7 @@ Finally, complete the OAuth flow, retrieve the profile information, then save yo
 launch {
     // Complete the authentication flow. The account manager persists login state and
     // fetches the profile, delivering it via AccountObserver.onProfileUpdated.
-    accountManager.finishAuthentication(FxaAuthData(AuthType.Signin, code, state))
+    accountManager.finishAuthentication(FxaAuthData(AuthType.Signin(), code, state))
 }
 ```
 

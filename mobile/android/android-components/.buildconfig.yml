@@ -198,6 +198,7 @@ projects:
     upstream_dependencies:
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -300,6 +301,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -612,6 +614,7 @@ projects:
     upstream_dependencies:
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:support-base
     - components:tooling-lint
   components:concept-tabstray:
@@ -695,6 +698,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-push
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -826,6 +830,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -1046,6 +1051,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -1154,6 +1160,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-integrity
     - components:concept-menu
     - components:concept-storage
@@ -1698,6 +1705,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -1850,6 +1858,7 @@ projects:
     - components:browser-storage-sync
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2272,6 +2281,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -2352,6 +2362,7 @@ projects:
     - components:concept-base
     - components:concept-engine
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-menu
     - components:concept-storage
     - components:concept-storage-bookmarks
@@ -2642,6 +2653,7 @@ projects:
     - components:compose-base
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2694,6 +2706,7 @@ projects:
     - components:browser-storage-sync
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2792,6 +2805,7 @@ projects:
     upstream_dependencies:
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync
@@ -2809,6 +2823,7 @@ projects:
     upstream_dependencies:
     - components:concept-base
     - components:concept-fetch
+    - components:concept-firefox-accounts
     - components:concept-storage
     - components:concept-storage-bookmarks
     - components:concept-sync

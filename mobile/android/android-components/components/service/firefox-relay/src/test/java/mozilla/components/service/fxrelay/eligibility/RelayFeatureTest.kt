@@ -115,7 +115,7 @@ class RelayFeatureTest {
             val feature = createFeature()
             feature.start()
 
-            accountManager.observers.first().onAuthenticated(FakeOAuthAccount(), AuthType.Signin)
+            accountManager.observers.first().onAuthenticated(FakeOAuthAccount(), AuthType.Signin())
 
             assertEquals(Ineligible.NoRelay, store.state.eligibilityState)
         }
