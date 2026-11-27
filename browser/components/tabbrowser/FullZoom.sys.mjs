@@ -24,6 +24,40 @@ const CONTENT_PREF_NAME = "browser.content.full-zoom";
  * Controls the "full zoom" setting and its site-specific preferences.
  */
 export class FullZoom {
+  /** @type {WeakMap<BrowserWindow, FullZoom>} */
+  static #instances = new WeakMap();
+
+  /**
+   * Returns the window's instance, creating it if needed. A location change
+   * can reach the instance before `init` runs; `init` replays it.
+   *
+   * @param {BrowserWindow} window
+   * @returns {FullZoom}
+   */
+  static forWindow(window) {
+    let instance = FullZoom.#instances.get(window);
+    if (!instance) {
+      instance = new FullZoom(window);
+      FullZoom.#instances.set(window, instance);
+    }
+    return instance;
+  }
+
+  /**
+   * @param {BrowserWindow} window
+   */
+  static init(window) {
+    FullZoom.forWindow(window).#init();
+  }
+
+  /**
+   * @param {BrowserWindow} window
+   */
+  static destroy(window) {
+    FullZoom.#instances.get(window).#destroy();
+    FullZoom.#instances.delete(window);
+  }
+
   // This maps the browser to monotonically increasing integer
   // tokens. #browserTokenMap[browser] is increased each time the zoom is
   // changed in the browser. See #getBrowserToken and #ignorePendingZoomAccesses.
@@ -66,7 +100,7 @@ export class FullZoom {
 
   // Initialization & Destruction
 
-  init() {
+  #init() {
     this.documentGlobal.gBrowser.addEventListener("DoZoomEnlarge", this);
     this.documentGlobal.gBrowser.addEventListener("DoZoomReduce", this);
     this.documentGlobal.addEventListener("MozScaleGestureComplete", this);
@@ -88,7 +122,7 @@ export class FullZoom {
     this.#initialLocations = null;
   }
 
-  destroy() {
+  #destroy() {
     Services.prefs.removeObserver("browser.zoom.full", this);
     lazy.cps2.removeObserverForName(CONTENT_PREF_NAME, this);
     this.documentGlobal.gBrowser.removeEventListener("DoZoomEnlarge", this);
