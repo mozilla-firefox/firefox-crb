@@ -1053,6 +1053,10 @@ TCPSocket::OnTransportStatus(nsITransport* aTransport, nsresult aStatus,
     return NS_OK;
   }
 
+  if (mReadyState != TCPReadyState::Connecting) {
+    return NS_OK;
+  }
+
   if (mSsl) {
     // The TCP handshake is done, but the TLS handshake is still in flight.
     // Wait for HandshakeDone() before reporting "open".
