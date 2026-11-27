@@ -12,6 +12,7 @@ FrontendCodeReviewBestPractices
 CommandLineParameters
 BrowserStartup
 BrowserWindowScripts
+BrowserWindowTracker
 CategoryManagerIndirection
 DistributionIni
 components/customizableui/docs/index
