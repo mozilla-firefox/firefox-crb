@@ -14,9 +14,16 @@
 "use strict";
 
 add_task(async function testExecuteScript() {
-  const win = window.open("http://mochi.test:8888/");
-
   async function background() {
+    const tabLoaded = new Promise(resolve => {
+      browser.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+        if (tab.status === "complete" && tab.url === "http://mochi.test:8888/") {
+          browser.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      });
+    });
+
     const tasks = [
       {
         description: "CSS as moz-extension:// url",
@@ -77,6 +84,10 @@ add_task(async function testExecuteScript() {
     }
 
     try {
+      // insertCSS targets the active tab, which needs to have loaded the page
+      // we have host permissions for.
+      await tabLoaded;
+
       for (const {background, description, foreground, promise} of tasks) {
         browser.test.log(`Run test case: ${description}`);
         let result = await promise();
@@ -111,6 +122,7 @@ add_task(async function testExecuteScript() {
   });
 
   await extension.startup();
+  const win = window.open("http://mochi.test:8888/");
 
   await extension.awaitFinish("insertCSS");
 
