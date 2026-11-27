@@ -41,6 +41,7 @@ permalink: /changelog/
   * ⚠️ **Breaking change**: Moved `FxaService` and `FxaScope` to `concept-firefox-accounts`. Add the `org.mozilla.components:concept-firefox-accounts` dependency and import both types from `mozilla.components.concept.fxa`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 * **concept-sync**
   * ⚠️ **Breaking change**: `AuthType.Signin`, `AuthType.Signup`, and `AuthType.Pairing` are now data classes carrying an optional `service: FxaService?`. `AuthType.OtherExternal` also carries the service. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
+  * ⚠️ **Breaking change**: `AuthFlowError` has changed from an enum to a sealed interface, that now has an optional `service: FxaService?` property to identify what the associated service for that error is. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 162.0
 * **concept-engine**
