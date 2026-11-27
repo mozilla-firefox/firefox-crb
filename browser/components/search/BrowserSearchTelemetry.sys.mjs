@@ -69,6 +69,7 @@ class BrowserSearchTelemetryHandler {
     errorpage: "errorpage",
     newtab_search_widget: "newtab-search-widget",
     newtab_searchbar: "newtab-searchbar",
+    private_newtab_searchbar: "private-newtab-searchbar",
     searchbar: "searchbar",
     smartbar: "smartbar",
     smartwindow_assistant: "smartwindow_assistant",
@@ -267,6 +268,7 @@ class BrowserSearchTelemetryHandler {
           this.#recordSearch(browser, source, "enter");
           break;
         case "errorpage":
+        case "private_newtab_searchbar":
         case "newtab_searchbar":
         case "searchbar":
         case "smartbar":

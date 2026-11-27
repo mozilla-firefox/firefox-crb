@@ -531,7 +531,7 @@ ${
     // reflect value of keyword.enabled or set the searchbar placeholder.
     this._setPlaceholder(null);
 
-    if (this.sapName != "newtab_searchbar") {
+    if (typeof ChromeUtils != "undefined") {
       if (this.controller.maybeInitEngineStore()) {
         // Engine store is initialized now and placeholder with
         // engine name will be set in connectedCallback.

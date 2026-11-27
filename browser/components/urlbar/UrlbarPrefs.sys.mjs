@@ -1377,7 +1377,8 @@ class Preferences {
         );
       }
       case "searchbar":
-      case "newtab_searchbar": {
+      case "newtab_searchbar":
+      case "private_newtab_searchbar": {
         // This is a temporary placeholder until searchbar gets its own config.
         return this.#getOrCacheResultGroups(key, () =>
           makeDefaultResultGroups({

@@ -174,6 +174,7 @@ sap:
           `newtab_search_widget`,
           `errorpage`,
           `newtab_searchbar`,
+          `private_newtab_searchbar`,
           `searchbar`,
           `smartbar`,
           `smartwindow_assistant`,
@@ -271,8 +272,8 @@ sap:
       source:
         description: |
           The search access point from which the user initiated the search.
-          Possible values are `newtab_searchbar`, `searchbar`, `smartbar` and
-          `urlbar`.
+          Possible values are `private_newtab_searchbar`,
+          `newtab_searchbar`, `searchbar`, `smartbar` and `urlbar`.
         type: string
       provider_id:
         description: |
@@ -377,6 +378,7 @@ serp:
           `reload`,
           `searchbar`,
           `newtab_searchbar`,
+          `private_newtab_searchbar`,
           `smartbar`,
           `smartwindow_assistant`,
           `newtab_search_widget`,
@@ -1013,6 +1015,22 @@ browser.engagement.navigation:
       - https://bugzil.la/2062210
     data_reviews:
       - https://bugzil.la/2062210
+    notification_emails:
+      - fx-search-telemetry@mozilla.com
+      - rev-data@mozilla.com
+    expires: never
+
+  private_newtab_searchbar:
+    type: labeled_counter
+    description: |
+      The count of URI loads triggered from the aboutprivatebrowsing
+      search bar, broken down by the originating action.
+    data_sensitivity:
+      - interaction
+    bugs:
+      - https://bugzil.la/2098584
+    data_reviews:
+      - https://bugzil.la/2098584
     notification_emails:
       - fx-search-telemetry@mozilla.com
       - rev-data@mozilla.com

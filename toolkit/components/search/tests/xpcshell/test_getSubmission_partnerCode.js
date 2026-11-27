@@ -195,6 +195,13 @@ add_task(
     );
     assertSubmission(
       engine,
+      "private_newtab_searchbar",
+      "newtabcode",
+      "google-newtabsx",
+      "mapped private_newtab_searchbar"
+    );
+    assertSubmission(
+      engine,
       "about_home",
       "newtabcode",
       "google-newtabsx",

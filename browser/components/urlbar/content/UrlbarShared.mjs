@@ -699,7 +699,7 @@ export const UrlbarShared = {
    * toolbar search bar and New Tab's -- as opposed to the address bar and its
    * variants, whose search also covers history and bookmarks.
    */
-  SEARCHBAR_SAPS: ["searchbar", "newtab_searchbar"],
+  SEARCHBAR_SAPS: ["searchbar", "newtab_searchbar", "private_newtab_searchbar"],
 
   /**
    * Whether a SAP is one of SEARCHBAR_SAPS.
