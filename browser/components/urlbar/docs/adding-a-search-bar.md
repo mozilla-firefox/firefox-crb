@@ -109,12 +109,11 @@ name records wrong or missing data without an error.
   with no providers, so its queries return no results.
 - **Result groups.** `UrlbarPrefs.getResultGroups()` throws
   `Unknown SAP name` for a name its `switch` doesn't list.
-- **Engagement telemetry.** `#searchSourceToSap` in `UrlbarParentController`
-  needs a branch for the new input. Without one, an input in a tab falls through
-  to the address bar's checks and records the wrong `sap`, such as
-  `urlbar_newtab`. An input with no browser window throws instead; the error is
-  logged as `Could not record engagement:`, and the engagement, abandonment and
-  exposure events are lost.
+- **Engagement telemetry.** `UrlbarSession.#getTelemetrySap()` records the SAP
+  name as the `sap` of every SAP other than `urlbar`, so the engagement events
+  record the new name with no code change. Add it to the `sap` descriptions in
+  `browser/components/urlbar/metrics.yaml` and to `UrlbarTelemetrySapName` in
+  `browser/components/urlbar/types/urlbar.ts`.
 - **Zero-prefix counters.** `urlbar.zeroprefix2.*` are labeled counters keyed
   by SAP name. An unlisted name counts into `__other__`.
 - **Search counts.** `BrowserSearchTelemetry.recordSearch()` logs
