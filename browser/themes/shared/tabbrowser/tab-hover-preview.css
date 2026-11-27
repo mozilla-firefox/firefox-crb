@@ -4,12 +4,8 @@
 
 #tab-preview-panel {
   --panel-width: 280px;
-  --panel-padding: 0;
-
-  @media -moz-pref("browser.nova.enabled") {
-    --panel-padding: var(--space-small);
-    --panel-border-radius: var(--border-radius-large);
-  }
+  --panel-padding: var(--space-small);
+  --panel-border-radius: var(--border-radius-large);
 
   @media not -moz-pref("browser.tabs.notes.enabled") {
     pointer-events: none;
@@ -77,28 +73,20 @@
   height: 16px;
   background-image: var(--identity-icon);
   -moz-context-properties: fill;
-  fill: var(--identity-icon-color);
+  fill: var(--identity-color);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
-
-  /* Non-nova shows name + icon; nova shows icon + name, matching the URL bar. */
-  @media -moz-pref("browser.nova.enabled") {
-    order: 1;
-    fill: var(--identity-color);
-  }
+  /* Show the icon before the name, matching the URL bar. */
+  order: 1;
 }
 
 .tab-preview-container-label {
-  color: var(--identity-tab-color);
+  color: var(--identity-color);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-
-  @media -moz-pref("browser.nova.enabled") {
-    order: 2;
-    color: var(--identity-color);
-  }
+  order: 2;
 }
 
 .tab-preview-thumbnail-container {
@@ -267,17 +255,14 @@
 }
 
 #tabgroup-panel-content {
+  --panel-padding: var(--space-small);
   max-width: var(--menuitem-max-width);
 
   & toolbarbutton.active-tab {
     font-weight: var(--font-weight-semibold);
   }
 
-  @media -moz-pref("browser.nova.enabled") {
-    --panel-padding: var(--space-small);
-
-    .group-preview-button {
-      border: 1px solid var(--button-border-color-ghost);
-    }
+  .group-preview-button {
+    border: 1px solid var(--button-border-color-ghost);
   }
 }

@@ -16,7 +16,6 @@ const lazy = XPCOMUtils.declareLazy({
   Tabbrowser: "moz-src:///browser/components/tabbrowser/Tabbrowser.sys.mjs",
   TabNotes: "moz-src:///browser/components/tabnotes/TabNotes.sys.mjs",
   prefDisableAutohide: { pref: "ui.popup.disable_autohide", default: false },
-  novaEnabled: { pref: "browser.nova.enabled", default: false },
   prefDisplayThumbnail: {
     pref: "browser.tabs.hoverPreview.showThumbnails",
     default: false,
@@ -925,22 +924,15 @@ class TabGroupPanel extends HoverPanel {
   }
 
   get popupOptions() {
-    // With Nova enabled, offset the panel by the border-radius (16px).
-
-    const nova = lazy.novaEnabled;
-
+    // Offset the panel by its border-radius (16px).
     if (this.win.gBrowser.tabContainer.verticalMode) {
       return {
         position: this.win.SidebarController._positionStart
           ? "topright topleft"
           : "topleft topright",
         x: 0,
-        y: nova ? -16 : -5,
+        y: -16,
       };
-    }
-
-    if (!nova) {
-      return { position: "bottomleft topleft", x: 0, y: 0 };
     }
 
     const rtl = this.win.RTL_UI;
