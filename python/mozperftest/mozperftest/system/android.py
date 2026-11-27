@@ -52,6 +52,26 @@ _PERMALINKS = {
 }
 
 
+# Device state that changes performance results between devices of the same
+# model: the firmware, the CPU and memory frequency limits and governors, and
+# the animation and refresh rate settings (vendors store some of these in
+# different settings namespaces).
+_DEVICE_DETAILS_SCRIPT = (
+    "for p in ro.build.fingerprint ro.build.date ro.soc.model; do"
+    ' echo "$p=$(getprop $p)"; done;'
+    " for d in /sys/devices/system/cpu/cpufreq/policy*; do"
+    ' echo "cpufreq ${d##*/}: governor=$(cat $d/scaling_governor)'
+    " min=$(cat $d/scaling_min_freq) max=$(cat $d/scaling_max_freq)"
+    ' hw_max=$(cat $d/cpuinfo_max_freq)"; done;'
+    " for d in /sys/class/devfreq/*; do"
+    ' echo "devfreq ${d##*/}: governor=$(cat $d/governor)'
+    ' min=$(cat $d/min_freq) max=$(cat $d/max_freq)"; done;'
+    " for ns in global secure system; do settings list $ns |"
+    " grep -i -E 'anim|refresh_rate|reduce_motion' | sed \"s/^/$ns /\"; done;"
+    " dumpsys thermalservice | grep -m1 'Thermal Status'"
+)
+
+
 class DeviceError(Exception):
     pass
 
@@ -276,6 +296,8 @@ class AndroidDevice(Layer):
         if self.clear_logcat:
             self.device.clear_logcat()
 
+        # Before the installation, which can boost the CPU frequencies.
+        self.log_device_details()
         self.install_application(self.get_arg("android-install-apk"))
 
         if self.get_arg("android-perf-tuning", False):
@@ -297,3 +319,13 @@ class AndroidDevice(Layer):
         self.info(f"- Activity: {self.android_activity}")
         self.info(f"- Intent: {self.get_arg('android_intent')}")
         return metadata
+
+    def log_device_details(self):
+        try:
+            details = self.device.shell_output(_DEVICE_DETAILS_SCRIPT)
+        except ADBError as e:
+            self.warning(f"Could not read the device details: {e}")
+            return
+        self.info("Device details:")
+        for line in details.splitlines():
+            self.info(f"- {line}")

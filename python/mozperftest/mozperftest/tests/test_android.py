@@ -101,6 +101,48 @@ def test_android_no_emulator_setup_without_flag(ensure_device):
     ensure_device.assert_not_called()
 
 
+def _run_android_layer():
+    args = {
+        "app": "fenix",
+        "flavor": "mobile-browser",
+        "android-install-apk": ["this.apk"],
+        "android": True,
+        "android-timeout": 30,
+        "android-capture-adb": "stdout",
+        "android-app-name": "org.mozilla.fenix",
+    }
+    mach_cmd, metadata, env = get_running_env(**args)
+    system = env.layers[SYSTEM]
+    android_layer = get_android_device_layer(system.layers)
+    with system as android, silence(system):
+        with mock.patch.object(android_layer, "info") as info, mock.patch.object(
+            android_layer, "warning"
+        ) as warning:
+            android(metadata)
+    return [c.args[0] for c in info.call_args_list], warning
+
+
+@mock.patch("mozperftest.system.VersionProducer", new=mock.MagicMock())
+@mock.patch("mozperftest.system.android.ADBLoggedDevice", new=FakeDevice)
+def test_android_logs_device_details():
+    details = "ro.build.fingerprint=vendor/model:14/1:user\ncpufreq policy0: governor=x"
+    with mock.patch.object(FakeDevice, "shell_output", return_value=details):
+        messages, warning = _run_android_layer()
+    assert "Device details:" in messages
+    assert "- ro.build.fingerprint=vendor/model:14/1:user" in messages
+    assert "- cpufreq policy0: governor=x" in messages
+    warning.assert_not_called()
+
+
+@mock.patch("mozperftest.system.VersionProducer", new=mock.MagicMock())
+@mock.patch("mozperftest.system.android.ADBLoggedDevice", new=FakeDevice)
+def test_android_device_details_failure_is_not_fatal():
+    with mock.patch.object(FakeDevice, "shell_output", side_effect=ADBError("boom")):
+        messages, warning = _run_android_layer()
+    assert "Device details:" not in messages
+    warning.assert_called_once()
+
+
 @mock.patch("mozperftest.system.VersionProducer", new=mock.MagicMock())
 @mock.patch("mozperftest.system.android.ADBLoggedDevice", new=FakeDevice)
 def test_android_with_binary():
@@ -270,8 +312,8 @@ def test_android_apk_alias(device):
     with system as android, silence(system):
         android(metadata)
 
-    assert device.mock_calls[1][1][0] == "org.mozilla.fenix"
-    assert device.mock_calls[2][1][0].endswith("target.apk")
+    device.return_value.uninstall_app.assert_called_once_with("org.mozilla.fenix")
+    assert device.return_value.install_app.call_args[0][0].endswith("target.apk")
 
 
 @mock.patch("mozperftest.system.VersionProducer", new=mock.MagicMock())
