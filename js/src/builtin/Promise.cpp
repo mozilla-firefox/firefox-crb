@@ -29,8 +29,9 @@
 #include "vm/Iteration.h"
 #include "vm/JSContext.h"
 #include "vm/JSObject.h"
-#include "vm/List.h"           // js::ListObject
-#include "vm/PlainObject.h"    // js::PlainObject
+#include "vm/List.h"         // js::ListObject
+#include "vm/PlainObject.h"  // js::PlainObject
+#include "vm/Probes.h"
 #include "vm/PromiseObject.h"  // js::PromiseObject
 #include "vm/SelfHosting.h"
 #include "vm/Warnings.h"  // js::WarnNumberASCII
@@ -3999,6 +4000,52 @@ static JSFunction* GetResolveFunctionFromPromise(PromiseObject* promise) {
   return GetResolveFunctionFromReject(rejectFun);
 }
 
+static gc::AllocKind PromiseObjectAllocKind() {
+  return gc::GetFinalizedAllocKindForClass(
+      gc::GetGCObjectKind(&PromiseObject::class_), &PromiseObject::class_);
+}
+
+/* static */
+SharedShape* GlobalObject::createPromiseShapeWithDefaultProto(JSContext* cx) {
+  MOZ_ASSERT(!cx->global()->data().promiseShapeWithDefaultProto);
+
+  RootedObject proto(
+      cx, GlobalObject::getOrCreatePromisePrototype(cx, cx->global()));
+  if (!proto) {
+    return nullptr;
+  }
+
+  SharedShape* shape = SharedShape::getInitialShape(
+      cx, &PromiseObject::class_, cx->realm(), TaggedProto(proto),
+      PromiseObjectAllocKind());
+  if (!shape) {
+    return nullptr;
+  }
+
+  cx->global()->data().promiseShapeWithDefaultProto.init(shape);
+  return shape;
+}
+
+// Allocate a PromiseObject with %Promise.prototype% as its prototype. As with
+// NewObjectWithClassProto, the caller initializes the promise's state.
+static PromiseObject* NewPromiseObjectWithDefaultProto(JSContext* cx) {
+  Rooted<SharedShape*> shape(cx,
+                             GlobalObject::getPromiseShapeWithDefaultProto(cx));
+  if (!shape) {
+    return nullptr;
+  }
+
+  gc::Heap heap = GetInitialHeap(GenericObject, &PromiseObject::class_);
+  auto* promise = NativeObject::create<PromiseObject>(
+      cx, PromiseObjectAllocKind(), heap, shape);
+  if (!promise) {
+    return nullptr;
+  }
+
+  probes::CreateObject(cx, promise);
+  return promise;
+}
+
 /**
  * ES2022 draft rev d03c1ec6e235a5180fa772b6178727c17974cb14
  *
@@ -4026,7 +4073,9 @@ CreatePromiseObjectInternal(JSContext* cx, HandleObject proto /* = nullptr */,
   //             « [[PromiseState]], [[PromiseResult]],
   //               [[PromiseFulfillReactions]], [[PromiseRejectReactions]],
   //               [[PromiseIsHandled]] »).
-  PromiseObject* promise = NewObjectWithClassProto<PromiseObject>(cx, proto);
+  PromiseObject* promise =
+      proto ? NewObjectWithClassProto<PromiseObject>(cx, proto)
+            : NewPromiseObjectWithDefaultProto(cx);
   if (!promise) {
     return nullptr;
   }
