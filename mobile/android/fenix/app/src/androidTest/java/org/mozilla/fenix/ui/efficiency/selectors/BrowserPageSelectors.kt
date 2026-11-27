@@ -31,6 +31,7 @@ object BrowserPageSelectors : SelectorContainer {
         SIGN_IN_TO_SUMMARIZE_BOTTOM_SHEET,
         TRANSLATION_BANNER,
         OPEN_IN_APP_CFR,
+        CONNECTION_FAILURE_ERROR_PAGE,
     }
 
     val ENGINE_VIEW =
@@ -66,6 +67,26 @@ object BrowserPageSelectors : SelectorContainer {
             strategy = SelectorStrategy.UIAUTOMATOR_WITH_RAW_RES_ID,
             value = "errorTryAgain",
             description = "Error page 'Try Again' button",
+            groups = setOf(Group.CONNECTION_FAILURE_ERROR_PAGE),
+        )
+
+    // Reloading an already-loaded page while offline yields this page, not the "no internet" one: the host is
+    // already resolved, so AppRequestInterceptor.improveErrorType() never rewrites the unknown-host it keys on.
+    val CONNECTION_FAILURE_ERROR_TITLE =
+        Selector(
+            strategy = SelectorStrategy.UIAUTOMATOR_WITH_TEXT_CONTAINS,
+            value = getStringResource(errorpagesR.string.mozac_browser_errorpages_connection_failure_title),
+            description = "Connection failure error page title",
+            groups = setOf(Group.CONNECTION_FAILURE_ERROR_PAGE),
+        )
+
+    // The error page's illustration, a raw (unprefixed) DOM id on <iframe id="errorImage">.
+    val ERROR_PAGE_IMAGE =
+        Selector(
+            strategy = SelectorStrategy.UIAUTOMATOR_WITH_RAW_RES_ID,
+            value = "errorImage",
+            description = "Error page illustration image",
+            groups = setOf(Group.CONNECTION_FAILURE_ERROR_PAGE),
         )
 
     // The Play control on the media test pages (video's custom <button>Play</button> and audio's native
