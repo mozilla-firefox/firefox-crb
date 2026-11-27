@@ -1349,7 +1349,7 @@ arena_chunk_t* arena_t::PurgeGetSpareChunk(PurgeStats& aStats)
 }
 
 arena_chunk_t* arena_t::GetExcessSpareChunk() MOZ_REQUIRES(mLock) {
-  if (mNumSpares > 1) {
+  if (mNumSpares > kMaxSpareChunksPerArena) {
     arena_chunk_t* chunk = mSpares.popBack();
     mNumSpares--;
     MOZ_ASSERT(!chunk->mIsPurging);
