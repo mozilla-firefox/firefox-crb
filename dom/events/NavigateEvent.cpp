@@ -464,7 +464,7 @@ void NavigateEvent::PotentiallyProcessScrollBehavior() {
 MOZ_CAN_RUN_SCRIPT
 static void ScrollToBeginningOfDocument(Document& aDocument) {
   RefPtr<PresShell> presShell = aDocument.GetPresShell();
-  if (!presShell) {
+  if (!presShell || !presShell->DidInitialize()) {
     return;
   }
 
