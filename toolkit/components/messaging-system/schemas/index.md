@@ -23,7 +23,7 @@ System handles:
 - {searchfox}`Update Action <browser/components/asrouter/content-src/templates/OnboardingMessage/UpdateAction.schema.json>`
 - {searchfox}`Urlbar Action <browser/components/asrouter/content-src/templates/OnboardingMessage/UrlbarAction.schema.json>`
 
-Together, they are combined into the {searchfox}`Messaging Experiments <browser/components/asrouter/content-src/schemas/MessagingExperiment.schema.json>` via a {searchfox}`script <browser/components/asrouter/content-src/schemas/make-schemas.py>`. This
+Together, they are combined into the {searchfox}`Messaging Experiments <browser/components/asrouter/content-src/schemas/MessagingExperiment.schema.json>` via a {searchfox}`script <browser/components/asrouter/content-src/schemas/make_schemas.py>`. This
 is the schema used for Nimbus experiments that target messaging features. All
 incoming messaging experiments will be validated against this schema.
 
@@ -65,13 +65,13 @@ To add a new message type to the Messaging Experiments schema:
    `{ "$ref": "#/$defs/Foo" }`) to work in the bundled schema. See docs on
    [bundling JSON schemas][jsonschema_bundling] for more information.
 
-3. Add the new schema to the list in {searchfox}`make-schemas.py <browser/components/asrouter/content-src/schemas/make-schemas.py>`.
+3. Add the new schema to the list in {searchfox}`make_schemas.py <browser/components/asrouter/content-src/schemas/make_schemas.py>`.
 
 4. Build the new schema by running:
 
    ```shell
    cd browser/components/asrouter/content-src/schemas/
-   ../../../../../mach python make-schemas.py
+   ../../../../../mach python make_schemas.py
    ```
 
 5. Commit the results.
@@ -81,7 +81,7 @@ schema:
 
 ```shell
 cd browser/components/asrouter/content-src/schemas/
-../../../../../mach python make-schemas.py
+../../../../../mach python make_schemas.py
 ```
 
 If you do not, the {searchfox}`Firefox MS Schemas CI job <taskcluster/kinds/source-test/python.yml>` will fail.
@@ -93,7 +93,7 @@ You can run this locally via:
 ```shell
 cd browser/components/asrouter/content-src/schemas/
 ../../../../../mach xpcshell extract-test-corpus.js
-../../../../../mach python make-schemas.py --check
+../../../../../mach python make_schemas.py --check
 ```
 
 This test will re-generate the schema and compare it to
@@ -101,6 +101,12 @@ This test will re-generate the schema and compare it to
 The test will also validate the list of in-tree messages with the same schema
 validator that Experimenter uses to ensure that our schemas are compatible with
 Experimenter.
+
+The unit tests for `make_schemas.py` run with:
+
+```shell
+./mach python-test --subsuite fxms
+```
 
 ## Shared Definitions
 
