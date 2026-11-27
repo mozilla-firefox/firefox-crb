@@ -32,6 +32,34 @@ using SourceId = uint32_t;
 // Typedef for indexes into the source table array.
 using IndexIntoSourceTable = uint32_t;
 
+namespace mozilla {
+struct JSSourceEntry;
+}
+
+// Assigns indexes into the source table of a profile to the JS sources that the
+// profile refers to, in the order in which they're first looked up while the
+// samples and markers are streamed. Sources with the same id, which have the
+// same contents, share an index. The source table is streamed afterwards, with
+// only these sources.
+class JSSourceIndexer {
+ public:
+  explicit JSSourceIndexer(
+      const nsTArray<mozilla::JSSourceEntry>& aJSSourceEntries);
+
+  // The index of the source with this sourceId, or Nothing() if there is none.
+  mozilla::Maybe<IndexIntoSourceTable> IndexFor(SourceId aSourceId);
+
+  // Positions in aJSSourceEntries of the sources that were looked up, in the
+  // order of their index.
+  const nsTArray<size_t>& UsedEntries() const { return mUsedEntries; }
+
+ private:
+  const nsTArray<mozilla::JSSourceEntry>& mJSSourceEntries;
+  nsTHashMap<SourceId, size_t> mEntryForSourceId;
+  nsTHashMap<nsCStringHashKey, IndexIntoSourceTable> mIndexForId;
+  nsTArray<size_t> mUsedEntries;
+};
+
 class ProfileBufferEntry {
  public:
   using KindUnderlyingType =
@@ -188,8 +216,7 @@ class JITFrameInfo final {
       uint64_t aRangeStart, uint64_t aRangeEnd, JSContext* aCx,
       const std::function<void(const std::function<void(void*, uint64_t)>&)>&
           aJITAddressProvider,
-      const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap =
-          nullptr);
+      JSSourceIndexer* aJSSourceIndexer = nullptr);
 
   // Returns whether the information stored in this object is still relevant
   // for any entries in the buffer.
@@ -262,11 +289,10 @@ class UniqueStacks final : public mozilla::FailureLatch {
       bool operator==(const NormalFrameData& aOther) const;
 
       nsCString GetLocationWithSourceIndex(
-          const nsTHashMap<SourceId, IndexIntoSourceTable>* aSourceIdToIndexMap)
-          const {
+          JSSourceIndexer* aJSSourceIndexer) const {
         nsCString result = mLocation;
-        if (mSourceId && aSourceIdToIndexMap) {
-          auto index = aSourceIdToIndexMap->MaybeGet(mSourceId);
+        if (mSourceId && aJSSourceIndexer) {
+          auto index = aJSSourceIndexer->IndexFor(mSourceId);
           if (index) {
             result.AppendLiteral("[");
             result.AppendInt(*index);
@@ -388,8 +414,7 @@ class UniqueStacks final : public mozilla::FailureLatch {
   UniqueStacks(mozilla::FailureLatch& aFailureLatch,
                JITFrameInfo&& aJITFrameInfo,
                ProfilerCodeAddressService* aCodeAddressService = nullptr,
-               const nsTHashMap<SourceId, IndexIntoSourceTable>*
-                   aSourceIdToIndexMap = nullptr);
+               JSSourceIndexer* aJSSourceIndexer = nullptr);
 
   // Return a StackKey for aFrame as the stack's root frame (no prefix).
   [[nodiscard]] mozilla::Maybe<StackKey> BeginStack(const FrameKey& aFrame);
@@ -447,7 +472,7 @@ class UniqueStacks final : public mozilla::FailureLatch {
 
   mozilla::Vector<JITFrameInfoForBufferRange> mJITInfoRanges;
 
-  const nsTHashMap<SourceId, IndexIntoSourceTable>* mSourceIdToIndexMap;
+  JSSourceIndexer* mJSSourceIndexer;
 };
 
 //

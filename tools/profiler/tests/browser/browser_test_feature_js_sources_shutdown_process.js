@@ -42,11 +42,14 @@ add_task(
         // random token at runtime so it never appears as a literal in the
         // serialized SpecialPowers.spawn callback (which is itself a JS source
         // captured in the content process).
+        // It calls captureSample so that a sample refers to its source, as
+        // only those sources are included in the profile.
+        await defineCaptureSampleInContent(contentBrowser);
         await SpecialPowers.spawn(contentBrowser, [token], t => {
           content.window.eval(
             "function shutdownTestFn_" +
               t +
-              "(){return 42;}" +
+              "(){captureSample();return 42;}" +
               "shutdownTestFn_" +
               t +
               "();"

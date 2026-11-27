@@ -19,6 +19,29 @@ registerCleanupFunction(async () => {
 });
 
 /**
+ * Defines a `captureSample` function in the content window of aBrowser. It
+ * spins until the profiler has taken a sample of the content main thread, so
+ * the stack of that sample contains the content script that called it. Use it
+ * to make sure that the profile refers to the source of that script.
+ *
+ * @param {object} aBrowser
+ */
+async function defineCaptureSampleInContent(aBrowser) {
+  await SpecialPowers.spawn(aBrowser, [], () => {
+    const { ProfilerTestUtils } = ChromeUtils.importESModule(
+      "resource://testing-common/ProfilerTestUtils.sys.mjs"
+    );
+    Cu.exportFunction(
+      () => {
+        ProfilerTestUtils.captureAtLeastOneJsSample();
+      },
+      content,
+      { defineAs: "captureSample" }
+    );
+  });
+}
+
+/**
  * This is a helper function that will stop the profiler and returns the main
  * threads for the parent process and the content process with PID contentPid.
  * This happens immediately, without waiting for any sampling to happen or
