@@ -521,9 +521,8 @@ private fun createStore() =
 @StringRes
 private fun LoginsSnackbarState.toStringRes(): Int? =
     when (this) {
-        // the success state will be added in https://bugzilla.mozilla.org/show_bug.cgi?id=2094015, in a follow-up
-        LoginsSnackbarState.ImportSucceeded,
         LoginsSnackbarState.None -> null
+        LoginsSnackbarState.ImportSucceeded -> R.string.passwords_import_snackbar_success
         is LoginsSnackbarState.ImportFailed ->
             if (error == FileImporterError.ParseError(PasswordsParseError.UnsupportedContentType)) {
                 R.string.passwords_import_snackbar_failure_unsupported_type
