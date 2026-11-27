@@ -70,7 +70,7 @@ internal class CsvPasswordsFileImporter(
     private val loginsStorage: LoginsStorage,
 ) : FileImporter<PasswordsImportResult> {
 
-    override val mimeType = "text/comma-separated-values"
+    override val mimeType = "*/*"
 
     override suspend fun importFromUri(uri: Uri): Result<PasswordsImportResult> = runCatching {
         val inputStream =
