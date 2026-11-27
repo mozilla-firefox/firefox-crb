@@ -13,9 +13,11 @@ SimpleTest.waitForExplicitFinish();
 SimpleTest.waitForFocus(async () => {
   function stringifySelectionChangeNotification(aNotification) {
     return `{ type: ${aNotification.type}, ${
-      aNotification.hasRange
-        ? `offset: ${aNotification.offset}, length: ${aNotification.length}`
-        : `hasRange: false`
+      aNotification.hasSelectionRange
+        ? `selectionOffset: ${aNotification.selectionOffset}, selectionLength: ${
+            aNotification.selectionLength
+          }`
+        : `hasSelectionRange: false`
     }, causedByComposition: ${aNotification.causedByComposition}, causedBySelectionEvent: ${
       aNotification.causedBySelectionEvent
     }, occurredDuringComposition: ${aNotification.occurredDuringComposition} }`;
@@ -40,17 +42,19 @@ SimpleTest.waitForFocus(async () => {
       case "request-to-cancel":
         aTIP.cancelComposition();
         break;
-      case "notify-selection-change":
-        selectionChanges.push({
-          type: aNotification.type,
-          hasRange: aNotification.hasRange,
-          offset: aNotification.hasRange ? aNotification.offset : null,
-          length: aNotification.hasRange ? aNotification.length : null,
-          causedByComposition: aNotification.causedByComposition,
-          causedBySelectionEvent: aNotification.causedBySelectionEvent,
-          occurredDuringComposition: aNotification.occurredDuringComposition,
-        });
-      break;
+      case "notify-content-change":
+        if (aNotification.selectionChanged) {
+          selectionChanges.push({
+            type: aNotification.type,
+            hasSelectionRange: aNotification.hasSelectionRange,
+            selectionOffset: aNotification.hasSelectionRange ? aNotification.selectionOffset : null,
+            selectionLength: aNotification.hasSelectionRange ? aNotification.selectionLength : null,
+            causedByComposition: aNotification.causedByComposition,
+            causedBySelectionEvent: aNotification.causedBySelectionEvent,
+            occurredDuringComposition: aNotification.occurredDuringComposition,
+          });
+        }
+        break;
     }
     return true;
   }
@@ -80,10 +84,10 @@ SimpleTest.waitForFocus(async () => {
     stringifySelectionChangeNotifications(selectionChanges),
     stringifySelectionChangeNotifications([
       {
-        type: "notify-selection-change",
-        hasRange: true,
-        offset: 1,
-        length: 0,
+        type: "notify-content-change",
+        hasSelectionRange: true,
+        selectionOffset: 1,
+        selectionLength: 0,
         // The selection changes during recreating TextEditor should be treated
         // as caused by handling composition because the selection changes are
         // required to preserve the selection in the previous editor instance.
