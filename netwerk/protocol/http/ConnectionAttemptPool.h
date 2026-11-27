@@ -48,6 +48,11 @@ class ConnectionAttemptPool final {
  protected:
   ~ConnectionAttemptPool();
 
+  // Init()s attempt, takes it into the pool, and claims it for
+  // aPendingTransInfo when there is one.
+  nsresult AdoptConnectionAttempt(ConnectionEntry* entry,
+                                  ConnectionAttempt* attempt,
+                                  PendingTransactionInfo* pendingTransInfo);
   void InsertIntoConnectionAttempts(ConnectionAttempt* sock);
 
   WeakPtr<ConnectionEntry> mEntry;
