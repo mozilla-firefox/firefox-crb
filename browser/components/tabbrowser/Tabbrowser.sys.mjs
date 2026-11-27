@@ -10504,7 +10504,19 @@ export class Tabbrowser {
 }
 
 /**
- * A web progress listener object definition for a given tab.
+ * Tracks the web progress of each tab's browser, mediated through
+ * `nsBrowserStatusFilter`, and translates updates into tab state: the tab's
+ * `busy` and `progress` attributes, its title and icon, the address bar's
+ * value override, and the tabbrowser's own busy state. It then forwards each
+ * notification to the progress listeners registered on `gBrowser`, and
+ * records the last state flags, status, message and total progress for
+ * `gBrowser.updateCurrentBrowser()` to replay on a tab switch.
+ *
+ * The tabbrowser creates one for each tab that has a browser, and replaces it
+ * when the tab's browser changes remoteness or is swapped with another tab's.
+ * :doc:`Progress listeners
+ * </browser/components/tabbrowser/docs/progress-listeners>` describes what the
+ * registered listeners receive.
  */
 class TabProgressListener {
   // Keyed by tab, because a tab's listener is replaced when its browser
@@ -10512,6 +10524,10 @@ class TabProgressListener {
   static #tabsNotSelectedSinceLoad = new WeakSet();
 
   /**
+   * Records that `tab` was selected after its current load started, which
+   * keeps the `notselectedsinceload` attribute off the tab when that load
+   * finishes.
+   *
    * @param {MozTabbrowserTab} tab
    */
   static onTabSelect(tab) {
@@ -10560,6 +10576,10 @@ class TabProgressListener {
     return this._tab.documentGlobal.gBrowser;
   }
 
+  /**
+   * Drops the listener's references to the tab and its browser once the
+   * tabbrowser stops using it.
+   */
   destroy() {
     delete this._tab;
     delete this._browser;
@@ -10606,6 +10626,19 @@ class TabProgressListener {
     return location == "about:blank";
   }
 
+  /**
+   * Records the total progress for replay. Unless the browser still shows its
+   * initial about:blank document or the request is for an `about:` URI, it
+   * then sets the `progress` attribute on a busy tab and forwards the
+   * notification.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aCurSelfProgress
+   * @param {number} aMaxSelfProgress
+   * @param {number} aCurTotalProgress
+   * @param {number} aMaxTotalProgress
+   */
   onProgressChange(
     aWebProgress,
     aRequest,
@@ -10637,6 +10670,17 @@ class TabProgressListener {
     ]);
   }
 
+  /**
+   * Forwards to `onProgressChange`, so listeners receive both as
+   * `onProgressChange`.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aCurSelfProgress
+   * @param {number} aMaxSelfProgress
+   * @param {number} aCurTotalProgress
+   * @param {number} aMaxTotalProgress
+   */
   onProgressChange64(
     aWebProgress,
     aRequest,
@@ -10656,6 +10700,24 @@ class TabProgressListener {
   }
 
   /* eslint-disable complexity */
+  /**
+   * At a network `STATE_START` it marks the tab busy if the load is
+   * top-level and shows progress, as `onProgressChange` decides, and, for a
+   * tab's first load where it is safe to, shows the destination URL as the
+   * tab's title early. At a network `STATE_STOP` it clears the tab's `busy` and
+   * `progress` attributes, may play the load-finished burst, and settles the
+   * tab's icon and the address bar's value. It then notifies the global
+   * listeners, which receive `onUpdateCurrentBrowser` in place of
+   * `onStateChange` for the initial about:blank document, then the tabs
+   * listeners. It records the state flags and status for replay, and clears
+   * the recorded message and total progress at the start or stop of any
+   * request.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aStateFlags
+   * @param {number} aStatus
+   */
   onStateChange(aWebProgress, aRequest, aStateFlags, aStatus) {
     if (!aRequest) {
       return;
@@ -10663,9 +10725,9 @@ class TabProgressListener {
 
     let location, originalLocation;
     try {
-      aRequest.QueryInterface(Ci.nsIChannel);
-      location = aRequest.URI;
-      originalLocation = aRequest.originalURI;
+      let channel = aRequest.QueryInterface(Ci.nsIChannel);
+      location = channel.URI;
+      originalLocation = channel.originalURI;
     } catch (ex) {}
 
     let ignoreBlank = this._isForInitialAboutBlank(
@@ -10907,6 +10969,21 @@ class TabProgressListener {
   }
   /* eslint-enable complexity */
 
+  /**
+   * For a top-level location change, clears the address bar's value override
+   * where the change calls for it and updates the tab's entry in the address
+   * bar's open tab results. A change to another document also clears the
+   * tab's sound-playing state, closes a Find toolbar opened for quick find
+   * and, unless it is a reload, updates the tab's title. It then forwards the
+   * notification, unless the browser still shows its initial about:blank
+   * document and has no opener, and after a change to another document sends
+   * a simulated `onContentBlockingEvent`.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {nsIURI} aLocation
+   * @param {number} aFlags
+   */
   onLocationChange(aWebProgress, aRequest, aLocation, aFlags) {
     // OnLocationChange is called for both the top-level content
     // and the subframes.
@@ -11095,6 +11172,15 @@ class TabProgressListener {
     }
   }
 
+  /**
+   * Forwards the notification and records its message for replay, unless the
+   * browser still shows its initial about:blank document.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aStatus
+   * @param {string} aMessage
+   */
   onStatusChange(aWebProgress, aRequest, aStatus, aMessage) {
     if (this._blank) {
       return;
@@ -11110,6 +11196,13 @@ class TabProgressListener {
     this._message = aMessage;
   }
 
+  /**
+   * Forwards the notification.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aState
+   */
   onSecurityChange(aWebProgress, aRequest, aState) {
     this._callProgressListeners("onSecurityChange", [
       aWebProgress,
@@ -11118,6 +11211,13 @@ class TabProgressListener {
     ]);
   }
 
+  /**
+   * Forwards the notification.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIRequest} aRequest
+   * @param {number} aEvent
+   */
   onContentBlockingEvent(aWebProgress, aRequest, aEvent) {
     this._callProgressListeners("onContentBlockingEvent", [
       aWebProgress,
@@ -11126,6 +11226,16 @@ class TabProgressListener {
     ]);
   }
 
+  /**
+   * Forwards the notification and returns false if any listener returned a
+   * falsy value, which cancels the refresh.
+   *
+   * @param {nsIWebProgress} aWebProgress
+   * @param {nsIURI} aURI
+   * @param {number} aDelay
+   * @param {boolean} aSameURI
+   * @returns {boolean}
+   */
   onRefreshAttempted(aWebProgress, aURI, aDelay, aSameURI) {
     return this._callProgressListeners("onRefreshAttempted", [
       aWebProgress,

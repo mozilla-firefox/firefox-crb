@@ -22,3 +22,9 @@ Code holding a particular tab should use the same member on its
 :members:
 :exclude-members: Tabbrowser, _findTabToBlurTo, _getTabsToTheEndFrom, _getTabsToTheStartFrom, _printPreviewBrowsers
 ```
+
+## TabProgressListener
+
+```{js:autoclass} TabProgressListener
+:members:
+```
