@@ -31,14 +31,19 @@ const FORM_HISTORY_ENTRIES = [
 ];
 
 /**
- * Saves an address and the form history entries every test needs.
+ * Saves addresses and the form history entries every test needs.
  *
- * @param {object} address - Address record to save.
+ * @param {...object} addresses - Address records to save, preferred one first.
  * @returns {Promise<void>}
  */
-async function saveStoredValues(address) {
+async function saveStoredValues(...addresses) {
   await formAutofillStorage.initialize();
-  await formAutofillStorage.addresses.add(address);
+  const [preferredAddress, ...otherAddresses] = addresses;
+  const guid = await formAutofillStorage.addresses.add(preferredAddress);
+  for (const address of otherAddresses) {
+    await formAutofillStorage.addresses.add(address);
+  }
+  await formAutofillStorage.addresses.notifyUsed(guid);
   await FormHistory.update(
     FORM_HISTORY_ENTRIES.map(entry => ({ op: "add", ...entry }))
   );
@@ -105,8 +110,11 @@ describe("Smart Form Fill stored value candidates", () => {
     );
   });
 
-  it("reads the field the local guess names out of the saved address", async () => {
-    await saveStoredValues({ name: SAVED_NAME, country: "US" });
+  it("uses one saved address and falls back to form history for missing fields", async () => {
+    await saveStoredValues(
+      { name: SAVED_NAME, country: "US" },
+      { email: SAVED_EMAIL, country: "US" }
+    );
     context = await setupFormReviewTest();
 
     Assert.deepEqual(
@@ -115,7 +123,7 @@ describe("Smart Form Fill stored value candidates", () => {
         ["email", TYPED_EMAIL],
         ["name", SAVED_NAME],
       ],
-      "The saved address answers the name field, and form history answers the email field it has no value for"
+      "The selected address supplies the name, and form history supplies the email even though another address has one"
     );
   });
 

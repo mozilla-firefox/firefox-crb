@@ -52,6 +52,7 @@ const AUTOFILL_ICON = "chrome://browser/skin/smart-window-simplified.svg";
  *   Accessible label for the entry. The entry is an ARIA option, so this
  *   replaces its whole subtree and has to carry the state shown visually.
  * @property {number} availableTabs Number of open tabs available
+ * @property {boolean} hasSavedAddresses Whether an address can be chosen
  */
 
 /**
@@ -79,6 +80,7 @@ class SmartFormFillAutocompleteItem {
     secondaryActionLabel,
     ariaLabel,
     availableTabs,
+    hasSavedAddresses,
   }) {
     const comment = {
       type: "smartFormFill",
@@ -98,7 +100,7 @@ class SmartFormFillAutocompleteItem {
       },
     };
 
-    if (availableTabs > 1) {
+    if (availableTabs > 1 || hasSavedAddresses) {
       comment.secondaryAction = {
         type: "edit",
         fillMessageName: "SmartFormFill:EditSources",
@@ -179,10 +181,21 @@ export const SmartFormFillAutocomplete = {
    * @param {string} [options.focusElementId]
    *   Identifier for the field associated with the autocomplete search.
    * @param {number} options.availableTabs Number of current open tabs available
+   * @param {boolean} options.hasSavedAddresses Whether an address can be chosen
+   * @param {boolean} options.hasSelectedAddress Whether an address is selected
    * @returns {Promise<Array<SmartFormFillAutocompleteItem>>}
    *   An array containing the Smart Form Fill entry.
    */
-  async createItemsAsync({ sffActor, formId, focusElementId, availableTabs }) {
+  async createItemsAsync({
+    sffActor,
+    formId,
+    focusElementId,
+    availableTabs,
+    hasSavedAddresses,
+    hasSelectedAddress,
+  }) {
+    const tabs = sffActor.getSelectedTabSources(formId).length;
+    const relevantTabsReady = sffActor.areRelevantTabsReady(formId);
     const [
       label,
       loadingLabel,
@@ -193,15 +206,10 @@ export const SmartFormFillAutocomplete = {
       { id: "ai-smart-form-fill-autocomplete-label" },
       { id: "ai-smart-form-fill-autocomplete-loading" },
       { id: "ai-smart-form-fill-autocomplete-sources-label" },
-      {
-        id: "ai-smart-form-fill-autocomplete-tabs-count",
-        args: { tabs: sffActor.getSelectedTabSources(formId).length },
-      },
+      { id: "ai-smart-form-fill-autocomplete-tabs-count", args: { tabs } },
       { id: "ai-smart-form-fill-edit-sources-button" },
     ]);
-    const relevantTabsReady = sffActor.areRelevantTabsReady(formId);
-    const hasSources =
-      relevantTabsReady && sffActor.getSelectedTabSources(formId).length;
+    const hasSources = hasSelectedAddress || tabs > 0;
 
     const loading = !relevantTabsReady;
     const emptySourcesLabel =
@@ -233,6 +241,7 @@ export const SmartFormFillAutocomplete = {
       secondaryActionLabel: editSourcesLabel,
       ariaLabel,
       availableTabs,
+      hasSavedAddresses,
     });
 
     return [item];
