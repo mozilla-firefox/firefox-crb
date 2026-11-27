@@ -114,7 +114,8 @@ bool ContentTriggeredURILoadIsAllowed(nsIURI* aURI,
 
   return ValidatePrincipalCouldPotentiallyBeLoadedBy(
       principal, aEffectiveRemoteType,
-      {ValidatePrincipalOptions::AllowNotLoadedOrigin});
+      {ValidatePrincipalOptions::AllowNotLoadedOrigin,
+       ValidatePrincipalOptions::AlwaysAllowExtension});
 }
 
 }  // namespace mozilla::dom

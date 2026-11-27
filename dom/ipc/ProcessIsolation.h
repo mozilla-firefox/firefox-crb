@@ -151,6 +151,11 @@ enum class ValidatePrincipalOptions {
   // be checked to ensure it is a moz-extension principal.
   AllowExpanded,
 
+  // Allow all extension principals unconditionally.
+  // This may be necessary for principals which could be derived from an
+  // extension content script's ExpandedPrincipal.
+  AlwaysAllowExtension,
+
   // Allow the system principal if it is in the process' LoadedOriginSet.
   //
   // This should only occur in the inference process, or when a legacy system
