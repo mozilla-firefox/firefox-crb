@@ -7676,6 +7676,14 @@
   value: 0x3fffffff
   mirror: always
 
+# Whether 2D canvases that cannot be accelerated draw with software in the GPU
+# process instead of falling back to the content process. Canvases created with
+# willReadFrequently still draw in the content process.
+- name: gfx.canvas.remote.software
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Whether OffscreenCanvas can use remote canvas
 - name: gfx.canvas.remote.allow-offscreen
   type: RelaxedAtomicBool

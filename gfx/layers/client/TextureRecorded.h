@@ -26,6 +26,10 @@ class RecordedTextureData final : public TextureData {
     MOZ_ASSERT(!mDrawTargetCreationAttempted);
     mPreferAcceleration = aPreferAcceleration;
   }
+  void SetSoftwareInGPUProcess(bool aSoftwareInGPUProcess) {
+    MOZ_ASSERT(!mDrawTargetCreationAttempted);
+    mSoftwareInGPUProcess = aSoftwareInGPUProcess;
+  }
 
   void InvalidateContents() final;
 
@@ -87,6 +91,7 @@ class RecordedTextureData final : public TextureData {
   bool mInvalidContents = true;
   bool mDrawTargetCreationAttempted = false;
   bool mPreferAcceleration = false;
+  bool mSoftwareInGPUProcess = false;
 };
 
 }  // namespace layers

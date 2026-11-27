@@ -642,7 +642,14 @@ bool CanvasTranslator::TryDrawTargetWebglFallback(
                                    aWebgl->GetSize(), aWebgl->GetFormat())) {
     bool success = aWebgl->CopyToFallback(dt);
     if (info.mRefPtr) {
+      // AddDrawTarget clears the current DrawTarget if it replaces it. A
+      // canvas that stays in the GPU process gets no refresh that would set it
+      // again, so its later events would have no target.
+      bool wasCurrent = GetCurrentDrawTarget() == aWebgl;
       AddDrawTarget(info.mRefPtr, dt);
+      if (wasCurrent) {
+        SetCurrentDrawTarget(info.mRefPtr);
+      }
     }
     return success;
   }
@@ -1100,6 +1107,9 @@ void CanvasTranslator::NotifyRequiresRefresh(
     const RemoteTextureOwnerId aTextureOwnerId, bool aDispatch) {
   if (aDispatch) {
     auto& info = mTextureInfo[aTextureOwnerId];
+    if (info.mSoftwareInGPUProcess) {
+      return;
+    }
     if (!info.mNotifiedRequiresRefresh) {
       info.mNotifiedRequiresRefresh = true;
       DispatchToTaskQueue(NewRunnableMethod<RemoteTextureOwnerId, bool>(
@@ -1265,7 +1275,7 @@ already_AddRefed<gfx::DrawTarget> CanvasTranslator::CreateFallbackDrawTarget(
 already_AddRefed<gfx::DrawTarget> CanvasTranslator::CreateDrawTarget(
     gfx::ReferencePtr aRefPtr, const RemoteTextureOwnerId aTextureOwnerId,
     const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat,
-    bool aPreferAcceleration) {
+    bool aPreferAcceleration, bool aSoftwareInGPUProcess) {
   if (!aTextureOwnerId.IsValid()) {
 #ifndef FUZZING_SNAPSHOT
     MOZ_DIAGNOSTIC_CRASH("No texture owner set");
@@ -1285,6 +1295,8 @@ already_AddRefed<gfx::DrawTarget> CanvasTranslator::CreateDrawTarget(
       }
     }
   }
+
+  mTextureInfo[aTextureOwnerId].mSoftwareInGPUProcess = aSoftwareInGPUProcess;
 
   RefPtr<gfx::DrawTarget> dt;
   if (gfx::gfxVars::UseAcceleratedCanvas2D()) {
@@ -1310,6 +1322,12 @@ already_AddRefed<gfx::DrawTarget> CanvasTranslator::CreateDrawTarget(
 
   if (!dt) {
     dt = CreateFallbackDrawTarget(aRefPtr, aTextureOwnerId, aSize, aFormat);
+    if (!dt && aSoftwareInGPUProcess) {
+      // The content process would not be able to allocate this canvas either,
+      // so report it as lost. Restoring it right away would only fail again.
+      RemoteTextureOwnerIdSet lost = {aTextureOwnerId};
+      NotifyDeviceReset(lost, /* aRestore */ false);
+    }
   }
 
   if (dt && aRefPtr) {
@@ -1432,7 +1450,14 @@ bool CanvasTranslator::UnlockTexture(
     if (info.mTextureLockMode & OpenMode::OPEN_WRITE) {
       webgl->EndFrame();
       if (webgl->RequiresRefresh()) {
-        NotifyRequiresRefresh(aTextureOwnerId);
+        if (info.mSoftwareInGPUProcess) {
+          // Acceleration performs poorly for this canvas, so continue in
+          // software. If that fails, keep using the accelerated target.
+          webgl->EnsureDataSnapshot();
+          TryDrawTargetWebglFallback(aTextureOwnerId, webgl);
+        } else {
+          NotifyRequiresRefresh(aTextureOwnerId);
+        }
       }
     }
   }
@@ -1471,6 +1496,11 @@ bool CanvasTranslator::PresentTexture(
   }
   if (TextureData* data = info.mTextureData.get()) {
     PushRemoteTexture(aTextureOwnerId, data, aId, aTextureOwnerId);
+  } else if (!info.mDrawTarget) {
+    // The canvas could not be allocated. Push a placeholder so that the
+    // compositor does not wait for this texture forever.
+    EnsureRemoteTextureOwner(aTextureOwnerId);
+    mRemoteTextureOwner->PushDummyTexture(aId, aTextureOwnerId);
   }
   return true;
 }

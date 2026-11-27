@@ -552,7 +552,8 @@ bool CanvasChild::ShouldBeCleanedUp() const {
 
 already_AddRefed<gfx::DrawTargetRecording> CanvasChild::CreateDrawTarget(
     const RemoteTextureOwnerId& aTextureOwnerId, gfx::IntSize aSize,
-    gfx::SurfaceFormat aFormat, bool aPreferAcceleration) {
+    gfx::SurfaceFormat aFormat, bool aPreferAcceleration,
+    bool aSoftwareInGPUProcess) {
   NS_ASSERT_OWNINGTHREAD(CanvasChild);
   MOZ_RELEASE_ASSERT(mTextureInfo.find(aTextureOwnerId) == mTextureInfo.end());
 
@@ -563,7 +564,8 @@ already_AddRefed<gfx::DrawTargetRecording> CanvasChild::CreateDrawTarget(
   RefPtr<gfx::DrawTarget> dummyDt = gfx::Factory::CreateDrawTarget(
       gfx::BackendType::SKIA, gfx::IntSize(1, 1), aFormat);
   RefPtr<gfx::DrawTargetRecording> dt = MakeAndAddRef<gfx::DrawTargetRecording>(
-      mRecorder, aTextureOwnerId, dummyDt, aSize, aPreferAcceleration);
+      mRecorder, aTextureOwnerId, dummyDt, aSize, aPreferAcceleration,
+      aSoftwareInGPUProcess);
   dt->SetOptimizeTransform(true);
 
   mTextureInfo.insert({aTextureOwnerId, {}});

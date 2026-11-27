@@ -162,7 +162,7 @@ class PersistentBufferProviderRemote : public PersistentBufferProvider {
       gfx::IntSize aSize, gfx::SurfaceFormat aFormat,
       KnowsCompositor* aKnowsCompositor, bool aPreferAcceleration = false);
 
-  bool IsAccelerated() const override { return true; }
+  bool IsAccelerated() const override { return mAccelerated; }
   bool IsRemote() const override { return true; }
 
   already_AddRefed<gfx::DrawTarget> BorrowDrawTarget(
@@ -193,13 +193,16 @@ class PersistentBufferProviderRemote : public PersistentBufferProvider {
  protected:
   explicit PersistentBufferProviderRemote(
       RemoteTextureOwnerId aRemoteTextureOwnerId,
-      const RefPtr<TextureClient>& aTexture);
+      const RefPtr<TextureClient>& aTexture, bool aAccelerated);
   ~PersistentBufferProviderRemote() override;
 
   void Destroy();
 
   RemoteTextureOwnerId mRemoteTextureOwnerId;
   RefPtr<TextureClient> mTexture;
+  // Whether the GPU process was asked to accelerate this canvas, as opposed to
+  // drawing it in software. It can still fall back to software later.
+  bool mAccelerated;
 
   RefPtr<gfx::DrawTarget> mDrawTarget;
   RefPtr<gfx::SourceSurface> mSnapshot;

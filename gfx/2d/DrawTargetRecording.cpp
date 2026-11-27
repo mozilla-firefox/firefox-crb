@@ -222,13 +222,13 @@ class FilterNodeRecording : public FilterNode {
 DrawTargetRecording::DrawTargetRecording(
     layers::CanvasDrawEventRecorder* aRecorder,
     const layers::RemoteTextureOwnerId& aTextureOwnerId, DrawTarget* aDT,
-    const IntSize& aSize, bool aPreferAcceleration)
+    const IntSize& aSize, bool aPreferAcceleration, bool aSoftwareInGPUProcess)
     : mRecorder(static_cast<DrawEventRecorderPrivate*>(aRecorder)),
       mFinalDT(aDT),
       mRect(IntPoint(0, 0), aSize) {
   RecordEventSkipFlushTransform(layers::RecordedCanvasDrawTargetCreation(
       this, aTextureOwnerId, mFinalDT->GetBackendType(), aSize,
-      mFinalDT->GetFormat(), aPreferAcceleration));
+      mFinalDT->GetFormat(), aPreferAcceleration, aSoftwareInGPUProcess));
   mFormat = mFinalDT->GetFormat();
   DrawTarget::SetPermitSubpixelAA(IsOpaque(mFormat));
 }
