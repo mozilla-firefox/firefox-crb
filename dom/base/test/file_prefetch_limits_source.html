@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>prefetch limits source</title>
+<script>
+  // ?immediate=<JSON URL list>&conservative=<JSON URL list>: one list rule per
+  // eagerness, and a link for each conservative URL so a test can press it.
+  const params = new URLSearchParams(location.search);
+  const immediate = JSON.parse(params.get("immediate") || "[]");
+  const conservative = JSON.parse(params.get("conservative") || "[]");
+  const rules = [];
+  if (immediate.length) {
+    rules.push({ source: "list", urls: immediate, eagerness: "immediate" });
+  }
+  if (conservative.length) {
+    rules.push({
+      source: "list",
+      urls: conservative,
+      eagerness: "conservative",
+    });
+  }
+  const script = document.createElement("script");
+  script.type = "speculationrules";
+  script.textContent = JSON.stringify({ prefetch: rules });
+  document.head.appendChild(script);
+</script>
+<body>
+  <p id="blank">nothing to see</p>
+  <script>
+    conservative.forEach((url, i) => {
+      const a = document.createElement("a");
+      a.id = `link${i}`;
+      a.href = url;
+      a.textContent = `link ${i}`;
+      document.body.append(a, document.createElement("br"));
+    });
+  </script>
+</body>

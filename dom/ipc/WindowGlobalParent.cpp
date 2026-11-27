@@ -2599,6 +2599,59 @@ PrefetchRecordParent* WindowGlobalParent::FindMatchingPrefetchRecord(
   return toUse;
 }
 
+void WindowGlobalParent::AdmitPrefetchRecord(PrefetchRecordParent* aRec) {
+  // Immediate and non-immediate records have separate budgets. A record
+  // counts against its budget while its fetch is in flight, and once
+  // completed until it expires.
+  const bool immediate = aRec->IsImmediate();
+  const uint32_t limit =
+      immediate
+          ? StaticPrefs::dom_speculation_rules_max_immediate_prefetches()
+          : StaticPrefs::dom_speculation_rules_max_non_immediate_prefetches();
+  const TimeStamp now = TimeStamp::Now();
+  uint32_t count = 0;
+  PrefetchRecordParent* oldestCompleted = nullptr;
+
+  nsTArray<PPrefetchRecordParent*> managed;
+  ManagedPPrefetchRecordParent(managed);
+  for (auto* p : managed) {
+    auto* rec = static_cast<PrefetchRecordParent*>(p);
+    if (rec == aRec || rec->IsImmediate() != immediate) {
+      continue;
+    }
+    if (rec->State() == PrefetchState::Ongoing) {
+      ++count;
+    } else if (rec->State() == PrefetchState::Completed &&
+               rec->ExpiryTime() >= now) {
+      ++count;
+      // Every record gets the same lifetime, so the earliest expiry is the
+      // earliest completion.
+      if (!oldestCompleted ||
+          rec->ExpiryTime() < oldestCompleted->ExpiryTime()) {
+        oldestCompleted = rec;
+      }
+    }
+  }
+
+  if (count >= limit) {
+    if (immediate || !oldestCompleted) {
+      LOG_SPECRULES(
+          ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p rejected, "
+           "%s budget full (%u)",
+           this, aRec, immediate ? "immediate" : "non-immediate", limit));
+      aRec->MarkCanceled();
+      return;
+    }
+    LOG_SPECRULES(
+        ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p evicting "
+         "oldest non-immediate rec=%p",
+         this, aRec, oldestCompleted));
+    oldestCompleted->MarkCanceled();
+  }
+
+  aRec->StartFetch(this);
+}
+
 void WindowGlobalParent::DedupePrefetchRecords(
     PrefetchRecordParent* aJustCompleted) {
   // Implements "complete a prefetch record" step 4: remove all other completed
