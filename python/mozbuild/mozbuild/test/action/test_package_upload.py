@@ -273,16 +273,16 @@ class TestFilesToUpload(unittest.TestCase):
             _SUBSTS,
             ab_cd="de",
             present=[
-                "browser/installer/windows/l10ngen/setup.exe",
-                "browser/installer/windows/l10ngen/setup-stub.exe",
+                "browser/installer/windows/l10ngen/de/setup.exe",
+                "browser/installer/windows/l10ngen/de/setup-stub.exe",
             ],
         )
 
         self.assertEqual(
             files,
             [
-                "browser/installer/windows/l10ngen/setup.exe",
-                "browser/installer/windows/l10ngen/setup-stub.exe",
+                "browser/installer/windows/l10ngen/de/setup.exe",
+                "browser/installer/windows/l10ngen/de/setup-stub.exe",
             ],
         )
 
