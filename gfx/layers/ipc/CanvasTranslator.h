@@ -442,6 +442,10 @@ class CanvasTranslator final : public gfx::InlineTranslator,
   UniquePtr<TextureData> CreateTextureData(const gfx::IntSize& aSize,
                                            gfx::SurfaceFormat aFormat,
                                            bool aClear);
+  UniquePtr<TextureData> CreateTextureData(TextureType aTextureType,
+                                           const gfx::IntSize& aSize,
+                                           gfx::SurfaceFormat aFormat,
+                                           bool aClear);
 
   void EnsureRemoteTextureOwner(
       RemoteTextureOwnerId aOwnerId = RemoteTextureOwnerId());
