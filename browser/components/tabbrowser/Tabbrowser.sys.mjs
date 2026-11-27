@@ -2316,9 +2316,7 @@ export class Tabbrowser {
     if (this.documentGlobal.gURLBar.getBrowserState(newBrowser).urlbarFocused) {
       let selectURL = () => {
         if (this.#asyncTabSwitching) {
-          // Set _awaitingSetURI flag to suppress popup notification
-          // explicitly while tab switching asynchronously.
-          newBrowser._awaitingSetURI = true;
+          newBrowser.awaitingSetURI = true;
 
           // The onLocationChange event called in updateCurrentBrowser() will
           // be captured in browser.js, then it calls gURLBar.setURI(). In case
@@ -2330,7 +2328,7 @@ export class Tabbrowser {
           this.documentGlobal.gURLBar.inputField.addEventListener(
             "SetURI",
             () => {
-              delete newBrowser._awaitingSetURI;
+              newBrowser.awaitingSetURI = false;
 
               // If the user happened to type into the URL bar for this browser
               // by the time we got here, focusing will cause the text to be

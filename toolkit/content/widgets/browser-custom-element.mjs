@@ -157,6 +157,12 @@ export class MozBrowser extends MozElements.MozElementMixin(XULFrameElement) {
     // See bug 791594 for reference.
     this._currentAuthPromptURI = null;
     /**
+     * Auth prompt counts per base domain, managed by LoginManagerAuthPrompter.
+     *
+     * @type {Record<string, number>}
+     */
+    this.authPromptAbuseCounter;
+    /**
      * These are managed by the tabbrowser:
      */
     this.droppedLinkHandler = null;
@@ -164,6 +170,13 @@ export class MozBrowser extends MozElements.MozElementMixin(XULFrameElement) {
     this.lastURI = null;
     /** @type {number} */
     this.lastLocationChange;
+    /**
+     * True while an async tab switch waits for the address bar to show this
+     * browser's URI, so that popup notifications stay suppressed until then.
+     */
+    this.awaitingSetURI = false;
+    /** @type {any} */
+    this.tabDialogBox;
 
     /**
      * @type {PopupAndRedirectBlocker}
