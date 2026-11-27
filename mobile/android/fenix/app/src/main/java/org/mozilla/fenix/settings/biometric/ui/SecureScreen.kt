@@ -109,6 +109,7 @@ internal fun SecureScreenImpl(
             )
         }
 
+        is BiometricAuthenticationState.NextLockSuppressed,
         is BiometricAuthenticationState.Authorized -> {
             content()
         }

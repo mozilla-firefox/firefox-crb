@@ -15,6 +15,12 @@ sealed class BiometricAuthenticationState {
      */
     data object ReadyToLock : BiometricAuthenticationState()
 
+    /**
+     * The state means that we make an exception the next time we should lock the screen, and allow the user to continue
+     * without re-authentication. Used for allowing user to navigate into the FilePicker without extra friction.
+     */
+    data object NextLockSuppressed : BiometricAuthenticationState()
+
     /** The biometric authentication prompt is currently being displayed to the user. */
     data object InProgress : BiometricAuthenticationState()
 
@@ -31,4 +37,8 @@ sealed class BiometricAuthenticationState {
     /** `true` if the current state is [ReadyToLock]. */
     val isReadyToLock: Boolean
         get() = this is ReadyToLock
+
+    /** `true` if the current state is [NextLockSuppressed]. */
+    val isLockSuppressed: Boolean
+        get() = this is NextLockSuppressed
 }

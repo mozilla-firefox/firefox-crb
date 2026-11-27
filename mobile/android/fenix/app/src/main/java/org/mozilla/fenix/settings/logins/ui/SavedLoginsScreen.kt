@@ -73,12 +73,17 @@ import mozilla.components.compose.base.theme.Theme
 import mozilla.components.concept.fileimporter.FileImporterError
 import mozilla.components.lib.password.parser.csv.PasswordsParseError
 import mozilla.components.lib.state.ext.observeAsComposableState
+import mozilla.components.lib.state.helpers.StoreProvider.Companion.composableStore
 import mozilla.components.support.ktx.kotlin.trimmed
 import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.list.IconListItem
 import org.mozilla.fenix.compose.list.SelectableFaviconListItem
 import org.mozilla.fenix.settings.biometric.ui.SecureScreen
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenState
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenStore
+import org.mozilla.fenix.settings.biometric.ui.state.SuppressOverrideMiddleware
 import org.mozilla.fenix.settings.logins.ui.LoginsSortOrder.Alphabetical.isGuidToDelete
 import org.mozilla.fenix.theme.FirefoxTheme
 
@@ -113,7 +118,18 @@ internal fun SavedLoginsScreen(
         }
     }
 
+    val secureScreenStore =
+        composableStore(SecureScreenState.Initial) {
+                SecureScreenStore(it, middleware = listOf(SuppressOverrideMiddleware()))
+            }
+            .value
+    SuppressLockDuringImport(
+        loginsStore = store,
+        secureScreenStore = secureScreenStore,
+    )
+
     SecureScreen(
+        store = secureScreenStore,
         title = stringResource(R.string.logins_biometric_prompt_message_2),
         onExit = exitLogins,
     ) {
@@ -139,6 +155,40 @@ internal fun SavedLoginsScreen(
             composable(route = LoginsDestinations.LOGIN_DETAILS) {
                 BackHandler { store.dispatch(LoginsDetailBackClicked) }
                 LoginDetailsScreen(store = store)
+            }
+        }
+    }
+}
+
+/**
+ * Suppresses the next lock of the [SecureScreenStore] while the user is picking a file to import passwords from.
+ *
+ * @param loginsStore The [LoginsStore] providing the import state.
+ * @param secureScreenStore The [SecureScreenStore] whose next lock is suppressed.
+ */
+@Composable
+internal fun SuppressLockDuringImport(
+    loginsStore: LoginsStore,
+    secureScreenStore: SecureScreenStore,
+) {
+    val loginsImportState by loginsStore.observeAsComposableState { it.loginsImportState }
+    LaunchedEffect(loginsImportState) {
+        when (loginsImportState) {
+            // When the user is leaving for a file picker, we do not want to ask them for an immediate re-authentication
+            // when they get back, so we set up a flag that [LifecycleAction.OnPause] will use to move the state into
+            // [BiometricAuthenticationState.NextLockSuppressed] state.
+            LoginsImportState.OpeningFilePicker ->
+                secureScreenStore.dispatch(SecureScreenAction.SuppressAction.SuppressNextLock)
+            // Similarly to how we set the "should suppress" flag when the file picker is about to be opened, we reset
+            // it when the file picker is closed. The file picker could be closed very quickly, before system lifecycle
+            // events would get triggered, so there is no guarantee that 'onPause' or 'onResume' would reset this flag.
+            LoginsImportState.ImportStarted,
+            LoginsImportState.ImportCancelled,
+            LoginsImportState.ImportSuccess,
+            LoginsImportState.ImportFailed ->
+                secureScreenStore.dispatch(SecureScreenAction.SuppressAction.ClearNextSuppress)
+            LoginsImportState.Idle -> {
+                // no-op
             }
         }
     }

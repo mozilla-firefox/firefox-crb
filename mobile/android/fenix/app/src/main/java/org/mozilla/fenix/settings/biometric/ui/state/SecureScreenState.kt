@@ -11,10 +11,12 @@ import mozilla.components.lib.state.State
  *
  * @property authenticationState The current state of the authentication process.
  * @property shouldExit `true` if the authentication process should be exited.
+ * @property shouldSuppressNextLock Whether next lock invocation should be suppressed.
  */
 data class SecureScreenState(
     val authenticationState: BiometricAuthenticationState = BiometricAuthenticationState.Inert,
     val shouldExit: Boolean = false,
+    val shouldSuppressNextLock: Boolean = false,
 ) : State {
 
     companion object {

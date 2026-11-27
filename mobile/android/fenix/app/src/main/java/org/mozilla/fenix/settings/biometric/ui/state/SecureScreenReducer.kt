@@ -6,6 +6,7 @@ package org.mozilla.fenix.settings.biometric.ui.state
 
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.AuthenticationFlowAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.LifecycleAction
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.SuppressAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.UnlockScreenAction
 
 /**
@@ -23,6 +24,7 @@ fun secureScreenReducer(
     when (action) {
         is AuthenticationFlowAction -> state.handleAuthenticationFlowAction(action)
         is LifecycleAction -> state.handleLifecycleAction(action)
+        is SuppressAction -> state.handleSuppressAction(action)
         is UnlockScreenAction -> state.handleUnlockScreenAction(action)
     }
 
@@ -41,27 +43,46 @@ private fun SecureScreenState.handleAuthenticationFlowAction(action: Authenticat
     }
 }
 
+private fun SecureScreenState.handleSuppressAction(action: SuppressAction): SecureScreenState {
+    return when (action) {
+        SuppressAction.SuppressNextLock -> copy(shouldSuppressNextLock = true)
+        SuppressAction.ClearNextSuppress -> copy(shouldSuppressNextLock = false)
+        SuppressAction.OverrideSuppressedLock ->
+            copy(
+                authenticationState = BiometricAuthenticationState.ReadyToLock,
+                shouldSuppressNextLock = false,
+            )
+    }
+}
+
 private fun SecureScreenState.handleLifecycleAction(action: LifecycleAction): SecureScreenState {
     return when (action) {
-        LifecycleAction.OnPause ->
-            copy(
-                authenticationState =
-                    if (authenticationState.isAuthorized) {
-                        BiometricAuthenticationState.ReadyToLock
-                    } else {
-                        authenticationState
-                    }
-            )
+        LifecycleAction.OnPause -> {
+            if (shouldSuppressNextLock) {
+                copy(
+                    authenticationState = BiometricAuthenticationState.NextLockSuppressed,
+                    shouldSuppressNextLock = false,
+                )
+            } else if (authenticationState.isAuthorized) {
+                copy(authenticationState = BiometricAuthenticationState.ReadyToLock)
+            } else {
+                this
+            }
+        }
 
         LifecycleAction.OnDispose -> this
         LifecycleAction.OnResume ->
-            copy(
-                authenticationState =
-                    if (authenticationState.isReadyToLock) {
-                        BiometricAuthenticationState.InProgress
-                    } else {
-                        authenticationState
-                    }
-            )
+            if (authenticationState.isLockSuppressed) {
+                copy(
+                    authenticationState = BiometricAuthenticationState.Authorized,
+                    // this is defensive coding, the flag should be cleared by now,
+                    // when lock suppression state was set or by the file picker observation.
+                    shouldSuppressNextLock = false,
+                )
+            } else if (authenticationState.isReadyToLock) {
+                copy(authenticationState = BiometricAuthenticationState.InProgress)
+            } else {
+                this
+            }
     }
 }

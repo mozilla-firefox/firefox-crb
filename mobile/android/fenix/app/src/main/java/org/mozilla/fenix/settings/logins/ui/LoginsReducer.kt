@@ -62,12 +62,29 @@ internal fun loginsReducer(state: LoginsState, action: LoginsAction) =
         LearnMoreAboutSync -> state
         is ImportPasswordsOverflowMenuClicked -> state.copy(importPasswordsMenuShown = true)
         is ImportPasswordsOverflowMenuDismissed -> state.copy(importPasswordsMenuShown = false)
-        is ImportAction.ImportFileClicked -> state.copy(importPasswordsMenuShown = false)
-        is ImportAction.ImportSucceeded -> state.copy(loginsSnackbarState = LoginsSnackbarState.ImportSucceeded)
-        is ImportAction.ImportFailed -> state.copy(loginsSnackbarState = LoginsSnackbarState.ImportFailed(action.error))
-        is ImportAction.ImportStarted,
-        is ImportAction.ImportCancelled -> state
+        is ImportAction -> state.handleImportAction(action)
         is SnackbarAction.Dismissed -> state.copy(loginsSnackbarState = LoginsSnackbarState.None)
+    }
+
+private fun LoginsState.handleImportAction(action: ImportAction): LoginsState =
+    when (action) {
+        is ImportAction.ImportFileClicked ->
+            copy(
+                importPasswordsMenuShown = false,
+                loginsImportState = LoginsImportState.OpeningFilePicker,
+            )
+        is ImportAction.ImportSucceeded ->
+            copy(
+                loginsImportState = LoginsImportState.ImportSuccess,
+                loginsSnackbarState = LoginsSnackbarState.ImportSucceeded,
+            )
+        is ImportAction.ImportFailed ->
+            copy(
+                loginsImportState = LoginsImportState.ImportFailed,
+                loginsSnackbarState = LoginsSnackbarState.ImportFailed(action.error),
+            )
+        is ImportAction.ImportStarted -> copy(loginsImportState = LoginsImportState.ImportStarted)
+        is ImportAction.ImportCancelled -> copy(loginsImportState = LoginsImportState.ImportCancelled)
     }
 
 private fun LoginsState.withDeletedLoginRemoved(): LoginsState =

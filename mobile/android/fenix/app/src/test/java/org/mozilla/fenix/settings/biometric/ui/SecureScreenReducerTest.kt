@@ -5,11 +5,13 @@
 package org.mozilla.fenix.settings.biometric.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mozilla.fenix.settings.biometric.ui.state.BiometricAuthenticationState
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.AuthenticationFlowAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.LifecycleAction
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.SuppressAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.UnlockScreenAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenState
 import org.mozilla.fenix.settings.biometric.ui.state.secureScreenReducer
@@ -139,7 +141,118 @@ class SecureScreenReducerTest {
         assertTrue(result.shouldExit)
     }
 
-    private fun createState(authenticationState: BiometricAuthenticationState): SecureScreenState {
-        return SecureScreenState(authenticationState = authenticationState)
+    @Test
+    fun `WHEN suppress next lock action is dispatched THEN suppress flag is recorded and state does not immediately change from Authorized`() {
+        val result =
+            secureScreenReducer(
+                state = createState(authenticationState = BiometricAuthenticationState.Authorized),
+                action = SuppressAction.SuppressNextLock,
+            )
+
+        assertTrue(result.shouldSuppressNextLock)
+        assertEquals(BiometricAuthenticationState.Authorized, result.authenticationState)
+    }
+
+    @Test
+    fun `GIVEN suppress next lock flag is set WHEN lifecycle moves into paused THEN state moves into next lock suppressed state and flag is reset`() {
+        val shouldSuppressNextLock = true
+
+        val result =
+            secureScreenReducer(
+                state =
+                    createState(
+                        authenticationState = BiometricAuthenticationState.Authorized,
+                        shouldSuppressNextLock = shouldSuppressNextLock,
+                    ),
+                action = LifecycleAction.OnPause,
+            )
+
+        assertEquals(BiometricAuthenticationState.NextLockSuppressed, result.authenticationState)
+        assertEquals(!shouldSuppressNextLock, result.shouldSuppressNextLock)
+    }
+
+    @Test
+    fun `GIVEN next lock suppressed state WHEN lifecycle moves into resumed THEN user skips re-authentication once`() {
+        val result =
+            secureScreenReducer(
+                state = createState(authenticationState = BiometricAuthenticationState.NextLockSuppressed),
+                action = LifecycleAction.OnResume,
+            )
+
+        assertEquals(BiometricAuthenticationState.Authorized, result.authenticationState)
+        assertFalse(result.shouldSuppressNextLock)
+    }
+
+    @Test
+    fun `GIVEN suppress next lock flag is set WHEN clear suppression action is dispatched THEN flag is reset`() {
+        val shouldSuppressNextLock = true
+
+        val result =
+            secureScreenReducer(
+                state =
+                    createState(
+                        authenticationState = BiometricAuthenticationState.Authorized,
+                        shouldSuppressNextLock = shouldSuppressNextLock,
+                    ),
+                action = SuppressAction.ClearNextSuppress,
+            )
+
+        assertEquals(!shouldSuppressNextLock, result.shouldSuppressNextLock)
+    }
+
+    @Test
+    fun `GIVEN next lock suppressed state WHEN override suppression action is dispatched THEN state is set to ready to lock`() {
+        val result =
+            secureScreenReducer(
+                state = createState(authenticationState = BiometricAuthenticationState.NextLockSuppressed),
+                action = SuppressAction.OverrideSuppressedLock,
+            )
+
+        assertEquals(BiometricAuthenticationState.ReadyToLock, result.authenticationState)
+    }
+
+    @Test
+    fun `GIVEN next lock suppressed state and suppress next lock flag is still set WHEN override suppression action is dispatched THEN state is set to ready to lock and lock is reset`() {
+        val shouldSuppressNextLock = true
+
+        val result =
+            secureScreenReducer(
+                state =
+                    createState(
+                        authenticationState = BiometricAuthenticationState.NextLockSuppressed,
+                        shouldSuppressNextLock = shouldSuppressNextLock,
+                    ),
+                action = SuppressAction.OverrideSuppressedLock,
+            )
+
+        assertEquals(BiometricAuthenticationState.ReadyToLock, result.authenticationState)
+        assertEquals(!shouldSuppressNextLock, result.shouldSuppressNextLock)
+    }
+
+    @Test
+    fun `GIVEN the suppression was overridden WHEN the lifecycle becomes resumed THEN authentication state is set to in progress`() {
+        val overridden =
+            secureScreenReducer(
+                state =
+                    createState(
+                        authenticationState = BiometricAuthenticationState.NextLockSuppressed,
+                        shouldSuppressNextLock = true,
+                    ),
+                action = SuppressAction.OverrideSuppressedLock,
+            )
+
+        val result = secureScreenReducer(state = overridden, action = LifecycleAction.OnResume)
+
+        assertEquals(BiometricAuthenticationState.InProgress, result.authenticationState)
+    }
+
+    private fun createState(
+        authenticationState: BiometricAuthenticationState,
+        shouldSuppressNextLock: Boolean = false,
+    ): SecureScreenState {
+        return SecureScreenState(
+            authenticationState = authenticationState,
+            shouldSuppressNextLock = shouldSuppressNextLock,
+        )
     }
 }
