@@ -285,21 +285,22 @@ async function testPolicy({
     "http://example.com/dummy"
   );
 
-  let contentCSP = await contentPage.spawn(
-    [`${baseURL}/content.html`],
-    async src => {
-      let doc = this.content.document;
+  await contentPage.spawn([`${baseURL}/content.html`], async src => {
+    let doc = this.content.document;
 
-      let frame = doc.createElement("iframe");
-      frame.src = src;
-      doc.body.appendChild(frame);
+    let frame = doc.createElement("iframe");
+    frame.src = src;
+    doc.body.appendChild(frame);
 
-      await new Promise(resolve => {
-        frame.onload = resolve;
-      });
+    await new Promise(resolve => {
+      frame.onload = resolve;
+    });
+  });
 
-      return frame.contentWindow.wrappedJSObject.getCsp();
-    }
+  let contentCSP = await contentPage.SpecialPowers.spawn(
+    contentPage.browsingContext.children[0],
+    [],
+    () => JSON.parse(content.document.cspJSON)
   );
 
   let backgroundCSP = await extension.awaitMessage("background-csp");

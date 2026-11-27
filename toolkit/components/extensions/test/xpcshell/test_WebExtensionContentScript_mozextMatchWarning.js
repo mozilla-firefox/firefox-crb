@@ -11,7 +11,7 @@ add_setup(() => {
 });
 
 async function test_mozExtensionGlobalMatch({ expectAllowed }) {
-  const testMatchesWindowGlobal = async ({ allowed, extId, subframeURL }) => {
+  const testMatchesWindowGlobal = async ({ allowed, extId, isSubframe }) => {
     const { MatchPatternSet, WebExtensionContentScript, WebExtensionPolicy } =
       Cu.getGlobalForObject(Services);
 
@@ -24,25 +24,11 @@ async function test_mozExtensionGlobalMatch({ expectAllowed }) {
       matches: new MatchPatternSet([policy.getURL("*")]),
       // The content script instance should be configured to match all
       // frames if we are testing a moz-extension subframe.
-      allFrames: !!subframeURL,
+      allFrames: !!isSubframe,
       matchAboutBlank: false,
     });
 
-    let targetWin = this.content;
-
-    if (subframeURL) {
-      info("Creating moz-extension subframe");
-      const iframe = this.content.document.createElement("iframe");
-      iframe.src = subframeURL;
-      const promiseFrameLoaded = new Promise(resolve => {
-        iframe.addEventListener("load", resolve, { once: true });
-      });
-      this.content.document.body.append(iframe);
-      info("Waiting for subframe to be fully loaded");
-      await promiseFrameLoaded;
-      info("Subframe load is completed: " + iframe.contentDocument.documentURI);
-      targetWin = iframe.contentWindow;
-    }
+    const targetWin = this.content;
 
     info(
       "Call WebExtensionContentScript.matchesWindowGlobal and wait for the console message"
@@ -161,8 +147,20 @@ async function test_mozExtensionGlobalMatch({ expectAllowed }) {
 
   // Test warning logged in subframe.
   const subframeURL = `moz-extension://${extension.uuid}/extdoc.html`;
-  await webPage.spawn(
-    [{ allowed: expectAllowed, extId, subframeURL }],
+  await webPage.spawn([subframeURL], async url => {
+    info("Creating moz-extension subframe");
+    const iframe = this.content.document.createElement("iframe");
+    iframe.src = url;
+    const promiseFrameLoaded = new Promise(resolve => {
+      iframe.addEventListener("load", resolve, { once: true });
+    });
+    this.content.document.body.append(iframe);
+    info("Waiting for subframe to be fully loaded");
+    await promiseFrameLoaded;
+  });
+  await webPage.SpecialPowers.spawn(
+    webPage.browsingContext.children[0],
+    [{ allowed: expectAllowed, extId, isSubframe: true }],
     testMatchesWindowGlobal
   );
   // Verify telemetry event for subframe matching.

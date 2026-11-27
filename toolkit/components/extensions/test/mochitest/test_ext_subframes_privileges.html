@@ -272,7 +272,11 @@ add_task(async function test_webext_background_remote_subframe_privileges() {
 });
 
 // Test a moz-extension:// iframe inside a content iframe in an extension page.
-add_task(async function test_sub_subframe_conduit_verified_env() {
+async function test_sub_subframe_conduit_verified_env(isolateSubframes) {
+  await SpecialPowers.pushPrefEnv({
+    set: [["extensions.isolate_subframes", isolateSubframes]],
+  });
+
   let manifest = {
     content_scripts: [{
       // Note: no :8888 because of bug 1468162.
@@ -343,9 +347,19 @@ add_task(async function test_sub_subframe_conduit_verified_env() {
     is(err, "Unknown sender or wrong actor for recvCreateProxyContext");
   }
 
+  // If we're isolating subframes, the moz-extension iframe embedded within web
+  // content is loaded in the extension process. This makes the second failure
+  // the same as the first failure.
+  // The 'badProcess' failure cannot occur if isolation is enabled, as all
+  // WebExtension frames will be loaded within the extension process.
+  let isolated =
+    isolateSubframes &&
+    WebExtensionPolicy.useRemoteWebExtensions &&
+    SpecialPowers.useRemoteSubframes;
+
   let badProcess = { message: /Bad {[\w-]+} process: web/ };
   let badPrincipal = { message: /Bad {[\w-]+} principal: http/ };
-  consoleMonitor.start([badPrincipal, badProcess]);
+  consoleMonitor.start([badPrincipal, isolated ? badPrincipal : badProcess]);
 
   let extension = ExtensionTestUtils.loadExtension({ manifest, files });
 
@@ -366,6 +380,16 @@ add_task(async function test_sub_subframe_conduit_verified_env() {
   await extension.unload();
   await consoleMonitor.finished();
   info("Conduit creation logged correct exception(s).");
+
+  await SpecialPowers.popPrefEnv();
+}
+
+add_task(async function test_sub_subframe_conduit_verified_env_shared() {
+  await test_sub_subframe_conduit_verified_env(false);
+});
+
+add_task(async function test_sub_subframe_conduit_verified_env_isolated() {
+  await test_sub_subframe_conduit_verified_env(true);
 });
 
 </script>

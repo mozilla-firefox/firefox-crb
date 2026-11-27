@@ -16,6 +16,11 @@ const promiseTestAboutPageRegistered = registerPrivilegedAboutTestPage(
   getRootDirectory(gTestPath) + "data/file_privilegedabout_page.html"
 );
 
+const ISOLATE_SUBFRAMES = Services.prefs.getBoolPref(
+  "extensions.isolate_subframes",
+  false
+);
+
 add_setup(function () {
   is(
     WebExtensionPolicy.useRemoteWebExtensions,
@@ -28,7 +33,7 @@ add_task(async function test_extension_subframe_in_https_page() {
   await assertExtensionSubframeProcess({
     parentURL: "https://example.com",
     parentRemoteType: "webIsolated",
-    expectInExtensionProcess: false,
+    expectInExtensionProcess: ISOLATE_SUBFRAMES,
   });
 });
 
@@ -38,7 +43,7 @@ add_task(async function test_extension_subframe_in_file_page() {
       new FileUtils.File(getTestFilePath("data/file_dummy.html"))
     ).spec,
     parentRemoteType: "file",
-    expectInExtensionProcess: false,
+    expectInExtensionProcess: ISOLATE_SUBFRAMES,
   });
 });
 
@@ -52,7 +57,7 @@ add_task(async function test_extension_subframe_in_privilegedmozilla_page() {
   await assertExtensionSubframeProcess({
     parentURL: "https://example.com",
     parentRemoteType: "privilegedmozilla",
-    expectInExtensionProcess: false,
+    expectInExtensionProcess: ISOLATE_SUBFRAMES,
   });
   await SpecialPowers.popPrefEnv();
 });

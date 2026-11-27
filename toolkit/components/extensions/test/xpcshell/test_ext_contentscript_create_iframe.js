@@ -120,12 +120,12 @@ add_task(async function test_contentscript_create_iframe() {
 
   info("testing APIs availability once the extension is unloaded...");
 
-  await contentPage.legacySpawn(null, () => {
-    this.iframeWindow = this.content[0];
+  let iframeBC = contentPage.browsingContext.children[0];
+  Assert.ok(iframeBC, "content script enabled iframe found");
 
-    Assert.ok(this.iframeWindow, "content script enabled iframe found");
-    Assert.ok(
-      /content_script_iframe\.html$/.test(this.iframeWindow.location),
+  await contentPage.SpecialPowers.spawn(iframeBC, [], () => {
+    ok(
+      /content_script_iframe\.html$/.test(content.location),
       "the found iframe has the expected URL"
     );
   });
@@ -136,8 +136,8 @@ add_task(async function test_contentscript_create_iframe() {
     "test content script APIs not accessible from the frame once the extension is unloaded"
   );
 
-  await contentPage.legacySpawn(null, () => {
-    let win = Cu.waiveXrays(this.iframeWindow);
+  await contentPage.SpecialPowers.spawn(iframeBC, [], () => {
+    let win = Cu.waiveXrays(content);
     ok(
       !Cu.isDeadWrapper(win.browser),
       "the API object should not be a dead object"

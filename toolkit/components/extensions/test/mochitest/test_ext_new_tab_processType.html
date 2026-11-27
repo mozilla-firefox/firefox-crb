@@ -131,8 +131,6 @@ add_task(async function test_target_blank_link() {
   document.body.appendChild(iframe);
   await new Promise(resolve => iframe.addEventListener("load", () => setTimeout(resolve, 0), {once: true}));
 
-  let win = SpecialPowers.wrap(iframe).contentWindow;
-
   {
     // Flush layout so that synthesizeMouseAtCenter on a cross-origin iframe
     // works as expected.
@@ -153,9 +151,15 @@ add_task(async function test_target_blank_link() {
   {
     let promise = promiseObserved("document-element-inserted", doc => doc.documentURI === linkURL);
 
-    let res = win.eval(`window.open("${linkURL}")`);
+    let openedBCId = await SpecialPowers.spawn(iframe, [linkURL], url => {
+      return content.eval(`window.open("${url}")`).browsingContext.id;
+    });
     let {subject: doc} = await promise;
-    is(SpecialPowers.unwrap(res), SpecialPowers.unwrap(doc.defaultView), "window.open worked as expected");
+    is(
+      openedBCId,
+      SpecialPowers.wrap(doc.defaultView).browsingContext.id,
+      "window.open worked as expected"
+    );
 
     doc.defaultView.close();
   }

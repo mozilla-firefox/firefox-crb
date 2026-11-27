@@ -2,7 +2,13 @@
 
 add_task(async function test_cross_docGroup_adoption() {
   await SpecialPowers.pushPrefEnv({
-    set: [["extensions.content_web_accessible.enabled", true]],
+    set: [
+      ["extensions.content_web_accessible.enabled", true],
+      // If extension subframe isolation is enabled, the extension subframe will
+      // not be accessible to the content script, which is required to test
+      // cross-docGroup adoption.
+      ["extensions.isolate_subframes", false],
+    ],
   });
 
   let tab = await BrowserTestUtils.openNewForegroundTab(
