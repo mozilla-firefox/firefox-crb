@@ -226,6 +226,7 @@ toolbar .toolbarbutton-1 {
     outline: var(--toolbarbutton-outline);
     outline-offset: var(--toolbarbutton-outline-offset);
     overflow-clip-margin: padding-box;
+    transition: background-color var(--toolbarbutton-motion-duration-hover) var(--toolbarbutton-motion-easing);
   }
 
   &:focus-visible {
@@ -242,6 +243,11 @@ toolbar .toolbarbutton-1 {
   > .toolbarbutton-icon {
     width: var(--toolbarbutton-icon-size);
     height: var(--toolbarbutton-icon-size);
+  }
+
+  > .toolbarbutton-icon > .toolbarbutton-icon-image,
+  > .toolbarbutton-badge-stack > .toolbarbutton-icon > .toolbarbutton-icon-image {
+    transition: scale var(--toolbarbutton-motion-duration-release) var(--toolbarbutton-motion-easing);
   }
 
   > .toolbarbutton-text {
@@ -282,6 +288,14 @@ toolbar .toolbarbutton-1 {
     &:is(:hover:active, [open], [checked]) > :is(.toolbarbutton-icon, .toolbarbutton-text, .toolbarbutton-badge-stack) {
       background-color: var(--toolbarbutton-background-color-active);
       color: inherit;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      &:is(:hover:active, [held]) > .toolbarbutton-icon > .toolbarbutton-icon-image,
+      &:is(:hover:active, [held]) > .toolbarbutton-badge-stack > .toolbarbutton-icon > .toolbarbutton-icon-image {
+        scale: var(--toolbarbutton-motion-scale);
+        transition: scale var(--toolbarbutton-motion-duration-press) var(--toolbarbutton-motion-easing);
+      }
     }
 
     &:not(:focus-visible) {
