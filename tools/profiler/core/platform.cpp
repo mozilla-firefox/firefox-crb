@@ -4149,8 +4149,12 @@ locked_profiler_stream_json_for_this_process(
   }
 #endif  // DEBUG
 
-  return ProfileGenerationAdditionalInformation{std::move(sharedLibraryInfo),
-                                                std::move(jsSourceEntries)};
+  // The source table above needed every sourceId. From here on, the sources
+  // are only looked up by id, so copies with the same id can go.
+  ProfileGenerationAdditionalInformation additionalInfo{
+      std::move(sharedLibraryInfo), std::move(jsSourceEntries)};
+  additionalInfo.DeduplicateJSSourceEntries();
+  return std::move(additionalInfo);
 }
 
 // Keep this internal function non-static, so it may be used by tests.
