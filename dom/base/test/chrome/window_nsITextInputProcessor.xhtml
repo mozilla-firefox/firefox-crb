@@ -4223,30 +4223,40 @@ async function runCallbackTests(aForTests)
 
   function checkPositionChangeNotification(aNotification, aDescription)
   {
-    is(!aNotification || aNotification.type, "notify-position-change",
-       aDescription + " should cause position change notification");
+    ok(
+      aNotification?.type == "notify-content-change" && aNotification.layoutChanged,
+      `${aDescription} should cause a content change notification which notifies of a layout change (got "${
+        aNotification?.type
+      }, textChanged=${aNotification?.textChanged}, selectionChanged=${aNotification?.selectionChanged}")`);
   }
 
   function checkSelectionChangeNotification(aNotification, aDescription, aExpected)
   {
-    is(aNotification.type, "notify-selection-change",
-       aDescription + " should cause selection change notification");
-    if (aNotification.type != "notify-selection-change") {
+    is(aNotification?.type, "notify-content-change",
+       `${aDescription} should cause a content change notification`);
+    if (aNotification?.type != "notify-content-change") {
       return;
     }
-    is(aNotification.hasRange, aExpected.hasRange !== false,
-      `${aDescription} should cause selection change notification whose hasRange is ${aExpected.hasRange}`);
-    if (aNotification.hasRange) {
-      is(aNotification.offset, aExpected.offset,
-        `${aDescription} should cause selection change notification whose offset is ${aExpected.offset}`);
-      is(aNotification.text, aExpected.text,
-        `${aDescription} should cause selection change notification whose text is "${aExpected.text}"`);
-      is(aNotification.length, aExpected.text.length,
-        `${aDescription} should cause selection change notification whose length is ${aExpected.text.length}`);
-      is(aNotification.reversed, aExpected.reversed || false,
-        `${aDescription} should cause selection change notification whose reversed is ${aExpected.reversed || false}`);
+    ok(
+      aNotification.selectionChanged,
+      `${aDescription} should cause a selection change notification`
+    );
+    if (!aNotification.selectionChanged) {
+      return;
     }
-    is(aNotification.collapsed, aExpected.hasRange === false || !aExpected.text.length,
+    is(aNotification.hasSelectionRange, aExpected.hasRange !== false,
+      `${aDescription} should cause selection change notification whose hasSelectionRange is ${aExpected.hasRange}`);
+    if (aNotification.hasSelectionRange) {
+      is(aNotification.selectionOffset, aExpected.offset,
+        `${aDescription} should cause selection change notification whose selectionOffset is ${aExpected.offset}`);
+      is(aNotification.selectedText, aExpected.text,
+        `${aDescription} should cause selection change notification whose selectedText is "${aExpected.text}"`);
+      is(aNotification.selectionLength, aExpected.text.length,
+        `${aDescription} should cause selection change notification whose selectionLength is ${aExpected.text.length}`);
+      is(aNotification.selectionRangeReversed, aExpected.reversed || false,
+        `${aDescription} should cause selection change notification whose selectionRangeReversed is ${aExpected.reversed || false}`);
+    }
+    is(aNotification.selectionCollapsed, aExpected.hasRange === false || !aExpected.text.length,
       `${aDescription} should cause selection change notification whose collapsed is ${aExpected.hasRange === false || !aExpected.text.length}`);
     is(aNotification.writingMode, aExpected.writingMode || "horizontal-tb",
       `${aDescription} should cause selection change notification whose writingMode is ${aExpected.writingMode || "horizontal-tb"}`);
@@ -4260,13 +4270,20 @@ async function runCallbackTests(aForTests)
 
   function checkTextChangeNotification(aNotification, aDescription, aExpected)
   {
-    is(aNotification.type, "notify-text-change",
-       aDescription + " should cause text change notification");
-    if (aNotification.type != "notify-text-change") {
+    is(aNotification.type, "notify-content-change",
+       aDescription + " should cause a content change notification");
+    if (aNotification.type != "notify-content-change") {
       return;
     }
-    is(aNotification.offset, aExpected.offset,
-       aDescription + " should cause text change notification whose offset is " + aExpected.offset);
+    ok(
+      aNotification.textChanged,
+      `${aDescription} should cause a text change notification`
+    );
+    if (!aNotification.textChanged) {
+      return;
+    }
+    is(aNotification.textChangeOffset, aExpected.offset,
+       aDescription + " should cause text change notification whose textChangeOffset is " + aExpected.offset);
     is(aNotification.removedLength, aExpected.removedLength,
        aDescription + " should cause text change notification whose removedLength is " + aExpected.removedLength);
     is(aNotification.addedLength, aExpected.addedLength,
@@ -4510,7 +4527,10 @@ async function runQuerySelectionEventTestAtTextChangeNotification() {
         case "request-to-cancel":
           aTIP.cancelComposition();
           break;
-        case "notify-text-change": {
+        case "notify-content-change": {
+          if (!aNotification.textChanged) {
+            break;
+          }
           const textContent = synthesizeQueryTextContent(0, 100);
           if (textContent?.text.includes("abc")) {
             break;  // Different notification which we want to test, wait next one.
@@ -4637,8 +4657,8 @@ async function runTextNotificationChangesDuringNoFrame() {
       case "request-to-cancel":
         aTIP.cancelComposition();
         break;
-      case "notify-text-change":
-        if (onTextChange) {
+      case "notify-content-change":
+        if (onTextChange && aNotification.textChanged) {
           onTextChange(aNotification);
         }
         break;
@@ -4670,9 +4690,9 @@ async function runTextNotificationChangesDuringNoFrame() {
     info(`${description}: waiting for notifications...`);
     const notification = await waitNotifications;
     is(
-      notification?.offset,
+      notification?.textChangeOffset,
       0,
-      `${description}: offset should be 0`
+      `${description}: textChangeOffset should be 0`
     );
     is(
       notification?.removedLength,
@@ -4699,9 +4719,9 @@ async function runTextNotificationChangesDuringNoFrame() {
     info(`${description}: waiting for notifications...`);
     const notification = await waitNotifications;
     is(
-      notification?.offset,
+      notification?.textChangeOffset,
       0,
-      `${description}: offset should be 0`
+      `${description}: textChangeOffset should be 0`
     );
     is(
       notification?.removedLength,
@@ -4730,9 +4750,9 @@ async function runTextNotificationChangesDuringNoFrame() {
     info(`${description}: waiting for notifications...`);
     const notification = await waitNotifications;
     is(
-      notification?.offset,
+      notification?.textChangeOffset,
       0,
-      `${description}: offset should be 0`
+      `${description}: textChangeOffset should be 0`
     );
     is(
       notification?.removedLength,
@@ -4763,9 +4783,9 @@ async function runTextNotificationChangesDuringNoFrame() {
     info(`${description}: waiting for notifications...`);
     const notification = await waitNotifications;
     is(
-      notification?.offset,
+      notification?.textChangeOffset,
       0,
-      `${description}: offset should be 0`
+      `${description}: textChangeOffset should be 0`
     );
     is(
       notification?.removedLength,
