@@ -903,9 +903,7 @@ TextInputProcessor::NotifyIME(TextEventDispatcher* aTextEventDispatcher,
       case NOTIFY_IME_OF_BLUR:
         notification = new TextInputProcessorNotification("notify-blur");
         break;
-      case NOTIFY_IME_OF_TEXT_CHANGE:
-      case NOTIFY_IME_OF_SELECTION_CHANGE:
-      case NOTIFY_IME_OF_POSITION_CHANGE:
+      case NOTIFY_IME_OF_CONTENT_CHANGE:
         notification = new TextInputProcessorNotification(
             aNotification.mTextChangeData, aNotification.mSelectionChangeData,
             aNotification.mLayoutChanged);
@@ -945,7 +943,7 @@ NS_IMETHODIMP_(IMENotificationRequests)
 TextInputProcessor::GetIMENotificationRequests() {
   // TextInputProcessor should support all change notifications.
   return {IMENotificationRequest::TextChange,
-          IMENotificationRequest::PositionChange};
+          IMENotificationRequest::LayoutChange};
 }
 
 NS_IMETHODIMP_(void)

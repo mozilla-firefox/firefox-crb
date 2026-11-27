@@ -344,15 +344,11 @@ class BrowserParent final : public PBrowserParent,
       const widget::IMENotification& aEventMessage,
       NotifyIMEFocusResolver&& aResolve);
 
-  mozilla::ipc::IPCResult RecvNotifyIMETextChange(
+  mozilla::ipc::IPCResult RecvNotifyIMEContentChange(
       const ContentCache& aContentCache,
       const widget::IMENotification& aEventMessage);
 
   mozilla::ipc::IPCResult RecvNotifyIMECompositionUpdate(
-      const ContentCache& aContentCache,
-      const widget::IMENotification& aEventMessage);
-
-  mozilla::ipc::IPCResult RecvNotifyIMESelection(
       const ContentCache& aContentCache,
       const widget::IMENotification& aEventMessage);
 
@@ -361,10 +357,6 @@ class BrowserParent final : public PBrowserParent,
 
   mozilla::ipc::IPCResult RecvNotifyIMEMouseButtonEvent(
       const widget::IMENotification& aEventMessage, bool* aConsumedByIME);
-
-  mozilla::ipc::IPCResult RecvNotifyIMEPositionChange(
-      const ContentCache& aContentCache,
-      const widget::IMENotification& aEventMessage);
 
   mozilla::ipc::IPCResult RecvOnEventNeedingAckHandled(
       const EventMessage& aMessage, const uint32_t& aCompositionId);

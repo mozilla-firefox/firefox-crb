@@ -325,12 +325,10 @@ class PuppetWidget final : public nsIWidget,
 
   nsresult RequestIMEToCommitComposition(bool aCancel);
   nsresult NotifyIMEOfFocusChange(const IMENotification& aIMENotification);
-  nsresult NotifyIMEOfSelectionChange(const IMENotification& aIMENotification);
+  nsresult NotifyIMEOfContentChange(const IMENotification& aIMENotification);
   nsresult NotifyIMEOfCompositionUpdate(
       const IMENotification& aIMENotification);
-  nsresult NotifyIMEOfTextChange(const IMENotification& aIMENotification);
   nsresult NotifyIMEOfMouseButtonEvent(const IMENotification& aIMENotification);
-  nsresult NotifyIMEOfPositionChange(const IMENotification& aIMENotification);
 
   bool CacheEditorRect();
   bool CacheCompositionRects(uint32_t& aStartOffset,
