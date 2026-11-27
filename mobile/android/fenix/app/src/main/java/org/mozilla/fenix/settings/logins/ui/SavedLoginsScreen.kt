@@ -5,6 +5,7 @@
 package org.mozilla.fenix.settings.logins.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -31,11 +34,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CollectionInfo
@@ -52,16 +57,22 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import mozilla.components.compose.base.LinkText
 import mozilla.components.compose.base.LinkTextState
 import mozilla.components.compose.base.annotation.FlexibleWindowPreview
 import mozilla.components.compose.base.button.IconButton
 import mozilla.components.compose.base.menu.DropdownMenu
 import mozilla.components.compose.base.menu.MenuItem
+import mozilla.components.compose.base.snackbar.Snackbar
+import mozilla.components.compose.base.snackbar.displaySnackbar
 import mozilla.components.compose.base.text.Text
 import mozilla.components.compose.base.textfield.TextField
 import mozilla.components.compose.base.theme.PreviewThemeProvider
 import mozilla.components.compose.base.theme.Theme
+import mozilla.components.concept.fileimporter.FileImporterError
+import mozilla.components.lib.password.parser.csv.PasswordsParseError
+import mozilla.components.lib.state.ext.observeAsComposableState
 import mozilla.components.support.ktx.kotlin.trimmed
 import mozilla.components.ui.icons.R as iconsR
 import org.mozilla.fenix.R
@@ -87,6 +98,20 @@ internal fun SavedLoginsScreen(
 ) {
     val navController = rememberNavController()
     val store = remember { buildStore(navController) }
+    val loginSnackbarState by store.observeAsComposableState { it.loginsSnackbarState }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val resources = LocalResources.current
+    LaunchedEffect(loginSnackbarState) {
+        val messageRes = loginSnackbarState.toStringRes() ?: return@LaunchedEffect
+        scope.launch {
+            snackbarHostState.displaySnackbar(
+                message = resources.getString(messageRes),
+                onDismissPerformed = { store.dispatch(SnackbarAction.Dismissed) },
+            )
+        }
+    }
 
     SecureScreen(
         title = stringResource(R.string.logins_biometric_prompt_message_2),
@@ -98,7 +123,10 @@ internal fun SavedLoginsScreen(
         ) {
             composable(route = LoginsDestinations.LIST) {
                 BackHandler { store.dispatch(LoginsListBackClicked) }
-                LoginsList(store = store)
+                LoginsList(
+                    store = store,
+                    snackbarHostState = snackbarHostState,
+                )
             }
             composable(route = LoginsDestinations.ADD_LOGIN) {
                 BackHandler { store.dispatch(AddLoginBackClicked) }
@@ -124,7 +152,10 @@ internal object LoginsDestinations {
 }
 
 @Composable
-private fun LoginsList(store: LoginsStore) {
+private fun LoginsList(
+    store: LoginsStore,
+    snackbarHostState: SnackbarHostState,
+) {
     val state by store.stateFlow.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -132,6 +163,16 @@ private fun LoginsList(store: LoginsStore) {
     }
 
     Scaffold(
+        snackbarHost = {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) {
+                    Snackbar(snackbarData = it)
+                }
+            }
+        },
         topBar = {
             LoginsListTopBar(
                 store = store,
@@ -477,11 +518,28 @@ private fun createStore() =
             )
     )
 
+@StringRes
+private fun LoginsSnackbarState.toStringRes(): Int? =
+    when (this) {
+        // the success state will be added in https://bugzilla.mozilla.org/show_bug.cgi?id=2094015, in a follow-up
+        LoginsSnackbarState.ImportSucceeded,
+        LoginsSnackbarState.None -> null
+        is LoginsSnackbarState.ImportFailed ->
+            if (error == FileImporterError.ParseError(PasswordsParseError.UnsupportedContentType)) {
+                R.string.passwords_import_snackbar_failure_unsupported_type
+            } else {
+                R.string.passwords_import_snackbar_failure_general
+            }
+    }
+
 @FlexibleWindowPreview
 @Composable
 private fun LoginsListScreenPreview(@PreviewParameter(PreviewThemeProvider::class) theme: Theme) {
     FirefoxTheme(theme) {
-        LoginsList(store = createStore())
+        LoginsList(
+            store = createStore(),
+            snackbarHostState = SnackbarHostState(),
+        )
     }
 }
 
@@ -489,6 +547,9 @@ private fun LoginsListScreenPreview(@PreviewParameter(PreviewThemeProvider::clas
 @Composable
 private fun EmptyLoginsListScreenPreview(@PreviewParameter(PreviewThemeProvider::class) theme: Theme) {
     FirefoxTheme(theme) {
-        LoginsList(store = LoginsStore())
+        LoginsList(
+            store = LoginsStore(),
+            snackbarHostState = SnackbarHostState(),
+        )
     }
 }
