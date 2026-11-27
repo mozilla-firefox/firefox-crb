@@ -661,6 +661,7 @@ fxms-schemas:
             - 'browser/components/asrouter/content-src/**/*.schema.json'
             - 'browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs'
             - 'browser/components/asrouter/modules/PanelTestProvider.sys.mjs'
+            - 'toolkit/components/messaging-system/schemas/MultiStageProtonScreenSchemas/MultiStageProtonScreenSchemas.json'
 
 condprof:
     description: testing/condprofile unit tests
