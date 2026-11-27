@@ -6,7 +6,9 @@
   --border-color-tokens-table: var(--color-gray-50);
   --table-border-outer: 2px solid var(--border-color-tokens-table);
   --table-border-inner: var(--border-width) solid var(--border-color-tokens-table);
-  --table-background-color: color-mix(in srgb, var(--color-gray-50) 20%, transparent);
+  @media not (forced-colors) {
+    --table-background-color: color-mix(in srgb, var(--color-gray-50) 20%, transparent);
+  }
   --outline-preview: 2px solid var(--color-gray-60);
   --background-color-icon-demo: var(--color-gray-60);
   --background-color-padding-demo: var(--color-blue-60);
@@ -57,7 +59,9 @@
 
   moz-button {
     --button-border-radius: 0;
-    --button-border-color: var(--border-color);
+    @media not (prefers-contrast) {
+      --button-border-color: var(--border-color);
+    }
 
     min-width: fit-content;
     flex: 1;

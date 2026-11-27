@@ -28,8 +28,10 @@
 :host([type="vibrant"]) {
   --promo-message-text-color: var(--promo-message-text-color-vibrant);
   --promo-heading-text-color: var(--promo-heading-text-color-vibrant);
-  --promo-background-color: var(--promo-background-color-vibrant);
-  --promo-border-color: var(--promo-border-color-vibrant);
+  @media not (prefers-contrast) {
+    --promo-background-color: var(--promo-background-color-vibrant);
+    --promo-border-color: var(--promo-border-color-vibrant);
+  }
 }
 
 .container {
@@ -159,7 +161,9 @@
 @media not (forced-colors) {
   :host([dismissable][imagealignment="end"][imagedisplay="cover"]) .close {
     --button-background-color-ghost: var(--background-color-box);
-    --button-text-color-ghost: var(--text-color);
+    @media not (prefers-contrast) {
+      --button-text-color-ghost: var(--text-color);
+    }
   }
 }
 

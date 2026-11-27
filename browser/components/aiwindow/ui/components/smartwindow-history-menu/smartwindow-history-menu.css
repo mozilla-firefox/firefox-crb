@@ -50,9 +50,11 @@ panel-list.history-menu[valign="top"] {
 
 @media -moz-pref("browser.nova.enabled") and (not (forced-colors)) {
   moz-button.fullpage-action-button {
-    --button-text-color-ghost: light-dark(var(--color-violet-desaturated-60), var(--color-violet-desaturated-30));
-    --button-text-color-ghost-hover: var(--button-text-color);
-    --button-text-color-ghost-active: var(--button-text-color);
+    @media not (prefers-contrast) {
+      --button-text-color-ghost: light-dark(var(--color-violet-desaturated-60), var(--color-violet-desaturated-30));
+      --button-text-color-ghost-hover: var(--button-text-color);
+      --button-text-color-ghost-active: var(--button-text-color);
+    }
     --button-text-color-ghost-selected: var(--button-text-color);
     --button-icon-fill: currentColor;
     /* No resting fill (transparent ghost; the top scrim provides legibility).
@@ -259,7 +261,9 @@ moz-button.history-menu-button {
     @media not (forced-colors) {
       --panel-list-border-color: light-dark(var(--color-violet-desaturated-20), var(--color-violet-desaturated-50));
       --panel-list-text-color: light-dark(var(--color-violet-desaturated-90), var(--color-gray-0));
-      --panel-separator-color: light-dark(var(--color-gray-20), var(--color-gray-50));
+      @media not (prefers-contrast) {
+        --panel-separator-color: light-dark(var(--color-gray-20), var(--color-gray-50));
+      }
       --button-background-color-menu-hover: var(--smartwindow-panel-item-background-color-hover);
       --button-background-color-menu-active: var(--smartwindow-panel-item-background-color-active);
       --button-text-color-menu-hover: var(--panel-list-text-color);

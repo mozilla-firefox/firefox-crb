@@ -742,9 +742,13 @@ toolbar[keyNav]:not([collapsed], [customizing]) toolbartabstop,
   gap: var(--smartwindow-ask-btn-text-icon-gap);
   height: var(--size-item-medium);
   padding-inline: var(--smartwindow-ask-btn-inner-padding-inline);
-  --toolbarbutton-outline-color-hover: none;
-  --toolbarbutton-background-color-hover: transparent;
-  --toolbarbutton-background-color-active: transparent;
+  @media not (prefers-contrast) {
+    --toolbarbutton-outline-color-hover: none;
+  }
+  @media not (forced-colors) {
+    --toolbarbutton-background-color-hover: transparent;
+    --toolbarbutton-background-color-active: transparent;
+  }
   --toolbarbutton-border-radius: 0;
   --toolbarbutton-padding-outer: var(--toolbarbutton-padding-inner);
 
