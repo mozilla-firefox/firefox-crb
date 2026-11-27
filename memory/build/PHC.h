@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "mozjemalloc_types.h"
 #include "mozmemory_wrap.h"
 
 namespace mozilla {
@@ -164,5 +165,31 @@ MOZ_JEMALLOC_API void GetPHCStats(PHCStats& aStats);
 
 // Initialise PHC (called from mozjemalloc's initialisation.
 void phc_init();
+
+namespace mozilla::phc {
+
+// The memory allocator calls these functions to attempt PHC allocations.
+// They can return nullptr (or false for Free()) if the regular allocator
+// should be used.
+
+MOZ_ALWAYS_INLINE bool ShouldAllocHot(size_t aReqSize);
+
+MOZ_ALWAYS_INLINE bool FastIsPHCPtr(const void* aPtr);
+
+void* MaybeAlloc(arena_id_t aArenaId, size_t aReqSize, size_t aAlignment = 1);
+
+// Requires a PHC pointer, callers should test with FastIsPHCPtr first.
+void Free(void* aPtr);
+
+void JemallocStats(jemalloc_stats_t* aStats, jemalloc_bin_stats_t* aBinStats);
+
+// Like Free this returns true if the pointer is known to PHC.
+bool JemallocPtrInfo(const void* aPtr, jemalloc_ptr_info_t* aInfo,
+                     arena_id_t* aArenaId);
+
+// Get the usable size for this pointer.
+size_t JemallocUsableSize(usable_ptr_t aPtr);
+
+}  // namespace mozilla::phc
 
 #endif /* PHC_h */
