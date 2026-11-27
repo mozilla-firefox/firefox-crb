@@ -5063,8 +5063,8 @@
   value: true
   mirror: always
 
-# Maximum time (ms) to wait for an in-flight prefetch to complete before
-# falling back to a normal navigation fetch. Used by the
+# Maximum time (ms) to wait for the response head of an in-flight prefetch
+# before falling back to a normal navigation fetch. Used by the
 # "wait for a matching prefetch record" algorithm:
 # https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
 # Matches Chromium's practical default. Lower in tests to avoid timeouts.
@@ -5092,7 +5092,7 @@
   mirror: always
 
 # Time-to-live (ms) for a completed prefetch record, measured from the
-# moment the response is fully received. Implements the 5-minute expiry
+# moment the response head is received. Implements the 5-minute expiry
 # from the "complete a prefetch record" algorithm:
 # https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-complete
 # Set lower in tests to verify expiry without waiting 5 minutes.

@@ -641,7 +641,7 @@ void DocumentLoadListener::ActivateFromPrefetch(
     dom::PrefetchRecordParent* aRec) {
   auto* sourceWGP = static_cast<WindowGlobalParent*>(aRec->Manager());
 
-  aRec->MarkActivated();
+  RefPtr<dom::PrefetchFetchClaim> claim = aRec->MarkActivated();
 
   // "Copy prefetch cookies": copy cookies from the isolated partition to the
   // destination partition.
@@ -663,10 +663,11 @@ void DocumentLoadListener::ActivateFromPrefetch(
 
   // Serve the record's own response rather than whatever entry a cache lookup
   // of the navigation URL would find.
-  if (nsCOMPtr<nsIURI> cacheURI = aRec->CacheEntryURI()) {
-    if (RefPtr<net::nsHttpChannel> httpChannel = do_QueryObject(mChannel)) {
+  if (RefPtr<net::nsHttpChannel> httpChannel = do_QueryObject(mChannel)) {
+    if (nsCOMPtr<nsIURI> cacheURI = aRec->CacheEntryURI()) {
       (void)httpChannel->SetNavigationalPrefetchCacheURI(cacheURI);
     }
+    httpChannel->SetNavigationalPrefetchClaim(claim.forget());
   }
 
   LOG_SPECRULES(

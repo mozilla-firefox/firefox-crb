@@ -48,6 +48,7 @@
 #include "mozilla/dom/NavigatorLogin.h"
 #include "mozilla/dom/PerformanceStorage.h"
 #include "mozilla/dom/PolicyContainer.h"
+#include "mozilla/dom/PrefetchRecordParent.h"
 #include "mozilla/dom/ReferrerInfo.h"
 #include "mozilla/dom/RemoteType.h"
 #include "mozilla/dom/SecFetch.h"
@@ -1631,6 +1632,7 @@ nsresult nsHttpChannel::ContinueConnect() {
 
   // Not served from cache, so drop any caller-set cacheReadStart.
   mCacheReadStart = TimeStamp();
+  mNavigationalPrefetchClaim = nullptr;
 
   // hit the net...
   nsresult rv = DoConnect(mTransactionSticky);
@@ -5372,16 +5374,21 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, uint32_t* aResult) {
     rv = CheckPartial(entry, &size, &contentLength);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    if (contentLength != int64_t(-1) && contentLength != size) {
-      *aResult = ENTRY_NOT_WANTED;
-      return NS_OK;
-    }
+    // A speculation-rules prefetch that is still being written is read
+    // concurrently, which is set up below.
+    bool inFlightPrefetch = size == int64_t(-1) && mNavigationalPrefetchClaim;
+    if (!inFlightPrefetch) {
+      if (contentLength != int64_t(-1) && contentLength != size) {
+        *aResult = ENTRY_NOT_WANTED;
+        return NS_OK;
+      }
 
-    rv = OpenCacheInputStream(entry, true);
-    if (NS_SUCCEEDED(rv)) {
-      StoreCachedContentIsValid(CachedContentValidity::Valid);
+      rv = OpenCacheInputStream(entry, true);
+      if (NS_SUCCEEDED(rv)) {
+        StoreCachedContentIsValid(CachedContentValidity::Valid);
+      }
+      return rv;
     }
-    return rv;
   }
 
   bool wantCompleteEntry = false;
@@ -5422,8 +5429,12 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, uint32_t* aResult) {
         return NS_OK;
       }
 
-      // Ignore !(size > 0) from the resumability condition
-      if (!IsResumable(size, contentLength, true)) {
+      // Ignore !(size > 0) from the resumability condition. The prefetch
+      // writing the entry of a navigation activated from it is that
+      // navigation's fetch, so it is read as it arrives even though no range
+      // request could complete it.
+      if (!IsResumable(size, contentLength, true) &&
+          !mNavigationalPrefetchClaim) {
         if (IsNavigation()) {
           LOG(
               ("  bypassing wait for the entry, "
@@ -6926,6 +6937,14 @@ nsresult nsHttpChannel::SetupReplacementChannel(nsIURI* newURI,
       httpChannelImpl->SetEarlyHintObserver(mEarlyHintObserver);
     }
     mEarlyHintObserver = nullptr;
+  }
+
+  // The redirect target reads the prefetch's response in this channel's place.
+  if (mNavigationalPrefetchClaim) {
+    if (RefPtr<nsHttpChannel> httpChannelImpl = do_QueryObject(newChannel)) {
+      httpChannelImpl->SetNavigationalPrefetchClaim(
+          mNavigationalPrefetchClaim.forget());
+    }
   }
 
   // We don't support redirection for WebTransport for now.
@@ -10668,6 +10687,15 @@ nsresult nsHttpChannel::ContinueOnStopRequest(nsresult aStatus, bool aIsFromNet,
     }
   }
 
+  // The cache has no error to report for a prefetch that failed while this
+  // channel was reading what it wrote.
+  if (RefPtr<dom::PrefetchFetchClaim> claim =
+          mNavigationalPrefetchClaim.forget()) {
+    if (NS_SUCCEEDED(aStatus) && claim->FetchFailed()) {
+      aStatus = NS_ERROR_NET_PARTIAL_TRANSFER;
+    }
+  }
+
   StoreIsPending(false);
   mStatus = aStatus;
 
@@ -11238,6 +11266,11 @@ nsHttpChannel::GetPreferCacheLoadOverBypass(bool* aPreferCacheLoadOverBypass) {
   NS_ENSURE_ARG(aPreferCacheLoadOverBypass);
   *aPreferCacheLoadOverBypass = LoadPreferCacheLoadOverBypass();
   return NS_OK;
+}
+
+void nsHttpChannel::SetNavigationalPrefetchClaim(
+    already_AddRefed<dom::PrefetchFetchClaim> aClaim) {
+  mNavigationalPrefetchClaim = aClaim;
 }
 
 nsresult nsHttpChannel::SetNavigationalPrefetchCacheURI(nsIURI* aURI) {

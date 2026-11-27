@@ -201,6 +201,13 @@ support-files = [
   "file_pageload_prefetch_target.sjs",
 ]
 
+["browser_prefetch_slow_body.js"]
+# All channels: the test enables the prefs it needs.
+support-files = [
+  "file_pageload_prefetch_source.html",
+  "file_pageload_prefetch_target.sjs",
+]
+
 ["browser_promiseDocumentFlushed.js"]
 
 ["browser_refresh_content.js"]

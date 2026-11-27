@@ -45,6 +45,9 @@ class nsInputStreamPump;
 class nsITransportSecurityInfo;
 
 namespace mozilla {
+namespace dom {
+class PrefetchFetchClaim;
+}
 namespace net {
 
 class nsChannelClassifier;
@@ -237,6 +240,11 @@ class nsHttpChannel final : public HttpBaseChannel,
   // different No-Vary-Search-equivalent entry. Must be called before
   // AsyncOpen().
   nsresult SetNavigationalPrefetchCacheURI(nsIURI* aURI);
+  // For a navigation activated from a speculation-rules prefetch record whose
+  // fetch is still running: lets this channel read the response as that fetch
+  // writes it to the cache. Must be called before AsyncOpen().
+  void SetNavigationalPrefetchClaim(
+      already_AddRefed<dom::PrefetchFetchClaim> aClaim);
 
   [[nodiscard]] nsresult OpenCacheEntry(bool isHttps);
   [[nodiscard]] nsresult OpenCacheEntryInternal(bool isHttps);
@@ -664,6 +672,7 @@ class nsHttpChannel final : public HttpBaseChannel,
 
   nsCOMPtr<nsIURI> mCacheEntryURI;
   nsCOMPtr<nsIURI> mNavigationalPrefetchCacheURI;
+  RefPtr<dom::PrefetchFetchClaim> mNavigationalPrefetchClaim;
   nsCString mCacheIdExtension;
 
   // We must close mCacheInputStream explicitly to avoid leaks.

@@ -20,6 +20,7 @@
 #include "nsIReferrerInfo.h"
 #include "nsIRequestObserver.h"
 #include "nsIStreamListener.h"
+#include "nsISupportsImpl.h"
 #include "nsITimer.h"
 #include "nsIURI.h"
 #include "nsString.h"
@@ -29,7 +30,27 @@ class nsIPrincipal;
 
 namespace mozilla::dom {
 
+class PrefetchRecordParent;
 class WindowGlobalParent;
+
+// Held by a navigation channel while it reads the response of the prefetch
+// record that activated it as the record's fetch delivers it. A claimed fetch
+// is neither canceled nor held to the body cap, which would truncate the
+// navigation's response.
+class PrefetchFetchClaim final {
+ public:
+  NS_INLINE_DECL_REFCOUNTING(PrefetchFetchClaim)
+
+  // Whether the fetch ended in failure, so the response read is incomplete.
+  bool FetchFailed() const;
+
+ private:
+  friend class PrefetchRecordParent;
+  explicit PrefetchFetchClaim(PrefetchRecordParent* aRecord);
+  ~PrefetchFetchClaim();
+
+  RefPtr<PrefetchRecordParent> mRecord;
+};
 
 // Parent-side actor for a speculation rules prefetch record.
 // Authoritative: holds the prefetch record fields, opens the HTTP channel,
@@ -96,8 +117,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // Called by RecvCancel and WindowGlobalParent::DedupePrefetchRecords.
   void MarkCanceled();
 
-  // Called when a navigation activates this record.
-  void MarkActivated() { mOutcome = Outcome::Used; }
+  // Called when a navigation activates this record. Returns a claim on the
+  // fetch if it is still running, null otherwise.
+  already_AddRefed<PrefetchFetchClaim> MarkActivated();
 
   // Implements "prefetch record matches a URL" using the completed response's
   // No-Vary-Search header.
@@ -120,6 +142,8 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   void ActorDestroy(ActorDestroyReason aReason) override;
 
  private:
+  friend class PrefetchFetchClaim;
+
   bool IsCrossOriginToDocument(nsIURI* aURI) const;
   void PopulateIsolatedPartitionKey(mozilla::OriginAttributes& aAttrs);
   void ConfigureSecPurpose(nsIChannel* aChannel);
@@ -129,6 +153,9 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   bool PrefetchIPAnonymizationPolicyRequiresAnonymity(nsIURI* aURI) const;
   void AppendRedirectChainEntry(nsIURI* aURI);
   void FillResponseOnLastEntry(nsIChannel* aChannel);
+  bool FinalResponseSupportsPrefetch() const;
+  bool IsFeedingNavigation() const { return mClaims > 0; }
+  void ReleaseClaim();
   nsString ComputePartitionKeyForChannel(nsIChannel* aChannel) const;
   bool IsReferrerPolicySufficientlyStrict() const;
   void ReleaseCacheToken();
@@ -145,7 +172,11 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   nsString mNoVarySearchHint;
   PrefetchSource mSource = PrefetchSource::SpeculationRules;
   PrefetchState mState = PrefetchState::Ongoing;
+  // The fetch's current channel; null once it has stopped.
   nsCOMPtr<nsIChannel> mChannel;
+  // Number of PrefetchFetchClaims on the fetch.
+  uint32_t mClaims = 0;
+  bool mFetchFailed = false;
   // Keeps the response's HTTP cache entry alive so activation can be served
   // from it; no-store responses would otherwise be purged as expired.
   nsCOMPtr<nsISupports> mCacheToken;
@@ -169,6 +200,8 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // On-the-wire bytes, summed over the redirect chain.
   uint64_t mTransferSize = 0;
   bool mFinalResponseHadNetworkTransfer = false;
+  // The actor went away while the fetch was still feeding a navigation.
+  bool mDataUsagePending = false;
 
  protected:
   ~PrefetchRecordParent() = default;
