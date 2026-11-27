@@ -22,6 +22,10 @@ class nsIURI;
 namespace mozilla {
 class WritingMode;
 
+namespace intl {
+struct FluentArg;
+}
+
 namespace a11y {
 
 class AccAttributes;
@@ -529,11 +533,7 @@ class Accessible {
   /**
    * Default to localized action name.
    */
-  void ActionDescriptionAt(uint8_t aIndex, nsAString& aDescription) {
-    nsAutoString name;
-    ActionNameAt(aIndex, name);
-    TranslateString(name, aDescription);
-  }
+  void ActionDescriptionAt(uint8_t aIndex, nsAString& aDescription);
 
   /**
    * Invoke the accessible action.
@@ -816,10 +816,13 @@ class Accessible {
 #endif
 
   /**
-   * Return the localized string for the given key.
+   * Return the localized string for the given Fluent message identifier in
+   * dom/accessible.ftl.
    */
-  static void TranslateString(const nsString& aKey, nsAString& aStringOut,
-                              const nsTArray<nsString>& aParams = {});
+  static void TranslateString(const nsACString& aL10nId, nsAString& aStringOut);
+  static void TranslateString(const nsACString& aL10nId,
+                              const nsTArray<intl::FluentArg>& aArgs,
+                              nsAString& aStringOut);
 
   /*
    * Return calculated group level based on accessible hierarchy.

@@ -289,6 +289,7 @@ enum class FluentResourceFile : uint8_t {
   DOM_DEPRECATIONS,
   DOM_DIALOGS,
   DOM_FORM_VALIDATION,
+  DOM_ACCESSIBLE,
   _COUNT
 };
 

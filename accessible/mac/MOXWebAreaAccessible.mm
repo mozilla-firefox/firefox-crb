@@ -30,7 +30,7 @@ using namespace mozilla::a11y;
 
 - (NSString*)moxRoleDescription {
   if ([[self moxSubrole] isEqualToString:@"AXLandmarkApplication"]) {
-    return utils::LocalizedString(u"application"_ns);
+    return utils::LocalizedString("a11y-role-application"_ns);
   }
 
   return NSAccessibilityRoleDescription(NSAccessibilityGroupRole, nil);
@@ -113,7 +113,7 @@ using namespace mozilla::a11y;
 - (NSString*)moxRoleDescription {
   // The role description is "HTML Content" regardless of the gecko role
   // (APPLICATION or DOCUMENT)
-  return utils::LocalizedString(u"htmlContent"_ns);
+  return utils::LocalizedString("a11y-role-html-content"_ns);
 }
 
 - (NSURL*)moxURL {

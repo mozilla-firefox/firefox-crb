@@ -14,6 +14,7 @@
 #include "mozilla/a11y/FocusManager.h"
 #include "mozilla/a11y/HyperTextAccessibleBase.h"
 #include "nsAccUtils.h"
+#include "nsContentUtils.h"
 #include "nsIStringBundle.h"
 #include "nsIURI.h"
 
@@ -557,28 +558,51 @@ void Accessible::DebugPrint(const char* aPrefix,
 
 #endif
 
-void Accessible::TranslateString(const nsString& aKey, nsAString& aStringOut,
-                                 const nsTArray<nsString>& aParams) {
-  nsCOMPtr<nsIStringBundleService> stringBundleService =
-      components::StringBundle::Service();
-  if (!stringBundleService) return;
+void Accessible::ActionDescriptionAt(uint8_t aIndex, nsAString& aDescription) {
+  struct ActionL10nId {
+    const nsLiteralString mName;
+    const nsLiteralCString mL10nId;
+  };
+  static constexpr ActionL10nId kActionL10nIds[] = {
+      {u"jump"_ns, "a11y-action-jump"_ns},
+      {u"press"_ns, "a11y-action-press"_ns},
+      {u"check"_ns, "a11y-action-check"_ns},
+      {u"uncheck"_ns, "a11y-action-uncheck"_ns},
+      {u"select"_ns, "a11y-action-select"_ns},
+      {u"open"_ns, "a11y-action-open"_ns},
+      {u"close"_ns, "a11y-action-close"_ns},
+      {u"switch"_ns, "a11y-action-switch"_ns},
+      {u"click"_ns, "a11y-action-click"_ns},
+      {u"collapse"_ns, "a11y-action-collapse"_ns},
+      {u"expand"_ns, "a11y-action-expand"_ns},
+      {u"activate"_ns, "a11y-action-activate"_ns},
+      {u"cycle"_ns, "a11y-action-cycle"_ns},
+      {u"clickAncestor"_ns, "a11y-action-click-ancestor"_ns},
+  };
 
-  nsCOMPtr<nsIStringBundle> stringBundle;
-  stringBundleService->CreateBundle(
-      "chrome://global-platform/locale/accessible.properties",
-      getter_AddRefs(stringBundle));
-  if (!stringBundle) return;
-
-  nsAutoString xsValue;
-  nsresult rv = NS_OK;
-  if (aParams.IsEmpty()) {
-    rv = stringBundle->GetStringFromName(NS_ConvertUTF16toUTF8(aKey).get(),
-                                         xsValue);
-  } else {
-    rv = stringBundle->FormatStringFromName(NS_ConvertUTF16toUTF8(aKey).get(),
-                                            aParams, xsValue);
+  nsAutoString name;
+  ActionNameAt(aIndex, name);
+  for (const ActionL10nId& action : kActionL10nIds) {
+    if (name.Equals(action.mName)) {
+      TranslateString(action.mL10nId, aDescription);
+      return;
+    }
   }
-  if (NS_SUCCEEDED(rv)) aStringOut.Assign(xsValue);
+}
+
+void Accessible::TranslateString(const nsACString& aL10nId,
+                                 nsAString& aStringOut) {
+  TranslateString(aL10nId, {}, aStringOut);
+}
+
+void Accessible::TranslateString(const nsACString& aL10nId,
+                                 const nsTArray<intl::FluentArg>& aArgs,
+                                 nsAString& aStringOut) {
+  nsAutoString value;
+  if (NS_SUCCEEDED(nsContentUtils::FormatFluentString(
+          dom::FluentResourceFile::DOM_ACCESSIBLE, aL10nId, aArgs, value))) {
+    aStringOut.Assign(value);
+  }
 }
 
 const Accessible* Accessible::ActionAncestor() const {

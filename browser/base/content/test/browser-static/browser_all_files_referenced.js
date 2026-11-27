@@ -228,24 +228,12 @@ var allowlist = [
 
   // The l10n build system can't package string files only for some platforms.
   {
-    file: "resource://gre/chrome/en-US/locale/en-US/global-platform/mac/accessible.properties",
-    platforms: ["linux", "win"],
-  },
-  {
     file: "resource://gre/chrome/en-US/locale/en-US/global-platform/mac/platformKeys.properties",
     platforms: ["linux", "win"],
   },
   {
-    file: "resource://gre/chrome/en-US/locale/en-US/global-platform/unix/accessible.properties",
-    platforms: ["macosx", "win"],
-  },
-  {
     file: "resource://gre/chrome/en-US/locale/en-US/global-platform/unix/platformKeys.properties",
     platforms: ["macosx", "win"],
-  },
-  {
-    file: "resource://gre/chrome/en-US/locale/en-US/global-platform/win/accessible.properties",
-    platforms: ["linux", "macosx"],
   },
   {
     file: "resource://gre/chrome/en-US/locale/en-US/global-platform/win/platformKeys.properties",
@@ -339,6 +327,9 @@ var allowlist = [
   { file: "resource://gre/localization/en-US/dom/deprecations.ftl" },
   { file: "resource://gre/localization/en-US/dom/dialogs.ftl" },
   { file: "resource://gre/localization/en-US/dom/form-validation.ftl" },
+
+  // accessible/basetypes/Accessible.cpp
+  { file: "resource://gre/localization/en-US/dom/accessible.ftl" },
 
   // A QA and dev debug tool.
   { file: "chrome://browser/content/places/interactionsViewer.html" },

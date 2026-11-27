@@ -123,7 +123,7 @@ using namespace mozilla::a11y;
 @implementation mozTabAccessible
 
 - (NSString*)moxRoleDescription {
-  return utils::LocalizedString(u"tab"_ns);
+  return utils::LocalizedString("a11y-role-tab"_ns);
 }
 
 - (id)moxValue {
