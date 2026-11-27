@@ -42,10 +42,6 @@ const PREF_IS_MERINO_FEED_EXPERIMENT =
   "browser.newtabpage.activity-stream.discoverystream.merino-feed-experiment";
 const PREF_ENDPOINTS =
   "browser.newtabpage.activity-stream.discoverystream.endpoints";
-const PREF_UNIFIED_ADS_TILES_ENABLED =
-  "browser.newtabpage.activity-stream.unifiedAds.tiles.enabled";
-const PREF_UNIFIED_ADS_SPOCS_ENABLED =
-  "browser.newtabpage.activity-stream.unifiedAds.spocs.enabled";
 
 add_setup(async function setup() {
   do_get_profile();

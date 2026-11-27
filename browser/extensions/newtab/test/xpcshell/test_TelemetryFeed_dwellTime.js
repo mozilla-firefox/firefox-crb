@@ -1275,7 +1275,7 @@ add_task(
         ],
       },
     });
-    sandbox.stub(instance, "canSendUnifiedAdsTilesCallbacks").get(() => true);
+    sandbox.stub(instance, "SHOW_SPONSORED_TOPSITES_ENABLED").get(() => true);
     sandbox.stub(instance, "sendUnifiedAdsCallbackEvent");
     sandbox.stub(instance, "sendMacCallbackEvent");
 
@@ -1486,7 +1486,7 @@ add_task(
     let { instance, notify, intend, cleanup } = withNavigationTargetFeed({
       TopSites: { rows: [] },
     });
-    sandbox.stub(instance, "canSendUnifiedAdsSpocCallbacks").get(() => true);
+    sandbox.stub(instance, "SHOW_SPONSORED_STORIES_ENABLED").get(() => true);
     sandbox.stub(instance, "sendUnifiedAdsCallbackEvent");
     sandbox.stub(instance, "sendMacCallbackEvent");
 

@@ -62,8 +62,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 export const PREF_IMPRESSION_ID = "impressionId";
 export const TELEMETRY_PREF = "telemetry";
-export const PREF_UNIFIED_ADS_SPOCS_ENABLED = "unifiedAds.spocs.enabled";
-export const PREF_UNIFIED_ADS_TILES_ENABLED = "unifiedAds.tiles.enabled";
 const PREF_ENDPOINTS = "discoverystream.endpoints";
 const PREF_SHOW_SPONSORED_STORIES = "showSponsored";
 const PREF_SHOW_SPONSORED_TOPSITES = "showSponsoredTopSites";
@@ -639,22 +637,6 @@ export class TelemetryFeed {
 
   get clientInfo() {
     return lazy.ClientEnvironmentBase;
-  }
-
-  get canSendUnifiedAdsSpocCallbacks() {
-    const unifiedAdsSpocsEnabled = this._prefs.get(
-      PREF_UNIFIED_ADS_SPOCS_ENABLED
-    );
-
-    return unifiedAdsSpocsEnabled && this.SHOW_SPONSORED_STORIES_ENABLED;
-  }
-
-  get canSendUnifiedAdsTilesCallbacks() {
-    const unifiedAdsTilesEnabled = this._prefs.get(
-      PREF_UNIFIED_ADS_TILES_ENABLED
-    );
-
-    return unifiedAdsTilesEnabled && this.SHOW_SPONSORED_TOPSITES_ENABLED;
   }
 
   get telemetryClientId() {
@@ -1669,7 +1651,7 @@ export class TelemetryFeed {
       return;
     }
 
-    if (data.reporting_url && this.canSendUnifiedAdsTilesCallbacks) {
+    if (data.reporting_url && this.SHOW_SPONSORED_TOPSITES_ENABLED) {
       if (this._adsClient) {
         this.sendMacCallbackEvent(data.reporting_url, type);
       } else {
@@ -2064,7 +2046,7 @@ export class TelemetryFeed {
           );
           this.#pairDwellWithClick(dwellToken, releasedContentData);
           if (shim) {
-            if (this.canSendUnifiedAdsSpocCallbacks) {
+            if (this.SHOW_SPONSORED_STORIES_ENABLED) {
               if (this._adsClient) {
                 // Send callback event via MAC
                 this.sendMacCallbackEvent(shim, "click");
@@ -3499,7 +3481,7 @@ export class TelemetryFeed {
       );
 
       if (tile.shim) {
-        if (this.canSendUnifiedAdsSpocCallbacks) {
+        if (this.SHOW_SPONSORED_STORIES_ENABLED) {
           if (this._adsClient) {
             // Send callback event via MAC
             this.sendMacCallbackEvent(tile.shim, "impression");

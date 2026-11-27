@@ -473,7 +473,6 @@ add_task(
 
     let sandbox = sinon.createSandbox();
     Services.prefs.setStringPref(PREF_ENDPOINTS, "https://test.reporting.net/");
-    Services.prefs.setBoolPref(PREF_UNIFIED_ADS_SPOCS_ENABLED, true);
 
     sandbox.stub(AdsClient, "isEnabled").returns(true);
     const ADS_CLIENT = { recordClick: sinon.fake.resolves() };
@@ -511,7 +510,6 @@ add_task(
     Assert.ok(AdsClient.callbackOptions.calledOnce);
     Assert.ok(ADS_CLIENT.recordClick.calledOnce);
 
-    Services.prefs.clearUserPref(PREF_UNIFIED_ADS_SPOCS_ENABLED);
     Services.prefs.clearUserPref(PREF_ENDPOINTS);
     sandbox.restore();
   }
