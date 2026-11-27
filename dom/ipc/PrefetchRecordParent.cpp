@@ -128,7 +128,7 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
     return;
   }
 
-  StartFetch(aWGP);
+  aWGP->AdmitPrefetchRecord(this);
 }
 
 void PrefetchRecordParent::StartFetch(WindowGlobalParent* aWGP) {
@@ -539,9 +539,13 @@ PrefetchRecordParent::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
   mExpiryTime = TimeStamp::Now() +
                 TimeDuration::FromMilliseconds(
                     StaticPrefs::dom_speculation_rules_record_expiry_ms());
+  // The spec only checks the expiry time when a navigation looks for a match
+  // ("find a matching complete prefetch record", step 5b). An expired record
+  // is canceled instead, so it stops counting against its budget and its cache
+  // entry is released.
   NS_NewTimerWithCallback(
       getter_AddRefs(mExpiryTimer),
-      [self = RefPtr{this}](nsITimer*) { self->ReleaseCacheToken(); },
+      [self = RefPtr{this}](nsITimer*) { self->MarkCanceled(); },
       StaticPrefs::dom_speculation_rules_record_expiry_ms(),
       nsITimer::TYPE_ONE_SHOT, "PrefetchRecordParent::Expiry"_ns);
 

@@ -5073,13 +5073,22 @@
   value: 2000
   mirror: always
 
-# Maximum number of prefetch records (ongoing + completed) allowed per
-# document. Enforced in SpeculationRulesManager::StartPrefetch; excess
-# candidates are silently dropped (best-effort per spec). Lower in tests
-# to verify cap behaviour without creating 20 actual fetches.
-- name: dom.speculation_rules.max_records_per_document
+# Maximum number of "immediate" eagerness prefetch records per document that
+# are in flight or completed and not yet expired. Enforced in
+# WindowGlobalParent::AdmitPrefetchRecord; further records are canceled
+# without being fetched.
+- name: dom.speculation_rules.max_immediate_prefetches
   type: RelaxedAtomicUint32
-  value: 20
+  value: 50
+  mirror: always
+
+# Same as dom.speculation_rules.max_immediate_prefetches, for "eager",
+# "moderate" and "conservative" records, which share one budget. When it is
+# full, the oldest completed such record is canceled to make room for the new
+# one.
+- name: dom.speculation_rules.max_non_immediate_prefetches
+  type: RelaxedAtomicUint32
+  value: 5
   mirror: always
 
 # Maximum response body bytes allowed per prefetch record before the fetch

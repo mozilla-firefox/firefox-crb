@@ -469,6 +469,11 @@ class WindowGlobalParent final : public WindowContext,
   void NotifyPrefetchStateChanged(dom::PrefetchRecordParent* aRec);
   void DedupePrefetchRecords(dom::PrefetchRecordParent* aJustCompleted);
 
+  // Applies this document's prefetch budgets to aRec, which Init accepted:
+  // starts its fetch, possibly evicting an older non-immediate record to make
+  // room, or cancels it when its budget is full.
+  void AdmitPrefetchRecord(dom::PrefetchRecordParent* aRec);
+
   static void ClearPrefetchCache(nsIPrincipal* aPartitionedPrincipal);
 
   // "Find a matching complete prefetch record": synchronous lookup of a
