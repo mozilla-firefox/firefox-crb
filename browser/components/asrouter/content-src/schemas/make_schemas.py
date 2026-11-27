@@ -189,57 +189,42 @@ def patch_schema(schema, bundled_id, schema_id=None):
     if schema_id is None:
         schema_id = schema["$id"]
 
-    def patch_impl(schema):
-        ref = schema.get("$ref")
+    def patch_ref(ref):
+        uri = urlparse(ref)
+        if uri.scheme == "" and uri.netloc == "" and uri.path == "" and uri.fragment:
+            return f"{schema_id}#{uri.fragment}"
+        if (uri.scheme, uri.path) == ("file", f"/{COMMON_SCHEMA_NAME}"):
+            return f"{bundled_id}#{uri.fragment}"
+        return ref
 
-        if ref:
-            uri = urlparse(ref)
-            if (
-                uri.scheme == ""
-                and uri.netloc == ""
-                and uri.path == ""
-                and uri.fragment != ""
-            ):
-                schema["$ref"] = f"{schema_id}#{uri.fragment}"
-            elif (uri.scheme, uri.path) == ("file", f"/{COMMON_SCHEMA_NAME}"):
-                schema["$ref"] = f"{bundled_id}#{uri.fragment}"
-
-        # If `schema` is object-like, inspect each of its indivual properties
-        # and patch them.
-        properties = schema.get("properties")
-        if properties:
-            for prop in properties.keys():
-                patch_impl(properties[prop])
-
-        # If `schema` is array-like, inspect each of its items and patch them.
-        items = schema.get("items")
-        if items:
-            patch_impl(items)
-
-        # Patch each `if`, `then`, `else`, and `not` sub-schema that is present.
-        for key in ("if", "then", "else", "not"):
-            if key in schema:
-                patch_impl(schema[key])
-
-        # Patch the items of each `oneOf`, `allOf`, and `anyOf` sub-schema that
-        # is present.
-        for key in ("oneOf", "allOf", "anyOf"):
-            subschema = schema.get(key)
-            if subschema:
-                for i, alternate in enumerate(subschema):
-                    patch_impl(alternate)
-
-    # Patch the top-level type defined in the schema.
-    patch_impl(schema)
-
-    # Patch each named definition in the schema.
-    for key in ("$defs", "definitions"):
-        defns = schema.get(key)
-        if defns:
-            for defn_name, defn_value in defns.items():
-                patch_impl(defn_value)
+    for node in iter_refs(schema):
+        node["$ref"] = patch_ref(node["$ref"])
 
     return schema
+
+
+def iter_refs(node):
+    """Yield every subschema within `node` that has a `$ref`."""
+    if isinstance(node, dict):
+        if isinstance(node.get("$ref"), str):
+            yield node
+        for value in node.values():
+            yield from iter_refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from iter_refs(item)
+
+
+def check_refs(schema):
+    """Check that every `$ref` in the bundled schema resolves"""
+    resolver = NestedRefResolver(schema)
+    for node in iter_refs(schema):
+        try:
+            resolver.resolve(node["$ref"])
+        except jsonschema.exceptions.RefResolutionError as e:
+            raise ValueError(
+                f"{schema['$id']} has an unresolvable $ref: {node['$ref']}"
+            ) from e
 
 
 def bundle_schema(schema_def: SchemaDefinition):
@@ -458,6 +443,7 @@ def main(check=False):
     for schema_def in SCHEMAS:
         print(f"Generating {schema_def.schema_path} ...")
         schema = bundle_schema(schema_def)
+        check_refs(schema)
 
         if check:
             print(f"Checking {schema_def.schema_path} ...")

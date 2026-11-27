@@ -364,7 +364,7 @@
               "description": "Map of Fluent data-l10n-name keys to real URLs",
               "type": "object",
               "additionalProperties": {
-                "$ref": "#/$defs/linkUrl"
+                "$ref": "file:///InfoBar.schema.json#/$defs/linkUrl"
               }
             },
             "linkActions": {
