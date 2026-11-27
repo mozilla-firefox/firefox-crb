@@ -17,9 +17,11 @@
 #include "nsContentPolicyUtils.h"
 #include "nsIAsyncVerifyRedirectCallback.h"
 #include "nsICacheEntry.h"
+#include "nsICacheInfoChannel.h"
 #include "nsICachingChannel.h"
 #include "nsIHttpChannel.h"
 #include "nsILoadInfo.h"
+#include "nsIWeakReferenceUtils.h"
 #include "nsMixedContentBlocker.h"
 #include "nsNetUtil.h"
 #include "nsStreamUtils.h"
@@ -296,6 +298,27 @@ void PrefetchRecordParent::AppendRedirectChainEntry(nsIURI* aURI) {
   mRedirectChain.AppendElement(std::move(rec));
 }
 
+// Don't use prefetch responses that do not have an OK status.
+// Spec: https://wicg.github.io/nav-speculation/prefetch.html#supports-prefetch
+bool PrefetchRecordParent::FinalResponseSupportsPrefetch() const {
+  if (mRedirectChain.IsEmpty()) {
+    return true;
+  }
+  uint32_t status = mRedirectChain.LastElement().mResponseStatus;
+  return status >= 200 && status <= 299;
+}
+
+void PrefetchRecordParent::MarkActivated(nsIChannel* aNavigation) {
+  mOutcome = Outcome::Used;
+  mNavigation = do_GetWeakReference(aNavigation);
+}
+
+bool PrefetchRecordParent::IsFeedingNavigation() const {
+  nsCOMPtr<nsIChannel> navigation = do_QueryReferent(mNavigation);
+  bool pending = false;
+  return navigation && NS_SUCCEEDED(navigation->IsPending(&pending)) && pending;
+}
+
 void PrefetchRecordParent::FillResponseOnLastEntry(nsIChannel* aChannel) {
   if (mRedirectChain.IsEmpty()) {
     return;
@@ -453,8 +476,9 @@ bool PrefetchRecordParent::IsReferrerPolicySufficientlyStrict() const {
 
 NS_IMETHODIMP
 PrefetchRecordParent::OnStartRequest(nsIRequest* aRequest) {
-  nsCOMPtr<nsIChannel> ch = do_QueryInterface(aRequest);
-  FillResponseOnLastEntry(ch);
+  // A redirected prefetch ends on the last hop.
+  mChannel = do_QueryInterface(aRequest);
+  FillResponseOnLastEntry(mChannel);
   if (nsCOMPtr<nsICachingChannel> caching = do_QueryInterface(aRequest)) {
     (void)caching->GetCacheToken(getter_AddRefs(mCacheToken));
   }
@@ -468,6 +492,54 @@ PrefetchRecordParent::OnStartRequest(nsIRequest* aRequest) {
     LOG_SPECRULES(("PrefetchRecordParent::OnStartRequest: this=%p status=%u",
                    this, status));
   }
+
+  // OnStopRequest cancels the record for a failed or non-OK response.
+  nsresult status = NS_OK;
+  aRequest->GetStatus(&status);
+  if (mState != PrefetchState::Ongoing || NS_FAILED(status) ||
+      !FinalResponseSupportsPrefetch()) {
+    return NS_OK;
+  }
+
+  auto* wgp = static_cast<WindowGlobalParent*>(Manager());
+
+  // Implements "complete a prefetch record", which the spec runs once the
+  // response head has arrived; the body keeps streaming into the HTTP cache
+  // entry, which an activated navigation reads while it is being written.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-complete
+  // Step 1: assert document is fully active.
+  if (!wgp || wgp->IsClosed()) {
+    return NS_OK;
+  }
+
+  if (nsCOMPtr<nsICacheInfoChannel> cacheInfo = do_QueryInterface(aRequest)) {
+    bool fromCache = false;
+    (void)cacheInfo->IsFromCache(&fromCache);
+    mFinalResponseHadNetworkTransfer = !fromCache;
+  }
+
+  // Steps 2-3: compute expiry time (currentTime + 5 min per spec; pref allows
+  // shorter values in tests).
+  mExpiryTime = TimeStamp::Now() +
+                TimeDuration::FromMilliseconds(
+                    StaticPrefs::dom_speculation_rules_record_expiry_ms());
+  NS_NewTimerWithCallback(
+      getter_AddRefs(mExpiryTimer),
+      [self = RefPtr{this}](nsITimer*) { self->ReleaseCacheToken(); },
+      StaticPrefs::dom_speculation_rules_record_expiry_ms(),
+      nsITimer::TYPE_ONE_SHOT, "PrefetchRecordParent::Expiry"_ns);
+
+  // Step 4: remove prior completed records with the same URL.
+  wgp->DedupePrefetchRecords(this);
+  // Step 5: set state to "completed".
+  mState = PrefetchState::Completed;
+  // Step 6: trigger a prefetch status updated event ("ready").
+  FirePrefetchStatusUpdated(true);
+  wgp->NotifyPrefetchStateChanged(this);
+
+  LOG_SPECRULES(
+      ("PrefetchRecordParent::OnStartRequest: this=%p completed", this));
   return NS_OK;
 }
 
@@ -477,7 +549,7 @@ PrefetchRecordParent::OnDataAvailable(nsIRequest* aRequest,
                                       uint32_t aCount) {
   mBytesReceived += aCount;
   uint32_t maxBytes = StaticPrefs::dom_speculation_rules_max_body_bytes();
-  if (mBytesReceived > maxBytes) {
+  if (mBytesReceived > maxBytes && !IsFeedingNavigation()) {
     LOG_SPECRULES_WARN(
         ("PrefetchRecordParent::OnDataAvailable: this=%p body cap exceeded "
          "(%" PRIu64 " > %u); canceling",
@@ -514,56 +586,21 @@ PrefetchRecordParent::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
       reason = PrefetchNavigationResult::Canceled;
     }
     MarkCanceled(reason);
-    return NS_OK;
+  } else if (!FinalResponseSupportsPrefetch()) {
+    LOG_SPECRULES_WARN(
+        ("PrefetchRecordParent::OnStopRequest: this=%p final status does not "
+         "support prefetch; discarding",
+         this));
+    MarkCanceled(PrefetchNavigationResult::HttpError);
+  } else if (mOutcome == Outcome::Incomplete) {
+    mOutcome = Outcome::Unused;
   }
 
-  // dont use prefetch responses that does not have OK status
-  // Spec Ref:
-  // https://wicg.github.io/nav-speculation/prefetch.html#supports-prefetch
-  if (!mRedirectChain.IsEmpty()) {
-    uint32_t status = mRedirectChain.LastElement().mResponseStatus;
-    if (status < 200 || status > 299) {
-      LOG_SPECRULES_WARN(
-          ("PrefetchRecordParent::OnStopRequest: this=%p final status %u does "
-           "not support prefetch; discarding",
-           this, status));
-      MarkCanceled(PrefetchNavigationResult::HttpError);
-      return NS_OK;
-    }
+  if (mDataUsagePending) {
+    RecordDataUsage();
   }
 
-  auto* wgp = static_cast<WindowGlobalParent*>(Manager());
-
-  // Implements "complete a prefetch record".
-  // Spec:
-  // https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-complete
-  // Step 1: assert document is fully active.
-  if (!wgp || wgp->IsClosed()) {
-    return NS_OK;
-  }
-
-  // Steps 2-3: compute expiry time (currentTime + 5 min per spec; pref allows
-  // shorter values in tests).
-  mExpiryTime = TimeStamp::Now() +
-                TimeDuration::FromMilliseconds(
-                    StaticPrefs::dom_speculation_rules_record_expiry_ms());
-  NS_NewTimerWithCallback(
-      getter_AddRefs(mExpiryTimer),
-      [self = RefPtr{this}](nsITimer*) { self->ReleaseCacheToken(); },
-      StaticPrefs::dom_speculation_rules_record_expiry_ms(),
-      nsITimer::TYPE_ONE_SHOT, "PrefetchRecordParent::Expiry"_ns);
-
-  // Step 4: remove prior completed records with the same URL.
-  wgp->DedupePrefetchRecords(this);
-  // Step 5: set state to "completed".
-  mState = PrefetchState::Completed;
-  mOutcome = Outcome::Unused;
-  // Step 6: trigger a prefetch status updated event ("ready").
-  FirePrefetchStatusUpdated(true);
-  wgp->NotifyPrefetchStateChanged(this);
-
-  LOG_SPECRULES(
-      ("PrefetchRecordParent::OnStopRequest: this=%p completed", this));
+  LOG_SPECRULES(("PrefetchRecordParent::OnStopRequest: this=%p done", this));
   return NS_OK;
 }
 
@@ -691,7 +728,9 @@ void PrefetchRecordParent::MarkCanceled(PrefetchNavigationResult aReason) {
   mCancelReason = aReason;
   ReleaseCacheToken();
 
-  if (mChannel) {  // Step 4: abort the fetch controller
+  // Step 4: abort the fetch controller, unless a navigation is still reading
+  // the response as it arrives.
+  if (mChannel && !IsFeedingNavigation()) {
     mChannel->Cancel(NS_BINDING_ABORTED);
     mChannel = nullptr;
   }
@@ -720,13 +759,17 @@ void PrefetchRecordParent::ActorDestroy(ActorDestroyReason aReason) {
                  static_cast<int>(aReason)));
   // Safety net: ensure the channel is canceled if we die mid-flight
   // (covers PWindowGlobal teardown, tab close, content process crash).
-  if (mChannel && mState == PrefetchState::Ongoing) {
+  if (mChannel && !IsFeedingNavigation()) {
     mChannel->Cancel(NS_BINDING_ABORTED);
     mChannel = nullptr;
   }
   ReleaseCacheToken();
 
-  RecordDataUsage();
+  // A fetch left feeding a navigation is recorded once its size is known.
+  mDataUsagePending = !!mChannel;
+  if (!mDataUsagePending) {
+    RecordDataUsage();
+  }
 }
 
 uint64_t PrefetchRecordParent::AccumulateTransferSize(nsIRequest* aRequest) {

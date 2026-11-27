@@ -40,6 +40,36 @@ function handleRequest(request, response) {
     body += "x".repeat(1024);
   }
 
+  // ?slowbody=<ms>: send the headers and the body so far at once, and hold
+  // back the end of the body.
+  if (params.has("slowbody")) {
+    // Without a charset the parser waits for more of the body to sniff it.
+    response.setHeader("Content-Type", "text/html; charset=utf-8", false);
+    const end = "<p id=end>end</p>";
+    // ?length=1: declare the body's length rather than leave it open-ended.
+    if (params.has("length")) {
+      response.setHeader(
+        "Content-Length",
+        String(body.length + end.length),
+        false
+      );
+    }
+    response.processAsync();
+    response.write(body);
+    const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    pendingTimers.add(timer);
+    timer.init(
+      () => {
+        pendingTimers.delete(timer);
+        response.write(end);
+        response.finish();
+      },
+      Number(params.get("slowbody")),
+      Ci.nsITimer.TYPE_ONE_SHOT
+    );
+    return;
+  }
+
   // ?slow=<ms>: hold back the whole response, headers included, so a
   // prefetch of this target is still in flight when the test navigates.
   // ?status=<code> with it answers with that status instead of 200.

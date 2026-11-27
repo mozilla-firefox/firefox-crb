@@ -22,6 +22,7 @@
 #include "nsIStreamListener.h"
 #include "nsITimer.h"
 #include "nsIURI.h"
+#include "nsIWeakReference.h"
 #include "nsString.h"
 #include "nsTArray.h"
 
@@ -97,8 +98,10 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   void MarkCanceled(
       PrefetchNavigationResult aReason = PrefetchNavigationResult::Canceled);
 
-  // Called when a navigation activates this record.
-  void MarkActivated() { mOutcome = Outcome::Used; }
+  // Called when aNavigation activates this record. While that channel is
+  // loading, the fetch is neither canceled nor held to the body cap: the
+  // navigation may be reading the response as it arrives.
+  void MarkActivated(nsIChannel* aNavigation);
 
   // Implements "prefetch record matches a URL" using the completed response's
   // No-Vary-Search header.
@@ -133,6 +136,8 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   bool PrefetchIPAnonymizationPolicyRequiresAnonymity(nsIURI* aURI) const;
   void AppendRedirectChainEntry(nsIURI* aURI);
   void FillResponseOnLastEntry(nsIChannel* aChannel);
+  bool FinalResponseSupportsPrefetch() const;
+  bool IsFeedingNavigation() const;
   nsString ComputePartitionKeyForChannel(nsIChannel* aChannel) const;
   bool IsReferrerPolicySufficientlyStrict() const;
   void ReleaseCacheToken();
@@ -149,7 +154,10 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   nsString mNoVarySearchHint;
   PrefetchSource mSource = PrefetchSource::SpeculationRules;
   PrefetchState mState = PrefetchState::Ongoing;
+  // The fetch's current channel; null once it has stopped.
   nsCOMPtr<nsIChannel> mChannel;
+  // The navigation channel that last activated this record.
+  nsWeakPtr mNavigation;
   // Keeps the response's HTTP cache entry alive so activation can be served
   // from it; no-store responses would otherwise be purged as expired.
   nsCOMPtr<nsISupports> mCacheToken;
@@ -174,6 +182,8 @@ class PrefetchRecordParent final : public PPrefetchRecordParent,
   // On-the-wire bytes, summed over the redirect chain.
   uint64_t mTransferSize = 0;
   bool mFinalResponseHadNetworkTransfer = false;
+  // The actor went away while the fetch was still feeding a navigation.
+  bool mDataUsagePending = false;
 
  protected:
   ~PrefetchRecordParent() = default;

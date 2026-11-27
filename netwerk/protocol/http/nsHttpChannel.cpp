@@ -5372,16 +5372,22 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, uint32_t* aResult) {
     rv = CheckPartial(entry, &size, &contentLength);
     NS_ENSURE_SUCCESS(rv, rv);
 
-    if (contentLength != int64_t(-1) && contentLength != size) {
-      *aResult = ENTRY_NOT_WANTED;
-      return NS_OK;
-    }
+    // A speculation-rules prefetch that is still being written is read
+    // concurrently, which is set up below.
+    bool inFlightPrefetch = size == int64_t(-1) &&
+                            mLoadInfo->GetActivatedFromNavigationalPrefetch();
+    if (!inFlightPrefetch) {
+      if (contentLength != int64_t(-1) && contentLength != size) {
+        *aResult = ENTRY_NOT_WANTED;
+        return NS_OK;
+      }
 
-    rv = OpenCacheInputStream(entry, true);
-    if (NS_SUCCEEDED(rv)) {
-      StoreCachedContentIsValid(CachedContentValidity::Valid);
+      rv = OpenCacheInputStream(entry, true);
+      if (NS_SUCCEEDED(rv)) {
+        StoreCachedContentIsValid(CachedContentValidity::Valid);
+      }
+      return rv;
     }
-    return rv;
   }
 
   bool wantCompleteEntry = false;
@@ -5422,8 +5428,12 @@ nsHttpChannel::OnCacheEntryCheck(nsICacheEntry* entry, uint32_t* aResult) {
         return NS_OK;
       }
 
-      // Ignore !(size > 0) from the resumability condition
-      if (!IsResumable(size, contentLength, true)) {
+      // Ignore !(size > 0) from the resumability condition. The prefetch
+      // writing the entry of a navigation activated from it is that
+      // navigation's fetch, so it is read as it arrives even though no range
+      // request could complete it.
+      if (!IsResumable(size, contentLength, true) &&
+          !mLoadInfo->GetActivatedFromNavigationalPrefetch()) {
         if (IsNavigation()) {
           LOG(
               ("  bypassing wait for the entry, "

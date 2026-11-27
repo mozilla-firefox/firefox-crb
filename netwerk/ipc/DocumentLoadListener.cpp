@@ -660,7 +660,7 @@ void DocumentLoadListener::ActivateFromPrefetch(
     dom::PrefetchRecordParent* aRec) {
   auto* sourceWGP = static_cast<WindowGlobalParent*>(aRec->Manager());
 
-  aRec->MarkActivated();
+  aRec->MarkActivated(mChannel);
 
   // "Copy prefetch cookies": copy cookies from the isolated partition to the
   // destination partition.
