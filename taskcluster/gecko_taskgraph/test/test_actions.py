@@ -3,7 +3,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
+import requests
 import yaml
 from mozunit import main
 from pytest_taskgraph import make_graph, make_task
@@ -13,7 +16,7 @@ from taskgraph.util import json
 from taskgraph.util.taskcluster import _task_definitions_cache
 
 from gecko_taskgraph import decision
-from gecko_taskgraph.actions import trigger_action_callback
+from gecko_taskgraph.actions import ab_profiles, trigger_action_callback
 from gecko_taskgraph.actions.confirm_failure import confirm_modifier
 
 ROOT_URL = "https://taskcluster.example.com"
@@ -1202,6 +1205,195 @@ def test_ab_profiles_push_action_rejects_unsupported_task(
                 "base_revision": AB_PROFILES_BASE_REV,
             },
         )
+
+
+LANDO_JOB_URL = "https://lando.moz.tools/landing_jobs/124890/"
+
+
+@pytest.fixture
+def run_ab_profiles_from_try_config(
+    ab_profiles_mocks, mocker, monkeypatch, parameters, graph_config, artifact_dir
+):
+    monkeypatch.setattr(create, "testing", True)
+    monkeypatch.setenv("TASK_ID", "gid")
+    sleep = mocker.patch("gecko_taskgraph.actions.ab_profiles.time.sleep")
+
+    def inner(config):
+        parameters.update({
+            "head_rev": "newrev123456789",
+            "project": "try",
+            "try_task_config": {"ab": config},
+        })
+        decision.write_artifact("task-graph.json", {"decisiontaskid": {}})
+        decision.write_artifact(
+            "label-to-taskid.json", {AB_PROFILES_BUILD_LABEL: "newbuildtid"}
+        )
+        ab_profiles.create_ab_tasks_from_try_config(
+            parameters,
+            graph_config,
+            "gid",
+            ab_profiles_graph(),
+            {AB_PROFILES_BUILD_LABEL: "newbuildtid"},
+        )
+        return sleep
+
+    return inner
+
+
+def test_ab_profiles_from_try_config_waits_for_the_base_push(
+    run_ab_profiles_from_try_config, mocker, responses, get_artifact
+):
+    responses.get(LANDO_JOB_URL, json={"status": "IN_PROGRESS"})
+    responses.get(
+        LANDO_JOB_URL, json={"status": "LANDED", "commit_id": AB_PROFILES_BASE_REV}
+    )
+    not_found = TaskclusterRestFailure("not found", None, status_code=404)
+    find_decision_task = mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.find_decision_task",
+        side_effect=[not_found, "basedecisiontid", "basedecisiontid"],
+    )
+
+    sleep = run_ab_profiles_from_try_config({
+        "tasks": [AB_PROFILES_LABEL],
+        "base-lando-instance": "lando-prod-2025",
+        "base-lando-job-id": 124890,
+    })
+
+    assert sleep.call_count == 2
+    assert find_decision_task.call_args.args[0]["head_rev"] == AB_PROFILES_BASE_REV
+    task_id = get_artifact("label-to-taskid-ab.json")[AB_PROFILES_LABEL]
+    task_def = get_artifact("task-graph-ab.json")[task_id]["task"]
+    assert task_def["metadata"]["name"] == f"{AB_PROFILES_LABEL}-ab"
+    assert {"basebuildtid", "newbuildtid"} <= set(task_def["dependencies"])
+
+    # The decision task's own artifacts list the new task as well.
+    assert set(get_artifact("task-graph.json")) == {"decisiontaskid", task_id}
+    assert get_artifact("label-to-taskid.json") == {
+        AB_PROFILES_BUILD_LABEL: "newbuildtid",
+        AB_PROFILES_LABEL: task_id,
+    }
+
+
+def test_ab_profiles_from_try_config_retries_transient_errors(
+    run_ab_profiles_from_try_config, mocker, responses, get_artifact
+):
+    responses.get(LANDO_JOB_URL, status=502)
+    responses.get(LANDO_JOB_URL, body=requests.ConnectionError("dropped"))
+    responses.get(
+        LANDO_JOB_URL, json={"status": "LANDED", "commit_id": AB_PROFILES_BASE_REV}
+    )
+    unavailable = TaskclusterRestFailure("unavailable", None, status_code=503)
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.find_decision_task",
+        side_effect=[unavailable, "basedecisiontid", "basedecisiontid"],
+    )
+
+    sleep = run_ab_profiles_from_try_config({
+        "tasks": [AB_PROFILES_LABEL],
+        "base-lando-instance": "lando-prod-2025",
+        "base-lando-job-id": 124890,
+    })
+
+    assert sleep.call_count == 3
+    assert AB_PROFILES_LABEL in get_artifact("label-to-taskid-ab.json")
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {},
+        {"base-lando-instance": "lando-prod-2025"},
+        {"base-lando-job-id": 124890},
+    ],
+)
+def test_ab_profiles_from_try_config_needs_a_base(
+    run_ab_profiles_from_try_config, config
+):
+    with pytest.raises(Exception, match='needs either "base-revision"'):
+        run_ab_profiles_from_try_config({"tasks": [AB_PROFILES_LABEL], **config})
+
+
+@pytest.mark.parametrize(
+    "started_minutes_ago, expected_wait",
+    [
+        # Plenty of maxRunTime left: wait for the full timeout.
+        (0, ab_profiles.BASE_PUSH_TIMEOUT),
+        # 30 - 20 minutes are left, minus the margin.
+        (20, 30 * 60 - 20 * 60 - ab_profiles.DECISION_TASK_MARGIN),
+        # Within the margin already: the deadline has passed.
+        (28, 30 * 60 - 28 * 60 - ab_profiles.DECISION_TASK_MARGIN),
+    ],
+)
+def test_ab_profiles_wait_deadline(mocker, started_minutes_ago, expected_wait):
+    started = datetime.now(timezone.utc) - timedelta(minutes=started_minutes_ago)
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.status_task",
+        return_value={"runs": [{"started": started.isoformat()}]},
+    )
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.get_task_definition",
+        return_value={"payload": {"maxRunTime": 30 * 60}},
+    )
+    mocker.patch("gecko_taskgraph.actions.ab_profiles.time.monotonic", return_value=0)
+
+    deadline = ab_profiles.wait_deadline("gid")
+
+    assert deadline == pytest.approx(expected_wait, abs=2)
+
+
+def test_ab_profiles_lando_instance_without_instance_id(monkeypatch, tmp_path):
+    (tmp_path / ".lando.ini").write_text(
+        "[lando-old]\napi_domain = old.example.com\n"
+        "[lando-new]\ninstance_id = lando-2025\napi_domain = new.example.com\n"
+    )
+    monkeypatch.setattr(ab_profiles, "GECKO", str(tmp_path))
+
+    assert ab_profiles.lando_api_domain("lando-old") == "old.example.com"
+    assert ab_profiles.lando_api_domain("lando-2025") == "new.example.com"
+
+
+def test_ab_profiles_from_try_config_with_a_base_revision(
+    run_ab_profiles_from_try_config, get_artifact
+):
+    run_ab_profiles_from_try_config({
+        "tasks": [AB_PROFILES_LABEL],
+        "base-revision": AB_PROFILES_BASE_REV,
+        "order": "new,base",
+    })
+
+    task_id = get_artifact("label-to-taskid-ab.json")[AB_PROFILES_LABEL]
+    task_def = get_artifact("task-graph-ab.json")[task_id]["task"]
+    config = json.loads(task_def["payload"]["env"]["RAPTOR_AB_CONFIG"])
+    assert config["order"] == ["new", "base"]
+    assert "basebuildtid" in config["runs"]["base"]["installer_url"]
+
+
+def test_ab_profiles_from_try_config_times_out(
+    run_ab_profiles_from_try_config, mocker, responses
+):
+    responses.get(LANDO_JOB_URL, json={"status": "IN_PROGRESS"})
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.time.monotonic",
+        side_effect=[0, 0, ab_profiles.BASE_PUSH_TIMEOUT],
+    )
+    with pytest.raises(Exception, match="Timed out waiting for Lando landing job"):
+        run_ab_profiles_from_try_config({
+            "tasks": [AB_PROFILES_LABEL],
+            "base-lando-instance": "lando-prod-2025",
+            "base-lando-job-id": 124890,
+        })
+
+
+def test_ab_profiles_from_try_config_failed_landing(
+    run_ab_profiles_from_try_config, responses
+):
+    responses.get(LANDO_JOB_URL, json={"status": "FAILED", "error": "conflict"})
+    with pytest.raises(Exception, match="124890 is FAILED: conflict"):
+        run_ab_profiles_from_try_config({
+            "tasks": [AB_PROFILES_LABEL],
+            "base-lando-instance": "lando-prod-2025",
+            "base-lando-job-id": 124890,
+        })
 
 
 def test_ab_profiles_requires_a_base(mocker, run_action):

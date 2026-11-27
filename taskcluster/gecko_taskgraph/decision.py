@@ -346,6 +346,26 @@ def taskgraph_decision(options, parameters, bugbug_result_path=None):
             decision_task_id=decision_task_id,
         )
 
+        if tgg.parameters["try_task_config"].get("ab"):
+            from .actions.ab_profiles import create_ab_tasks_from_try_config
+
+            # Failing now would keep the tasks created above from running.
+            try:
+                create_ab_tasks_from_try_config(
+                    tgg.parameters,
+                    tgg.graph_config,
+                    decision_task_id,
+                    # The optimizer rewrote some of full_task_graph's tasks in
+                    # place, so read the graph back as the actions do.
+                    TaskGraph.from_json(read_artifact("full-task-graph.json"))[1],
+                    tgg.label_to_taskid,
+                )
+            except Exception:
+                logger.exception(
+                    "Could not create the AB tasks. Trigger the "
+                    "ab-profiles-push action on this push to create them."
+                )
+
         # write bugbug scheduling information if it was invoked or is ready
         bugbug_data = None
         if push_schedules.cache_info().currsize > 0:
