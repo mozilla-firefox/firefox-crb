@@ -1503,7 +1503,7 @@ void CanvasRenderingContext2D::OnRemoteCanvasRestored() {
 }
 
 void CanvasRenderingContext2D::OnRemoteCanvasReset(
-    const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds) {
+    const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds, bool aRestore) {
   auto* bufferProvider = GetBufferProvider();
   if (!bufferProvider) {
     return;
@@ -1516,7 +1516,9 @@ void CanvasRenderingContext2D::OnRemoteCanvasReset(
   }
 
   OnRemoteCanvasLost();
-  OnRemoteCanvasRestored();
+  if (aRestore) {
+    OnRemoteCanvasRestored();
+  }
 }
 
 void CanvasRenderingContext2D::SetStyleFromString(const nsACString& aStr,
