@@ -193,7 +193,7 @@ export const BrowserWindowTracker = {
    *   false to restrict the search to non-private windows.
    *   If the property is not provided, search for either. If permanent private
    *   browsing is enabled this option will be ignored!
-   * @param {boolean} [options.allowPopups]: true if popup windows are
+   * @param {boolean} [options.allowPopups] true if popup windows are
    *   permitted.
    * @param {boolean} [options.allowTaskbarTabs] true if taskbar tab windows
    *  are permitted.
@@ -318,6 +318,10 @@ export const BrowserWindowTracker = {
    *   True to make the window a private browsing window.
    * @param {boolean} [options.aiWindow]
    *   True to make the window an AI browsing window.
+   * @param {string} [options.restoreSessionURL]
+   *   For an AI window that session restore is reopening, the URL of its
+   *   selected tab. The window then skips its start page, and opens in immersive
+   *   view if that URL calls for it.
    * @param {string} [options.features]
    *   Additional window features to give the new window.
    * @param {boolean} [options.all]
@@ -450,14 +454,14 @@ export const BrowserWindowTracker = {
   },
 
   /**
-   * Array of browser windows ordered by z-index, in reverse order.
-   * This means that the top-most browser window will be the first item.
+   * Array of browser windows, most recently activated first, with minimized
+   * windows moved to the end.
    *
    * @param {object} options
-   * @param {boolean}  [options.private]
-   *   If set, returns only windows with the specified privateness. i.e. `true`
-   *   will return only private windows. The default value, `null`, will return
-   *   all windows.
+   * @param {boolean} [options.private]
+   *   If set, returns only windows with the specified privateness, i.e. `true`
+   *   returns only private windows. If omitted, returns all windows.
+   * @returns {Window[]}
    */
   getOrderedWindows({ private: isPrivate = undefined } = {}) {
     const nonMinimized = [];
