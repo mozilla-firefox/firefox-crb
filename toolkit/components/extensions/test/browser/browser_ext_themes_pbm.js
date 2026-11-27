@@ -347,6 +347,33 @@ add_task(async function test_theme_switch_updates_existing_pbm_win() {
   await BrowserTestUtils.closeWindow(pbmWindow);
 });
 
+// Normal windows opened from a PBM window should not inherit its dark theme.
+add_task(async function test_normal_window_opened_from_pbm_window() {
+  let pbmWindow = await BrowserTestUtils.openNewBrowserWindow({
+    private: true,
+  });
+  await testWindowColorScheme({
+    win: pbmWindow,
+    expectDark: true,
+    expectLWT: true,
+    expectNonNativeTheme: true,
+  });
+
+  let newWindowPromise = BrowserTestUtils.waitForNewWindow();
+  pbmWindow.OpenBrowserWindow();
+  let win = await newWindowPromise;
+
+  info("Normal window opened from private window should not be in dark mode.");
+  await testWindowColorScheme({
+    win,
+    expectDark: false,
+    expectNonNativeTheme: false,
+  });
+
+  await BrowserTestUtils.closeWindow(win);
+  await BrowserTestUtils.closeWindow(pbmWindow);
+});
+
 // pageInfo windows should inherit the PBM window dark theme.
 add_task(async function test_pbm_dark_page_info() {
   for (let isPBM of [false, true]) {

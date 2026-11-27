@@ -495,6 +495,13 @@ LightweightThemeConsumer.prototype = {
       return null;
     })();
 
+    // Reset any color scheme override inherited from our opener.
+    // NOTE(emilio): The !parent check shouldn't be needed ideally, but
+    // apparently Thunderbird uses this code on child frames? See bug 1752815.
+    let bc = this._win.browsingContext;
+    if (!bc.parent) {
+      bc.prefersColorSchemeOverride = "none";
+    }
     this._ensureColorSchemeMetaTag().content =
       toolbarColorScheme || "light dark";
     if (updateGlobalThemeData) {
