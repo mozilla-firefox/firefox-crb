@@ -262,7 +262,7 @@ var allowlist = [
   // Starting from here, files in the allowlist are bugs that need fixing.
   // Bug 1339424 (wontfix?)
   {
-    file: "chrome://browser/locale/taskbar.properties",
+    file: "resource://app/localization/en-US/browser/jumpLists.ftl",
     platforms: ["linux", "macosx"],
   },
   // Bug 1348559

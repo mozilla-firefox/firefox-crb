@@ -30,10 +30,8 @@ ChromeUtils.defineLazyGetter(lazy, "_prefs", function () {
   return Services.prefs.getBranch(PREF_TASKBAR_BRANCH);
 });
 
-ChromeUtils.defineLazyGetter(lazy, "_stringBundle", function () {
-  return Services.strings.createBundle(
-    "chrome://browser/locale/taskbar.properties"
-  );
+ChromeUtils.defineLazyGetter(lazy, "l10n", function () {
+  return new Localization(["browser/jumpLists.ftl"]);
 });
 
 ChromeUtils.defineLazyGetter(lazy, "logConsole", function () {
@@ -63,22 +61,14 @@ ChromeUtils.defineESModuleGetters(lazy, {
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
 });
 
-/**
- * Global functions
- */
-
-function _getString(name) {
-  return lazy._stringBundle.GetStringFromName(name);
-}
-
 // Task list configuration data object.
 
 var tasksCfg = [
   /**
    * Task configuration options: title, description, args, iconIndex, open, close.
    *
-   * title       - Task title displayed in the list. (strings in the table are temp fillers.)
-   * description - Tooltip description on the list item.
+   * l10nId      - Fluent ID with the title (.label) displayed in the list and
+   *               the tooltip description (.description) of the list item.
    * args        - Command line args to invoke the task.
    * iconIndex   - Optional win icon index into the main application for the
    *               list item.
@@ -87,12 +77,7 @@ var tasksCfg = [
    */
   // Open new tab
   {
-    get title() {
-      return _getString("taskbar.tasks.newTab.label");
-    },
-    get description() {
-      return _getString("taskbar.tasks.newTab.description");
-    },
+    l10nId: "jump-list-task-new-tab",
     args: ["-new-tab", "about:blank"],
     iconIndex: 3, // New window icon
     open: true,
@@ -103,12 +88,7 @@ var tasksCfg = [
 
   // Open new window
   {
-    get title() {
-      return _getString("taskbar.tasks.newWindow.label");
-    },
-    get description() {
-      return _getString("taskbar.tasks.newWindow.description");
-    },
+    l10nId: "jump-list-task-new-window",
     args: ["-browser"],
     iconIndex: 2, // New tab icon
     open: true,
@@ -119,12 +99,7 @@ var tasksCfg = [
 
 // Open new private window
 let privateWindowTask = {
-  get title() {
-    return _getString("taskbar.tasks.newPrivateWindow.label");
-  },
-  get description() {
-    return _getString("taskbar.tasks.newPrivateWindow.description");
-  },
+  l10nId: "jump-list-task-new-private-window",
   args: ["-private-window"],
   iconIndex: 4, // Private browsing mode icon
   open: true,
@@ -214,10 +189,16 @@ var Builder = class {
       let taskDescriptions = [];
 
       if (this._showTasks) {
-        taskDescriptions = this._tasks.map(task => {
+        let messages = await lazy.l10n.formatMessages(
+          this._tasks.map(task => ({ id: task.l10nId }))
+        );
+        taskDescriptions = this._tasks.map((task, i) => {
+          let attrs = Object.fromEntries(
+            messages[i].attributes.map(({ name, value }) => [name, value])
+          );
           return {
-            title: task.title,
-            description: task.description,
+            title: attrs.label,
+            description: attrs.description,
             path: selfPath,
             arguments: task.args,
             fallbackIconIndex: task.iconIndex,
@@ -273,7 +254,7 @@ var Builder = class {
           });
         }
 
-        customTitle = _getString("taskbar.frequent.label");
+        customTitle = await lazy.l10n.formatValue("jump-list-frequent");
       }
 
       if (!this._shuttingDown) {
