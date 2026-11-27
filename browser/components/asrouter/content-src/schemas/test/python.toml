@@ -1,0 +1,4 @@
+[DEFAULT]
+subsuite = "fxms"
+
+["test_make_schemas.py"]
