@@ -1896,6 +1896,8 @@ skip-if = [
 
 ["test_synthesized_response.js"]
 
+["test_tcpsocket_tls_open_race.js"]
+
 ["test_te_remove.js"]
 
 ["test_throttlechannel.js"]

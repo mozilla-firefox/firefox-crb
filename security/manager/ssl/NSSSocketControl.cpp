@@ -547,6 +547,11 @@ NS_IMETHODIMP
 NSSSocketControl::SetHandshakeCallbackListener(
     nsITlsHandshakeCallbackListener* callback) {
   COMMON_SOCKET_CONTROL_ASSERT_ON_OWNING_THREAD();
+  if (callback && mHandshakeCompleted) {
+    mTlsHandshakeCallback = nullptr;
+    (void)callback->HandshakeDone();
+    return NS_OK;
+  }
   mTlsHandshakeCallback = callback;
   return NS_OK;
 }
