@@ -1349,7 +1349,7 @@ arena_chunk_t* arena_t::PurgeGetSpareChunk(PurgeStats& aStats)
 }
 
 arena_chunk_t* arena_t::GetExcessSpareChunk() MOZ_REQUIRES(mLock) {
-  if (mNumSpares > kMaxSpareChunksPerArena) {
+  if (mNumSpares > kMaxSpareChunksPerArenaSync) {
     arena_chunk_t* chunk = mSpares.popBack();
     mNumSpares--;
     MOZ_ASSERT(!chunk->mIsPurging);
@@ -1442,7 +1442,8 @@ ArenaPurgeResult arena_t::PurgeDirtyPages(arena_chunk_t* aChunk,
 
       const bool continue_purge_chunk = purge_info.FindDirtyPages(purged_once);
       const bool continue_purge_arena =
-          purge_info.mArena.mNumDirty > aTargetDirtyPages;
+          purge_info.mArena.mNumDirty > aTargetDirtyPages ||
+          purge_info.mArena.mNumSpares > kMaxSpareChunksPerArenaAsync;
 
       if (!continue_purge_chunk) {
         if (!continue_purge_arena &&
@@ -1485,7 +1486,8 @@ ArenaPurgeResult arena_t::PurgeDirtyPages(arena_chunk_t* aChunk,
       // an empty chunk becomes a spare chunk that the destructor releases.
       const bool continue_purge_arena =
           !purge_info.mArena.mMustDeleteAfterPurge &&
-          purge_info.mArena.mNumDirty > aTargetDirtyPages;
+          (purge_info.mArena.mNumDirty > aTargetDirtyPages ||
+           purge_info.mArena.mNumSpares > kMaxSpareChunksPerArenaAsync);
 
       if (!continue_purge_chunk || !continue_purge_arena || !keep_going) {
         // We're going to stop (or pause) purging here so update the chunk's
@@ -1583,20 +1585,24 @@ ArenaPurgeResult arena_t::PurgeLoop(PurgeCondition aCond, const char* aCaller,
         break;
       }
 
-      // The arena reused dirty pages within the reuse grace time, so it will
-      // likely reuse more soon. A target purge only releases pages that were
-      // unused since the last purge, so this does not stop it.
-      if (aCond != PurgeToTarget && aReuseGraceMS &&
-          GetTimestampNS() - mLastPageReuseNS < reuseGraceNS) {
-        break;
-      }
-
-      spare_chunk = PurgeGetSpareChunk(purge_stats);
+      // Note that excess spare chunks is checked before the reuse time.
+      spare_chunk = GetExcessSpareChunk();
       if (!spare_chunk) {
-        dirty_chunk = PurgeGetDirtyChunk(purge_stats);
-        if (!dirty_chunk) {
-          pr = ReachedThresholdOrBusy;
+        // The arena reused dirty pages within the reuse grace time, so it will
+        // likely reuse more soon. A target purge only releases pages that were
+        // unused since the last purge, so this does not stop it.
+        if (aCond != PurgeToTarget && aReuseGraceMS &&
+            GetTimestampNS() - mLastPageReuseNS < reuseGraceNS) {
           break;
+        }
+
+        spare_chunk = PurgeGetSpareChunk(purge_stats);
+        if (!spare_chunk) {
+          dirty_chunk = PurgeGetDirtyChunk(purge_stats);
+          if (!dirty_chunk) {
+            pr = ReachedThresholdOrBusy;
+            break;
+          }
         }
       }
     }  // The lock is released here.
@@ -2839,7 +2845,7 @@ static inline void idalloc(void* ptr, arena_t* aArena) {
 }
 
 inline purge_action_t arena_t::ShouldStartPurge() {
-  if (mNumDirty > mMaxDirty) {
+  if (mNumDirty > mMaxDirty || mNumSpares > kMaxSpareChunksPerArenaAsync) {
     if (!mIsDeferredPurgeEnabled) {
       return purge_action_t::PurgeNow;
     }
@@ -4175,6 +4181,12 @@ may_purge_now_result_t ArenaCollection::MayPurgeSteps(
     }
     for (arena_t& arena : mOutstandingPurges) {
       MutexAutoLock arena_lock(arena.mLock);
+
+      // Note that page reuse isn't considered for the spare chunk list.
+      if (arena.mNumSpares > kMaxSpareChunksPerArenaAsync) {
+        found = &arena;
+        break;
+      }
 
       if (now - arena.mLastPageReuseNS >= minPurgeDelayNS) {
         found = &arena;

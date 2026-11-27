@@ -123,13 +123,17 @@ constexpr size_t kCacheLineMask = kCacheLineSize - 1;
 // 6.25% of the process address space on a 32-bit OS for later use.
 static constexpr size_t gRecycleLimit = 128_MiB;
 
-// The maximum number of spare chunks per arena.  This value was chosen so
+// The maximum number of spare chunks per arena.  The asynchronous limit is
+// applied during deferred purge, if deferred purge hasn't run yet then the
+// synchronous limit provides a safety net.  These values were chosen so
 // that they are above the maximum number of dirty chunks observed while
 // running sp3: https://bugzilla.mozilla.org/show_bug.cgi?id=2093249#c7
 #ifdef XP_DARWIN
-constexpr size_t kMaxSpareChunksPerArena = 200;
+constexpr size_t kMaxSpareChunksPerArenaAsync = 200;
+constexpr size_t kMaxSpareChunksPerArenaSync = 250;
 #else
-constexpr size_t kMaxSpareChunksPerArena = 120;
+constexpr size_t kMaxSpareChunksPerArenaAsync = 120;
+constexpr size_t kMaxSpareChunksPerArenaSync = 150;
 #endif
 
 #endif /* ! CONSTANTS_H */
