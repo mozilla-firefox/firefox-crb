@@ -51,6 +51,39 @@ static const size_t kPageSize = 16384;
 static const size_t kPageSize = 4096;
 #endif
 
+static void TestPHCAllocationTestPos(size_t n1, size_t n2) {
+  void* p = (uint8_t*)GetPHCAllocation(n1);
+  if (!p) {
+    MOZ_CRASH("failed to get a PHC allocation");
+  }
+
+  ASSERT_EQ((reinterpret_cast<uintptr_t>(p) & (kPageSize - 1)), kPageSize - n2);
+  ASSERT_EQ(moz_malloc_usable_size(p), n2);
+
+  free(p);
+}
+
+static void TestPHCAllocationTestAlign(size_t a1, size_t a2) {
+  void* p = (uint8_t*)GetPHCAllocation(8, a1);
+  ASSERT_EQ((reinterpret_cast<uintptr_t>(p) & (kPageSize - 1)), kPageSize - a2);
+  ASSERT_EQ(moz_malloc_usable_size(p), a2);
+  free(p);
+
+#if defined(XP_DARWIN) && defined(__aarch64__)
+  // On 16KB page systems, jemalloc may use the 4KB size class for 8KB-aligned
+  // allocations (usable 4096), while PHC must place them at offset 8192 in
+  // the page (usable 8192). The mismatch is unavoidable, so skip jemalloc
+  // check.
+  if (a1 == kPageSize / 2) {
+    return;
+  }
+#endif
+
+  p = (uint8_t*)moz_xmemalign(a1, 8);
+  ASSERT_EQ(moz_malloc_usable_size(p), a2);
+  free(p);
+}
+
 TEST(PHC, TestPHCAllocations)
 {
   mozilla::phc::SetPHCState(phc::PHCState::Enabled);
@@ -58,62 +91,21 @@ TEST(PHC, TestPHCAllocations)
   // First, check that allocations of various sizes all get put at the end of
   // their page as expected. Also, check their sizes are as expected.
 
-#define ASSERT_POS(n1, n2)                                      \
-  p = (uint8_t*)moz_xrealloc(p, (n1));                          \
-  ASSERT_EQ((reinterpret_cast<uintptr_t>(p) & (kPageSize - 1)), \
-            kPageSize - (n2));                                  \
-  ASSERT_EQ(moz_malloc_usable_size(p), (n2));
-
-  uint8_t* p = GetPHCAllocation(1);
-  if (!p) {
-    MOZ_CRASH("failed to get a PHC allocation");
-  }
-
   // The smallest possible allocation is 16 bytes.
-  ASSERT_POS(8U, 16U);
+  TestPHCAllocationTestPos(8, 16);
   for (unsigned i = 16; i <= kPageSize; i *= 2) {
-    ASSERT_POS(i, i);
+    TestPHCAllocationTestPos(i, i);
   }
-
-  free(p);
-
-#undef ASSERT_POS
 
   // Second, do similar checking with allocations of various alignments. Also
   // check that their sizes (which are different to allocations with normal
   // alignment) are the same as the sizes of equivalent non-PHC allocations.
 
-#define ASSERT_ALIGN(a1, a2)                                    \
-  p = (uint8_t*)GetPHCAllocation(8, (a1));                      \
-  ASSERT_EQ((reinterpret_cast<uintptr_t>(p) & (kPageSize - 1)), \
-            kPageSize - (a2));                                  \
-  ASSERT_EQ(moz_malloc_usable_size(p), (a2));                   \
-  free(p);                                                      \
-  p = (uint8_t*)moz_xmemalign((a1), 8);                         \
-  ASSERT_EQ(moz_malloc_usable_size(p), (a2));                   \
-  free(p);
-
   // The smallest possible allocation is 16 bytes.
-  ASSERT_ALIGN(8U, 16U);
+  TestPHCAllocationTestAlign(8, 16);
   for (unsigned i = 16; i <= kPageSize; i *= 2) {
-#if defined(XP_DARWIN) && defined(__aarch64__)
-    // On 16KB page systems, jemalloc may use the 4KB size class for 8KB-aligned
-    // allocations (usable 4096), while PHC must place them at offset 8192 in
-    // the page (usable 8192). The mismatch is unavoidable, so skip jemalloc
-    // check.
-    if (i == kPageSize / 2) {
-      p = (uint8_t*)GetPHCAllocation(8, i);
-      ASSERT_EQ((reinterpret_cast<uintptr_t>(p) & (kPageSize - 1)),
-                (size_t)(kPageSize - i));
-      ASSERT_EQ(moz_malloc_usable_size(p), (size_t)i);
-      free(p);
-      continue;
-    }
-#endif
-    ASSERT_ALIGN(i, i);
+    TestPHCAllocationTestAlign(i, i);
   }
-
-#undef ASSERT_ALIGN
 }
 
 static void TestInUseAllocation(uint8_t* aPtr, size_t aSize) {
