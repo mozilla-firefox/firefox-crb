@@ -28,6 +28,11 @@ enum DllBlocklistInitFlags {
 
 inline void SetDllBlocklistProcessTypeFlags(uint32_t& aFlags,
                                             GeckoProcessType aProcessType) {
+  if (aProcessType == GeckoProcessType_Default) {
+    return;
+  }
+
+  aFlags |= eDllBlocklistInitFlagIsChildProcess;
   if (aProcessType == GeckoProcessType_Utility) {
     aFlags |= eDllBlocklistInitFlagIsUtilityProcess;
   } else if (aProcessType == GeckoProcessType_GPU) {

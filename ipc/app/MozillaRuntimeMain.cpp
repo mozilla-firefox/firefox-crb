@@ -84,9 +84,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifdef HAS_DLL_BLOCKLIST
-  uint32_t initFlags = eDllBlocklistInitFlagIsChildProcess;
-  SetDllBlocklistProcessTypeFlags(initFlags, GetGeckoProcessType());
-  DllBlocklist_Initialize(initFlags);
+  DllBlocklist_Initialize();
 #endif
 
   nsresult rv = bootstrap->XRE_InitChildProcess(argc, argv, &childData);

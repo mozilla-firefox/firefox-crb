@@ -65,7 +65,7 @@ static LauncherVoidResultWithLineInfo InitializeDllBlocklistOOPInternal(
   }
 
   // Only child processes need this hook, and failing to set it is not fatal.
-  if (gBlocklistInitFlags & eDllBlocklistInitFlagWasBootstrapped) {
+  if (aProcessType != GeckoProcessType_Default) {
 #  if defined(DEBUG) && defined(_M_X64) && !defined(__MINGW64__)
     MOZ_ASSERT(!HasStackCookieCheck(
         reinterpret_cast<uintptr_t>(&freestanding::patched_NtCreateSection)));
@@ -147,13 +147,6 @@ static LauncherVoidResultWithLineInfo InitializeDllBlocklistOOPInternal(
 
   // Tell the mozglue blocklist that we have bootstrapped
   uint32_t newFlags = eDllBlocklistInitFlagWasBootstrapped;
-
-  if (gBlocklistInitFlags & eDllBlocklistInitFlagWasBootstrapped) {
-    // If we ourselves were bootstrapped, then we are starting a child process
-    // and need to set the appropriate flag.
-    newFlags |= eDllBlocklistInitFlagIsChildProcess;
-  }
-
   SetDllBlocklistProcessTypeFlags(newFlags, aProcessType);
 
   LauncherVoidResult writeResult =

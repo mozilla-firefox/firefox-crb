@@ -424,6 +424,12 @@ int main(int argc, char* argv[], char* envp[]) {
   }
 #endif
 
+#ifdef HAS_DLL_BLOCKLIST
+  // This must be before the base profiler is started, so that the loader
+  // observer is in place to suppress stack walking during DLL loads.
+  DllBlocklist_Initialize(gBlocklistInitFlags);
+#endif
+
   AUTO_BASE_PROFILER_INIT;
   AUTO_BASE_PROFILER_LABEL("nsBrowserApp main", OTHER);
 
@@ -431,13 +437,6 @@ int main(int argc, char* argv[], char* envp[]) {
   // We are launching as a content process, delegate to the appropriate
   // main
   if (GetGeckoProcessType() != GeckoProcessType_Default) {
-#  ifdef HAS_DLL_BLOCKLIST
-    uint32_t initFlags =
-        gBlocklistInitFlags | eDllBlocklistInitFlagIsChildProcess;
-    SetDllBlocklistProcessTypeFlags(initFlags, GetGeckoProcessType());
-    DllBlocklist_Initialize(initFlags);
-#  endif  // HAS_DLL_BLOCKLIST
-
 #  if defined(XP_WIN)
     // Ideally, we would be able to set our DPI awareness in
     // firefox.exe.manifest Unfortunately, that would cause Win32k calls when
@@ -478,10 +477,6 @@ int main(int argc, char* argv[], char* envp[]) {
 
     return NS_FAILED(rv) ? 1 : 0;
   }
-#endif
-
-#ifdef HAS_DLL_BLOCKLIST
-  DllBlocklist_Initialize(gBlocklistInitFlags);
 #endif
 
 // We will likely only ever support this as a command line argument on Windows

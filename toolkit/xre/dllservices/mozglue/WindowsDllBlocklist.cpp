@@ -573,6 +573,7 @@ MFBT_API void DllBlocklist_Initialize(uint32_t aInitFlags) {
   }
   sBlocklistInitAttempted = true;
 
+  SetDllBlocklistProcessTypeFlags(aInitFlags, GetGeckoProcessType());
   sInitFlags = aInitFlags;
 
   glue::ModuleLoadFrame::StaticInit(&gMozglueLoaderObserver, &gWinLauncher);
