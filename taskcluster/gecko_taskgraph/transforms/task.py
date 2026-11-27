@@ -48,7 +48,10 @@ from gecko_taskgraph.util import docker as dockerutil
 from gecko_taskgraph.util.attributes import TRUNK_PROJECTS
 from gecko_taskgraph.util.chunking import TEST_VARIANTS
 from gecko_taskgraph.util.hash import hash_path
-from gecko_taskgraph.util.partners import get_partners_to_be_published
+from gecko_taskgraph.util.partners import (
+    get_partner_build_numbers,
+    get_partners_to_be_published,
+)
 from gecko_taskgraph.util.scriptworker import BALROG_ACTIONS
 from gecko_taskgraph.util.workertypes import get_worker_type, worker_type_implementation
 
@@ -1121,6 +1124,8 @@ def build_beetmover_push_to_release_payload(config, task, task_def):
         "build_number": release_config["build_number"],
         "partners": partners,
     }
+    if worker["product"] == "firefox":
+        task_def["payload"]["partner_build_numbers"] = get_partner_build_numbers(config)
 
 
 class BeetmoverImportFromGcsSchema(Schema, forbid_unknown_fields=False, kw_only=True):
