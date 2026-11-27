@@ -13,6 +13,7 @@ android {
 }
 
 dependencies {
+    api project(':components:concept-firefox-accounts')
     api project(':components:concept-storage')
     // Types defined in concept-sync are part of the public API of this module.
     api project(':components:concept-sync')
@@ -33,7 +34,6 @@ dependencies {
     implementation libs.kotlinx.coroutines
     implementation libs.kotlinx.serialization.json
 
-    testImplementation project(':components:concept-firefox-accounts')
     testImplementation project(':components:support-test')
     testImplementation project(':components:support-test-fakes')
     testImplementation project(':components:support-test-libstate')

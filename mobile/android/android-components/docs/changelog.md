@@ -39,6 +39,8 @@ permalink: /changelog/
   * 🆕 Added `CustomizableMenuItemsAction.AttemptedMoveAsSubItem`, which `EditMenuItemsContent` dispatches when the user lets go of an item inside another one it cannot be inside of, and `CustomizableMenuItemsAction.AttemptedEmptySection`, which it dispatches when the user drags the last item shown in the section to the hidden ones. [Bug 2090979](https://bugzilla.mozilla.org/show_bug.cgi?id=2090979)
 * **service-firefox-accounts**
   * ⚠️ **Breaking change**: Moved `FxaService` and `FxaScope` to `concept-firefox-accounts`. Add the `org.mozilla.components:concept-firefox-accounts` dependency and import both types from `mozilla.components.concept.fxa`. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
+* **concept-sync**
+  * ⚠️ **Breaking change**: `AuthType.Signin`, `AuthType.Signup`, and `AuthType.Pairing` are now data classes carrying an optional `service: FxaService?`. `AuthType.OtherExternal` also carries the service. [Bug 2085000](https://bugzilla.mozilla.org/show_bug.cgi?id=2085000)
 
 # 162.0
 * **concept-engine**
