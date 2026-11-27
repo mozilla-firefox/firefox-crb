@@ -201,6 +201,12 @@ class nsHttpConnectionMgr final : public HttpConnectionMgrShell,
   already_AddRefed<PendingTransactionInfo> FindTransactionHelper(
       bool removeWhenFound, ConnectionEntry* aEnt, nsAHttpTransaction* aTrans);
 
+  // Starts an inner connection for a transaction pending on an
+  // origin-through-CONNECT-proxy entry, tunnelling through the wildcard
+  // entry's outer connection. NS_ERROR_NOT_AVAILABLE when it does not apply.
+  [[nodiscard]] nsresult TryStartInnerConnection(
+      ConnectionEntry* aEnt, PendingTransactionInfo* aPendingTransInfo);
+
   void DoSpeculativeConnectionInternal(ConnectionEntry* aEnt,
                                        SpeculativeTransaction* aTrans,
                                        bool aFetchHTTPSRR);
