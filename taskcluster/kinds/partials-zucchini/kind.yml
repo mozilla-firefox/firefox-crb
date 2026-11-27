@@ -7,6 +7,7 @@ loader: taskgraph.loader.transform:loader
 transforms:
     - taskgraph.transforms.from_deps
     - gecko_taskgraph.transforms.name_sanity
+    - gecko_taskgraph.transforms.zucchini_partial_rollout:partials_zucchini_transforms
     - gecko_taskgraph.transforms.partials_zucchini
     - gecko_taskgraph.transforms.job
     - gecko_taskgraph.transforms.task
@@ -39,7 +40,6 @@ tasks:
             copy-attributes: true
             group-by: single-with-filters
         shipping-phase: promote
-        run-on-projects: ["mozilla-central"]
         validate-cert:
             by-project:
                 # don't validate certs on try; this allows generating
