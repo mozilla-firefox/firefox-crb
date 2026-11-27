@@ -1,0 +1,16 @@
+---
+root:
+  items:
+    - type: clip
+      id: 2
+      bounds: [60, 60, 140, 240]
+    - type: clip-chain
+      id: 3
+      clips: [2]
+    - type: stacking-context
+      transform: [1.6586037, -0.33344102, 0, 0, 0.25011343, 1.2441154, 0, 0, 0, 0, 1, 0, 100, 100, 0, 1]
+      items:
+        - type: rect
+          bounds: [0, 0, 72, 72]
+          color: [0, 128, 255, 1]
+          clip-chain: 3

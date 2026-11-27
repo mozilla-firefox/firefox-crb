@@ -315,12 +315,7 @@ impl<Src, Dst> MatrixHelpers<Src, Dst> for Transform3D<f32, Src, Dst> {
      *  a  b  0  1
      */
     fn is_2d_scale_translation(&self) -> bool {
-        (self.m33 - 1.0).abs() < NEARLY_ZERO &&
-            (self.m44 - 1.0).abs() < NEARLY_ZERO &&
-            self.m12.abs() < NEARLY_ZERO && self.m13.abs() < NEARLY_ZERO && self.m14.abs() < NEARLY_ZERO &&
-            self.m21.abs() < NEARLY_ZERO && self.m23.abs() < NEARLY_ZERO && self.m24.abs() < NEARLY_ZERO &&
-            self.m31.abs() < NEARLY_ZERO && self.m32.abs() < NEARLY_ZERO && self.m34.abs() < NEARLY_ZERO &&
-            self.m43.abs() < NEARLY_ZERO
+        api::is_2d_scale_translation(self)
     }
 
     fn as_grid_aligned_rotation(&self) -> Option<(ScaleOffset, bool)> {
@@ -684,6 +679,33 @@ pub mod test {
         let xref = LayoutTransform::scale(30.0, 11.0, 1.0)
             .then_translate(vec3(50.0, 240.0, 0.0));
         validate_convert(&xref);
+    }
+
+    #[test]
+    fn scale_offset_small_scale_rotation() {
+        // A skewed transform under a very small scale, as found in Google
+        // Slides documents that use EMUs as the unit of their content.
+        let skew = LayoutTransform::new(
+            1.6586037, -0.33344102, 0.0, 0.0,
+            0.25011343, 1.2441154, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            267258.0, 6441.637, 0.0, 1.0,
+        );
+        let xref = skew.then_scale(0.00041010499, 0.00041010499, 1.0);
+        assert!(ScaleOffset::from_transform(&xref).is_none());
+        assert!(!xref.is_2d_scale_translation());
+
+        let xref = LayoutTransform::rotation(0.0, 0.0, 1.0, euclid::Angle::degrees(1.0))
+            .then_scale(0.001, 0.001, 1.0);
+        assert!(ScaleOffset::from_transform(&xref).is_none());
+
+        let xref = LayoutTransform::scale(0.001, 0.002, 1.0)
+            .then_translate(vec3(50.0, 240.0, 0.0));
+        validate_convert(&xref);
+        assert!(xref.is_2d_scale_translation());
+
+        let xref = LayoutTransform::scale(0.0, 1.0, 1.0);
+        assert!(ScaleOffset::from_transform(&xref).is_some());
     }
 
     fn validate_inverse(xref: &LayoutTransform) {

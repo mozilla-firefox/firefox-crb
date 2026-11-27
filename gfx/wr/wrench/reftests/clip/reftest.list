@@ -42,3 +42,4 @@ fuzzy(86,4200) fuzzy-if(platform(swgl),108,4200) fuzzy-if(platform(android),108,
 fuzzy(106,4) == nested-rotation-elliptical-clip.yaml nested-rotation-elliptical-clip-ref.yaml
 fuzzy(2,500) if(not(platform(swgl)),color_targets(2)) if(platform(swgl),color_targets(3)) == rounded-clip-direct.yaml rounded-clip-direct-ref.yaml
 == rotated-prim-device-clip.yaml rotated-prim-device-clip-ref.yaml
+fuzzy(130,500) == skewed-prim-small-scale-clip.yaml skewed-prim-small-scale-clip-ref.yaml

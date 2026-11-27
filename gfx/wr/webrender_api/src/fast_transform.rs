@@ -10,6 +10,37 @@ use crate::units::{LayoutPixel, WorldPixel};
 // Matches the definition of SK_ScalarNearlyZero in Skia.
 const NEARLY_ZERO: f32 = 1.0 / 4096.0;
 
+/// Whether the transform is a 2D scale and translation:
+///
+/// ```text
+/// sx 0  0  0
+/// 0  sy 0  0
+/// 0  0  1  0
+/// tx ty 0  1
+/// ```
+///
+/// The rotation and skew terms are compared to the scale of their axis, so
+/// that a rotation combined with a very small scale is not mistaken for a
+/// scale and translation. The tolerance is capped for scales larger than 1.
+#[inline(always)]
+pub fn is_2d_scale_translation<F, T>(m: &Transform3D<f32, F, T>) -> bool {
+    let x_tolerance = NEARLY_ZERO * m.m11.abs().min(1.0);
+    let y_tolerance = NEARLY_ZERO * m.m22.abs().min(1.0);
+
+    m.m12.abs() <= x_tolerance &&
+        m.m21.abs() <= y_tolerance &&
+        m.m13.abs() <= NEARLY_ZERO &&
+        m.m14.abs() <= NEARLY_ZERO &&
+        m.m23.abs() <= NEARLY_ZERO &&
+        m.m24.abs() <= NEARLY_ZERO &&
+        m.m31.abs() <= NEARLY_ZERO &&
+        m.m32.abs() <= NEARLY_ZERO &&
+        (m.m33 - 1.0).abs() <= NEARLY_ZERO &&
+        m.m34.abs() <= NEARLY_ZERO &&
+        m.m43.abs() <= NEARLY_ZERO &&
+        (m.m44 - 1.0).abs() <= NEARLY_ZERO
+}
+
 // Represents an optimized transform where there is only
 // a scale and translation (which are guaranteed to maintain
 // an axis align rectangle under transformation). The
@@ -46,23 +77,7 @@ impl ScaleOffset {
     pub fn from_transform<F, T>(
         m: &Transform3D<f32, F, T>,
     ) -> Option<ScaleOffset> {
-        // To check that we have a pure scale / translation:
-        // Every field must match an identity matrix, except:
-        //  - Any value present in tx,ty
-        //  - Any value present in sx,sy
-
-        if m.m12.abs() > NEARLY_ZERO ||
-           m.m13.abs() > NEARLY_ZERO ||
-           m.m14.abs() > NEARLY_ZERO ||
-           m.m21.abs() > NEARLY_ZERO ||
-           m.m23.abs() > NEARLY_ZERO ||
-           m.m24.abs() > NEARLY_ZERO ||
-           m.m31.abs() > NEARLY_ZERO ||
-           m.m32.abs() > NEARLY_ZERO ||
-           (m.m33 - 1.0).abs() > NEARLY_ZERO ||
-           m.m34.abs() > NEARLY_ZERO ||
-           m.m43.abs() > NEARLY_ZERO ||
-           (m.m44 - 1.0).abs() > NEARLY_ZERO {
+        if !is_2d_scale_translation(m) {
             return None;
         }
 

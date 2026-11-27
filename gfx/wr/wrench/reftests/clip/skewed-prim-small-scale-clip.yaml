@@ -1,0 +1,24 @@
+# A skewed primitive under a very small scale, partially clipped by a rect
+# clip in the scaled space. The off-diagonal terms of the composed
+# transform are tiny in absolute value but large relative to the scale.
+# The fuzz covers the edge anti-aliasing, which ps_quad extrudes in local
+# space and which is lost at this scale.
+---
+root:
+  items:
+    - type: stacking-context
+      transform: [0.0004, 0, 0, 0, 0, 0.0004, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+      items:
+        - type: clip
+          id: 2
+          bounds: [150000, 150000, 350000, 600000]
+        - type: clip-chain
+          id: 3
+          clips: [2]
+        - type: stacking-context
+          transform: [1.6586037, -0.33344102, 0, 0, 0.25011343, 1.2441154, 0, 0, 0, 0, 1, 0, 250000, 250000, 0, 1]
+          items:
+            - type: rect
+              bounds: [0, 0, 180000, 180000]
+              color: [0, 128, 255, 1]
+              clip-chain: 3
