@@ -537,6 +537,7 @@ bool WebExtensionPolicy::Enable() {
   if (XRE_IsParentProcess()) {
     // Reserve a BrowsingContextGroup for use by this WebExtensionPolicy.
     RefPtr<BrowsingContextGroup> group = BrowsingContextGroup::Create();
+    group->SetIsForWebExtension();
     mBrowsingContextGroup = group->MakeKeepAlivePtr();
   }
 
