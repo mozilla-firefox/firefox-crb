@@ -85,9 +85,9 @@ flowchart TD
     switched --> replay --> globals
 ```
 
-Each tab gets its own `TabProgressListener`, wired to the browser through a
-[status filter][filter] that coalesces the raw notification stream, which is why
-fine-grained progress rates never reach a listener.
+Each tab gets its own {js:class}`TabProgressListener`, wired to the browser
+through a [status filter][filter] that coalesces the raw notification stream,
+which is why fine-grained progress rates never reach a listener.
 
 `TabProgressListener` translates web progress into tab state: it maintains the
 tab's `busy` and `progress` attributes, the tabbrowser's own busy state, the tab's
