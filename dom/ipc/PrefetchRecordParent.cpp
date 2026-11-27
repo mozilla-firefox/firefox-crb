@@ -80,6 +80,7 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
     mReferrerInfo = new ReferrerInfo();
   }
   mNoVarySearchHint = aArgs.noVarySearchHint();
+  mIsImmediate = aArgs.isImmediate();
   mAnonPolicy =
       aArgs.anonymizeClientIP()
           ? PrefetchAnonymizationPolicy::AnonymousClientIPWhenCrossOrigin
@@ -118,11 +119,29 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
     PopulateIsolatedPartitionKey(isolatedAttrs);
   }
   mIsolatedPartitionKey = isolatedAttrs.mPartitionKey;
+  mFetchOriginAttributes = isolatedAttrs;
 
   if (StaticPrefs::dom_speculation_rules_prefetch_dry_run()) {
     LOG_SPECRULES(
         ("PrefetchRecordParent::Init: this=%p dry run, not fetching", this));
     mState = PrefetchState::DryRun;
+    return;
+  }
+
+  StartFetch(aWGP);
+}
+
+void PrefetchRecordParent::StartFetch(WindowGlobalParent* aWGP) {
+  MOZ_ASSERT(mState == PrefetchState::Queued ||
+             mState == PrefetchState::Ongoing);
+  mState = PrefetchState::Ongoing;
+
+  nsCOMPtr<nsIPrincipal> docPrincipal = aWGP->DocumentPrincipal();
+  if (!docPrincipal) {
+    LOG_SPECRULES_WARN(
+        ("PrefetchRecordParent::StartFetch: this=%p docPrincipal is null",
+         this));
+    mState = PrefetchState::Canceled;
     return;
   }
 
@@ -134,7 +153,7 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
       aWGP, docPrincipal, nsIContentPolicy::TYPE_OTHER,
       nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_INHERITS_SEC_CONTEXT,
       /* aSandboxFlags */ 0);
-  loadInfo->SetOriginAttributes(isolatedAttrs);
+  loadInfo->SetOriginAttributes(mFetchOriginAttributes);
 
   nsresult rv = NS_NewChannelInternal(
       getter_AddRefs(mChannel), mURL, loadInfo,
@@ -147,13 +166,15 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
 
   if (NS_FAILED(rv)) {
     LOG_SPECRULES_WARN(
-        ("PrefetchRecordParent::Init: this=%p NS_NewChannelInternal failed "
-         "(0x%" PRIx32 ")",
+        ("PrefetchRecordParent::StartFetch: this=%p NS_NewChannelInternal "
+         "failed (0x%" PRIx32 ")",
          this, static_cast<uint32_t>(rv)));
     mState = PrefetchState::Canceled;
     return;
   }
 
+  bool isCrossSite = true;
+  docPrincipal->IsThirdPartyURI(mURL, &isCrossSite);
   ConfigureSecPurpose(mChannel);
   ConfigureSpeculationTags(mChannel, docPrincipal, isCrossSite);
 
@@ -169,7 +190,8 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
   rv = mChannel->AsyncOpen(this);
   if (NS_FAILED(rv)) {
     LOG_SPECRULES_WARN(
-        ("PrefetchRecordParent::Init: this=%p AsyncOpen failed (0x%" PRIx32 ")",
+        ("PrefetchRecordParent::StartFetch: this=%p AsyncOpen failed "
+         "(0x%" PRIx32 ")",
          this, static_cast<uint32_t>(rv)));
     mState = PrefetchState::Canceled;
     mChannel = nullptr;

@@ -67,9 +67,10 @@ void SpeculationRulesManager::StartPrefetch(Document* aDocument,
   }
 
   const bool anonymizeClientIP = false;
+  const bool isImmediate = aCand.eagerness == Eagerness::Immediate;
 
   SpeculativePrefetchArgs args(WrapNotNull(uri.get()), referrerInfo,
-                               noVarySearchHint, anonymizeClientIP,
+                               noVarySearchHint, anonymizeClientIP, isImmediate,
                                std::move(tags));
 
   auto actor =
