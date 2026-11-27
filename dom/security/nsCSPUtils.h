@@ -231,6 +231,7 @@ class nsCSPBaseSrc {
   virtual void toString(nsAString& outStr) const = 0;
 
   virtual bool isReportSample() const { return false; }
+  virtual bool isSelf() const { return false; }
 
   virtual bool isHash() const { return false; }
   virtual bool isUrlHash() const { return false; }
@@ -268,6 +269,8 @@ class nsCSPHostSrc : public nsCSPBaseSrc {
                bool aUpgradeInsecure) const override;
   bool visit(nsCSPSrcVisitor* aVisitor) const override;
   void toString(nsAString& outStr) const override;
+
+  bool isSelf() const override { return mGeneratedFromSelfKeyword; }
 
   void setScheme(const nsAString& aScheme);
   void setPort(const nsAString& aPort);
@@ -584,6 +587,8 @@ class nsCSPDirective {
 
   bool visitSrcs(nsCSPSrcVisitor* aVisitor) const;
 
+  const nsTArray<nsCSPBaseSrc*>& getSrcs() const { return mSrcs; }
+
   virtual void getDirName(nsAString& outStr) const;
 
   bool hasReportSampleKeyword() const;
@@ -819,7 +824,7 @@ class nsCSPPolicy {
 
   // Bug 2072122: Trusted Types readiness experiment only, to be removed.
   // Whether this is a strict CSP: the directive governing script elements
-  // contains 'strict-dynamic' and base-uri is 'none'.
+  // contains 'strict-dynamic' and base-uri is 'none' or 'self'.
   bool isStrict() const;
 
   /*

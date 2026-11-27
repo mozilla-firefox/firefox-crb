@@ -2067,9 +2067,18 @@ bool nsCSPPolicy::isStrict() const {
   }
   for (nsCSPDirective* directive : mDirectives) {
     if (directive->equals(nsIContentSecurityPolicy::BASE_URI_DIRECTIVE)) {
-      // This works because 'none' is only included by the parser when no
-      // other source except 'report-sample' is used.
-      return directive->allows(CSP_NONE);
+      // Accept only 'none' or 'self', optionally with 'report-sample'.
+      bool hasNoneOrSelf = false;
+      for (nsCSPBaseSrc* src : directive->getSrcs()) {
+        if (src->isReportSample()) {
+          continue;
+        }
+        if (!src->isKeyword(CSP_NONE) && !src->isSelf()) {
+          return false;
+        }
+        hasNoneOrSelf = true;
+      }
+      return hasNoneOrSelf;
     }
   }
   return false;
