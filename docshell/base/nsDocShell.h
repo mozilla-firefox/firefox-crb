@@ -194,6 +194,7 @@ class nsDocShell final : public nsDocLoader,
   NS_IMETHOD Stop() override {
     // Need this here because otherwise nsIWebNavigation::Stop
     // overrides the docloader's Stop()
+    ++mStopGeneration;
     return nsDocLoader::Stop();
   }
 
@@ -1355,6 +1356,12 @@ class nsDocShell final : public nsDocLoader,
   uint64_t mChannelToDisconnectOnPageHide;
 
   uint32_t mPendingReloadCount = 0;
+
+  // Bumped every time this docshell is asked to stop loading, whether by
+  // window.stop(), the stop button, or a navigation superseding what is
+  // already in flight. An async continuation that must not outlive a stop
+  // snapshots this before it suspends and compares on resumption.
+  uint32_t mStopGeneration = 0;
 
   // The following two fields cannot be declared as bit fields
   // because of uses with AutoRestore.
