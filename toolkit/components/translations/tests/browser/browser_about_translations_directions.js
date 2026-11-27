@@ -74,7 +74,7 @@ add_task(
 
     await aboutTranslationsTestUtils.assertTargetTextArea({
       scriptDirection: "ltr",
-      languageTag: Services.locale.appLocaleAsBCP47,
+      languageTag: Services.locale.appLocale,
       value: "Translating…",
     });
 
@@ -136,7 +136,7 @@ add_task(
         await aboutTranslationsTestUtils.assertTargetTextArea({
           // Even though the target language is RTL, the translating placeholder is still LTR.
           scriptDirection: "ltr",
-          languageTag: Services.locale.appLocaleAsBCP47,
+          languageTag: Services.locale.appLocale,
           value: "Translating…",
         });
       }

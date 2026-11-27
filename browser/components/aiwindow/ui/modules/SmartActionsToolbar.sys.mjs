@@ -197,7 +197,7 @@ const PROMPT_VALUES = {
       .map(tab => `- ${lazy.sanitizeUntrustedContent(tab.label)}`)
       .join("\n"),
   n: () => lazy.actionCount,
-  locale: () => Services.locale.appLocaleAsBCP47,
+  locale: () => Services.locale.appLocale,
   date: () => new Date().toISOString().slice(0, 10),
 };
 

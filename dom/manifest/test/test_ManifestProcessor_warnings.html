@@ -18,7 +18,7 @@ const { Localization } = SpecialPowers.Cu.getGlobalForObject(
 const l10n = new Localization(["dom/manifest.ftl"], true);
 const fmt = (id, args) => l10n.formatValueSync(id, args);
 const listFormat = new Intl.ListFormat(
-  SpecialPowers.Services.locale.appLocaleAsBCP47,
+  SpecialPowers.Services.locale.appLocale,
   { type: "unit" }
 );
 [

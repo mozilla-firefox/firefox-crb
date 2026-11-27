@@ -2244,7 +2244,7 @@ LocaleData.prototype = {
   },
 
   get uiLocale() {
-    return Services.locale.appLocaleAsBCP47;
+    return Services.locale.appLocale;
   },
 
   get availableLocales() {

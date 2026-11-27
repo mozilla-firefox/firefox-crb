@@ -1849,7 +1849,7 @@ add_task(async function has_eligible_journeys() {
     Services.locale.availableLocales = ["en-US", "de"];
     Services.locale.requestedLocales = ["de"];
     Assert.equal(
-      Services.locale.appLocaleAsBCP47,
+      Services.locale.appLocale,
       "de",
       "The app locale should be German for this check"
     );
@@ -1912,7 +1912,7 @@ add_task(async function count_eligible_journeys() {
     Services.locale.availableLocales = ["en-US", "de"];
     Services.locale.requestedLocales = ["de"];
     Assert.equal(
-      Services.locale.appLocaleAsBCP47,
+      Services.locale.appLocale,
       "de",
       "The app locale should be German for this check"
     );

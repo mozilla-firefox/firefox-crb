@@ -199,7 +199,7 @@ async function usingAppLocale(locale, callback) {
     appLocales: [locale],
   });
 
-  if (Services.locale.appLocaleAsBCP47 !== locale) {
+  if (Services.locale.appLocale !== locale) {
     throw new Error("Unable to change the app locale.");
   }
   await callback();

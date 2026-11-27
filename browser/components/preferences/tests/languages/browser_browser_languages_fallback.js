@@ -238,7 +238,7 @@ add_task(async function testFallbackWithRegionalVariants() {
     "es-ES is live-applied"
   );
   Assert.deepEqual(
-    Services.locale.appLocalesAsBCP47,
+    Services.locale.appLocales,
     ["es-ES", "es-AR", "en-US"],
     "Negotiation places the regional variant before en-US"
   );
@@ -275,7 +275,7 @@ add_task(async function testFallbackWithRegionalVariants() {
   // negotiated app locales unchanged should still update the fallback.
   Services.locale.requestedLocales = ["es-ES", "es-AR"];
   Assert.deepEqual(
-    Services.locale.appLocalesAsBCP47,
+    Services.locale.appLocales,
     ["es-ES", "es-AR", "en-US"],
     "Negotiated app locales are unchanged"
   );

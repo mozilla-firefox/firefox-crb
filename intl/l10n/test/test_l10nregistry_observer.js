@@ -82,7 +82,7 @@ add_task(async function test_no_spurious_app_locales_changed() {
 
   globalReg.registerSources([makeSource("test-app-locales-base")]);
   Services.locale.requestedLocales = ["en-US"];
-  const appLocales = Services.locale.appLocalesAsBCP47;
+  const appLocales = Services.locale.appLocales;
   Assert.deepEqual(
     appLocales.toSorted(),
     LOCALES.toSorted(),
@@ -103,7 +103,7 @@ add_task(async function test_no_spurious_app_locales_changed() {
 
   Assert.equal(fired, 0, "intl:app-locales-changed did not fire");
   Assert.deepEqual(
-    Services.locale.appLocalesAsBCP47,
+    Services.locale.appLocales,
     appLocales,
     "App locales keep the same order"
   );

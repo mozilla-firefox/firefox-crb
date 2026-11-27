@@ -47,8 +47,7 @@ nsresult txResultStringComparator::init(const nsACString& aLanguage,
     if (aResistFingerPrinting) {
       appLocale.Assign(nsRFPService::GetSpoofedJSLocale());
     } else {
-      mozilla::intl::LocaleService::GetInstance()->GetAppLocaleAsBCP47(
-          appLocale);
+      mozilla::intl::LocaleService::GetInstance()->GetAppLocale(appLocale);
     }
     result = mozilla::intl::Collator::TryCreate(appLocale, options);
   }

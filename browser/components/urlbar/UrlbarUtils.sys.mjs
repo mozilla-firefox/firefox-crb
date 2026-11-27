@@ -1385,7 +1385,7 @@ export var UrlbarUtils = {
     const FULL_NUMBER_MIN_THRESHOLD = 10 ** -5;
     const MAX_FLOAT_PRECISION = 15;
 
-    let locale = Services.locale.appLocaleAsBCP47;
+    let locale = Services.locale.appLocale;
 
     if (
       Math.abs(result) >= FULL_NUMBER_MAX_THRESHOLD ||

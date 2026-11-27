@@ -277,7 +277,7 @@ Preferences.addSetting({
       window.canShowAiFeature(aiControlSmartTabGroups, aiControlDefault) &&
       !!tabGroups.value &&
       !!smartTabGroups.value &&
-      Services.locale.appLocaleAsBCP47.startsWith("en")
+      Services.locale.appLocale.startsWith("en")
     );
   },
 });

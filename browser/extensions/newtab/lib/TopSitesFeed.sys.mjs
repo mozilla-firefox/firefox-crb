@@ -1459,12 +1459,12 @@ export class TopSitesFeed {
       }
 
       // Filter by locale.
-      if (topsite.exclude_locales?.includes(Services.locale.appLocaleAsBCP47)) {
+      if (topsite.exclude_locales?.includes(Services.locale.appLocale)) {
         return false;
       }
       if (
         topsite.include_locales?.length &&
-        !topsite.include_locales.includes(Services.locale.appLocaleAsBCP47)
+        !topsite.include_locales.includes(Services.locale.appLocale)
       ) {
         return false;
       }

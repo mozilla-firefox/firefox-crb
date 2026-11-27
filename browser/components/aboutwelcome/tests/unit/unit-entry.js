@@ -359,7 +359,7 @@ const TEST_GLOBAL = {
       set: () => undefined,
     },
     locale: {
-      get appLocaleAsBCP47() {
+      get appLocale() {
         return "en-US";
       },
       negotiateLanguages() {},

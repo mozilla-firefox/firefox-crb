@@ -30,7 +30,7 @@ using namespace mozilla::intl;
 // static
 void AppCollator::Initialize() {
   nsAutoCStringN<32> appLocale;
-  mozilla::intl::LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+  mozilla::intl::LocaleService::GetInstance()->GetAppLocale(appLocale);
   mozilla_app_collator_glue_initialize(&appLocale);
 }
 

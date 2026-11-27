@@ -44,7 +44,7 @@ async function withHomeRegion(region, fn) {
 }
 
 /**
- * Runs `fn` with `Services.locale.appLocaleAsBCP47` reporting the given locale.
+ * Runs `fn` with `Services.locale.appLocale` reporting the given locale.
  *
  * @param {string} locale BCP 47 language tag.
  * @param {Function} fn Callback, awaited before the locale is restored.
@@ -55,7 +55,7 @@ async function withAppLocale(locale, fn) {
   Services.locale.availableLocales = [locale];
   Services.locale.requestedLocales = [locale];
   Assert.equal(
-    Services.locale.appLocaleAsBCP47,
+    Services.locale.appLocale,
     locale,
     `App locale is now ${locale}`
   );

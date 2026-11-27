@@ -792,7 +792,7 @@ var gMainPane = {
       gMainPane.onPrimaryBrowserLanguageMenuChange(event);
     });
 
-    gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocaleAsBCP47);
+    gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocale);
   },
 
   /**
@@ -918,7 +918,7 @@ var gMainPane = {
     if (locale == "search") {
       gMainPane.showBrowserLanguagesSubDialog({ search: true });
       return;
-    } else if (locale == Services.locale.appLocaleAsBCP47) {
+    } else if (locale == Services.locale.appLocale) {
       this.hideConfirmLanguageChangeMessageBar();
       return;
     }
@@ -937,16 +937,12 @@ var gMainPane = {
         break;
       case Multilingual.TransitionType.LiveReload:
         Services.locale.requestedLocales = newLocales;
-        gMainPane.updatePrimaryBrowserLanguageUI(
-          Services.locale.appLocaleAsBCP47
-        );
+        gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocale);
         gMainPane.hideConfirmLanguageChangeMessageBar();
         break;
       case Multilingual.TransitionType.LocalesMatch:
         // They matched, so we can reset the UI.
-        gMainPane.updatePrimaryBrowserLanguageUI(
-          Services.locale.appLocaleAsBCP47
-        );
+        gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocale);
         gMainPane.hideConfirmLanguageChangeMessageBar();
         break;
       default:
@@ -1023,16 +1019,12 @@ var gMainPane = {
       case Multilingual.TransitionType.LiveReload:
         Services.locale.requestedLocales = selected;
 
-        gMainPane.updatePrimaryBrowserLanguageUI(
-          Services.locale.appLocaleAsBCP47
-        );
+        gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocale);
         gMainPane.hideConfirmLanguageChangeMessageBar();
         break;
       case Multilingual.TransitionType.LocalesMatch:
         // They matched, so we can reset the UI.
-        gMainPane.updatePrimaryBrowserLanguageUI(
-          Services.locale.appLocaleAsBCP47
-        );
+        gMainPane.updatePrimaryBrowserLanguageUI(Services.locale.appLocale);
         gMainPane.hideConfirmLanguageChangeMessageBar();
         break;
       default:
@@ -1041,7 +1033,7 @@ var gMainPane = {
   },
 
   displayUseSystemLocale() {
-    let appLocale = Services.locale.appLocaleAsBCP47;
+    let appLocale = Services.locale.appLocale;
     let regionalPrefsLocales = Services.locale.regionalPrefsLocales;
     if (!regionalPrefsLocales.length) {
       return;

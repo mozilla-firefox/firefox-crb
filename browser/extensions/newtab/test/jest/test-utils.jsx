@@ -56,7 +56,7 @@ const SERVICE_STUBS = {
     caretBlinkCount: 500,
   }),
   locale: () => ({
-    appLocaleAsBCP47: "en-US",
+    appLocale: "en-US",
     negotiateLanguages: jest.fn(),
   }),
   obs: () => ({

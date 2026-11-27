@@ -2740,7 +2740,7 @@ bool ContentParent::InitInternal(ProcessPriority aInitialPriority) {
 
   OSPreferences::GetInstance()->GetSystemLocales(xpcomInit.sysLocales());
 
-  LocaleService::GetInstance()->GetAppLocalesAsBCP47(xpcomInit.appLocales());
+  LocaleService::GetInstance()->GetAppLocales(xpcomInit.appLocales());
   LocaleService::GetInstance()->GetRequestedLocales(
       xpcomInit.requestedLocales());
 
@@ -3969,7 +3969,7 @@ ContentParent::Observe(nsISupports* aSubject, const char* aTopic,
     (void)SendNotifyEmptyHTTPCache();
   } else if (!strcmp(aTopic, "intl:app-locales-changed")) {
     nsTArray<nsCString> appLocales;
-    LocaleService::GetInstance()->GetAppLocalesAsBCP47(appLocales);
+    LocaleService::GetInstance()->GetAppLocales(appLocales);
     (void)SendUpdateAppLocales(appLocales);
   } else if (!strcmp(aTopic, "intl:requested-locales-changed")) {
     nsTArray<nsCString> requestedLocales;

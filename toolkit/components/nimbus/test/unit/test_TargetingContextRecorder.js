@@ -39,7 +39,7 @@ async function setupTest({ ...args } = {}) {
   const localeService = Services.locale;
   const mockLocaleService = new Proxy(localeService, {
     get(obj, prop) {
-      if (prop === "appLocaleAsBCP47") {
+      if (prop === "appLocale") {
         return "en-US";
       }
 

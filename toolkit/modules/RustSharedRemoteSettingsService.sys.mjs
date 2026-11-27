@@ -43,7 +43,7 @@ class _SharedRemoteSettingsService {
         appId: Services.appinfo.ID || "",
         channel: AppConstants.IS_ESR ? "esr" : AppConstants.MOZ_UPDATE_CHANNEL,
         appVersion: Services.appinfo.version,
-        locale: Services.locale.appLocaleAsBCP47,
+        locale: Services.locale.appLocale,
         os: AppConstants.platform,
         osVersion: Services.sysinfo.get("version"),
         country: Region.home ?? undefined,
@@ -129,7 +129,7 @@ class _SharedRemoteSettingsService {
         break;
       }
       case "intl:app-locales-changed": {
-        const newLocale = Services.locale.appLocaleAsBCP47;
+        const newLocale = Services.locale.appLocale;
         if (newLocale != this.#config.appContext.locale) {
           this.#config.appContext.locale = newLocale;
           this.#updateConfig();

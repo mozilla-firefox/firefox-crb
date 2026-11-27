@@ -233,7 +233,7 @@ export const AbuseReporter = {
 
     data.app = AppConstants.platform === "android" ? "android" : "firefox";
     data.appversion = Services.appinfo.version;
-    data.lang = Services.locale.appLocaleAsBCP47;
+    data.lang = Services.locale.appLocale;
     data.operating_system = AppConstants.platform;
     data.operating_system_version = Services.sysinfo.getProperty("version");
 

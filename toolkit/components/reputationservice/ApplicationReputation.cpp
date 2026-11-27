@@ -1644,7 +1644,7 @@ nsresult PendingLookup::SendRemoteQueryInternal(Reason& aReason) {
   mRequest.set_user_initiated(true);
 
   nsCString locale;
-  rv = LocaleService::GetInstance()->GetAppLocaleAsBCP47(locale);
+  rv = LocaleService::GetInstance()->GetAppLocale(locale);
   NS_ENSURE_SUCCESS(rv, rv);
   mRequest.set_locale(locale.get());
   nsCString sha256Hash;

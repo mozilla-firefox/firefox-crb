@@ -121,7 +121,7 @@ export class FramedWidgetsFeed {
     const { data, error } = await this.merino.fetchFramedWidgets({
       source: "newtab",
       endpointUrl,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
     });
     if (error || !Array.isArray(data?.widgets)) {
       return null;

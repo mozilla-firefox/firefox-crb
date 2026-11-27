@@ -1169,7 +1169,7 @@ export class EnrollmentsContext {
     this.unenrolledExperimentSlugs = unenrolledExperimentSlugs;
     this.matches = 0;
 
-    this.locale = Services.locale.appLocaleAsBCP47;
+    this.locale = Services.locale.appLocale;
   }
 
   async checkRecipe(recipe) {
@@ -1377,7 +1377,7 @@ export class EnrollmentsContext {
               substitutedValue =
                 lazy._ExperimentFeature.substituteLocalizations(
                   value,
-                  localizations[Services.locale.appLocaleAsBCP47],
+                  localizations[Services.locale.appLocale],
                   missingL10nIds
                 );
             } catch (e) {

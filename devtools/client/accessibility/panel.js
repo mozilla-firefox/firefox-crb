@@ -133,7 +133,7 @@ class AccessibilityPanel extends EventEmitter {
    * array of FluentBundles elements.
    */
   async createFluentBundles() {
-    const locales = Services.locale.appLocalesAsBCP47;
+    const locales = Services.locale.appLocales;
     const generator = L10nRegistry.getInstance().generateBundles(locales, [
       "devtools/client/accessibility.ftl",
     ]);

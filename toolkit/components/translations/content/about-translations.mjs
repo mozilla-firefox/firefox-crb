@@ -6,7 +6,7 @@
 // about-translations.mjs is running in an unprivileged context, and these injected functions
 // allow for the page to get access to additional privileged features.
 
-/* global AT_getAppLocaleAsBCP47, AT_getSupportedLanguages, AT_log, AT_getScriptDirection,
+/* global AT_getAppLocale, AT_getSupportedLanguages, AT_log, AT_getScriptDirection,
    AT_getDisplayName, AT_logError, AT_createTranslationsPort, AT_isHtmlTranslation,
    AT_isTranslationEngineSupported, AT_isInAutomation, AT_identifyLanguage, AT_clearSourceText,
    AT_telemetry, AT_isEnabledStateManagedByPolicy, AT_enableTranslationsFeature,
@@ -2035,7 +2035,7 @@ class AboutTranslations {
     this.#setTargetText(this.#translatingPlaceholderText);
     this.#disableSwapLanguagesButton();
     this.#updateTextAreaAttributes(targetSectionTextArea, {
-      languageTag: AT_getAppLocaleAsBCP47(),
+      languageTag: AT_getAppLocale(),
     });
 
     dispatchTestEvent("AboutTranslationsTest:ShowTranslatingPlaceholder");
@@ -2189,7 +2189,7 @@ class AboutTranslations {
       });
     } else {
       this.#updateTextAreaAttributes(sourceSectionTextArea, {
-        languageTag: AT_getAppLocaleAsBCP47(),
+        languageTag: AT_getAppLocale(),
         removeLangAttribute: true,
       });
     }
@@ -2209,7 +2209,7 @@ class AboutTranslations {
       });
     } else {
       this.#updateTextAreaAttributes(targetSectionTextArea, {
-        languageTag: AT_getAppLocaleAsBCP47(),
+        languageTag: AT_getAppLocale(),
         removeLangAttribute: true,
       });
     }

@@ -509,7 +509,7 @@ assert(availableLocales.includes("ar"));
 
 Services.locale.requestedLocales = ["ko-KR"];
 
-let appLocales = Services.locale.appLocalesAsBCP47;
+let appLocales = Services.locale.appLocales;
 assert(appLocales[0], "ko-KR");
 ```
 
@@ -525,7 +525,7 @@ but it is also simpler:
 Services.locale.availableLocales = ["ko-KR", "ar"];
 Services.locale.requestedLocales = ["ko-KR"];
 
-let appLocales = Services.locale.appLocalesAsBCP47;
+let appLocales = Services.locale.appLocales;
 assert(appLocales[0], "ko-KR");
 ```
 

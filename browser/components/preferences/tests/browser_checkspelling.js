@@ -59,7 +59,7 @@ add_task(async function test_spellcheck_checkbox_toggles_pref() {
 
   is(
     link.href,
-    `https://example.com/${Services.locale.appLocaleAsBCP47}/dictionaries/`,
+    `https://example.com/${Services.locale.appLocale}/dictionaries/`,
     "Link href is localized"
   );
 

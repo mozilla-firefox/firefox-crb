@@ -328,7 +328,7 @@ describe("ActivityStream", () => {
       getStringPrefStub = argsStub();
       services.prefs.getStringPref = getStringPrefStub;
       region.home = "CA";
-      services.locale.appLocaleAsBCP47 = "en-CA";
+      services.locale.appLocale = "en-CA";
     });
     it("throws an error when the pref argument is not a string", () => {
       expect(() => csvPrefHasValue(0, "foo")).toThrow(
@@ -362,7 +362,7 @@ describe("ActivityStream", () => {
     const REGION_WEATHER_CONFIG =
       "browser.newtabpage.activity-stream.discoverystream.region-weather-config";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       getStringPrefStub = argsStub();
       services.prefs.getStringPref = getStringPrefStub;
@@ -372,7 +372,7 @@ describe("ActivityStream", () => {
     });
     it("should turn off when region and locale are not set", () => {
       region.home = "";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -393,19 +393,19 @@ describe("ActivityStream", () => {
     });
     it("should turn on in any locale when region is supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "ja";
+      services.locale.appLocale = "ja";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(true);
     });
     it("should turn on when locale is not set and region is supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(true);
     });
     it("should turn off in any locale when region is not supported", () => {
       region.home = "FR";
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -416,7 +416,7 @@ describe("ActivityStream", () => {
     const ENABLED_PREF = "widgets.enabled";
     const BRANCH = "browser.newtabpage.activity-stream.";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -458,7 +458,7 @@ describe("ActivityStream", () => {
         .whenCalledWith(`${BRANCH}widgets.system.region-config`)
         .returns("CZ");
       region.home = "CZ";
-      services.locale.appLocaleAsBCP47 = "cs";
+      services.locale.appLocale = "cs";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(AVAILABLE_PREF).value).toBe(true);
     });
@@ -511,7 +511,7 @@ describe("ActivityStream", () => {
     const ENABLED_PREF = "widgets.lists.enabled";
     const BRANCH = "browser.newtabpage.activity-stream.";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -551,7 +551,7 @@ describe("ActivityStream", () => {
     const ENABLED_PREF = "widgets.focusTimer.enabled";
     const BRANCH = "browser.newtabpage.activity-stream.";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -580,7 +580,7 @@ describe("ActivityStream", () => {
     const ENABLED_PREF = "widgets.clocks.enabled";
     const BRANCH = "browser.newtabpage.activity-stream.";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -609,7 +609,7 @@ describe("ActivityStream", () => {
     const ENABLED_PREF = "widgets.pictureOfTheDay.enabled";
     const BRANCH = "browser.newtabpage.activity-stream.";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -658,7 +658,7 @@ describe("ActivityStream", () => {
           .returns(enforce);
         try {
           region.home = "US";
-          services.locale.appLocaleAsBCP47 = "en-US";
+          services.locale.appLocale = "en-US";
           as._updateDynamicPrefs();
           expect(
             PREFS_CONFIG.get(`widgets.system.${widget}.enabled`).value
@@ -676,7 +676,7 @@ describe("ActivityStream", () => {
     const AVAILABLE_PREF = "widgets.system.privacy.enabled";
     const ENABLED_PREF = "widgets.privacy.enabled";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       services.prefs.getStringPref = argsStub(
         (_pref, defaultValue) => defaultValue
       );
@@ -721,7 +721,7 @@ describe("ActivityStream", () => {
       "should be available but off by default in %s with %s",
       (geo, locale) => {
         region.home = geo;
-        services.locale.appLocaleAsBCP47 = locale;
+        services.locale.appLocale = locale;
         as._updateDynamicPrefs();
         expect(PREFS_CONFIG.get(AVAILABLE_PREF).value).toBe(true);
         expect(PREFS_CONFIG.get(ENABLED_PREF).value).toBe(false);
@@ -731,14 +731,14 @@ describe("ActivityStream", () => {
       "should be unavailable in a non-English locale (%s)",
       locale => {
         region.home = "US";
-        services.locale.appLocaleAsBCP47 = locale;
+        services.locale.appLocale = locale;
         as._updateDynamicPrefs();
         expect(PREFS_CONFIG.get(AVAILABLE_PREF).value).toBe(false);
       }
     );
     it("should be unavailable in PL even in an English locale", () => {
       region.home = "PL";
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(AVAILABLE_PREF).value).toBe(false);
     });
@@ -761,7 +761,7 @@ describe("ActivityStream", () => {
           .returns(true);
         try {
           region.home = "US";
-          services.locale.appLocaleAsBCP47 = "de";
+          services.locale.appLocale = "de";
           as._updateDynamicPrefs();
           expect(PREFS_CONFIG.get(AVAILABLE_PREF).value).toBe(expected);
         } finally {
@@ -807,7 +807,7 @@ describe("ActivityStream", () => {
       "widgets.solitaire.enabled",
     ];
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       services.prefs.getStringPref = argsStub(
         (_pref, defaultValue) => defaultValue
       );
@@ -868,7 +868,7 @@ describe("ActivityStream", () => {
     const BRANCH = "browser.newtabpage.activity-stream.";
     let getStringPrefStub;
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       getStringPrefStub = argsStub((_pref, defaultValue) => defaultValue);
       services.prefs.getStringPref = getStringPrefStub;
     });
@@ -896,7 +896,7 @@ describe("ActivityStream", () => {
     });
     it("should keep Crossword English-only", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "de";
+      services.locale.appLocale = "de";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get("widgets.system.crossword.enabled").value).toBe(
         false
@@ -1031,7 +1031,7 @@ describe("ActivityStream", () => {
     const LOCALE_TOPICS_CONFIG =
       "browser.newtabpage.activity-stream.discoverystream.topicSelection.locale-topics-config";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       getStringPrefStub = argsStub();
       services.prefs.getStringPref = getStringPrefStub;
@@ -1046,7 +1046,7 @@ describe("ActivityStream", () => {
     });
     it("should turn off when region and locale are not set", () => {
       region.home = "";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -1067,25 +1067,25 @@ describe("ActivityStream", () => {
     });
     it("should turn off when locale is not set", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
     it("should turn on when locale is supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(true);
     });
     it("should turn off when locale is not supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "fr";
+      services.locale.appLocale = "fr";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
     it("should turn off when region and locale are both not supported", () => {
       region.home = "FR";
-      services.locale.appLocaleAsBCP47 = "fr";
+      services.locale.appLocale = "fr";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -1098,7 +1098,7 @@ describe("ActivityStream", () => {
     const LOCALE_TOPIC_LABEL_CONFIG =
       "browser.newtabpage.activity-stream.discoverystream.topicLabels.locale-topic-label-config";
     beforeEach(() => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       getStringPrefStub = argsStub();
       services.prefs.getStringPref = getStringPrefStub;
@@ -1115,7 +1115,7 @@ describe("ActivityStream", () => {
     });
     it("should turn off when region and locale are not set", () => {
       region.home = "";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -1136,25 +1136,25 @@ describe("ActivityStream", () => {
     });
     it("should turn off when locale is not set", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
     it("should turn on when locale is supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(true);
     });
     it("should turn off when locale is not supported", () => {
       region.home = "US";
-      services.locale.appLocaleAsBCP47 = "fr";
+      services.locale.appLocale = "fr";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
     it("should turn off when region and locale are both not supported", () => {
       region.home = "FR";
-      services.locale.appLocaleAsBCP47 = "fr";
+      services.locale.appLocale = "fr";
       as._updateDynamicPrefs();
       expect(PREFS_CONFIG.get(FEATURE_ENABLED_PREF).value).toBe(false);
     });
@@ -1165,7 +1165,7 @@ describe("ActivityStream", () => {
       getStringPrefStub = argsStub();
       services.prefs.getStringPref = getStringPrefStub;
       region.home = "CA";
-      services.locale.appLocaleAsBCP47 = "en-CA";
+      services.locale.appLocale = "en-CA";
     });
     it("should enable 7 row layout pref if no basic config is set and no geo is set", () => {
       getStringPrefStub
@@ -1227,7 +1227,7 @@ describe("ActivityStream", () => {
         )
         .returns(true);
 
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       region.home = "US";
 
@@ -1239,7 +1239,7 @@ describe("ActivityStream", () => {
       );
     });
     it("should be false with no geo/locale", () => {
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
       region.home = "";
 
       as._updateDynamicPrefs();
@@ -1247,7 +1247,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be false with no geo but an allowed locale", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       region.home = "";
 
       as._updateDynamicPrefs();
@@ -1262,7 +1262,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be false with expected geo and unexpected locale", () => {
-      services.locale.appLocaleAsBCP47 = "no-LOCALE";
+      services.locale.appLocale = "no-LOCALE";
 
       as._updateDynamicPrefs();
 
@@ -1282,7 +1282,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be true with updated pref change", () => {
-      services.locale.appLocaleAsBCP47 = "en-GB";
+      services.locale.appLocale = "en-GB";
       region.home = "GB";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1293,14 +1293,14 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be true with a locale matched by a pattern", () => {
-      services.locale.appLocaleAsBCP47 = "en-GB";
+      services.locale.appLocale = "en-GB";
 
       as._updateDynamicPrefs();
 
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be true in any region with a wildcard region entry", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       region.home = "MX";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1311,7 +1311,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be false for a locale the wildcard region does not list", () => {
-      services.locale.appLocaleAsBCP47 = "es-MX";
+      services.locale.appLocale = "es-MX";
       region.home = "MX";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1322,7 +1322,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be true for a region added alongside a wildcard entry", () => {
-      services.locale.appLocaleAsBCP47 = "es-MX";
+      services.locale.appLocale = "es-MX";
       region.home = "MX";
       getStringPrefStub.whenCalledWith(STORIES_REGION_LOCALE_PREF).returns(
         JSON.stringify([
@@ -1336,7 +1336,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be false with a blocked region despite a wildcard entry", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       region.home = "MX";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1348,7 +1348,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should not match a variant against an exact pattern", () => {
-      services.locale.appLocaleAsBCP47 = "es-MX";
+      services.locale.appLocale = "es-MX";
       region.home = "ES";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1359,7 +1359,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should ignore casing in regions and locales", () => {
-      services.locale.appLocaleAsBCP47 = "EN-us";
+      services.locale.appLocale = "EN-us";
       region.home = "us";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1370,7 +1370,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should keep only the last entry for a region", () => {
-      services.locale.appLocaleAsBCP47 = "de";
+      services.locale.appLocale = "de";
       region.home = "BE";
       getStringPrefStub.whenCalledWith(STORIES_REGION_LOCALE_PREF).returns(
         JSON.stringify([
@@ -1384,14 +1384,14 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be false with a geo but no locale", () => {
-      services.locale.appLocaleAsBCP47 = "";
+      services.locale.appLocale = "";
 
       as._updateDynamicPrefs();
 
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should fall back when the config parses to something else", () => {
-      services.locale.appLocaleAsBCP47 = "es-MX";
+      services.locale.appLocale = "es-MX";
       region.home = "MX";
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
@@ -1418,7 +1418,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be true for a trainhop region/locale pair", () => {
-      services.locale.appLocaleAsBCP47 = "es-MX";
+      services.locale.appLocale = "es-MX";
       region.home = "MX";
       nimbusFeatures.newtabTrainhop.getAllEnrollments = jest.fn(() => [
         {
@@ -1440,7 +1440,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should let the trainhop payload replace the shipped pairs", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       nimbusFeatures.newtabTrainhop.getAllEnrollments = jest.fn(() => [
         {
           value: {
@@ -1456,7 +1456,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should prefer an experiment payload over a rollout payload", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       nimbusFeatures.newtabTrainhop.getAllEnrollments = jest.fn(() => [
         {
           value: {
@@ -1479,7 +1479,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be true for a legacy region/locale pair", () => {
-      services.locale.appLocaleAsBCP47 = "pl";
+      services.locale.appLocale = "pl";
       region.home = "PL";
       getVariableStub
         .whenCalledWith("regionStoriesConfig")
@@ -1490,7 +1490,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(true);
     });
     it("should be false for a legacy region without its locale", () => {
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
       region.home = "PL";
       getVariableStub
         .whenCalledWith("regionStoriesConfig")
@@ -1501,7 +1501,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be false for a legacy region left out of the config", () => {
-      services.locale.appLocaleAsBCP47 = "pl";
+      services.locale.appLocale = "pl";
       region.home = "PL";
       getVariableStub
         .whenCalledWith("regionStoriesConfig")
@@ -1512,7 +1512,7 @@ describe("ActivityStream", () => {
       expect(PREFS_CONFIG.get("feeds.system.topstories").value).toBe(false);
     });
     it("should be false with a blocked region in the legacy config", () => {
-      services.locale.appLocaleAsBCP47 = "pl";
+      services.locale.appLocale = "pl";
       region.home = "PL";
       getVariableStub.whenCalledWith("regionStoriesConfig").returns("PL");
       getVariableStub.whenCalledWith("regionStoriesBlock").returns("PL");
@@ -1525,7 +1525,7 @@ describe("ActivityStream", () => {
       getStringPrefStub
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
         .returns(undefined);
-      services.locale.appLocaleAsBCP47 = "de";
+      services.locale.appLocale = "de";
       region.home = "DE";
 
       as._updateDynamicPrefs();
@@ -1563,7 +1563,7 @@ describe("ActivityStream", () => {
         .returns(JSON.stringify([["US", ["en-*"]]]));
 
       services.prefs.getBoolPref = jest.fn(() => true);
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       as._updateDynamicPrefs();
       jest.advanceTimersByTime(1);
@@ -1577,7 +1577,7 @@ describe("ActivityStream", () => {
         .whenCalledWith(STORIES_REGION_LOCALE_PREF)
         .returns(JSON.stringify([["US", ["en-*"]]]));
 
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       as._updateDynamicPrefs();
       jest.advanceTimersByTime(1);
@@ -1594,7 +1594,7 @@ describe("ActivityStream", () => {
       getVariableStub.whenCalledWith("regionStoriesBlock").returns("US");
 
       services.prefs.getBoolPref = jest.fn(() => true);
-      services.locale.appLocaleAsBCP47 = "en-US";
+      services.locale.appLocale = "en-US";
 
       as._updateDynamicPrefs();
       jest.advanceTimersByTime(1);

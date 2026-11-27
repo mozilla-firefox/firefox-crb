@@ -301,7 +301,7 @@ async function doLocaleTest({ shouldRunTask, osUnit, unitsByLocale }) {
 
   // Sanity check initial locale info.
   Assert.equal(
-    Services.locale.appLocaleAsBCP47,
+    Services.locale.appLocale,
     "en-US",
     "Initial app locale should be en-US"
   );

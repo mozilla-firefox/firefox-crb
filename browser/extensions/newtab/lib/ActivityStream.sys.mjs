@@ -3213,7 +3213,7 @@ export class ActivityStream {
       this.geo = "";
     }
 
-    this.locale = Services.locale.appLocaleAsBCP47;
+    this.locale = Services.locale.appLocale;
 
     // Update the pref config of those with dynamic values
     for (const pref of PREFS_CONFIG.keys()) {

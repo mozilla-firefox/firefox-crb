@@ -1051,7 +1051,7 @@ add_task(
       );
       // The browser locale was injected into the prompt
       Assert.ok(
-        callArgs.args[1].content.includes(Services.locale.appLocaleAsBCP47) &&
+        callArgs.args[1].content.includes(Services.locale.appLocale) &&
           !callArgs.args[1].content.includes("{locale}"),
         "Browser locale should be injected into the prompt and no {locale} placeholder should remain"
       );

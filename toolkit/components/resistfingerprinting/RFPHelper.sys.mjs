@@ -193,7 +193,7 @@ class _RFPHelper {
 
   _shouldPromptForLanguagePref() {
     return (
-      Services.locale.appLocaleAsBCP47.substr(0, 2) !== "en" &&
+      Services.locale.appLocale.substr(0, 2) !== "en" &&
       Services.prefs.getIntPref(kPrefSpoofEnglish) === 0
     );
   }

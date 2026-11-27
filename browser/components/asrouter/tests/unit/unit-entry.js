@@ -386,7 +386,7 @@ const TEST_GLOBAL = {
       exists: () => false,
     },
     locale: {
-      get appLocaleAsBCP47() {
+      get appLocale() {
         return "en-US";
       },
       negotiateLanguages() {},

@@ -273,7 +273,7 @@ describe("SmartFormFillModel", () => {
           "THE USER'S OTHER OPEN TABS (title and URL only)\n" +
           `${JSON.stringify(shapedTabs)}\n\n` +
           "maxSelectedTabs: 3\n\n" +
-          `userLocale: ${Services.locale.appLocaleAsBCP47}\n\n` +
+          `userLocale: ${Services.locale.appLocale}\n\n` +
           "Which of these tabs could help fill this form? " +
           "Include every tab that plausibly could.",
       });
@@ -368,7 +368,7 @@ describe("SmartFormFillModel", () => {
         content:
           `Current page title:\n${pageTitle.substring(0, 100)}\n\n` +
           "Current page url:\n§url_token: EXAMPLE_COM_JOBS_GENERATE_1§\n\n" +
-          `User's browser locale:\n${Services.locale.appLocaleAsBCP47}\n\n` +
+          `User's browser locale:\n${Services.locale.appLocale}\n\n` +
           "Current page text:\nApply for the example role.\n\n" +
           "Relevant memories about the user:\n[]\n\n" +
           `Relevant open tabs:\n${JSON.stringify(shapedRelevantTabs)}\n\n` +

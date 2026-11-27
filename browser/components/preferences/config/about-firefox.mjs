@@ -482,7 +482,7 @@ Preferences.addSetting({
     return () =>
       Services.obs.removeObserver(emitChange, "intl:app-locales-changed");
   },
-  visible: () => NEWSLETTER_LOCALES.has(Services.locale.appLocaleAsBCP47),
+  visible: () => NEWSLETTER_LOCALES.has(Services.locale.appLocale),
 });
 
 SettingGroupManager.registerGroups({

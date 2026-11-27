@@ -188,7 +188,7 @@ export class PictureOfTheDayFeed {
     const { data, error } = await this.merino.fetchPictureOfTheDay({
       source: "newtab",
       endpointUrl,
-      acceptLanguage: Services.locale.appLocaleAsBCP47,
+      acceptLanguage: Services.locale.appLocale,
     });
     const picture = this.normalize(data);
     if (error || !picture) {

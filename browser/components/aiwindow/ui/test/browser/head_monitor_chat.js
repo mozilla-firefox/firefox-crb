@@ -176,9 +176,7 @@ function formatScheduleTime(hour, minute, weekday) {
     when.setDate(when.getDate() + ((weekday - when.getDay() + 7) % 7));
   }
   const format = options =>
-    new Intl.DateTimeFormat(Services.locale.appLocalesAsBCP47, options).format(
-      when
-    );
+    new Intl.DateTimeFormat(Services.locale.appLocales, options).format(when);
   return {
     time: format({ hour: "numeric", minute: "2-digit" }),
     weekday: format({ weekday: "long" }),

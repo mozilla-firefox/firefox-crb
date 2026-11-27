@@ -82,7 +82,7 @@ pub fn get_app_locales() -> Option<ThinVec<nsCString>> {
     let mut locales = ThinVec::new();
     unsafe {
         locale_service
-            .GetAppLocalesAsBCP47(&mut locales)
+            .GetAppLocales(&mut locales)
             .to_result()
             .ok()?;
     }

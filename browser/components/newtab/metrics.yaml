@@ -15,7 +15,7 @@ newtab:
     type: string
     description: >
       The application's locale as of when newtab's TelemetryFeed was init.
-      Comes from `Services.local.appLocaleAsBCP47`.
+      Comes from `Services.local.appLocale`.
       Looks like `en-US`.
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=1766887

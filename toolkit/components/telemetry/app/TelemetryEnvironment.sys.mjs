@@ -411,7 +411,7 @@ const SERVICES_INFO_CHANGE_TOPIC = "sync-ui-state:update";
  */
 function getBrowserLocale() {
   try {
-    return Services.locale.appLocaleAsBCP47;
+    return Services.locale.appLocale;
   } catch (e) {
     return null;
   }
@@ -465,7 +465,7 @@ function getRegionalPrefsLocales() {
 function recordIntlMetrics() {
   Glean.intl.requestedLocales.set(Services.locale.requestedLocales);
   Glean.intl.availableLocales.set(Services.locale.availableLocales);
-  Glean.intl.appLocales.set(Services.locale.appLocalesAsBCP47);
+  Glean.intl.appLocales.set(Services.locale.appLocales);
   Glean.intl.systemLocales.set(getSystemLocales());
   Glean.intl.regionalPrefsLocales.set(getRegionalPrefsLocales());
   Glean.intl.acceptLanguages.set(

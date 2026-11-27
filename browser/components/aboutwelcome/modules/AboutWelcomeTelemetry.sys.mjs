@@ -76,7 +76,7 @@ export class AboutWelcomeTelemetry {
     let ping = {
       ...event,
       addon_version: Services.appinfo.appBuildID,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
       client_id: await lazy.telemetryClientId,
       browser_session_id: lazy.browserSessionId,
     };

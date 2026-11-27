@@ -306,7 +306,7 @@ export async function buildChatSystemPrompt(model) {
 
   const prompt = renderTemplate(sections.join("\n\n\n"), {
     skill_list: skillList,
-    locale: Services.locale.appLocaleAsBCP47,
+    locale: Services.locale.appLocale,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     location: locationText,
     isoTimestamp,

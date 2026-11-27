@@ -212,7 +212,7 @@ add_task(async function test_panel_press_fills_the_form_from_the_page() {
       !first.user.includes("My own name"),
       "What the user typed is not sent"
     );
-    const language = describeLanguage(Services.locale.appLocaleAsBCP47);
+    const language = describeLanguage(Services.locale.appLocale);
     Assert.ok(
       first.system.includes(language) &&
         first.user.trimEnd().split("\n").at(-1).includes(language),

@@ -76,7 +76,7 @@ export function getAddonAndLocalAPIsMocker(testScope, sandbox) {
         .stub(mockable, "getAvailableLocalesIncludingFallback")
         .returns(availableLocales);
       sandbox.stub(mockable, "getDefaultLocale").returns(appLocale);
-      sandbox.stub(mockable, "getAppLocaleAsBCP47").returns(appLocale);
+      sandbox.stub(mockable, "getAppLocale").returns(appLocale);
       sandbox.stub(mockable, "getLastFallbackLocale").returns("en-US");
     }
     if (systemLocale) {
