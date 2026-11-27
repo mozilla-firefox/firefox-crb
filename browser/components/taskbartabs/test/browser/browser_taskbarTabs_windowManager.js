@@ -466,6 +466,28 @@ add_task(async function testTaskbarTabCount() {
   TaskbarTabs.removeTaskbarTab(taskbarTab1.id);
 });
 
+add_task(async function testLinuxWindowIconSet() {
+  const wm = new TaskbarTabsWindowManager();
+
+  let expectedIcon = TaskbarTabsUtils.getTaskbarTabIconFile(taskbarTab1.id);
+
+  async function check(win, cause) {
+    is(
+      win.document.documentElement.getAttribute("icon"),
+      expectedIcon.path,
+      `${cause} set the window icon to the saved Taskbar Tab icon`
+    );
+    await BrowserTestUtils.closeWindow(win);
+  }
+
+  let win = await wm.openWindow(taskbarTab1);
+  await check(win, "openWindow");
+
+  let tab = BrowserTestUtils.addTab(window.gBrowser, url1.spec);
+  win = await wm.replaceTabWithWindow(taskbarTab1, tab);
+  await check(win, "replaceTabWithWindow");
+}).skip(AppConstants.platform !== "linux"); // The icon path is only set on Linux.
+
 add_task(async function testWindowIconSet() {
   const wm = new TaskbarTabsWindowManager();
 

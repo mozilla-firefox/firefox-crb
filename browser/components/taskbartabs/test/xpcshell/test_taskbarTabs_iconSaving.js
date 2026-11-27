@@ -99,14 +99,14 @@ function getTempFile() {
   return path;
 }
 
-add_task(async function test_pin_saves_raster_icon() {
+add_task(async function test_saves_raster_icon() {
   sinon.resetHistory();
 
   let iconFile = getTempFile();
   gOverrideIconFileOnce = iconFile;
 
   let img = await TaskbarTabsUtils._imageFromLocalURI(gPngFavicon);
-  await TaskbarTabsPin.pinTaskbarTab(taskbarTab, img);
+  await TaskbarTabsPin.saveTaskbarTabIcon(taskbarTab, img);
 
   equal(
     ShellService.writeShortcutIcon.firstCall.args[1],
@@ -117,14 +117,14 @@ add_task(async function test_pin_saves_raster_icon() {
   await testWrittenIconFile(iconFile);
 });
 
-add_task(async function test_pin_saves_vector_icon() {
+add_task(async function test_saves_vector_icon() {
   sinon.resetHistory();
 
   let iconFile = getTempFile();
   gOverrideIconFileOnce = iconFile;
 
   let img = await TaskbarTabsUtils._imageFromLocalURI(gSvgFavicon);
-  await TaskbarTabsPin.pinTaskbarTab(taskbarTab, img);
+  await TaskbarTabsPin.saveTaskbarTabIcon(taskbarTab, img);
 
   equal(
     ShellService.writeShortcutIcon.firstCall.args[1],

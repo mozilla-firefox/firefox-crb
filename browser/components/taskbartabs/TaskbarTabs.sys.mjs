@@ -128,7 +128,7 @@ export const TaskbarTabs = new (class {
     let pin = null;
     if (result.created || aDetails.ensurePinned) {
       // Don't wait for the pinning to complete.
-      pin = this.#pinTaskbarTab(result.taskbarTab, result.icon, {
+      pin = this.#pinTaskbarTab(result.taskbarTab, {
         window: aDetails.window ?? null,
       });
       this.#applyWindowClass(result.taskbarTab, pin);
@@ -162,20 +162,26 @@ export const TaskbarTabs = new (class {
       this.#updateMetrics();
 
       let icon = await fetchIconForTaskbarTab(result.taskbarTab, aDetails);
+      if (!(await TaskbarTabsPin.saveTaskbarTabIcon(result.taskbarTab, icon))) {
+        icon = await TaskbarTabsUtils.getDefaultIcon();
+        await TaskbarTabsPin.saveTaskbarTabIcon(result.taskbarTab, icon);
+      }
       result.icon = icon;
     } else {
+      let iconFile = TaskbarTabsUtils.getTaskbarTabIconFile(
+        result.taskbarTab.id
+      );
       result.icon = await loadSavedTaskbarTabIcon(result.taskbarTab.id);
+      if (!(await IOUtils.exists(iconFile.path))) {
+        await TaskbarTabsPin.saveTaskbarTabIcon(result.taskbarTab, result.icon);
+      }
     }
 
     return result;
   }
 
-  async #pinTaskbarTab(aTaskbarTab, aIcon, aDetails) {
-    let result = await TaskbarTabsPin.pinTaskbarTab(
-      aTaskbarTab,
-      aIcon,
-      aDetails
-    );
+  async #pinTaskbarTab(aTaskbarTab, aDetails) {
+    let result = await TaskbarTabsPin.pinTaskbarTab(aTaskbarTab, aDetails);
     this.#registry.patchTaskbarTab(aTaskbarTab, {
       shortcutRelativePath: result.shortcut,
     });
@@ -253,7 +259,7 @@ export const TaskbarTabs = new (class {
     if (created) {
       // Don't wait for pinning to complete. (This is separate so we can call
       // it with the newly-created window.)
-      let pin = this.#pinTaskbarTab(taskbarTab, icon, { window: win });
+      let pin = this.#pinTaskbarTab(taskbarTab, { window: win });
       this.#applyWindowClass(taskbarTab, pin);
     }
 
@@ -383,11 +389,7 @@ async function fetchIconForTaskbarTab(aTaskbarTab, aDetails) {
  * @returns {imgIContainer} The icon saved on disk.
  */
 async function loadSavedTaskbarTabIcon(aTaskbarTabId) {
-  let iconPath = TaskbarTabsUtils.getTaskbarTabsFolder();
-  iconPath.append("icons");
-  iconPath.append(
-    aTaskbarTabId + "." + lazy.ShellService.shortcutIconType.extension
-  );
+  let iconPath = TaskbarTabsUtils.getTaskbarTabIconFile(aTaskbarTabId);
 
   try {
     return await TaskbarTabsUtils._remoteDecodeImageFromFile(
