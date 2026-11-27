@@ -27,7 +27,9 @@ add_task(async function () {
   ok(
     hasTooltip(
       summaryGraphAllEl,
-      ANIMATION_L10N.getStr("player.allPropertiesOnCompositorTooltip")
+      ANIMATION_L10N.formatValueSync(
+        "animation-inspector-all-properties-on-compositor"
+      )
     ),
     "The element has the right tooltip content"
   );
@@ -41,14 +43,18 @@ add_task(async function () {
   ok(
     !hasTooltip(
       summaryGraphNoEl,
-      ANIMATION_L10N.getStr("player.allPropertiesOnCompositorTooltip")
+      ANIMATION_L10N.formatValueSync(
+        "animation-inspector-all-properties-on-compositor"
+      )
     ),
     "The element does not have oncompositor tooltip content"
   );
   ok(
     !hasTooltip(
       summaryGraphNoEl,
-      ANIMATION_L10N.getStr("player.somePropertiesOnCompositorTooltip")
+      ANIMATION_L10N.formatValueSync(
+        "animation-inspector-some-properties-on-compositor"
+      )
     ),
     "The element does not have oncompositor tooltip content"
   );
@@ -65,7 +71,9 @@ add_task(async function () {
   ok(
     hasTooltip(
       summaryGraphEl,
-      ANIMATION_L10N.getStr("player.somePropertiesOnCompositorTooltip")
+      ANIMATION_L10N.formatValueSync(
+        "animation-inspector-some-properties-on-compositor"
+      )
     ),
     "The element has the right tooltip content"
   );

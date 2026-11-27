@@ -30,7 +30,7 @@ class RewindButton extends PureComponent {
         event.stopPropagation();
         rewindAnimationsCurrentTime();
       },
-      title: getStr("timeline.rewindButtonTooltip"),
+      title: getStr("animation-inspector-rewind-button-title"),
     });
   }
 }

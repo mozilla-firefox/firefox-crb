@@ -5,17 +5,24 @@
 "use strict";
 
 const { LocalizationHelper } = require("resource://devtools/shared/l10n.js");
-const L10N = new LocalizationHelper(
-  "devtools/client/locales/animationinspector.properties"
-);
+
+loader.lazyGetter(this, "L10N", () => {
+  return new Localization(["devtools/client/animation-inspector.ftl"], true);
+});
 const INSPECTOR_L10N = new LocalizationHelper(
   "devtools/client/locales/inspector.properties"
 );
 
+const TITLE_IDS = {
+  cssanimation: "animation-inspector-css-animation-name",
+  csstransition: "animation-inspector-css-transition-name",
+  scriptanimation: "animation-inspector-script-animation-name",
+};
+
 /**
  * Get a formatted title for this animation. This will be either:
- * "%S", "%S : CSS Transition", "%S : CSS Animation",
- * "%S : Script Animation", or "Script Animation", depending
+ * "name", "name — CSS Transition", "name — CSS Animation",
+ * "name — Script Animation", or "Script Animation", depending
  * if the server provides the type, what type it is and if the animation
  * has a name.
  *
@@ -31,16 +38,19 @@ function getFormattedTitle(state) {
 
   // Script-generated animations may not have a name.
   if (state.type === "scriptanimation" && !state.name) {
-    return L10N.getStr("timeline.scriptanimation.unnamedLabel");
+    return getStr("animation-inspector-script-animation-unnamed");
   }
 
-  return L10N.getFormatStr(`timeline.${state.type}.nameLabel`, state.name);
+  const id = TITLE_IDS[state.type];
+  return id ? getStr(id, { name: state.name }) : state.name;
+}
+
+function getStr(id, args) {
+  return L10N.formatValueSync(id, args);
 }
 
 module.exports = {
-  getFormatStr: (...args) => L10N.getFormatStr(...args),
   getFormattedTitle,
   getInspectorStr: (...args) => INSPECTOR_L10N.getStr(...args),
-  getStr: (...args) => L10N.getStr(...args),
-  numberWithDecimals: (...args) => L10N.numberWithDecimals(...args),
+  getStr,
 };

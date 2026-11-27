@@ -26,9 +26,7 @@ const SummaryGraphPath = createFactory(
 
 const {
   getFormattedTitle,
-  getFormatStr,
   getStr,
-  numberWithDecimals,
 } = require("resource://devtools/client/inspector/animation/utils/l10n.js");
 
 class SummaryGraph extends PureComponent {
@@ -55,79 +53,83 @@ class SummaryGraph extends PureComponent {
 
   getTitleText(state) {
     const getTime = time =>
-      getFormatStr("player.timeLabel", numberWithDecimals(time / 1000, 2));
+      getStr("animation-inspector-time-seconds", { time: time / 1000 });
     const getTimeOrInfinity = time =>
-      time === Infinity ? getStr("player.infiniteDurationText") : getTime(time);
+      time === Infinity
+        ? getStr("animation-inspector-infinity")
+        : getTime(time);
 
-    let text = "";
+    const lines = [getFormattedTitle(state)];
 
-    // Adding the name.
-    text += getFormattedTitle(state);
-    text += "\n";
-
-    // Adding the delay.
     if (state.delay) {
-      text += getStr("player.animationDelayLabel") + " ";
-      text += getTime(state.delay);
-      text += "\n";
-    }
-
-    // Adding the duration.
-    text += getStr("player.animationDurationLabel") + " ";
-    text += getTimeOrInfinity(state.duration);
-    text += "\n";
-
-    // Adding the endDelay.
-    if (state.endDelay) {
-      text += getStr("player.animationEndDelayLabel") + " ";
-      text += getTime(state.endDelay);
-      text += "\n";
-    }
-
-    // Adding the iteration count (the infinite symbol, or an integer).
-    if (state.iterationCount !== 1) {
-      text += getStr("player.animationIterationCountLabel") + " ";
-      text +=
-        state.iterationCount || getStr("player.infiniteIterationCountText");
-      text += "\n";
-    }
-
-    // Adding the iteration start.
-    if (state.iterationStart !== 0) {
-      text += getFormatStr(
-        "player.animationIterationStartLabel2",
-        state.iterationStart,
-        getTimeOrInfinity(state.iterationStart * state.duration)
+      lines.push(
+        getStr("animation-inspector-tooltip-delay", {
+          delay: getTime(state.delay),
+        })
       );
-      text += "\n";
+    }
+
+    lines.push(
+      getStr("animation-inspector-tooltip-duration", {
+        duration: getTimeOrInfinity(state.duration),
+      })
+    );
+
+    if (state.endDelay) {
+      lines.push(
+        getStr("animation-inspector-tooltip-end-delay", {
+          endDelay: getTime(state.endDelay),
+        })
+      );
+    }
+
+    if (state.iterationCount !== 1) {
+      lines.push(
+        getStr("animation-inspector-tooltip-iteration-count", {
+          count: state.iterationCount || getStr("animation-inspector-infinity"),
+        })
+      );
+    }
+
+    if (state.iterationStart !== 0) {
+      lines.push(
+        getStr("animation-inspector-tooltip-iteration-start", {
+          iterationStart: state.iterationStart,
+          time: getTimeOrInfinity(state.iterationStart * state.duration),
+        })
+      );
     }
 
     // Adding the easing if it is not "linear".
     if (state.easing && state.easing !== "linear") {
-      text += getStr("player.animationOverallEasingLabel") + " ";
-      text += state.easing;
-      text += "\n";
+      lines.push(
+        getStr("animation-inspector-tooltip-overall-easing", {
+          easing: state.easing,
+        })
+      );
     }
 
-    // Adding the fill mode.
     if (state.fill && state.fill !== "none") {
-      text += getStr("player.animationFillLabel") + " ";
-      text += state.fill;
-      text += "\n";
+      lines.push(
+        getStr("animation-inspector-tooltip-fill", { fill: state.fill })
+      );
     }
 
     // Adding the direction mode if it is not "normal".
     if (state.direction && state.direction !== "normal") {
-      text += getStr("player.animationDirectionLabel") + " ";
-      text += state.direction;
-      text += "\n";
+      lines.push(
+        getStr("animation-inspector-tooltip-direction", {
+          direction: state.direction,
+        })
+      );
     }
 
-    // Adding the playback rate if it's different than 1.
     if (state.playbackRate !== 1) {
-      text += getStr("player.animationRateLabel") + " ";
-      text += state.playbackRate;
-      text += "\n";
+      lines.push(
+        getStr("animation-inspector-tooltip-playback-rate", {
+          rate: state.playbackRate,
+        })
+      );
     }
 
     // Adding the animation-timing-function
@@ -136,9 +138,11 @@ class SummaryGraph extends PureComponent {
       state.animationTimingFunction &&
       state.animationTimingFunction !== "ease"
     ) {
-      text += getStr("player.animationTimingFunctionLabel") + " ";
-      text += state.animationTimingFunction;
-      text += "\n";
+      lines.push(
+        getStr("animation-inspector-tooltip-timing-function", {
+          timingFunction: state.animationTimingFunction,
+        })
+      );
     }
 
     // Adding a note that the animation is running on the compositor thread if
@@ -147,17 +151,17 @@ class SummaryGraph extends PureComponent {
       if (
         state.propertyState.every(propState => propState.runningOnCompositor)
       ) {
-        text += getStr("player.allPropertiesOnCompositorTooltip");
+        lines.push(getStr("animation-inspector-all-properties-on-compositor"));
       } else if (
         state.propertyState.some(propState => propState.runningOnCompositor)
       ) {
-        text += getStr("player.somePropertiesOnCompositorTooltip");
+        lines.push(getStr("animation-inspector-some-properties-on-compositor"));
       }
     } else if (state.isRunningOnCompositor) {
-      text += getStr("player.runningOnCompositorTooltip");
+      lines.push(getStr("animation-inspector-running-on-compositor"));
     }
 
-    return text;
+    return lines.join("\n");
   }
 
   render() {
