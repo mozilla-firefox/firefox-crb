@@ -144,7 +144,7 @@ async function withRegionAndLocale({ region, locale, callback }) {
   info("Done waiting for locale change");
 
   Assert.equal(
-    Services.locale.appLocaleAsBCP47,
+    Services.locale.appLocale,
     locale,
     "App locale should now be the desired locale"
   );
@@ -172,7 +172,7 @@ async function withRegionAndLocale({ region, locale, callback }) {
   info("Done waiting for original locale to be restored");
 
   Assert.equal(
-    Services.locale.appLocaleAsBCP47,
+    Services.locale.appLocale,
     requestedLocales[0],
     "App locale should now be the original locale"
   );

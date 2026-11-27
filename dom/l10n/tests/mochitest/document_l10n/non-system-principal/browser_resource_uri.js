@@ -13,7 +13,7 @@ protocol.setSubstitution("l10n-test", Services.io.newURI(uri));
 //
 // Notice: we're using a `chrome://` protocol here only for convenience reasons.
 // Real sources should use `resource://` protocol.
-let locales = Services.locale.appLocalesAsBCP47;
+let locales = Services.locale.appLocales;
 
 // This source is actually using a real `FileSource` instead of a mocked one,
 // because we want to test that fetching real I/O out of the `uri` works in non-system-principal.

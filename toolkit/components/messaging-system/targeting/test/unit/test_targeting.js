@@ -15,7 +15,7 @@ add_task(async function instance_with_default() {
   let targeting = new TargetingContext();
 
   let res = await targeting.eval(
-    `ctx.locale == '${Services.locale.appLocaleAsBCP47}'`
+    `ctx.locale == '${Services.locale.appLocale}'`
   );
 
   Assert.ok(res, "Has local context");

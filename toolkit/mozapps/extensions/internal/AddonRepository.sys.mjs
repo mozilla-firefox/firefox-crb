@@ -707,8 +707,8 @@ export var AddonRepository = {
   updateIfLocaleChanged() {
     // The "extensions.getAddons.get.url" pref defines where getAddonsByIDs()
     // should fetch data. The pref contains %LOCALE% which is replaced with
-    // Services.locale.appLocaleAsBCP47 by urlFormatter.formatURL.
-    const locale = Services.locale.appLocaleAsBCP47;
+    // Services.locale.appLocale by urlFormatter.formatURL.
+    const locale = Services.locale.appLocale;
 
     if (Services.prefs.getStringPref(PREF_METADATA_LASTLOCALE, "") === locale) {
       // Locale not changed, avoid excessive redundant activity (bug 2052032).

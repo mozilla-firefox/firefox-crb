@@ -18,7 +18,7 @@ AddonTestUtils.createAppInfo(
 let server = AddonTestUtils.createHttpServer({ hosts: ["example.com"] });
 server.registerDirectory("/data/", do_get_file("data"));
 
-// Use %LOCALE% as the default pref does. It is set from appLocaleAsBCP47.
+// Use %LOCALE% as the default pref does. It is set from appLocale.
 Services.prefs.setStringPref(
   PREF_GETADDONS_BYIDS,
   "http://example.com/addons.json?guids=%IDS%&locale=%LOCALE%"
@@ -157,7 +157,7 @@ function promiseLocaleChanged(requestedLocale) {
           case INTL_LOCALES_CHANGED: {
             let reqLocs = Services.locale.requestedLocales;
             equal(reqLocs[0], requestedLocale);
-            equal(Services.locale.appLocaleAsBCP47, requestedLocale);
+            equal(Services.locale.appLocale, requestedLocale);
             Services.obs.removeObserver(localeObserver, INTL_LOCALES_CHANGED);
             resolve();
           }
@@ -229,7 +229,7 @@ add_setup(async function setup() {
 add_task(async function test_locale_change() {
   // In tests we default to en-US; The install of the langpack in setup already
   // triggered an update check that ought have cached the add-on data.
-  equal(Services.locale.appLocaleAsBCP47, "en-US", "Locale is en-US");
+  equal(Services.locale.appLocale, "en-US", "Locale is en-US");
   let addon = await AddonRepository.getCachedAddonByID(TEST_ADDON_ID);
   Assert.ok(addon.description.includes("en-US"), "description is en-us");
   Assert.ok(
@@ -289,7 +289,7 @@ add_task(async function no_update_check_when_primary_language_is_unchanged() {
     ["en-US", "und"],
     "After enabling und langpack, it is back in availableLocales"
   );
-  equal(Services.locale.appLocaleAsBCP47, "en-US", "Locale is still en-US");
+  equal(Services.locale.appLocale, "en-US", "Locale is still en-US");
 
   equal(
     AddonRepositoryUpdateSpy.callCount,

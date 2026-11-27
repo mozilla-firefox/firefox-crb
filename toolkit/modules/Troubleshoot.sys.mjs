@@ -987,7 +987,7 @@ var dataProviders = {
       localeService: {
         requested: Services.locale.requestedLocales,
         available: Services.locale.availableLocales,
-        supported: Services.locale.appLocalesAsBCP47,
+        supported: Services.locale.appLocales,
         regionalPrefs: Services.locale.regionalPrefsLocales,
         defaultLocale: Services.locale.defaultLocale,
       },

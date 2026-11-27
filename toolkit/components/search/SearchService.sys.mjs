@@ -2873,7 +2873,7 @@ export const SearchService = new (class SearchService {
   // called in test_remove_engine_notification_box.js
   async _fetchEngineSelectorEngines() {
     let searchEngineSelectorProperties = {
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
       region: lazy.Region.home || "unknown",
       channel: lazy.SearchUtils.MODIFIED_APP_CHANNEL,
       experiment: this.#lazyPrefs.experimentPrefValue,

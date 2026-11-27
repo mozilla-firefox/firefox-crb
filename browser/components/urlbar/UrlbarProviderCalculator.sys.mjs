@@ -327,7 +327,7 @@ class BaseCalculator {
       throw new Error("Value is " + finalResult);
     }
 
-    let locale = Services.locale.appLocaleAsBCP47;
+    let locale = Services.locale.appLocale;
 
     if (
       Math.abs(finalResult) >= FULL_NUMBER_MAX_THRESHOLD ||

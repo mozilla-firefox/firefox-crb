@@ -67,7 +67,7 @@ interface mozILocaleService : nsISupports
    *
    * Example: ["en-US", "de", "pl", "sr-Cyrl", "zh-Hans-HK"]
    */
-  readonly attribute Array<ACString> appLocalesAsBCP47;
+  readonly attribute Array<ACString> appLocales;
 
   /**
    * Returns a list of locales to use for any regional specific operations
@@ -114,14 +114,14 @@ interface mozILocaleService : nsISupports
    *
    * The result is a valid locale ID.
    *
-   * Where possible, appLocalesAsBCP47 should be preferred over this API and
+   * Where possible, appLocales should be preferred over this API and
    * all callsites should handle some form of "best effort" language
    * negotiation to respect user preferences in case the use case does
    * not have data for the first locale in the list.
    *
    * Example: "zh-Hans-HK"
    */
-  readonly attribute ACString appLocaleAsBCP47;
+  readonly attribute ACString appLocale;
 
   /**
    * Returns a list of locales that the user requested the app to be

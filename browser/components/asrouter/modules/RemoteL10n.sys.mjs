@@ -194,7 +194,7 @@ export class _RemoteL10n {
     /* istanbul ignore next */
     let useRemoteL10n = Services.prefs.getBoolPref(USE_REMOTE_L10N_PREF, true);
     if (useRemoteL10n && !L10nRegistry.getInstance().hasSource("cfr")) {
-      const appLocale = Services.locale.appLocaleAsBCP47;
+      const { appLocale } = Services.locale;
       let cfrIndexedFileSource = new L10nFileSource(
         "cfr",
         "app",

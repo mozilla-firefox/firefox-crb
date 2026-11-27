@@ -6563,7 +6563,7 @@ nsresult XREMain::XRE_mainRun() {
     mozilla::FilePreferences::InitPrefs();
 
     nsCString userAgentLocale;
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(userAgentLocale);
+    LocaleService::GetInstance()->GetAppLocale(userAgentLocale);
     CrashReporter::RecordAnnotationNSCString(
         CrashReporter::Annotation::useragent_locale, userAgentLocale);
 

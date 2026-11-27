@@ -146,14 +146,14 @@ export const AutoTabGroupingSuggestions = {
    * @returns {boolean}
    */
   get isLocaleSupported() {
-    const locale = Services.locale.appLocaleAsBCP47.toLowerCase();
+    const locale = Services.locale.appLocale.toLowerCase();
     return lazy.supportedLocales.some(
       supported => locale === supported || locale.startsWith(`${supported}-`)
     );
   },
 
   get isEnglishLocale() {
-    return Services.locale.appLocaleAsBCP47.startsWith("en");
+    return Services.locale.appLocale.startsWith("en");
   },
 
   /**
@@ -394,7 +394,7 @@ export const AutoTabGroupingSuggestions = {
       ]);
     conversation.setSystemMessage(
       lazy.renderPrompt(systemPrompt, {
-        locale: Services.locale.appLocaleAsBCP47,
+        locale: Services.locale.appLocale,
       })
     );
     conversation.addUserMessage(lazy.renderPrompt(userTemplate, { titles }));

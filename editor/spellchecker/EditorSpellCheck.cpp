@@ -1006,7 +1006,7 @@ void EditorSpellCheck::SetFallbackDictionary(DictionaryFetcher* aFetcher) {
 
       // Use the application locale dictionary when the required language
       // equals applocation locale language.
-      LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocaleStr);
+      LocaleService::GetInstance()->GetAppLocale(appLocaleStr);
       if (!appLocaleStr.IsEmpty()) {
         mozilla::intl::Locale appLoc;
         auto result =
@@ -1074,7 +1074,7 @@ void EditorSpellCheck::SetFallbackDictionary(DictionaryFetcher* aFetcher) {
         // Priority 4:
         // As next fallback, try the current locale.
         nsAutoCString appLocaleStr;
-        LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocaleStr);
+        LocaleService::GetInstance()->GetAppLocale(appLocaleStr);
         MOZ_LOG(sEditorSpellChecker, LogLevel::Debug,
                 ("SetFallbackDictionary, Trying application locale \"%s\"",
                  appLocaleStr.get()));

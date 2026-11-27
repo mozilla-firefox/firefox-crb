@@ -1497,9 +1497,7 @@ describe("ASRouter", () => {
       });
     });
     it("should download the attachment if RemoteSettings returns some messages", async () => {
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
       sandbox
         .stub(MessageLoaderUtils, "_getRemoteSettingsMessages")
         .resolves([{ id: "message_1" }]);
@@ -1520,9 +1518,7 @@ describe("ASRouter", () => {
       assert.calledOnce(spy);
     });
     it("should dispatch undesired event if the ms-language-packs returns no messages", async () => {
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
       sandbox
         .stub(MessageLoaderUtils, "_getRemoteSettingsMessages")
         .resolves([{ id: "message_1" }]);
@@ -2984,7 +2980,7 @@ describe("ASRouter", () => {
       const getter = sandbox.stub();
       getter.onFirstCall().returns("en-US");
       getter.onSecondCall().returns("fr");
-      sandbox.stub(global.Services.locale, "appLocaleAsBCP47").get(getter);
+      sandbox.stub(global.Services.locale, "appLocale").get(getter);
       const provider = {
         id: "cfr",
         enabled: true,
@@ -3016,7 +3012,7 @@ describe("ASRouter", () => {
       const getter = sandbox.stub();
       getter.onFirstCall().returns("en-US");
       getter.onSecondCall().returns("fr");
-      sandbox.stub(global.Services.locale, "appLocaleAsBCP47").get(getter);
+      sandbox.stub(global.Services.locale, "appLocale").get(getter);
       const provider = {
         id: "localProvider",
         enabled: true,
@@ -3344,9 +3340,7 @@ describe("ASRouter", () => {
     });
     it("should be called with the expected dir path", async () => {
       const writeSpy = sandbox.spy(global.IOUtils, "write");
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 
@@ -3361,9 +3355,7 @@ describe("ASRouter", () => {
     it("should download if local file has different size", async () => {
       global.IOUtils.exists.resolves(true);
       sandbox.stub(global.IOUtils, "stat").resolves({ size: 1337 });
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 
@@ -3372,25 +3364,21 @@ describe("ASRouter", () => {
     it("should not download if local file has same size", async () => {
       global.IOUtils.exists.resolves(true);
       sandbox.stub(global.IOUtils, "stat").resolves({ size: 42 });
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 
       assert.notCalled(downloadSpy);
     });
     it("should allow fetch for known locales", async () => {
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "en-US");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "en-US");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 
       assert.calledOnce(downloadSpy);
     });
     it("should fallback to 'en-US' for locale 'und' ", async () => {
-      sandbox.stub(global.Services.locale, "appLocaleAsBCP47").get(() => "und");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "und");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 
@@ -3402,7 +3390,7 @@ describe("ASRouter", () => {
     });
     it("should fallback to 'ja-JP-mac' for locale 'ja-JP-macos'", async () => {
       sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
+        .stub(global.Services.locale, "appLocale")
         .get(() => "ja-JP-macos");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
@@ -3414,9 +3402,7 @@ describe("ASRouter", () => {
       assert.calledOnce(downloadSpy);
     });
     it("should not allow fetch for unsupported locales", async () => {
-      sandbox
-        .stub(global.Services.locale, "appLocaleAsBCP47")
-        .get(() => "unkown");
+      sandbox.stub(global.Services.locale, "appLocale").get(() => "unkown");
 
       await MessageLoaderUtils._remoteSettingsLoader(provider, {});
 

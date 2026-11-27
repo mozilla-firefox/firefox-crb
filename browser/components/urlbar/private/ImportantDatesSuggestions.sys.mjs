@@ -85,7 +85,7 @@ export class ImportantDatesSuggestions extends SuggestProvider {
    */
   #formatDateOrRange(dateStr) {
     if (Array.isArray(dateStr)) {
-      let format = new Intl.DateTimeFormat(Services.locale.appLocaleAsBCP47, {
+      let format = new Intl.DateTimeFormat(Services.locale.appLocale, {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -95,7 +95,7 @@ export class ImportantDatesSuggestions extends SuggestProvider {
       return format.formatRange(startDate, endDate);
     }
 
-    let format = new Intl.DateTimeFormat(Services.locale.appLocaleAsBCP47, {
+    let format = new Intl.DateTimeFormat(Services.locale.appLocale, {
       weekday: "long",
       year: "numeric",
       month: "long",

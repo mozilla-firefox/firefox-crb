@@ -162,7 +162,7 @@ export async function constructRealTimeInfoInjectionMessage(
     await getCurrentTabMetadata(contextMentions);
   const isoTimestamp = getLocalIsoTime();
   const datePart = isoTimestamp?.split("T")[0] ?? "";
-  const locale = Services.locale.appLocaleAsBCP47;
+  const locale = Services.locale.appLocale;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hasTabInfo = Boolean(url || title || description) && !isNewPageUrl(url);
 

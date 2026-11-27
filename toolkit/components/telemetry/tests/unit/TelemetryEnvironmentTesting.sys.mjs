@@ -394,7 +394,7 @@ export var TelemetryEnvironmentTesting = {
       Glean.intl.availableLocales.testGetValue()
     );
     lazy.Assert.deepEqual(
-      Services.locale.appLocalesAsBCP47,
+      Services.locale.appLocales,
       Glean.intl.appLocales.testGetValue()
     );
     try {

@@ -891,7 +891,7 @@ export const LinkPreview = {
       .split(",")
       .map(locale => locale.trim().toLowerCase());
 
-    const userLocale = Services.locale.appLocaleAsBCP47.toLowerCase();
+    const userLocale = Services.locale.appLocale.toLowerCase();
     return supportedLocales.some(locale => userLocale.startsWith(locale));
   },
 

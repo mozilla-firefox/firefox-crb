@@ -55,10 +55,9 @@ const tokenRate = (tokens, ms) => {
 
 const mebibytesPerSecond = (size, ms) => (size * 1000) / ms / 2 ** 20;
 
-const durationFormat = new Intl.DurationFormat(
-  Services.locale.appLocalesAsBCP47,
-  { style: "narrow" }
-);
+const durationFormat = new Intl.DurationFormat(Services.locale.appLocales, {
+  style: "narrow",
+});
 
 /** On-device memories experiment. */
 export class MemoriesView extends MozLitElement {

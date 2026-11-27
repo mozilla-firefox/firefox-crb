@@ -445,7 +445,7 @@ export class UrlbarProviderInterventions extends UrlbarProvider {
       !queryContext.searchString ||
       queryContext.searchString.length > UrlbarShared.MAX_TEXT_LENGTH ||
       lazy.UrlUtils.REGEXP_LIKE_PROTOCOL.test(queryContext.searchString) ||
-      !EN_LOCALE_MATCH.test(Services.locale.appLocaleAsBCP47) ||
+      !EN_LOCALE_MATCH.test(Services.locale.appLocale) ||
       !Services.policies.isAllowed("urlbarinterventions") ||
       (await this.queryInstance
         .getProvider(lazy.UrlbarProviderGlobalActions.name)

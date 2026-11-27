@@ -98,7 +98,7 @@ add_task(async function test_langpack_updates_do_not_change_app_locales() {
     Services.locale.requestedLocales = originalRequested;
   });
   Services.locale.requestedLocales = ["en-US"];
-  const appLocales = Services.locale.appLocalesAsBCP47;
+  const appLocales = Services.locale.appLocales;
 
   let fired = 0;
   const observer = () => fired++;
@@ -126,7 +126,7 @@ add_task(async function test_langpack_updates_do_not_change_app_locales() {
   }
   Assert.equal(fired, 0, "intl:app-locales-changed did not fire");
   Assert.deepEqual(
-    Services.locale.appLocalesAsBCP47,
+    Services.locale.appLocales,
     appLocales,
     "App locales keep the same order"
   );

@@ -1039,7 +1039,7 @@ export var BrowserUtils = {
 
   // Return true if Send to Device emails are supported for user's locale
   sendToDeviceEmailsSupported() {
-    const userLocale = Services.locale.appLocaleAsBCP47.toLowerCase();
+    const userLocale = Services.locale.appLocale.toLowerCase();
     return this.emailSupportedLocales.has(userLocale);
   },
 };

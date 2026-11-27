@@ -144,7 +144,7 @@ export const GeckoViewTranslationsSettings = {
   _getLanguageSettingName(langTag) {
     const isAlways = lazy.TranslationsParent.shouldAlwaysTranslateLanguage({
       docLangTag: langTag,
-      userLangTag: new Intl.Locale(Services.locale.appLocaleAsBCP47).language,
+      userLangTag: new Intl.Locale(Services.locale.appLocale).language,
     });
     const isNever =
       lazy.TranslationsParent.shouldNeverTranslateLanguage(langTag);

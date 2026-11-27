@@ -203,11 +203,11 @@ add_task(async function test_asrouter() {
     RemoteL10n.reloadL10n();
   });
 
-  // We can't stub Services.locale.appLocaleAsBCP47 directly because its an
+  // We can't stub Services.locale.appLocale directly because its an
   // XPCOM_Native object.
   const fakeLocaleService = new Proxy(localeService, {
     get(obj, prop) {
-      if (prop === "appLocaleAsBCP47") {
+      if (prop === "appLocale") {
         return "ja-JP-macos";
       }
       return obj[prop];
@@ -221,7 +221,7 @@ add_task(async function test_asrouter() {
   await ASRouter.loadMessagesFromAllProviders([cfrProvider]);
 
   Assert.equal(
-    Services.locale.appLocaleAsBCP47,
+    Services.locale.appLocale,
     "ja-JP-macos",
     "Locale service returns ja-JP-macos"
   );

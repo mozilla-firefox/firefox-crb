@@ -2107,7 +2107,7 @@ function waitForPresShell(context) {
  * @returns {(id: string, args?: Record<string, FluentVariable>) => string}
  */
 async function getFluentStringHelper(resourceIds) {
-  const locales = Services.locale.appLocalesAsBCP47;
+  const locales = Services.locale.appLocales;
   const generator = L10nRegistry.getInstance().generateBundles(
     locales,
     resourceIds

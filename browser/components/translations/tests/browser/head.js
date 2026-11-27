@@ -4619,7 +4619,7 @@ class SelectTranslationsTestUtils {
           `Waiting for translate-selection context menu item to have the correct data-l10n-id '${expectedL10nId}`
         );
 
-        if (Services.locale.appLocaleAsBCP47 === "en-US") {
+        if (Services.locale.appLocale === "en-US") {
           // We only want to test the localized name in CI if the current app locale is the default (en-US).
           const expectedLanguageDisplayName = getIntlDisplayName(
             expectedTargetLanguage

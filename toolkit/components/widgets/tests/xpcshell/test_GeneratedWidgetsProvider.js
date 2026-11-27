@@ -388,10 +388,7 @@ add_task(async function test_a_planted_startup_cache_entry_is_ignored() {
     originControls: false,
   };
   await restart(() =>
-    StartupCache.manifests.set(
-      [id, "1", Services.locale.appLocaleAsBCP47],
-      planted
-    )
+    StartupCache.manifests.set([id, "1", Services.locale.appLocale], planted)
   );
   let policy = WebExtensionPolicy.getByID(id);
   Assert.ok(policy?.active, "Widget started");

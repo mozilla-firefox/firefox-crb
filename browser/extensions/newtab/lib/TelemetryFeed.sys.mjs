@@ -699,7 +699,7 @@ export class TelemetryFeed {
         lazy.ContextId.requestSynchronously()
       );
     }
-    Glean.newtab.locale.set(Services.locale.appLocaleAsBCP47);
+    Glean.newtab.locale.set(Services.locale.appLocale);
   }
 
   getOrCreateImpressionId() {

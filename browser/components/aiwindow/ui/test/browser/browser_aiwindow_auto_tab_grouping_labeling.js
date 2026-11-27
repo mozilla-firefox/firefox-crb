@@ -79,7 +79,7 @@ add_task(async function test_buildProposals_usesLlmLabel() {
     );
     Assert.ok(
       JSON.stringify(request).includes(
-        `Name this group of tabs in ${Services.locale.appLocaleAsBCP47}.`
+        `Name this group of tabs in ${Services.locale.appLocale}.`
       ),
       "The system prompt names the group in the app locale"
     );

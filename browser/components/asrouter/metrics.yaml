@@ -286,7 +286,7 @@ messaging_system:
     lifetime: ping
     description: >
       The locale as supplied to the messaging system by
-      `Services.locale.appLocaleAsBCP47`.
+      `Services.locale.appLocale`.
     bugs:
       - https://bugzilla.mozilla.org/show_bug.cgi?id=1825863
     data_reviews:

@@ -551,7 +551,7 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
 
   get smartTabGroupsEnabled() {
     return (
-      Services.locale.appLocaleAsBCP47.startsWith("en") &&
+      Services.locale.appLocale.startsWith("en") &&
       this.smartTabGroupsUserEnabled &&
       this.smartTabGroupsFeatureConfigEnabled &&
       !lazy.PrivateBrowsingUtils.isWindowPrivate(this.documentGlobal) &&

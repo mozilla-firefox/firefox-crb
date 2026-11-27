@@ -1402,7 +1402,7 @@ already_AddRefed<Promise> nsImageLoadingContent::RecognizeCurrentImageText(
     // The app locales should also be included after the document's locales.
     // Extract the language tag like above.
     nsTArray<nsCString> appLocales;
-    intl::LocaleService::GetInstance()->GetAppLocalesAsBCP47(appLocales);
+    intl::LocaleService::GetInstance()->GetAppLocales(appLocales);
 
     for (const auto& localeString : appLocales) {
       intl::Locale locale;

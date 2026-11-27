@@ -93,7 +93,7 @@ static CFLocaleRef CreateCFLocaleFor(const nsACString& aLocale) {
   OSPreferences::GetInstance()->GetSystemLocale(systemLocale);
 
   if (aLocale.IsEmpty()) {
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(reqLocale);
+    LocaleService::GetInstance()->GetAppLocale(reqLocale);
   } else {
     reqLocale.Assign(aLocale);
   }

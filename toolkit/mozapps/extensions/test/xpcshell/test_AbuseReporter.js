@@ -86,11 +86,7 @@ async function assertBaseReportData({ reportData, addon }) {
     "Got expected 'app'"
   );
   equal(reportData.appversion, APPVERSION, "Got expected 'appversion'");
-  equal(
-    reportData.lang,
-    Services.locale.appLocaleAsBCP47,
-    "Got expected 'lang'"
-  );
+  equal(reportData.lang, Services.locale.appLocale, "Got expected 'lang'");
   equal(
     reportData.operating_system,
     AppConstants.platform,

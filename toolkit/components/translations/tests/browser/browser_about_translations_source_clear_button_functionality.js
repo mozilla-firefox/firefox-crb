@@ -117,7 +117,7 @@ add_task(
       value: "Clearing in progress",
     });
     await aboutTranslationsTestUtils.assertTargetTextArea({
-      languageTag: Services.locale.appLocaleAsBCP47,
+      languageTag: Services.locale.appLocale,
       value: "Translating…",
     });
 

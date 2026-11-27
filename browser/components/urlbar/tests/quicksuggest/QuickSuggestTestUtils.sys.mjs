@@ -1535,7 +1535,7 @@ class _QuickSuggestTestUtils {
       "Region is now " + newRegion
     );
     this.Assert.equal(
-      Services.locale.appLocaleAsBCP47,
+      Services.locale.appLocale,
       newLocale,
       "App locale is now " + newLocale
     );

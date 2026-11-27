@@ -138,7 +138,7 @@ export class PdfJsGuessAltTextFeature extends AIFeature {
    * @returns {boolean}
    */
   static get isAllowed() {
-    return Services.locale.appLocaleAsBCP47.substring(0, 2) === "en";
+    return Services.locale.appLocale.substring(0, 2) === "en";
   }
 
   /**

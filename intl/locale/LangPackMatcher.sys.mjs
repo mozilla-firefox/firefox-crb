@@ -291,8 +291,8 @@ const mockable = {
   /**
    * @returns {string}
    */
-  getAppLocaleAsBCP47() {
-    return Services.locale.appLocaleAsBCP47;
+  getAppLocale() {
+    return Services.locale.appLocale;
   },
 
   /**
@@ -379,7 +379,7 @@ function getStructuredLocaleOrNull(localeString) {
 function getAppAndSystemLocaleInfo() {
   // Convert locale strings into structured locale objects.
   const systemLocaleRaw = mockable.getSystemLocale();
-  const appLocaleRaw = mockable.getAppLocaleAsBCP47();
+  const appLocaleRaw = mockable.getAppLocale();
 
   const systemLocale = getStructuredLocaleOrNull(systemLocaleRaw);
   const appLocale = getStructuredLocaleOrNull(appLocaleRaw);

@@ -293,7 +293,7 @@ bool LocaleService::IsAppLocaleRTL() {
   }
 
   nsAutoCString locale;
-  GetAppLocaleAsBCP47(locale);
+  GetAppLocale(locale);
   return IsLocaleRTL(locale);
 }
 
@@ -448,7 +448,7 @@ LocaleService::GetLastFallbackLocale(nsACString& aRetVal) {
 }
 
 NS_IMETHODIMP
-LocaleService::GetAppLocalesAsBCP47(nsTArray<nsCString>& aRetVal) {
+LocaleService::GetAppLocales(nsTArray<nsCString>& aRetVal) {
   if (mAppLocales.IsEmpty()) {
     NegotiateAppLocales(mAppLocales);
   }
@@ -458,7 +458,7 @@ LocaleService::GetAppLocalesAsBCP47(nsTArray<nsCString>& aRetVal) {
 }
 
 NS_IMETHODIMP
-LocaleService::GetAppLocaleAsBCP47(nsACString& aRetVal) {
+LocaleService::GetAppLocale(nsACString& aRetVal) {
   if (mAppLocales.IsEmpty()) {
     NegotiateAppLocales(mAppLocales);
   }
@@ -480,7 +480,7 @@ LocaleService::GetRegionalPrefsLocales(nsTArray<nsCString>& aRetVal) {
     }
 
     // If we fail to retrieve them, return the app locales.
-    GetAppLocalesAsBCP47(aRetVal);
+    GetAppLocales(aRetVal);
     return NS_OK;
   }
 
@@ -492,11 +492,11 @@ LocaleService::GetRegionalPrefsLocales(nsTArray<nsCString>& aRetVal) {
   // regional prefs to "en-GB".
   nsAutoCString appLocale;
   AutoTArray<nsCString, 10> regionalPrefsLocales;
-  LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+  LocaleService::GetInstance()->GetAppLocale(appLocale);
 
   if (NS_FAILED(OSPreferences::GetInstance()->GetRegionalPrefsLocales(
           regionalPrefsLocales))) {
-    GetAppLocalesAsBCP47(aRetVal);
+    GetAppLocales(aRetVal);
     return NS_OK;
   }
 
@@ -506,7 +506,7 @@ LocaleService::GetRegionalPrefsLocales(nsTArray<nsCString>& aRetVal) {
   }
 
   // Otherwise use the app locales.
-  GetAppLocalesAsBCP47(aRetVal);
+  GetAppLocales(aRetVal);
   return NS_OK;
 }
 

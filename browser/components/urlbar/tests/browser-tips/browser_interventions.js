@@ -200,7 +200,7 @@ add_task(async function tipsAreEnglishOnly() {
   };
   registerCleanupFunction(() => cleanup?.());
 
-  let appLocales = Services.locale.appLocalesAsBCP47;
+  let appLocales = Services.locale.appLocales;
   Assert.equal(appLocales[0], "de");
 
   await enginesReloaded;

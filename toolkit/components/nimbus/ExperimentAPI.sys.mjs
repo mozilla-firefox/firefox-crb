@@ -1134,7 +1134,7 @@ export class _ExperimentFeature {
     if (missingIds?.size) {
       throw new ExperimentLocalizationError(
         lazy.NimbusTelemetry.ValidationFailureReason.L10N_MISSING_ENTRY,
-        Services.locale.appLocaleAsBCP47
+        Services.locale.appLocale
       );
     }
 
@@ -1190,7 +1190,7 @@ export class _ExperimentFeature {
           } else {
             throw new ExperimentLocalizationError(
               lazy.NimbusTelemetry.ValidationFailureReason.L10N_MISSING_ENTRY,
-              Services.locale.appLocaleAsBCP47
+              Services.locale.appLocale
             );
           }
         }
@@ -1219,7 +1219,7 @@ export class _ExperimentFeature {
    */
   _getLocalizedValue(enrollment, variable = undefined) {
     if (enrollment) {
-      const locale = Services.locale.appLocaleAsBCP47;
+      const locale = Services.locale.appLocale;
 
       if (
         typeof enrollment.localizations === "object" &&

@@ -780,7 +780,7 @@ export const MessageLoaderUtils = {
       und: "en-US",
     };
 
-    const locale = Services.locale.appLocaleAsBCP47;
+    const locale = Services.locale.appLocale;
     return localeMap[locale] ?? locale;
   },
 };
@@ -813,7 +813,7 @@ export class _ASRouter {
       messages: [],
       groups: [],
       errors: [],
-      localeInUse: Services.locale.appLocaleAsBCP47,
+      localeInUse: Services.locale.appLocale,
     };
     this._experimentChangedListeners = new Map();
     this._triggerHandler = this._triggerHandler.bind(this);
@@ -1163,7 +1163,7 @@ export class _ASRouter {
    */
   async _onLocaleChanged() {
     const { localeInUse } = this.state.localeInUse;
-    const newLocale = Services.locale.appLocaleAsBCP47;
+    const newLocale = Services.locale.appLocale;
     if (newLocale !== localeInUse) {
       const providers = [...this.state.providers];
       let needsUpdate = false;

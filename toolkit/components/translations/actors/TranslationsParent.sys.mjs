@@ -2372,8 +2372,8 @@ export class TranslationsParent extends JSWindowActorParent {
 
       if (
         !Services.prefs.prefHasUserValue(ACCEPT_LANGUAGES_PREF) &&
-        Services.locale.appLocaleAsBCP47 !== "en" &&
-        !Services.locale.appLocaleAsBCP47.startsWith("en-")
+        Services.locale.appLocale !== "en" &&
+        !Services.locale.appLocale.startsWith("en-")
       ) {
         // The user hasn't customized their accept languages, this means that English
         // is always provided as a fallback language, even if it is not available.
@@ -2385,7 +2385,7 @@ export class TranslationsParent extends JSWindowActorParent {
         // The user has removed all of their web content languages, default to the
         // app locale.
         TranslationsParent.#webContentLanguages.add(
-          new Intl.Locale(Services.locale.appLocaleAsBCP47).baseName
+          new Intl.Locale(Services.locale.appLocale).baseName
         );
       }
     }
@@ -2455,7 +2455,7 @@ export class TranslationsParent extends JSWindowActorParent {
     // Combine the locales together.
     const userSettingsLocales = new Set([
       ...TranslationsParent.getWebContentLanguages(),
-      ...Services.locale.appLocalesAsBCP47,
+      ...Services.locale.appLocales,
       ...systemLocales,
     ]);
 
@@ -3179,7 +3179,7 @@ export class TranslationsParent extends JSWindowActorParent {
       }
     }
 
-    const appLangTag = Services.locale.appLocaleAsBCP47;
+    const appLangTag = Services.locale.appLocale;
     for (const langTag of displayNames.keys()) {
       if (lazy.TranslationsUtils.langTagsMatch(langTag, appLangTag)) {
         displayNames.delete(langTag);
@@ -3220,7 +3220,7 @@ export class TranslationsParent extends JSWindowActorParent {
     fallback = "code",
     languageDisplay = "standard",
   } = {}) {
-    return new Services.intl.DisplayNames(Services.locale.appLocaleAsBCP47, {
+    return new Services.intl.DisplayNames(Services.locale.appLocale, {
       type: "language",
       languageDisplay,
       fallback,
@@ -4003,7 +4003,7 @@ export class TranslationsParent extends JSWindowActorParent {
   static async deleteLanguageFiles(language) {
     return TranslationsParent.deleteLanguageFilesToAndFromPair(
       language,
-      Services.locale.appLocaleAsBCP47,
+      Services.locale.appLocale,
       /* deletePivots */ false
     );
   }
@@ -4322,7 +4322,7 @@ export class TranslationsParent extends JSWindowActorParent {
   ) {
     return TranslationsParent.getRecordsForTranslatingToAndFromPair(
       requestedLanguage,
-      Services.locale.appLocaleAsBCP47,
+      Services.locale.appLocale,
       includePivotRecords
     );
   }

@@ -8152,8 +8152,8 @@ interface mozILocaleService extends nsISupports {
   readonly lastFallbackLocale: string;
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocalesAsLangTags) --> */
   readonly appLocalesAsLangTags: string[];
-  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocalesAsBCP47) --> */
-  readonly appLocalesAsBCP47: string[];
+  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocales) --> */
+  readonly appLocales: string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_regionalPrefsLocales) --> */
   readonly regionalPrefsLocales: string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_webExposedLocales) --> */
@@ -8162,8 +8162,8 @@ interface mozILocaleService extends nsISupports {
   negotiateLanguages(aRequested: string[], aAvailable: string[], aDefaultLocale?: string, langNegStrategy?: i32): string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocaleAsLangTag) --> */
   readonly appLocaleAsLangTag: string;
-  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocaleAsBCP47) --> */
-  readonly appLocaleAsBCP47: string;
+  /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_appLocale) --> */
+  readonly appLocale: string;
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_requestedLocales) --> */
   requestedLocales: string[];
   /** <!-- binding_to(idl, attribute, XPIDL_mozILocaleService_requestedLocale) --> */

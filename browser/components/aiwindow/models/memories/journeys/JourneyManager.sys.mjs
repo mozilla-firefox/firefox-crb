@@ -835,7 +835,7 @@ export const JourneyManager = {
   },
 
   _isJourneyLocaleSupported() {
-    const appLocale = Services.locale.appLocaleAsBCP47.toLowerCase();
+    const appLocale = Services.locale.appLocale.toLowerCase();
     return JOURNEY_SUPPORTED_LOCALES.some(
       locale => appLocale === locale || appLocale.startsWith(`${locale}-`)
     );

@@ -199,7 +199,7 @@ export class DiscoveryStreamFeed {
 
     // Persistent cache for remote endpoint data.
     this.cache = new lazy.PersistentCache(CACHE_KEY, true);
-    this.locale = Services.locale.appLocaleAsBCP47;
+    this.locale = Services.locale.appLocale;
     // Internal in-memory cache for parsing json prefs.
     this._prefCache = {};
     this.adsClient = null;
