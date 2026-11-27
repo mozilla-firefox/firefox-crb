@@ -101,7 +101,7 @@ class HttpConnectionUDP final : public HttpConnectionBase,
 
   void ResetTransaction(nsHttpTransaction* aHttpTransaction);
 
-  void HandleTunnelResponse(nsHttpTransaction* aHttpTransaction,
+  void HandleTunnelResponse(nsAHttpTransaction* aHttpTransaction,
                             const nsHttpResponseHead& responseHead,
                             bool* reset);
 
