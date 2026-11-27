@@ -976,6 +976,9 @@ html {
 
     &.light-text {
       // fallback values can be removed after Nova has reached release
+      // The screen paints its own dark background in every regime, so the
+      // text keeps its light color under prefers-contrast too.
+      // stylelint-disable-next-line stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides
       --text-color: var(--color-violet-desaturated-0, rgb(251, 251, 254));
 
       @media not (forced-colors) {

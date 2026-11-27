@@ -283,6 +283,7 @@ module.exports = {
     "stylelint-plugin-mozilla/media-query-no-invalid": true,
     "stylelint-plugin-mozilla/no-base-design-tokens": true,
     "stylelint-plugin-mozilla/no-has-selector": true,
+    "stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides": true,
     "stylelint-plugin-mozilla/use-boolean-forced-colors-query": true,
     "stylelint-plugin-mozilla/use-design-tokens": true,
     "stylelint-plugin-mozilla/use-paired-color-tokens": true,
@@ -459,7 +460,39 @@ module.exports = {
         "browser/components/search/content/contentSearchHandoffUI.css",
       ],
       rules: {
+        "stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides":
+          null,
         "stylelint-plugin-mozilla/use-design-tokens": null,
+      },
+    },
+    {
+      // Chrome on macOS and Linux never reaches forced colors.
+      name: "high-contrast-token-overrides-prefers-contrast-only",
+      files: [
+        "browser/themes/linux/**",
+        "browser/themes/osx/**",
+        "toolkit/themes/linux/**",
+        "toolkit/themes/osx/**",
+      ],
+      rules: {
+        "stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides": [
+          true,
+          { ignoreForcedColors: true },
+        ],
+      },
+    },
+    {
+      // Content documents such as about:addons and preferences subdialogs load
+      // these, and forced colors apply there.
+      name: "high-contrast-token-overrides-in-content",
+      files: [
+        "toolkit/themes/linux/global/global.css",
+        "toolkit/themes/linux/global/in-content/**",
+        "toolkit/themes/osx/global/global.css",
+        "toolkit/themes/osx/global/in-content/**",
+      ],
+      rules: {
+        "stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides": true,
       },
     },
     {
@@ -469,6 +502,7 @@ module.exports = {
         "devtools/client/aboutdebugging/src/**",
       ],
       rules: {
+        "stylelint-plugin-mozilla/no-unguarded-high-contrast-token-overrides": true,
         "stylelint-plugin-mozilla/use-design-tokens": true,
       },
     },
