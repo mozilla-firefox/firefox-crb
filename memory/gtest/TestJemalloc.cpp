@@ -426,7 +426,9 @@ TEST(Jemalloc, InPlace)
     for (size_t to_size : sSizes) {
       SCOPED_TRACE(testing::Message() << "to_size = " << to_size);
       char* ptr = (char*)moz_arena_malloc(arena, from_size);
+      EXPECT_TRUE(ptr);
       char* ptr2 = (char*)moz_arena_realloc(arena, ptr, to_size);
+      EXPECT_TRUE(ptr2);
       if (CanReallocInPlace(from_size, to_size, stats)) {
         EXPECT_EQ(ptr, ptr2);
       } else {
