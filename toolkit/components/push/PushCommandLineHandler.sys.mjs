@@ -83,14 +83,52 @@ export class CommandLineHandler {
   }
 
   /**
+   * Observe the end of the handshake with the push server, fired by
+   * PushServiceWebSocket.
+   *
+   * @returns {{promise: Promise<void>, stop: function(): void}}
+   *   `promise` resolves once the handshake is done, or at once if Push won't
+   *   connect (offline or disabled). `stop` removes the observer and is safe
+   *   to call more than once.
+   */
+  observeHandshakeComplete() {
+    const topic = "push-service-handshake-complete";
+    let observer;
+    const promise = new Promise(resolve => {
+      if (
+        Services.io.offline ||
+        !Services.prefs.getBoolPref("dom.push.connection.enabled", true)
+      ) {
+        resolve();
+        return;
+      }
+      observer = () => {
+        Services.obs.removeObserver(observer, topic);
+        observer = null;
+        resolve();
+      };
+      Services.obs.addObserver(observer, topic);
+    });
+    const stop = () => {
+      if (observer) {
+        Services.obs.removeObserver(observer, topic);
+        observer = null;
+      }
+    };
+    return { promise, stop };
+  }
+
+  /**
    * Receive push messages.
    *
    * Nothing tells us how many push messages are pending, so we cannot wait for
    * the last one. Instead we listen and stop once they stop arriving.
    *
-   * The per message timeout restarts on every push message, so a steady
-   * stream keeps receiving. The total timeout never restarts, so a stream that
-   * never ends cannot keep Firefox alive forever. Both come from prefs under
+   * The per message timeout starts once the handshake with the push server is
+   * done, or right away when Push won't connect (offline or disabled). It
+   * restarts on every push message, so a steady stream keeps receiving. The total timeout starts right away and never restarts, so a
+   * stream that never ends, or a handshake that never completes, cannot keep
+   * Firefox alive forever. Both come from prefs under
    * app.backgroundNotifications.receivePushMessages.
    *
    * A push message arriving isn't the same as it being handled. Its service
@@ -106,7 +144,18 @@ export class CommandLineHandler {
    * @returns {Promise<void>} Resolves when receiving stops.
    */
   async receivePushMessages() {
-    if (!(await this.ensurePushServiceReady())) {
+    // Observed before starting the Push Service, so it can't be missed.
+    const handshake = this.observeHandshakeComplete();
+
+    let ready = false;
+    try {
+      ready = await this.ensurePushServiceReady();
+    } finally {
+      if (!ready) {
+        handshake.stop();
+      }
+    }
+    if (!ready) {
       return;
     }
 
@@ -142,6 +191,7 @@ export class CommandLineHandler {
           notificationShownObserver,
           notificationShownTopic
         );
+        handshake.stop();
         lazy.Timer.clearTimeout(perMessageTimer);
         lazy.Timer.clearTimeout(totalTimer);
         Glean.backgroundNotificationHelper.wakeMessages.accumulateSingleSample(
@@ -206,6 +256,14 @@ export class CommandLineHandler {
 
       notificationShownObserver = () => totalNotifications++;
 
+      // The per message timer starts with the handshake, so a slow handshake
+      // doesn't eat into it.
+      handshake.promise.then(() => {
+        if (receiving && !capped) {
+          startPerMessageTimer();
+        }
+      });
+
       Services.obs.addObserver(pushTopicObserver, pushTopic);
       Services.obs.addObserver(
         pushMessageHandledTopicObserver,
@@ -215,7 +273,6 @@ export class CommandLineHandler {
         notificationShownObserver,
         notificationShownTopic
       );
-      startPerMessageTimer();
       startTotalTimer();
     });
   }

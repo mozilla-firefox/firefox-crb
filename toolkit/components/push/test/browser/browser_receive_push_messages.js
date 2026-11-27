@@ -272,6 +272,26 @@ function countPushTopicObservers() {
   return countObservers(PUSH_SERVICE.pushTopic);
 }
 
+const HANDSHAKE_COMPLETE_TOPIC = "push-service-handshake-complete";
+
+async function startReceiving() {
+  let receiving = CommandLineHandler.prototype.receivePushMessages();
+
+  // The observers are added after the Push Service check resolves
+  await TestUtils.waitForCondition(
+    () => countPushTopicObservers() == 1,
+    "Receiving has started",
+    10
+  );
+
+  // Wrapped, because returning the promise itself would wait for it
+  return { receiving };
+}
+
+function completeHandshake() {
+  Services.obs.notifyObservers(null, HANDSHAKE_COMPLETE_TOPIC);
+}
+
 add_task(async function test_push_messages_not_observed_without_push_service() {
   let pushService = sinon
     .stub(CommandLineHandler.prototype, "ensurePushServiceReady")
@@ -281,10 +301,39 @@ add_task(async function test_push_messages_not_observed_without_push_service() {
     let receiving = CommandLineHandler.prototype.receivePushMessages();
     is(countPushTopicObservers(), 0, "No observer while receiving");
     await receiving;
+    is(
+      countObservers(HANDSHAKE_COMPLETE_TOPIC),
+      0,
+      "No handshake observer without the Push Service"
+    );
   } finally {
     pushService.restore();
   }
 });
+
+add_task(
+  async function test_handshake_not_observed_if_push_service_is_broken() {
+    let pushServiceError = new Error("The Push Service is broken");
+    let pushService = sinon
+      .stub(CommandLineHandler.prototype, "ensurePushServiceReady")
+      .rejects(pushServiceError);
+
+    try {
+      await Assert.rejects(
+        CommandLineHandler.prototype.receivePushMessages(),
+        e => e == pushServiceError,
+        "The Push Service error is propagated"
+      );
+      is(
+        countObservers(HANDSHAKE_COMPLETE_TOPIC),
+        0,
+        "No handshake observer after the Push Service fails"
+      );
+    } finally {
+      pushService.restore();
+    }
+  }
+);
 
 const OBSERVED_TIMEOUT_MS = 100;
 
@@ -312,15 +361,9 @@ add_task(async function test_push_messages_observed_with_push_service() {
     is(countPushTopicObservers(), 0, "No observer before receiving");
     is(countObservers(handledTopic), 0, "No handled observer before receiving");
 
-    let receiving = CommandLineHandler.prototype.receivePushMessages();
+    let { receiving } = await startReceiving();
 
-    // The observer is added after the Push Service check resolves
-    await TestUtils.waitForCondition(
-      () => countPushTopicObservers() == 1,
-      "One observer while receiving",
-      10
-    );
-
+    is(countPushTopicObservers(), 1, "One observer while receiving");
     is(countObservers(handledTopic), 1, "One handled observer while receiving");
 
     await receiving;
@@ -375,10 +418,12 @@ async function receivePushMessagesDurationMs({
   }, INTERVAL_MS);
   registerCleanupFunction(() => clearInterval(sending));
 
-  let startedAt = ChromeUtils.now();
-
   try {
-    await CommandLineHandler.prototype.receivePushMessages();
+    let { receiving } = await startReceiving();
+
+    let startedAt = ChromeUtils.now();
+    completeHandshake();
+    await receiving;
 
     return ChromeUtils.now() - startedAt;
   } finally {
@@ -624,14 +669,8 @@ add_task(async function test_notifications_shown_are_counted() {
   Services.fog.testResetFOG();
 
   try {
-    let receiving = CommandLineHandler.prototype.receivePushMessages();
-
-    // The observers are added after the Push Service check resolves
-    await TestUtils.waitForCondition(
-      () => countPushTopicObservers() == 1,
-      "Receiving has started",
-      10
-    );
+    let { receiving } = await startReceiving();
+    completeHandshake();
 
     showNotification();
     showNotification();
@@ -686,6 +725,7 @@ async function receivePushEventsDurationMs({
   events,
   perMessageTimeoutMs = PER_MESSAGE_TIMEOUT_MS,
   totalTimeoutMs = TOTAL_TIMEOUT_MS,
+  completesHandshake = true,
 }) {
   let pushService = sinon
     .stub(CommandLineHandler.prototype, "ensurePushServiceReady")
@@ -708,16 +748,12 @@ async function receivePushEventsDurationMs({
   let timers = [];
 
   try {
-    let receiving = CommandLineHandler.prototype.receivePushMessages();
-
-    // The observers are added after the Push Service check resolves
-    await TestUtils.waitForCondition(
-      () => countPushTopicObservers() == 1,
-      "One observer while receiving",
-      10
-    );
+    let { receiving } = await startReceiving();
 
     let startedAt = ChromeUtils.now();
+    if (completesHandshake) {
+      completeHandshake();
+    }
 
     // Simulates push messages and their handling, without going through the
     // real Push Notifier
@@ -842,6 +878,41 @@ add_task(
     );
   }
 );
+
+add_task(async function test_per_message_timer_starts_if_push_is_disabled() {
+  await using _pref = await SpecialPowers.prefEnv({
+    set: [["dom.push.connection.enabled", false]],
+  });
+
+  let durationMs = await receivePushEventsDurationMs({
+    events: [],
+    completesHandshake: false,
+  });
+
+  isfuzzy(
+    durationMs,
+    PER_MESSAGE_TIMEOUT_MS,
+    TOLERANCE_MS,
+    "Receiving stops at the per message timeout if push is disabled"
+  );
+});
+
+add_task(async function test_per_message_timer_starts_if_offline() {
+  Services.io.offline = true;
+  registerCleanupFunction(() => (Services.io.offline = false));
+
+  let durationMs = await receivePushEventsDurationMs({
+    events: [],
+    completesHandshake: false,
+  });
+
+  isfuzzy(
+    durationMs,
+    PER_MESSAGE_TIMEOUT_MS,
+    TOLERANCE_MS,
+    "Receiving stops at the per message timeout if offline"
+  );
+});
 
 add_task(async function test_stray_handled_notification_is_ignored() {
   let durationMs = await receivePushEventsDurationMs({
