@@ -134,8 +134,6 @@ GenerateWebCompatAddonFiles(
     "webcompat_addon_generated_files/",
 )
 
-CONFIGURE_SUBST_FILES += ["installer/Makefile"]
-
 DIRS += [
     "locales",
 ]
