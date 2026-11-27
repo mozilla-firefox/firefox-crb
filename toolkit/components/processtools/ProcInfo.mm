@@ -97,13 +97,7 @@ ProcInfoPromise::ResolveOrRejectValue GetProcInfoSync(
     info.utilityActors = std::move(request.utilityInfo);
 
 #ifdef XP_MACOSX
-    mach_port_t selectedTask;
-    // If we did not get a task from a child process, we use mach_task_self()
-    if (request.childTask == MACH_PORT_NULL) {
-      selectedTask = mach_task_self();
-    } else {
-      selectedTask = request.childTask;
-    }
+    mach_port_t selectedTask = request.childTask;
 
     task_power_info_data_t task_power_info;
     mach_msg_type_number_t count = TASK_POWER_INFO_COUNT;

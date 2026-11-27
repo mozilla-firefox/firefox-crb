@@ -175,12 +175,11 @@ typedef MozPromise<mozilla::HashMap<base::ProcessId, ProcInfo>, nsresult, true>
 struct ProcInfoRequest {
   ProcInfoRequest(base::ProcessId aPid, ProcType aProcessType,
                   const nsACString& aOrigin, nsTArray<WindowInfo>&& aWindowInfo,
-                  nsTArray<UtilityInfo>&& aUtilityInfo, uint32_t aChildId = 0
+                  nsTArray<UtilityInfo>&& aUtilityInfo,
 #ifdef XP_MACOSX
-                  ,
-                  mach_port_t aChildTask = 0
-#endif  // XP_DARWIN
-                  )
+                  mach_port_t aChildTask,
+#endif  // XP_MACOSX
+                  uint32_t aChildId = 0)
       : pid(aPid),
         processType(aProcessType),
         origin(aOrigin),
@@ -190,8 +189,14 @@ struct ProcInfoRequest {
 #ifdef XP_MACOSX
         ,
         childTask(aChildTask)
-#endif  // XP_DARWIN
+#endif  // XP_MACOSX
   {
+#ifdef XP_MACOSX
+    MOZ_ASSERT(aChildTask != MACH_PORT_NULL,
+               "ProcInfoRequest requires a valid task port on macOS - "
+               "pass GetChildTask() for children, mach_task_self() for the "
+               "current process.");
+#endif  // XP_MACOSX
   }
   const base::ProcessId pid;
   const ProcType processType;
@@ -202,7 +207,7 @@ struct ProcInfoRequest {
   const int32_t childId;
 #ifdef XP_MACOSX
   const mach_port_t childTask;
-#endif  // XP_DARWIN
+#endif  // XP_MACOSX
 };
 
 /**

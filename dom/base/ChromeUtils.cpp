@@ -1966,7 +1966,12 @@ already_AddRefed<Promise> ChromeUtils::RequestProcInfo(GlobalObject& aGlobal,
       /* aProcessType = */ ProcType::Browser,
       /* aOrigin = */ ""_ns,
       /* aWindowInfo = */ nsTArray<WindowInfo>(),
-      /* aUtilityInfo = */ nsTArray<UtilityInfo>());
+      /* aUtilityInfo = */ nsTArray<UtilityInfo>()
+#ifdef XP_MACOSX
+          ,
+      /* aChildTask = */ mach_task_self()
+#endif  // XP_MACOSX
+  );
 
   // First handle non-ContentParent processes.
   for (auto& geckoProcess : mozilla::ipc::GeckoChildProcessHost::GetAll()) {
@@ -1976,6 +1981,13 @@ already_AddRefed<Promise> ChromeUtils::RequestProcInfo(GlobalObject& aGlobal,
       // fail gracefully.
       continue;
     }
+#ifdef XP_MACOSX
+    // The launch callback may not have populated the task port yet;
+    // skip rather than asserting on a transient race.
+    if (geckoProcess->GetChildTask() == MACH_PORT_NULL) {
+      continue;
+    }
+#endif
     mozilla::ProcType type = mozilla::ProcType::Unknown;
 
     switch (geckoProcess->GetProcessType()) {
@@ -2026,13 +2038,13 @@ already_AddRefed<Promise> ChromeUtils::RequestProcInfo(GlobalObject& aGlobal,
         /* aWindowInfo = */ nsTArray<WindowInfo>(),  // Without a
                                                      // ContentProcess, no
                                                      // DOM windows.
-        /* aUtilityInfo = */ std::move(utilityActors),
-        /* aChild = */ geckoProcess->GetChildID()
+        /* aUtilityInfo = */ std::move(utilityActors)
 #ifdef XP_MACOSX
             ,
         /* aChildTask = */ geckoProcess->GetChildTask()
 #endif  // XP_MACOSX
-    );
+            ,
+        /* aChild = */ geckoProcess->GetChildID());
   }
 
   // Now handle ContentParents.
@@ -2052,6 +2064,13 @@ already_AddRefed<Promise> ChromeUtils::RequestProcInfo(GlobalObject& aGlobal,
       // We'll get it in the next call, skip it for the moment.
       continue;
     }
+#ifdef XP_MACOSX
+    // The launch callback may not have populated the task port yet;
+    // skip rather than asserting on a transient race.
+    if (contentParent->Process()->GetChildTask() == MACH_PORT_NULL) {
+      continue;
+    }
+#endif
 
     // Since this code is executed synchronously on the main thread,
     // processes cannot die while we're in this loop.
@@ -2130,13 +2149,13 @@ already_AddRefed<Promise> ChromeUtils::RequestProcInfo(GlobalObject& aGlobal,
         /* aProcessType = */ type,
         /* aOrigin = */ origin,
         /* aWindowInfo = */ std::move(windows),
-        /* aUtilityInfo = */ nsTArray<UtilityInfo>(),
-        /* aChild = */ contentParent->ChildID()
+        /* aUtilityInfo = */ nsTArray<UtilityInfo>()
 #ifdef XP_MACOSX
             ,
         /* aChildTask = */ contentParent->Process()->GetChildTask()
 #endif  // XP_MACOSX
-    );
+            ,
+        /* aChild = */ contentParent->ChildID());
   }
 
   // Now place background request.
