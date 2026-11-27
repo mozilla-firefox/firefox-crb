@@ -109,10 +109,11 @@ it("shows the extension controlled notice", async () => {
   ok(!strictRadio.disabled, "Strict radio enabled before install");
 
   extension = loadTPExtension();
-  let messageBarShown = waitForMessageBar(radioGroupControl, true);
   await extension.startup();
   await extension.awaitMessage("tp-set");
-  await messageBarShown;
+  // Wait only after startup, which can be slow on some builds. The condition
+  // is checked immediately, so a message bar rendered already is fine.
+  await waitForMessageBar(radioGroupControl, true);
 
   ok(Services.prefs.getBoolPref(TP_PREF), "Extension enabled tracking prot.");
   let messageBar = assertMessageBar(radioGroupControl);
@@ -229,10 +230,11 @@ it("keeps the strict exceptions usable while controlled", async () => {
   );
 
   extension = loadTPExtension();
-  let messageBarShown = waitForMessageBar(radioGroupControl, true);
   await extension.startup();
   await extension.awaitMessage("tp-set");
-  await messageBarShown;
+  // Wait only after startup, which can be slow on some builds. The condition
+  // is checked immediately, so a message bar rendered already is fine.
+  await waitForMessageBar(radioGroupControl, true);
 
   is(
     Services.prefs.getStringPref(CAT_PREF),
