@@ -1087,6 +1087,65 @@ def test_ab_profiles(ab_profiles_mocks, run_action, get_artifact):
     assert task_def["tags"]["action"] == "ab-profiles-task"
     assert "retrigger" not in task_def["tags"]
     assert task_def["payload"]["maxRunTime"] == 2 * 4200
+    assert {"basebuildtid", "newbuildtid"} <= set(task_def["dependencies"])
+
+
+def ab_task_def(get_artifact, label=AB_PROFILES_LABEL):
+    task_id = get_artifact("label-to-taskid.json")[label]
+    return get_artifact("task-graph.json")[task_id]["task"]
+
+
+@pytest.mark.parametrize("state", ["unscheduled", "pending", "running"])
+def test_ab_profiles_waits_for_unfinished_base_build(
+    ab_profiles_mocks, mocker, run_action, get_artifact, state
+):
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.status_task",
+        return_value={"state": state},
+    )
+    run_action(
+        "ab-profiles",
+        params={"head_rev": "newrev123456789", "project": "try"},
+        input={"base_revision": AB_PROFILES_BASE_REV},
+    )
+
+    assert "basebuildtid" in ab_task_def(get_artifact)["dependencies"]
+    # An unfinished build has no artifacts to check yet.
+    ab_profiles_mocks.assert_not_called()
+
+
+@pytest.mark.parametrize("state", ["failed", "exception"])
+def test_ab_profiles_refuses_failed_base_build(
+    ab_profiles_mocks, mocker, run_action, state
+):
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.status_task",
+        return_value={"state": state},
+    )
+    with pytest.raises(Exception, match=f"is {state}. Rerun it"):
+        run_action(
+            "ab-profiles",
+            params={"head_rev": "newrev123456789", "project": "try"},
+            input={"base_revision": AB_PROFILES_BASE_REV},
+        )
+
+
+@pytest.mark.parametrize("state", ["failed", "exception"])
+def test_ab_profiles_refuses_failed_new_build(
+    ab_profiles_mocks, mocker, run_action, state
+):
+    mocker.patch(
+        "gecko_taskgraph.actions.ab_profiles.status_task",
+        side_effect=lambda task_id: {
+            "state": state if task_id == "newbuildtid" else "completed"
+        },
+    )
+    with pytest.raises(Exception, match=f"new build \\(newbuildtid\\) is {state}"):
+        run_action(
+            "ab-profiles",
+            params={"head_rev": "newrev123456789", "project": "try"},
+            input={"base_revision": AB_PROFILES_BASE_REV},
+        )
 
 
 def test_ab_profiles_requires_a_base(mocker, run_action):
@@ -1112,6 +1171,18 @@ def test_ab_profiles_task_id_overrides_revision(
     config = json.loads(task_def["payload"]["env"]["RAPTOR_AB_CONFIG"])
     assert config["runs"]["base"]["description"] == "task otherbuildtid"
     assert "otherbuildtid" in config["runs"]["base"]["installer_url"]
+
+
+def test_ab_profiles_same_build_on_both_sides(
+    ab_profiles_mocks, run_action, get_artifact
+):
+    run_action(
+        "ab-profiles",
+        params={"head_rev": "newrev123456789", "project": "try"},
+        input={"base_build_task_id": "newbuildtid"},
+    )
+
+    assert ab_task_def(get_artifact)["dependencies"].count("newbuildtid") == 1
 
 
 def test_ab_profiles_short_base_revision(ab_profiles_mocks, run_action):
