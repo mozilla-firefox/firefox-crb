@@ -1667,19 +1667,26 @@ bool ValidatePrincipalCouldPotentiallyBeLoadedBy(
     if (!aOptions.contains(ValidatePrincipalOptions::AllowExpanded)) {
       return false;
     }
-    // FIXME: There are more constraints on expanded principals in-practice,
-    // such as the structure of extension expanded principals. This may need
-    // to be investigated more in the future.
+
     nsCOMPtr<nsIExpandedPrincipal> expandedPrincipal =
         do_QueryInterface(aPrincipal);
     const auto& allowList = expandedPrincipal->AllowList();
-    for (const auto& innerPrincipal : allowList) {
-      if (!ValidatePrincipalCouldPotentiallyBeLoadedBy(
-              innerPrincipal, aRemoteType, aOptions, aLoadedOriginSet)) {
-        return false;
-      }
+    if (allowList.Length() != 1 && allowList.Length() != 2) {
+      NS_WARNING("ExpandedPrincipal must have 1 or 2 inner principals");
+      return false;
     }
-    return true;
+
+    // The second principal, if present, must be a content script's extension
+    // principal. That principal is otherwise unvalidated.
+    if (allowList.Length() == 2 && !allowList[1]->SchemeIs("moz-extension")) {
+      return false;
+    }
+
+    // The first principal must not be an expanded principal, but should
+    // otherwise follow normal ValidatePrincipal rules.
+    return ValidatePrincipalCouldPotentiallyBeLoadedBy(
+        allowList[0], aRemoteType,
+        aOptions - ValidatePrincipalOptions::AllowExpanded, aLoadedOriginSet);
   }
 
   // At this point we know we're working with a content principal.
