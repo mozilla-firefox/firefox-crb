@@ -437,3 +437,13 @@ async function ensureNoTRRModeChange(mode) {
     is(actualMode, mode, "No change in TRR mode");
   }
 }
+
+async function waitForOffReason(action) {
+  let offReasonPromise = TestUtils.topicObserved("doh:off-reason-changed");
+  await action();
+  await offReasonPromise;
+}
+
+function checkOffReason(reason, trippedHeuristics = []) {
+  Assert.deepEqual(DoHController.offReason, { reason, trippedHeuristics });
+}

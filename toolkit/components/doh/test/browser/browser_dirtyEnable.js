@@ -19,6 +19,7 @@ add_task(async function testDirtyEnable() {
     true,
     "Disabled state recorded."
   );
+  checkOffReason("manuallyDisabled");
   ok(
     !Services.prefs.prefHasUserValue(prefs.BREADCRUMB_PREF),
     "Breadcrumb not saved."
@@ -47,7 +48,8 @@ add_task(async function testDirtyEnable() {
   );
 
   // Restart the controller for good measure.
-  await restartDoHController();
+  await waitForOffReason(restartDoHController);
+  checkOffReason("manuallyDisabled");
   await ensureNoTRRModeChange(undefined);
   await ensureNoTRRSelectionTelemetry();
   await ensureNoHeuristicsTelemetry();

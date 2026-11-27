@@ -42,11 +42,13 @@ add_task(async function testUserInterference() {
   BrowserTestUtils.removeTab(tab);
 
   await ensureTRRMode(2);
+  checkOffReason(null);
   await checkHeuristicsTelemetry("enable_doh", "startup");
 
   // Set the TRR mode pref manually and ensure we respect this.
   Services.prefs.setIntPref(prefs.NETWORK_TRR_MODE_PREF, 3);
   await ensureTRRMode(undefined);
+  checkOffReason("manuallyDisabled");
 
   // Simulate a network change.
   simulateNetworkChange();
@@ -69,7 +71,8 @@ add_task(async function testUserInterference() {
   await ensureNoHeuristicsTelemetry();
 
   // Restart the controller for good measure.
-  await restartDoHController();
+  await waitForOffReason(restartDoHController);
+  checkOffReason("manuallyDisabled");
   await ensureNoTRRModeChange(undefined);
   await ensureNoTRRSelectionTelemetry();
   await ensureNoHeuristicsTelemetry();

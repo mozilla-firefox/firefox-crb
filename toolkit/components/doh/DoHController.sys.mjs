@@ -145,6 +145,14 @@ function getHashedNetworkID() {
 export const DoHController = {
   _heuristicsAreEnabled: false,
 
+  // reason is the last setState() state, "incomplete" or null when enabled.
+  offReason: { reason: null, trippedHeuristics: [] },
+
+  _setOffReason(reason, trippedHeuristics = []) {
+    this.offReason = { reason, trippedHeuristics };
+    Services.obs.notifyObservers(null, "doh:off-reason-changed");
+  },
+
   async init() {
     await lazy.DoHConfigController.initComplete;
 
@@ -162,6 +170,8 @@ export const DoHController = {
       await this.maybeEnableHeuristics();
     } else if (Services.prefs.getBoolPref(FIRST_RUN_PREF, false)) {
       await this.rollback();
+    } else {
+      this._setOffReason("rollback");
     }
 
     this._asyncShutdownBlocker = async () => {
@@ -218,6 +228,7 @@ export const DoHController = {
   // 2. If there are any non-DoH enterprise policies active
   async maybeEnableHeuristics() {
     if (Services.prefs.getBoolPref(DISABLED_PREF, false)) {
+      this._setOffReason("manuallyDisabled");
       return;
     }
 
@@ -244,6 +255,7 @@ export const DoHController = {
           Glean.networking.dohHeuristicsResult.set(
             lazy.Heuristics.Telemetry.enterpriseEnabled
           );
+          this._setOffReason(null);
           break;
       }
       Services.prefs.setBoolPref(SKIP_HEURISTICS_PREF, true);
@@ -285,6 +297,7 @@ export const DoHController = {
 
       Services.prefs.setStringPref(ROLLOUT_URI_PREF, uri || "");
     }
+    this._setOffReason("incomplete");
     this.runHeuristicsThrottled("startup");
     Services.obs.addObserver(this, kLinkStatusChangedTopic);
     Services.obs.addObserver(this, kConnectivityTopic);
@@ -426,7 +439,12 @@ export const DoHController = {
       Glean.networking.dohHeuristicsResult.set(
         lazy.Heuristics.Telemetry.fromResults(results)
       );
-      await this.setState("disabled");
+      await this.setState(
+        "disabled",
+        lazy.Heuristics.Telemetry.heuristicNames().filter(
+          name => results[name] === lazy.Heuristics.DISABLE_DOH
+        )
+      );
     } else {
       Glean.networking.dohHeuristicsResult.set(lazy.Heuristics.Telemetry.pass);
       Glean.networking.dohHeuristicsPassCount.add(1);
@@ -476,7 +494,7 @@ export const DoHController = {
     Glean.doh.evaluateV2Heuristics.record(resultsForTelemetry);
   },
 
-  async setState(state) {
+  async setState(state, trippedHeuristics = []) {
     switch (state) {
       case "disabled":
         Services.prefs.setIntPref(ROLLOUT_MODE_PREF, 0);
@@ -512,6 +530,10 @@ export const DoHController = {
           Services.prefs.clearUserPref(ROLLOUT_MODE_PREF);
         }
         break;
+    }
+
+    if (state != "shutdown") {
+      this._setOffReason(state == "enabled" ? null : state, trippedHeuristics);
     }
 
     Glean.doh["state" + state[0].toUpperCase() + state.slice(1)].record({
@@ -679,11 +701,15 @@ export const DoHController = {
         break;
       case DISABLED_PREF:
         if (
-          !Services.prefs.getBoolPref(DISABLED_PREF, false) &&
-          !this._heuristicsAreEnabled &&
-          lazy.DoHConfigController.currentConfig.enabled
+          Services.prefs.getBoolPref(DISABLED_PREF, false) ||
+          this._heuristicsAreEnabled
         ) {
+          break;
+        }
+        if (lazy.DoHConfigController.currentConfig.enabled) {
           await this.maybeEnableHeuristics();
+        } else {
+          this._setOffReason("rollback");
         }
         break;
     }
