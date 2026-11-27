@@ -221,11 +221,25 @@ nsIGlobalObject* GetIncumbentGlobal() {
   return IncumbentGlobalForScriptedCaller(JS::GetScriptedCallerGlobal(cx));
 }
 
+static bool IsCurrentGlobal(JSContext* aCx, JSObject* aGlobal) {
+  return aGlobal && aGlobal == JS::CurrentGlobalOrNull(aCx);
+}
+
 JSObject* GetIncumbentGlobalJSObject(JSContext* aCx) {
   MOZ_ASSERT(aCx == danger::GetJSContext());
 
+  JSObject* scriptedCallerGlobal = JS::GetScriptedCallerGlobal(aCx);
+
+  // ClampToSubject can only substitute the current global, so a scripted
+  // caller in the current realm is its own incumbent global.
+  if (IsCurrentGlobal(aCx, scriptedCallerGlobal)) {
+    MOZ_ASSERT(IncumbentGlobalForScriptedCaller(scriptedCallerGlobal)
+                   ->GetGlobalJSObjectPreserveColor() == scriptedCallerGlobal);
+    return scriptedCallerGlobal;
+  }
+
   nsIGlobalObject* global =
-      IncumbentGlobalForScriptedCaller(JS::GetScriptedCallerGlobal(aCx));
+      IncumbentGlobalForScriptedCaller(scriptedCallerGlobal);
   return global ? global->GetGlobalJSObject() : nullptr;
 }
 
