@@ -9,6 +9,7 @@ The Firefox repository is very big and so it isn't advised to blindly run rg or 
 
 Before you edit, review or investigate files under any of the following directories, read the `AGENTS.md` at the top of each listed directory that contains them, outermost first:
  - `browser/`
+ - `browser/components/urlbar/`
  - `browser/extensions/newtab/`
  - `browser/themes/`
  - `dom/media/`
