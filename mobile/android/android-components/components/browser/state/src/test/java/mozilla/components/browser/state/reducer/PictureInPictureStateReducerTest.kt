@@ -8,6 +8,7 @@ import mozilla.components.browser.state.action.PictureInPictureAction
 import mozilla.components.browser.state.selector.findTab
 import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.PictureInPictureSession
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.PictureInPictureWindowState
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.concept.engine.EngineSession
@@ -25,24 +26,100 @@ class PictureInPictureStateReducerTest {
         val result =
             PictureInPictureStateReducer.reduce(
                 BrowserState(tabs = listOf(tab())),
-                PictureInPictureAction.RequestAction("tab"),
+                PictureInPictureAction.RequestAction("tab", PictureInPictureSource.ADDRESS_BAR),
             )
 
-        assertEquals(PictureInPictureWindowState(requestedTabId = "tab"), result.pictureInPictureWindow)
+        assertEquals(
+            PictureInPictureWindowState(requestedTabId = "tab", requestedSource = PictureInPictureSource.ADDRESS_BAR),
+            result.pictureInPictureWindow,
+        )
     }
 
     @Test
-    fun `GIVEN the window has a session WHEN RequestAction is dispatched THEN the window keeps its session and waits on the tab`() {
+    fun `GIVEN the window has a session WHEN RequestAction is dispatched THEN the session keeps its source`() {
+        val addressBarSession = session.copy(source = PictureInPictureSource.ADDRESS_BAR)
         val state =
             BrowserState(
                 tabs = listOf(tab()),
-                pictureInPictureWindow = PictureInPictureWindowState(session = session),
+                pictureInPictureWindow = PictureInPictureWindowState(session = addressBarSession),
             )
 
-        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.RequestAction("tab"))
+        val result =
+            PictureInPictureStateReducer.reduce(
+                state,
+                PictureInPictureAction.RequestAction("tab", PictureInPictureSource.FULLSCREEN),
+            )
 
         assertEquals(
-            PictureInPictureWindowState(session = session, requestedTabId = "tab"),
+            PictureInPictureWindowState(
+                session = addressBarSession,
+                requestedTabId = "tab",
+                requestedSource = PictureInPictureSource.FULLSCREEN,
+            ),
+            result.pictureInPictureWindow,
+        )
+    }
+
+    @Test
+    fun `GIVEN a pending request WHEN the tab enters THEN the session takes the source of the request`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(
+                        requestedTabId = "tab",
+                        requestedSource = PictureInPictureSource.FULLSCREEN,
+                    ),
+            )
+
+        val result =
+            PictureInPictureStateReducer.reduce(
+                state,
+                PictureInPictureAction.EnterAction(tabId = "tab", engineSession = engineSession),
+            )
+
+        assertEquals(PictureInPictureSource.FULLSCREEN, result.pictureInPictureWindow.session?.source)
+    }
+
+    @Test
+    fun `GIVEN a session WHEN a request from another source is consumed without entering THEN the session keeps its source`() {
+        val addressBarSession = session.copy(source = PictureInPictureSource.ADDRESS_BAR)
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(
+                        session = addressBarSession,
+                        requestedTabId = "tab",
+                        requestedSource = PictureInPictureSource.FULLSCREEN,
+                    ),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ConsumeRequestAction("tab"))
+
+        assertEquals(PictureInPictureWindowState(session = addressBarSession), result.pictureInPictureWindow)
+    }
+
+    @Test
+    fun `GIVEN a pending request WHEN the session exits THEN the request is kept`() {
+        val state =
+            BrowserState(
+                tabs = listOf(tab()),
+                pictureInPictureWindow =
+                    PictureInPictureWindowState(
+                        session = session.copy(source = PictureInPictureSource.ADDRESS_BAR),
+                        requestedTabId = "other",
+                        requestedSource = PictureInPictureSource.FULLSCREEN,
+                    ),
+            )
+
+        val result = PictureInPictureStateReducer.reduce(state, PictureInPictureAction.ExitAction("tab"))
+
+        assertEquals(
+            PictureInPictureWindowState(
+                requestedTabId = "other",
+                requestedSource = PictureInPictureSource.FULLSCREEN,
+            ),
             result.pictureInPictureWindow,
         )
     }

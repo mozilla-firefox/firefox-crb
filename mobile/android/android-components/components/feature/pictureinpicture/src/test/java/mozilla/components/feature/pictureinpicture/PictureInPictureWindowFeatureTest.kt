@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.test.StandardTestDispatcher
 import mozilla.components.browser.state.action.PictureInPictureAction
 import mozilla.components.browser.state.state.BrowserState
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.Engine
@@ -101,7 +102,7 @@ class PictureInPictureWindowFeatureTest {
     }
 
     private fun request(tabId: String) {
-        store.dispatch(PictureInPictureAction.RequestAction(tabId))
+        store.dispatch(PictureInPictureAction.RequestAction(tabId, PictureInPictureSource.ADDRESS_BAR))
     }
 
     private fun enter(tabId: String) {

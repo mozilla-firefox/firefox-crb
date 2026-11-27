@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import mozilla.components.browser.state.action.BrowserAction
 import mozilla.components.browser.state.action.PictureInPictureAction
 import mozilla.components.browser.state.state.BrowserState
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.browser.state.state.createTab
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.engine.EngineSession
@@ -88,7 +89,7 @@ class PictureInPictureSessionFeatureTest {
     @Test
     fun `GIVEN the window got a session elsewhere WHEN the feature starts THEN it is rendered without a request`() {
         val engineSession: EngineSession = mock()
-        store.dispatch(PictureInPictureAction.RequestAction("tab"))
+        store.dispatch(PictureInPictureAction.RequestAction("tab", PictureInPictureSource.ADDRESS_BAR))
         enter("tab", engineSession)
         captureActionsMiddleware.reset()
 
@@ -215,7 +216,7 @@ class PictureInPictureSessionFeatureTest {
     }
 
     private fun request(tabId: String) {
-        store.dispatch(PictureInPictureAction.RequestAction(tabId))
+        store.dispatch(PictureInPictureAction.RequestAction(tabId, PictureInPictureSource.ADDRESS_BAR))
         feature.start()
         testDispatcher.scheduler.advanceUntilIdle()
     }

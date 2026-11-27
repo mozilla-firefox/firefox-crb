@@ -12,6 +12,7 @@ import mozilla.components.browser.state.action.PictureInPictureAction
 import mozilla.components.browser.state.selector.findTabOrCustomTab
 import mozilla.components.browser.state.state.BrowserState
 import mozilla.components.browser.state.state.PictureInPictureSession
+import mozilla.components.browser.state.state.PictureInPictureSource
 import mozilla.components.lib.state.Store
 
 /**
@@ -26,13 +27,21 @@ class PictureInPictureUseCases(
 ) {
     /** Use case requesting a picture-in-picture window for the video of a tab. */
     class RequestUseCase internal constructor(private val store: Store<BrowserState, BrowserAction>) {
-        /** Requests a picture-in-picture window for the video of the tab with ID [tabId]. */
-        operator fun invoke(tabId: String? = store.state.selectedTabId) {
+        /**
+         * Requests a picture-in-picture window for the video of the tab with ID [tabId].
+         *
+         * @param tabId The ID of the tab whose video is shown, the selected tab by default.
+         * @param source Where the window is requested from, the address bar by default.
+         */
+        operator fun invoke(
+            tabId: String? = store.state.selectedTabId,
+            source: PictureInPictureSource = PictureInPictureSource.ADDRESS_BAR,
+        ) {
             if (tabId == null) {
                 return
             }
 
-            store.dispatch(PictureInPictureAction.RequestAction(tabId))
+            store.dispatch(PictureInPictureAction.RequestAction(tabId, source))
         }
     }
 

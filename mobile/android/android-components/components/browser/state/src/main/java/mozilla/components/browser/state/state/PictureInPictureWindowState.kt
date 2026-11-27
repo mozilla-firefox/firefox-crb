@@ -11,19 +11,32 @@ import mozilla.components.concept.engine.EngineSession
  *
  * @property session The session cloning a video.
  * @property requestedTabId ID of the tab whose video the window is waiting on.
+ * @property requestedSource Where the pending request came from, or null if no request is pending.
  */
 data class PictureInPictureWindowState(
     val session: PictureInPictureSession? = null,
     val requestedTabId: String? = null,
+    val requestedSource: PictureInPictureSource? = null,
 )
+
+/** Where a picture-in-picture window was requested from. */
+enum class PictureInPictureSource {
+    /** The address bar button, showing the window in a picture-in-picture activity of its own. */
+    ADDRESS_BAR,
+
+    /** A fullscreen video the user left the browser from, showing the window over the browser. */
+    FULLSCREEN,
+}
 
 /**
  * A session cloning the video of a tab into a picture-in-picture window.
  *
  * @property tabId ID of the tab the video comes from.
  * @property engineSession The session cloning the video.
+ * @property source Where the window was requested from.
  */
 data class PictureInPictureSession(
     val tabId: String,
     val engineSession: EngineSession,
+    val source: PictureInPictureSource? = null,
 )
