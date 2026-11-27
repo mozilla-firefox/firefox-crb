@@ -64,6 +64,10 @@ const kDataVersion = 3;
 
 const MAX_DATE_MS = 8640000000000000;
 
+function isPlainObject(value) {
+  return !!value && typeof value == "object" && !Array.isArray(value);
+}
+
 // LoginStore
 
 /**
@@ -135,21 +139,31 @@ LoginStore.prototype._backupHandler = async function () {
  * Synchronously work on the data just loaded into memory.
  */
 LoginStore.prototype._dataPostProcessor = function (data) {
-  if (data.nextId === undefined) {
-    data.nextId = 1;
+  if (!isPlainObject(data)) {
+    console.error("Ignoring logins data that is not an object.");
+    data = {};
   }
 
   // Create any arrays that are not present in the saved file.
-  if (!data.logins) {
+  if (!Array.isArray(data.logins)) {
     data.logins = [];
   }
 
-  if (!data.potentiallyVulnerablePasswords) {
+  if (!Array.isArray(data.potentiallyVulnerablePasswords)) {
     data.potentiallyVulnerablePasswords = [];
   }
 
+  if (!Number.isSafeInteger(data.nextId)) {
+    data.nextId =
+      data.logins.reduce(
+        (maxId, login) =>
+          Number.isSafeInteger(login?.id) ? Math.max(maxId, login.id) : maxId,
+        0
+      ) + 1;
+  }
+
   // Migrate breach alert dismissals from the separate map into per-login fields.
-  if (data.dismissedBreachAlertsByLoginGUID) {
+  if (isPlainObject(data.dismissedBreachAlertsByLoginGUID)) {
     for (let login of data.logins) {
       if (login.guid in data.dismissedBreachAlertsByLoginGUID) {
         const { timeBreachAlertDismissed } =
@@ -157,8 +171,8 @@ LoginStore.prototype._dataPostProcessor = function (data) {
         login.timeLastBreachAlertDismissed = timeBreachAlertDismissed;
       }
     }
-    delete data.dismissedBreachAlertsByLoginGUID;
   }
+  delete data.dismissedBreachAlertsByLoginGUID;
 
   // sanitize dates in logins
   if (!("version" in data) || data.version < 3) {

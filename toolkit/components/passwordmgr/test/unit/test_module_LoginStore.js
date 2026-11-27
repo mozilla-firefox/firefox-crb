@@ -187,6 +187,101 @@ add_task(async function test_load_string_malformed_sync() {
 });
 
 /**
+ * Loads valid JSON that is not a login store object.
+ */
+add_task(async function test_load_string_not_an_object() {
+  for (let string of ['""', "null", "42", "[]", '"logins"']) {
+    for (let sync of [false, true]) {
+      let store = new LoginStore(getTempFile(TEST_STORE_FILE_NAME).path);
+      await IOUtils.writeUTF8(store.path, string, {
+        tmpPath: store.path + ".tmp",
+      });
+
+      if (sync) {
+        store.ensureDataReady();
+      } else {
+        await store.load();
+      }
+
+      Assert.deepEqual(
+        store.data.logins,
+        [],
+        `${string} (sync: ${sync}): logins`
+      );
+      Assert.deepEqual(
+        store.data.potentiallyVulnerablePasswords,
+        [],
+        `${string} (sync: ${sync}): potentiallyVulnerablePasswords`
+      );
+      Assert.equal(store.data.nextId, 1, `${string} (sync: ${sync}): nextId`);
+    }
+  }
+});
+
+/**
+ * Loads a login store object whose members have unexpected types.
+ */
+add_task(async function test_load_unexpected_member_types() {
+  let login = {
+    id: 7,
+    hostname: "http://www.example.com",
+    guid: "(test)",
+    timeCreated: 1262304000000,
+    timeLastUsed: 1262304000000,
+    timePasswordChanged: 1262304000000,
+  };
+
+  let tests = [
+    {
+      data: {
+        logins: [login],
+        potentiallyVulnerablePasswords: {},
+        nextId: "8",
+        dismissedBreachAlertsByLoginGUID: "bogus",
+      },
+      expectedLogins: [login],
+      expectedNextId: 8,
+    },
+    {
+      data: {
+        logins: "bogus",
+        potentiallyVulnerablePasswords: "bogus",
+        nextId: null,
+      },
+      expectedLogins: [],
+      expectedNextId: 1,
+    },
+    {
+      data: { logins: [login], potentiallyVulnerablePasswords: 1 },
+      expectedLogins: [login],
+      expectedNextId: 8,
+    },
+  ];
+
+  for (let { data, expectedLogins, expectedNextId } of tests) {
+    let store = new LoginStore(getTempFile(TEST_STORE_FILE_NAME).path);
+    await IOUtils.writeJSON(store.path, data, {
+      tmpPath: store.path + ".tmp",
+    });
+
+    await store.load();
+
+    let name = JSON.stringify(data);
+    Assert.deepEqual(store.data.logins, expectedLogins, `${name}: logins`);
+    Assert.deepEqual(
+      store.data.potentiallyVulnerablePasswords,
+      [],
+      `${name}: potentiallyVulnerablePasswords`
+    );
+    Assert.equal(store.data.nextId, expectedNextId, `${name}: nextId`);
+    Assert.ok(
+      !("dismissedBreachAlertsByLoginGUID" in store.data),
+      `${name}: dismissedBreachAlertsByLoginGUID is removed`
+    );
+  }
+});
+
+/**
  * Fix bad dates when loading login data
  */
 add_task(async function test_load_bad_dates() {
