@@ -267,7 +267,7 @@ using namespace mozilla::a11y;
 @implementation mozDatePickerAccessible
 
 - (NSString*)moxTitle {
-  return utils::LocalizedString(u"dateField"_ns);
+  return utils::LocalizedString("a11y-role-date-field"_ns);
 }
 
 @end

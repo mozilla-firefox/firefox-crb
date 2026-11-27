@@ -470,39 +470,39 @@ static bool IsNonNativePopover(Accessible* aAccessible) {
 
 struct RoleDescrMap {
   NSString* role;
-  const nsLiteralString description;
+  const nsLiteralCString description;
 };
 
 static constexpr RoleDescrMap sRoleDescrMap[] = {
-    {@"AXApplicationAlert", u"alert"_ns},
-    {@"AXApplicationAlertDialog", u"alertDialog"_ns},
-    {@"AXApplicationDialog", u"dialog"_ns},
-    {@"AXApplicationLog", u"log"_ns},
-    {@"AXApplicationMarquee", u"marquee"_ns},
-    {@"AXApplicationStatus", u"status"_ns},
-    {@"AXApplicationTimer", u"timer"_ns},
-    {@"AXContentSeparator", u"separator"_ns},
-    {@"AXDefinition", u"definition"_ns},
-    {@"AXDetails", u"details"_ns},
-    {@"AXDocument", u"document"_ns},
-    {@"AXDocumentArticle", u"article"_ns},
-    {@"AXDocumentMath", u"math"_ns},
-    {@"AXDocumentNote", u"note"_ns},
-    {@"AXLandmarkApplication", u"application"_ns},
-    {@"AXLandmarkBanner", u"banner"_ns},
-    {@"AXLandmarkComplementary", u"complementary"_ns},
-    {@"AXLandmarkContentInfo", u"content"_ns},
-    {@"AXLandmarkMain", u"main"_ns},
-    {@"AXLandmarkNavigation", u"navigation"_ns},
-    {@"AXLandmarkRegion", u"region"_ns},
-    {@"AXLandmarkSearch", u"search"_ns},
-    {@"AXSearchField", u"searchTextField"_ns},
-    {@"AXSectionFooter", u"sectionfooter"_ns},
-    {@"AXSectionHeader", u"sectionheader"_ns},
-    {@"AXSummary", u"summary"_ns},
-    {@"AXTabPanel", u"tabPanel"_ns},
-    {@"AXTerm", u"term"_ns},
-    {@"AXUserInterfaceTooltip", u"tooltip"_ns}};
+    {@"AXApplicationAlert", "a11y-role-alert"_ns},
+    {@"AXApplicationAlertDialog", "a11y-role-alert-dialog"_ns},
+    {@"AXApplicationDialog", "a11y-role-dialog"_ns},
+    {@"AXApplicationLog", "a11y-role-log"_ns},
+    {@"AXApplicationMarquee", "a11y-role-marquee"_ns},
+    {@"AXApplicationStatus", "a11y-role-status"_ns},
+    {@"AXApplicationTimer", "a11y-role-timer"_ns},
+    {@"AXContentSeparator", "a11y-role-separator"_ns},
+    {@"AXDefinition", "a11y-role-definition"_ns},
+    {@"AXDetails", "a11y-role-details"_ns},
+    {@"AXDocument", "a11y-role-document"_ns},
+    {@"AXDocumentArticle", "a11y-role-article"_ns},
+    {@"AXDocumentMath", "a11y-role-math"_ns},
+    {@"AXDocumentNote", "a11y-role-note"_ns},
+    {@"AXLandmarkApplication", "a11y-role-application"_ns},
+    {@"AXLandmarkBanner", "a11y-landmark-banner"_ns},
+    {@"AXLandmarkComplementary", "a11y-landmark-complementary"_ns},
+    {@"AXLandmarkContentInfo", "a11y-landmark-content-info"_ns},
+    {@"AXLandmarkMain", "a11y-landmark-main"_ns},
+    {@"AXLandmarkNavigation", "a11y-landmark-navigation"_ns},
+    {@"AXLandmarkRegion", "a11y-landmark-region"_ns},
+    {@"AXLandmarkSearch", "a11y-landmark-search"_ns},
+    {@"AXSearchField", "a11y-role-search-text-field"_ns},
+    {@"AXSectionFooter", "a11y-role-section-footer"_ns},
+    {@"AXSectionHeader", "a11y-role-section-header"_ns},
+    {@"AXSummary", "a11y-role-summary"_ns},
+    {@"AXTabPanel", "a11y-role-tab-panel"_ns},
+    {@"AXTerm", "a11y-role-term"_ns},
+    {@"AXUserInterfaceTooltip", "a11y-role-tooltip"_ns}};
 
 struct RoleDescrComparator {
   const NSString* mRole;
@@ -520,12 +520,14 @@ struct RoleDescrComparator {
     }
   }
 
-  if (mRole == roles::FIGURE) return utils::LocalizedString(u"figure"_ns);
+  if (mRole == roles::FIGURE)
+    return utils::LocalizedString("a11y-role-figure"_ns);
 
-  if (mRole == roles::HEADING) return utils::LocalizedString(u"heading"_ns);
+  if (mRole == roles::HEADING)
+    return utils::LocalizedString("a11y-role-heading"_ns);
 
   if (mRole == roles::MARK) {
-    return utils::LocalizedString(u"highlight"_ns);
+    return utils::LocalizedString("a11y-role-highlight"_ns);
   }
 
   NSString* subrole = [self moxSubrole];

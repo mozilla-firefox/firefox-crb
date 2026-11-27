@@ -1659,9 +1659,9 @@ void uiaRawElmProvider::GetLocalizedControlType(nsAString& aLocalized) const {
   // know about some newer roles.
   const role accRole = acc->Role();
   if (accRole == roles::SECTION_FOOTER) {
-    Accessible::TranslateString(u"sectionfooter"_ns, aLocalized);
+    Accessible::TranslateString("a11y-role-section-footer"_ns, aLocalized);
   } else if (accRole == roles::SECTION_HEADER) {
-    Accessible::TranslateString(u"sectionheader"_ns, aLocalized);
+    Accessible::TranslateString("a11y-role-section-header"_ns, aLocalized);
   }
 }
 
@@ -1674,11 +1674,14 @@ void uiaRawElmProvider::GetLocalizedLandmarkType(nsAString& aLocalized) const {
   // provide strings for landmarks considered custom by UIA. For now, we only
   // support landmarks in the core ARIA specification, not other ARIA modules
   // such as DPub.
-  if (landmark == nsGkAtoms::banner || landmark == nsGkAtoms::complementary ||
-      landmark == nsGkAtoms::contentinfo || landmark == nsGkAtoms::region) {
-    nsAutoString unlocalized;
-    landmark->ToString(unlocalized);
-    Accessible::TranslateString(unlocalized, aLocalized);
+  if (landmark == nsGkAtoms::banner) {
+    Accessible::TranslateString("a11y-landmark-banner"_ns, aLocalized);
+  } else if (landmark == nsGkAtoms::complementary) {
+    Accessible::TranslateString("a11y-landmark-complementary"_ns, aLocalized);
+  } else if (landmark == nsGkAtoms::contentinfo) {
+    Accessible::TranslateString("a11y-landmark-content-info"_ns, aLocalized);
+  } else if (landmark == nsGkAtoms::region) {
+    Accessible::TranslateString("a11y-landmark-region"_ns, aLocalized);
   }
 }
 

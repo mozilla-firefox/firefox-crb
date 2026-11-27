@@ -34,10 +34,10 @@ NSArray<mozAccessible*>* ConvertToNSArray(AccArray& aArray) {
 }
 
 /**
- * Get a localized string from the string bundle.
+ * Get a localized string from dom/accessible.ftl.
  * Return nil if not found.
  */
-NSString* LocalizedString(const nsString& aString);
+NSString* LocalizedString(const nsACString& aL10nId);
 
 /**
  * Gets an accessible atttribute from the mozAccessible's associated

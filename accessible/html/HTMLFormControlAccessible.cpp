@@ -19,6 +19,7 @@
 #include "mozilla/dom/HTMLInputElement.h"
 #include "mozilla/dom/HTMLMeterElement.h"
 #include "mozilla/dom/HTMLTextAreaElement.h"
+#include "mozilla/intl/FluentArg.h"
 #include "nsAccUtils.h"
 #include "nsEventShell.h"
 #include "nsIFormControl.h"
@@ -179,15 +180,15 @@ void HTMLButtonAccessible::Value(nsString& aValue) const {
       Maybe<nscolor> maybeColor = HTMLInputElement::ParseSimpleColor(value);
       if (maybeColor) {
         const nscolor& color = maybeColor.ref();
-        Decimal r(static_cast<int>(NS_GET_R(color) / 2.55f)),
-            g(static_cast<int>(NS_GET_G(color) / 2.55f)),
-            b(static_cast<int>(NS_GET_B(color) / 2.55f));
-        nsAutoString rs(NS_ConvertUTF8toUTF16(r.toString()));
-        nsAutoString gs(NS_ConvertUTF8toUTF16(g.toString()));
-        nsAutoString bs(NS_ConvertUTF8toUTF16(b.toString()));
         Accessible::TranslateString(
-            u"inputColorValue"_ns, aValue,
-            {std::move(rs), std::move(gs), std::move(bs)});
+            "a11y-input-color-value"_ns,
+            {intl::FluentArg("red"_ns,
+                             static_cast<int>(NS_GET_R(color) / 2.55f)),
+             intl::FluentArg("green"_ns,
+                             static_cast<int>(NS_GET_G(color) / 2.55f)),
+             intl::FluentArg("blue"_ns,
+                             static_cast<int>(NS_GET_B(color) / 2.55f))},
+            aValue);
         return;
       }
     }

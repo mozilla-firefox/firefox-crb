@@ -5942,6 +5942,7 @@ static const char* const gFluentResourceFilePaths[][2] = {
     {"dom/deprecations.ftl"},
     {"dom/dialogs.ftl", "branding/brand.ftl"},
     {"dom/form-validation.ftl"},
+    {"dom/accessible.ftl"},
 };
 static_assert(std::size(gFluentResourceFilePaths) == kFluentResourceFileCount,
               "gFluentResourceFilePaths must have an entry for each "

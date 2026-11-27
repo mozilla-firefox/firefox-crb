@@ -18,13 +18,13 @@ namespace a11y {
 namespace utils {
 
 /**
- * Get a localized string from the a11y string bundle.
+ * Get a localized string from dom/accessible.ftl.
  * Return nil if not found.
  */
-NSString* LocalizedString(const nsString& aString) {
+NSString* LocalizedString(const nsACString& aL10nId) {
   nsString text;
 
-  Accessible::TranslateString(aString, text);
+  Accessible::TranslateString(aL10nId, text);
 
   return text.IsEmpty() ? nil : nsCocoaUtils::ToNSString(text);
 }
