@@ -48,6 +48,10 @@ from gecko_taskgraph.util import docker as dockerutil
 from gecko_taskgraph.util.attributes import TRUNK_PROJECTS
 from gecko_taskgraph.util.chunking import TEST_VARIANTS
 from gecko_taskgraph.util.hash import hash_path
+from gecko_taskgraph.util.partner_releases import (
+    PARTNER_BEETMOVER_KINDS,
+    get_partner_upload_tasks,
+)
 from gecko_taskgraph.util.partners import (
     get_partner_build_numbers,
     get_partners_to_be_published,
@@ -1126,6 +1130,28 @@ def build_beetmover_push_to_release_payload(config, task, task_def):
     }
     if worker["product"] == "firefox":
         task_def["payload"]["partner_build_numbers"] = get_partner_build_numbers(config)
+        uploads = get_partner_upload_tasks(
+            config.params["release_partner_config"] or {}
+        )
+        if config.params.get("release_partner_config_is_explicit"):
+            dependencies = task.get("dependencies", {})
+            for name, label in list(dependencies.items()):
+                dependency = config.kind_dependencies_tasks.get(label)
+                if dependency and dependency.kind in PARTNER_BEETMOVER_KINDS:
+                    del dependencies[name]
+            if uploads:
+                task_def.setdefault("dependencies", []).extend(uploads)
+        elif uploads:
+            existing_tasks = config.params.get("existing_tasks", {})
+            do_not_optimize = set(config.params.get("do_not_optimize", []))
+            reused_dependencies = {
+                existing_tasks.get(label)
+                for label in task.get("dependencies", {}).values()
+                if label not in do_not_optimize
+            }
+            task_def.setdefault("dependencies", []).extend(
+                task_id for task_id in uploads if task_id not in reused_dependencies
+            )
 
 
 class BeetmoverImportFromGcsSchema(Schema, forbid_unknown_fields=False, kw_only=True):
