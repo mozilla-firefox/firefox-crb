@@ -34,31 +34,19 @@ namespace mozilla {
 class TextInputProcessorNotification final
     : public nsITextInputProcessorNotification {
   using SelectionChangeData = IMENotification::SelectionChangeData;
-  using SelectionChangeDataBase = IMENotification::SelectionChangeDataBase;
   using TextChangeData = IMENotification::TextChangeData;
-  using TextChangeDataBase = IMENotification::TextChangeDataBase;
 
  public:
   explicit TextInputProcessorNotification(const char* aType)
       : mType(aType), mTextChangeData() {}
 
-  explicit TextInputProcessorNotification(
-      const TextChangeDataBase& aTextChangeData)
-      : mType("notify-text-change"), mTextChangeData(aTextChangeData) {}
+  explicit TextInputProcessorNotification(const TextChangeData& aTextChangeData)
+      : mType("notify-text-change"), mTextChangeData(Some(aTextChangeData)) {}
 
   explicit TextInputProcessorNotification(
-      const SelectionChangeDataBase& aSelectionChangeData)
+      const SelectionChangeData& aSelectionChangeData)
       : mType("notify-selection-change"),
-        mSelectionChangeData(aSelectionChangeData) {
-    // SelectionChangeDataBase::mString still refers nsString instance owned
-    // by aSelectionChangeData.  So, this needs to copy the instance.
-    if (aSelectionChangeData.HasRange()) {
-      mSelectionChangeData.mString =
-          new nsString(aSelectionChangeData.String());
-    } else {
-      mSelectionChangeData.mString = nullptr;
-    }
-  }
+        mSelectionChangeData(Some(aSelectionChangeData)) {}
 
   NS_DECL_ISUPPORTS
 
@@ -73,14 +61,14 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      if (!mSelectionChangeData.HasRange()) {
+      if (!mSelectionChangeData->HasRange()) {
         return NS_ERROR_NOT_AVAILABLE;
       }
-      *aOffset = mSelectionChangeData.mOffset;
+      *aOffset = mSelectionChangeData->mOffset;
       return NS_OK;
     }
     if (IsTextChange()) {
-      *aOffset = mTextChangeData.mStartOffset;
+      *aOffset = mTextChangeData->mStartOffset;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -89,17 +77,17 @@ class TextInputProcessorNotification final
   // "notify-selection-change"
   NS_IMETHOD GetHasRange(bool* aHasRange) final {
     if (IsSelectionChange()) {
-      *aHasRange = mSelectionChangeData.HasRange();
+      *aHasRange = mSelectionChangeData->HasRange();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
   }
   NS_IMETHOD GetText(nsAString& aText) final {
     if (IsSelectionChange()) {
-      if (!mSelectionChangeData.HasRange()) {
+      if (!mSelectionChangeData->HasRange()) {
         return NS_ERROR_NOT_AVAILABLE;
       }
-      aText = mSelectionChangeData.String();
+      aText = mSelectionChangeData->String();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -110,7 +98,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      *aCollapsed = mSelectionChangeData.IsCollapsed();
+      *aCollapsed = mSelectionChangeData->IsCollapsed();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -121,10 +109,10 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      if (!mSelectionChangeData.HasRange()) {
+      if (!mSelectionChangeData->HasRange()) {
         return NS_ERROR_NOT_AVAILABLE;
       }
-      *aLength = mSelectionChangeData.Length();
+      *aLength = mSelectionChangeData->Length();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -135,10 +123,10 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      if (!mSelectionChangeData.HasRange()) {
+      if (!mSelectionChangeData->HasRange()) {
         return NS_ERROR_NOT_AVAILABLE;
       }
-      *aReversed = mSelectionChangeData.mReversed;
+      *aReversed = mSelectionChangeData->mReversed;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -146,7 +134,7 @@ class TextInputProcessorNotification final
 
   NS_IMETHOD GetWritingMode(nsACString& aWritingMode) final {
     if (IsSelectionChange()) {
-      WritingMode writingMode = mSelectionChangeData.GetWritingMode();
+      WritingMode writingMode = mSelectionChangeData->GetWritingMode();
       if (!writingMode.IsVertical()) {
         aWritingMode.AssignLiteral("horizontal-tb");
       } else if (writingMode.IsVerticalLR()) {
@@ -164,7 +152,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      *aCausedByComposition = mSelectionChangeData.mCausedByComposition;
+      *aCausedByComposition = mSelectionChangeData->mCausedByComposition;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -175,7 +163,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsSelectionChange()) {
-      *aCausedBySelectionEvent = mSelectionChangeData.mCausedBySelectionEvent;
+      *aCausedBySelectionEvent = mSelectionChangeData->mCausedBySelectionEvent;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -188,7 +176,7 @@ class TextInputProcessorNotification final
     }
     if (IsSelectionChange()) {
       *aOccurredDuringComposition =
-          mSelectionChangeData.mOccurredDuringComposition;
+          mSelectionChangeData->mOccurredDuringComposition;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -200,7 +188,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsTextChange()) {
-      *aLength = mTextChangeData.OldLength();
+      *aLength = mTextChangeData->OldLength();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -211,7 +199,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsTextChange()) {
-      *aLength = mTextChangeData.NewLength();
+      *aLength = mTextChangeData->NewLength();
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -222,7 +210,7 @@ class TextInputProcessorNotification final
       return NS_ERROR_INVALID_ARG;
     }
     if (IsTextChange()) {
-      *aCausedOnlyByComposition = mTextChangeData.mCausedOnlyByComposition;
+      *aCausedOnlyByComposition = mTextChangeData->mCausedOnlyByComposition;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -235,7 +223,7 @@ class TextInputProcessorNotification final
     }
     if (IsTextChange()) {
       *aIncludingChangesDuringComposition =
-          mTextChangeData.mIncludingChangesDuringComposition;
+          mTextChangeData->mIncludingChangesDuringComposition;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
@@ -248,20 +236,13 @@ class TextInputProcessorNotification final
     }
     if (IsTextChange()) {
       *aIncludingChangesWithoutComposition =
-          mTextChangeData.mIncludingChangesWithoutComposition;
+          mTextChangeData->mIncludingChangesWithoutComposition;
       return NS_OK;
     }
     return NS_ERROR_NOT_AVAILABLE;
   }
 
  protected:
-  virtual ~TextInputProcessorNotification() {
-    if (IsSelectionChange() && mSelectionChangeData.mString) {
-      delete mSelectionChangeData.mString;
-      mSelectionChangeData.mString = nullptr;
-    }
-  }
-
   bool IsTextChange() const {
     return mType.EqualsLiteral("notify-text-change");
   }
@@ -272,12 +253,11 @@ class TextInputProcessorNotification final
 
  private:
   nsAutoCString mType;
-  union {
-    TextChangeDataBase mTextChangeData;
-    SelectionChangeDataBase mSelectionChangeData;
-  };
+  Maybe<TextChangeData> mTextChangeData;
+  Maybe<SelectionChangeData> mSelectionChangeData;
 
-  TextInputProcessorNotification() : mTextChangeData() {}
+  TextInputProcessorNotification() = default;
+  virtual ~TextInputProcessorNotification() = default;
 };
 
 NS_IMPL_ISUPPORTS(TextInputProcessorNotification,
@@ -895,12 +875,12 @@ TextInputProcessor::NotifyIME(TextEventDispatcher* aTextEventDispatcher,
         notification = new TextInputProcessorNotification("notify-blur");
         break;
       case NOTIFY_IME_OF_TEXT_CHANGE:
-        notification =
-            new TextInputProcessorNotification(aNotification.mTextChangeData);
+        notification = new TextInputProcessorNotification(
+            aNotification.mTextChangeData.ref());
         break;
       case NOTIFY_IME_OF_SELECTION_CHANGE:
         notification = new TextInputProcessorNotification(
-            aNotification.mSelectionChangeData);
+            aNotification.mSelectionChangeData.ref());
         break;
       case NOTIFY_IME_OF_POSITION_CHANGE:
         notification =

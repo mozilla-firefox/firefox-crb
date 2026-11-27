@@ -80,7 +80,7 @@ class ContentCache {
     };
 
     explicit Selection(
-        const IMENotification::SelectionChangeDataBase& aSelectionChangeData)
+        const IMENotification::SelectionChangeData& aSelectionChangeData)
         : mAnchor(UINT32_MAX),
           mFocus(UINT32_MAX),
           mWritingMode(aSelectionChangeData.GetWritingMode()),
@@ -351,7 +351,7 @@ class ContentCacheInChild final : public ContentCache {
    */
   [[nodiscard]] bool SetSelection(
       nsIWidget* aWidget,
-      const IMENotification::SelectionChangeDataBase& aSelectionChangeData);
+      const IMENotification::SelectionChangeData& aSelectionChangeData);
 
  private:
   bool QueryCharRect(nsIWidget* aWidget, uint32_t aOffset,
