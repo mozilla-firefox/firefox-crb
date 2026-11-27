@@ -549,6 +549,11 @@ export class Tabbrowser {
   /** @type {MozTabSplitViewWrapper} */
   #activeSplitView = null;
 
+  /**
+   * The split view shown in the content area, or null if none is.
+   *
+   * @type {MozTabSplitViewWrapper|null}
+   */
   get activeSplitView() {
     return this.#activeSplitView;
   }
@@ -575,18 +580,38 @@ export class Tabbrowser {
    */
   #tabSelectTimestamps = [];
 
+  /**
+   * All tabs in this window, in tab strip order. Includes hidden tabs, tabs in
+   * collapsed groups, closing tabs and the Firefox View tab.
+   */
   get tabs() {
     return this.tabContainer.allTabs;
   }
 
+  /**
+   * The tab groups in this window, in tab strip order.
+   *
+   * @type {MozTabbrowserTabGroup[]}
+   */
   get tabGroups() {
     return this.tabContainer.allGroups;
   }
 
+  /**
+   * The split views in this window, in tab strip order, including split views
+   * inside tab groups.
+   *
+   * @type {MozTabSplitViewWrapper[]}
+   */
   get splitViews() {
     return this.tabContainer.allSplitViews;
   }
 
+  /**
+   * The tabs in collapsed tab groups, excluding hidden and closing tabs.
+   *
+   * @type {MozTabbrowserTab[]}
+   */
   get tabsInCollapsedTabGroups() {
     return this.tabGroups
       .filter(tabGroup => tabGroup.collapsed)
@@ -657,6 +682,11 @@ export class Tabbrowser {
     return this.tabContainer.visibleTabs;
   }
 
+  /**
+   * The number of pinned tabs in `tabs`, which lists pinned tabs first.
+   *
+   * @type {number}
+   */
   get pinnedTabCount() {
     for (var i = 0; i < this.tabs.length; i++) {
       if (!this.tabs[i].pinned) {
@@ -1339,7 +1369,7 @@ export class Tabbrowser {
     let findBar = this.document.createXULElement("findbar");
     let browser = this.getBrowserForTab(aTab);
 
-    browser.parentNode.insertAdjacentElement("afterend", findBar);
+    browser.parentElement.insertAdjacentElement("afterend", findBar);
 
     await new Promise(r => this.documentGlobal.requestAnimationFrame(r));
     Tabbrowser.#pendingFindBars.delete(aTab);
@@ -1470,10 +1500,25 @@ export class Tabbrowser {
     }
   }
 
+  /**
+   * Returns the browser of the tab at a given index in `tabs`.
+   *
+   * @param {number} aIndex
+   * @returns {MozBrowser}
+   *   The browser, or undefined if no tab has that index.
+   */
   getBrowserAtIndex(aIndex) {
     return this.browsers[aIndex];
   }
 
+  /**
+   * Returns the browser in this window with the given outer window ID.
+   *
+   * @param {number} aID
+   *   The outer window ID of the browser's top-level content window.
+   * @returns {MozBrowser|null}
+   *   The browser, or null if no tab's browser has that ID.
+   */
   getBrowserForOuterWindowID(aID) {
     for (let b of this.browsers) {
       if (b.outerWindowID == aID) {
@@ -1484,6 +1529,14 @@ export class Tabbrowser {
     return null;
   }
 
+  /**
+   * Returns the tab that a browser belongs to.
+   *
+   * @param {MozBrowser} aBrowser
+   * @returns {MozTabbrowserTab}
+   *   The tab, or undefined if `aBrowser` isn't the browser of a tab in this
+   *   window.
+   */
   getTabForBrowser(aBrowser) {
     return this.#tabForBrowser.get(aBrowser);
   }
@@ -4692,6 +4745,14 @@ export class Tabbrowser {
     return groups;
   }
 
+  /**
+   * Finds an open tab group by ID in this window or in another window with the
+   * same privateness.
+   *
+   * @param {string} id
+   * @returns {MozTabbrowserTabGroup|null}
+   *   The tab group, or null if no open tab group has that ID.
+   */
   getTabGroupById(id) {
     for (const win of lazy.BrowserWindowTracker.getOrderedWindows({
       private: lazy.PrivateBrowsingUtils.isWindowPrivate(this.documentGlobal),
@@ -7719,10 +7780,12 @@ export class Tabbrowser {
       aOtherBrowser.docShellIsActive = this.shouldActivateDocShell(ourBrowser);
     }
 
-    let ourBrowserContainer =
-      ourBrowser.ownerDocument.getElementById("browser");
-    let otherBrowserContainer =
-      aOtherBrowser.ownerDocument.getElementById("browser");
+    let ourBrowserContainer = /** @type {XULElement} */ (
+      ourBrowser.ownerDocument.getElementById("browser")
+    );
+    let otherBrowserContainer = /** @type {XULElement} */ (
+      aOtherBrowser.ownerDocument.getElementById("browser")
+    );
     let ourBrowserContainerWasHidden = ourBrowserContainer.hidden;
     let otherBrowserContainerWasHidden = otherBrowserContainer.hidden;
 
@@ -7861,6 +7924,13 @@ export class Tabbrowser {
     );
   }
 
+  /**
+   * Returns the browser of a tab, i.e. its `linkedBrowser`.
+   *
+   * @param {MozTabbrowserTab} aTab
+   * @returns {MozBrowser}
+   *   The browser, or null once the tab has been removed.
+   */
   getBrowserForTab(aTab) {
     return aTab.linkedBrowser;
   }
@@ -9737,6 +9807,15 @@ export class Tabbrowser {
     return false;
   }
 
+  /**
+   * Returns the IDs of the processes that run a tab's content.
+   *
+   * @param {MozTabbrowserTab} tab
+   * @returns {number[]}
+   *   The PID of the tab's content process followed by, with Fission, the PIDs
+   *   of other processes running its subframes. Empty if the tab's browser
+   *   isn't remote or hasn't been inserted, e.g. for a lazy tab.
+   */
   getTabPids(tab) {
     if (!tab?.linkedBrowser) {
       return [];
@@ -10276,7 +10355,7 @@ export class Tabbrowser {
       }
 
       if (!tab.hasAttribute("activemedia-blocked")) {
-        tab.setAttribute("activemedia-blocked", true);
+        tab.toggleAttribute("activemedia-blocked", true);
         this._tabAttrModified(tab, ["activemedia-blocked"]);
       }
     });
