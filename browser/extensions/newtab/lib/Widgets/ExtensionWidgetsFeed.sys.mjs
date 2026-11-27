@@ -9,21 +9,11 @@ import {
   actionCreators as ac,
 } from "resource://newtab/common/Actions.mjs";
 import { WIDGET_REGISTRY } from "resource://newtab/common/WidgetsRegistry.mjs";
-import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   WidgetManager: "moz-src:///toolkit/components/widgets/WidgetManager.sys.mjs",
 });
-
-/**
- * @backward-compat { version 160 }
- * WidgetManager is a host module added in 160, absent when New Tab train-hops
- * onto an older Firefox. Remove this guard once 160 reaches Release.
- */
-function isWidgetManagerSupported() {
-  return Services.vc.compare(AppConstants.MOZ_APP_VERSION, "160.0a1") >= 0;
-}
 
 /**
  * The information New Tab uses from a widget's extension.
@@ -59,9 +49,6 @@ export class ExtensionWidgetsFeed {
   #getExtensionWidgets() {
     /** @type {{[extensionID: string]: ExtensionWidget}} */
     const extensionWidgets = {};
-    if (!isWidgetManagerSupported()) {
-      return extensionWidgets;
-    }
     for (const { extensionID } of WIDGET_REGISTRY) {
       const widget = lazy.WidgetManager.getWidgetByID(extensionID);
       if (widget) {
@@ -110,15 +97,11 @@ export class ExtensionWidgetsFeed {
   onAction(action) {
     switch (action.type) {
       case at.INIT:
-        if (isWidgetManagerSupported()) {
-          lazy.WidgetManager.on("change", this.onChange);
-        }
+        lazy.WidgetManager.on("change", this.onChange);
         this.#broadcast(this.#getExtensionWidgets(), { isStartup: true });
         break;
       case at.UNINIT:
-        if (isWidgetManagerSupported()) {
-          lazy.WidgetManager.off("change", this.onChange);
-        }
+        lazy.WidgetManager.off("change", this.onChange);
         break;
     }
   }
