@@ -28,8 +28,10 @@ add_task(async function testHeuristicsThrottling() {
   let throttledPromise = TestUtils.topicObserved(throttleDoneTopic);
   setPassingHeuristics();
   let prefPromise = TestUtils.waitForPrefChange(prefs.BREADCRUMB_PREF);
-  Services.prefs.setBoolPref(prefs.ENABLED_PREF, true);
-
+  await waitForOffReason(() =>
+    Services.prefs.setBoolPref(prefs.ENABLED_PREF, true)
+  );
+  checkOffReason("incomplete");
   await prefPromise;
   is(
     Services.prefs.getBoolPref(prefs.BREADCRUMB_PREF),
