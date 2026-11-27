@@ -66,6 +66,13 @@ class nsFocusManager final : public nsIFocusManager,
   MOZ_CAN_RUN_SCRIPT static void FocusWindow(
       nsPIDOMWindowOuter* aWindow, mozilla::dom::CallerType aCallerType);
 
+  /**
+   * Focus aFrameElement because the document in it asked to be focused, which
+   * unlike focusing the element itself also works while it isn't rendered.
+   */
+  MOZ_CAN_RUN_SCRIPT void RequestFrameFocus(
+      mozilla::dom::Element& aFrameElement, uint32_t aFlags);
+
   MOZ_CAN_RUN_SCRIPT_BOUNDARY static void PrefChanged(const char* aPref,
                                                       void* aSelf);
   MOZ_CAN_RUN_SCRIPT void PrefChanged(const char* aPref);
@@ -347,7 +354,7 @@ class nsFocusManager final : public nsIFocusManager,
    */
   MOZ_CAN_RUN_SCRIPT mozilla::Maybe<uint64_t> SetFocusInner(
       mozilla::dom::Element* aNewContent, int32_t aFlags, bool aFocusChanged,
-      bool aAdjustWidget);
+      bool aAdjustWidget, bool aIsFrameFocusRequest = false);
 
   /**
    * Returns true if aPossibleAncestor is the same as aWindow or an
@@ -936,6 +943,14 @@ class nsFocusManager final : public nsIFocusManager,
   // Returns true if it's an area element with one or more shapes that are
   // focusable areas.
   static bool IsAreaElementFocusable(mozilla::dom::HTMLAreaElement& aArea);
+
+  /**
+   * Returns true if aElement is a frame element in a content document that
+   * isn't rendered but, like in other browsers, can still hold focus for the
+   * document in it. An <object> or <embed> showing an image has no document.
+   */
+  static bool IsUnrenderedFrameThatCanHoldFocus(
+      mozilla::dom::Element& aElement);
 
  private:
   // In the chrome process, the currently active and front-most top-most

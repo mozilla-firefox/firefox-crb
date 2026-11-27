@@ -6827,7 +6827,7 @@ void nsContentUtils::RequestFrameFocus(Element& aFrameElement, bool aCanRaise,
     flags |= nsIFocusManager::FLAG_NONSYSTEMCALLER;
   }
 
-  fm->SetFocus(target, flags);
+  fm->RequestFrameFocus(*target, flags);
 }
 
 nsresult nsContentUtils::DispatchEventOnlyToChrome(

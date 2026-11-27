@@ -47,6 +47,7 @@
 #include "mozilla/dom/XULPopupElement.h"
 #include "mozilla/widget/IMEData.h"
 #include "nsCaret.h"
+#include "nsComputedDOMStyle.h"
 #include "nsContentUtils.h"
 #include "nsFrameLoader.h"
 #include "nsFrameLoaderOwner.h"
@@ -509,6 +510,14 @@ nsFocusManager::SetFocus(Element* aElement, uint32_t aFlags) {
   LOGFOCUS(("<<SetFocus end>>"));
 
   return NS_OK;
+}
+
+void nsFocusManager::RequestFrameFocus(Element& aFrameElement,
+                                       uint32_t aFlags) {
+  LOGFOCUS(("<<RequestFrameFocus begin>>"));
+  SetFocusInner(&aFrameElement, aFlags, true, true,
+                /* aIsFrameFocusRequest = */ true);
+  LOGFOCUS(("<<RequestFrameFocus end>>"));
 }
 
 NS_IMETHODIMP
@@ -1717,13 +1726,74 @@ static bool IsEmeddededInNoautofocusPopup(BrowsingContext& aBc) {
       nsGkAtoms::noautofocus);
 }
 
+static bool IsWindowFrozen(nsPIDOMWindowOuter* aWindow) {
+  if (!aWindow || nsGlobalWindowOuter::Cast(aWindow)->IsFrozen()) {
+    return true;
+  }
+
+  // Check if the inner window is frozen as well. This can happen when a focus
+  // change occurs while restoring a previous page.
+  auto* innerWindow =
+      nsGlobalWindowInner::Cast(aWindow->GetCurrentInnerWindow());
+  return !innerWindow || innerWindow->IsFrozen();
+}
+
+/* static */
+bool nsFocusManager::IsUnrenderedFrameThatCanHoldFocus(Element& aElement) {
+  // Chrome is excluded so that hidden panels don't take keyboard input.
+  RefPtr<nsFrameLoaderOwner> owner = do_QueryObject(&aElement);
+  if (!owner || !owner->GetExtantBrowsingContext() ||
+      aElement.GetPrimaryFrame() ||
+      nsContentUtils::IsChromeDoc(aElement.OwnerDoc())) {
+    return false;
+  }
+  if (RefPtr<const ComputedStyle> style =
+          nsComputedDOMStyle::GetComputedStyleNoFlush(&aElement)) {
+    return !style->StyleUI()->IsInert();
+  }
+  // A document without a pres shell has no style, so only the inert
+  // attribute can make its elements inert.
+  for (Element* element = &aElement; element;
+       element = element->GetFlattenedTreeParentElement()) {
+    if (element->HasAttr(nsGkAtoms::inert)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// aPresShell is aWindow's pres shell, which an in-process frame doesn't have
+// while its embedder element isn't rendered.
+static bool CanFocusUnderHiddenEmbedder(nsPIDOMWindowOuter* aWindow,
+                                        PresShell* aPresShell) {
+  if (IsWindowFrozen(aWindow)) {
+    return false;
+  }
+  BrowsingContext* bc = aWindow->GetBrowsingContext();
+  if (!bc->IsContent() || bc->IsTop()) {
+    return false;
+  }
+  if (aPresShell) {
+    return aPresShell->IsUnderHiddenEmbedderElement();
+  }
+  Element* embedder = bc->GetEmbedderElement();
+  return embedder && !embedder->GetPrimaryFrame();
+}
+
 Maybe<uint64_t> nsFocusManager::SetFocusInner(Element* aNewContent,
                                               int32_t aFlags,
                                               bool aFocusChanged,
-                                              bool aAdjustWidget) {
+                                              bool aAdjustWidget,
+                                              bool aIsFrameFocusRequest) {
   // if the element is not focusable, just return and leave the focus as is
   RefPtr<Element> elementToFocus =
       FlushAndCheckIfFocusable(aNewContent, aFlags);
+  // The document of a frame that isn't rendered can ask to be focused, though
+  // the frame element can't be focused on its own.
+  if (!elementToFocus && aIsFrameFocusRequest &&
+      IsUnrenderedFrameThatCanHoldFocus(*aNewContent)) {
+    elementToFocus = aNewContent;
+  }
   if (!elementToFocus) {
     return Nothing();
   }
@@ -1941,7 +2011,11 @@ Maybe<uint64_t> nsFocusManager::SetFocusInner(Element* aNewContent,
   // if the element is in the active window, frame switching is allowed and
   // the content is in a visible window, fire blur and focus events.
   bool sendFocusEvent =
-      isElementInActiveWindow && allowFrameSwitch && IsWindowVisible(newWindow);
+      isElementInActiveWindow && allowFrameSwitch &&
+      (IsWindowVisible(newWindow) ||
+       (aIsFrameFocusRequest && !elementToFocus &&
+        CanFocusUnderHiddenEmbedder(newWindow,
+                                    newWindow->GetDocShell()->GetPresShell())));
 
   // Don't allow to steal the focus from chrome nodes if the caller cannot
   // access them.
@@ -2244,7 +2318,11 @@ bool nsFocusManager::AdjustInProcessWindowFocus(
     // if the parent window is visible but the original window was not, then we
     // have likely moved up and out from a hidden tab to the browser window, or
     // a similar such arrangement. Stop adjusting the current nodes.
-    if (IsWindowVisible(window) != aIsVisible) {
+    const bool isVisible =
+        IsWindowVisible(window) ||
+        (aIsVisible && CanFocusUnderHiddenEmbedder(
+                           window, window->GetDocShell()->GetPresShell()));
+    if (isVisible != aIsVisible) {
       break;
     }
 
@@ -2302,15 +2380,7 @@ void nsFocusManager::AdjustWindowFocus(
 }
 
 bool nsFocusManager::IsWindowVisible(nsPIDOMWindowOuter* aWindow) {
-  if (!aWindow || nsGlobalWindowOuter::Cast(aWindow)->IsFrozen()) {
-    return false;
-  }
-
-  // Check if the inner window is frozen as well. This can happen when a focus
-  // change occurs while restoring a previous page.
-  auto* innerWindow =
-      nsGlobalWindowInner::Cast(aWindow->GetCurrentInnerWindow());
-  if (!innerWindow || innerWindow->IsFrozen()) {
+  if (IsWindowFrozen(aWindow)) {
     return false;
   }
 
@@ -2768,8 +2838,11 @@ void nsFocusManager::Focus(
     return;
   }
 
+  // A window-level focus can also go to a frame with no pres shell, see
+  // CanFocusUnderHiddenEmbedder.
   const RefPtr<PresShell> presShell = docShell->GetPresShell();
-  if (!presShell) {
+  if (!presShell &&
+      (aElement || !CanFocusUnderHiddenEmbedder(aWindow, nullptr))) {
     return;
   }
 
@@ -2806,7 +2879,8 @@ void nsFocusManager::Focus(
                              : aWindow->GetFocusMethod() |
                                    (aFlags & (FLAG_SHOWRING | FLAG_NOSHOWRING));
 
-  if (!IsWindowVisible(aWindow)) {
+  if (!IsWindowVisible(aWindow) &&
+      (aElement || !CanFocusUnderHiddenEmbedder(aWindow, presShell))) {
     // if the window isn't visible, for instance because it is a hidden tab,
     // update the current focus and scroll it into view but don't do anything
     // else
@@ -2837,7 +2911,7 @@ void nsFocusManager::Focus(
     // focus can be traversed from the top level down to the newly focused
     // window.
     RefPtr<BrowsingContext> bc = aWindow->GetBrowsingContext();
-    AdjustWindowFocus(bc, false, IsWindowVisible(aWindow), aActionId,
+    AdjustWindowFocus(bc, false, true /* aIsVisible */, aActionId,
                       false /* aShouldClearAncestorFocus */,
                       nullptr /* aAncestorBrowsingContextToFocus */);
   }
@@ -2849,7 +2923,7 @@ void nsFocusManager::Focus(
 
   SetFocusedWindowInternal(aWindow, aActionId);
 
-  if (aAdjustWidget && !sTestMode) {
+  if (aAdjustWidget && !sTestMode && presShell) {
     if (nsCOMPtr<nsIWidget> widget = presShell->GetRootWidget()) {
       widget->SetFocus(nsIWidget::Raise::No, aFlags & FLAG_NONSYSTEMCALLER
                                                  ? CallerType::NonSystem
@@ -2868,7 +2942,8 @@ void nsFocusManager::Focus(
     // receive focus event.
     if (doc && ((aElement && aElement->IsInDesignMode()) ||
                 (!aElement && doc->IsInDesignMode()))) {
-      RefPtr<nsPresContext> presContext = presShell->GetPresContext();
+      RefPtr<nsPresContext> presContext =
+          presShell ? presShell->GetPresContext() : nullptr;
       IMEStateManager::OnChangeFocus(presContext, nullptr,
                                      GetFocusMoveActionCause(aFlags));
       // IMEStateManager::OnChangeFocus() may commit extant composition and that
@@ -3008,7 +3083,8 @@ void nsFocusManager::Focus(
     if (!mFocusedElement && mFocusedWindow == aWindow) {
       // When there is no focused element, IMEStateManager needs to adjust IME
       // enabled state with the document.
-      RefPtr<nsPresContext> presContext = presShell->GetPresContext();
+      RefPtr<nsPresContext> presContext =
+          presShell ? presShell->GetPresContext() : nullptr;
       IMEStateManager::OnChangeFocus(presContext, nullptr,
                                      GetFocusMoveActionCause(aFlags));
       // IMEStateManager::OnChangeFocus() may commit extant composition and that
@@ -3202,11 +3278,16 @@ void nsFocusManager::FireFocusOrBlurEvent(EventMessage aEventMessage,
   }
 #endif
 
-  aPresShell->ScheduleContentRelevancyUpdate(
-      ContentRelevancyReason::FocusInSubtree);
+  // aPresShell is null when a frame with no pres shell gets focus, see
+  // CanFocusUnderHiddenEmbedder.
+  if (aPresShell) {
+    aPresShell->ScheduleContentRelevancyUpdate(
+        ContentRelevancyReason::FocusInSubtree);
+  }
 
   nsContentUtils::AddScriptRunner(MakeAndAddRef<FocusBlurEvent>(
-      aTarget, aEventMessage, aPresShell->GetPresContext(), aWindowRaised,
+      aTarget, aEventMessage,
+      aPresShell ? aPresShell->GetPresContext() : nullptr, aWindowRaised,
       aIsRefocus, aRelatedTarget));
 
   // Check that the target is not a window or document before firing

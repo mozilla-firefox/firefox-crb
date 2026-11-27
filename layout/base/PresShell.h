@@ -1129,9 +1129,7 @@ class PresShell final : public nsStubDocumentObserver,
   bool IsUnderHiddenEmbedderElement() const {
     return mUnderHiddenEmbedderElement;
   }
-  void SetIsUnderHiddenEmbedderElement(bool aUnderHiddenEmbedderElement) {
-    mUnderHiddenEmbedderElement = aUnderHiddenEmbedderElement;
-  }
+  void SetIsUnderHiddenEmbedderElement(bool aUnderHiddenEmbedderElement);
 
   /* Temporarily ignore the Displayport for better paint performance. We
    * trigger a repaint once suppression is disabled. Without that

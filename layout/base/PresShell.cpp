@@ -158,6 +158,7 @@
 #include "nsError.h"
 #include "nsFlexContainerFrame.h"
 #include "nsFocusManager.h"
+#include "nsFrameLoaderOwner.h"
 #include "nsFrameSelection.h"
 #include "nsGkAtoms.h"
 #include "nsGlobalWindowOuter.h"
@@ -1381,6 +1382,22 @@ void PresShell::AddAuthorSheet(StyleSheet* aSheet) {
   mDocument->ApplicableStylesChanged();
 }
 
+void PresShell::SetIsUnderHiddenEmbedderElement(
+    bool aUnderHiddenEmbedderElement) {
+  if (mUnderHiddenEmbedderElement == aUnderHiddenEmbedderElement) {
+    return;
+  }
+  mUnderHiddenEmbedderElement = aUnderHiddenEmbedderElement;
+  if (aUnderHiddenEmbedderElement && NeedsFocusFixUp()) {
+    // The refresh driver of a hidden document rarely ticks, so don't wait for
+    // it to move focus away from the element.
+    nsContentUtils::AddScriptRunner(NS_NewRunnableFunction(
+        "PresShell::FixUpFocus",
+        [self = RefPtr{this}]()
+            MOZ_CAN_RUN_SCRIPT_BOUNDARY { self->FixUpFocus(); }));
+  }
+}
+
 bool PresShell::NeedsFocusFixUp() const {
   if (NS_WARN_IF(!mDocument)) {
     return false;
@@ -1390,6 +1407,21 @@ bool PresShell::NeedsFocusFixUp() const {
       Document::IncludeChromeOnly::Yes);
   if (!currentFocus) {
     return false;
+  }
+
+  if (currentFocus->IsElement() &&
+      nsFocusManager::IsUnrenderedFrameThatCanHoldFocus(
+          *currentFocus->AsElement())) {
+    return false;
+  }
+
+  // No element of a content document whose embedder is hidden keeps focus,
+  // though the document itself and the frames in it can.
+  if (mUnderHiddenEmbedderElement && !nsContentUtils::IsChromeDoc(mDocument)) {
+    RefPtr<nsFrameLoaderOwner> owner = do_QueryObject(currentFocus);
+    return currentFocus != mDocument->GetBody() &&
+           currentFocus != mDocument->GetRootElement() &&
+           !(owner && owner->GetExtantBrowsingContext());
   }
 
   // If focus target is an area element with one or more shapes that are

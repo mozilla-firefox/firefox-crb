@@ -10,6 +10,23 @@ window.onmessage = function(e) {
   if (e.data === "focus") {
     input.focus();
     window.parent.postMessage("done", "*");
+  } else if (e.data === "focuswindow") {
+    window.focus();
+    window.parent.postMessage("done", "*");
+  } else if (e.data === "getfocus") {
+    window.parent.postMessage(document.hasFocus(), "*");
+  } else if (e.data === "waitforblur") {
+    let reply = () =>
+      window.parent.postMessage(
+        `${document.activeElement.tagName} ${document.hasFocus()}`, "*");
+    if (document.activeElement == input) {
+      input.addEventListener("blur", reply, { once: true });
+    } else {
+      reply();
+    }
   }
 };
+if (location.search == "?announce") {
+  window.onload = () => window.parent.postMessage("ready", "*");
+}
 </script>

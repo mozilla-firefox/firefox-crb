@@ -15,6 +15,10 @@ https://bugzilla.mozilla.org/show_bug.cgi?id=1716762
 <div id="target" style="display: none;">
 <iframe src="http://example.org/tests/dom/base/test/file_focus_display_none_xorigin_iframe_inner.html"></iframe>
 </div>
+<div id="objectcontainer"></div>
+<div id="nested" style="display: none;">
+<iframe src="http://example.org/tests/dom/base/test/file_focus_display_none_xorigin_iframe_middle.html"></iframe>
+</div>
 <script type="text/javascript">
 
 let waitForMessage = function(aMsg) {
@@ -44,10 +48,118 @@ let getFocus = function(aWindow) {
   });
 }
 
+let getActiveElementInMiddle = function(aWindow) {
+  return new Promise(resolve => {
+    window.addEventListener("message", e => resolve(e.data), { once: true });
+    aWindow.postMessage("getactiveelement", "*");
+  });
+};
+
 /** Test for Bug 1716762  */
 
 let input = document.querySelector("input");
 let iframe = document.querySelector("iframe");
+
+add_task(async function test_ancestor_display_none_window_focus() {
+  input.focus();
+  is(document.activeElement.tagName, "INPUT", "focus should move to input element");
+
+  // Like in other browsers, the document of a hidden iframe can be focused,
+  // though its elements can't.
+  await sendMessage(iframe.contentWindow, "focuswindow");
+  is(document.activeElement.tagName, "IFRAME", "focus should move to iframe element");
+  ok(await getFocus(iframe.contentWindow), "iframe document should have focus");
+
+  // The focus fixup runs in the rendering update after animation frame
+  // callbacks, so wait for two frames to let one complete.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  is(document.activeElement.tagName, "IFRAME", "focus should stay on hidden iframe element");
+  ok(await getFocus(iframe.contentWindow), "iframe document should keep focus");
+});
+
+add_task(async function test_display_none_object_window_focus() {
+  let object = document.createElement("object");
+  object.type = "text/html";
+  object.data = "https://example.org/tests/dom/base/test/file_focus_display_none_xorigin_iframe_inner.html?announce";
+  // object.contentWindow is null for this cross-origin object, so use the
+  // source of its message.
+  let objectWindow = await new Promise(resolve => {
+    window.addEventListener("message", function handler(e) {
+      if (e.data === "ready") {
+        window.removeEventListener("message", handler);
+        resolve(e.source);
+      }
+    });
+    document.getElementById("objectcontainer").append(object);
+  });
+  document.getElementById("objectcontainer").style.display = "none";
+  document.body.offsetWidth;
+  input.focus();
+  is(document.activeElement.tagName, "INPUT", "focus should move to input element");
+
+  await sendMessage(objectWindow, "focuswindow");
+  is(document.activeElement.tagName, "OBJECT", "focus should move to object element");
+  ok(await getFocus(objectWindow), "object document should have focus");
+  object.remove();
+});
+
+add_task(async function test_nested_display_none_window_focus() {
+  let outer = document.querySelector("#nested iframe");
+  input.focus();
+  is(document.activeElement.tagName, "INPUT", "focus should move to input element");
+
+  // The inner document gets focus, and each iframe on the way to it becomes
+  // the active element of its document.
+  await sendMessage(outer.contentWindow, "focuswindow");
+  is(document.activeElement, outer, "focus should move to outer iframe element");
+  ok(await getFocus(outer.contentWindow), "inner iframe document should have focus");
+  is(await getActiveElementInMiddle(outer.contentWindow), "IFRAME",
+     "inner iframe should be the active element of the middle document");
+});
+
+add_task(async function test_nested_focus_then_hide() {
+  let container = document.createElement("div");
+  let outer = document.createElement("iframe");
+  outer.src = "https://example.org/tests/dom/base/test/file_focus_display_none_xorigin_iframe_middle.html";
+  container.append(outer);
+  let loaded = new Promise(r => outer.addEventListener("load", r, { once: true }));
+  document.body.append(container);
+  await loaded;
+
+  await sendMessage(outer.contentWindow, "focuswindow");
+  is(document.activeElement, outer, "focus should move to outer iframe element");
+
+  // Hiding the outer iframe runs the focus fixup in the middle document, which
+  // must leave focus on the inner iframe.
+  container.style.display = "none";
+  document.body.offsetWidth;
+  is(await getActiveElementInMiddle(outer.contentWindow), "IFRAME",
+     "inner iframe should stay the active element of the middle document");
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  is(document.activeElement, outer, "focus should stay on outer iframe element");
+  ok(await getFocus(outer.contentWindow), "inner iframe document should keep focus");
+  container.remove();
+});
+
+add_task(async function test_inert_hidden_iframe_window_focus() {
+  let container = document.createElement("div");
+  container.style.display = "none";
+  container.inert = true;
+  // Same-origin, because a cross-process frame isn't told that it's inert,
+  // hidden or not.
+  let frame = document.createElement("iframe");
+  frame.src = "file_focus_display_none_xorigin_iframe_inner.html";
+  container.append(frame);
+  let loaded = new Promise(r => frame.addEventListener("load", r, { once: true }));
+  document.body.append(container);
+  await loaded;
+
+  input.focus();
+  await sendMessage(frame.contentWindow, "focuswindow");
+  is(document.activeElement.tagName, "INPUT", "focus should stay on input element");
+  ok(!(await getFocus(frame.contentWindow)), "inert iframe document should not have focus");
+  container.remove();
+});
 
 add_task(async function test_ancestor_display_none_init() {
   // focus input element
@@ -77,6 +189,11 @@ add_task(async function test_ancestor_display_none() {
   // add `display: none` to the ancestor of iframe back
   document.getElementById("target").style = "display: none;";
   document.body.offsetWidth;
+
+  // The focus fixup runs in the rendering update after animation frame
+  // callbacks, so wait for two frames to let one complete.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  is(document.activeElement.tagName, "IFRAME", "focus should stay on hidden iframe element");
 
   // focus input element
   input.focus();
@@ -127,6 +244,49 @@ add_task(async function test_remove_iframe_display_none() {
   // focus input element in hidden iframe
   await sendMessage(iframe.contentWindow, "focus");
   is(document.activeElement.tagName, "IFRAME", "focus should move to iframe element");
+});
+
+for (let src of [
+  "file_focus_display_none_xorigin_iframe_inner.html",
+  "https://example.org/tests/dom/base/test/file_focus_display_none_xorigin_iframe_inner.html",
+]) {
+  add_task(async function test_focused_element_in_hidden_iframe() {
+    let container = document.createElement("div");
+    let frame = document.createElement("iframe");
+    frame.src = src;
+    container.append(frame);
+    let loaded = new Promise(r => frame.addEventListener("load", r, { once: true }));
+    document.body.append(container);
+    await loaded;
+
+    await sendMessage(frame.contentWindow, "focus");
+    is(document.activeElement, frame, `focus should move to iframe element (${src})`);
+
+    // Like in other browsers, the element focused in the iframe is blurred
+    // when the iframe is hidden, while its document keeps focus.
+    container.style.display = "none";
+    document.body.offsetWidth;
+    let result = await new Promise(resolve => {
+      window.addEventListener("message", e => resolve(e.data), { once: true });
+      frame.contentWindow.postMessage("waitforblur", "*");
+    });
+    is(result, "BODY true", `iframe document should keep focus without its input (${src})`);
+    is(document.activeElement, frame, `focus should stay on hidden iframe element (${src})`);
+    container.remove();
+  });
+}
+
+add_task(async function test_inert_iframe() {
+  // focus input element in iframe
+  await sendMessage(iframe.contentWindow, "focus");
+  is(document.activeElement.tagName, "IFRAME", "focus should move to iframe element");
+
+  // A rendered iframe that becomes inert isn't focusable anymore, so the focus
+  // fixup, which runs after animation frame callbacks, moves focus away.
+  document.getElementById("target").inert = true;
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  is(document.activeElement.tagName, "BODY", "focus should move away from inert iframe");
+  document.getElementById("target").inert = false;
 });
 
 </script>
