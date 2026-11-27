@@ -2,14 +2,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+@file:OptIn(ExperimentalAndroidComponentsApi::class)
+
 package org.mozilla.fenix.ipprotection.store
 
+import mozilla.components.ExperimentalAndroidComponentsApi
 import mozilla.components.feature.ipprotection.store.IPProtectionAction
 import mozilla.components.feature.ipprotection.store.state.IPProtectionState
 import mozilla.components.lib.state.Middleware
 import mozilla.components.lib.state.Store
 import org.mozilla.fenix.components.AppStore
 import org.mozilla.fenix.components.appstate.AppAction.IPProtectionSnackbarAction
+
+private const val ERROR_QUOTA_EXHAUSTED = -11
 
 /**
  * Localized snackbar messages dispatched by [IPProtectionSnackbarMiddleware].
@@ -40,7 +45,11 @@ class IPProtectionSnackbarMiddleware(
         next(action)
         when (action) {
             is IPProtectionAction.ActivationAction.ToggleFailed ->
-                lazyAppStore.value.dispatch(IPProtectionSnackbarAction.ShowSnackbar(title = messages.connectionError))
+                if (action.error?.errorCode != ERROR_QUOTA_EXHAUSTED) {
+                    lazyAppStore.value.dispatch(
+                        IPProtectionSnackbarAction.ShowSnackbar(title = messages.connectionError)
+                    )
+                }
 
             is IPProtectionAction.LocationAction.LocationReset ->
                 lazyAppStore.value.dispatch(

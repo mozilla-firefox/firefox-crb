@@ -9,6 +9,7 @@ package org.mozilla.fenix.ipprotection.store
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import mozilla.components.ExperimentalAndroidComponentsApi
+import mozilla.components.concept.engine.ipprotection.IPProtectionHandler
 import mozilla.components.feature.ipprotection.store.ActivationOperation
 import mozilla.components.feature.ipprotection.store.CachedLocationStatus
 import mozilla.components.feature.ipprotection.store.IPProtectionAction
@@ -58,6 +59,32 @@ class IPProtectionSnackbarMiddlewareTest {
         captureMiddleware.assertLastAction(AppAction.IPProtectionSnackbarAction.ShowSnackbar::class) { action ->
             assertEquals(connectionError, action.title)
         }
+    }
+
+    @Test
+    fun `GIVEN activation failed with an error other than the data limit WHEN ToggleFailed is dispatched THEN ShowSnackbar action is dispatched`() {
+        ipProtectionStore.dispatch(
+            IPProtectionAction.ActivationAction.ToggleFailed(
+                ActivationOperation.Activate,
+                IPProtectionHandler.RequestError(errorCode = -2, cause = RuntimeException("network-error")),
+            )
+        )
+
+        captureMiddleware.assertLastAction(AppAction.IPProtectionSnackbarAction.ShowSnackbar::class) { action ->
+            assertEquals(connectionError, action.title)
+        }
+    }
+
+    @Test
+    fun `GIVEN activation failed because the data limit is reached WHEN ToggleFailed is dispatched THEN no snackbar action is dispatched`() {
+        ipProtectionStore.dispatch(
+            IPProtectionAction.ActivationAction.ToggleFailed(
+                ActivationOperation.Activate,
+                IPProtectionHandler.RequestError(errorCode = -11, cause = RuntimeException("quota-exhausted")),
+            )
+        )
+
+        captureMiddleware.assertNotDispatched(AppAction.IPProtectionSnackbarAction.ShowSnackbar::class)
     }
 
     @Test
