@@ -35,10 +35,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const { setTimeout, clearTimeout } = ChromeUtils.importESModule(
   "resource://gre/modules/Timer.sys.mjs"
 );
-// eslint-disable-next-line mozilla/use-static-import
-const { AppConstants } = ChromeUtils.importESModule(
-  "resource://gre/modules/AppConstants.sys.mjs"
-);
 import {
   actionTypes as at,
   actionCreators as ac,
@@ -751,20 +747,7 @@ export class DiscoveryStreamFeed {
       );
     }
 
-    /**
-     * @backward-compat { version 161 }
-     * `requestSpocOrImageAds` can return images and spocs (with similar structures) unlike `requestSpocAds`
-     * which invalidly drops would-be images returned from MARS. This requires a vendor of A-S
-     * for the function to exist, and another for it to behave correctly (using the latter).
-     */
-    const adsClientUpdated =
-      Services.vc.compare(AppConstants.MOZ_APP_VERSION, "161.0a1") >= 0;
-    let spocs;
-    if (adsClientUpdated) {
-      spocs = await this.adsClient.requestSpocOrImageAds(requests, options);
-    } else {
-      spocs = await this.adsClient.requestSpocAds(requests, options);
-    }
+    const spocs = await this.adsClient.requestSpocOrImageAds(requests, options);
 
     // The ads-client omits placements it has no ads for; MARS returns them as
     // empty arrays, and loadSpocs concats by placement, so a missing key folds
@@ -776,12 +759,7 @@ export class DiscoveryStreamFeed {
         spocs.entries().map(([placementId, placementSpocs]) => [
           placementId,
           placementSpocs
-            .map(spocWrapped => {
-              if (adsClientUpdated) {
-                return spocWrapped.v0;
-              }
-              return spocWrapped;
-            })
+            .map(spocWrapped => spocWrapped.v0)
             .filter(Boolean)
             .map(spoc => ({
               alt_text: spoc.altText,
