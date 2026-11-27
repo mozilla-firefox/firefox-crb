@@ -891,6 +891,12 @@ skip-if = [
   "os == 'win'",
 ]
 
+["test_happy_eyeballs_h3only_udp_close_stall.js"]
+skip-if = [
+  "os == 'android'",
+  "os == 'win'",
+]
+
 ["test_happy_eyeballs_https_rr_prefetch_reuse.js"]
 
 ["test_happy_eyeballs_ip_preference.js"]

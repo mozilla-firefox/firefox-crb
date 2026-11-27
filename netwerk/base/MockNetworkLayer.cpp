@@ -21,6 +21,8 @@ class MockNetworkSecret {
 
   // The address the socket was asked to connect to.
   NetAddr mPeerAddr;
+  // Whether the socket sent a datagram that was dropped by blockUDPAddrIO.
+  bool mSentToBlockedUDPAddr = false;
 };
 
 static PRStatus MockNetworkConnect(PRFileDesc* fd, const PRNetAddr* addr,
@@ -125,9 +127,15 @@ static PRStatus MockNetworkClose(PRFileDesc* fd) {
   MockNetworkSecret* secret =
       reinterpret_cast<MockNetworkSecret*>(layer->secret);
   SOCKET_LOG(("MockNetworkClose %p\n", secret));
+  bool delayClose = secret && secret->mSentToBlockedUDPAddr;
   layer->secret = nullptr;
   layer->dtor(layer);
   delete secret;
+  if (uint32_t delayMs = BlockedUDPCloseDelayMs(); delayClose && delayMs) {
+    SOCKET_LOG(("MockNetworkClose delaying close by %u ms", delayMs));
+    NoteDelayedUDPClose();
+    PR_Sleep(PR_MillisecondsToInterval(delayMs));
+  }
   return fd->methods->close(fd);
 }
 
@@ -169,6 +177,7 @@ static PRInt32 MockNetworkSendTo(PRFileDesc* fd, const void* buf,
     netAddr.ToAddrPortString(addrPort);
     SOCKET_LOG(
         ("MockNetworkSendTo %p addr [%s] is blocked", secret, addrPort.get()));
+    secret->mSentToBlockedUDPAddr = true;
     return PR_SUCCESS;
   }
   return (fd->lower->methods->sendto)(fd->lower, buf, amount, flags, addr,

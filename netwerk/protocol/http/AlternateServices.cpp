@@ -664,6 +664,23 @@ void AltSvcTransaction::Close(nsresult reason) {
   if (!mValidatedResult && mConnection) {
     mConnection->DontReuse();
   }
+
+  // Happy Eyeballs doesn't exclude HTTP/3 when one of its attempts fails,
+  // since another may still succeed. When a whole h3 validation fails without
+  // reaching the alternate, typically because the network drops UDP, exclude
+  // it until the network changes. Otherwise every response carrying Alt-Svc
+  // would start the validation again (bug 2098400).
+  if (mIsHttp3 && !mValidatedResult && !mConnection &&
+      (reason == NS_ERROR_CONNECTION_REFUSED ||
+       reason == NS_ERROR_NET_TIMEOUT)) {
+    LOG(("AltSvcTransaction::Close() %p excluding HTTP/3 for %s", this,
+         mConnectionInfo->GetRoutedHost().get()));
+    // ExcludeHttp3 ignores Happy Eyeballs connection infos, for the reason
+    // above.
+    RefPtr<nsHttpConnectionInfo> ci =
+        mConnectionInfo->Mutate().SetHappyEyeballsEnabled(false).Finalize();
+    gHttpHandler->ExcludeHttp3(ci);
+  }
   NullHttpTransaction::Close(reason);
 }
 

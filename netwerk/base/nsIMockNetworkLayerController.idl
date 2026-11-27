@@ -67,6 +67,18 @@ interface nsIMockNetworkLayerController : nsISupports
   void clearBlockedUDPAddr();
 
   /**
+   * Makes closing a UDP socket that sent to an address blocked by
+   * blockUDPAddrIO take aDelayMs, like a macOS content filter waiting for a
+   * dropped flow to detach. 0, the default, closes immediately.
+   */
+  void setBlockedUDPCloseDelay(in unsigned long aDelayMs);
+
+  /**
+   * The number of UDP socket closes that setBlockedUDPCloseDelay has delayed.
+   */
+  readonly attribute unsigned long delayedUDPCloseCount;
+
+  /**
    * This method causes UDP sendto() to fail immediately with
    * PR_CONNECT_REFUSED_ERROR for the given network address.
    */

@@ -5,6 +5,7 @@
 #ifndef MockNetworkLayerController_h_
 #define MockNetworkLayerController_h_
 
+#include "mozilla/Atomics.h"
 #include "mozilla/RWLock.h"
 #include "mozilla/net/DNS.h"
 #include "nsIMockNetworkLayerController.h"
@@ -21,6 +22,8 @@ bool FindBlockedUDPAddr(const NetAddr& aInput);
 bool FindFailedUDPAddr(const NetAddr& aInput);
 bool FindWouldBlockUDPAddr(const NetAddr& aInput);
 bool FindResetUDPAddr(const NetAddr& aInput);
+uint32_t BlockedUDPCloseDelayMs();
+void NoteDelayedUDPClose();
 
 class MockNetworkLayerController : public nsIMockNetworkLayerController {
  public:
@@ -43,6 +46,8 @@ class MockNetworkLayerController : public nsIMockNetworkLayerController {
   nsTHashSet<nsCStringHashKey> mFailedUDPAddresses MOZ_GUARDED_BY(mLock);
   nsTHashSet<nsCStringHashKey> mWouldBlockUDPAddresses MOZ_GUARDED_BY(mLock);
   nsTHashSet<nsCStringHashKey> mResetUDPAddresses MOZ_GUARDED_BY(mLock);
+  Atomic<uint32_t, Relaxed> mBlockedUDPCloseDelayMs{0};
+  Atomic<uint32_t, Relaxed> mDelayedUDPCloseCount{0};
 
   friend bool FindNetAddrOverride(const NetAddr& aInput, NetAddr& aOutput);
   friend bool FindBlockedTCPConnect(const NetAddr& aInput);
@@ -52,6 +57,8 @@ class MockNetworkLayerController : public nsIMockNetworkLayerController {
   friend bool FindFailedUDPAddr(const NetAddr& aInput);
   friend bool FindWouldBlockUDPAddr(const NetAddr& aInput);
   friend bool FindResetUDPAddr(const NetAddr& aInput);
+  friend uint32_t BlockedUDPCloseDelayMs();
+  friend void NoteDelayedUDPClose();
 };
 
 }  // namespace mozilla::net

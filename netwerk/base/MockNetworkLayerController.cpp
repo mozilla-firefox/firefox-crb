@@ -218,6 +218,31 @@ NS_IMETHODIMP MockNetworkLayerController::ClearBlockedUDPAddr() {
   return NS_OK;
 }
 
+uint32_t BlockedUDPCloseDelayMs() {
+  RefPtr<MockNetworkLayerController> controller = gController;
+  return controller ? uint32_t(controller->mBlockedUDPCloseDelayMs) : 0;
+}
+
+void NoteDelayedUDPClose() {
+  if (RefPtr<MockNetworkLayerController> controller = gController) {
+    ++controller->mDelayedUDPCloseCount;
+  }
+}
+
+NS_IMETHODIMP MockNetworkLayerController::SetBlockedUDPCloseDelay(
+    uint32_t aDelayMs) {
+  MOZ_ASSERT(NS_IsMainThread());
+
+  mBlockedUDPCloseDelayMs = aDelayMs;
+  return NS_OK;
+}
+
+NS_IMETHODIMP MockNetworkLayerController::GetDelayedUDPCloseCount(
+    uint32_t* aCount) {
+  *aCount = mDelayedUDPCloseCount;
+  return NS_OK;
+}
+
 bool FindFailedUDPAddr(const NetAddr& aInput) {
   RefPtr<MockNetworkLayerController> controller = gController;
   if (!controller) {
