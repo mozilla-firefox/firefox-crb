@@ -13,6 +13,12 @@
   user-select: none;
 }
 
+/* On the host rather than .button-background, so that a consumer can size its
+ * toolbar buttons from outside. */
+:host([type~="toolbar"]) {
+  --button-size-icon: var(--tab-min-height, var(--button-min-height));
+}
+
 :host([type="split"]) {
   --button-split-separator-height: 50%;
 
@@ -274,7 +280,6 @@ button {
   &[type~="toolbar"] {
     --button-outer-padding-block: 4px;
     --button-outer-padding-inline: var(--toolbarbutton-padding-outer);
-    --button-size-icon: var(--tab-min-height, var(--button-min-height));
     --focus-outline-offset: -2px;
 
     background-color: var(--button-background-color-toolbar);
