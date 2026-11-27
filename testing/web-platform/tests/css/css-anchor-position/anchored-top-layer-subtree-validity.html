@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<title>Validity of elements under top layer positioning against an anchor in a lower layer</title>
+<link rel="help" href="https://drafts.csswg.org/css-anchor-position-1/#acceptable-anchor-element">
+<link rel="help" href="https://bugzilla.mozilla.org/show_bug.cgi?id=2098629">
+<link rel="author" href="mailto:dshin@mozilla.com">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="support/test-common.js"></script>
+<style>
+#anchor {
+  height: 50px;
+  anchor-name: --x;
+}
+#positioned {
+  left: 0;
+  top: 0;
+  height: anchor-size(--x height, 0px);
+}
+</style>
+<div id=anchor></div>
+<dialog id=dialog>
+  <div id=container>
+    <div id=positioned></div>
+  </div>
+</dialog>
+<script>
+async function do_test(t, position, expected) {
+  positioned.style.position = position;
+  dialog.showModal();
+  t.add_cleanup(() => {
+    dialog.close();
+    positioned.style.position = "";
+  });
+  await waitUntilNextAnimationFrame();
+  assert_equals(getComputedStyle(positioned).height, expected);
+}
+
+promise_test(async t => {
+  await do_test(t, "absolute", "0px");
+}, "Positioned element in top layer subtree cannot anchor to anchors under that top layer with position: absolute");
+
+promise_test(async t => {
+  await do_test(t, "fixed", "50px");
+}, "Positioned element in top layer subtree can anchor to anchors under that top layer with position: fixed");
+
+promise_test(async t => {
+  container.style.contain = "strict";
+  t.add_cleanup(() => {
+    container.style.contain = "";
+  });
+  await do_test(t, "fixed", "0px");
+}, "Positioned element in top layer subtree cannot anchor to anchors under that top layer with position: fixed if another element contains it");
+</script>
