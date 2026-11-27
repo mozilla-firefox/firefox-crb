@@ -1,0 +1,13 @@
+[DEFAULT]
+tags = "urlbar"
+support-files = [
+  "../browser/head-common.js",
+  "head.js",
+]
+prefs = [
+  "browser.search.separatePrivateDefault.enabled=true",
+  "browser.search.separatePrivateDefault.featureGate=true",
+  "browser.urlbar.aboutprivatebrowsing.featureGate=true",
+]
+
+["browser_searchAndNavigate.js"]

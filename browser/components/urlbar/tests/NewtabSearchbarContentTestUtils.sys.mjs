@@ -11,9 +11,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /**
  * Drives the `<moz-urlbar>` that New Tab's component registry mounts on
- * about:newtab. The element lives in the page's realm in a privilegedabout
- * content process, so this runs in a `SpecialPowers.spawn` task there, where
- * the element is reachable without crossing a process boundary.
+ * about:newtab, or the one on about:privatebrowsing. The element
+ * lives in the page's realm in a privilegedabout content process, so this runs
+ * in a `SpecialPowers.spawn` task there, where the element is reachable without
+ * crossing a process boundary.
  * `NewtabSearchbarTestUtils` is the parent-side facade tests call; this is what it
  * forwards to.
  *

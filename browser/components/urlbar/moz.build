@@ -104,6 +104,7 @@ BROWSER_CHROME_MANIFESTS += [
     "tests/browser-engagementTelemetry/browser.toml",
     "tests/browser-ml/perftest.toml",
     "tests/browser-newtab/browser.toml",
+    "tests/browser-private-newtab/browser.toml",
     "tests/browser-quickactions/browser.toml",
     "tests/browser-results/browser.toml",
     "tests/browser-search/browser.toml",

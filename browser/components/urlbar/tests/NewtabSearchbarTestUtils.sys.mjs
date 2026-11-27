@@ -41,10 +41,11 @@ const FORWARDED = [
 ];
 
 /**
- * Drives the `<moz-urlbar>` on about:newtab from a browser-chrome test. The
- * element lives in a content process, so every method here forwards to
- * `NewtabSearchbarContentTestUtils` over one `SpecialPowers.spawn` and takes a
- * `browser` where the chrome utils take a window.
+ * Drives the `<moz-urlbar>` on about:newtab and about:privatebrowsing from a
+ * browser-chrome test. The element lives in a content process, so every method
+ * here forwards to `NewtabSearchbarContentTestUtils` over one
+ * `SpecialPowers.spawn` and takes a `browser` where the chrome utils take a
+ * window.
  *
  * A sequence of steps is better spent in one task than a round trip each:
  *
@@ -135,6 +136,34 @@ class NewtabTestUtils {
       "waiting for <moz-urlbar> on about:newtab"
     );
     await this.scope.SimpleTest.promiseFocus(tab.linkedBrowser);
+    return tab;
+  }
+
+  /**
+   * Opens about:privatebrowsing in a new tab.
+   *
+   * @param {ChromeWindow} win
+   *   A private browser window.
+   * @returns {Promise<MozTabbrowserTab>}
+   *   The new about:privatebrowsing tab.
+   */
+  async openPrivateBrowsingPage(win) {
+    // about:privatebrowsing is preloaded, so its load event may already have
+    // fired.
+    let tab = await lazy.BrowserTestUtils.openNewForegroundTab(
+      win.gBrowser,
+      "about:privatebrowsing",
+      false
+    );
+    await lazy.TestUtils.waitForCondition(
+      () =>
+        this.window.SpecialPowers.spawn(
+          tab.linkedBrowser,
+          [],
+          () => content.document.readyState == "complete"
+        ).catch(() => false),
+      "waiting for about:privatebrowsing to load"
+    );
     return tab;
   }
 
