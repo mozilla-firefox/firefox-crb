@@ -3,10 +3,11 @@
 <title>prefetch source</title>
 <script>
   const params = new URLSearchParams(location.search);
+  const target = params.get("target");
   const rule = {
     source: "list",
-    urls: [params.get("target")],
-    eagerness: "immediate",
+    urls: [target],
+    eagerness: params.get("eagerness") || "immediate",
   };
   if (params.has("tag")) {
     rule.tag = params.get("tag");
@@ -15,4 +16,12 @@
   script.type = "speculationrules";
   script.textContent = JSON.stringify({ prefetch: [rule] });
   document.head.appendChild(script);
+  document.addEventListener("DOMContentLoaded", () => {
+    const link = document.createElement("a");
+    link.id = "link";
+    link.href = target;
+    link.textContent = "target";
+    document.body.appendChild(link);
+  });
 </script>
+<body></body>

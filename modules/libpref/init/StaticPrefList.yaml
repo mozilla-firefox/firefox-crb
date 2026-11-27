@@ -5063,14 +5063,23 @@
   value: true
   mirror: always
 
-# Maximum time (ms) to wait for an in-flight prefetch to complete before
-# falling back to a normal navigation fetch. Used by the
+# Maximum time (ms) a navigation waits for an in-flight prefetch to complete
+# before falling back to a normal navigation fetch, when every in-flight
+# prefetch it could use has "immediate" eagerness. Used by the
 # "wait for a matching prefetch record" algorithm:
 # https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
-# Matches Chromium's practical default. Lower in tests to avoid timeouts.
-- name: dom.speculation_rules.wait_timeout_ms
+- name: dom.speculation_rules.wait_timeout_immediate_ms
   type: RelaxedAtomicUint32
   value: 2000
+  mirror: always
+
+# Same as dom.speculation_rules.wait_timeout_immediate_ms, when at least one of
+# those prefetches has non-immediate eagerness. Such a prefetch starts only
+# shortly before the navigation (on hover or pointerdown), so it is usually
+# still in flight, and refetching would throw away its head start.
+- name: dom.speculation_rules.wait_timeout_non_immediate_ms
+  type: RelaxedAtomicUint32
+  value: 20000
   mirror: always
 
 # Maximum number of "immediate" eagerness prefetch records per document that

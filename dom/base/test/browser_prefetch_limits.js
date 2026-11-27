@@ -605,7 +605,7 @@ add_task(async function test_navigation_doesnt_wait_for_queued_prefetch() {
       ["dom.speculation_rules.max_inflight_prefetches_per_document", 1],
       // Long enough that a navigation waiting for the queued prefetch would be
       // served from it once the in-flight one finishes.
-      ["dom.speculation_rules.wait_timeout_ms", 30000],
+      ["dom.speculation_rules.wait_timeout_immediate_ms", 30000],
     ],
   });
 

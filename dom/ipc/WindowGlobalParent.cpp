@@ -2428,7 +2428,22 @@ RefPtr<PrefetchMatchPromise> WindowGlobalParent::WaitForMatchingPrefetchRecord(
   // Steps 5.1.3-5.1.5: build potentialRecords (ongoing records that could
   // still satisfy aURI) and, "if potentialRecords is empty, return null"
   // without ever registering a waiter.
-  if (!HasPotentialPrefetchMatch(aURI)) {
+  bool hasPotentialRecord = false;
+  bool hasNonImmediatePotentialRecord = false;
+  nsTArray<PPrefetchRecordParent*> managed;
+  ManagedPPrefetchRecordParent(managed);
+  for (auto* p : managed) {
+    auto* rec = static_cast<PrefetchRecordParent*>(p);
+    if (rec->State() == PrefetchState::Ongoing &&
+        rec->IsExpectedToMatch(aURI)) {
+      hasPotentialRecord = true;
+      if (!rec->IsImmediate()) {
+        hasNonImmediatePotentialRecord = true;
+        break;
+      }
+    }
+  }
+  if (!hasPotentialRecord) {
     LOG_SPECRULES(
         ("WindowGlobalParent::WaitForMatchingPrefetchRecord: "
          "this=%p no potential records",
@@ -2439,16 +2454,19 @@ RefPtr<PrefetchMatchPromise> WindowGlobalParent::WaitForMatchingPrefetchRecord(
   // Otherwise "wait until the state of any element of ... prefetch records
   // changes" and re-run the loop: PrefetchMatchWaiter re-checks for a match
   // (or gives up) each time NotifyPrefetchStateChanged fires, until the
-  // dom.speculation_rules.wait_timeout_ms timeout.
+  // timeout. The spec leaves the wait unbounded; the timeout is longer when a
+  // non-immediate prefetch could match.
+  uint32_t timeoutMs =
+      hasNonImmediatePotentialRecord
+          ? StaticPrefs::dom_speculation_rules_wait_timeout_non_immediate_ms()
+          : StaticPrefs::dom_speculation_rules_wait_timeout_immediate_ms();
   RefPtr<PrefetchMatchWaiter> waiter = PrefetchMatchWaiter::Create(
-      this, aURI,
-      TimeDuration::FromMilliseconds(
-          StaticPrefs::dom_speculation_rules_wait_timeout_ms()));
+      this, aURI, TimeDuration::FromMilliseconds(timeoutMs));
   mPrefetchWaiters.AppendElement(waiter);
   LOG_SPECRULES(
       ("WindowGlobalParent::WaitForMatchingPrefetchRecord: "
-       "this=%p registered waiter=%p",
-       this, waiter.get()));
+       "this=%p registered waiter=%p timeout=%ums",
+       this, waiter.get(), timeoutMs));
   return waiter->Promise();
 }
 

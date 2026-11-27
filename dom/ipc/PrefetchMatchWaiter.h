@@ -39,7 +39,7 @@ using PrefetchMatchPromise =
 // one. It resolves its promise with the matching record once that record
 // completes, with nullptr once no ongoing record could still match (so the
 // navigation can fall back to a normal fetch), or with nullptr when the
-// dom.speculation_rules.wait_timeout_ms timeout fires first.
+// timeout given by WindowGlobalParent fires first.
 //
 // Thread safety: must be used on the main thread only.
 //

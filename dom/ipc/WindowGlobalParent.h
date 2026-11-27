@@ -498,16 +498,16 @@ class WindowGlobalParent final : public WindowContext,
 
   // "Wait for a matching prefetch record": returns null if no ongoing
   // prefetch could match aURI, otherwise a promise that resolves when a match
-  // completes (or with nullptr when none can, or when
-  // dom.speculation_rules.wait_timeout_ms expires).
+  // completes (or with nullptr when none can, or when the
+  // dom.speculation_rules.wait_timeout_immediate_ms or
+  // dom.speculation_rules.wait_timeout_non_immediate_ms timeout expires).
   // Spec:
   // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
   RefPtr<PrefetchMatchPromise> WaitForMatchingPrefetchRecord(nsIURI* aURI);
 
   // Whether some ongoing prefetch record could still become a matching
-  // prefetch record for aURI once it completes. Used by
-  // WaitForMatchingPrefetchRecord and by PrefetchMatchWaiter to decide
-  // whether to keep waiting or give up early.
+  // prefetch record for aURI once it completes. Used by PrefetchMatchWaiter to
+  // decide whether to keep waiting or give up early.
   // Spec:
   // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
   bool HasPotentialPrefetchMatch(nsIURI* aURI);

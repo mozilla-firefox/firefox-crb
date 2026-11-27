@@ -255,10 +255,10 @@ add_task(async function test_navigation_waits_for_in_flight_prefetch() {
 
 // A prefetch that fails while a navigation waits for it, here because the
 // server rate-limits it with a 429, releases the navigation at once rather
-// than after dom.speculation_rules.wait_timeout_ms.
+// than after dom.speculation_rules.wait_timeout_immediate_ms.
 add_task(async function test_navigation_proceeds_when_prefetch_fails() {
   await SpecialPowers.pushPrefEnv({
-    set: [["dom.speculation_rules.wait_timeout_ms", 30000]],
+    set: [["dom.speculation_rules.wait_timeout_immediate_ms", 30000]],
   });
   const target = targetURL("failed", { slowMs: 1000, status: 429 });
   const prefetchStarted = targetChannelObserved(
@@ -374,7 +374,7 @@ add_task(async function test_superseded_navigation_waiting_for_prefetch() {
 // Once the wait times out the navigation falls back to a normal fetch.
 add_task(async function test_navigation_stops_waiting_after_timeout() {
   await SpecialPowers.pushPrefEnv({
-    set: [["dom.speculation_rules.wait_timeout_ms", 100]],
+    set: [["dom.speculation_rules.wait_timeout_immediate_ms", 100]],
   });
   const target = targetURL("timeout", { slowMs: 1500 });
   Assert.equal(
@@ -391,5 +391,58 @@ add_task(async function test_navigation_stops_waiting_after_timeout() {
     2,
     "The navigation fetched the target itself after the timeout."
   );
+  await SpecialPowers.popPrefEnv();
+});
+
+// A navigation that could use a non-immediate prefetch waits for it with the
+// longer dom.speculation_rules.wait_timeout_non_immediate_ms timeout.
+add_task(async function test_non_immediate_prefetch_uses_longer_timeout() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["dom.speculation_rules.wait_timeout_immediate_ms", 100],
+      ["dom.speculation_rules.wait_timeout_non_immediate_ms", 30000],
+    ],
+  });
+  const target = targetURL("nonimmediate", { slowMs: 1500 });
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: `${sourceURL("file_pageload_prefetch_source.html", target)}&eagerness=conservative`,
+    waitForLoad: true,
+  });
+
+  const prefetchStarted = targetChannelObserved(
+    "http-on-modify-request",
+    target
+  );
+  await BrowserTestUtils.synthesizeMouseAtCenter(
+    "#link",
+    { type: "mousedown" },
+    tab.linkedBrowser
+  );
+  await prefetchStarted;
+
+  const loaded = BrowserTestUtils.browserLoaded(
+    tab.linkedBrowser,
+    false,
+    target
+  );
+  BrowserTestUtils.startLoadingURIString(tab.linkedBrowser, target);
+  await loaded;
+
+  Assert.equal(
+    await SpecialPowers.spawn(
+      tab.linkedBrowser,
+      [],
+      () => content.performance.getEntriesByType("navigation")[0].deliveryType
+    ),
+    "navigational-prefetch",
+    "The navigation waited past the immediate timeout and was served from the prefetch."
+  );
+  Assert.equal(
+    await hitCount("nonimmediate"),
+    1,
+    "The navigation reused the in-flight prefetch instead of refetching."
+  );
+  BrowserTestUtils.removeTab(tab);
   await SpecialPowers.popPrefEnv();
 });
