@@ -25,7 +25,8 @@ export class GeckoViewPictureInPictureSourceChild extends GeckoViewActorChild {
 
   /**
    * The first video this frame is playing, in document order, or otherwise the
-   * first paused one that has played. Null if there is neither.
+   * first paused one that has played, or otherwise the first paused one with a
+   * frame to show. Null if there is none.
    *
    * @returns {?{videoRef: object, paused: boolean}}
    */
@@ -39,10 +40,11 @@ export class GeckoViewPictureInPictureSourceChild extends GeckoViewActorChild {
     const videos = [...doc.querySelectorAll("video")].filter(
       v => v.videoWidth > 0 && v.videoHeight > 0
     );
-    // Find a playing video, if none found then pick a video that has played before.
-    // A video that has only loaded but never played should not be picked.
+    // Prefer a playing video, then one that has played, then any with a frame to show.
     const video =
-      videos.find(v => !v.paused) ?? videos.find(v => !!v.played.length);
+      videos.find(v => !v.paused) ??
+      videos.find(v => !!v.played.length) ??
+      videos.find(v => v.readyState >= v.HAVE_CURRENT_DATA);
     if (!video) {
       return null;
     }
