@@ -197,11 +197,16 @@ class FaviconLoad {
         Ci.nsILoadInfo.SEC_ALLOW_CROSS_ORIGIN_INHERITS_SEC_CONTEXT;
     }
 
+    const loadingPrincipal =
+      iconInfo.loadingPrincipal ?? iconInfo.node.nodePrincipal;
+    // LoadInfo requires a loading node to have the loading principal.
+    const loadingNode = iconInfo.loadingPrincipal ? null : iconInfo.node;
+
     this.channel = Services.io.newChannelFromURI(
       iconInfo.iconUri,
-      iconInfo.node,
-      iconInfo.node.nodePrincipal,
-      iconInfo.node.nodePrincipal,
+      loadingNode,
+      loadingPrincipal,
+      loadingPrincipal,
       securityFlags |
         Ci.nsILoadInfo.SEC_ALLOW_CHROME |
         Ci.nsILoadInfo.SEC_DISALLOW_SCRIPT,
@@ -605,6 +610,29 @@ class IconLoader {
     this.actor = actor;
   }
 
+  #setTrustedIcon(iconURI, { node, beforePageShow, isRichIcon, isTabIcon }) {
+    // We need to do a manual security check because the channel won't do
+    // it for us.
+    try {
+      Services.scriptSecurityManager.checkLoadURIWithPrincipal(
+        node.nodePrincipal,
+        iconURI,
+        Services.scriptSecurityManager.ALLOW_CHROME
+      );
+    } catch (ex) {
+      return;
+    }
+    this.actor.sendAsyncMessage("Link:SetIcon", {
+      originalURL: iconURI.spec,
+      expiration: undefined,
+      iconURL: iconURI.spec,
+      canStoreIcon: beforePageShow && iconURI.schemeIs("data"),
+      beforePageShow,
+      isRichIcon,
+      isTabIcon,
+    });
+  }
+
   async load(iconInfo) {
     if (this._loader) {
       // If we're already loading this icon, just let it finish.
@@ -615,27 +643,7 @@ class IconLoader {
     }
 
     if (TRUSTED_FAVICON_SCHEMES.includes(iconInfo.iconUri.scheme)) {
-      // We need to do a manual security check because the channel won't do
-      // it for us.
-      try {
-        Services.scriptSecurityManager.checkLoadURIWithPrincipal(
-          iconInfo.node.nodePrincipal,
-          iconInfo.iconUri,
-          Services.scriptSecurityManager.ALLOW_CHROME
-        );
-      } catch (ex) {
-        return;
-      }
-      this.actor.sendAsyncMessage("Link:SetIcon", {
-        originalURL: iconInfo.iconUri.spec,
-        expiration: undefined,
-        iconURL: iconInfo.iconUri.spec,
-        canStoreIcon:
-          iconInfo.beforePageShow && iconInfo.iconUri.schemeIs("data"),
-        beforePageShow: iconInfo.beforePageShow,
-        isRichIcon: iconInfo.isRichIcon,
-        isTabIcon: iconInfo.isTabIcon,
-      });
+      this.#setTrustedIcon(iconInfo.iconUri, iconInfo);
       return;
     }
 
@@ -673,6 +681,9 @@ class IconLoader {
           isRichIcon: iconInfo.isRichIcon,
           isTabIcon: iconInfo.isTabIcon,
         });
+        if (iconInfo.fallbackIconURI) {
+          this.#setTrustedIcon(iconInfo.fallbackIconURI, iconInfo);
+        }
       }
     } finally {
       this._loader = null;
@@ -756,10 +767,20 @@ export class FaviconLoader {
     return false;
   }
 
-  addDefaultIcon(pageUri) {
+  /**
+   * @param {nsIURI} pageUri
+   * @param {object} [options]
+   * @param {nsIURI} [options.fallbackIconURI] A trusted icon to show if the
+   *   favicon fails to load.
+   * @param {nsIPrincipal} [options.loadingPrincipal] Overrides the document
+   *   principal for the favicon load, which then has no loading node.
+   */
+  addDefaultIcon(pageUri, { fallbackIconURI, loadingPrincipal } = {}) {
     // Currently ImageDocuments will just load the default favicon, see bug
     // 403651 for discussion.
     this.iconInfos.push({
+      fallbackIconURI,
+      loadingPrincipal,
       iconUri: pageUri.mutate().setPathQueryRef("/favicon.ico").finalize(),
       width: -1,
       isRichIcon: false,

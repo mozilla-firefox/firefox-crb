@@ -89,6 +89,8 @@ support-files = [
   "file_pdfjs_slow.sjs",
 ]
 
+["browser_pdfjs_favicon.js"]
+
 ["browser_pdfjs_features_notification.js"]
 
 ["browser_pdfjs_features_notification_sync.js"]
