@@ -730,56 +730,63 @@ nsresult PuppetWidget::NotifyIMEOfCompositionUpdate(
   return NS_OK;
 }
 
-nsresult PuppetWidget::NotifyIMEOfTextChange(
+nsresult PuppetWidget::NotifyIMEOfContentChange(
     const IMENotification& aIMENotification) {
   MOZ_ASSERT(IMEStateManager::CanSendNotificationToWidget());
-  MOZ_ASSERT(aIMENotification.mMessage == NOTIFY_IME_OF_TEXT_CHANGE,
+  MOZ_ASSERT(aIMENotification.mMessage == NOTIFY_IME_OF_CONTENT_CHANGE,
              "Passed wrong notification");
 
   if (!mBrowserChild) {
     return NS_ERROR_FAILURE;
   }
 
-  // FYI: text change notification is the first notification after
-  //      a user operation changes the content.  So, we need to modify
-  //      the cache as far as possible here.
-
-  if (NS_WARN_IF(!mContentCache.CacheText(this, &aIMENotification))) {
-    return NS_ERROR_FAILURE;
+  if (aIMENotification.mTextChangeData.isSome()) {
+    // FYI: text change notification is the first notification after
+    //      a user operation changes the content.  So, we need to modify
+    //      the cache as far as possible here.
+    if (NS_WARN_IF(!mContentCache.CacheText(this, &aIMENotification))) {
+      return NS_ERROR_FAILURE;
+    }
+  }
+  if (aIMENotification.mSelectionChangeData.isSome()) {
+    // Note that selection change must be notified after text change if it
+    // occurs. Therefore, we don't need to query text content again here.
+    if (MOZ_UNLIKELY(!mContentCache.SetSelection(
+            this, aIMENotification.mSelectionChangeData.ref()))) {
+      // If there is no text cache yet, caching text will cache selection too.
+      // Therefore, in the case, we don't need to notify IME of selection change
+      // right now.
+      return NS_OK;
+    }
+  }
+  if (aIMENotification.mLayoutChanged) {
+    if (NS_WARN_IF(!mContentCache.CacheEditorRect(this, &aIMENotification))) {
+      return NS_ERROR_FAILURE;
+    }
+    if (NS_WARN_IF(
+            !mContentCache.CacheCaretAndTextRects(this, &aIMENotification))) {
+      return NS_ERROR_FAILURE;
+    }
   }
 
-  // BrowserParent doesn't this this to cache.  we don't send the notification
-  // if parent process doesn't request text changes.
-  if (mIMENotificationRequestsOfParent.contains(
-          IMENotificationRequest::TextChange)) {
-    mBrowserChild->SendNotifyIMETextChange(mContentCache, aIMENotification);
-  } else {
-    mBrowserChild->SendUpdateContentCache(mContentCache);
-  }
-  return NS_OK;
-}
-
-nsresult PuppetWidget::NotifyIMEOfSelectionChange(
-    const IMENotification& aIMENotification) {
-  MOZ_ASSERT(IMEStateManager::CanSendNotificationToWidget());
-  MOZ_ASSERT(aIMENotification.mMessage == NOTIFY_IME_OF_SELECTION_CHANGE,
-             "Passed wrong notification");
-  if (!mBrowserChild) {
-    return NS_ERROR_FAILURE;
+  // BrowserParent doesn't want the notification, we should send only the
+  // content cache.
+  if (!aIMENotification.mSelectionChangeData) {
+    const bool noTextChangeNotification =
+        aIMENotification.mTextChangeData.isNothing() ||
+        !mIMENotificationRequestsOfParent.contains(
+            IMENotificationRequest::TextChange);
+    const bool noLayoutChangeNotification =
+        !aIMENotification.mLayoutChanged ||
+        !mIMENotificationRequestsOfParent.contains(
+            IMENotificationRequest::LayoutChange);
+    if (!noTextChangeNotification && !noLayoutChangeNotification) {
+      mBrowserChild->SendUpdateContentCache(mContentCache);
+      return NS_OK;
+    }
   }
 
-  // Note that selection change must be notified after text change if it occurs.
-  // Therefore, we don't need to query text content again here.
-  if (MOZ_UNLIKELY(!mContentCache.SetSelection(
-          this, aIMENotification.mSelectionChangeData.ref()))) {
-    // If there is no text cache yet, caching text will cache selection too.
-    // Therefore, in the case, we don't need to notify IME of selection change
-    // right now.
-    return NS_OK;
-  }
-
-  mBrowserChild->SendNotifyIMESelection(mContentCache, aIMENotification);
-
+  mBrowserChild->SendNotifyIMEContentChange(mContentCache, aIMENotification);
   return NS_OK;
 }
 
@@ -797,29 +804,6 @@ nsresult PuppetWidget::NotifyIMEOfMouseButtonEvent(
   }
 
   return consumedByIME ? NS_SUCCESS_EVENT_CONSUMED : NS_OK;
-}
-
-nsresult PuppetWidget::NotifyIMEOfPositionChange(
-    const IMENotification& aIMENotification) {
-  MOZ_ASSERT(IMEStateManager::CanSendNotificationToWidget());
-  if (NS_WARN_IF(!mBrowserChild)) {
-    return NS_ERROR_FAILURE;
-  }
-
-  if (NS_WARN_IF(!mContentCache.CacheEditorRect(this, &aIMENotification))) {
-    return NS_ERROR_FAILURE;
-  }
-  if (NS_WARN_IF(
-          !mContentCache.CacheCaretAndTextRects(this, &aIMENotification))) {
-    return NS_ERROR_FAILURE;
-  }
-  if (mIMENotificationRequestsOfParent.contains(
-          IMENotificationRequest::PositionChange)) {
-    mBrowserChild->SendNotifyIMEPositionChange(mContentCache, aIMENotification);
-  } else {
-    mBrowserChild->SendUpdateContentCache(mContentCache);
-  }
-  return NS_OK;
 }
 
 struct CursorSurface {
@@ -1034,16 +1018,12 @@ PuppetWidget::NotifyIME(TextEventDispatcher* aTextEventDispatcher,
     case NOTIFY_IME_OF_FOCUS:
     case NOTIFY_IME_OF_BLUR:
       return NotifyIMEOfFocusChange(aIMENotification);
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      return NotifyIMEOfSelectionChange(aIMENotification);
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-      return NotifyIMEOfTextChange(aIMENotification);
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      return NotifyIMEOfContentChange(aIMENotification);
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       return NotifyIMEOfCompositionUpdate(aIMENotification);
     case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
       return NotifyIMEOfMouseButtonEvent(aIMENotification);
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      return NotifyIMEOfPositionChange(aIMENotification);
     default:
       return NS_ERROR_NOT_IMPLEMENTED;
   }
@@ -1053,7 +1033,7 @@ NS_IMETHODIMP_(IMENotificationRequests)
 PuppetWidget::GetIMENotificationRequests() {
   return mIMENotificationRequestsOfParent +
          IMENotificationRequests{IMENotificationRequest::TextChange,
-                                 IMENotificationRequest::PositionChange};
+                                 IMENotificationRequest::LayoutChange};
 }
 
 NS_IMETHODIMP_(void)

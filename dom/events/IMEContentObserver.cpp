@@ -1602,14 +1602,18 @@ void IMEContentObserver::MaybeNotifyIMEOfPositionChange(
   MOZ_LOG(sIMECOLog, LogLevel::Verbose,
           ("0x%p MaybeNotifyIMEOfPositionChange()", this));
   // If reflow is caused by ContentEventHandler during PositionChangeEvent
-  // sending NOTIFY_IME_OF_POSITION_CHANGE, we don't need to notify IME of it
+  // sending NOTIFY_IME_OF_CONTENT_CHANGE, we don't need to notify IME of it
   // again since ContentEventHandler returns the result including this reflow's
   // result.
+  // FIXME: NOTIFY_IME_OF_CONTENT_CHANGE may be for a text change or a selection
+  // change now. So, this does wrong. However, this is not required anymore
+  // once we send text, selection and/or layout change with a notification.
+  // Therefore, this will be removed by the following patch.
   if (mIsHandlingQueryContentEvent &&
-      mSendingNotification == NOTIFY_IME_OF_POSITION_CHANGE) {
+      mSendingNotification == NOTIFY_IME_OF_CONTENT_CHANGE) {
     MOZ_LOG(sIMECOLog, LogLevel::Verbose,
             ("0x%p   MaybeNotifyIMEOfPositionChange(), ignored since caused by "
-             "ContentEventHandler during sending NOTIFY_IME_OF_POSITION_CHANGE",
+             "ContentEventHandler during sending NOTIFY_IME_OF_CONTENT_CHANGE",
              this));
     return;
   }
@@ -2245,11 +2249,11 @@ void IMEContentObserver::IMENotificationSender::SendSelectionChange() {
            "NOTIFY_IME_OF_SELECTION_CHANGE... newSelChangeData=%s",
            this, ToString(newSelChangeData).c_str()));
 
-  IMENotification notification(NOTIFY_IME_OF_SELECTION_CHANGE);
+  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
   notification.mSelectionChangeData = Some(observer->mSelectionData);
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
-  observer->mSendingNotification = NOTIFY_IME_OF_SELECTION_CHANGE;
+  observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
   IMEStateManager::NotifyIME(notification, observer->mWidget);
   observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
 
@@ -2300,12 +2304,12 @@ void IMEContentObserver::IMENotificationSender::SendTextChange() {
            "mTextChangeData=%s }",
            this, ToString(observer->mTextChangeData).c_str()));
 
-  IMENotification notification(NOTIFY_IME_OF_TEXT_CHANGE);
+  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
   notification.mTextChangeData = Some(observer->mTextChangeData);
   observer->mTextChangeData.Clear();
 
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
-  observer->mSendingNotification = NOTIFY_IME_OF_TEXT_CHANGE;
+  observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
   IMEStateManager::NotifyIME(notification, observer->mWidget);
   observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
 
@@ -2355,10 +2359,12 @@ void IMEContentObserver::IMENotificationSender::SendPositionChange() {
            "NOTIFY_IME_OF_POSITION_CHANGE...",
            this));
 
+  IMENotification notification(NOTIFY_IME_OF_CONTENT_CHANGE);
+  notification.mLayoutChanged = true;
+
   MOZ_RELEASE_ASSERT(observer->mSendingNotification == NOTIFY_IME_OF_NOTHING);
-  observer->mSendingNotification = NOTIFY_IME_OF_POSITION_CHANGE;
-  IMEStateManager::NotifyIME(IMENotification(NOTIFY_IME_OF_POSITION_CHANGE),
-                             observer->mWidget);
+  observer->mSendingNotification = NOTIFY_IME_OF_CONTENT_CHANGE;
+  IMEStateManager::NotifyIME(notification, observer->mWidget);
   observer->mSendingNotification = NOTIFY_IME_OF_NOTHING;
 
   MOZ_LOG(sIMECOLog, LogLevel::Debug,

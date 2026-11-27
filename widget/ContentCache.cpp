@@ -1812,14 +1812,16 @@ void ContentCacheInParent::MaybeNotifyIME(
   }
 
   switch (aNotification.mMessage) {
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      mPendingSelectionChange.MergeWith(aNotification);
-      break;
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-      mPendingTextChange.MergeWith(aNotification);
-      break;
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      mPendingLayoutChange.MergeWith(aNotification);
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      if (aNotification.mSelectionChangeData) {
+        mPendingSelectionChange.MergeWith(aNotification);
+      }
+      if (aNotification.mTextChangeData) {
+        mPendingTextChange.MergeWith(aNotification);
+      }
+      if (aNotification.mLayoutChanged) {
+        mPendingLayoutChange.MergeWith(aNotification);
+      }
       break;
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       mPendingCompositionUpdate.MergeWith(aNotification);

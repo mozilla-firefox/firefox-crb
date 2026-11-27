@@ -2497,7 +2497,7 @@ mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMEFocus(
   return IPC_OK();
 }
 
-mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMETextChange(
+mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMEContentChange(
     const ContentCache& aContentCache,
     const IMENotification& aIMENotification) {
   nsCOMPtr<nsIWidget> widget = GetTextInputHandlingWidget();
@@ -2513,21 +2513,6 @@ mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMETextChange(
 }
 
 mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMECompositionUpdate(
-    const ContentCache& aContentCache,
-    const IMENotification& aIMENotification) {
-  nsCOMPtr<nsIWidget> widget = GetTextInputHandlingWidget();
-  if (!widget || !IMEStateManager::DoesBrowserParentHaveIMEFocus(this)) {
-    return IPC_OK();
-  }
-  if (NS_WARN_IF(!aContentCache.IsValid())) {
-    return IPC_FAIL(this, "Invalid content cache data");
-  }
-  mContentCache.AssignContent(aContentCache, widget, &aIMENotification);
-  mContentCache.MaybeNotifyIME(widget, aIMENotification);
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMESelection(
     const ContentCache& aContentCache,
     const IMENotification& aIMENotification) {
   nsCOMPtr<nsIWidget> widget = GetTextInputHandlingWidget();
@@ -2564,21 +2549,6 @@ mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMEMouseButtonEvent(
   }
   nsresult rv = IMEStateManager::NotifyIME(aIMENotification, widget, this);
   *aConsumedByIME = rv == NS_SUCCESS_EVENT_CONSUMED;
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult BrowserParent::RecvNotifyIMEPositionChange(
-    const ContentCache& aContentCache,
-    const IMENotification& aIMENotification) {
-  nsCOMPtr<nsIWidget> widget = GetTextInputHandlingWidget();
-  if (!widget || !IMEStateManager::DoesBrowserParentHaveIMEFocus(this)) {
-    return IPC_OK();
-  }
-  if (NS_WARN_IF(!aContentCache.IsValid())) {
-    return IPC_FAIL(this, "Invalid content cache data");
-  }
-  mContentCache.AssignContent(aContentCache, widget, &aIMENotification);
-  mContentCache.MaybeNotifyIME(widget, aIMENotification);
   return IPC_OK();
 }
 

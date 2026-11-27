@@ -342,7 +342,7 @@ UINT IMMHandler::GetKeyboardCodePage() { return sCodePage; }
 
 // static
 IMENotificationRequests IMMHandler::GetIMENotificationRequests() {
-  return {IMENotificationRequest::PositionChange,
+  return {IMENotificationRequest::LayoutChange,
           IMENotificationRequest::MouseEventOnChar};
 }
 

@@ -383,7 +383,7 @@ class IMEContentObserver final : public nsStubMutationObserver,
   bool NeedsPositionChangeNotification() const {
     return mIMENotificationRequests &&
            mIMENotificationRequests->contains(
-               IMENotificationRequest::PositionChange);
+               IMENotificationRequest::LayoutChange);
   }
   void ClearPendingNotifications() {
     mNeedsToNotifyIMEOfFocusSet = false;

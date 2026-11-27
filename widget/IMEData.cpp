@@ -387,52 +387,48 @@ std::ostream& operator<<(std::ostream& aStream,
   return aStream;
 }
 
-std::ostream& operator<<(std::ostream& aStream,
-                         const IMENotification::SelectionChangeData& aData) {
+std::string format_as(const IMENotification::SelectionChangeData& aData) {
   if (!aData.IsInitialized()) {
-    aStream << "{ IsInitialized()=false }";
-    return aStream;
+    return "{ IsInitialized()=false }";
   }
   if (!aData.HasRange()) {
-    aStream << "{ HasRange()=false }";
-    return aStream;
+    return "{ HasRange()=false }";
   }
-  aStream << "{ mOffset=" << aData.mOffset;
-  if (aData.mString.Length() > 20) {
-    aStream << ", mString.Length()=" << aData.mString.Length();
-  } else {
-    aStream << ", mString=\"" << NS_ConvertUTF16toUTF8(aData.mString)
-            << "\" (Length()=" << aData.mString.Length() << ")";
-  }
+  return fmt::format(
+      "{{ mOffset={}, {}, GetWritingMode()={}, mReversed={}, "
+      "mCausedByComposition={}, mCausedBySelectionEvent={}, "
+      "mOccurredDuringComposition={} }}",
+      aData.mOffset,
+      aData.mString.Length() > 20
+          ? fmt::format("mString.Length()={}", aData.mString.Length())
+          : fmt::format("mString=\"{}\" (Length()={})",
+                        NS_ConvertUTF16toUTF8(aData.mString),
+                        aData.mString.Length()),
+      aData.GetWritingMode(), aData.mReversed, aData.mCausedByComposition,
+      aData.mCausedBySelectionEvent, aData.mOccurredDuringComposition);
+}
 
-  aStream << ", GetWritingMode()=" << aData.GetWritingMode()
-          << ", mReversed=" << (aData.mReversed ? "true" : "false")
-          << ", mCausedByComposition="
-          << (aData.mCausedByComposition ? "true" : "false")
-          << ", mCausedBySelectionEvent="
-          << (aData.mCausedBySelectionEvent ? "true" : "false")
-          << ", mOccurredDuringComposition="
-          << (aData.mOccurredDuringComposition ? "true" : "false") << " }";
-  return aStream;
+std::ostream& operator<<(std::ostream& aStream,
+                         const IMENotification::SelectionChangeData& aData) {
+  return aStream << format_as(aData);
+}
+
+std::string format_as(const IMENotification::TextChangeData& aData) {
+  if (!aData.IsValid()) {
+    return "{ IsValid()=false }";
+  }
+  return fmt::format(
+      "{{ mStartOffset={}, mRemoveEndOffset={}, mAddedEndOffset={}, "
+      "mCausedOnlyByComposition={}, mIncludingChangesDuringComposition={}, "
+      "mIncludingChangesWithoutComposition={} }}",
+      aData.mStartOffset, aData.mRemovedEndOffset, aData.mAddedEndOffset,
+      aData.mCausedOnlyByComposition, aData.mIncludingChangesDuringComposition,
+      aData.mIncludingChangesWithoutComposition);
 }
 
 std::ostream& operator<<(std::ostream& aStream,
                          const IMENotification::TextChangeData& aData) {
-  if (!aData.IsValid()) {
-    aStream << "{ IsValid()=false }";
-    return aStream;
-  }
-  aStream << "{ mStartOffset=" << aData.mStartOffset
-          << ", mRemoveEndOffset=" << aData.mRemovedEndOffset
-          << ", mAddedEndOffset=" << aData.mAddedEndOffset
-          << ", mCausedOnlyByComposition="
-          << (aData.mCausedOnlyByComposition ? "true" : "false")
-          << ", mIncludingChangesDuringComposition="
-          << (aData.mIncludingChangesDuringComposition ? "true" : "false")
-          << ", mIncludingChangesWithoutComposition="
-          << (aData.mIncludingChangesWithoutComposition ? "true" : "false")
-          << " }";
-  return aStream;
+  return aStream << format_as(aData);
 }
 
 const char* ToChar(InputContext::Origin aOrigin) {
@@ -454,14 +450,10 @@ const char* ToChar(IMEMessage aIMEMessage) {
       return "NOTIFY_IME_OF_FOCUS";
     case NOTIFY_IME_OF_BLUR:
       return "NOTIFY_IME_OF_BLUR";
-    case NOTIFY_IME_OF_SELECTION_CHANGE:
-      return "NOTIFY_IME_OF_SELECTION_CHANGE";
-    case NOTIFY_IME_OF_TEXT_CHANGE:
-      return "NOTIFY_IME_OF_TEXT_CHANGE";
+    case NOTIFY_IME_OF_CONTENT_CHANGE:
+      return "NOTIFY_IME_OF_CONTENT_CHANGE";
     case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED:
       return "NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED";
-    case NOTIFY_IME_OF_POSITION_CHANGE:
-      return "NOTIFY_IME_OF_POSITION_CHANGE";
     case NOTIFY_IME_OF_MOUSE_BUTTON_EVENT:
       return "NOTIFY_IME_OF_MOUSE_BUTTON_EVENT";
     case REQUEST_TO_COMMIT_COMPOSITION:
