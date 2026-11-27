@@ -31,6 +31,7 @@ namespace net {
 class ConnectionEntry;
 class nsHttpHandler;
 class ASpdySession;
+class TunnelSetupTransaction;
 class WebTransportSessionBase;
 
 enum class ConnectionState : uint32_t {
@@ -199,6 +200,15 @@ class HttpConnectionBase : public nsSupportsWeakReference {
   void RecordConnectionAddressType();
 
   bool IsProxyConnectInProgress() { return mState == SETTING_UP_TUNNEL; }
+
+  // Creates an inner connection tunnelled through this one, driven by aDriver
+  // itself rather than by a wrapper transaction created here. aDriver owns the
+  // CONNECT exchange; the real transaction is dispatched on the result only
+  // once that has succeeded.
+  virtual nsresult CreateInnerConnection(
+      TunnelSetupTransaction* aDriver, HttpConnectionBase** aInnerConnection) {
+    return NS_ERROR_NOT_IMPLEMENTED;
+  }
 
   virtual nsresult CreateTunnelStream(nsAHttpTransaction* httpTransaction,
                                       HttpConnectionBase** aHttpConnection,
