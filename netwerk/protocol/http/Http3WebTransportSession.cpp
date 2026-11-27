@@ -173,9 +173,10 @@ nsresult Http3TunnelStreamBase::WriteSegments() {
     mSocketInCondition = NS_OK;
     countWrittenSingle = 0;
     // Delivering a CONNECT response can close this stream from inside the
-    // call: a refused CONNECT-UDP closes the inner connection and with it
-    // this stream, dropping mTransaction. Keep the transaction alive across
-    // the call and stop once the stream has been closed under us.
+    // call: a refused CONNECT-UDP fails its InnerConnectionEstablisher, which
+    // closes the inner connection and with it this stream, dropping
+    // mTransaction. Keep the transaction alive across the call and stop once
+    // the stream has been closed under us.
     RefPtr<nsAHttpTransaction> transaction = mTransaction;
     rv = transaction->WriteSegmentsAgain(this, nsIOService::gDefaultSegmentSize,
                                          &countWrittenSingle, &again);
