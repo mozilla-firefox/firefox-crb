@@ -112,6 +112,7 @@ UNIFIED_SOURCES += [
     "testPrinter.cpp",
     "testPrintf.cpp",
     "testPrivateGCThingValue.cpp",
+    "testProfilerScriptSources.cpp",
     "testProfileStrings.cpp",
     "testPromise.cpp",
     "testPropCache.cpp",

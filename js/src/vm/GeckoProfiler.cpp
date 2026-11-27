@@ -451,10 +451,62 @@ void GeckoProfilerRuntime::stringsReset() {
   }
 }
 
+namespace {
+
+// Identifies the source text and metadata of a ScriptSource. The text, the
+// file name and the source map URL are stored in the
+// SharedImmutableStringsCache, so pointers to equal strings are equal while
+// the strings are alive.
+struct SameSourceKey {
+  const void* text;
+  const char* filename;
+  const char16_t* sourceMapURL;
+  uint32_t startLine;
+  uint32_t startColumn;
+  bool unwrapEventHandlerBody;
+
+  using Lookup = SameSourceKey;
+  static HashNumber hash(const Lookup& aLookup) {
+    return mozilla::AddToHash(
+        mozilla::HashGeneric(aLookup.text, aLookup.filename,
+                             aLookup.sourceMapURL),
+        aLookup.startLine, aLookup.startColumn, aLookup.unwrapEventHandlerBody);
+  }
+  static bool match(const SameSourceKey& aKey, const Lookup& aLookup) {
+    return aKey.text == aLookup.text && aKey.filename == aLookup.filename &&
+           aKey.sourceMapURL == aLookup.sourceMapURL &&
+           aKey.startLine == aLookup.startLine &&
+           aKey.startColumn == aLookup.startColumn &&
+           aKey.unwrapEventHandlerBody == aLookup.unwrapEventHandlerBody;
+  }
+};
+
+const void* SharedSourceText(const ScriptSource::DataReader& aReader) {
+  MOZ_ASSERT(aReader.hasSourceText());
+  bool isUtf8 = aReader->hasSourceType<Utf8Unit>();
+  if (aReader->hasUncompressedSource()) {
+    return isUtf8 ? static_cast<const void*>(
+                        aReader->uncompressedData<Utf8Unit>()->units())
+                  : aReader->uncompressedData<char16_t>()->units();
+  }
+  return isUtf8 ? aReader->compressedData<Utf8Unit>()->raw.chars()
+                : aReader->compressedData<char16_t>()->raw.chars();
+}
+
+}  // namespace
+
 // Get all script sources as a list of ProfilerJSSourceData.
 js::ProfilerJSSources GeckoProfilerRuntime::getProfilerScriptSources(
     bool gatherSourceText) {
   js::ProfilerJSSources result;
+
+  // The entries whose text was copied, by source. Each one keeps a DataReader
+  // on its source, so that its text can't be compressed and freed, and its
+  // pointer reused by another source, while the sources are gathered.
+  HashMap<SameSourceKey, size_t, SameSourceKey, SystemAllocPolicy>
+      copiedSources;
+  Vector<UniquePtr<ScriptSource::DataReader>, 0, SystemAllocPolicy>
+      copiedSourceReaders;
 
   auto guard = scriptSources_.readLock();
   for (auto iter = guard->iter(); !iter.done(); iter.next()) {
@@ -464,6 +516,34 @@ js::ProfilerJSSources GeckoProfilerRuntime::getProfilerScriptSources(
     ScriptSource::DataReader sourceReader(scriptSource);
 
     uint32_t sourceId = scriptSource->id();
+
+    mozilla::Maybe<SameSourceKey> sameSourceKey;
+    if (gatherSourceText && sourceReader.hasSourceText()) {
+      sameSourceKey.emplace(SameSourceKey{
+          SharedSourceText(sourceReader), scriptSource->filename(),
+          scriptSource->hasSourceMapURL() ? scriptSource->sourceMapURL()
+                                          : nullptr,
+          scriptSource->startLine(),
+          scriptSource->startColumn().oneOriginValue(),
+          scriptSource->shouldUnwrapEventHandlerBody()});
+      if (auto p = copiedSources.lookup(*sameSourceKey)) {
+        (void)result.append(
+            ProfilerJSSourceData::CreateSameSourceAs(sourceId, p->value()));
+        continue;
+      }
+    }
+
+    // Called after appending an entry with the text of this source.
+    auto noteCopiedSource = [&](bool aAppended) {
+      if (!aAppended || !sameSourceKey) {
+        return;
+      }
+      auto reader = MakeUnique<ScriptSource::DataReader>(scriptSource);
+      if (!reader || !copiedSourceReaders.append(std::move(reader))) {
+        return;
+      }
+      (void)copiedSources.putNew(*sameSourceKey, result.length() - 1);
+    };
 
     // Get filename for all source types. Create single copy to be moved.
     const char* filename = scriptSource->filename();
@@ -557,19 +637,19 @@ js::ProfilerJSSources GeckoProfilerRuntime::getProfilerScriptSources(
       if (!utf8Chars) {
         continue;
       }
-      (void)result.emplaceBack(sourceId, std::move(utf8Chars), charsLength,
-                               std::move(filenameCopy), filenameLen, startLine,
-                               startColumn, std::move(sourceMapURLCopy),
-                               sourceMapURLLen);
+      noteCopiedSource(result.emplaceBack(
+          sourceId, std::move(utf8Chars), charsLength, std::move(filenameCopy),
+          filenameLen, startLine, startColumn, std::move(sourceMapURLCopy),
+          sourceMapURLLen));
     } else {
       auto& utf16Chars = sourceResult.as<JS::UniqueTwoByteChars>();
       if (!utf16Chars) {
         continue;
       }
-      (void)result.emplaceBack(sourceId, std::move(utf16Chars), charsLength,
-                               std::move(filenameCopy), filenameLen, startLine,
-                               startColumn, std::move(sourceMapURLCopy),
-                               sourceMapURLLen);
+      noteCopiedSource(result.emplaceBack(
+          sourceId, std::move(utf16Chars), charsLength, std::move(filenameCopy),
+          filenameLen, startLine, startColumn, std::move(sourceMapURLCopy),
+          sourceMapURLLen));
     }
   }
 

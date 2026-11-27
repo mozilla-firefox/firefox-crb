@@ -2640,7 +2640,11 @@ JSSourceIndexer::JSSourceIndexer(
       MOZ_ASSERT(!mEntryForSourceId.Contains(sourceId),
                  "Duplicate sourceId detected! This indicates sourceId "
                  "collision between different sources.");
-      mEntryForSourceId.InsertOrUpdate(sourceId, i);
+      // A source that is the same as an earlier one uses the entry of that
+      // one, which has the data.
+      mEntryForSourceId.InsertOrUpdate(
+          sourceId,
+          aJSSourceEntries[i].sourceData.sameSourceAsIndex().valueOr(i));
     }
   }
 }
