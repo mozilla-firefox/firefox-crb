@@ -26,3 +26,6 @@ run-sequentially = ["true"] # perma-fail in parallel
 ["test_backgroundupdate_reason_schedule.js"]
 
 ["test_backgroundupdate_reason_update.js"]
+
+["test_backgroundupdate_stale_prefs.js"]
+run-sequentially = ["true"]
