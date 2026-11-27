@@ -17,6 +17,7 @@ use crate::values::computed::{Context, NonNegativeLength};
 use crate::values::specified::color::ColorSchemeFlags;
 use servo_arc::Arc;
 use smallvec::SmallVec;
+use style_traits::dom::OpaqueNode;
 
 /// The conditions for caching and matching a style in the rule cache.
 #[derive(Clone, Debug, Default)]
@@ -26,6 +27,7 @@ pub struct RuleCacheConditions {
     line_height: Option<NonNegativeLength>,
     writing_mode: Option<WritingMode>,
     color_scheme: Option<ColorSchemeFlags>,
+    sibling_count_parent: Option<OpaqueNode>,
 }
 
 impl RuleCacheConditions {
@@ -45,6 +47,12 @@ impl RuleCacheConditions {
     pub fn set_color_scheme_dependency(&mut self, color_scheme: ColorSchemeFlags) {
         debug_assert!(self.color_scheme.is_none_or(|cs| cs == color_scheme));
         self.color_scheme = Some(color_scheme);
+    }
+
+    /// Sets the style as depending on sharing a common parent, for `sibling-count()`.
+    pub fn set_sibling_count_parent_dependency(&mut self, parent: OpaqueNode) {
+        debug_assert!(self.sibling_count_parent.is_none_or(|n| n == parent));
+        self.sibling_count_parent = Some(parent);
     }
 
     /// Sets the style as uncacheable.
@@ -70,11 +78,17 @@ struct CachedConditions {
     line_height: Option<NonNegativeLength>,
     color_scheme: Option<ColorSchemeFlags>,
     writing_mode: Option<WritingMode>,
+    sibling_count_parent: Option<OpaqueNode>,
 }
 
 impl CachedConditions {
     /// Returns whether `style` matches the conditions.
-    fn matches(&self, cached_style: &ComputedValues, style: &StyleBuilder) -> bool {
+    fn matches(
+        &self,
+        cached_style: &ComputedValues,
+        style: &StyleBuilder,
+        parent: Option<OpaqueNode>,
+    ) -> bool {
         if cached_style.effective_zoom != style.effective_zoom {
             return false;
         }
@@ -113,6 +127,11 @@ impl CachedConditions {
         }
 
         if self.writing_mode.is_some_and(|wm| style.writing_mode != wm) {
+            return false;
+        }
+
+        if self.sibling_count_parent.is_some() && self.sibling_count_parent != parent {
+            // Assuming here that `sibling-count()` with no parent is uncacheable here.
             return false;
         }
 
@@ -203,7 +222,7 @@ impl RuleCache {
         let cached_values = self.map.get(rules)?;
 
         for (conditions, values) in cached_values.iter() {
-            if conditions.matches(values, &context.builder) {
+            if conditions.matches(values, &context.builder, context.parent_node()) {
                 debug!("Using cached reset style with conditions {:?}", conditions);
                 return Some(&**values);
             }
@@ -256,6 +275,7 @@ impl RuleCache {
             font_size: conditions.font_size,
             line_height: conditions.line_height,
             color_scheme: conditions.color_scheme,
+            sibling_count_parent: conditions.sibling_count_parent,
         };
         self.map
             .entry(rules)

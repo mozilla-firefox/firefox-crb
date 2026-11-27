@@ -45,6 +45,7 @@ use std::cmp;
 use std::f32;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Sub};
+use style_traits::dom::OpaqueNode;
 
 pub use self::align::{ContentDistribution, ItemPlacement, JustifyItems, SelfAlignment};
 pub use self::angle::Angle;
@@ -516,8 +517,14 @@ impl<'a> Context<'a> {
     pub fn query_sibling_count(&self) -> u32 {
         self.builder
             .add_flags(ComputedValueFlags::USES_SIBLING_COUNT);
-        // TODO(dshin, Bug 2098201): Probably worth adding a condition for this.
-        self.rule_cache_conditions.borrow_mut().set_uncacheable();
+        if let Some(p) = self.element_context.opaque_parent() {
+            self.rule_cache_conditions
+                .borrow_mut()
+                .set_sibling_count_parent_dependency(p);
+        } else {
+            // Don't bother - not common enough to try to make this cacheable.
+            self.rule_cache_conditions.borrow_mut().set_uncacheable();
+        }
         self.resolve_tree_counting_result().sibling_count
     }
 
@@ -586,6 +593,11 @@ impl<'a> Context<'a> {
         } else {
             size
         }
+    }
+
+    /// Get the parent node of the element we're styling, if exists.
+    pub fn parent_node(&self) -> Option<OpaqueNode> {
+        self.element_context.opaque_parent()
     }
 }
 
