@@ -19,44 +19,48 @@ const NIMBUS_VARIABLE_MAX_SPONSORED = "topSitesMaxSponsored";
 const NIMBUS_VARIABLE_CONTILE_POSITIONS = "contileTopsitesPositions";
 const NIMBUS_VARIABLE_CONTILE_ENABLED = "topSitesContileEnabled";
 const NIMBUS_VARIABLE_CONTILE_MAX_NUM_SPONSORED = "topSitesContileMaxSponsored";
+const UNIFIED_ADS_BLOCKED_ADS_PREF = "unifiedAds.blockedAds";
+const UNIFIED_ADS_PLACEMENTS_PREF = "discoverystream.placements.tiles";
+const UNIFIED_ADS_COUNTS_PREF = "discoverystream.placements.tiles.counts";
+const UNIFIED_ADS_OHTTP_ENABLED =
+  "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled";
 
-let contileTile1 = {
-  id: 74357,
-  name: "Brand1",
-  url: "https://www.brand1.com",
-  click_url: "https://clickurl.com",
-  image_url: "https://contile-images.jpg",
-  image_size: 200,
-  impression_url: "https://impression_url.com",
-};
-let contileTile2 = {
-  id: 74925,
-  name: "Brand2",
-  url: "https://www.brand2.com",
-  click_url: "https://click_url.com",
-  image_url: "https://contile-images.jpg",
-  image_size: 200,
-  impression_url: "https://impression_url.com",
-};
-let contileTile3 = {
-  id: 75001,
-  name: "Brand3",
-  url: "https://www.brand3.com",
-  click_url: "https://click_url.com",
-  image_url: "https://contile-images.jpg",
-  image_size: 200,
-  impression_url: "https://impression_url.com",
-};
-let contileTile4 = {
-  id: 75899,
-  name: "Brand4",
-  url: "https://www.brand4.com",
-  click_url: "https://click_url.com",
-  image_url: "https://contile-images.jpg",
-  image_size: 200,
-  impression_url: "https://impression_url.com",
-};
-let mozSalesTile = [
+const contileTiles = [
+  {
+    name: "Brand1",
+    url: "https://www.brand1.com",
+    click_url: "https://brand1-click.com",
+    image_url: "https://brand1-image.jpg",
+    impression_url: "https://brand1-impression.com",
+    image_size: 200,
+  },
+  {
+    name: "Brand2",
+    url: "https://www.brand2.com",
+    click_url: "https://brand2-click.com",
+    image_url: "https://brand2-image.jpg",
+    impression_url: "https://brand2-impression.com",
+    image_size: 200,
+  },
+  {
+    name: "Brand3",
+    url: "https://www.brand3.com",
+    click_url: "https://brand3-click.com",
+    image_url: "https://brand3-image.jpg",
+    impression_url: "https://brand3-impression.com",
+    image_size: 200,
+  },
+  {
+    name: "Brand4",
+    url: "https://www.brand4.com",
+    click_url: "https://brand4-click.com",
+    image_url: "https://brand4-image.jpg",
+    impression_url: "https://brand4-impression.com",
+    image_size: 200,
+  },
+];
+
+const mozSalesTiles = [
   {
     label: "MozSales Title",
     title: "MozSales Title",
@@ -65,6 +69,81 @@ let mozSalesTile = [
     partner: "moz-sales",
   },
 ];
+
+const marsResponseTiles = {
+  newtab_tile_foo: [
+    {
+      block_key: "foo",
+      name: "foo",
+      url: "https://foo.com",
+      callbacks: {
+        click: "https://click-foo.com",
+        impression: "https://impression-foo.com",
+      },
+      image_url: "https://image-foo.com",
+    },
+  ],
+  newtab_tile_bar: [
+    {
+      block_key: "bar",
+      name: "bar",
+      url: "https://bar.com",
+      callbacks: {
+        click: "https://click-bar.com",
+        impression: "https://impression-bar.com",
+      },
+      image_url: "https://image-bar.com",
+    },
+  ],
+  newtab_tile_1: [
+    {
+      block_key: contileTiles[0].name,
+      name: contileTiles[0].name,
+      url: contileTiles[0].url,
+      callbacks: {
+        click: contileTiles[0].click_url,
+        impression: contileTiles[0].impression_url,
+      },
+      image_url: contileTiles[0].image_url,
+    },
+  ],
+  newtab_tile_2: [
+    {
+      block_key: contileTiles[1].name,
+      name: contileTiles[1].name,
+      url: contileTiles[1].url,
+      callbacks: {
+        click: contileTiles[1].click_url,
+        impression: contileTiles[1].impression_url,
+      },
+      image_url: contileTiles[1].image_url,
+    },
+  ],
+  newtab_tile_3: [
+    {
+      block_key: contileTiles[2].name,
+      name: contileTiles[2].name,
+      url: contileTiles[2].url,
+      callbacks: {
+        click: contileTiles[2].click_url,
+        impression: contileTiles[2].impression_url,
+      },
+      image_url: contileTiles[2].image_url,
+    },
+  ],
+  newtab_tile_4: [
+    {
+      block_key: contileTiles[3].name,
+      name: contileTiles[3].name,
+      url: contileTiles[3].url,
+      callbacks: {
+        click: contileTiles[3].click_url,
+        impression: contileTiles[3].impression_url,
+      },
+      image_url: contileTiles[3].image_url,
+    },
+  ],
+};
 
 function getTopSitesFeedForTest(sandbox) {
   sandbox.stub(ContileIntegration.prototype, "PersistentCache").returns({
@@ -86,7 +165,15 @@ function getTopSitesFeedForTest(sandbox) {
       return this.state;
     },
     state: {
-      Prefs: { values: { topSitesRows: 2 } },
+      Prefs: {
+        values: {
+          topSitesRows: 2,
+          [UNIFIED_ADS_BLOCKED_ADS_PREF]: "",
+          [UNIFIED_ADS_PLACEMENTS_PREF]:
+            "newtab_tile_foo, newtab_tile_bar, newtab_tile_1, newtab_tile_2, newtab_tile_3, newtab_tile_4",
+          [UNIFIED_ADS_COUNTS_PREF]: "1,1,1,1,1,1",
+        },
+      },
       TopSites: { rows: Array(12).fill("site") },
     },
     dbStorage: { getDbTable: sandbox.stub().returns(storage) },
@@ -133,6 +220,8 @@ add_setup(async () => {
   sandbox.spy(Glean.topsites.sponsoredTilesConfigured, "set");
   sandbox.spy(Glean.topsites.sponsoredTilesReceived, "set");
 
+  Services.prefs.setBoolPref(UNIFIED_ADS_OHTTP_ENABLED, false);
+
   // Temporarily setting isInAutomation to false.
   // If Cu.isInAutomation is true then the check for Cu.isInAutomation in
   // ContileIntegration._readDefaults passes, bypassing Contile, resulting in
@@ -163,6 +252,7 @@ add_setup(async () => {
       }
     }
 
+    Services.prefs.clearUserPref(UNIFIED_ADS_OHTTP_ENABLED);
     sandbox.restore();
   });
 });
@@ -173,10 +263,10 @@ add_task(async function test_set_contile_tile_to_oversold() {
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
   feed._telemetryUtility.setTiles([
-    contileTile1,
-    contileTile2,
-    contileTile3,
-    contileTile4,
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+    contileTiles[3],
   ]);
 
   let mergedTiles = [
@@ -248,8 +338,8 @@ add_task(async function test_set_moz_sale_tile_to_oversold() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2]);
-  feed._telemetryUtility.setTiles(mozSalesTile);
+  feed._telemetryUtility.setTiles([contileTiles[0], contileTiles[1]]);
+  feed._telemetryUtility.setTiles(mozSalesTiles);
 
   let mergedTiles = [
     {
@@ -306,8 +396,8 @@ add_task(async function test_set_contile_tile_to_oversold() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2]);
-  feed._telemetryUtility.setTiles(mozSalesTile);
+  feed._telemetryUtility.setTiles([contileTiles[0], contileTiles[1]]);
+  feed._telemetryUtility.setTiles(mozSalesTiles);
   let mergedTiles = [
     {
       url: "https://www.brand1.com",
@@ -361,7 +451,11 @@ add_task(async function test_set_contile_tiles_to_dismissed() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2, contileTile3]);
+  feed._telemetryUtility.setTiles([
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+  ]);
 
   let mergedTiles = [
     {
@@ -415,7 +509,11 @@ add_task(async function test_set_all_contile_tiles_to_dismissed() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2, contileTile3]);
+  feed._telemetryUtility.setTiles([
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+  ]);
 
   let mergedTiles = [];
 
@@ -456,8 +554,8 @@ add_task(async function test_set_moz_sales_tiles_to_dismissed() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2]);
-  feed._telemetryUtility.setTiles(mozSalesTile);
+  feed._telemetryUtility.setTiles([contileTiles[0], contileTiles[1]]);
+  feed._telemetryUtility.setTiles(mozSalesTiles);
   let mergedTiles = [
     {
       url: "https://www.brand1.com",
@@ -512,10 +610,10 @@ add_task(async function test_set_tiles_to_dismissed_then_updated() {
 
   // Step 1:  Set initial tiles
   feed._telemetryUtility.setTiles([
-    contileTile1,
-    contileTile2,
-    contileTile3,
-    contileTile4,
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+    contileTiles[3],
   ]);
 
   // Step 2:  Set all tiles to dismissed
@@ -589,10 +687,10 @@ add_task(async function test_set_tile_positions_after_updated_list() {
 
   // Step 1:  Set initial tiles
   feed._telemetryUtility.setTiles([
-    contileTile1,
-    contileTile2,
-    contileTile3,
-    contileTile4,
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+    contileTiles[3],
   ]);
 
   // Step 2:  Set 1 tile to oversold (brand3)
@@ -685,10 +783,10 @@ add_task(async function test_set_tile_positions_after_updated_list_all_tiles() {
 
   // Step 1:  Set initial tiles
   feed._telemetryUtility.setTiles([
-    contileTile1,
-    contileTile2,
-    contileTile3,
-    contileTile4,
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+    contileTiles[3],
   ]);
 
   // Step 2:  Set 1 tile to oversold (brand3)
@@ -782,10 +880,10 @@ add_task(
 
     // Step 1:  Set initial tiles
     feed._telemetryUtility.setTiles([
-      contileTile1,
-      contileTile2,
-      contileTile3,
-      contileTile4,
+      contileTiles[0],
+      contileTiles[1],
+      contileTiles[2],
+      contileTiles[3],
     ]);
 
     // Step 2:  Set 1 tile to oversold (brand3)
@@ -926,7 +1024,11 @@ add_task(async function test_set_position_to_value_gt_3() {
   let feed = getTopSitesFeedForTest(sandbox);
 
   feed._telemetryUtility.setSponsoredTilesConfigured();
-  feed._telemetryUtility.setTiles([contileTile1, contileTile2, contileTile3]);
+  feed._telemetryUtility.setTiles([
+    contileTiles[0],
+    contileTiles[1],
+    contileTiles[2],
+  ]);
 
   let filteredContileTiles = [
     {
@@ -991,30 +1093,12 @@ add_task(async function test_all_tiles_displayed() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://www.brand1.com",
-            image_url: "images/brand1-com.png",
-            click_url: "https://www.brand1-click.com",
-            impression_url: "https://www.brand1-impression.com",
-            name: "brand1",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-        ],
+        newtab_tile_1: marsResponseTiles.newtab_tile_1,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
       }),
   });
-
   const fetched = await feed._contile._fetchSites();
   Assert.ok(fetched);
   Assert.equal(feed._contile.sites.length, 2);
@@ -1054,41 +1138,12 @@ add_task(async function test_set_one_tile_display_fail_reason_to_oversold() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://www.brand1.com",
-            image_url: "images/brand1-com.png",
-            click_url: "https://www.brand1-click.com",
-            impression_url: "https://www.brand1-impression.com",
-            name: "brand1",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brnad3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand3",
-          },
-          {
-            url: "https://www.brand4.com",
-            image_url: "images/brnad4-com.png",
-            click_url: "https://www.brand4-click.com",
-            impression_url: "https://www.brand4-impression.com",
-            name: "brand4",
-          },
-        ],
+        newtab_tile_1: marsResponseTiles.newtab_tile_1,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
+        newtab_tile_4: marsResponseTiles.newtab_tile_4,
       }),
   });
 
@@ -1142,37 +1197,13 @@ add_task(async function test_set_one_tile_display_fail_reason_to_dismissed() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://foo.com",
-            image_url: "images/foo.png",
-            click_url: "https://www.foo-click.com",
-            impression_url: "https://www.foo-impression.com",
-            name: "foo",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brnad2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand3",
-          },
-        ],
+        newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
       }),
   });
-
   Services.prefs.setStringPref(
     TOP_SITES_BLOCKED_SPONSORS_PREF,
     `["foo","bar"]`
@@ -1213,6 +1244,7 @@ add_task(async function test_set_one_tile_display_fail_reason_to_dismissed() {
     Glean.topsites.sponsoredTilesReceived.testGetValue(),
     JSON.stringify(expectedResult)
   );
+
   Services.prefs.clearUserPref(TOP_SITES_BLOCKED_SPONSORS_PREF);
   sandbox.restore();
 });
@@ -1228,48 +1260,13 @@ add_task(
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://foo.com",
-              image_url: "images/foo.png",
-              click_url: "https://www.foo-click.com",
-              impression_url: "https://www.foo-impression.com",
-              name: "foo",
-            },
-            {
-              url: "https://www.brand2.com",
-              image_url: "images/brand2-com.png",
-              click_url: "https://www.brand2-click.com",
-              impression_url: "https://www.brand2-impression.com",
-              name: "brand2",
-            },
-            {
-              url: "https://www.brand3.com",
-              image_url: "images/brand3-com.png",
-              click_url: "https://www.brand3-click.com",
-              impression_url: "https://www.brand3-impression.com",
-              name: "brand3",
-            },
-            {
-              url: "https://www.brand4.com",
-              image_url: "images/brand4-com.png",
-              click_url: "https://www.brand4-click.com",
-              impression_url: "https://www.brand4-impression.com",
-              name: "brand4",
-            },
-            {
-              url: "https://www.brand5.com",
-              image_url: "images/brand5-com.png",
-              click_url: "https://www.brand5-click.com",
-              impression_url: "https://www.brand5-impression.com",
-              name: "brand5",
-            },
-          ],
+          newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
+          newtab_tile_3: marsResponseTiles.newtab_tile_3,
+          newtab_tile_4: marsResponseTiles.newtab_tile_4,
         }),
     });
 
@@ -1296,25 +1293,25 @@ add_task(
           display_fail_reason: "dismissed",
         },
         {
-          advertiser: "brand2",
+          advertiser: "brand1",
           provider: "amp",
           display_position: 1,
           display_fail_reason: null,
         },
         {
-          advertiser: "brand3",
+          advertiser: "brand2",
           provider: "amp",
           display_position: 2,
           display_fail_reason: null,
         },
         {
-          advertiser: "brand4",
+          advertiser: "brand3",
           provider: "amp",
           display_position: 3,
           display_fail_reason: null,
         },
         {
-          advertiser: "brand5",
+          advertiser: "brand4",
           provider: "amp",
           display_position: null,
           display_fail_reason: "oversold",
@@ -1325,6 +1322,7 @@ add_task(
       Glean.topsites.sponsoredTilesReceived.testGetValue(),
       JSON.stringify(expectedResult)
     );
+
     Services.prefs.clearUserPref(TOP_SITES_BLOCKED_SPONSORS_PREF);
     sandbox.restore();
   }
@@ -1416,41 +1414,12 @@ add_task(async function test_update_tile_count() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://www.brand1.com",
-            image_url: "images/brand1-com.png",
-            click_url: "https://www.brand1-click.com",
-            impression_url: "https://www.brand1-impression.com",
-            name: "brand1",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand3",
-          },
-          {
-            url: "https://www.brand4.com",
-            image_url: "images/brand4-com.png",
-            click_url: "https://www.brand4-click.com",
-            impression_url: "https://www.brand4-impression.com",
-            name: "brand4",
-          },
-        ],
+        newtab_tile_1: marsResponseTiles.newtab_tile_1,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
+        newtab_tile_4: marsResponseTiles.newtab_tile_4,
       }),
   });
 
@@ -1733,7 +1702,7 @@ add_task(
   async function test_update_telemetry_fields_if_dismissed_brands_list_is_updated() {
     let sandbox = sinon.createSandbox();
     info(
-      "if the user dismisses a brand, that dismissed tile shoudl be represented in the next ping."
+      "if the user dismisses a brand, that dismissed tile should be represented in the next ping."
     );
     let { feed, fetchStub } = prepFeed(
       getTopSitesFeedForTest(sandbox),
@@ -1743,34 +1712,11 @@ add_task(
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://foo.com",
-              image_url: "images/foo.png",
-              click_url: "https://www.foo-click.com",
-              impression_url: "https://www.foo-impression.com",
-              name: "foo",
-            },
-            {
-              url: "https://www.brand2.com",
-              image_url: "images/brand2-com.png",
-              click_url: "https://www.brand2-click.com",
-              impression_url: "https://www.brand2-impression.com",
-              name: "brand2",
-            },
-            {
-              url: "https://www.brand3.com",
-              image_url: "images/brand3-com.png",
-              click_url: "https://www.brand3-click.com",
-              impression_url: "https://www.brand3-impression.com",
-              name: "brand3",
-            },
-          ],
+          newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
+          newtab_tile_3: marsResponseTiles.newtab_tile_3,
         }),
     });
     Services.prefs.setStringPref(
@@ -1892,34 +1838,11 @@ add_task(async function test_telemetry_data_updates() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://foo.com",
-            image_url: "images/foo.png",
-            click_url: "https://www.foo-click.com",
-            impression_url: "https://www.foo-impression.com",
-            name: "foo",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand3",
-          },
-        ],
+        newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
       }),
   });
   Services.prefs.setStringPref(
@@ -1966,34 +1889,11 @@ add_task(async function test_telemetry_data_updates() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://foo.com",
-            image_url: "images/foo.png",
-            click_url: "https://www.foo-click.com",
-            impression_url: "https://www.foo-impression.com",
-            name: "foo",
-          },
-          {
-            url: "https://bar.com",
-            image_url: "images/bar-com.png",
-            click_url: "https://www.bar-click.com",
-            impression_url: "https://www.bar-impression.com",
-            name: "bar",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand3",
-          },
-        ],
+        newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+        newtab_tile_bar: marsResponseTiles.newtab_tile_bar,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
       }),
   });
 
@@ -2044,34 +1944,11 @@ add_task(async function test_reset_telemetry_data() {
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://foo.com",
-            image_url: "images/foo.png",
-            click_url: "https://www.foo-click.com",
-            impression_url: "https://www.foo-impression.com",
-            name: "foo",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "test3",
-          },
-        ],
+        newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
       }),
   });
   Services.prefs.setStringPref(
@@ -2181,49 +2058,19 @@ add_task(async function test_set_telemetry_for_moz_sales_tiles() {
   let sandbox = sinon.createSandbox();
   let { feed, fetchStub } = prepFeed(getTopSitesFeedForTest(sandbox), sandbox);
 
-  sandbox.stub(feed, "fetchDiscoveryStreamSpocs").returns([
-    {
-      label: "MozSales Title",
-      title: "MozSales Title",
-      url: "https://mozsale.net",
-      sponsored_position: 1,
-      partner: "moz-sales",
-    },
-  ]);
+  sandbox.stub(feed, "fetchDiscoveryStreamSpocs").returns(mozSalesTiles);
 
   fetchStub.resolves({
     ok: true,
     status: 200,
-    headers: new Map([
-      ["cache-control", "private, max-age=859, stale-if-error=10463"],
-    ]),
     json: () =>
       Promise.resolve({
-        tiles: [
-          {
-            url: "https://www.brand1.com",
-            image_url: "images/brand1-com.png",
-            click_url: "https://www.brand1-click.com",
-            impression_url: "https://www.brand1-impression.com",
-            name: "brand1",
-          },
-          {
-            url: "https://www.brand2.com",
-            image_url: "images/brand2-com.png",
-            click_url: "https://www.brand2-click.com",
-            impression_url: "https://www.brand2-impression.com",
-            name: "brand2",
-          },
-          {
-            url: "https://www.brand3.com",
-            image_url: "images/brand3-com.png",
-            click_url: "https://www.brand3-click.com",
-            impression_url: "https://www.brand3-impression.com",
-            name: "brand2",
-          },
-        ],
+        newtab_tile_1: marsResponseTiles.newtab_tile_1,
+        newtab_tile_2: marsResponseTiles.newtab_tile_2,
+        newtab_tile_3: marsResponseTiles.newtab_tile_3,
       }),
   });
+
   const fetched = await feed._contile._fetchSites();
   Assert.ok(fetched);
   Assert.equal(feed._contile.sites.length, 3);

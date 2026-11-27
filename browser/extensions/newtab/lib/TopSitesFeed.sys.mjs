@@ -105,7 +105,6 @@ const NIMBUS_VARIABLE_ADDITIONAL_TILES =
 // The default will be `CONTILE_MAX_NUM_SPONSORED` if variable is unspecified.
 const NIMBUS_VARIABLE_CONTILE_MAX_NUM_SPONSORED = "topSitesContileMaxSponsored";
 
-const PREF_UNIFIED_ADS_TILES_ENABLED = "unifiedAds.tiles.enabled";
 const PREF_UNIFIED_ADS_ENDPOINT = "unifiedAds.endpoint";
 const PREF_UNIFIED_ADS_PLACEMENTS = "discoverystream.placements.tiles";
 const PREF_UNIFIED_ADS_COUNTS = "discoverystream.placements.tiles.counts";
@@ -140,7 +139,6 @@ const DEFAULT_SITES_EXPERIMENTS_PREF_BRANCH = "browser.topsites.experiment.";
 // `browser.topsites.contile.enabled`.
 const NIMBUS_VARIABLE_CONTILE_ENABLED = "topSitesContileEnabled";
 const NIMBUS_VARIABLE_CONTILE_POSITIONS = "contileTopsitesPositions";
-const CONTILE_ENDPOINT_PREF = "browser.topsites.contile.endpoint";
 const CONTILE_UPDATE_INTERVAL = 15 * 60 * 1000; // 15 minutes
 // The maximum number of sponsored top sites to fetch from Contile.
 const CONTILE_MAX_NUM_SPONSORED = 3;
@@ -491,30 +489,6 @@ export class ContileIntegration {
   }
 
   /**
-   * Calculate the time Contile response is valid for based on cache-control header
-   *
-   * @param {string} cacheHeader
-   *   string value of the Contile resposne cache-control header
-   */
-  _extractCacheValidFor(cacheHeader) {
-    const unifiedAdsTilesEnabled =
-      this._topSitesFeed.store.getState().Prefs.values[
-        PREF_UNIFIED_ADS_TILES_ENABLED
-      ];
-
-    // Note: Cache-control only applies to direct Contile API calls
-    if (!cacheHeader && !unifiedAdsTilesEnabled) {
-      lazy.log.warn("Contile response cache control header is empty");
-      return 0;
-    }
-    const [, staleIfError] = cacheHeader.match(/stale-if-error=\s*([0-9]+)/i);
-    const [, maxAge] = cacheHeader.match(/max-age=\s*([0-9]+)/i);
-    const validFor =
-      Number.parseInt(staleIfError, 10) + Number.parseInt(maxAge, 10);
-    return isNaN(validFor) ? 0 : validFor;
-  }
-
-  /**
    * Load Tiles from Contile Cache Prefs
    */
   async _loadTilesFromCache() {
@@ -567,9 +541,10 @@ export class ContileIntegration {
    * @param {object} data
    *   Tiles keyed by placement ID, as returned by MARS or the ads client.
    *   Each value should be an array of 0 or 1 items.
-   * @param {Array<string>} placementIds
+   * @param {string[]} placementIds
    *   Placement IDs in the order tiles should appear.
    *   IDs absent from this list are emitted last, keeping their iteration order from `data`.
+   * @returns {{ tiles: object[] }} An object containing an array of normalized tiles.
    */
   _normalizeTileData(data, placementIds) {
     // Requested placement ids are in iteration order from placementIds
@@ -703,197 +678,179 @@ export class ContileIntegration {
     let body;
 
     const state = this._topSitesFeed.store.getState();
-
-    const unifiedAdsTilesEnabled =
-      state.Prefs.values[PREF_UNIFIED_ADS_TILES_ENABLED];
-
     const adsFeedEnabled = state.Prefs.values[PREF_UNIFIED_ADS_ADSFEED_ENABLED];
-
-    const debugServiceName = unifiedAdsTilesEnabled ? "MARS" : "Contile";
 
     try {
       // Fetch Data via TopSitesFeed.sys.mjs
       if (!adsFeedEnabled) {
         // Fetch tiles via UAPI service directly from TopSitesFeed.sys.mjs
-        if (unifiedAdsTilesEnabled) {
-          // Shared set up for manual MARS call and ads-client calls
-          placementsArray = state.Prefs.values[
-            PREF_UNIFIED_ADS_PLACEMENTS
-          ]?.split(`,`)
-            .map(s => s.trim())
-            .filter(item => item);
-          const countsArray = state.Prefs.values[
-            PREF_UNIFIED_ADS_COUNTS
-          ]?.split(`,`)
-            .map(s => s.trim())
-            .filter(item => item)
-            .map(item => parseInt(item, 10));
+        // Shared set up for manual MARS call and ads-client calls
+        placementsArray = state.Prefs.values[
+          PREF_UNIFIED_ADS_PLACEMENTS
+        ]?.split(`,`)
+          .map(s => s.trim())
+          .filter(item => item);
+        const countsArray = state.Prefs.values[PREF_UNIFIED_ADS_COUNTS]?.split(
+          `,`
+        )
+          .map(s => s.trim())
+          .filter(item => item)
+          .map(item => parseInt(item, 10));
 
-          const marsOhttpEnabled = Services.prefs.getBoolPref(
-            "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
-            false
+        const marsOhttpEnabled = Services.prefs.getBoolPref(
+          "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
+          false
+        );
+        const ohttpRelayURL = Services.prefs.getStringPref(
+          "browser.newtabpage.activity-stream.discoverystream.ohttp.relayURL",
+          ""
+        );
+        const ohttpConfigURL = Services.prefs.getStringPref(
+          "browser.newtabpage.activity-stream.discoverystream.ohttp.configURL",
+          ""
+        );
+        const useOhttp = marsOhttpEnabled && ohttpConfigURL && ohttpRelayURL;
+
+        const relevance = useOhttp
+          ? await SponsoredTopSitesScoreProvider.getScores()
+          : {};
+
+        if (this._topSitesFeed.adsClient) {
+          body = await this._fetchSitesWithAdsClient(
+            placementsArray,
+            relevance
           );
-          const ohttpRelayURL = Services.prefs.getStringPref(
-            "browser.newtabpage.activity-stream.discoverystream.ohttp.relayURL",
-            ""
-          );
-          const ohttpConfigURL = Services.prefs.getStringPref(
-            "browser.newtabpage.activity-stream.discoverystream.ohttp.configURL",
-            ""
-          );
-          const useOhttp = marsOhttpEnabled && ohttpConfigURL && ohttpRelayURL;
-
-          const relevance = useOhttp
-            ? await SponsoredTopSitesScoreProvider.getScores()
-            : {};
-
-          if (this._topSitesFeed.adsClient) {
-            body = await this._fetchSitesWithAdsClient(
-              placementsArray,
-              relevance
-            );
-          } else {
-            let fetchPromise;
-            const headers = new Headers();
-            headers.append("content-type", "application/json");
-
-            const endpointBaseUrl =
-              state.Prefs.values[PREF_UNIFIED_ADS_ENDPOINT];
-
-            // We need some basic data that we can pass along to the ohttp request.
-            // We purposefully don't use ohttp on this request. We also expect to
-            // mostly hit the HTTP cache rather than the network with these requests.
-            if (marsOhttpEnabled) {
-              const preflightResponse = await this._topSitesFeed.fetch(
-                `${endpointBaseUrl}v1/ads-preflight`,
-                {
-                  method: "GET",
-                }
-              );
-              const preFlight = await preflightResponse.json();
-
-              if (preFlight) {
-                // If we don't get a normalized_ua, it means it matched the default userAgent.
-                headers.append(
-                  "X-User-Agent",
-                  preFlight.normalized_ua || lazy.userAgent
-                );
-                headers.append("X-Geoname-ID", preFlight.geoname_id);
-                headers.append("X-Geo-Location", preFlight.geo_location);
-              }
-            }
-
-            let blockedSponsors =
-              this._topSitesFeed.store.getState().Prefs.values[
-                PREF_UNIFIED_ADS_BLOCKED_LIST
-              ];
-
-            // Also block the user's current default search engine hostname so
-            // MARS returns a substitute sponsor instead of leaving us short.
-            const blocksList = Array.from(
-              new Set(
-                blockedSponsors
-                  .split(",")
-                  .concat(this._topSitesFeed._currentSearchHostname || [])
-                  .filter(item => item)
-              )
-            );
-
-            // Overwrite URL to Unified Ads endpoint
-            const fetchUrl = `${endpointBaseUrl}v1/ads`;
-
-            const controller = new AbortController();
-            const { signal } = controller;
-
-            const adsBackendConfig = state.Prefs.values?.adsBackendConfig || {};
-
-            const hasRelevance = !!Object.keys(relevance).length;
-
-            const options = {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                ...(!hasRelevance && {
-                  context_id: await lazy.ContextId.request(),
-                }),
-                flags: adsBackendConfig,
-                placements: placementsArray.map((placement, index) => ({
-                  placement,
-                  count: countsArray[index] || 1,
-                })),
-                blocks: blocksList,
-                ...(hasRelevance && { relevance }),
-              }),
-              credentials: "omit",
-              signal,
-            };
-
-            if (useOhttp) {
-              const config =
-                await lazy.ObliviousHTTP.getOHTTPConfig(ohttpConfigURL);
-              if (!config) {
-                console.error(
-                  new Error(
-                    `OHTTP was configured for ${fetchUrl} but we couldn't fetch a valid config`
-                  )
-                );
-                return null;
-              }
-
-              // ObliviousHTTP.ohttpRequest only accepts a key/value object, and not
-              // a Headers instance.
-              fetchPromise = lazy.ObliviousHTTP.ohttpRequest(
-                ohttpRelayURL,
-                config,
-                fetchUrl,
-                { ...options, headers: Object.fromEntries(headers) }
-              );
-            } else {
-              fetchPromise = this._topSitesFeed.fetch(fetchUrl, options);
-            }
-
-            response = await fetchPromise;
-          }
         } else {
-          // (Default) Fetch tiles via Contile service from TopSitesFeed.sys.mjs
-          const fetchUrl = Services.prefs.getStringPref(CONTILE_ENDPOINT_PREF);
+          let fetchPromise;
+          const headers = new Headers();
+          headers.append("content-type", "application/json");
 
-          let options = {
+          const endpointBaseUrl = state.Prefs.values[PREF_UNIFIED_ADS_ENDPOINT];
+
+          // We need some basic data that we can pass along to the ohttp request.
+          // We purposefully don't use ohttp on this request. We also expect to
+          // mostly hit the HTTP cache rather than the network with these requests.
+          if (marsOhttpEnabled) {
+            const preflightResponse = await this._topSitesFeed.fetch(
+              `${endpointBaseUrl}v1/ads-preflight`,
+              {
+                method: "GET",
+              }
+            );
+            const preFlight = await preflightResponse.json();
+
+            if (preFlight) {
+              // If we don't get a normalized_ua, it means it matched the default userAgent.
+              headers.append(
+                "X-User-Agent",
+                preFlight.normalized_ua || lazy.userAgent
+              );
+              headers.append("X-Geoname-ID", preFlight.geoname_id);
+              headers.append("X-Geo-Location", preFlight.geo_location);
+            }
+          }
+
+          let blockedSponsors =
+            this._topSitesFeed.store.getState().Prefs.values[
+              PREF_UNIFIED_ADS_BLOCKED_LIST
+            ];
+
+          // Also block the user's current default search engine hostname so
+          // MARS returns a substitute sponsor instead of leaving us short.
+          const blocksList = Array.from(
+            new Set(
+              blockedSponsors
+                .split(",")
+                .concat(this._topSitesFeed._currentSearchHostname || [])
+                .filter(item => item)
+            )
+          );
+
+          // Overwrite URL to Unified Ads endpoint
+          const fetchUrl = `${endpointBaseUrl}v1/ads`;
+
+          const controller = new AbortController();
+          const { signal } = controller;
+
+          const adsBackendConfig = state.Prefs.values?.adsBackendConfig || {};
+
+          const hasRelevance = !!Object.keys(relevance).length;
+
+          const options = {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              ...(!hasRelevance && {
+                context_id: await lazy.ContextId.request(),
+              }),
+              flags: adsBackendConfig,
+              placements: placementsArray.map((placement, index) => ({
+                placement,
+                count: countsArray[index] || 1,
+              })),
+              blocks: blocksList,
+              ...(hasRelevance && { relevance }),
+            }),
             credentials: "omit",
+            signal,
           };
 
-          response = await this._topSitesFeed.fetch(fetchUrl, options);
-        }
+          if (useOhttp) {
+            const config =
+              await lazy.ObliviousHTTP.getOHTTPConfig(ohttpConfigURL);
+            if (!config) {
+              console.error(
+                new Error(
+                  `OHTTP was configured for ${fetchUrl} but we couldn't fetch a valid config`
+                )
+              );
+              return null;
+            }
 
-        // Catch Response Error
-        if (response && !response.ok) {
-          lazy.log.warn(
-            `${debugServiceName} endpoint returned unexpected status: ${response.status}`
-          );
-          if (response.status === 304 || response.status >= 500) {
-            return await this._loadTilesFromCache();
+            // ObliviousHTTP.ohttpRequest only accepts a key/value object, and not
+            // a Headers instance.
+            fetchPromise = lazy.ObliviousHTTP.ohttpRequest(
+              ohttpRelayURL,
+              config,
+              fetchUrl,
+              { ...options, headers: Object.fromEntries(headers) }
+            );
+          } else {
+            fetchPromise = this._topSitesFeed.fetch(fetchUrl, options);
           }
-        }
 
-        // Set Cache Prefs
-        const lastFetch = Math.round(Date.now() / 1000);
-        Services.prefs.setIntPref(CONTILE_CACHE_LAST_FETCH_PREF, lastFetch);
-        this._topSitesFeed._telemetryUtility.setSponsoredTilesConfigured();
-
-        // Contile returns 204 indicating there is no content at the moment.
-        // If this happens, it will clear `this._sites` reset the cached tiles
-        // to an empty array.
-        if (response && response.status === 204) {
-          this._topSitesFeed._telemetryUtility.clearTilesForProvider(
-            SPONSORED_TILE_PARTNER_AMP
-          );
-          if (this._sites.length) {
-            this._sites = [];
-            await this.cache.set("contile", this._sites);
-            return true;
-          }
-          return false;
+          response = await fetchPromise;
         }
+      }
+
+      // Catch Response Error
+      if (response && !response.ok) {
+        lazy.log.warn(
+          `MARS endpoint returned unexpected status: ${response.status}`
+        );
+        if (response.status === 304 || response.status >= 500) {
+          return await this._loadTilesFromCache();
+        }
+      }
+
+      // Set Cache Prefs
+      const lastFetch = Math.round(Date.now() / 1000);
+      Services.prefs.setIntPref(CONTILE_CACHE_LAST_FETCH_PREF, lastFetch);
+      this._topSitesFeed._telemetryUtility.setSponsoredTilesConfigured();
+
+      // Contile returns 204 indicating there is no content at the moment.
+      // If this happens, it will clear `this._sites` reset the cached tiles
+      // to an empty array.
+      if (response && response.status === 204) {
+        this._topSitesFeed._telemetryUtility.clearTilesForProvider(
+          SPONSORED_TILE_PARTNER_AMP
+        );
+        if (this._sites.length) {
+          this._sites = [];
+          await this.cache.set("contile", this._sites);
+          return true;
+        }
+        return false;
       }
 
       // Default behavior when ads fetched via TopSitesFeed
@@ -901,22 +858,17 @@ export class ContileIntegration {
         body = await response.json();
       }
 
-      // If using UAPI, normalize the data
-      if (unifiedAdsTilesEnabled) {
-        if (adsFeedEnabled) {
-          // IMPORTANT: Ignore all previous fetch logic and get ads data from AdsFeed
-          const { tiles } = state.Ads;
-          body = { tiles };
-        } else {
-          // Converts UAPI response into normalized tiles[] array
-          body = this._normalizeTileData(body, placementsArray);
-        }
+      if (adsFeedEnabled) {
+        // IMPORTANT: Ignore all previous fetch logic and get ads data from AdsFeed
+        const { tiles } = state.Ads;
+        body = { tiles };
+      } else {
+        // Converts UAPI response into normalized tiles[] array
+        body = this._normalizeTileData(body, placementsArray);
       }
 
       // Logic below runs the same regardless of ad source
-      if (body?.sov) {
-        this._sov = JSON.parse(atob(body.sov));
-      } else if (this.sovEnabled()) {
+      if (this.sovEnabled()) {
         this._sov = this.generateSov();
       }
 
@@ -944,7 +896,7 @@ export class ContileIntegration {
           tiles
         );
         if (tiles.length > maxNumFromContile) {
-          lazy.log.info(`Remove unused links from ${debugServiceName}`);
+          lazy.log.info("Remove unused links from MARS");
           tiles.length = maxNumFromContile;
           this._topSitesFeed._telemetryUtility.determineFilteredTilesAndSetToOversold(
             tiles
@@ -953,28 +905,15 @@ export class ContileIntegration {
         this._sites = tiles;
 
         await this.cache.set("contile", this._sites);
-
-        if (!unifiedAdsTilesEnabled) {
-          Services.prefs.setIntPref(
-            CONTILE_CACHE_VALID_FOR_PREF,
-            this._extractCacheValidFor(
-              response.headers.get("cache-control") ||
-                response.headers.get("Cache-Control")
-            )
-          );
-        } else {
-          Services.prefs.setIntPref(
-            CONTILE_CACHE_VALID_FOR_PREF,
-            CONTILE_CACHE_VALID_FOR_FALLBACK
-          );
-        }
+        Services.prefs.setIntPref(
+          CONTILE_CACHE_VALID_FOR_PREF,
+          CONTILE_CACHE_VALID_FOR_FALLBACK
+        );
 
         return true;
       }
     } catch (error) {
-      lazy.log.warn(
-        `Failed to fetch data from ${debugServiceName} server: ${error.message}`
-      );
+      lazy.log.warn(`Failed to fetch data from MARS server: ${error.message}`);
       return await this._loadTilesFromCache();
     }
     return false;
@@ -2921,7 +2860,6 @@ export class TopSitesFeed {
             this.refresh({ broadcast: true });
             break;
           case SHOW_SPONSORED_PREF:
-          case PREF_UNIFIED_ADS_TILES_ENABLED:
             if (
               lazy.NimbusFeatures.newtab.getVariable(
                 NIMBUS_VARIABLE_CONTILE_ENABLED

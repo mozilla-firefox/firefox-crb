@@ -57,6 +57,99 @@ const CONTILE_CACHE_VALID_FOR_SECONDS_PREF =
 // in seconds.
 const CONTILE_CACHE_LAST_FETCH_PREF = "browser.topsites.contile.lastFetch";
 
+const UNIFIED_ADS_OHTTP_ENABLED =
+  "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled";
+
+const contileTiles = [
+  {
+    name: "Brand1",
+    url: "https://www.brand1.com",
+    click_url: "https://brand1-click.com",
+    image_url: "https://brand1-image.jpg",
+    impression_url: "https://brand1-impression.com",
+    image_size: 200,
+  },
+  {
+    name: "Brand2",
+    url: "https://www.brand2.com",
+    click_url: "https://brand2-click.com",
+    image_url: "https://brand2-image.jpg",
+    impression_url: "https://brand2-impression.com",
+    image_size: 200,
+  },
+  {
+    name: "Brand3",
+    url: "https://www.brand3.com",
+    click_url: "https://brand3-click.com",
+    image_url: "https://brand3-image.jpg",
+    impression_url: "https://brand3-impression.com",
+    image_size: 200,
+  },
+];
+
+const marsResponseTiles = {
+  newtab_tile_foo: [
+    {
+      block_key: "foo",
+      name: "foo",
+      url: "https://foo.com",
+      callbacks: {
+        click: "https://click-foo.com",
+        impression: "https://impression-foo.com",
+      },
+      image_url: "https://image-foo.com",
+    },
+  ],
+  newtab_tile_bar: [
+    {
+      block_key: "bar",
+      name: "bar",
+      url: "https://bar.com",
+      callbacks: {
+        click: "https://click-bar.com",
+        impression: "https://impression-bar.com",
+      },
+      image_url: "https://image-bar.com",
+    },
+  ],
+  newtab_tile_1: [
+    {
+      block_key: contileTiles[0].name,
+      name: contileTiles[0].name,
+      url: contileTiles[0].url,
+      callbacks: {
+        click: contileTiles[0].click_url,
+        impression: contileTiles[0].impression_url,
+      },
+      image_url: contileTiles[0].image_url,
+    },
+  ],
+  newtab_tile_2: [
+    {
+      block_key: contileTiles[1].name,
+      name: contileTiles[1].name,
+      url: contileTiles[1].url,
+      callbacks: {
+        click: contileTiles[1].click_url,
+        impression: contileTiles[1].impression_url,
+      },
+      image_url: contileTiles[1].image_url,
+    },
+  ],
+  newtab_tile_3: [
+    {
+      block_key: contileTiles[2].name,
+      name: contileTiles[2].name,
+      url: contileTiles[2].url,
+      callbacks: {
+        click: contileTiles[2].click_url,
+        impression: contileTiles[2].impression_url,
+      },
+      image_url: contileTiles[2].image_url,
+    },
+  ],
+};
+
 function FakeTippyTopProvider() {}
 FakeTippyTopProvider.prototype = {
   async init() {
@@ -87,6 +180,10 @@ function getTopSitesFeedForTest(sandbox) {
       Prefs: {
         values: {
           topSitesRows: 2,
+          "unifiedAds.blockedAds": "",
+          "discoverystream.placements.tiles":
+            "newtab_tile_1, newtab_tile_foo, newtab_tile_bar, newtab_tile_2, newtab_tile_3",
+          "discoverystream.placements.tiles.counts": "1,1,1,1,1",
         },
       },
       TopSites: { rows: Array(12).fill("site") },
@@ -126,7 +223,10 @@ add_setup(async () => {
   sandbox.spy(Screenshots, "maybeCacheScreenshot");
   sandbox.stub(Screenshots, "_shouldGetScreenshots").returns(true);
 
+  Services.prefs.setBoolPref(UNIFIED_ADS_OHTTP_ENABLED, false);
+
   registerCleanupFunction(() => {
+    Services.prefs.clearUserPref(UNIFIED_ADS_OHTTP_ENABLED);
     sandbox.restore();
   });
 });
@@ -2325,17 +2425,6 @@ add_task(async function test_sponsored_scoring_follows_prefs() {
   assertAfterPrefChange(SHOWN_ON_NEWTAB_PREF, true, true);
 
   sandbox.resetHistory();
-  feed.onAction({
-    type: actionTypes.PREF_CHANGED,
-    data: { name: "unifiedAds.tiles.enabled", value: false },
-  });
-  Assert.ok(
-    SponsoredTopSitesScoreProvider.clearData.notCalled &&
-      SponsoredTopSitesScoreProvider.uninit.notCalled,
-    "Switching sponsored tiles away from MARS keeps the scoring"
-  );
-
-  sandbox.resetHistory();
   values[SHOW_SPONSORED_PREF] = false;
   feed.init();
   Assert.ok(
@@ -3518,27 +3607,10 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://www.test1.com",
-              image_url: "images/test1-com.png",
-              click_url: "https://www.test1-click.com",
-              impression_url: "https://www.test1-impression.com",
-              name: "test1",
-            },
-          ],
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
         }),
     });
 
@@ -3567,80 +3639,6 @@ add_task(async function test_ContileIntegration() {
       feed.allocatePositions.calledOnce,
       "feed.allocatePositions called once"
     );
-    sandbox.restore();
-  }
-
-  {
-    info(
-      "TopSitesFeed._fetchSites should fetch SOV (Share-of-Voice) " +
-        "settings from Contile"
-    );
-    let { feed, fetchStub } = prepFeed(getTopSitesFeedForTest(sandbox));
-
-    let sov = {
-      name: "SOV-20230518215316",
-      allocations: [
-        {
-          position: 1,
-          allocation: [
-            {
-              partner: "foo",
-              percentage: 100,
-            },
-            {
-              partner: "bar",
-              percentage: 0,
-            },
-          ],
-        },
-        {
-          position: 2,
-          allocation: [
-            {
-              partner: "foo",
-              percentage: 80,
-            },
-            {
-              partner: "bar",
-              percentage: 20,
-            },
-          ],
-        },
-      ],
-    };
-    fetchStub.resolves({
-      ok: true,
-      status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
-      json: () =>
-        Promise.resolve({
-          sov: btoa(JSON.stringify(sov)),
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://www.test1.com",
-              image_url: "images/test1-com.png",
-              click_url: "https://www.test1-click.com",
-              impression_url: "https://www.test1-impression.com",
-              name: "test1",
-            },
-          ],
-        }),
-    });
-
-    let fetched = await feed._contile._fetchSites();
-
-    Assert.ok(fetched);
-    Assert.deepEqual(feed._contile.sov, sov);
-    Assert.equal(feed._contile.sites.length, 2);
     sandbox.restore();
   }
 
@@ -3675,48 +3673,13 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://foo.com",
-              image_url: "images/foo-com.png",
-              click_url: "https://www.foo-click.com",
-              impression_url: "https://www.foo-impression.com",
-              name: "foo",
-            },
-            {
-              url: "https://bar.com",
-              image_url: "images/bar-com.png",
-              click_url: "https://www.bar-click.com",
-              impression_url: "https://www.bar-impression.com",
-              name: "bar",
-            },
-            {
-              url: "https://test1.com",
-              image_url: "images/test1-com.png",
-              click_url: "https://www.test1-click.com",
-              impression_url: "https://www.test1-impression.com",
-              name: "test1",
-            },
-            {
-              url: "https://test2.com",
-              image_url: "images/test2-com.png",
-              click_url: "https://www.test2-click.com",
-              impression_url: "https://www.test2-impression.com",
-              name: "test2",
-            },
-          ],
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+          newtab_tile_bar: marsResponseTiles.newtab_tile_bar,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
+          newtab_tile_3: marsResponseTiles.newtab_tile_3,
         }),
     });
 
@@ -3725,9 +3688,9 @@ add_task(async function test_ContileIntegration() {
     Assert.ok(fetched);
     // Both "foo" and "bar" should be filtered
     Assert.equal(feed._contile.sites.length, 3);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test.com");
-    Assert.equal(feed._contile.sites[1].url, "https://test1.com");
-    Assert.equal(feed._contile.sites[2].url, "https://test2.com");
+    Assert.equal(feed._contile.sites[0].url, contileTiles[0].url);
+    Assert.equal(feed._contile.sites[1].url, contileTiles[1].url);
+    Assert.equal(feed._contile.sites[2].url, contileTiles[2].url);
     sandbox.restore();
   }
 
@@ -3745,34 +3708,11 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://foo.com",
-              image_url: "images/foo-com.png",
-              click_url: "https://www.foo-click.com",
-              impression_url: "https://www.foo-impression.com",
-              name: "foo",
-            },
-            {
-              url: "https://test1.com",
-              image_url: "images/test1-com.png",
-              click_url: "https://www.test1-click.com",
-              impression_url: "https://www.test1-impression.com",
-              name: "test1",
-            },
-          ],
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
         }),
     });
 
@@ -3780,8 +3720,8 @@ add_task(async function test_ContileIntegration() {
 
     Assert.ok(fetched);
     Assert.equal(feed._contile.sites.length, 2);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test.com");
-    Assert.equal(feed._contile.sites[1].url, "https://test1.com");
+    Assert.equal(feed._contile.sites[0].url, contileTiles[0].url);
+    Assert.equal(feed._contile.sites[1].url, contileTiles[1].url);
     sandbox.restore();
   }
 
@@ -3794,34 +3734,11 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://foo.com",
-              image_url: "images/foo-com.png",
-              click_url: "https://www.foo-click.com",
-              impression_url: "https://www.foo-impression.com",
-              name: "foo",
-            },
-            {
-              url: "https://bar.com",
-              image_url: "images/bar-com.png",
-              click_url: "https://www.bar-click.com",
-              impression_url: "https://www.bar-impression.com",
-              name: "bar",
-            },
-          ],
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_foo: marsResponseTiles.newtab_tile_foo,
+          newtab_tile_bar: marsResponseTiles.newtab_tile_bar,
         }),
     });
 
@@ -3830,7 +3747,7 @@ add_task(async function test_ContileIntegration() {
     Assert.ok(fetched);
     // Both "foo" and "bar" should be filtered
     Assert.equal(feed._contile.sites.length, 1);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test.com");
+    Assert.equal(feed._contile.sites[0].url, contileTiles[0].url);
     sandbox.restore();
   }
 
@@ -3897,7 +3814,7 @@ add_task(async function test_ContileIntegration() {
       status: 200,
       json: () =>
         Promise.resolve({
-          unknown: [],
+          unknown: {},
         }),
     });
 
@@ -3919,9 +3836,6 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
           tiles: [],
@@ -3954,26 +3868,34 @@ add_task(async function test_ContileIntegration() {
 
   {
     info(
-      "TopSitesFeed._fetchSites should set Caching Prefs after " +
-        "a successful request"
+      "TopSitesFeed._fetchSites should not set Caching Prefs after " +
+        "a successful request based on response header"
     );
     let { feed, fetchStub } = prepFeed(getTopSitesFeedForTest(sandbox));
     NimbusFeatures.newtab.getVariable.returns(true);
 
     let tiles = [
       {
-        url: "https://www.test.com",
-        image_url: "images/test-com.png",
-        click_url: "https://www.test-click.com",
-        impression_url: "https://www.test-impression.com",
-        name: "test",
+        url: marsResponseTiles.newtab_tile_1[0].url,
+        image_url: marsResponseTiles.newtab_tile_1[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_1[0].callbacks.click,
+        impression_url: marsResponseTiles.newtab_tile_1[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_1[0].name,
+        id: marsResponseTiles.newtab_tile_1[0].name,
+        block_key: marsResponseTiles.newtab_tile_1[0].name,
+        image_size: 200,
+        attribution: null,
       },
       {
-        url: "https://www.test1.com",
-        image_url: "images/test1-com.png",
-        click_url: "https://www.test1-click.com",
-        impression_url: "https://www.test1-impression.com",
-        name: "test1",
+        url: marsResponseTiles.newtab_tile_2[0].url,
+        image_url: marsResponseTiles.newtab_tile_2[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_2[0].callbacks.click,
+        impression_url: marsResponseTiles.newtab_tile_2[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_2[0].name,
+        id: marsResponseTiles.newtab_tile_2[0].name,
+        block_key: marsResponseTiles.newtab_tile_2[0].name,
+        image_size: 200,
+        attribution: null,
       },
     ];
     fetchStub.resolves({
@@ -3984,7 +3906,8 @@ add_task(async function test_ContileIntegration() {
       ]),
       json: () =>
         Promise.resolve({
-          tiles,
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
         }),
     });
 
@@ -3993,7 +3916,7 @@ add_task(async function test_ContileIntegration() {
     Assert.ok(feed._contile.cache.set.calledWith("contile", tiles));
     Assert.equal(
       Services.prefs.getIntPref(CONTILE_CACHE_VALID_FOR_SECONDS_PREF),
-      11322
+      10800
     );
     sandbox.restore();
   }
@@ -4008,18 +3931,26 @@ add_task(async function test_ContileIntegration() {
 
     let tiles = [
       {
-        url: "https://www.test-cached.com",
-        image_url: "images/test-com.png",
-        click_url: "https://www.test-click.com",
-        impression_url: "https://www.test-impression.com",
-        name: "test",
+        url: marsResponseTiles.newtab_tile_1[0].url,
+        image_url: marsResponseTiles.newtab_tile_1[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_1[0].callbacks.click,
+        impression_url: marsResponseTiles.newtab_tile_1[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_1[0].name,
+        id: marsResponseTiles.newtab_tile_1[0].name,
+        block_key: marsResponseTiles.newtab_tile_1[0].name,
+        image_size: 200,
+        attribution: null,
       },
       {
-        url: "https://www.test1-cached.com",
-        image_url: "images/test1-com.png",
-        click_url: "https://www.test1-click.com",
-        impression_url: "https://www.test1-impression.com",
-        name: "test1",
+        url: marsResponseTiles.newtab_tile_2[0].url,
+        image_url: marsResponseTiles.newtab_tile_2[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_2[0].callbacks.click,
+        impression_url: marsResponseTiles.newtab_tile_2[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_2[0].name,
+        id: marsResponseTiles.newtab_tile_2[0].name,
+        block_key: marsResponseTiles.newtab_tile_2[0].name,
+        image_size: 200,
+        attribution: null,
       },
     ];
 
@@ -4037,8 +3968,14 @@ add_task(async function test_ContileIntegration() {
     let fetched = await feed._contile._fetchSites();
     Assert.ok(fetched);
     Assert.equal(feed._contile.sites.length, 2);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test-cached.com");
-    Assert.equal(feed._contile.sites[1].url, "https://www.test1-cached.com");
+    Assert.equal(
+      feed._contile.sites[0].url,
+      marsResponseTiles.newtab_tile_1[0].url
+    );
+    Assert.equal(
+      feed._contile.sites[1].url,
+      marsResponseTiles.newtab_tile_2[0].url
+    );
     sandbox.restore();
   }
 
@@ -4073,18 +4010,27 @@ add_task(async function test_ContileIntegration() {
 
     let tiles = [
       {
-        url: "https://foo.com",
-        image_url: "images/foo-com.png",
-        click_url: "https://www.foo-click.com",
-        impression_url: "https://www.foo-impression.com",
-        name: "foo",
+        url: marsResponseTiles.newtab_tile_foo[0].url,
+        image_url: marsResponseTiles.newtab_tile_foo[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_foo[0].callbacks.click,
+        impression_url:
+          marsResponseTiles.newtab_tile_foo[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_foo[0].name,
+        id: marsResponseTiles.newtab_tile_foo[0].name,
+        block_key: marsResponseTiles.newtab_tile_foo[0].name,
+        image_size: 200,
+        attribution: null,
       },
       {
-        url: "https://www.test1-cached.com",
-        image_url: "images/test1-com.png",
-        click_url: "https://www.test1-click.com",
-        impression_url: "https://www.test1-impression.com",
-        name: "test1",
+        url: marsResponseTiles.newtab_tile_1[0].url,
+        image_url: marsResponseTiles.newtab_tile_1[0].image_url,
+        click_url: marsResponseTiles.newtab_tile_1[0].callbacks.click,
+        impression_url: marsResponseTiles.newtab_tile_1[0].callbacks.impression,
+        name: marsResponseTiles.newtab_tile_1[0].name,
+        id: marsResponseTiles.newtab_tile_1[0].name,
+        block_key: marsResponseTiles.newtab_tile_1[0].name,
+        image_size: 200,
+        attribution: null,
       },
     ];
     feed._contile.cache.get.returns({ contile: tiles });
@@ -4101,7 +4047,10 @@ add_task(async function test_ContileIntegration() {
     let fetched = await feed._contile._fetchSites();
     Assert.ok(fetched);
     Assert.equal(feed._contile.sites.length, 1);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test1-cached.com");
+    Assert.equal(
+      feed._contile.sites[0].url,
+      marsResponseTiles.newtab_tile_1[0].url
+    );
     sandbox.restore();
   }
 
@@ -4117,34 +4066,11 @@ add_task(async function test_ContileIntegration() {
     fetchStub.resolves({
       ok: true,
       status: 200,
-      headers: new Map([
-        ["cache-control", "private, max-age=859, stale-if-error=10463"],
-      ]),
       json: () =>
         Promise.resolve({
-          tiles: [
-            {
-              url: "https://www.test.com",
-              image_url: "images/test-com.png",
-              click_url: "https://www.test-click.com",
-              impression_url: "https://www.test-impression.com",
-              name: "test",
-            },
-            {
-              url: "https://test1.com",
-              image_url: "images/test1-com.png",
-              click_url: "https://www.test1-click.com",
-              impression_url: "https://www.test1-impression.com",
-              name: "test1",
-            },
-            {
-              url: "https://test2.com",
-              image_url: "images/test2-com.png",
-              click_url: "https://www.test2-click.com",
-              impression_url: "https://www.test2-impression.com",
-              name: "test2",
-            },
-          ],
+          newtab_tile_1: marsResponseTiles.newtab_tile_1,
+          newtab_tile_2: marsResponseTiles.newtab_tile_2,
+          newtab_tile_3: marsResponseTiles.newtab_tile_3,
         }),
     });
 
@@ -4152,9 +4078,18 @@ add_task(async function test_ContileIntegration() {
 
     Assert.ok(fetched);
     Assert.equal(feed._contile.sites.length, 3);
-    Assert.equal(feed._contile.sites[0].url, "https://www.test.com");
-    Assert.equal(feed._contile.sites[1].url, "https://test1.com");
-    Assert.equal(feed._contile.sites[2].url, "https://test2.com");
+    Assert.equal(
+      feed._contile.sites[0].url,
+      marsResponseTiles.newtab_tile_1[0].url
+    );
+    Assert.equal(
+      feed._contile.sites[1].url,
+      marsResponseTiles.newtab_tile_2[0].url
+    );
+    Assert.equal(
+      feed._contile.sites[2].url,
+      marsResponseTiles.newtab_tile_3[0].url
+    );
     sandbox.restore();
   }
 
@@ -4178,14 +4113,12 @@ add_task(async function test_ContileIntegration() {
       "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
       true
     );
-    feed.store.state.Prefs.values["unifiedAds.tiles.enabled"] = true;
     feed.store.state.Prefs.values["unifiedAds.adsFeed.enabled"] = false;
     feed.store.state.Prefs.values["unifiedAds.endpoint"] =
       "https://test.endpoint/";
     feed.store.state.Prefs.values["discoverystream.placements.tiles"] = "1";
     feed.store.state.Prefs.values["discoverystream.placements.tiles.counts"] =
       "1";
-    feed.store.state.Prefs.values["unifiedAds.blockedAds"] = "";
 
     const TEST_PREFLIGHT_UA_STRING = "Some test UA";
     const TEST_PREFLIGHT_GEONAME_ID = "Some geo name";
@@ -4210,9 +4143,6 @@ add_task(async function test_ContileIntegration() {
       .resolves({
         ok: true,
         status: 200,
-        headers: new Map([
-          ["cache-control", "private, max-age=859, stale-if-error=10463"],
-        ]),
         json: () =>
           Promise.resolve({
             1: [
@@ -4326,14 +4256,12 @@ add_task(async function test_ContileIntegration() {
       "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
       true
     );
-    feed.store.state.Prefs.values["unifiedAds.tiles.enabled"] = true;
     feed.store.state.Prefs.values["unifiedAds.adsFeed.enabled"] = false;
     feed.store.state.Prefs.values["unifiedAds.endpoint"] =
       "https://test.endpoint/";
     feed.store.state.Prefs.values["discoverystream.placements.tiles"] = "1";
     feed.store.state.Prefs.values["discoverystream.placements.tiles.counts"] =
       "1";
-    feed.store.state.Prefs.values["unifiedAds.blockedAds"] = "";
     feed.store.state.Prefs.values.adsBackendConfig = {
       feature1: true,
       feature2: false,
@@ -4362,9 +4290,6 @@ add_task(async function test_ContileIntegration() {
       .resolves({
         ok: true,
         status: 200,
-        headers: new Map([
-          ["cache-control", "private, max-age=859, stale-if-error=10463"],
-        ]),
         json: () =>
           Promise.resolve({
             1: [
@@ -4488,14 +4413,12 @@ add_task(async function test_ContileIntegration() {
       "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
       true
     );
-    feed.store.state.Prefs.values["unifiedAds.tiles.enabled"] = true;
     feed.store.state.Prefs.values["unifiedAds.adsFeed.enabled"] = false;
     feed.store.state.Prefs.values["unifiedAds.endpoint"] =
       "https://test.endpoint/";
     feed.store.state.Prefs.values["discoverystream.placements.tiles"] = "1";
     feed.store.state.Prefs.values["discoverystream.placements.tiles.counts"] =
       "1";
-    feed.store.state.Prefs.values["unifiedAds.blockedAds"] = "";
 
     fetchStub.resolves({
       ok: true,
@@ -4564,14 +4487,12 @@ add_task(async function test_ContileIntegration() {
       "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
       false
     );
-    feed.store.state.Prefs.values["unifiedAds.tiles.enabled"] = true;
     feed.store.state.Prefs.values["unifiedAds.adsFeed.enabled"] = false;
     feed.store.state.Prefs.values["unifiedAds.endpoint"] =
       "https://test.endpoint/";
     feed.store.state.Prefs.values["discoverystream.placements.tiles"] = "1";
     feed.store.state.Prefs.values["discoverystream.placements.tiles.counts"] =
       "1";
-    feed.store.state.Prefs.values["unifiedAds.blockedAds"] = "";
 
     fetchStub.resolves({
       ok: true,
@@ -4624,7 +4545,6 @@ add_task(async function test_ContileIntegration() {
       "browser.newtabpage.activity-stream.unifiedAds.ohttp.enabled",
       true
     );
-    feed.store.state.Prefs.values["unifiedAds.tiles.enabled"] = true;
     feed.store.state.Prefs.values["unifiedAds.adsFeed.enabled"] = false;
     feed.store.state.Prefs.values["unifiedAds.endpoint"] =
       "https://test.endpoint/";
@@ -4632,7 +4552,6 @@ add_task(async function test_ContileIntegration() {
       "1, foo";
     feed.store.state.Prefs.values["discoverystream.placements.tiles.counts"] =
       "1";
-    feed.store.state.Prefs.values["unifiedAds.blockedAds"] = "";
     feed.store.state.Prefs.values.adsBackendConfig = {
       feature1: true,
       feature2: false,
@@ -4661,9 +4580,6 @@ add_task(async function test_ContileIntegration() {
       .resolves({
         ok: true,
         status: 200,
-        headers: new Map([
-          ["cache-control", "private, max-age=859, stale-if-error=10463"],
-        ]),
         json: () =>
           Promise.resolve({
             1: [
