@@ -111,10 +111,12 @@ export class UploadedProfilesManager {
     // Append at the end of the main content
     mainContent.append(this.#container);
 
-    // Add event delegation for delete buttons
+    // Add event delegation for share and delete buttons
     this.#profilesList.addEventListener("click", event => {
       if (event.target.classList.contains("delete-profile-button")) {
         this.#handleDeleteClick(event);
+      } else if (event.target.classList.contains("share-profile-button")) {
+        this.#handleShareClick(event);
       }
     });
   }
@@ -210,6 +212,13 @@ export class UploadedProfilesManager {
       const profileActions = document.createElement("div");
       profileActions.className = "uploaded-profile-actions";
 
+      const shareButton = document.createElement("moz-button");
+      shareButton.className = "share-profile-button";
+      document.l10n.setAttributes(
+        shareButton,
+        "about-logging-share-uploaded-profile"
+      );
+
       const deleteButton = document.createElement("moz-button");
       deleteButton.className = "delete-profile-button";
       document.l10n.setAttributes(
@@ -220,11 +229,23 @@ export class UploadedProfilesManager {
       // Assemble the structure
       profileDetails.append(profileDate, profileUrl);
       profileInfo.append(profileName, profileDetails);
-      profileActions.append(deleteButton);
+      profileActions.append(shareButton, deleteButton);
       profileItem.append(profileInfo, profileActions);
 
       this.#profilesList.append(profileItem);
     });
+  }
+
+  /**
+   * Handle click on share button. This uses the Web Share API, which isn't
+   * available on Desktop.
+   *
+   * @param {Event} event
+   */
+  async #handleShareClick(event) {
+    const profileItem = event.target.closest(".uploaded-profile-item");
+    const url = profileItem.querySelector(".uploaded-profile-url").href;
+    await navigator.share({ url });
   }
 
   /**

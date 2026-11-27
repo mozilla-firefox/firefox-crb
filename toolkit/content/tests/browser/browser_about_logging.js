@@ -1135,6 +1135,25 @@ add_task(async function testUploadedProfilesFeatures() {
       }
     );
 
+    info("Testing that the share button shares the profile URL");
+    // The Web Share API isn't available on Desktop.
+    const sharePromise = new Promise(resolve => {
+      window.navigator.share = async data => resolve(data);
+    });
+    const firstProfileItem = document.querySelector(".uploaded-profile-item");
+    const shareButton = firstProfileItem.querySelector(".share-profile-button");
+    is(
+      shareButton.dataset.l10nId,
+      "about-logging-share-uploaded-profile",
+      "Share button should have correct l10n ID"
+    );
+    shareButton.click();
+    Assert.deepEqual(
+      await sharePromise,
+      { url: firstProfileItem.querySelector(".uploaded-profile-url").href },
+      "The URL of the profile is shared"
+    );
+
     // Test actual deletion by clicking the delete button and handling the confirmation prompt
     info("Testing profile deletion with confirmation prompt");
 

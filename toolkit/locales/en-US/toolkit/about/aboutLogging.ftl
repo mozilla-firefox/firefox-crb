@@ -135,6 +135,7 @@ about-logging-uploaded-profile-name = Profile { DATETIME($date, dateStyle: "shor
 
 about-logging-uploaded-profiles-title = Uploaded Profiles
 about-logging-no-uploaded-profiles = No profiles have been uploaded yet.
+about-logging-share-uploaded-profile = Share
 about-logging-delete-uploaded-profile = Delete
 about-logging-view-uploaded-profile = View Profile
 about-logging-delete-profile-confirm-title = Delete Profile
