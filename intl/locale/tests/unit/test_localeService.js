@@ -28,11 +28,11 @@ add_test(function test_lastFallbackLocale() {
   run_next_test();
 });
 
-add_test(function test_appLocalesAsLangTags() {
-  const appLocale = localeService.appLocaleAsLangTag;
+add_test(function test_appLocalesAsBCP47() {
+  const appLocale = localeService.appLocaleAsBCP47;
   Assert.notEqual(appLocale, "", "appLocale is non-empty");
 
-  const appLocales = localeService.appLocalesAsLangTags;
+  const appLocales = localeService.appLocalesAsBCP47;
   Assert.ok(Array.isArray(appLocales), "appLocales returns an array");
 
   Assert.equal(
@@ -233,10 +233,7 @@ add_test(function test_handle_ja_JP_mac() {
   let appLocales = localeService.appLocalesAsBCP47;
   Assert.equal(appLocales[0], "ja-JP-macos");
 
-  let appLocalesAsLT = localeService.appLocalesAsLangTags;
-  Assert.equal(appLocalesAsLT[0], "ja-JP-mac");
-
-  Assert.equal(localeService.appLocaleAsLangTag, "ja-JP-mac");
+  Assert.equal(localeService.appLocaleAsBCP47, "ja-JP-macos");
 
   localeService.availableLocales = bkpAvLocales;
 
