@@ -8,15 +8,16 @@ from taskgraph.util.dependencies import get_primary_dependency
 zucchini_transforms = TransformSequence()
 partials_transforms = TransformSequence()
 
-# Projects that will use the "partials-zucchini" implementation as upstream.
-# Every other project, including all ESR branches, keeps using the legacy
-# "partials" implementation. Each branch reads its own copy of this set, so the
-# beta and release entries only take effect once they ride the trains.
-ZUCCHINI_PARTIALS_PROJECTS = {
-    "mozilla-central",
-    "mozilla-beta",
-    "mozilla-release",
-}
+
+# TODO: once ESR moves over, remove the legacy "partials" kind and this transform.
+def uses_legacy_partials(params):
+    """Whether the legacy "partials" implementation should be used.
+
+    This is the case for ESR release types, including those of future ESR
+    branches. Everything else uses the "partials-zucchini" implementation.
+    Moving ESR to zucchini partials requires changing this check explicitly.
+    """
+    return params["release_type"].startswith("esr")
 
 
 @partials_transforms.add
@@ -27,7 +28,7 @@ def filter_legacy_partials_by_project(config, tasks):
     we skip generating the legacy "partials" tasks entirely. This is the inverse
     of the filtering applied by the zucchini_transforms below.
     """
-    if config.params["project"] in ZUCCHINI_PARTIALS_PROJECTS:
+    if not uses_legacy_partials(config.params):
         return
     yield from tasks
 
@@ -37,8 +38,8 @@ def filter_partials_by_project(config, tasks):
     """Control the rollout of partials-zucchini across release channels.
 
     This transform manages the gradual transition from the legacy "partials" implementation
-    to the new "partials-zucchini" implementation. It ensures that partials-zucchini is only
-    used on ZUCCHINI_PARTIALS_PROJECTS.
+    to the new "partials-zucchini" implementation. It ensures that partials-zucchini is
+    used everywhere except where uses_legacy_partials is true.
 
     The transform filters tasks based on their primary dependency (partials or partials-zucchini)
     and the current project/channel, ensuring the appropriate implementation is used for each
@@ -56,16 +57,13 @@ def filter_partials_by_project(config, tasks):
             yield task
             continue
 
-        if (
-            primary_dep.kind == "partials"
-            and config.params["project"] in ZUCCHINI_PARTIALS_PROJECTS
-        ):
+        if primary_dep.kind == "partials" and not uses_legacy_partials(config.params):
             continue
 
-        if (
-            primary_dep.kind in ("partials-zucchini", "partials-zucchini-l10n")
-            and config.params["project"] not in ZUCCHINI_PARTIALS_PROJECTS
-        ):
+        if primary_dep.kind in (
+            "partials-zucchini",
+            "partials-zucchini-l10n",
+        ) and uses_legacy_partials(config.params):
             continue
 
         yield task
