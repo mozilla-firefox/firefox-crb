@@ -35,7 +35,8 @@
       // Note: if you remove 'wrap' or 'label' from the inherited attributes,
       // you'll need to add them to observedAttributes.
       return {
-        ".toolbarbutton-icon": "validate,src=image,label,type,consumeanchor",
+        ".toolbarbutton-icon": "label,type,consumeanchor",
+        ".toolbarbutton-icon-image": "validate,src=image",
         ".toolbarbutton-text": "accesskey,crop,dragover-top,wrap",
 
         ".toolbarbutton-badge": "text=badge,style=badgeStyle",
@@ -45,7 +46,7 @@
     static get fragment() {
       let frag = document.importNode(
         MozXULElement.parseXULToFragment(`
-        <image class="toolbarbutton-icon"></image>
+        <html:div class="toolbarbutton-icon"><image class="toolbarbutton-icon-image"/></html:div>
         <label class="toolbarbutton-text" crop="end" flex="1"></label>
         `),
         true
@@ -58,7 +59,7 @@
       let frag = document.importNode(
         MozXULElement.parseXULToFragment(`
         <stack class="toolbarbutton-badge-stack">
-          <image class="toolbarbutton-icon"/>
+          <html:div class="toolbarbutton-icon"><image class="toolbarbutton-icon-image"/></html:div>
           <html:label class="toolbarbutton-badge"/>
         </stack>
         <label class="toolbarbutton-text" crop="end" flex="1"/>
@@ -179,7 +180,7 @@
     }
 
     get icon() {
-      return this.querySelector(".toolbarbutton-icon");
+      return this.querySelector(".toolbarbutton-icon-image");
     }
 
     get badgeLabel() {

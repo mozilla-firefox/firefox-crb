@@ -144,8 +144,7 @@
     fill-opacity: var(--toolbarbutton-opacity-disabled);
   }
 
-  > .toolbarbutton-icon,
-  > .toolbarbutton-badge-stack > .toolbarbutton-icon {
+  .toolbarbutton-icon-image {
     width: var(--icon-size-small);
   }
 }

@@ -1303,9 +1303,12 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
 
 /* Firefox Account Toolbar Panel */
 
-#fxa-avatar-image {
-  width: var(--icon-size);
-  height: var(--icon-size);
+#fxa-toolbar-menu-button {
+  list-style-image: var(--avatar-image-url);
+
+  > .toolbarbutton-badge-stack > #fxa-avatar-label {
+    grid-column: 2;
+  }
 }
 
 :root {
@@ -1356,7 +1359,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
    * point, I'm hoping we can shift to something less gross (bug 1938106).
    */
   &[fxastatus="not_configured"][fxa-avatar-icon-variant$="-circle"] #fxa-toolbar-menu-button:not([showing-callout]) {
-    .avatar-container {
+    .toolbarbutton-icon {
       position: relative;
 
       &:-moz-locale-dir(rtl) {
@@ -1364,7 +1367,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
       }
     }
 
-    .avatar-container::after {
+    .toolbarbutton-icon::after {
       content: "";
       position: absolute;
       top: calc(var(--icon-size) - 6px);
@@ -1400,7 +1403,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
   }
 
   /* Non-signedin statuses icons are not totally round. */
-  &[fxastatus="signedin"] #fxa-avatar-image {
+  &[fxastatus="signedin"] #fxa-toolbar-menu-button .toolbarbutton-icon-image {
     border-radius: var(--border-radius-circle);
   }
 
@@ -1411,10 +1414,6 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
   &:not([fxastatus="signedin"]) #PanelUI-fxa-menu-connect-device-button {
     color: var(--text-color-disabled);
   }
-}
-
-#fxa-avatar-image {
-  list-style-image: var(--avatar-image-url);
 }
 
 #fxa-avatar-label {
