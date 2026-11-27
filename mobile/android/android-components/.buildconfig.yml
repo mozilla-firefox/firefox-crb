@@ -549,6 +549,12 @@ projects:
     publish: true
     upstream_dependencies:
     - components:tooling-lint
+  components:concept-firefox-accounts:
+    description: API contracts for Firefox Accounts.
+    path: components/concept/firefox-accounts
+    publish: true
+    upstream_dependencies:
+    - components:tooling-lint
   components:concept-integrity:
     description: A concept for verifying the integrity of an installation
     path: components/concept/integrity
