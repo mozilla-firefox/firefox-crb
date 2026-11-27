@@ -26,8 +26,6 @@ import mozilla.components.concept.fxa.FxaScope
 import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.FxAEntryPoint
-import mozilla.components.concept.sync.FxaScope
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_CAN_LINK_ACCOUNT
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_CHANGE_PASSWORD
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_DELETE_ACCOUNT
@@ -528,7 +526,7 @@ class FxaWebChannelFeature(
 
             try {
                 val data = payload.getJSONObject("data")
-                authType = data.getString("action").toAuthType()
+                authType = data.getString("action").toAuthType(data.getService())
                 code = data.getString("code")
                 state = data.getString("state")
                 declinedEngines = data.optJSONArray("declinedSyncEngines")?.toStringList()
@@ -550,6 +548,24 @@ class FxaWebChannelFeature(
             }
 
             return null
+        }
+
+        /**
+         * Support for identifying which service is being authenticated into added in
+         * [FXA-14892](https://mozilla-hub.atlassian.net/browse/FXA-14892)
+         *
+         * Note that the service is nested under the "services" JSON object and the service is specified as an empty
+         * object, so the key is sufficient to map into an [FxaService]
+         *
+         * For now, the service originally sent from the client is sent back in this message, and so accommodation is
+         * made for only one message. We will update this if the requirements change
+         */
+        private fun JSONObject.getService(): FxaService? {
+            return try {
+                getJSONObject("services").keys().asSequence().firstNotNullOfOrNull { FxaService.fromString(it) }
+            } catch (_: JSONException) {
+                null
+            }
         }
 
         /**

@@ -22,5 +22,15 @@ enum class FxaService(
     IpProtection(identifier = "vpn", requiredScopes = setOf(FxaScope.IP_PROTECTION, FxaScope.PROFILE)),
 
     /** Firefox Accounts relay service. */
-    Relay(identifier = "relay", requiredScopes = setOf(FxaScope.RELAY, FxaScope.PROFILE)),
+    Relay(identifier = "relay", requiredScopes = setOf(FxaScope.RELAY, FxaScope.PROFILE));
+
+    companion object {
+        /**
+         * Matches an [identifier] to the [FxaService] it represents and returns the service, or null if the identifier
+         * does not match any supported service.
+         */
+        fun fromString(identifier: String): FxaService? {
+            return FxaService.entries.firstOrNull { it.identifier == identifier }
+        }
+    }
 }

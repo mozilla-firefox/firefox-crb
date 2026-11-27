@@ -28,7 +28,6 @@ import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceConstellation
 import mozilla.components.concept.sync.DeviceType
 import mozilla.components.concept.sync.FxAEntryPoint
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.StatePersistenceCallback
 import mozilla.components.concept.sync.SyncConfig
 import mozilla.components.concept.sync.SyncEngine
@@ -303,9 +302,30 @@ class FxaAccountManagerTest {
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
-        verify(accountObserver, times(1)).onAuthenticated(any(), eq(AuthType.Signin))
+        verify(accountObserver, times(1)).onAuthenticated(any(), eq(AuthType.Signin()))
+    }
+
+    @Test
+    fun `OAuth completion forwards the auth type and its service to observers`() = runTest {
+        val service = FxaService.Relay
+        val authType = AuthType.Signin(service)
+
+        val manager = createFxaManager(coroutineContext, emptySet())
+        val account = manager.testableStorageWrapper.account
+        val observer: AccountObserver = mock()
+        manager.register(observer)
+        whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
+        manager.start()
+        whenever(account.processEvent(any()))
+            .thenReturn(FxaState.Authenticating("https://test-oauth.example.com/", FxaState.Connected))
+        manager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
+        whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
+
+        manager.finishAuthentication(FxaAuthData(authType, "test-code", "test-auth-state"))
+
+        verify(observer).onAuthenticated(account, authType)
     }
 
     @Test
@@ -314,7 +334,7 @@ class FxaAccountManagerTest {
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
         whenever(fxaManager.testableStorageWrapper.account.hasScope(SCOPE_SYNC)).thenReturn(false)
 
-        fxaManager.finishEmailAuthentication(AuthType.Signin)
+        fxaManager.finishEmailAuthentication(AuthType.Signin())
 
         val capabilitiesCaptor = argumentCaptor<Set<DeviceCapability>>()
         verify(fxaManager.testableStorageWrapper.deviceConstellation).ensureCapabilities(capabilitiesCaptor.capture())
@@ -327,7 +347,7 @@ class FxaAccountManagerTest {
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
         whenever(fxaManager.testableStorageWrapper.account.hasScope(SCOPE_SYNC)).thenReturn(true)
 
-        fxaManager.finishEmailAuthentication(AuthType.Signin)
+        fxaManager.finishEmailAuthentication(AuthType.Signin())
 
         val capabilitiesCaptor = argumentCaptor<Set<DeviceCapability>>()
         verify(fxaManager.testableStorageWrapper.deviceConstellation).ensureCapabilities(capabilitiesCaptor.capture())
@@ -442,9 +462,9 @@ class FxaAccountManagerTest {
         )
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
-        verify(accountObserver, times(1)).onAuthenticated(any(), eq(AuthType.Signin))
+        verify(accountObserver, times(1)).onAuthenticated(any(), eq(AuthType.Signin()))
     }
 
     @Test
@@ -453,7 +473,7 @@ class FxaAccountManagerTest {
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
         whenever(fxaManager.testableStorageWrapper.account.hasScope(SCOPE_SYNC)).thenReturn(false)
 
-        fxaManager.finishPairingAuthentication(AuthType.Pairing)
+        fxaManager.finishPairingAuthentication(AuthType.Pairing())
 
         val capabilitiesCaptor = argumentCaptor<Set<DeviceCapability>>()
         verify(fxaManager.testableStorageWrapper.deviceConstellation).ensureCapabilities(capabilitiesCaptor.capture())
@@ -467,7 +487,7 @@ class FxaAccountManagerTest {
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
         whenever(fxaManager.testableStorageWrapper.account.hasScope(SCOPE_SYNC)).thenReturn(true)
 
-        fxaManager.finishPairingAuthentication(AuthType.Pairing)
+        fxaManager.finishPairingAuthentication(AuthType.Pairing())
 
         val capabilitiesCaptor = argumentCaptor<Set<DeviceCapability>>()
         verify(fxaManager.testableStorageWrapper.deviceConstellation).ensureCapabilities(capabilitiesCaptor.capture())
@@ -525,7 +545,7 @@ class FxaAccountManagerTest {
         // Simulate the fxa client moving to the `Disconnected` state after `finishAuthentication()` is called.
         // This signals that the authentication failed at the end.
         whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
         verify(accountObserver, times(1)).onFlowError(AuthFlowError.FailedToCompleteAuth)
     }
@@ -612,7 +632,7 @@ class FxaAccountManagerTest {
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Disconnected)
         fxaManager.logout()
@@ -642,7 +662,7 @@ class FxaAccountManagerTest {
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
         // Simulate an authentication error during operation that we don't recover from
         whenever(account.processEvent(any())).thenReturn(FxaState.AuthIssues)
@@ -671,7 +691,7 @@ class FxaAccountManagerTest {
             .thenReturn(FxaState.Authenticating("https://test-oauth.example.com/", FxaState.Connected))
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
         org.mockito.Mockito.reset(accountObserver)
         clearInvocations(account)
 
@@ -706,7 +726,7 @@ class FxaAccountManagerTest {
             .thenReturn(FxaState.Authenticating("https://test-oauth.example.com/", FxaState.Connected))
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
         // Drive into AuthIssues via a sync auth error.
         whenever(account.processEvent(any())).thenReturn(FxaState.AuthIssues)
         fxaManager.encounteredAuthError("fake operation", 1)
@@ -741,7 +761,7 @@ class FxaAccountManagerTest {
             .thenReturn(FxaState.Authenticating("https://test-oauth.example.com/", FxaState.Connected))
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
         org.mockito.Mockito.reset(accountObserver)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.AuthIssues)
@@ -773,7 +793,7 @@ class FxaAccountManagerTest {
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
         // Simulate an authentication error during operation that we do recover from
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
@@ -787,7 +807,7 @@ class FxaAccountManagerTest {
             createFxaManager(coroutineContext = this.coroutineContext, capabilities = testDeviceCapabilities)
         val account = fxaManager.testableStorageWrapper.account
         whenever(account.hasScope(SCOPE_SYNC)).thenReturn(true)
-        fxaManager.finishEmailAuthentication(AuthType.Signin)
+        fxaManager.finishEmailAuthentication(AuthType.Signin())
         clearInvocations(fxaManager.testableStorageWrapper.deviceConstellation)
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
 
@@ -821,7 +841,7 @@ class FxaAccountManagerTest {
         fxaManager.beginAuthentication(service = FxaService.Sync.identifier, entrypoint = entryPoint)
 
         whenever(account.processEvent(any())).thenReturn(FxaState.Connected)
-        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin, "test-code", "test-auth-state"))
+        fxaManager.finishAuthentication(FxaAuthData(AuthType.Signin(), "test-code", "test-auth-state"))
 
         // Simulate an authentication error during operation that we don't recover from
         whenever(account.processEvent(any())).thenReturn(FxaState.AuthIssues)
@@ -863,13 +883,13 @@ class FxaAccountManagerTest {
         val integration = FxaAccountManager.AccountsToSyncIntegration(syncManager)
 
         // onAuthenticated - mapping of AuthType to SyncReason
-        integration.onAuthenticated(mock(), AuthType.Signin)
+        integration.onAuthenticated(mock(), AuthType.Signin())
         verify(syncManager, times(1)).start()
         verify(syncManager, times(1)).now(eq(SyncReason.FirstSync), anyBoolean(), eq(listOf()))
-        integration.onAuthenticated(mock(), AuthType.Signup)
+        integration.onAuthenticated(mock(), AuthType.Signup())
         verify(syncManager, times(2)).start()
         verify(syncManager, times(2)).now(eq(SyncReason.FirstSync), anyBoolean(), eq(listOf()))
-        integration.onAuthenticated(mock(), AuthType.Pairing)
+        integration.onAuthenticated(mock(), AuthType.Pairing())
         verify(syncManager, times(3)).start()
         verify(syncManager, times(3)).now(eq(SyncReason.FirstSync), anyBoolean(), eq(listOf()))
         integration.onAuthenticated(mock(), AuthType.MigratedReuse)

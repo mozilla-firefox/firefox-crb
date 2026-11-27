@@ -26,7 +26,6 @@ import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.DeviceCapability
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceType
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.Profile
 import mozilla.components.feature.qr.QrFeature
@@ -179,7 +178,7 @@ open class MainActivity : AppCompatActivity(), LoginFragment.OnLoginCompleteList
 
     private fun finishAuthentication(code: String, state: String) {
         launch {
-            accountManager.finishAuthentication(FxaAuthData(AuthType.Signin, code = code, state = state))
+            accountManager.finishAuthentication(FxaAuthData(AuthType.Signin(), code = code, state = state))
         }
     }
 
