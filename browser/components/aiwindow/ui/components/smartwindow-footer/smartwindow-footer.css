@@ -56,7 +56,9 @@
         color-mix(in srgb, var(--color-violet-30) 36%, transparent)
       );
       /* Active state is using a different text color for a11y contrast */
-      --button-text-color-ghost-active: light-dark(var(--color-violet-90), var(--color-gray-0));
+      @media not (prefers-contrast) {
+        --button-text-color-ghost-active: light-dark(var(--color-violet-90), var(--color-gray-0));
+      }
 
       --button-background-color-ghost-hover: light-dark(
         color-mix(in srgb, var(--color-violet-60) 16%, transparent),

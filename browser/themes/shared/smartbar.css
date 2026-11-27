@@ -23,9 +23,13 @@
   --smartbar-outline-width: var(--focus-outline-width);
   --smartbar-cta-icon-fill: var(--icon-color);
   --smartbar-scroll-mask-height: calc(var(--urlbarview-row-min-height) * 1.5);
-  --text-color-deemphasized: light-dark(color-mix(in srgb, var(--color-gray-100) 69%, transparent), color-mix(in srgb, var(--color-gray-0) 69%, transparent));
+  @media not (prefers-contrast) {
+    --text-color-deemphasized: light-dark(color-mix(in srgb, var(--color-gray-100) 69%, transparent), color-mix(in srgb, var(--color-gray-0) 69%, transparent));
+  }
 
-  --toolbar-field-border-color: transparent;
+  @media not (prefers-contrast) {
+    --toolbar-field-border-color: transparent;
+  }
 
   /* Match the address bar's focus border. */
   @media -moz-pref("browser.nova.enabled") {
@@ -48,10 +52,13 @@
 
   --urlbarview-small-font-size: var(--font-size-small);
 
-  @media not (forced-colors) {
+  @media not (prefers-contrast) {
     --urlbarview-background-color-hover: light-dark(var(--color-violet-0), var(--button-background-color-hover));
     --urlbarview-background-color-selected: light-dark(var(--color-violet-10), var(--button-background-color-active));
     --urlbarview-text-color-selected: var(--toolbar-field-focus-color);
+  }
+
+  @media not (forced-colors) {
     --urlbarview-text-color-secondary: light-dark(color-mix(in srgb, var(--color-gray-100) 69%, transparent), var(--color-violet-desaturated-20));
     --link-color: light-dark(var(--color-violet-70), var(--color-violet-30));
     --urlbar-background-border-focused: var(--smartbar-border-style-gradient) transparent;
@@ -354,7 +361,7 @@
 
 @media -moz-pref("browser.nova.enabled") {
   .smartbar {
-    @media not (forced-colors) {
+    @media not (prefers-contrast) {
       --urlbarview-background-color-hover: light-dark(
         color-mix(in srgb, var(--color-violet-desaturated-40) 25%, transparent),
         color-mix(in srgb, var(--color-violet-30) 20%, transparent)
@@ -363,6 +370,9 @@
         color-mix(in srgb, var(--color-violet-desaturated-40) 38%, transparent),
         color-mix(in srgb, var(--color-violet-30) 40%, transparent)
       );
+    }
+
+    @media not (forced-colors) {
       --link-color: var(--color-accent-primary);
     }
   }
