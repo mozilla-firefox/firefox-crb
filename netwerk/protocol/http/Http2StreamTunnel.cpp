@@ -26,10 +26,13 @@ NS_IMPL_ADDREF_INHERITED(Http2StreamTunnel, Http2StreamBase)
 NS_IMPL_RELEASE_INHERITED(Http2StreamTunnel, Http2StreamBase)
 
 NS_INTERFACE_MAP_BEGIN(Http2StreamTunnel)
-  NS_INTERFACE_MAP_ENTRY(nsITransport)
   NS_INTERFACE_MAP_ENTRY_CONCRETE(Http2StreamTunnel)
   NS_INTERFACE_MAP_ENTRY(nsITransport)
   NS_INTERFACE_MAP_ENTRY(nsISocketTransport)
+  // A connect-only consumer is handed this stream as its transport (see
+  // nsHttpConnection::TakeTransport), and wrapping it for JS queries
+  // nsISupports. Both bases provide one; match the refcounting above.
+  NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, Http2StreamBase)
 NS_INTERFACE_MAP_END
 
 Http2StreamTunnel::Http2StreamTunnel(Http2Session* session, int32_t priority,
