@@ -374,10 +374,13 @@ def new_label(label, tasks):
                 "description": "Symbol to be used by the scheduled task.",
             },
             "test_manifests": {
-                "type": "array",
-                "default": [],
-                "description": "An array of test manifest paths",
-                "items": {"type": "string"},
+                "type": "object",
+                "default": {},
+                "description": "A mapping of test suite to test manifest paths",
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
             },
             "times": {
                 "type": "integer",
