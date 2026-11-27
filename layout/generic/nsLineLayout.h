@@ -334,6 +334,49 @@ class nsLineLayout {
    */
   nscoord GetCurrentICoord() { return mCurrentSpan->mICoord; }
 
+  bool CurrentSpanCanWrap() const { return !mCurrentSpan->mNoWrap; }
+
+  nscoord GetCurrentSpanISize() const {
+    return mCurrentSpan->mLastFrame
+               ? (mCurrentSpan->mICoord - mCurrentSpan->mIStart)
+               : 0;
+  }
+
+  /**
+   * Inlines whose negative end margin must not be used to enlarge their
+   * available size when laying out a line. This is owned by the block doing
+   * line layout, so that it survives the line being laid out again.
+   */
+  struct DisabledNegativeMargins {
+    nsTArray<const nsIFrame*> mFrames;
+  };
+  void SetDisabledNegativeMargins(DisabledNegativeMargins* aDisabled) {
+    mDisabledNegativeMargins = aDisabled;
+  }
+  /**
+   * Whether aFrame's negative end margin may be used to enlarge its available
+   * size. This is false for line layouts that don't track disabled margins.
+   */
+  bool CanApplyNegativeMargin(const nsIFrame* aFrame) {
+    DisabledNegativeMargins* disabled =
+        GetOutermostLineLayout()->mDisabledNegativeMargins;
+    return disabled && !disabled->mFrames.Contains(aFrame);
+  }
+  /**
+   * Called when aFrame, an inline that had its negative end margin applied,
+   * does not end on this line. Requests that the line is laid out again
+   * without the margin.
+   */
+  void DisableNegativeMargin(const nsIFrame* aFrame) {
+    nsLineLayout* outermost = GetOutermostLineLayout();
+    MOZ_ASSERT(outermost->mDisabledNegativeMargins);
+    outermost->mDisabledNegativeMargins->mFrames.AppendElement(aFrame);
+    outermost->mNeedsRedoForNegativeMargin = true;
+  }
+  bool NeedsRedoForNegativeMargin() const {
+    return mNeedsRedoForNegativeMargin;
+  }
+
   void SetSuppressLineWrap(bool aEnabled) { mSuppressLineWrap = aEnabled; }
 
   /**
@@ -604,6 +647,9 @@ class nsLineLayout {
   bool mHasRuby : 1;
   bool mSuppressLineWrap : 1;
   bool mUsedOverflowWrap : 1;
+  bool mNeedsRedoForNegativeMargin : 1;
+
+  DisabledNegativeMargins* mDisabledNegativeMargins = nullptr;
 
   int32_t mSpanDepth = 0;
 #ifdef DEBUG

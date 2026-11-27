@@ -5728,6 +5728,7 @@ bool nsBlockFrame::ReflowInlineFrames(BlockReflowState& aState,
       aState.GetFloatAvailableSpace(GetWritingMode());
 
   LineReflowStatus lineReflowStatus;
+  nsLineLayout::DisabledNegativeMargins disabledNegativeMargins;
   do {
     nscoord availableSpaceBSize = 0;
     aState.mLineBSize.reset();
@@ -5750,6 +5751,7 @@ bool nsBlockFrame::ReflowInlineFrames(BlockReflowState& aState,
         nsLineLayout lineLayout(aState.mPresContext, aState.FloatManager(),
                                 aState.mReflowInput, &aLine, nullptr);
         lineLayout.Init(&aState, aState.mMinLineHeight, aState.mLineNumber);
+        lineLayout.SetDisabledNegativeMargins(&disabledNegativeMargins);
         if (forceBreakInFrame) {
           lineLayout.ForceBreakAtPosition(forceBreakInFrame, forceBreakOffset);
         }
@@ -5761,7 +5763,8 @@ bool nsBlockFrame::ReflowInlineFrames(BlockReflowState& aState,
         if (LineReflowStatus::RedoNoPull == lineReflowStatus ||
             LineReflowStatus::RedoMoreFloats == lineReflowStatus ||
             LineReflowStatus::RedoNextBand == lineReflowStatus) {
-          if (lineLayout.NeedsBackup()) {
+          if (lineLayout.NeedsBackup() &&
+              !lineLayout.NeedsRedoForNegativeMargin()) {
             NS_ASSERTION(!forceBreakInFrame,
                          "Backing up twice; this should never be necessary");
             // If there is no saved break position, then this will set
@@ -5959,7 +5962,11 @@ void nsBlockFrame::DoReflowInlineFrames(
         "even though there were better break opportunities before it");
     needsBackup = false;
   }
-  if (needsBackup) {
+  if (aLineLayout.NeedsRedoForNegativeMargin() &&
+      (lineReflowStatus == LineReflowStatus::Stop ||
+       lineReflowStatus == LineReflowStatus::OK)) {
+    lineReflowStatus = LineReflowStatus::RedoNoPull;
+  } else if (needsBackup) {
     // We need to try backing up to before a text run
     // XXX It's possible, in fact not unusual, for the break opportunity to
     // already be the end of the line. We should detect that and optimize to not
