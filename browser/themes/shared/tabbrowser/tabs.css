@@ -2413,55 +2413,44 @@ tab-group {
 }
 
 .tab-group-editor-panel {
-  --panel-width: 22em;
-  --panel-padding: 0;
+  --panel-width: 24em;
+  --panel-padding: var(--space-large) var(--space-small) 0;
+  --input-background-color: var(--background-color-box);
+  --panel-separator-padding: 0;
+  --panel-menuitem-padding-block: var(--space-xsmall);
   font: menu;
 
-  @media -moz-pref("browser.nova.enabled") {
-    --panel-padding: var(--space-large) var(--space-small) 0;
-    --input-background-color: var(--background-color-box);
-    --panel-separator-padding: 0;
-    --panel-menuitem-padding-block: var(--space-xsmall);
-    --panel-width: 24em;
+  > .panel-header {
+    justify-content: start;
+    text-align: start;
+    min-height: 0;
+    padding-block: var(--space-xsmall) var(--space-medium);
+  }
 
-    > .panel-header {
-      justify-content: start;
-      text-align: start;
-      min-height: 0;
-      padding-block: var(--space-xsmall) var(--space-medium);
-    }
+  /* Clip the header in the edit modal for a11y. */
+  &:not(.tab-group-editor-mode-create) > .panel-header {
+    position: absolute;
+    overflow: hidden;
+    clip-path: inset(50%);
+    width: 0;
+    height: 0;
+    min-height: 0;
+    pointer-events: none;
+  }
 
-    /* Clip the header in the edit modal for a11y. */
-    &:not(.tab-group-editor-mode-create) > .panel-header {
-      position: absolute;
-      overflow: hidden;
-      clip-path: inset(50%);
-      width: 0;
-      height: 0;
-      min-height: 0;
-      pointer-events: none;
-    }
+  /* Clip the name label in the edit modal for a11y. */
+  &:not(.tab-group-editor-mode-create) > .tab-group-editor-name > label {
+    position: absolute;
+    overflow: hidden;
+    clip-path: inset(50%);
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
 
-    /* Hide all toolbarseparators except the tab group suggestions one.
-     * Remove this rule and the toolbarseparators post-Nova (Bug 2056954). */
-    toolbarseparator:not(#tab-group-suggestions-separator) {
-      display: none;
-    }
-
-    /* Clip the name label in the edit modal for a11y. */
-    &:not(.tab-group-editor-mode-create) > .tab-group-editor-name > label {
-      position: absolute;
-      overflow: hidden;
-      clip-path: inset(50%);
-      width: 0;
-      height: 0;
-      pointer-events: none;
-    }
-
-    .panel-footer {
-      margin-block-start: var(--space-small);
-      margin-inline: var(--panel-menuitem-margin-inline);
-    }
+  .panel-footer {
+    margin-block-start: var(--space-small);
+    margin-inline: var(--panel-menuitem-margin-inline);
   }
 
   &.tab-group-editor-panel-expanded {
@@ -2478,10 +2467,6 @@ tab-group {
     flex-direction: column;
     margin: var(--panel-menuitem-margin);
 
-    @media not -moz-pref("browser.nova.enabled") {
-      padding-top: var(--panel-menuitem-padding-block);
-    }
-
     > label {
       margin-inline: 0;
       margin-bottom: var(--space-small);
@@ -2494,11 +2479,8 @@ tab-group {
   .tab-group-editor-swatches {
     display: block;
     margin: var(--panel-menuitem-margin);
-    padding-block: var(--panel-menuitem-padding-block);
+    padding-block: 0 var(--space-large);
 
-    @media -moz-pref("browser.nova.enabled") {
-      padding-block: 0 var(--space-large);
-    }
     &::part(inputs) {
       flex-flow: row nowrap;
       justify-content: space-between;
@@ -2507,23 +2489,17 @@ tab-group {
     moz-visual-picker-item {
       --visual-picker-item-border-color: transparent;
       --visual-picker-item-border-width-checked: var(--focus-outline-width);
-      @media -moz-pref("browser.nova.enabled") {
-        --visual-picker-item-border-radius: var(--border-radius-circle);
-      }
+      --visual-picker-item-border-radius: var(--border-radius-circle);
     }
   }
 
   .tab-group-editor-swatch {
     display: block;
     font-size: 0;
-    inline-size: 16px;
-    block-size: 16px;
+    inline-size: 20px;
+    block-size: 20px;
     margin: var(--focus-outline-offset);
     background-color: var(--tabgroup-swatch-color);
-    @media -moz-pref("browser.nova.enabled") {
-      inline-size: 20px;
-      block-size: 20px;
-    }
 
     .tab-group-editor-swatches[disabled] & {
       opacity: 0.5;
@@ -3585,9 +3561,7 @@ toolbar:not(#TabsToolbar) #firefox-view-button {
   color: var(--color-accent-primary);
   width: auto;
   padding: 0;
-  @media -moz-pref("browser.nova.enabled") {
-    padding-block-start: var(--space-medium);
-  }
+  padding-block-start: var(--space-medium);
 
   &:hover {
     --button-border-color-ghost-hover: var(--border-color-selected);
@@ -3622,9 +3596,7 @@ toolbar:not(#TabsToolbar) #firefox-view-button {
 #tab-group-suggestions-container,
 #tab-group-suggestions-optin-container {
   margin: var(--panel-menuitem-margin);
-  @media -moz-pref("browser.nova.enabled") {
-    margin-block-start: var(--space-medium);
-  }
+  margin-block-start: var(--space-medium);
 }
 
 .tab-group-suggestions-loading-header,

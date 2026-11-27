@@ -129,7 +129,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
         class="subviewbutton"
         data-l10n-id="tab-group-editor-action-ungroup">
       </toolbarbutton>
-      <toolbarseparator class="tab-group-edit-mode-only" />
       <toolbarbutton
         tabindex="0"
         id="tabGroupEditor_deleteGroup"
@@ -238,7 +237,7 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
 
       ${this.headerSection}
 
-      <toolbarseparator />
+      <html:div id="tab-group-editor-swatches-placeholder" />
 
       <html:div
         class="tab-group-editor-name">
@@ -257,10 +256,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
 
       <html:div id="tab-group-main" class="panel-subview-body">
         <html:div id="tab-group-properties-and-actions">
-          <html:div id="tab-group-editor-swatches-placeholder" />
-
-          <toolbarseparator class="tab-group-edit-mode-only"/>
-
           ${this.editActions}
 
           <toolbarseparator id="tab-group-suggestions-separator" hidden="true"/>
@@ -326,7 +321,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
   #createButton;
   #createMode;
   #keepNewlyCreatedGroup;
-  #nameContainer;
   #nameField;
   #panel;
   #swatchesContainer;
@@ -417,7 +411,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
     this.#createButton = this.querySelector("#tab-group-editor-button-create");
     this.#panel = this.querySelector("panel");
     this.#nameField = this.querySelector("#tab-group-name");
-    this.#nameContainer = this.querySelector(".tab-group-editor-name");
     this.#panel.addEventListener("click", e => {
       if (e.target !== this.#nameField) {
         this.#nameField.blur();
@@ -912,8 +905,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
       ? MozTabbrowserTabGroupMenu.State.CREATE_AI_INITIAL
       : MozTabbrowserTabGroupMenu.State.CREATE_STANDARD_INITIAL;
 
-    this.#maybeUpdateLayoutForNova();
-
     this.#panel.openPopup(group.firstChild, {
       position: this.#panelPosition,
     });
@@ -957,8 +948,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
       ? MozTabbrowserTabGroupMenu.State.EDIT_AI_INITIAL
       : MozTabbrowserTabGroupMenu.State.EDIT_STANDARD_INITIAL;
 
-    this.#maybeUpdateLayoutForNova();
-
     this.#panel.openPopup(group.firstChild, {
       position: this.#panelPosition,
     });
@@ -973,18 +962,6 @@ export class MozTabbrowserTabGroupMenu extends MozXULElement {
     );
     this.#commandButtons.copyAllLinks.disabled = !linkCount;
     this.#maybeDisableOrHideSaveButton();
-  }
-
-  #maybeUpdateLayoutForNova() {
-    const isNovaEnabled = Services.prefs.getBoolPref(
-      "browser.nova.enabled",
-      false
-    );
-    if (isNovaEnabled) {
-      this.#nameContainer.before(this.#swatchesContainer);
-    } else {
-      this.#tabGroupPropertiesActions.prepend(this.#swatchesContainer);
-    }
   }
 
   #maybeDisableOrHideSaveButton() {
