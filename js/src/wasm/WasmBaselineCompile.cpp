@@ -65,13 +65,18 @@
  * For baseline functions, we compile in code to monitor the function's
  * "hotness" and request tier-up once that hotness crosses a threshold.
  *
- * (1) Each function has an associated int32_t counter,
- *     FuncDefInstanceData::hotnessCounter.  These are stored in an array in
- *     the Instance.  Hence access to them is fast and thread-local.
+ * (1) Each function has an associated int32_t counter.  These are stored in
+ *     an array owned by the Code (Code::sharedHotnessCounters), which is
+ *     shared by all Instances of the module.  Each Instance holds a pointer to
+ *     it (Instance::hotnessCounters_), so access from baseline code is one
+ *     load away.
  *
- * (2) On instantiation, the counters are set to some positive number
- *     (Instance::init, Instance::computeInitialHotnessCounter), which is a
- *     very crude estimate of the cost of Ion compilation of the function.
+ * (2) When the Code is created, the counters are set to some positive number
+ *     (Code::initialize, LazyTieringHeuristics::estimateIonCompilationCost),
+ *     which is a very crude estimate of the cost of Ion compilation of the
+ *     function.  They are not reset when a new Instance is created, so
+ *     hotness accumulates across Instances.  This matters for applications
+ *     that instantiate the same module repeatedly.
  *
  * (3) In baseline compilation, a function decrements its counter at every
  *     entry (BaseCompiler::beginFunction) and at the start of every loop
@@ -87,7 +92,7 @@
  *
  * (6) BaseCompiler::addHotnessCheck creates the shortest possible
  *     decrement/check code, to minimise both time and code-space overhead.  On
- *     Intel it is only two instructions.  The counter has the value from (4)
+ *     Intel it is only three instructions.  The counter has the value from (4)
  *     subtracted from it.  If the result is negative, we jump to OOL code
  *     (class OutOfLineRequestTierUp) which requests tier up; control then
  *     continues immediately after the check.
@@ -119,13 +124,13 @@
  *      Hence it is necessary for WasmCode::requestTierUp (8) to detect and
  *      ignore duplicate requests.
  *
- * (11) Each Instance of a Module runs in its own thread and has its own array
- *      of counters.  This makes the counter updating thread-local and cheap.
- *      But it means that, if a Module has multiple threads (Instances), it
- *      could be that a function never gets hot enough to request tier up,
- *      because it is not hot enough in any single thread, even though the
- *      total hotness summed across all threads is enough to request tier up.
- *      Whether this inaccuracy is a problem in practice remains to be seen.
+ * (11) Instances of a Module may run on different threads, and they all
+ *      update the same counters with non-atomic read-modify-write sequences.
+ *      Updates can therefore be lost, including a reset done by (8), so a
+ *      function may make a few extra tier-up requests (filtered out per (10))
+ *      or a request may be delayed.  WasmHandleRequestTierUp (8) may also
+ *      observe a non-negative counter, after a reset or a lost update, or one
+ *      decremented below -127 by several threads.
  *
  * (12) Code::requestTierUp (8) creates a PartialTier2CompileTask and queues it
  *      for execution.  It does not do the compilation itself.
@@ -1267,7 +1272,8 @@ Maybe<CodeOffset> BaseCompiler::addHotnessCheck() {
   // Here's an example of what we'll create.  The path that almost always
   // happens, where the counter doesn't go negative, has just one branch.
   //
-  //   subl       $to_be_filled_in_later, 0x170(%r14)
+  //   movq       0x160(%r14), %rax // Instance::hotnessCounters_
+  //   subl       $to_be_filled_in_later, 0x170(%rax)
   //   js         oolCode // almost never taken
   // rejoin:
   // ----------------
@@ -1300,9 +1306,11 @@ Maybe<CodeOffset> BaseCompiler::addHotnessCheck() {
   fr.loadInstancePtr(instance);
 #endif
 
+  RegPtr counters = needPtr();
+  masm.loadPtr(Address(instance, wasm::Instance::offsetOfHotnessCounters()),
+               counters);
   Address addressOfCounter = Address(
-      instance, wasm::Instance::offsetInData(
-                    codeMeta_.offsetOfFuncDefInstanceData(func_.index)));
+      counters, (func_.index - codeMeta_.numFuncImports) * sizeof(int32_t));
 
 #if JS_CODEGEN_ARM
   Maybe<RegI32> scratch = Some(needI32());
@@ -1323,6 +1331,7 @@ Maybe<CodeOffset> BaseCompiler::addHotnessCheck() {
 
   masm.bind(ool->rejoin());
 
+  freePtr(counters);
   if (scratch.isSome()) {
     freeI32(scratch.value());
   }

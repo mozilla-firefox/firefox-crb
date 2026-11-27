@@ -106,14 +106,6 @@ static_assert(Instance::offsetOfLastCommonJitField() < 128);
 //
 // Functions and invocation.
 
-FuncDefInstanceData* Instance::funcDefInstanceData(uint32_t funcIndex) const {
-  MOZ_ASSERT(funcIndex >= codeMeta().numFuncImports);
-  uint32_t funcDefIndex = funcIndex - codeMeta().numFuncImports;
-  FuncDefInstanceData* instanceData =
-      (FuncDefInstanceData*)(data() + codeMeta().funcDefsOffsetStart);
-  return &instanceData[funcDefIndex];
-}
-
 TypeDefInstanceData* Instance::typeDefInstanceData(uint32_t typeIndex) const {
   TypeDefInstanceData* instanceData =
       (TypeDefInstanceData*)(data() + codeMeta().typeDefsOffsetStart);
@@ -2563,15 +2555,9 @@ bool Instance::init(JSContext* cx, const JSObjectVector& funcImports,
     setUpdateCallRefMetricsStub(nullptr);
   }
 
-  // Initialize the hotness counters, if relevant.
+  // The hotness counters are owned by the Code and shared by all its instances.
   if (code().mode() == CompileMode::LazyTiering) {
-    // Computing the initial hotness counters requires the code section size.
-    const size_t codeSectionSize = codeMeta().codeSectionSize();
-    for (uint32_t funcIndex = codeMeta().numFuncImports;
-         funcIndex < codeMeta().numFuncs(); funcIndex++) {
-      funcDefInstanceData(funcIndex)->hotnessCounter =
-          computeInitialHotnessCounter(funcIndex, codeSectionSize);
-    }
+    hotnessCounters_ = code().sharedHotnessCounters();
   }
 
   // Initialize type definitions in the instance data.
@@ -2978,21 +2964,18 @@ bool Instance::isInterrupted() const { return interrupt_; }
 
 void Instance::resetInterrupt() { interrupt_ = false; }
 
-int32_t Instance::computeInitialHotnessCounter(uint32_t funcIndex,
-                                               size_t codeSectionSize) {
-  MOZ_ASSERT(code().mode() == CompileMode::LazyTiering);
-  MOZ_ASSERT(codeSectionSize > 0);
-  uint32_t bodyLength = codeTailMeta().funcDefRange(funcIndex).size();
-  return LazyTieringHeuristics::estimateIonCompilationCost(bodyLength,
-                                                           codeSectionSize);
-}
-
+// The counters are shared by all instances of the Code, which may run on
+// different threads, and are updated non-atomically by baseline code.
 void Instance::resetHotnessCounter(uint32_t funcIndex) {
-  funcDefInstanceData(funcIndex)->hotnessCounter = INT32_MAX;
+  jit::AtomicOperations::storeSafeWhenRacy(
+      SharedMem<int32_t*>::shared(
+          &hotnessCounters_[funcIndex - codeMeta().numFuncImports]),
+      INT32_MAX);
 }
 
 int32_t Instance::readHotnessCounter(uint32_t funcIndex) const {
-  return funcDefInstanceData(funcIndex)->hotnessCounter;
+  return jit::AtomicOperations::loadSafeWhenRacy(SharedMem<int32_t*>::shared(
+      &hotnessCounters_[funcIndex - codeMeta().numFuncImports]));
 }
 
 void Instance::submitCallRefHints(uint32_t funcIndex) {

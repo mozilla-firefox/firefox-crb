@@ -48,7 +48,6 @@ class StoreBuffer;
 namespace wasm {
 
 struct CodeTailMetadata;
-struct FuncDefInstanceData;
 class FuncImport;
 struct FuncImportInstanceData;
 struct FuncExportInstanceData;
@@ -242,6 +241,10 @@ class alignas(16) Instance {
   // wasm function that calls it.
   void* requestTierUpStub_ = nullptr;
 
+  // Lazy tiering hotness counters, indexed by funcIndex - numFuncImports.
+  // Owned by the Code and shared by all of its instances.
+  int32_t* hotnessCounters_ = nullptr;
+
   // Pointer to a per-module builtin stub that does the OOL component of a
   // call-ref metrics update.
   void* updateCallRefMetricsStub_ = nullptr;
@@ -252,7 +255,6 @@ class alignas(16) Instance {
   alignas(16) char data_;
 
   // Internal helpers:
-  FuncDefInstanceData* funcDefInstanceData(uint32_t funcIndex) const;
   TypeDefInstanceData* typeDefInstanceData(uint32_t typeIndex) const;
   const void* addressOfGlobalCell(const GlobalDesc& globalDesc) const;
   FuncImportInstanceData& funcImportInstanceData(uint32_t funcIndex);
@@ -345,6 +347,9 @@ class alignas(16) Instance {
   static constexpr size_t offsetOfHasAllocationMetadataBuilder() {
     return offsetof(Instance, hasAllocationMetadataBuilder_);
   }
+  static constexpr size_t offsetOfHotnessCounters() {
+    return offsetof(Instance, hotnessCounters_);
+  }
   static constexpr size_t offsetOfAddressOfLastBufferedWholeCell() {
     return offsetof(Instance, addressOfLastBufferedWholeCell_);
   }
@@ -425,8 +430,6 @@ class alignas(16) Instance {
     hasAllocationMetadataBuilder_ = hasBuilder;
   }
 
-  int32_t computeInitialHotnessCounter(uint32_t funcIndex,
-                                       size_t codeSectionSize);
   void resetHotnessCounter(uint32_t funcIndex);
   int32_t readHotnessCounter(uint32_t funcIndex) const;
   void submitCallRefHints(uint32_t funcIndex);

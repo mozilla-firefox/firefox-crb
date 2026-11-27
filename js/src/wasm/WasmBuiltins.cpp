@@ -721,11 +721,21 @@ static void WasmHandleRequestTierUp(Instance* instance) {
 
   uint32_t funcIndex = codeRange->funcIndex();
 
-  // See BaseCompiler::addHotnessCheck for rationale.  If this fails, and
-  // `counter` is a very large negative number (close to -2^31), it may be that
-  // a hotness check didn't have its step patched in.
+  // The counters are shared by all instances of the module, possibly running
+  // on other threads.  A non-negative value means another thread has reset the
+  // counter, or a lost update has overwritten our decrement; either way there
+  // is nothing to do now.  Concurrent decrements can also take it below -127.
+  // See [SMDOC] WebAssembly baseline compiler, Lazy Tier-Up mechanism, point
+  // (11).
   int32_t counter = instance->readHotnessCounter(funcIndex);
-  MOZ_RELEASE_ASSERT(counter >= -127 && counter <= -1);
+  if (counter >= 0) {
+    return;
+  }
+
+  // See BaseCompiler::addHotnessCheck for rationale.  If this fails, it may be
+  // that a hotness check didn't have its step patched in: the unpatched step
+  // makes the counter count upwards until it wraps to close to -2^31.
+  MOZ_RELEASE_ASSERT(counter > INT32_MIN / 2);
 
   // Function `funcIndex` is requesting tier-up.  This can go one of three ways:
   // - the request is a duplicate -- ignore

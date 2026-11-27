@@ -3,6 +3,9 @@
 // requested synchronous tier-up of the same function in a shared module.
 setPrefValue("wasm_lazy_tiering", true);
 setPrefValue("wasm_lazy_tiering_synchronous", true);
+// Hotness counters are initialized when the module is compiled, and shared by
+// all of its instances.
+setPrefValue("wasm_lazy_tiering_level", 9);
 
 var body = "";
 for (var i = 0; i < 1500; i++) {
@@ -25,10 +28,6 @@ var bytes = wasmTextToBinary(wat);
 var mod = new WebAssembly.Module(bytes);
 setSharedObject(mod);
 
-var ins0 = new WebAssembly.Instance(mod);
-var f0 = ins0.exports.t.get(0);
-f0();
-
 var workerCode = `
   setPrefValue("wasm_lazy_tiering", true);
   setPrefValue("wasm_lazy_tiering_synchronous", true);
@@ -42,3 +41,7 @@ var workerCode = `
 for (var w = 0; w < 8; w++) {
   evalInWorker(workerCode);
 }
+
+var ins0 = new WebAssembly.Instance(mod);
+var f0 = ins0.exports.t.get(0);
+f0();

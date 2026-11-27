@@ -105,9 +105,6 @@ struct CodeMetadata : public ShareableBase<CodeMetadata> {
 
   // ==== Instance layout fields
   //
-  // The start offset of the FuncDefInstanceData[] section of the instance
-  // data. There is one entry for every function definition.
-  uint32_t funcDefsOffsetStart;
   // The start offset of the FuncImportInstanceData[] section of the instance
   // data. There is one entry for every imported function.
   uint32_t funcImportsOffsetStart;
@@ -134,7 +131,6 @@ struct CodeMetadata : public ShareableBase<CodeMetadata> {
         numFuncImports(0),
         funcImportsAreJS(false),
         numGlobalImports(0),
-        funcDefsOffsetStart(UINT32_MAX),
         funcImportsOffsetStart(UINT32_MAX),
         funcExportsOffsetStart(UINT32_MAX),
         typeDefsOffsetStart(UINT32_MAX),
@@ -234,12 +230,6 @@ struct CodeMetadata : public ShareableBase<CodeMetadata> {
   bool getFuncName(NameContext ctx, uint32_t funcIndex,
                    const ShareableBytes* nameSectionPayload,
                    UTF8Bytes* name) const;
-
-  uint32_t offsetOfFuncDefInstanceData(uint32_t funcIndex) const {
-    MOZ_RELEASE_ASSERT(funcIndex >= numFuncImports && funcIndex < numFuncs());
-    return funcDefsOffsetStart +
-           (funcIndex - numFuncImports) * sizeof(FuncDefInstanceData);
-  }
 
   uint32_t offsetOfFuncImportInstanceData(uint32_t funcIndex) const {
     MOZ_RELEASE_ASSERT(funcIndex < numFuncImports);

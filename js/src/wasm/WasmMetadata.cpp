@@ -100,15 +100,6 @@ bool CodeMetadata::prepareForCompile(CompileMode mode) {
   // Allocate the layout for instance data
   instanceDataLength = 0;
 
-  // Allocate space for function counters, if we have them
-  if (mode == CompileMode::LazyTiering) {
-    if (!allocateInstanceDataBytesN(sizeof(FuncDefInstanceData),
-                                    alignof(FuncDefInstanceData), numFuncDefs(),
-                                    &funcDefsOffsetStart)) {
-      return false;
-    }
-  }
-
   // Allocate space for type definitions
   if (!allocateInstanceDataBytesN(sizeof(TypeDefInstanceData),
                                   alignof(TypeDefInstanceData), types->length(),

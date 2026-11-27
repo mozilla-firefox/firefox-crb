@@ -34,6 +34,7 @@
 #ifdef MOZ_VTUNE
 #  include "vtune/VTuneWrapper.h"
 #endif
+#include "wasm/WasmHeuristics.h"
 #include "wasm/WasmModule.h"
 #include "wasm/WasmProcess.h"
 #include "wasm/WasmSerialize.h"
@@ -1289,6 +1290,21 @@ bool Code::initialize(FuncImportVector&& funcImports,
          funcDefIndex++) {
       funcStates_.get()[funcDefIndex].bestTier = completeTier1_;
       funcStates_.get()[funcDefIndex].tierUpState = TierUpState::NotRequested;
+    }
+
+    sharedHotnessCounters_ =
+        HotnessCountersPointer(js_pod_malloc<int32_t>(numFuncDefs));
+    if (!sharedHotnessCounters_) {
+      return false;
+    }
+    const size_t codeSectionSize = codeMeta_->codeSectionSize();
+    for (uint32_t funcDefIndex = 0; funcDefIndex < numFuncDefs;
+         funcDefIndex++) {
+      uint32_t funcIndex = codeMeta_->numFuncImports + funcDefIndex;
+      uint32_t bodyLength = codeTailMeta_->funcDefRange(funcIndex).size();
+      sharedHotnessCounters_.get()[funcDefIndex] =
+          LazyTieringHeuristics::estimateIonCompilationCost(bodyLength,
+                                                            codeSectionSize);
     }
   }
 

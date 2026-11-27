@@ -359,6 +359,7 @@ struct FuncState {
   mozilla::Atomic<TierUpState> tierUpState;
 };
 using FuncStatesPointer = mozilla::UniquePtr<FuncState[], JS::FreePolicy>;
+using HotnessCountersPointer = mozilla::UniquePtr<int32_t[], JS::FreePolicy>;
 
 // LazyFuncExport helps to efficiently lookup a CodeRange from a given function
 // index. It is inserted in a vector sorted by function index, to perform
@@ -847,6 +848,11 @@ class Code : public ShareableBase<Code> {
   // only needed if we're doing partial tiering.
   mutable FuncStatesPointer funcStates_;
 
+  // Lazy tiering hotness counters for every defined function, indexed by
+  // funcIndex - numFuncImports and shared by all instances of this module.
+  // Only allocated for lazy tiering.
+  mutable HotnessCountersPointer sharedHotnessCounters_;
+
   FuncImportVector funcImports_;
   ExclusiveData<CacheableCharsVector> profilingLabels_;
   JumpTables jumpTables_;
@@ -939,6 +945,11 @@ class Code : public ShareableBase<Code> {
     FuncState& state = funcStates_[funcIndex - codeMeta_->numFuncImports];
     return state.tierUpState.compareExchange(TierUpState::NotRequested,
                                              TierUpState::Requested);
+  }
+
+  int32_t* sharedHotnessCounters() const {
+    MOZ_ASSERT(mode_ == CompileMode::LazyTiering);
+    return sharedHotnessCounters_.get();
   }
 
   CompileMode mode() const { return mode_; }
