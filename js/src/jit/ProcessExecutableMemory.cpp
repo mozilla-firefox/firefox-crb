@@ -29,13 +29,7 @@
 
 #ifdef XP_WIN
 #  include "mozilla/StackWalk_windows.h"
-#elif defined(__wasi__)
-#  if defined(JS_CODEGEN_WASM32)
-#    include <cstdlib>
-#  else
-// Nothing.
-#  endif
-#else
+#elif !defined(__wasi__)
 #  include <sys/mman.h>
 #  include <unistd.h>
 #endif
@@ -393,23 +387,6 @@ static void DecommitPages(void* addr, size_t bytes) {
   }
 }
 #elif defined(__wasi__)
-#  if defined(JS_CODEGEN_WASM32)
-static void* ReserveProcessExecutableMemory(size_t bytes) {
-  return malloc(bytes);
-}
-
-static void DeallocateProcessExecutableMemory(void* addr, size_t bytes) {
-  free(addr);
-}
-
-[[nodiscard]] static bool CommitPages(void* addr, size_t bytes,
-                                      ProtectionSetting protection) {
-  return true;
-}
-
-static void DecommitPages(void* addr, size_t bytes) {}
-
-#  else
 static void* ReserveProcessExecutableMemory(size_t bytes) {
   MOZ_CRASH("NYI for WASI.");
   return nullptr;
@@ -425,7 +402,6 @@ static void DeallocateProcessExecutableMemory(void* addr, size_t bytes) {
 static void DecommitPages(void* addr, size_t bytes) {
   MOZ_CRASH("NYI for WASI.");
 }
-#  endif
 #else  // !XP_WIN && !__wasi__
 #  ifndef MAP_NORESERVE
 #    define MAP_NORESERVE 0
@@ -923,10 +899,6 @@ bool js::jit::AddressIsInExecutableMemory(const void* p) {
 bool js::jit::ReprotectRegion(void* start, size_t size,
                               ProtectionSetting protection,
                               MustFlushICache flushICache) {
-#if defined(JS_CODEGEN_WASM32)
-  return true;
-#endif
-
   // Flush ICache when making code executable, before we modify |size|.
   if (flushICache == MustFlushICache::Yes) {
     MOZ_ASSERT(protection == ProtectionSetting::Executable);

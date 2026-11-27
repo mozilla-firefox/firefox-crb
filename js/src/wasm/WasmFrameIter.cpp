@@ -717,7 +717,7 @@ static const unsigned PushedFP = 12;
 static const unsigned SetFP = 16;
 static const unsigned PoppedFP = 4;
 static const unsigned PoppedFPJitEntry = 8;
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 // Synthetic values to satisfy asserts and avoid compiler warnings.
 static const unsigned PushedRetAddr = 0;
 static const unsigned PushedFP = 1;

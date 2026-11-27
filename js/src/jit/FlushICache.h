@@ -29,7 +29,7 @@ inline void FlushICache(void* code, size_t size) {
 // `FlushExecutionContext` below.
 extern void FlushICache(void* code, size_t size);
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 inline void FlushICache(void* code, size_t size) { MOZ_CRASH(); }
 
@@ -49,7 +49,7 @@ inline void FlushExecutionContextForAllThreads() {
   // No-op. Execution context is coherent with instruction cache.
 }
 
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
 
 inline void FlushExecutionContext() { MOZ_CRASH(); }
 inline bool CanFlushExecutionContextForAllThreads() { MOZ_CRASH(); }

@@ -33,7 +33,7 @@ SpiderMonkey is organized along the pipeline a script flows through:
     -> Baseline Interpreter -> Baseline JIT -> Ion -> Warp.  CacheIR is the
     shared IC representation consumed by all tiers (BaselineCacheIRCompiler,
     IonCacheIRCompiler, WarpCacheIRTranspiler). Backends live under
-    `jit/{x86-shared,arm,arm64,loong64,mips-shared,riscv64,wasm32}`.
+    `jit/{x86-shared,arm,arm64,loong64,mips-shared,riscv64}`.
 - **`src/gc/`** — generational, incremental, compacting GC. Nursery + tenured
     heap of Arenas/Chunks; `Allocator.{h,cpp}` is the allocation entry point;
     `BufferAllocator.{h,cpp}` is the malloc-replacement used for GC-tracked

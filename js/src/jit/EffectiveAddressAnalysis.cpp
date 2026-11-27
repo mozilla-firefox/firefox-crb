@@ -62,7 +62,7 @@ static bool OffsetIsSmallEnough(int32_t imm) {
 #elif defined(JS_CODEGEN_RISCV64) || defined(JS_CODEGEN_LOONG64) || \
     defined(JS_CODEGEN_MIPS64)
   return imm >= -0xFFF && imm <= 0xFFF;
-#elif defined(JS_CODEGEN_WASM32) || defined(JS_CODEGEN_NONE)
+#elif defined(JS_CODEGEN_NONE)
   return true;
 #else
 #  error "This needs to be filled in for your platform"

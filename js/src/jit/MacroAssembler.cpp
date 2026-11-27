@@ -6598,7 +6598,7 @@ CodeOffset MacroAssembler::wasmCallImport(const wasm::CallSiteDesc& desc,
                                offsetof(wasm::FuncImportInstanceData, code))),
       ABINonArgReg0);
 
-#if !defined(JS_CODEGEN_NONE) && !defined(JS_CODEGEN_WASM32)
+#if !defined(JS_CODEGEN_NONE)
   static_assert(ABINonArgReg0 != InstanceReg, "by constraint");
 #endif
 
@@ -6640,7 +6640,7 @@ void MacroAssembler::wasmReturnCallImport(
                                offsetof(wasm::FuncImportInstanceData, code))),
       ABINonArgReg0);
 
-#if !defined(JS_CODEGEN_NONE) && !defined(JS_CODEGEN_WASM32)
+#if !defined(JS_CODEGEN_NONE)
   static_assert(ABINonArgReg0 != InstanceReg, "by constraint");
 #endif
 

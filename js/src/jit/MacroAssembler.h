@@ -23,8 +23,6 @@
 #  include "jit/loong64/MacroAssembler-loong64.h"
 #elif defined(JS_CODEGEN_RISCV64)
 #  include "jit/riscv64/MacroAssembler-riscv64.h"
-#elif defined(JS_CODEGEN_WASM32)
-#  include "jit/wasm32/MacroAssembler-wasm32.h"
 #elif defined(JS_CODEGEN_NONE)
 #  include "jit/none/MacroAssembler-none.h"
 #else
@@ -93,8 +91,8 @@
 //   }
 //   ////}}} check_macroassembler_style
 
-#define ALL_ARCH mips64, arm, arm64, x86, x64, loong64, riscv64, wasm32
-#define ALL_SHARED_ARCH arm, arm64, loong64, mips64, riscv64, x86_shared, wasm32
+#define ALL_ARCH mips64, arm, arm64, x86, x64, loong64, riscv64
+#define ALL_SHARED_ARCH arm, arm64, loong64, mips64, riscv64, x86_shared
 
 // * How this macro works:
 //
@@ -140,7 +138,6 @@
 #define DEFINED_ON_mips64
 #define DEFINED_ON_loong64
 #define DEFINED_ON_riscv64
-#define DEFINED_ON_wasm32
 #define DEFINED_ON_none
 
 // Specialize for each architecture.
@@ -169,9 +166,6 @@
 #elif defined(JS_CODEGEN_RISCV64)
 #  undef DEFINED_ON_riscv64
 #  define DEFINED_ON_riscv64 define
-#elif defined(JS_CODEGEN_WASM32)
-#  undef DEFINED_ON_wasm32
-#  define DEFINED_ON_wasm32 define
 #elif defined(JS_CODEGEN_NONE)
 #  undef DEFINED_ON_none
 #  define DEFINED_ON_none crash
@@ -576,7 +570,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
   void Pop(const Register64 reg);
   void PopFlags() DEFINED_ON(x86_shared);
   void PopStackPtr()
-      DEFINED_ON(arm, mips64, x86_shared, loong64, riscv64, wasm32);
+      DEFINED_ON(arm, mips64, x86_shared, loong64, riscv64);
 
   // Push |regs| in argument order, storing the first at the highest address.
   // Some backends may optimize this to use a single stack adjustment.
@@ -654,9 +648,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
 
   // These do not adjust framePushed().
   void pushReturnAddress()
-      DEFINED_ON(mips64, arm, arm64, loong64, riscv64, wasm32);
+      DEFINED_ON(mips64, arm, arm64, loong64, riscv64);
   void popReturnAddress()
-      DEFINED_ON(mips64, arm, arm64, loong64, riscv64, wasm32);
+      DEFINED_ON(mips64, arm, arm64, loong64, riscv64);
 
   // Useful for dealing with two-valued returns.
   void moveRegPair(Register src0, Register src1, Register dst0, Register dst1,
@@ -1276,7 +1270,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // On ARM, the chip must have hardware division instructions.
   inline void quotient32(Register lhs, Register rhs, Register dest,
                          bool isUnsigned)
-      DEFINED_ON(mips64, arm, arm64, loong64, riscv64, wasm32);
+      DEFINED_ON(mips64, arm, arm64, loong64, riscv64);
 
   inline void quotient64(Register lhs, Register rhs, Register dest,
                          bool isUnsigned)
@@ -1293,7 +1287,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // On ARM, the chip must have hardware division instructions.
   inline void remainder32(Register lhs, Register rhs, Register dest,
                           bool isUnsigned)
-      DEFINED_ON(mips64, arm, arm64, loong64, riscv64, wasm32);
+      DEFINED_ON(mips64, arm, arm64, loong64, riscv64);
 
   inline void remainder64(Register lhs, Register rhs, Register dest,
                           bool isUnsigned)
@@ -1814,7 +1808,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
                           Label* label) PER_SHARED_ARCH;
 
   inline void branchAdd64(Condition cond, Imm64 imm, Register64 dest,
-                          Label* label) DEFINED_ON(x86, arm, wasm32);
+                          Label* label) DEFINED_ON(x86, arm);
 
   template <typename T>
   inline void branchAddPtr(Condition cond, T src, Register dest,
@@ -3921,10 +3915,10 @@ class MacroAssembler : public MacroAssemblerSpecific {
 
   // temp required on x86 and x64; must be undefined on mips64 and loong64.
   void convertUInt64ToFloat32(Register64 src, FloatRegister dest, Register temp)
-      DEFINED_ON(arm64, mips64, loong64, riscv64, wasm32, x64, x86);
+      DEFINED_ON(arm64, mips64, loong64, riscv64, x64, x86);
 
   void convertInt64ToFloat32(Register64 src, FloatRegister dest)
-      DEFINED_ON(arm64, mips64, loong64, riscv64, wasm32, x64, x86);
+      DEFINED_ON(arm64, mips64, loong64, riscv64, x64, x86);
 
   bool convertUInt64ToDoubleNeedsTemp() PER_ARCH;
 
@@ -4166,11 +4160,11 @@ class MacroAssembler : public MacroAssemblerSpecific {
   void wasmTruncateDoubleToInt64(FloatRegister input, Register64 output,
                                  bool isSaturating, Label* oolEntry,
                                  Label* oolRejoin, FloatRegister tempDouble)
-      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64, wasm32);
+      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64);
   void wasmTruncateDoubleToUInt64(FloatRegister input, Register64 output,
                                   bool isSaturating, Label* oolEntry,
                                   Label* oolRejoin, FloatRegister tempDouble)
-      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64, wasm32);
+      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64);
   void oolWasmTruncateCheckF64ToI64(
       FloatRegister input, Register64 output, TruncFlags flags,
       const wasm::TrapSiteDesc& trapSiteDesc, Label* rejoin,
@@ -4180,11 +4174,11 @@ class MacroAssembler : public MacroAssemblerSpecific {
   void wasmTruncateFloat32ToInt64(FloatRegister input, Register64 output,
                                   bool isSaturating, Label* oolEntry,
                                   Label* oolRejoin, FloatRegister tempDouble)
-      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64, wasm32);
+      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64);
   void wasmTruncateFloat32ToUInt64(FloatRegister input, Register64 output,
                                    bool isSaturating, Label* oolEntry,
                                    Label* oolRejoin, FloatRegister tempDouble)
-      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64, wasm32);
+      DEFINED_ON(arm64, x86, x64, mips64, loong64, riscv64);
   void oolWasmTruncateCheckF32ToI64(
       FloatRegister input, Register64 output, TruncFlags flags,
       const wasm::TrapSiteDesc& trapSiteDesc, Label* rejoin,
@@ -4941,12 +4935,12 @@ class MacroAssembler : public MacroAssemblerSpecific {
   FaultingCodeRange wasmAtomicLoad64(const wasm::MemoryAccessDesc& access,
                                      const Address& mem, Register64 temp,
                                      Register64 output)
-      DEFINED_ON(arm, x86, wasm32);
+      DEFINED_ON(arm, x86);
 
   FaultingCodeRange wasmAtomicLoad64(const wasm::MemoryAccessDesc& access,
                                      const BaseIndex& mem, Register64 temp,
                                      Register64 output)
-      DEFINED_ON(arm, x86, wasm32);
+      DEFINED_ON(arm, x86);
 
   // x86: `expected` must be the same as `output`, and must be edx:eax.
   // x86: `replacement` must be ecx:ebx.
@@ -6206,7 +6200,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
   inline void addStackPtrTo(T t);
 
   void subFromStackPtr(Imm32 imm32)
-      DEFINED_ON(mips64, loong64, riscv64, wasm32, arm, x86, x64);
+      DEFINED_ON(mips64, loong64, riscv64, arm, x86, x64);
   void subFromStackPtr(Register reg);
 
   template <typename T>

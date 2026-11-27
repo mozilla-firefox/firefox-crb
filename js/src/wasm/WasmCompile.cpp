@@ -104,7 +104,7 @@ uint32_t wasm::ObservedCPUFeatures() {
 #elif defined(JS_CODEGEN_RISCV64)
   MOZ_ASSERT(jit::GetRISCV64Flags() <= (UINT32_MAX >> ARCH_BITS));
   return RISCV64 | (jit::GetRISCV64Flags() << ARCH_BITS);
-#elif defined(JS_CODEGEN_NONE) || defined(JS_CODEGEN_WASM32)
+#elif defined(JS_CODEGEN_NONE)
   return 0;
 #else
 #  error "unknown architecture"
