@@ -19,6 +19,24 @@ function initDirectoryService() {
 
 add_setup(initDirectoryService);
 
+add_setup(() => {
+  const source = L10nFileSource.createMock(
+    "mock-brand",
+    "app",
+    ["en-US"],
+    "/localization/{locale}/",
+    [
+      {
+        path: "/localization/en-US/branding/brand.ftl",
+        source: "-brand-short-name = Mock",
+      },
+    ]
+  );
+  const registry = L10nRegistry.getInstance();
+  registry.registerSources([source]);
+  registerCleanupFunction(() => registry.removeSources(["mock-brand"]));
+});
+
 function makeAlert(options) {
   var alert = Cc["@mozilla.org/alert-notification;1"].createInstance(
     Ci.nsIAlertNotification
@@ -180,15 +198,20 @@ function testAlert(when, { serverEnabled, profD, isBackgroundTaskMode } = {}) {
   let parsedArgumentString = action =>
     parseOneEncoded(unescape(argumentString(action)));
 
+  let settingsLabel = new Localization(
+    ["branding/brand.ftl", "toolkit/global/alert.ftl"],
+    true
+  ).formatValueSync("notification-settings-with-brand");
+
   let settingsAction = isBackgroundTaskMode
     ? ""
-    : `<action content="Notification settings"/>`;
+    : `<action content="${settingsLabel}"/>`;
 
   let parsedSettingsAction = origin => {
     if (isBackgroundTaskMode) {
       return [];
     }
-    let content = "Notification settings";
+    let content = settingsLabel;
     return [
       content,
       {
@@ -358,9 +381,9 @@ function testAlert(when, { serverEnabled, profD, isBackgroundTaskMode } = {}) {
   let parsedSettingsActionWithPrivilegedName = isBackgroundTaskMode
     ? []
     : [
-        "Notification settings",
+        settingsLabel,
         {
-          content: "Notification settings",
+          content: settingsLabel,
           arguments: parsedArgumentString({
             action: "settings",
             privilegedName: name,

@@ -10,3 +10,7 @@ alert-settings-title =
 ## Reminder Notifications
 
 notification-default-dismiss = Dismiss
+
+# Item in the "..." menu of a Windows notification. Opens the notification
+# settings of the browser, to tell it apart from the Windows settings item.
+notification-settings-with-brand = { -brand-short-name } notification settings

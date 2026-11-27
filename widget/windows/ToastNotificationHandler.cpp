@@ -583,9 +583,20 @@ ComPtr<IXmlDocument> ToastNotificationHandler::CreateToastXmlDocument() {
     wantSettings = false;
   }
 #endif
+  RefPtr<intl::Localization> l10n = intl::Localization::Create(
+      {"branding/brand.ftl"_ns, "toolkit/global/alert.ftl"_ns}, true);
   if (MOZ_LIKELY(wantSettings)) {
     nsAutoString settingsButtonTitle;
-    bundle->GetStringFromName("webActions.settings.label", settingsButtonTitle);
+    IgnoredErrorResult rv;
+    nsAutoCString settingsTitleUtf8;
+    l10n->FormatValueSync("notification-settings-with-brand"_ns,
+                          settingsTitleUtf8, rv);
+    if (!rv.Failed() && !settingsTitleUtf8.IsEmpty()) {
+      CopyUTF8toUTF16(settingsTitleUtf8, settingsButtonTitle);
+    } else {
+      bundle->GetStringFromName("webActions.settings.label",
+                                settingsButtonTitle);
+    }
     success = AddActionNode(
         toastXml, actionsNode, settingsButtonTitle, launchArgWithoutAction,
         // TODO: launch into `about:preferences`?
@@ -658,10 +669,6 @@ ComPtr<IXmlDocument> ToastNotificationHandler::CreateToastXmlDocument() {
     // `activationType="system" arguments="dismiss" content=""` provides
     // localized text from Windows, but we support more locales than Windows
     // does, so let's have our own.
-    nsTArray<nsCString> resIds = {
-        "toolkit/global/alert.ftl"_ns,
-    };
-    RefPtr<intl::Localization> l10n = intl::Localization::Create(resIds, true);
     IgnoredErrorResult rv;
     nsAutoCString closeTitle;
     l10n->FormatValueSync("notification-default-dismiss"_ns, closeTitle, rv);
