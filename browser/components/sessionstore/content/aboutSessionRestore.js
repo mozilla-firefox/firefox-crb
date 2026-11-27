@@ -244,7 +244,9 @@ function restoreSession() {
     lazy.SessionStore.setWindowState(newWindow, stateString, true);
 
     let tabbrowser = top.gBrowser;
-    let browser = window.docShell.chromeEventHandler;
+    let browser = /** @type {MozBrowser} */ (
+      window.docShell.chromeEventHandler
+    );
     let tab = tabbrowser.getTabForBrowser(browser);
     tabbrowser.removeTab(tab);
   }, "browser-delayed-startup-finished");
