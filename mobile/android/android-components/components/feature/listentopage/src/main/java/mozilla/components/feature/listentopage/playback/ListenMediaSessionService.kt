@@ -192,17 +192,27 @@ internal class ListenSessionCallback(
         controller: MediaSession.ControllerInfo,
     ): MediaSession.ConnectionResult {
         val granted = MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller).build()
-        val commands = granted.availableSessionCommands.buildUpon()
-        commands.add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+        val sessionCommands = granted.availableSessionCommands.buildUpon()
+
+        // Prevent command STOP to be sent from the notification, which puts player into the Idle state (Bug 2084728)
+        val playerCommands =
+            if (session.isMediaNotificationController(controller)) {
+                granted.availablePlayerCommands.buildUpon().remove(Player.COMMAND_STOP).build()
+            } else {
+                granted.availablePlayerCommands
+            }
+
+        sessionCommands.add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
         if (controller.packageName == ownPackage) {
-            commands.add(SessionCommand(COMMAND_SET_SESSION_ACTIVITY, Bundle.EMPTY))
-            commands.add(SessionCommand(COMMAND_SET_ARTICLE_DURATION, Bundle.EMPTY))
-            commands.add(SessionCommand(COMMAND_STOP_AND_BUFFER_AT, Bundle.EMPTY))
-            commands.add(SessionCommand(COMMAND_FINISH_AT, Bundle.EMPTY))
+            sessionCommands.add(SessionCommand(COMMAND_SET_SESSION_ACTIVITY, Bundle.EMPTY))
+            sessionCommands.add(SessionCommand(COMMAND_SET_ARTICLE_DURATION, Bundle.EMPTY))
+            sessionCommands.add(SessionCommand(COMMAND_STOP_AND_BUFFER_AT, Bundle.EMPTY))
+            sessionCommands.add(SessionCommand(COMMAND_FINISH_AT, Bundle.EMPTY))
         }
 
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
-            .setAvailableSessionCommands(commands.build())
+            .setAvailableSessionCommands(sessionCommands.build())
+            .setAvailablePlayerCommands(playerCommands)
             .build()
     }
 
