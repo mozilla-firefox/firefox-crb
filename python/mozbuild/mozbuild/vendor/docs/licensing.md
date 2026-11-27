@@ -222,12 +222,12 @@ Components come from four sources, because none alone covers the tree:
 
   `cargo metadata` supplies what `Cargo.lock` cannot: whether each crate is
   reached as a normal, a build or a dev dependency. What only a dev
-  dependency or a `TOOLING_MEMBERS` member (`sbom_cargo.py`: geckodriver, the
-  http3server, the uniffi bindgens...) reaches, `mockall` or `hyper` for
-  instance, ships in nothing and goes to the
-  {ref}`build tooling document <build_tooling_sbom>`. A member missing from
-  that list counts as shipped. An unconfigured tree has no kinds, so it keeps
-  every crate in the product document.
+  dependency, a build dependency, a proc-macro or a `TOOLING_MEMBERS` member
+  (`sbom_cargo.py`: geckodriver, the http3server, the uniffi bindgens...)
+  reaches, `mockall`, `cc`, `syn` or `hyper` for instance, ships in nothing
+  and goes to the {ref}`build tooling document <build_tooling_sbom>`. A
+  member missing from that list counts as shipped. An unconfigured tree has
+  no kinds, so it keeps every crate in the product document.
 - **The npm lockfiles of the bundled front-end code** describe what webpack
   folds into the newtab, aboutwelcome and asrouter bundles: React, Redux,
   Fluent and their closures. These packages leave no directory of their own,
@@ -394,9 +394,10 @@ It holds:
 - **The vendored test suites, benchmarks and tools** that have a `moz.yaml`:
   googletest, puppeteer, the WebGL and WebGPU conformance suites, the WebKit
   benchmarks, libfuzzer.
-- **The test and tooling crates**, reached from the workspace only as dev
-  dependencies or from a `TOOLING_MEMBERS` member, which the product document
-  leaves out. Telling them apart needs `cargo metadata`, so an unconfigured
+- **The build, test and tooling crates**, reached from the workspace only as
+  build or dev dependencies, as proc-macros or from a `TOOLING_MEMBERS`
+  member, which the product document leaves out. Telling them apart needs
+  `cargo metadata`, so an unconfigured
   tree has none here.
 - **The vendored Python packages**, which mach, the build system and the test
   harnesses run on. `third_party/python/uv.lock` gives the version, the
