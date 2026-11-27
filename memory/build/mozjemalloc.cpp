@@ -157,7 +157,9 @@
 #include "Extent.h"
 #include "Globals.h"
 #include "Mutex.h"
-#include "PHC.h"
+#ifdef MOZ_PHC
+#  include "PHC.h"
+#endif
 #include "RedBlackTree.h"
 #include "Utils.h"
 #include "Zero.h"

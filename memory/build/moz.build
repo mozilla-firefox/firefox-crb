@@ -9,7 +9,6 @@ EXPORTS += [
     "mozmemory.h",
     "mozmemory_stall.h",
     "mozmemory_wrap.h",
-    "PHC.h",
 ]
 
 LIBRARY_DEFINES["MOZ_HAS_MOZGLUE"] = True
@@ -26,6 +25,9 @@ if CONFIG["MOZ_REPLACE_MALLOC"]:
 
 if CONFIG["MOZ_PHC"]:
     DEFINES["MOZ_PHC"] = True
+    EXPORTS += [
+        "PHC.h",
+    ]
     UNIFIED_SOURCES += [
         "FdPrintf.cpp",
         # PHC.cpp is #included in mozjemalloc.cpp
