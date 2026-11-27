@@ -365,6 +365,7 @@ void nsDocLoader::Destroy() {
   mListenerInfoList.Compact();
 
   mDocumentRequest = nullptr;
+  mJavascriptURIRequests.Clear();
 
   if (mLoadGroup) mLoadGroup->SetGroupObserver(nullptr);
 
@@ -418,6 +419,8 @@ nsDocLoader::OnStartRequest(nsIRequest* request) {
   if (loadFlags & nsIRequest::LOAD_BACKGROUND) {
     if (nsCOMPtr<nsIScriptChannel> scriptChannel = do_QueryInterface(request)) {
       if (scriptChannel->GetIsDocumentLoad()) {
+        mJavascriptURIRequests.AppendElement(request);
+
         RefPtr<Document> doc = do_GetInterface(GetAsSupports(this));
         // https://html.spec.whatwg.org/#navigate-to-a-javascript:-url
         // Step 7.1:
@@ -543,6 +546,8 @@ nsDocLoader::OnStopRequest(nsIRequest* aRequest, nsresult aStatus) {
   if (lf & nsIRequest::LOAD_BACKGROUND) {
     if (nsCOMPtr<nsIScriptChannel> scriptChannel =
             do_QueryInterface(aRequest)) {
+      mJavascriptURIRequests.RemoveElement(aRequest);
+
       if (mIsLoadingJavascriptURI) {
         MOZ_ASSERT(scriptChannel->GetIsDocumentLoad(),
                    "This should be a document load");
@@ -835,24 +840,12 @@ void nsDocLoader::DocLoaderIsEmpty(bool aFlushLayout,
       MOZ_ASSERT(mDocumentOpenedButNotLoaded || mIsLoadingJavascriptURI);
 
       if (mIsLoadingJavascriptURI) {
-        // Look for javascript channel to ensure the execute is finished.
-        nsCOMPtr<nsISimpleEnumerator> requests;
-        mLoadGroup->GetRequests(getter_AddRefs(requests));
-        bool hasMore = false;
-        while (NS_SUCCEEDED(requests->HasMoreElements(&hasMore)) && hasMore) {
-          nsCOMPtr<nsISupports> elem;
-          requests->GetNext(getter_AddRefs(elem));
-
-          nsCOMPtr<nsIScriptChannel> scriptChannel(do_QueryInterface(elem));
-          if (scriptChannel && scriptChannel->GetIsDocumentLoad()) {
-            if (nsCOMPtr<nsIRequest> request = do_QueryInterface(elem)) {
-              bool isPending = false;
-              request->IsPending(&isPending);
-              if (isPending) {
-                // Still waiting for the javascript: URL to finish executing.
-                return;
-              }
-            }
+        for (nsIRequest* request : mJavascriptURIRequests) {
+          bool isPending = false;
+          request->IsPending(&isPending);
+          if (isPending) {
+            // Still waiting for the javascript: URL to finish executing.
+            return;
           }
         }
       }
