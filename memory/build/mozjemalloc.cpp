@@ -3618,12 +3618,9 @@ struct BaseAllocator {
 #include "malloc_decls.h"
 
 inline void* BaseAllocator::malloc(size_t aSize) {
-  void* ret;
-  arena_t* arena;
-
   if (!malloc_init()) {
-    ret = nullptr;
-    goto RETURN;
+    errno = ENOMEM;
+    return nullptr;
   }
 
   if (aSize == 0) {
@@ -3631,11 +3628,10 @@ inline void* BaseAllocator::malloc(size_t aSize) {
   }
   // If mArena is non-null, it must not be in the first page.
   MOZ_DIAGNOSTIC_ASSERT_IF(mArena, (size_t)mArena >= gPageSize);
-  arena = mArena ? mArena : choose_arena(aSize);
-  ret = arena->Malloc(aSize, /* aZero = */ false);
+  arena_t* arena = mArena ? mArena : choose_arena(aSize);
+  void* ret = arena->Malloc(aSize, /* aZero = */ false);
 
-RETURN:
-  if (!ret) {
+  if (MOZ_UNLIKELY(!ret)) {
     errno = ENOMEM;
   }
 
