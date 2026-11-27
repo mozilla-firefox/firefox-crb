@@ -1121,6 +1121,7 @@ let JSWINDOWACTORS = {
       "chrome://browser/content/browser.xhtml",
       "about:home",
       "about:newtab",
+      "about:privatebrowsing",
     ],
     // The actor must never load in a web content process: it exposes the
     // urlbar's full result set and navigation surface, and it deliberately

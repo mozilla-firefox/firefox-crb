@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { UrlbarInputBase } from "chrome://browser/content/urlbar/UrlbarInputBase.mjs";
-import UrlbarPrefs from "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs";
 
 const { XPCOMUtils } = ChromeUtils.importESModule(
   "resource://gre/modules/XPCOMUtils.sys.mjs"
@@ -23,24 +22,10 @@ export class SearchbarInput extends UrlbarInputBase {
    * The new searchbar only initializes when its pref is enabled; otherwise the
    * legacy XUL searchbar is shown instead.
    *
-   * @returns {boolean}
+   * @type {string}
    */
-  #shouldConnect() {
-    return UrlbarPrefs.get("browser.search.widget.new");
-  }
-
-  connectedCallback() {
-    if (!this.#shouldConnect()) {
-      return;
-    }
-    super.connectedCallback();
-  }
-
-  disconnectedCallback() {
-    if (!this.#shouldConnect()) {
-      return;
-    }
-    super.disconnectedCallback();
+  get connectPref() {
+    return "browser.search.widget.new";
   }
 
   sapInit() {
@@ -92,19 +77,6 @@ export class SearchbarInput extends UrlbarInputBase {
         return fragment;
       },
     });
-  }
-
-  onPrefChanged(pref) {
-    super.onPrefChanged(pref);
-    if (pref == "browser.search.widget.new" && this.isConnected) {
-      if (UrlbarPrefs.get("browser.search.widget.new")) {
-        // The connectedCallback was skipped. Init now.
-        super.connectedCallback();
-      } else {
-        // Uninit now, the disconnectedCallback will be skipped.
-        super.disconnectedCallback();
-      }
-    }
   }
 
   handleEmptyValueNavigation(event) {

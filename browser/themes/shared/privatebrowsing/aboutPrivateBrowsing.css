@@ -93,6 +93,22 @@ p {
   height: var(--size-item-xlarge);
   padding: 0;
   min-width: 70vw;
+
+  moz-urlbar {
+    --urlbar-height: var(--size-item-xlarge);
+  }
+}
+
+@media not -moz-pref("browser.urlbar.aboutprivatebrowsing.featureGate") {
+  moz-urlbar {
+    display: none !important;
+  }
+}
+
+@media -moz-pref("browser.urlbar.aboutprivatebrowsing.featureGate") {
+  content-search-handoff-ui {
+    display: none;
+  }
 }
 
 .promo-image-large {
