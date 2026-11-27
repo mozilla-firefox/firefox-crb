@@ -27,6 +27,8 @@ tags = "os_integration"
 
 ["browser_privacy_dnsoverhttps.js"]
 
+["browser_privacy_dnsoverhttps_extension.js"]
+
 ["browser_privacy_dnsoverhttps_policy.js"]
 
 ["browser_privacy_gpc.js"]

@@ -3362,8 +3362,9 @@ Preferences.addSetting({
 
 Preferences.addSetting({
   id: "dohExceptionsButton",
-  deps: ["dohMode"],
-  disabled: ({ dohMode }) => dohMode.locked,
+  deps: ["dohMode", "dohRadioGroup"],
+  disabled: ({ dohMode, dohRadioGroup }) =>
+    dohMode.locked || !!dohRadioGroup.controllingExtensionInfo.id,
   onUserClick: () => PrivacySettingHelpers.showDoHExceptions(),
 });
 
@@ -3542,6 +3543,10 @@ Preferences.addSetting({
   // for the mismatch of control-to-pref.
   deps: ["dohFallbackIfCustom", "dohMode", "dohURL"],
   disabled: ({ dohMode }) => dohMode.locked,
+  controllingExtensionInfo: {
+    storeId: "dns.dohSettings",
+    l10nId: "extension-controlling-doh",
+  },
   onUserChange: (val, deps) => {
     let value = null;
     if (val == "default") {

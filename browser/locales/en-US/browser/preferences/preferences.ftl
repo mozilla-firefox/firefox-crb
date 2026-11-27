@@ -158,6 +158,10 @@ extension-controlling-websites-content-blocking-all-trackers = <img data-l10n-na
 # are being controlled by an extension.
 extension-controlling-proxy-config = <img data-l10n-name ="icon"/> <strong>{ $name }</strong> controls how { -brand-short-name } connects to the internet.
 
+# This string is shown to notify the user that their DNS over HTTPS settings
+# are being controlled by an extension.
+extension-controlling-doh = <img data-l10n-name="icon"/> <strong>{ $name }</strong> controls your DNS over HTTPS settings.
+
 # This string is shown after the user disables an extension to notify the user
 # how to enable an extension that they disabled.
 #
