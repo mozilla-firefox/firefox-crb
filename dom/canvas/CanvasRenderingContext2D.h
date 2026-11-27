@@ -616,7 +616,8 @@ class CanvasRenderingContext2D : public nsICanvasRenderingContextInternal,
   void OnRemoteCanvasLost() override;
   void OnRemoteCanvasRestored() override;
   void OnRemoteCanvasReset(
-      const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds) override;
+      const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds,
+      bool aRestore) override;
 
   /**
    * Update CurrentState().filter with the filter description for

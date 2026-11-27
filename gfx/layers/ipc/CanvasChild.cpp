@@ -385,11 +385,11 @@ static void NotifyCanvasDeviceChanged() {
 }
 
 ipc::IPCResult CanvasChild::RecvNotifyDeviceReset(
-    const nsTArray<RemoteTextureOwnerId>& aOwnerIds) {
+    const nsTArray<RemoteTextureOwnerId>& aOwnerIds, bool aRestore) {
   NS_ASSERT_OWNINGTHREAD(CanvasChild);
 
   if (auto* manager = gfx::CanvasShutdownManager::MaybeGet()) {
-    manager->OnRemoteCanvasReset(aOwnerIds);
+    manager->OnRemoteCanvasReset(aOwnerIds, aRestore);
   }
 
   mRecorder->RecordEvent(RecordedDeviceResetAcknowledged());

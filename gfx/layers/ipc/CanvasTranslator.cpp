@@ -1058,7 +1058,8 @@ bool CanvasTranslator::CreateReferenceTexture() {
   return true;
 }
 
-void CanvasTranslator::NotifyDeviceReset(const RemoteTextureOwnerIdSet& aIds) {
+void CanvasTranslator::NotifyDeviceReset(const RemoteTextureOwnerIdSet& aIds,
+                                         bool aRestore) {
   if (aIds.empty()) {
     return;
   }
@@ -1070,9 +1071,10 @@ void CanvasTranslator::NotifyDeviceReset(const RemoteTextureOwnerIdSet& aIds) {
     idArray.AppendElement(id);
   }
   gfx::CanvasRenderThread::Dispatch(
-      NewRunnableMethod<nsTArray<RemoteTextureOwnerId>&&>(
+      NewRunnableMethod<nsTArray<RemoteTextureOwnerId>&&, bool>(
           "CanvasTranslator::SendNotifyDeviceReset", this,
-          &CanvasTranslator::SendNotifyDeviceReset, std::move(idArray)));
+          &CanvasTranslator::SendNotifyDeviceReset, std::move(idArray),
+          aRestore));
 }
 
 gfx::DrawTargetWebgl* CanvasTranslator::GetDrawTargetWebgl(

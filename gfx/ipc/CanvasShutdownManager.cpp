@@ -143,13 +143,13 @@ void CanvasShutdownManager::OnRemoteCanvasRestored() {
 }
 
 void CanvasShutdownManager::OnRemoteCanvasReset(
-    const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds) {
+    const nsTArray<layers::RemoteTextureOwnerId>& aOwnerIds, bool aRestore) {
   if (aOwnerIds.IsEmpty()) {
     return;
   }
 
   for (const auto& canvas : RefActiveCanvas()) {
-    canvas->OnRemoteCanvasReset(aOwnerIds);
+    canvas->OnRemoteCanvasReset(aOwnerIds, aRestore);
   }
 }
 

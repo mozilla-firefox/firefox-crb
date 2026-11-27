@@ -222,7 +222,8 @@ class nsICanvasRenderingContextInternal : public nsISupports,
   virtual void OnRemoteCanvasLost() {}
   virtual void OnRemoteCanvasRestored() {}
   virtual void OnRemoteCanvasReset(
-      const nsTArray<mozilla::layers::RemoteTextureOwnerId>& aOwnerIds) {}
+      const nsTArray<mozilla::layers::RemoteTextureOwnerId>& aOwnerIds,
+      bool aRestore) {}
 
   virtual mozilla::layers::PersistentBufferProvider* GetBufferProvider() {
     return nullptr;
