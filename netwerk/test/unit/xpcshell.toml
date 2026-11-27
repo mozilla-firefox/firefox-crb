@@ -1640,6 +1640,10 @@ run-sequentially = ["true"] # node server exceptions dont replay well
 
 ["test_proxyconnect_https.js"]
 
+["test_proxyconnect_versions.js"]
+run-sequentially = ["true"] # node server exceptions dont replay well
+requesttimeoutfactor = 2 # starts an http3server for the HTTP/3 proxy cases
+
 ["test_psl.js"]
 
 ["test_range_requests.js"]

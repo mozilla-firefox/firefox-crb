@@ -393,6 +393,10 @@ void InnerConnectionAttempt::OnEstablisherDone(
   if (succeeded) {
     mWinner = establisher;
     mWinnerConn = aResult.unwrap();
+    if (TunnelSetupTransaction* setup =
+            establisher ? establisher->Transaction() : nullptr) {
+      mEstablishedConnect = setup->ResponseHead();
+    }
     // Tell the machine first so it stops handing out endpoints. Publishing
     // must not wait on an output event.
     nsresult rv =
@@ -487,6 +491,16 @@ void InnerConnectionAttempt::Succeeded(ConnectionEntry* aEntry,
         mConnMgrDelegate->FindTransaction(true, entry, trans);
     if (pending) {
       trans->SetConnection(nullptr);
+      // A connect-only consumer wants the tunnel, not a request over it. The
+      // driver read the CONNECT response, so pass it on: without it the
+      // transaction closes empty and the channel sees a bogus HTTP/0.9 reply.
+      if ((mCaps & NS_HTTP_CONNECT_ONLY) && mEstablishedConnect) {
+        LOG(("  handing CONNECT status=%u to connect-only trans=%p",
+             mEstablishedConnect->Head().Status(), trans.get()));
+        trans->OnProxyConnectComplete(mEstablishedConnect);
+        trans->InjectProxyConnectResponse(mEstablishedConnect->Head(),
+                                          EmptyCString());
+      }
       nsresult rv = mConnMgrDelegate->DispatchTransaction(
           entry, pending->Transaction(), conn);
       if (NS_FAILED(rv)) {

@@ -1565,16 +1565,13 @@ nsresult nsHttpConnectionMgr::MakeNewConnection(
 }
 
 // Whether to use InnerConnectionAttempt to establish the inner connection.
-// A consumer that takes the tunnel itself stays on the legacy path for now:
-// connect-only wants the CONNECT response on its own transaction, and a
-// WebSocket or WebTransport upgrade needs an extended CONNECT stream when the
-// connection carrying it is HTTP/2.
+// A WebSocket or WebTransport upgrade stays on the legacy path for now: it
+// needs an extended CONNECT stream when the connection carrying it is HTTP/2.
 static bool ShouldUseInnerConnectionAttempt(nsHttpConnectionInfo* aCi,
                                             nsHttpTransaction* aTrans) {
   return StaticPrefs::network_http_happy_eyeballs_tunnel_enabled() &&
          aCi->UsingHttpsProxy() && aCi->UsingConnect() &&
-         !aTrans->IsWebsocketUpgrade() && !aTrans->IsForWebTransport() &&
-         !(aTrans->Caps() & NS_HTTP_CONNECT_ONLY);
+         !aTrans->IsWebsocketUpgrade() && !aTrans->IsForWebTransport();
 }
 
 nsresult nsHttpConnectionMgr::TryStartInnerConnection(
