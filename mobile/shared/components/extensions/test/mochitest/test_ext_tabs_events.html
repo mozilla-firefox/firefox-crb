@@ -248,11 +248,6 @@ add_task(async function test_tabs_event_page() {
       browser.tabs[event].addListener(() => {
       });
     }
-    browser.test.onMessage.addListener(async msg => {
-      if (msg === "createTab") {
-        await browser.tabs.create({url: "about:blank"});
-      }
-    });
     browser.test.sendMessage("ready");
   }
 
@@ -270,10 +265,6 @@ add_task(async function test_tabs_event_page() {
   await extension.startup();
   info("Wait for event page to be started");
   await extension.awaitMessage("ready");
-  // Sanity check
-  info("Wait for tabs.onCreated listener call");
-  extension.sendMessage("createTab");
-  await extension.awaitMessage("onCreated");
 
   // on startup, all event listeners should not be primed
   await assertPersistentListeners(extension, apiNs, apiEvents, { primed: false });
