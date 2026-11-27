@@ -36,6 +36,7 @@ namespace net {
 
 class nsHttpHandler;
 class ASpdySession;
+class TunnelSetupTransaction;
 
 // 1dcc863e-db90-4652-a1fe-13fea0b54e46
 #define NS_HTTPCONNECTION_IID \
@@ -214,6 +215,9 @@ class nsHttpConnection final : public HttpConnectionBase,
   nsresult CreateTunnelStream(nsAHttpTransaction* httpTransaction,
                               HttpConnectionBase** aHttpConnection,
                               bool aIsExtendedCONNECT = false) override;
+  nsresult CreateInnerConnection(
+      TunnelSetupTransaction* aDriver,
+      HttpConnectionBase** aInnerConnection) override;
 
   // Replace the transaction this H1 connection is currently driving.
   // Analog of Http2Session::SwapTransaction / Http3Session::SwapTransaction:
