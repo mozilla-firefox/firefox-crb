@@ -78,3 +78,13 @@ When trying to learn something about the engine, search for a relevant
 `searchfox-cli` (see `../AGENTS.md`) indexes the whole tree, including this
 directory. Restrict path searches with `--path 'js/...'` to stay inside the
 engine.
+
+## Testing Tips
+
+When benchmarking and reporting time numbers, be sure to use
+`--strict-benchmark-mode`.  Investigations may also get value from using
+`--benchmark-mode` and seeing if it produces warnings that are relevant. 
+
+Shell defaults differ from the browser's so results without one of these 
+flags are not representative.
+
