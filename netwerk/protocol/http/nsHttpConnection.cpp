@@ -14,6 +14,7 @@
 #include "ASpdySession.h"
 #include "NSSErrorsService.h"
 #include "TLSTransportLayer.h"
+#include "TunnelSetupTransaction.h"
 #include "mozilla/ChaosMode.h"
 #include "mozilla/StaticPrefs_network.h"
 #include "mozilla/glean/NetwerkMetrics.h"
@@ -798,6 +799,24 @@ void nsHttpConnection::SwapTransaction(nsAHttpTransaction* aOld,
     return;
   }
   mTransaction = aNew;
+}
+
+nsresult nsHttpConnection::CreateInnerConnection(
+    TunnelSetupTransaction* aDriver, HttpConnectionBase** aInnerConnection) {
+  if (!mSpdySession) {
+    return NS_ERROR_UNEXPECTED;
+  }
+
+  nsCOMPtr<nsIInterfaceRequestor> callbacks = GetCallbacks();
+  auto result =
+      mSpdySession->CreateTunnelStream(aDriver, callbacks, mRtt,
+                                       /* aIsExtendedCONNECT */ false);
+  if (result.isErr()) {
+    return result.unwrapErr();
+  }
+  RefPtr<nsHttpConnection> conn = result.unwrap();
+  conn.forget(aInnerConnection);
+  return NS_OK;
 }
 
 nsresult nsHttpConnection::CreateTunnelStream(
