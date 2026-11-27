@@ -54,9 +54,15 @@ class SchemaDefinition(NamedTuple):
     #: If a list, only the named definitions will be bundled.
     bundle_common: Union[bool, list[str]]
 
+    #: Whether to bundle the multistage screen schema and its definitions.
+    bundle_screen: bool
+
     #: The testing corpus for the schema.
     test_corpus: dict[str, Path]
 
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+TOPSRCDIR = SCRIPT_DIR.parents[4]
 
 SCHEMA_DIR = Path("..", "templates")
 
@@ -102,6 +108,7 @@ SCHEMAS = [
             ),
         },
         bundle_common=True,
+        bundle_screen=True,
         test_corpus={
             "ReachExperiments": Path("corpus", "ReachExperiments.messages.json"),
             # These are generated via extract-test-corpus.js
@@ -123,6 +130,7 @@ SCHEMAS = [
             ),
         },
         bundle_common=True,
+        bundle_screen=False,
         # These are generated via extract-test-corpus.js
         test_corpus={
             # Just the "toast_notification" messages.
@@ -135,6 +143,14 @@ SCHEMAS = [
 
 COMMON_SCHEMA_NAME = "FxMSCommon.schema.json"
 COMMON_SCHEMA_PATH = Path(COMMON_SCHEMA_NAME)
+
+SCREEN_SCHEMA_NAME = "MultiStageProtonScreenSchemas.json"
+SCREEN_SCHEMA_PATH = (
+    TOPSRCDIR
+    / "toolkit/components/messaging-system/schemas/MultiStageProtonScreenSchemas"
+    / SCREEN_SCHEMA_NAME
+)
+SCREEN_DEF_NAME = "MultiStageProtonScreen"
 
 
 class NestedRefResolver(jsonschema.RefResolver):
@@ -180,21 +196,31 @@ def patch_schema(schema, bundled_id, schema_id=None):
     nor does it support bundled schemas. We rewrite the schema so that all
     relative refs are transformed into absolute refs via the schema's `$id`.
 
-    Additionally, we merge in the contents of FxMSCommon.schema.json, so all
-    refs relative to that schema will be transformed to become relative to this
-    schema.
+    Additionally, we merge in the contents of FxMSCommon.schema.json and
+    MultiStageProtonScreenSchemas.json, so all refs relative to those schemas
+    will be transformed to become relative to this schema
 
     See-also: https://github.com/python-jsonschema/jsonschema/issues/313
     """
     if schema_id is None:
         schema_id = schema["$id"]
 
+    # Rules for how to rewrite URI fragments that reference bundled schemas.
+    rewrite_prefixes = {
+        f"/{COMMON_SCHEMA_NAME}": "",
+        f"/{SCREEN_SCHEMA_NAME}": f"/$defs/{SCREEN_DEF_NAME}",
+    }
+
     def patch_ref(ref):
         uri = urlparse(ref)
         if uri.scheme == "" and uri.netloc == "" and uri.path == "" and uri.fragment:
-            return f"{schema_id}#{uri.fragment}"
-        if (uri.scheme, uri.path) == ("file", f"/{COMMON_SCHEMA_NAME}"):
-            return f"{bundled_id}#{uri.fragment}"
+            ref = f"{schema_id}#{uri.fragment}"
+            uri = urlparse(ref)
+        if (
+            uri.scheme == "file"
+            and (prefix := rewrite_prefixes.get(uri.path)) is not None
+        ):
+            return f"{bundled_id}#{prefix}{uri.fragment}"
         return ref
 
     for node in iter_refs(schema):
@@ -230,8 +256,9 @@ def check_refs(schema):
 def bundle_schema(schema_def: SchemaDefinition):
     """Create a bundled schema based on the schema definition."""
     # Patch each message type schema to resolve all self-references to be
-    # absolute and rewrite # references to FxMSCommon.schema.json to be relative
-    # to the new schema (because we are about to bundle its definitions).
+    # absolute and rewrite references to FxMSCommon.schema.json and
+    # MultiStageProtonScreenSchemas.json to be relative to the new schema
+    # (because we are about to bundle their definitions).
     defs = {
         name: patch_schema(read_schema(path), bundled_id=schema_def.schema_id)
         for name, path in schema_def.message_types.items()
@@ -259,6 +286,16 @@ def bundle_schema(schema_def: SchemaDefinition):
             for name, dfn in common_schema["$defs"].items()
             if dfn_filter(name)
         })
+
+    # Bundle the multistage screen schema as a single definition, keeping its
+    # own definitions nested inside it.
+    if schema_def.bundle_screen:
+        screen_schema = patch_schema(
+            read_schema(SCREEN_SCHEMA_PATH), bundled_id=schema_def.schema_id
+        )
+        del screen_schema["$schema"]
+        del screen_schema["$id"]
+        defs[SCREEN_DEF_NAME] = screen_schema
 
     # Ensure all bundled schemas have an $id so that $refs inside the
     # bundled schema work correctly (i.e, they will reference the subschema
