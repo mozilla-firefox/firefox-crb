@@ -42,15 +42,25 @@
 #  include "mozilla/layers/TextureD3D11.h"
 #endif
 
+#ifdef XP_MACOSX
+#  include "mozilla/gfx/MacIOSurface.h"
+#endif
+
 namespace mozilla {
 namespace layers {
 
 UniquePtr<TextureData> CanvasTranslator::CreateTextureData(
     const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat, bool aClear) {
+  return CreateTextureData(mTextureType, aSize, aFormat, aClear);
+}
+
+UniquePtr<TextureData> CanvasTranslator::CreateTextureData(
+    TextureType aTextureType, const gfx::IntSize& aSize,
+    gfx::SurfaceFormat aFormat, bool aClear) {
   TextureData* textureData = nullptr;
   TextureAllocationFlags allocFlags =
       aClear ? ALLOC_CLEAR_BUFFER : ALLOC_DEFAULT;
-  switch (mTextureType) {
+  switch (aTextureType) {
     case TextureType::Unknown:
       textureData = BufferTextureData::Create(
           aSize, aFormat, gfx::ColorSpace2::SRGB, gfx::TransferFunction::SRGB,
@@ -59,7 +69,7 @@ UniquePtr<TextureData> CanvasTranslator::CreateTextureData(
           allocFlags, nullptr);
       break;
     default:
-      textureData = TextureData::Create(mTextureType, aFormat, aSize,
+      textureData = TextureData::Create(aTextureType, aFormat, aSize,
                                         allocFlags, mBackendType);
       break;
   }
@@ -1475,20 +1485,50 @@ void CanvasTranslator::EnsureRemoteTextureOwner(RemoteTextureOwnerId aOwnerId) {
   }
 }
 
+// Some texture types have size limits that a buffer does not have, such as the
+// maximum D3D11 texture size.
+static bool TextureTypeAllowsSize(TextureType aTextureType,
+                                  const gfx::IntSize& aSize) {
+  switch (aTextureType) {
+#ifdef XP_WIN
+    case TextureType::D3D11: {
+      RefPtr<ID3D11Device> device =
+          gfx::DeviceManagerDx::Get()->GetContentDevice();
+      if (!device) {
+        return true;
+      }
+      uint32_t maxSize = GetMaxTextureSizeFromDevice(device);
+      return uint32_t(aSize.width) <= maxSize &&
+             uint32_t(aSize.height) <= maxSize;
+    }
+#endif
+#ifdef XP_MACOSX
+    case TextureType::MacIOSurface:
+      return size_t(aSize.width) <= MacIOSurface::GetMaxWidth() &&
+             size_t(aSize.height) <= MacIOSurface::GetMaxHeight();
+#endif
+    default:
+      return true;
+  }
+}
+
 UniquePtr<TextureData> CanvasTranslator::CreateOrRecycleTextureData(
     const gfx::IntSize& aSize, gfx::SurfaceFormat aFormat) {
+  TextureType textureType = TextureTypeAllowsSize(mTextureType, aSize)
+                                ? mTextureType
+                                : TextureType::Unknown;
   if (mRemoteTextureOwner) {
-    if (mTextureType == TextureType::Unknown) {
+    if (textureType == TextureType::Unknown) {
       return mRemoteTextureOwner->CreateOrRecycleBufferTextureData(aSize,
                                                                    aFormat);
     }
     if (UniquePtr<TextureData> data =
             mRemoteTextureOwner->GetRecycledTextureData(aSize, aFormat,
-                                                        mTextureType)) {
+                                                        textureType)) {
       return data;
     }
   }
-  return CreateTextureData(aSize, aFormat, false);
+  return CreateTextureData(textureType, aSize, aFormat, false);
 }
 
 bool CanvasTranslator::PushRemoteTexture(
