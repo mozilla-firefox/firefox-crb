@@ -257,23 +257,23 @@ add_task(async function test_network_markers_service_worker_use() {
           // "Missed" when the cache answered before we get a result from the network.
           // "Unresolved" when we got a response from the network before the cache subsystem.
           cache: Expect.stringMatches(/^(Missed|Unresolved)$/),
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
         Assert.objectContainsOnly(contentStopMarker.data, {
           ...commonDataProperties,
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
 
         Assert.objectContainsOnly(parentRedirectMarkerIntercept.data, {
           ...commonRedirectProperties,
           redirectId: parentRedirectMarkerReset.data.id,
           cache: "Unresolved",
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
         Assert.objectContainsOnly(parentRedirectMarkerReset.data, {
           ...commonRedirectProperties,
           redirectId: parentStopMarker.data.id,
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
 
         // Note: there's no check for the contentRedirectMarker, because there's
