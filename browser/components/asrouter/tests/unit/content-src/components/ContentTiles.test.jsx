@@ -940,6 +940,31 @@ describe("ContentTiles component", () => {
     wrapper.unmount();
   });
 
+  it("should render a single-select legend only as the sr-only fieldset legend", () => {
+    wrapper = mount(
+      <ContentTiles
+        content={{
+          tiles: {
+            type: "single-select",
+            legend: { raw: "Choose one" },
+            data: [{ id: "test1", label: { raw: "test1 label" } }],
+          },
+        }}
+        setActiveSingleSelectSelection={setActiveSingleSelectSelection}
+        handleAction={handleAction}
+      />
+    );
+    const legend = wrapper.find("fieldset legend");
+    assert.ok(legend.exists(), "Legend should render");
+    assert.ok(legend.hasClass("sr-only"), "Legend should be sr-only");
+    assert.equal(legend.text(), "Choose one");
+    assert.isFalse(
+      wrapper.find(".tile-subtitle").exists(),
+      "Legend should not render as a visible tile subtitle"
+    );
+    wrapper.unmount();
+  });
+
   const mountCarousel = () =>
     mount(
       <ContentTiles

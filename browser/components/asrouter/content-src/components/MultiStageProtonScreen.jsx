@@ -1859,6 +1859,10 @@ export const screenContentShape = {
       // Optional, currently for single-select tiles only. Visual layout for
       // the tile's items.
       layout: PropTypes.oneOf(["carousel"]),
+      // Optional, currently for single-select tiles only. Screen-reader-only
+      // accessible name for the group of options. Unlike `subtitle`, it is not
+      // rendered visibly.
+      legend: localizableThingPropTypes,
       // Optional, currently for single-select tiles only. Accessible name for
       // the carousel pill navigation.
       pill_nav_label: localizableThingPropTypes,

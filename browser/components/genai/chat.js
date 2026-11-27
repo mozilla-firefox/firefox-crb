@@ -445,7 +445,7 @@ function showOnboarding(length) {
         })),
         // Default to nothing selected
         selected: " ",
-        subtitle: { string_id: "genai-onboarding-choose-header" },
+        legend: { string_id: "genai-onboarding-choose-header" },
         type: "single-select",
       };
       // Insert provider tiles on the first screen

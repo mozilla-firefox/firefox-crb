@@ -106,6 +106,27 @@ add_task(async function test_sidebar_onboarding() {
     document.querySelector("label:has(.localhost)")
   );
   Assert.ok(label, "Got a provider");
+  Assert.equal(
+    document.querySelectorAll(
+      '[data-l10n-id="genai-onboarding-choose-header"]:not(legend)'
+    ).length,
+    1,
+    "Choose header is shown visibly only once"
+  );
+  const legend = document.querySelector("fieldset legend");
+  Assert.ok(legend, "Provider choices have a legend");
+  const chooseHeader = await document.l10n.formatValue(
+    "genai-onboarding-choose-header"
+  );
+  await TestUtils.waitForCondition(
+    () => legend.textContent == chooseHeader,
+    "Legend is translated"
+  );
+  Assert.equal(
+    legend.textContent,
+    chooseHeader,
+    "Provider choices are labelled by the sr-only legend"
+  );
   const header = document.getElementById("header");
   const browserContainer = document.getElementById("browser-container");
   Assert.ok(header.inert, "Header is inert during onboarding");

@@ -126,7 +126,13 @@ export const SingleSelect = ({
           className={`tiles-single-select-section ${category} ${isCarousel ? "carousel" : ""}`}
           ref={scrollerRef}
         >
-          <Localized text={content.tiles?.subtitle || content.subtitle}>
+          <Localized
+            text={
+              content.tiles?.legend ||
+              content.tiles?.subtitle ||
+              content.subtitle
+            }
+          >
             <legend className="sr-only" />
           </Localized>
           {content.tiles.data.map(

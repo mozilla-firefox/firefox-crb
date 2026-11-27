@@ -2676,6 +2676,10 @@ const screenContentShape = {
     // Optional, currently for single-select tiles only. Visual layout for
     // the tile's items.
     layout: prop_types_prop_types__WEBPACK_IMPORTED_MODULE_13___default().oneOf(["carousel"]),
+    // Optional, currently for single-select tiles only. Screen-reader-only
+    // accessible name for the group of options. Unlike `subtitle`, it is not
+    // rendered visibly.
+    legend: localizableThingPropTypes,
     // Optional, currently for single-select tiles only. Accessible name for
     // the carousel pill navigation.
     pill_nav_label: localizableThingPropTypes,
@@ -5707,7 +5711,7 @@ const SingleSelect = ({
     className: `tiles-single-select-section ${category} ${isCarousel ? "carousel" : ""}`,
     ref: scrollerRef
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement(_MSLocalized__WEBPACK_IMPORTED_MODULE_1__.Localized, {
-    text: content.tiles?.subtitle || content.subtitle
+    text: content.tiles?.legend || content.tiles?.subtitle || content.subtitle
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default().createElement("legend", {
     className: "sr-only"
   })), content.tiles.data.map(({

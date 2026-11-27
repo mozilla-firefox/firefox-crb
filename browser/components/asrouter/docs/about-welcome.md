@@ -114,6 +114,10 @@ tiles: {
 }
 ```
 
+A `single-select` tile may set `tiles.legend` to give its group of options a
+screen-reader-only accessible name. Unlike `tiles.subtitle`, which is also
+rendered as a visible paragraph above the options, `tiles.legend` is not shown.
+
 ##### Carousel Card
 
 The `carousel-card` type displays a single select tile inside a card with a full bleed image, label, and an optional button. These cards, along with navigation pills, are consumed by the `carousel` layout and supported with horizontal scrolling navigation.
