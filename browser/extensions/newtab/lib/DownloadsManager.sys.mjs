@@ -53,16 +53,7 @@ export class DownloadsManager {
     };
   }
 
-  /**
-   * @backward-compat { version 161 }
-   * downloads.properties was migrated to Fluent in 161, removing
-   * DownloadsCommon.strings. Once 161 reaches Release, drop the
-   * DownloadsCommon.strings fallback.
-   */
   getSizeUnknownLabel() {
-    if (lazy.DownloadsCommon.strings) {
-      return lazy.DownloadsCommon.strings.sizeUnknown;
-    }
     return lazy.downloadsL10n.formatValueSync("downloads-size-unknown");
   }
 

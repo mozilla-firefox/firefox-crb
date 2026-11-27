@@ -401,7 +401,7 @@ describe("Downloads Manager", () => {
     });
   });
   describe("#getSizeUnknownLabel", () => {
-    it("should use the Fluent string when DownloadsCommon.strings is gone", () => {
+    it("should use the Fluent string", () => {
       const formatValueSync = jest.fn(() => "Unknown size");
       const restore = stubGlobals({
         Localization: class {
@@ -411,10 +411,6 @@ describe("Downloads Manager", () => {
       expect(downloadsManager.getSizeUnknownLabel()).toBe("Unknown size");
       expect(formatValueSync).toHaveBeenCalledWith("downloads-size-unknown");
       restore();
-    });
-    it("should fall back to DownloadsCommon.strings on older versions", () => {
-      downloadsCommon.strings = { sizeUnknown: "Unknown size" };
-      expect(downloadsManager.getSizeUnknownLabel()).toBe("Unknown size");
     });
   });
   describe("#onDownloadRemoved", () => {
