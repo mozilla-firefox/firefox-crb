@@ -71,21 +71,25 @@ function dropdown(el, name) {
  */
 async function chooseOption(win, mozSelect, value) {
   const select = mozSelect.shadowRoot.querySelector("select");
-  const target = [...select.options].findIndex(option => option.value == value);
-  select.scrollIntoView({ block: "center" });
-  await new Promise(resolve => win.requestAnimationFrame(resolve));
+  if (select.value == value) {
+    await Promise.resolve()
+  } else {
+    const target = [...select.options].findIndex(option => option.value == value);
+    select.scrollIntoView({ block: "center" });
+    await new Promise(resolve => win.requestAnimationFrame(resolve));
 
-  const shown = BrowserTestUtils.waitForSelectPopupShown(window);
-  EventUtils.synthesizeMouseAtCenter(select, {}, win);
-  const popup = await shown;
+    const shown = BrowserTestUtils.waitForSelectPopupShown(window);
+    EventUtils.synthesizeMouseAtCenter(select, {}, win);
+    const popup = await shown;
 
-  const changed = BrowserTestUtils.waitForEvent(mozSelect, "change");
-  const hidden = BrowserTestUtils.waitForPopupEvent(popup, "hidden");
-  const item = popup.querySelectorAll("menuitem")[target];
-  item.scrollIntoView({ block: "nearest" });
-  EventUtils.synthesizeMouseAtCenter(item, {}, window);
-  await Promise.all([changed, hidden]);
-  await mozSelect.getRootNode().host.updateComplete;
+    const changed = BrowserTestUtils.waitForEvent(mozSelect, "change");
+    const hidden = BrowserTestUtils.waitForPopupEvent(popup, "hidden");
+    const item = popup.querySelectorAll("menuitem")[target];
+    item.scrollIntoView({ block: "nearest" });
+    EventUtils.synthesizeMouseAtCenter(item, {}, window);
+    await Promise.all([changed, hidden]);
+    await mozSelect.getRootNode().host.updateComplete;
+  }
 }
 
 async function clickSubmit(win, el) {
