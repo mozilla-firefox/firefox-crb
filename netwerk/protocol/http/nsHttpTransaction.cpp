@@ -1064,6 +1064,16 @@ nsresult nsHttpTransaction::WriteSegments(nsAHttpSegmentWriter* writer,
     return NS_SUCCEEDED(mStatus) ? NS_BASE_STREAM_CLOSED : mStatus;
   }
 
+  // A restart detaches the transaction from its connection without marking it
+  // done. A stream that still feeds it must drop it, as for a forced restart,
+  // instead of parsing a response with no connection (bug 2095682).
+  if (!mConnection) {
+    LOG(("nsHttpTransaction::WriteSegments %p has no connection", this));
+    MOZ_DIAGNOSTIC_ASSERT(
+        false, "WriteSegments on a transaction without a connection");
+    return NS_BINDING_RETARGETED;
+  }
+
   if (ShouldThrottle()) {
     if (mThrottlingReadAllowance == THROTTLE_NO_LIMIT) {  // no limit set
       // V1: ThrottlingReadLimit() returns 0

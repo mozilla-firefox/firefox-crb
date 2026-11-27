@@ -34,8 +34,11 @@ ZeroRttHandle::ZeroRttHandle(HappyEyeballsConnectionAttempt* aHet)
 
 ZeroRttHandle::~ZeroRttHandle() = default;
 
+// A real transaction that is already on a connection was dispatched by
+// another attempt. Racing for it or adopting it would put it on a second
+// stream, where one stream can restart it under the other (bug 2095682).
 static bool IsUsableRealTxn(nsHttpTransaction* aRealTxn) {
-  return aRealTxn && !aRealTxn->Closed();
+  return aRealTxn && !aRealTxn->Closed() && !aRealTxn->Connection();
 }
 
 // Resolve the real nsHttpTransaction through HET. HET's mTransaction
@@ -198,6 +201,16 @@ nsresult ZeroRttHandle::Finish0RTT(HappyEyeballsTransaction* aCaller,
 
   // At this point we are about to declare a winner; the guard above guarantees
   // the handle is still Open.
+
+  // The real transaction leaves the pending queue when 0-RTT starts, and is
+  // only re-queued on paths that also clean up this handle, so it can't be on
+  // a connection yet. If it is, ResolveRealTxn treats it as gone below.
+  if (RefPtr<HappyEyeballsConnectionAttempt> het = do_QueryReferent(mHet)) {
+    nsHttpTransaction* realTxn = het->RealHttpTransaction();
+    MOZ_DIAGNOSTIC_ASSERT(!realTxn || !realTxn->Connection(),
+                          "0-RTT winner for a transaction already on a "
+                          "connection");
+  }
 
   // H1/H2, alpnChanged=1: early data was sent for a protocol the server no
   //   longer speaks, so the request must restart.  For H2, Http2Session also

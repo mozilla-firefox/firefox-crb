@@ -1637,8 +1637,11 @@ void Http3Session::SwapTransaction(nsAHttpTransaction* aOld,
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   MOZ_ASSERT(aOld && aNew);
   RefPtr<Http3StreamBase> stream = mStreamTransactionHash.Get(aOld);
+  // The new transaction already points at this session, so without the swap
+  // it would wait for a stream that never feeds it.
   if (!stream) {
     LOG3(("Http3Session::SwapTransaction %p aOld=%p not in hash", this, aOld));
+    MOZ_DIAGNOSTIC_ASSERT(false, "SwapTransaction: no stream for aOld");
     return;
   }
   LOG3(("Http3Session::SwapTransaction %p aOld=%p -> aNew=%p stream=%p", this,
