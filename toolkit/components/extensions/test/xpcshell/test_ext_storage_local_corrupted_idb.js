@@ -17,9 +17,6 @@ AddonTestUtils.init(this);
 AddonTestUtils.overrideCertDB();
 AddonTestUtils.createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "1");
 
-// The userContextID reserved for the extension storage.
-const WEBEXT_STORAGE_USER_CONTEXT_ID = -1 >>> 0;
-
 async function assertStorageLocalCorruptedGleanEvents(expected, msg) {
   await Services.fog.testFlushAllChildren();
   const gleanEvents =
@@ -108,7 +105,7 @@ add_task(async function test_idb_reset_on_missing_object_store() {
     PathUtils.profileDir,
     "storage",
     "default",
-    `moz-extension+++${uuid}^userContextId=${WEBEXT_STORAGE_USER_CONTEXT_ID}`,
+    `moz-extension+++${uuid}^userContextId=${Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID}`,
     "idb"
   );
 
@@ -374,7 +371,7 @@ add_task(async function test_corrupted_idb_key() {
     PathUtils.profileDir,
     "storage",
     "default",
-    `moz-extension+++${uuid}^userContextId=${WEBEXT_STORAGE_USER_CONTEXT_ID}`,
+    `moz-extension+++${uuid}^userContextId=${Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID}`,
     "idb"
   );
 

@@ -11,8 +11,6 @@ const TEST_STORE_FILE_PATH = PathUtils.join(
   "test-containers.json"
 );
 
-const MAX_USER_CONTEXT_ID = 4294967295;
-
 // Writes `data` to its own store file and returns a service instance with the
 // migrated data already loaded.
 async function loadFixture(name, data) {
@@ -114,7 +112,7 @@ function thumbnailIdentity({ legacy = false } = {}) {
 
 function webextStorageLocalIdentity({ legacy = false } = {}) {
   const identity = {
-    userContextId: MAX_USER_CONTEXT_ID,
+    userContextId: Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID,
     public: false,
     icon: "",
     color: "",
@@ -448,7 +446,7 @@ add_task(async function migrateVersion3() {
   );
   equal(
     webextStorageLocal && webextStorageLocal.userContextId,
-    MAX_USER_CONTEXT_ID,
+    Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID,
     "3 -> 4 adds the reserved extension storage identity"
   );
 
@@ -512,7 +510,11 @@ add_task(async function migrateVersion4() {
   equal(
     cis
       .getPrivateUserContextIds()
-      .filter(userContextId => userContextId === MAX_USER_CONTEXT_ID).length,
+      .filter(
+        userContextId =>
+          userContextId ===
+          Ci.nsIAddonPolicyService.STORAGE_LOCAL_USER_CONTEXT_ID
+      ).length,
     1,
     "The reserved extension storage identity is not duplicated"
   );

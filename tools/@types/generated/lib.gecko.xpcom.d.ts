@@ -1274,6 +1274,9 @@ interface nsIShellService extends nsISupports {
 
 /** <!-- binding_to(idl, interface_name, XPIDL_nsIAddonPolicyService) --> */
 interface nsIAddonPolicyService extends nsISupports {
+  /** <!-- binding_to(idl, const, XPIDL_nsIAddonPolicyService_STORAGE_LOCAL_USER_CONTEXT_ID) --> */
+  readonly STORAGE_LOCAL_USER_CONTEXT_ID?: 4294967295;
+
   /** <!-- binding_to(idl, attribute, XPIDL_nsIAddonPolicyService_defaultCSP) --> */
   readonly defaultCSP: string;
   /** <!-- binding_to(idl, attribute, XPIDL_nsIAddonPolicyService_defaultCSPV3) --> */
