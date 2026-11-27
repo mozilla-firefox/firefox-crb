@@ -118,7 +118,7 @@ static void TestInUseAllocation(uint8_t* aPtr, size_t aSize) {
                         true, false));
   ASSERT_EQ(moz_malloc_usable_size(aPtr), aSize);
   jemalloc_ptr_info(aPtr, &jeInfo);
-  ASSERT_TRUE(JeInfoEq(jeInfo, TagLiveAlloc, aPtr, aSize, 0));
+  ASSERT_TRUE(JeInfoEq(jeInfo, TagLiveAlloc, aPtr, aSize, 1));
 
   // Test an in-use PHC allocation: last byte within it.
   ASSERT_TRUE(mozilla::phc::IsPHCAllocation(aPtr + aSize - 1, &phcInfo));
@@ -126,7 +126,7 @@ static void TestInUseAllocation(uint8_t* aPtr, size_t aSize) {
                         true, false));
   ASSERT_EQ(moz_malloc_usable_size(aPtr + aSize - 1), aSize);
   jemalloc_ptr_info(aPtr + aSize - 1, &jeInfo);
-  ASSERT_TRUE(JeInfoEq(jeInfo, TagLiveAlloc, aPtr, aSize, 0));
+  ASSERT_TRUE(JeInfoEq(jeInfo, TagLiveAlloc, aPtr, aSize, 1));
 
   // Test an in-use PHC allocation: last byte before it.
   ASSERT_TRUE(mozilla::phc::IsPHCAllocation(aPtr - 1, &phcInfo));
@@ -188,14 +188,14 @@ static void TestFreedAllocation(uint8_t* aPtr, size_t aSize) {
   ASSERT_TRUE(PHCInfoEq(phcInfo, phc::AddrInfo::Kind::FreedPage, aPtr, aSize,
                         true, true));
   jemalloc_ptr_info(aPtr, &jeInfo);
-  ASSERT_TRUE(JeInfoEq(jeInfo, TagFreedAlloc, aPtr, aSize, 0));
+  ASSERT_TRUE(JeInfoEq(jeInfo, TagFreedAlloc, aPtr, aSize, 1));
 
   // Test a freed PHC allocation: last byte within it.
   ASSERT_TRUE(mozilla::phc::IsPHCAllocation(aPtr + aSize - 1, &phcInfo));
   ASSERT_TRUE(PHCInfoEq(phcInfo, phc::AddrInfo::Kind::FreedPage, aPtr, aSize,
                         true, true));
   jemalloc_ptr_info(aPtr + aSize - 1, &jeInfo);
-  ASSERT_TRUE(JeInfoEq(jeInfo, TagFreedAlloc, aPtr, aSize, 0));
+  ASSERT_TRUE(JeInfoEq(jeInfo, TagFreedAlloc, aPtr, aSize, 1));
 
   // Test a freed PHC allocation: last byte before it.
   ASSERT_TRUE(mozilla::phc::IsPHCAllocation(aPtr - 1, &phcInfo));
@@ -297,14 +297,10 @@ TEST(PHC, TestPHCDisablingThread)
 
   // Test realloc() on a PHC allocation while PHC is disabled on the thread.
   uint8_t* p2 = (uint8_t*)realloc(p, 128);
-  // The small realloc is fulfilled within the same page, but it does move.
-  ASSERT_TRUE(p2 == p - 96);
-  ASSERT_TRUE(mozilla::phc::IsPHCAllocation(p2, nullptr));
-  uint8_t* p3 = (uint8_t*)realloc(p2, 2 * kPageSize);
-  // The big realloc is not in-place, and the result is not a PHC allocation.
-  ASSERT_TRUE(p3 != p2);
-  ASSERT_FALSE(mozilla::phc::IsPHCAllocation(p3, nullptr));
-  free(p3);
+  // The realloc always moves into the jemalloc heap.
+  ASSERT_TRUE(p2 != p);
+  ASSERT_FALSE(mozilla::phc::IsPHCAllocation(p2, nullptr));
+  free(p2);
 
   // Test free() on a PHC allocation while PHC is disabled on the thread.
   free(q);
