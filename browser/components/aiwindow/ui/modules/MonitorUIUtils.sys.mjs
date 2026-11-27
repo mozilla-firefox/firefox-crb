@@ -566,7 +566,7 @@ export const MonitorUIUtils = {
   isMonitorRegionSupported() {
     return lazy.monitorSupportedRegions.matches(
       lazy.Region.home,
-      Services.locale.appLocaleAsBCP47
+      Services.locale.appLocale
     );
   },
 };

@@ -27,7 +27,7 @@ export function ImageObjectProcessor(aErrors, aExtractor, aGetL10n) {
 const iconPurposes = Object.freeze(["any", "maskable", "monochrome"]);
 
 function formatList(items) {
-  return new Intl.ListFormat(Services.locale.appLocaleAsBCP47, {
+  return new Intl.ListFormat(Services.locale.appLocale, {
     type: "unit",
   }).format(items);
 }

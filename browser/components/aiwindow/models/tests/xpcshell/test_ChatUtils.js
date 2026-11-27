@@ -142,7 +142,7 @@ add_task(
         label: "Example Page",
       },
     ];
-    const locale = Services.locale.appLocaleAsBCP47;
+    const locale = Services.locale.appLocale;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const mapping =

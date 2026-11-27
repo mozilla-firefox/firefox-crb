@@ -191,7 +191,7 @@ export const MonitorSetup = {
       conversation.securityProperties?.setPrivateData();
     }
 
-    const locale = Services.locale.appLocaleAsBCP47;
+    const locale = Services.locale.appLocale;
     const language = describeLanguage(locale);
     conversation.setSystemMessage(
       renderPrompt(systemTemplate, { locale, language })

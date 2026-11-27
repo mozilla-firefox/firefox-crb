@@ -253,7 +253,7 @@ export class AddonSearchEngine extends SearchEngine {
     // See also https://bugzilla.mozilla.org/show_bug.cgi?id=1781768#c3 for
     // more background.
     let localeToLoad = Services.locale.negotiateLanguages(
-      Services.locale.appLocalesAsBCP47,
+      Services.locale.appLocales,
       [...extension.localeData.locales.keys()],
       manifest.default_locale
     )[0];

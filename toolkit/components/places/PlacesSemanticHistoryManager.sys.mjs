@@ -414,7 +414,7 @@ class PlacesSemanticHistoryManager {
       this.qualifiedForSemanticSearch &&
       Services.prefs.getBoolPref("browser.ml.enable", true) &&
       Services.prefs.getBoolPref("places.semanticHistory.featureGate", false) &&
-      this.#isSupportedLocale(Services.locale.appLocaleAsBCP47)
+      this.#isSupportedLocale(Services.locale.appLocale)
     );
   }
 
@@ -432,7 +432,7 @@ class PlacesSemanticHistoryManager {
       this.qualifiedForSemanticSearch &&
       Services.prefs.getBoolPref("browser.ml.enable", true) &&
       lazy.semanticHistorySmartwindowFeatureGate &&
-      this.#isSupportedLocale(Services.locale.appLocaleAsBCP47)
+      this.#isSupportedLocale(Services.locale.appLocale)
     );
   }
 

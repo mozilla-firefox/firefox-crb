@@ -502,7 +502,7 @@ export var SearchUtils = {
     engines,
     appDefaultEngine,
     appPrivateDefaultEngine,
-    locale = Services.locale.appLocaleAsBCP47,
+    locale = Services.locale.appLocale,
   }) {
     /** @type {T[]} */
     const sortedEngines = [];

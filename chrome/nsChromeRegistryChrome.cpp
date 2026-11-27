@@ -141,13 +141,13 @@ nsChromeRegistryChrome::IsLocaleRTL(const nsACString& package, bool* aResult) {
  * chrome packages.
  *
  * If you want to get the current application's UI locale, please use
- * LocaleService::GetAppLocaleAsBCP47.
+ * LocaleService::GetAppLocale.
  */
 nsresult nsChromeRegistryChrome::GetSelectedLocale(const nsACString& aPackage,
                                                    nsACString& aLocale) {
   nsAutoCString reqLocale;
   if (aPackage.EqualsLiteral("global")) {
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(reqLocale);
+    LocaleService::GetInstance()->GetAppLocale(reqLocale);
   } else {
     AutoTArray<nsCString, 10> requestedLocales;
     LocaleService::GetInstance()->GetRequestedLocales(requestedLocales);
@@ -265,7 +265,7 @@ void nsChromeRegistryChrome::SendRegisteredChrome(
   }
 
   nsAutoCString appLocale;
-  LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+  LocaleService::GetInstance()->GetAppLocale(appLocale);
 
   if (aParent) {
     bool success = aParent->SendRegisterChrome(packages, resources, overrides,
@@ -290,7 +290,7 @@ void nsChromeRegistryChrome::ChromePackageFromPackageEntry(
     const nsACString& aPackageName, PackageEntry* aPackage,
     ChromePackage* aChromePackage, const nsCString& aSelectedSkin) {
   nsAutoCString appLocale;
-  LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+  LocaleService::GetInstance()->GetAppLocale(appLocale);
 
   SerializeURI(aPackage->baseURI, aChromePackage->contentBaseURI);
   SerializeURI(aPackage->locales.GetBase(appLocale, nsProviderArray::LOCALE),
@@ -324,7 +324,7 @@ nsIURI* nsChromeRegistryChrome::GetBaseURIFromPackage(
 
   if (aProvider.EqualsLiteral("locale")) {
     nsAutoCString appLocale;
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+    LocaleService::GetInstance()->GetAppLocale(appLocale);
     if (appLocale.LowerCaseEqualsASCII("ja-jp-macos")) {
       appLocale.AssignLiteral("ja-JP-mac");
     }

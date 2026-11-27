@@ -47,7 +47,7 @@ already_AddRefed<nsAtom> ICUUtils::LanguageTagIterForContent::GetNext() {
       return NS_Atomize(nsRFPService::GetSpoofedJSLocale());
     }
     nsAutoCString appLocale;
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+    LocaleService::GetInstance()->GetAppLocale(appLocale);
     return NS_Atomize(appLocale);
   }
 

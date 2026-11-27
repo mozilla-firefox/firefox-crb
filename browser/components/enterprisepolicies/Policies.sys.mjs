@@ -3911,7 +3911,7 @@ export var Policies = {
 
         const preferredLanguage = topWebPreferredLanguage.length
           ? topWebPreferredLanguage
-          : Services.locale.appLocaleAsBCP47;
+          : Services.locale.appLocale;
 
         lazy.PoliciesUtils.setDefaultPref(
           "browser.translations.mostRecentTargetLanguages",

@@ -86,7 +86,7 @@ add_task(async function test_fetch_caches_and_broadcasts() {
   Assert.ok(
     feed.merino.fetchFramedWidgets.calledWithMatch({
       endpointUrl: PROD_ENDPOINT,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
     }),
     "Fetches the prod endpoint for the app locale"
   );

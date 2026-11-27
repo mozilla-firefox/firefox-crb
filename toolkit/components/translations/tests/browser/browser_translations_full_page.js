@@ -309,11 +309,11 @@ add_task(async function test_full_page_translation_with_selected_text_input() {
  * locale.
  */
 add_task(async function test_about_translations_enabled() {
-  const { appLocaleAsBCP47 } = Services.locale;
-  if (!appLocaleAsBCP47.startsWith("en")) {
+  const { appLocale } = Services.locale;
+  if (!appLocale.startsWith("en")) {
     console.warn(
       "This test assumes to be running in an 'en' app locale, however the app locale " +
-        `is set to ${appLocaleAsBCP47}. Skipping the test.`
+        `is set to ${appLocale}. Skipping the test.`
     );
     ok(true, "Skipping test.");
     return;

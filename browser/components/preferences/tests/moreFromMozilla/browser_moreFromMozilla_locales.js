@@ -5,7 +5,7 @@
 
 add_task(async function test_email_link_visible_for_supported_locale() {
   await clearPolicies();
-  const initialLocale = Services.locale.appLocaleAsBCP47;
+  const initialLocale = Services.locale.appLocale;
   setLocale("pt-BR");
 
   await getPromoCards();
@@ -22,7 +22,7 @@ add_task(async function test_email_link_visible_for_supported_locale() {
 
 add_task(async function test_email_link_hidden_for_unsupported_locale() {
   await clearPolicies();
-  const initialLocale = Services.locale.appLocaleAsBCP47;
+  const initialLocale = Services.locale.appLocale;
   setLocale("af");
 
   await getPromoCards();

@@ -70,7 +70,7 @@ add_task(async function test_coverage_walks_past_locale_without_coverage() {
   Services.locale.requestedLocales = [LOC_NO_COVERAGE, LOC_COVERAGE];
 
   Assert.deepEqual(
-    Services.locale.appLocalesAsBCP47,
+    Services.locale.appLocales,
     [LOC_NO_COVERAGE, LOC_COVERAGE, "en-US"],
     "App locale chain is the coverage-less locale, the covered locale, then " +
       "the en-US last fallback"

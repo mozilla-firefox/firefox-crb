@@ -1459,12 +1459,19 @@ export class TopSitesFeed {
       }
 
       // Filter by locale.
-      if (topsite.exclude_locales?.includes(Services.locale.appLocaleAsBCP47)) {
+      /**
+       * @backward-compat { version 163 }
+       * Bug 2098563 renamed Services.locale.appLocaleAsBCP47 as .appLocale
+       */
+      const appLocale =
+        // @ts-expect-error
+        Services.locale.appLocale ?? Services.locale.appLocaleAsBCP47;
+      if (topsite.exclude_locales?.includes(appLocale)) {
         return false;
       }
       if (
         topsite.include_locales?.length &&
-        !topsite.include_locales.includes(Services.locale.appLocaleAsBCP47)
+        !topsite.include_locales.includes(appLocale)
       ) {
         return false;
       }

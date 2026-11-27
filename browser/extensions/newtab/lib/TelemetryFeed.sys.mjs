@@ -699,7 +699,14 @@ export class TelemetryFeed {
         lazy.ContextId.requestSynchronously()
       );
     }
-    Glean.newtab.locale.set(Services.locale.appLocaleAsBCP47);
+    /**
+     * @backward-compat { version 163 }
+     * Bug 2098563 renamed Services.locale.appLocaleAsBCP47 as .appLocale
+     */
+    const appLocale =
+      // @ts-expect-error
+      Services.locale.appLocale ?? Services.locale.appLocaleAsBCP47;
+    Glean.newtab.locale.set(appLocale);
   }
 
   getOrCreateImpressionId() {

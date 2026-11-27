@@ -3758,7 +3758,7 @@ export class Extension extends ExtensionData {
   }
 
   get manifestCacheKey() {
-    return [this.id, this.version, Services.locale.appLocaleAsBCP47];
+    return [this.id, this.version, Services.locale.appLocale];
   }
 
   saveStartupData() {
@@ -4050,7 +4050,7 @@ export class Extension extends ExtensionData {
       let locales = await this.promiseLocales();
 
       let matches = Services.locale.negotiateLanguages(
-        Services.locale.appLocalesAsBCP47,
+        Services.locale.appLocales,
         Array.from(locales.keys()),
         this.defaultLocale
       );

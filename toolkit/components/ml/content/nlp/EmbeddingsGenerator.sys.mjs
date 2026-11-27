@@ -270,7 +270,7 @@ export class EmbeddingsGeneratorFactory {
   #useMultiLingualEmbedding() {
     return lazy.multilingualEmbeddingRegions.matches(
       this.region,
-      Services.locale.appLocaleAsBCP47
+      Services.locale.appLocale
     );
   }
 

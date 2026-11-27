@@ -146,7 +146,7 @@ describe("settings ai features", () => {
       });
 
       // Tab Group Suggestions is only available in en-* locales
-      if (!Services.locale.appLocaleAsBCP47.startsWith("en")) {
+      if (!Services.locale.appLocale.startsWith("en")) {
         Assert.ok(true, "Skipping: locale is not en-*");
         return;
       }

@@ -38,8 +38,8 @@ add_task(async function test_top_level_parent_actor_at_https() {
  */
 add_task(
   async function test_top_level_child_actor_created_after_translation_request() {
-    const { appLocaleAsBCP47 } = Services.locale;
-    if (!appLocaleAsBCP47.startsWith("en")) {
+    const { appLocale } = Services.locale;
+    if (!appLocale.startsWith("en")) {
       info(
         "Skipping parent-only English page test because the app locale is not English."
       );

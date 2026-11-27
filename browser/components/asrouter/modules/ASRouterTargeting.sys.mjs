@@ -783,13 +783,10 @@ function getSelectedTabURI() {
 
 const TargetingGetters = {
   get locale() {
-    return Services.locale.appLocaleAsBCP47;
+    return Services.locale.appLocale;
   },
   get localeLanguageCode() {
-    return (
-      Services.locale.appLocaleAsBCP47 &&
-      Services.locale.appLocaleAsBCP47.substr(0, 2)
-    );
+    return Services.locale.appLocale && Services.locale.appLocale.substr(0, 2);
   },
   get browserSettings() {
     const { settings } = lazy.TelemetryEnvironment.currentEnvironment;

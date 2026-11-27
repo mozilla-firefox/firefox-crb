@@ -8,7 +8,7 @@ const { AppConstants } = ChromeUtils.importESModule(
 
 function run_test() {
   var formatter = Services.urlFormatter;
-  var locale = Services.locale.appLocaleAsBCP47;
+  var locale = Services.locale.appLocale;
   var OSVersion =
     Services.sysinfo.getProperty("name") +
     " " +

@@ -191,7 +191,7 @@ export var UpdateListener = {
       // Release notes are enabled by default for EN locales only, but can be
       // enabled for other locales within an experiment.
       if (
-        !Services.locale.appLocaleAsBCP47.startsWith("en") &&
+        !Services.locale.appLocale.startsWith("en") &&
         !lazy.NimbusFeatures.updatePrompt.getVariable("showReleaseNotesLink")
       ) {
         return null;

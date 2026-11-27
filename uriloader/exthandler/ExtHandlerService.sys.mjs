@@ -117,7 +117,7 @@ HandlerService.prototype = {
   },
 
   _injectDefaultProtocolHandlers() {
-    let locale = Services.locale.appLocaleAsBCP47;
+    let locale = Services.locale.appLocale;
 
     // Initialize handlers to default and update based on locale.
     let localeHandlers = lazy.kHandlerList.default;

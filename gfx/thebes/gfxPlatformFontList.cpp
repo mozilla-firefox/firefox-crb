@@ -3387,7 +3387,7 @@ void gfxPlatformFontList::FontPrefs::Init() {
 
   // Try using app's locale
   nsAutoCString localeStr;
-  LocaleService::GetInstance()->GetAppLocaleAsBCP47(localeStr);
+  LocaleService::GetInstance()->GetAppLocale(localeStr);
 
   {
     Locale locale;

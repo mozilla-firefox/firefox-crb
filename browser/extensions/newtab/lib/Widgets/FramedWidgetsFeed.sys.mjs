@@ -121,7 +121,12 @@ export class FramedWidgetsFeed {
     const { data, error } = await this.merino.fetchFramedWidgets({
       source: "newtab",
       endpointUrl,
-      locale: Services.locale.appLocaleAsBCP47,
+      /**
+       * @backward-compat { version 163 }
+       * Bug 2098563 renamed Services.locale.appLocaleAsBCP47 as .appLocale
+       */
+      // @ts-expect-error
+      locale: Services.locale.appLocale ?? Services.locale.appLocaleAsBCP47,
     });
     if (error || !Array.isArray(data?.widgets)) {
       return null;

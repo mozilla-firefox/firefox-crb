@@ -252,7 +252,7 @@ export async function generateConversationStartersSidebar(
       open_tabs: openedTabs,
       n: String(n),
       date: today,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
       assistant_limitations: assistantLimitations,
     });
 

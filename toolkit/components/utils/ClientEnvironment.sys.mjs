@@ -199,7 +199,7 @@ export class ClientEnvironmentBase {
   }
 
   static get locale() {
-    return Services.locale.appLocaleAsBCP47;
+    return Services.locale.appLocale;
   }
 
   static get doNotTrack() {

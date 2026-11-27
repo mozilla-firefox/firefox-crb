@@ -331,9 +331,7 @@ fn get_app_info() -> Result<(String, String, String, String), nsresult> {
 
     let mut locale = nsCString::new();
     unsafe {
-        locale_service
-            .GetAppLocaleAsBCP47(&mut *locale)
-            .to_result()?;
+        locale_service.GetAppLocale(&mut *locale).to_result()?;
     }
 
     Ok((

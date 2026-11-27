@@ -79,7 +79,7 @@ export class ASRouterTelemetry {
     let event = {
       ...action.data,
       addon_version: Services.appinfo.appBuildID,
-      locale: Services.locale.appLocaleAsBCP47,
+      locale: Services.locale.appLocale,
     };
 
     switch (event.action) {

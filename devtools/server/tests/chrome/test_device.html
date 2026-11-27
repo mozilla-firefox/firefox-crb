@@ -37,7 +37,7 @@ add_task(async function () {
     geckobuildid: appInfo.platformBuildID,
     geckoversion: appInfo.platformVersion,
     useragent: window.navigator.userAgent,
-    locale: Services.locale.appLocaleAsBCP47,
+    locale: Services.locale.appLocale,
     os: appInfo.OS,
     processor: appInfo.XPCOMABI.split("-")[0],
     compiler: appInfo.XPCOMABI.split("-")[1],

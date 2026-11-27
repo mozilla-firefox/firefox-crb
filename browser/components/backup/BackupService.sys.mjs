@@ -2408,10 +2408,7 @@ export class BackupService extends EventTarget {
     );
 
     // Set the lang attribute on the <html> element
-    templateDOM.documentElement.setAttribute(
-      "lang",
-      Services.locale.appLocaleAsBCP47
-    );
+    templateDOM.documentElement.setAttribute("lang", Services.locale.appLocale);
 
     let downloadLink = templateDOM.querySelector("#download-moz-browser");
     downloadLink.href = await this.resolveDownloadLink(

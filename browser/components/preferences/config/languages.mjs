@@ -105,8 +105,8 @@ export const Multilingual = {
    * @returns {keyof typeof Multilingual.TransitionType}
    */
   getTransitionType(newLocales) {
-    const { appLocalesAsBCP47 } = Services.locale;
-    if (appLocalesAsBCP47.join(",") === newLocales.join(",")) {
+    const { appLocales } = Services.locale;
+    if (appLocales.join(",") === newLocales.join(",")) {
       // The selected locales match, the order matters.
       return Multilingual.TransitionType.LocalesMatch;
     }
@@ -114,7 +114,7 @@ export const Multilingual = {
     if (Services.prefs.getBoolPref("intl.multilingual.liveReload")) {
       if (
         Services.intl.getScriptDirection(newLocales[0]) !==
-          Services.intl.getScriptDirection(appLocalesAsBCP47[0]) &&
+          Services.intl.getScriptDirection(appLocales[0]) &&
         !Services.prefs.getBoolPref("intl.multilingual.liveReloadBidirectional")
       ) {
         // Bug 1750852: The directionality of the text changed, which requires a restart
@@ -230,7 +230,7 @@ class BrowserLanguagesSetting extends Preferences.AsyncSetting {
   #installError = false;
 
   get currentLocale() {
-    return Services.locale.appLocaleAsBCP47;
+    return Services.locale.appLocale;
   }
 
   get pendingLocale() {
@@ -325,7 +325,7 @@ class BrowserLanguagesSetting extends Preferences.AsyncSetting {
   async get() {
     return this.#pendingLocales
       ? [...this.#pendingLocales]
-      : [...Services.locale.appLocalesAsBCP47];
+      : [...Services.locale.appLocales];
   }
 
   async visible() {
@@ -371,7 +371,7 @@ class BrowserLanguagesSetting extends Preferences.AsyncSetting {
     // Negotiated app locales include every installed regional variant of the
     // preferred language (e.g. es-AR after es-ES), so check the requested
     // locales first to reflect the user's choice.
-    let candidates = [...requested, ...Services.locale.appLocalesAsBCP47];
+    let candidates = [...requested, ...Services.locale.appLocales];
     for (let code of candidates) {
       if (code != preferred && installedCodes.includes(code)) {
         return code;
@@ -614,7 +614,7 @@ Preferences.addSetting({
   id: "useSystemLocale",
   pref: "intl.regional_prefs.use_os_locales",
   visible() {
-    let appLocale = Services.locale.appLocaleAsBCP47;
+    let appLocale = Services.locale.appLocale;
     let regionalPrefsLocales = Services.locale.regionalPrefsLocales;
     if (!regionalPrefsLocales.length) {
       return false;

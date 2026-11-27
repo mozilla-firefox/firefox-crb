@@ -993,7 +993,7 @@ class _QuickSuggest {
       this.#intendedDefaultPrefs = testOverrides.defaultPrefs;
     } else {
       let region = testOverrides?.region ?? lazy.Region.home;
-      let locale = testOverrides?.locale ?? Services.locale.appLocaleAsBCP47;
+      let locale = testOverrides?.locale ?? Services.locale.appLocale;
       this.#intendedDefaultPrefs = this.intendedDefaultPrefs(region, locale);
     }
 
@@ -1206,7 +1206,7 @@ class _QuickSuggest {
     //    checked the user branch and has since been fixed.
     if (
       ["DE", "FR", "IT"].includes(lazy.Region.home) &&
-      EN_LOCALES.includes(Services.locale.appLocaleAsBCP47)
+      EN_LOCALES.includes(Services.locale.appLocale)
     ) {
       userBranch.clearUserPref("suggest.quicksuggest.sponsored");
     }

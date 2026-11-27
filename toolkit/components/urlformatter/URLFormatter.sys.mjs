@@ -68,7 +68,7 @@ nsURLFormatterService.prototype = {
   QueryInterface: ChromeUtils.generateQI(["nsIURLFormatter"]),
 
   _defaults: {
-    LOCALE: () => Services.locale.appLocaleAsBCP47,
+    LOCALE: () => Services.locale.appLocale,
     REGION() {
       try {
         // When the geoip lookup failed to identify the region, we fallback to

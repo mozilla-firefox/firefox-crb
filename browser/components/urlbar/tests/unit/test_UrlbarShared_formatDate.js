@@ -16,7 +16,7 @@ add_setup(async function init() {
   UrlbarTestUtils.stubLocale("en-US");
 
   Assert.equal(
-    new Intl.Locale(Services.locale.appLocaleAsBCP47).getWeekInfo().firstDay,
+    new Intl.Locale(Services.locale.appLocale).getWeekInfo().firstDay,
     7,
     "Sanity check: First day of week in en-US is 7 (Sunday)"
   );

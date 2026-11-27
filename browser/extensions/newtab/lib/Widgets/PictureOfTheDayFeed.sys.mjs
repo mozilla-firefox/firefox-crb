@@ -188,7 +188,13 @@ export class PictureOfTheDayFeed {
     const { data, error } = await this.merino.fetchPictureOfTheDay({
       source: "newtab",
       endpointUrl,
-      acceptLanguage: Services.locale.appLocaleAsBCP47,
+      /**
+       * @backward-compat { version 163 }
+       * Bug 2098563 renamed Services.locale.appLocaleAsBCP47 as .appLocale
+       */
+      acceptLanguage:
+        // @ts-expect-error
+        Services.locale.appLocale ?? Services.locale.appLocaleAsBCP47,
     });
     const picture = this.normalize(data);
     if (error || !picture) {

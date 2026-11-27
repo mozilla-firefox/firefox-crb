@@ -652,13 +652,10 @@ const TranslationsSettings = {
     if (this.numberFormatter) {
       return this.numberFormatter;
     }
-    this.numberFormatter = new Intl.NumberFormat(
-      Services.locale.appLocaleAsBCP47,
-      {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 1,
-      }
-    );
+    this.numberFormatter = new Intl.NumberFormat(Services.locale.appLocale, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    });
     return this.numberFormatter;
   },
 

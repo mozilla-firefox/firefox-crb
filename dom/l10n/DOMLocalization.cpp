@@ -574,7 +574,7 @@ void DOMLocalization::GetTranslatables(
 /* static */
 void DOMLocalization::SetRootInfo(Element* aElement) {
   nsAutoCString primaryLocale;
-  LocaleService::GetInstance()->GetAppLocaleAsBCP47(primaryLocale);
+  LocaleService::GetInstance()->GetAppLocale(primaryLocale);
   aElement->SetAttr(kNameSpaceID_None, nsGkAtoms::lang,
                     NS_ConvertUTF8toUTF16(primaryLocale), true,
                     IsKnownNewAttr::No);

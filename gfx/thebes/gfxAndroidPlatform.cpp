@@ -300,7 +300,7 @@ static bool IsJapaneseLocale() {
     sInitialized = true;
 
     nsAutoCString appLocale;
-    LocaleService::GetInstance()->GetAppLocaleAsBCP47(appLocale);
+    LocaleService::GetInstance()->GetAppLocale(appLocale);
 
     const nsDependentCSubstring lang(appLocale, 0, 2);
     if (lang.EqualsLiteral("ja")) {

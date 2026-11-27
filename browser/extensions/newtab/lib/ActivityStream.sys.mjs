@@ -3213,7 +3213,12 @@ export class ActivityStream {
       this.geo = "";
     }
 
-    this.locale = Services.locale.appLocaleAsBCP47;
+    /**
+     * @backward-compat { version 163 }
+     * Bug 2098563 renamed Services.locale.appLocaleAsBCP47 as .appLocale
+     */
+    // @ts-expect-error
+    this.locale = Services.locale.appLocale ?? Services.locale.appLocaleAsBCP47;
 
     // Update the pref config of those with dynamic values
     for (const pref of PREFS_CONFIG.keys()) {

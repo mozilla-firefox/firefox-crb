@@ -78,7 +78,7 @@ const PluralForm = {
    */
   getPluralRule()
   {
-    const locale = new Intl.Locale(Services.locale.appLocaleAsBCP47);
+    const locale = new Intl.Locale(Services.locale.appLocale);
     switch (locale.language) {
       case "bo":
       case "id":
