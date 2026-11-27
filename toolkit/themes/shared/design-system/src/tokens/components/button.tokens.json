@@ -41,7 +41,7 @@
               },
               "brand": {
                 "light": "{color.violet-desaturated.20}",
-                "dark": "{color.violet-desaturated.50}"
+                "dark": "{color.violet-desaturated.60}"
               },
               "forcedColors": "SelectedItemText"
             }
@@ -68,7 +68,7 @@
               },
               "brand": {
                 "light": "{color.violet-desaturated.30}",
-                "dark": "{color.violet-desaturated.40}"
+                "dark": "{color.violet-desaturated.70}"
               },
               "forcedColors": "SelectedItemText"
             }

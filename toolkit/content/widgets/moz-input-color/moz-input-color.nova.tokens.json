@@ -4,13 +4,6 @@
       "@base": {
         "value": "{button.background.color.@base}"
       },
-      "active": {
-        "value": {
-          "light": "{button.background.color.active}",
-          "dark": "{color.violet-desaturated.60}",
-          "forcedColors": "{button.background.color.active}"
-        }
-      },
       "hover": {
         "value": "{button.background.color.hover}"
       }

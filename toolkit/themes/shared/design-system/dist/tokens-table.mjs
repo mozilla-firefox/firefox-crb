@@ -615,7 +615,7 @@ export const tokensTable = {
       name: "--input-color-background-color",
     },
     {
-      value: "var(--button-background-color-ghost-active)",
+      value: { default: "var(--button-background-color-ghost-active)" },
       name: "--input-color-background-color-active",
     },
     {
@@ -5192,8 +5192,9 @@ export const variableLookupTable = {
   "breadcrumb-link-color-active": "var(--link-color-active)",
   "breadcrumb-link-color-visited": "var(--link-color-visited)",
   "input-color-background-color": "var(--button-background-color-ghost)",
-  "input-color-background-color-active":
-    "var(--button-background-color-ghost-active)",
+  "input-color-background-color-active": {
+    default: "var(--button-background-color-ghost-active)",
+  },
   "input-color-background-color-hover":
     "var(--button-background-color-ghost-hover)",
   "input-color-border-color": "var(--border-color-interactive)",

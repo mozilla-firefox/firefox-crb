@@ -361,12 +361,12 @@
   },
   "button/background/color/hover": {
     "light": "{Colors$color/violet-desaturated/20}",
-    "dark": "{Colors$color/violet-desaturated/50}",
+    "dark": "{Colors$color/violet-desaturated/60}",
     "forcedColors": "{HCM Theme$SelectedItemText}"
   },
   "button/background/color/active": {
     "light": "{Colors$color/violet-desaturated/30}",
-    "dark": "{Colors$color/violet-desaturated/40}",
+    "dark": "{Colors$color/violet-desaturated/70}",
     "forcedColors": "{HCM Theme$SelectedItemText}"
   },
   "button/border/color": {
@@ -639,15 +639,15 @@
     "dark": "{Theme$button/background/color}",
     "forcedColors": "{Theme$button/background/color}"
   },
-  "input-color/background/color/active": {
-    "light": "{Theme$button/background/color/active}",
-    "dark": "{Colors$color/violet-desaturated/60}",
-    "forcedColors": "{Theme$button/background/color/active}"
-  },
   "input-color/background/color/hover": {
     "light": "{Theme$button/background/color/hover}",
     "dark": "{Theme$button/background/color/hover}",
     "forcedColors": "{Theme$button/background/color/hover}"
+  },
+  "input-color/background/color/active": {
+    "light": "{Theme$button/background/color/active}",
+    "dark": "{Theme$button/background/color/active}",
+    "forcedColors": "{Theme$button/background/color/active}"
   },
   "message-bar/background/color": {
     "light": "{Theme$background/color/box}",

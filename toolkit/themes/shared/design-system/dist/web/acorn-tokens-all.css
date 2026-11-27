@@ -71,8 +71,8 @@
     --button-attention-dot-color: var(--color-accent-attention);
     /* TODO Bug 1821203 - Gray use needs to be consolidated */
     --button-background-color: transparent;
-    --button-background-color-hover: light-dark(var(--color-violet-desaturated-20), var(--color-violet-desaturated-50));
-    --button-background-color-active: light-dark(var(--color-violet-desaturated-30), var(--color-violet-desaturated-40));
+    --button-background-color-hover: light-dark(var(--color-violet-desaturated-20), var(--color-violet-desaturated-60));
+    --button-background-color-active: light-dark(var(--color-violet-desaturated-30), var(--color-violet-desaturated-70));
     --button-background-color-disabled: var(--button-background-color);
     --button-background-color-destructive: light-dark(var(--color-red-50), var(--color-red-30));
     --button-background-color-destructive-hover: light-dark(var(--color-red-60), var(--color-red-20));
@@ -472,7 +472,7 @@
     --input-border-radius: var(--border-radius-medium);
     --input-color-background-color: var(--button-background-color);
     --input-color-background-color-hover: var(--button-background-color-hover);
-    --input-color-background-color-active: light-dark(var(--button-background-color-active), var(--color-violet-desaturated-60));
+    --input-color-background-color-active: var(--button-background-color-active);
     --input-color-border-color: var(--border-color-interactive);
     --input-color-border-color-hover: var(--border-color-interactive-hover);
     --input-color-border-color-active: var(--border-color-interactive-active);
@@ -1086,7 +1086,6 @@
       --icon-color-accent-primary-desaturated: CanvasText;
 
       /** input **/
-      --input-color-background-color-active: var(--button-background-color-active);
       --input-text-color-disabled: GrayText;
 
       /** link **/

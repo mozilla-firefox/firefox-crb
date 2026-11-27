@@ -5,7 +5,13 @@
         "value": "{button.background.color.ghost.@base}"
       },
       "active": {
-        "value": "{button.background.color.ghost.active}"
+        "value": {
+          "default": "{button.background.color.ghost.active}",
+          "nova": {
+            "comment": "Figma overrides the dark value, but it now matches the hover state; follow the shared button active state instead",
+            "value": "{button.background.color.active}"
+          }
+        }
       },
       "hover": {
         "value": "{button.background.color.ghost.hover}"
