@@ -111,7 +111,8 @@ export const GeckoViewPictureInPictureController = {
   },
 
   // Requests picture-in-picture for the video the focused frame is playing, or otherwise for a
-  // paused video that has played, preferring a playing video in any frame over a paused one.
+  // paused video, preferring a playing video in any frame over a paused one, and a paused video
+  // that has played over one that has not.
   async requestForCurrentMedia(browser, sourceDispatcher) {
     // The session's own browsing context only reaches the top document, whose <video> elements
     // are the ones outside any frame, so a video in an iframe would be invisible to it and lives
@@ -134,13 +135,14 @@ export const GeckoViewPictureInPictureController = {
       browser,
       sourceDispatcher,
       wgp,
-      found ? { wgp, videoRef: found.videoRef } : null
+      found ? { wgp, ...found } : null
     );
   },
 
   // The embedder asks from outside the page, so the user may have moved focus off the frame playing
   // the video since starting it. Falls back to the first frame of the session, in tree order, that
-  // is playing a video, then to pausedFallback, then to the first frame with a paused video.
+  // is playing a video, then to pausedFallback, then to the first frame with a paused video,
+  // preferring paused videos that have played.
   // askedWgp is a frame that was already asked and is skipped.
   async _requestForAnyFrame(
     browser,
@@ -170,13 +172,14 @@ export const GeckoViewPictureInPictureController = {
         await this.request(wgp, found.videoRef, sourceDispatcher);
         return;
       }
-      pausedCandidates.push({ wgp, videoRef: found.videoRef });
+      pausedCandidates.push({ wgp, ...found });
     }
     // A candidate's frame may have navigated or gone away while later frames were being asked.
-    const fallback = pausedCandidates.find(
+    const live = pausedCandidates.filter(
       c =>
         !c.wgp.isClosed && c.wgp.browsingContext?.currentWindowGlobal === c.wgp
     );
+    const fallback = live.find(c => c.played) ?? live[0];
     if (fallback) {
       await this.request(fallback.wgp, fallback.videoRef, sourceDispatcher);
     }
