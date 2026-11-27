@@ -3,10 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from taskgraph.transforms.base import TransformSequence
-from taskgraph.util.dependencies import get_primary_dependency
 
-zucchini_transforms = TransformSequence()
 partials_transforms = TransformSequence()
+partials_zucchini_transforms = TransformSequence()
 
 
 # TODO: once ESR moves over, remove the legacy "partials" kind and this transform.
@@ -26,44 +25,19 @@ def filter_legacy_partials_by_project(config, tasks):
 
     partials-zucchini is used on every other project, so on non-legacy projects
     we skip generating the legacy "partials" tasks entirely. This is the inverse
-    of the filtering applied by the zucchini_transforms below.
+    of filter_zucchini_partials_by_project.
     """
     if not uses_legacy_partials(config.params):
         return
     yield from tasks
 
 
-@zucchini_transforms.add
-def filter_partials_by_project(config, tasks):
-    """Control the rollout of partials-zucchini across release channels.
+@partials_zucchini_transforms.add
+def filter_zucchini_partials_by_project(config, tasks):
+    """Only generate "partials-zucchini" tasks on non-legacy release channels.
 
-    This transform manages the gradual transition from the legacy "partials" implementation
-    to the new "partials-zucchini" implementation. It ensures that partials-zucchini is
-    used everywhere except where uses_legacy_partials is true.
-
-    The transform filters tasks based on their primary dependency (partials or partials-zucchini)
-    and the current project/channel, ensuring the appropriate implementation is used for each
-    release channel.
+    This is the inverse of filter_legacy_partials_by_project.
     """
-    for task in tasks:
-        primary_dep = get_primary_dependency(config, task)
-        assert primary_dep
-
-        if primary_dep.kind not in (
-            "partials",
-            "partials-zucchini",
-            "partials-zucchini-l10n",
-        ):
-            yield task
-            continue
-
-        if primary_dep.kind == "partials" and not uses_legacy_partials(config.params):
-            continue
-
-        if primary_dep.kind in (
-            "partials-zucchini",
-            "partials-zucchini-l10n",
-        ) and uses_legacy_partials(config.params):
-            continue
-
-        yield task
+    if uses_legacy_partials(config.params):
+        return
+    yield from tasks

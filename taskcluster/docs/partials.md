@@ -139,10 +139,12 @@ The transform exposes two sequences:
 - `partials_transforms`, used by the `partials` kind, skips generating
   the legacy `partials` tasks entirely on non-legacy projects, so they
   only run on legacy projects.
-- `zucchini_transforms`, used by the `partials-signing` kind, filters
-  out the unused implementation. `partials-signing` depends on both
-  `partials` (legacy) and `partials-zucchini`, so on legacy projects it
-  drops the zucchini-derived signing tasks while keeping the legacy ones.
+- `partials_zucchini_transforms`, used by the `partials-zucchini` and
+  `partials-zucchini-l10n` kinds, skips generating zucchini tasks
+  entirely on legacy projects.
+
+`partials-signing` depends on all three kinds, but only the active
+implementation generates tasks, so it only signs those.
 
 To move ESR channels to zucchini partials, change `uses_legacy_partials`
 in the rollout transform.
