@@ -1971,6 +1971,21 @@ void nsWindow::SetIcon(const nsAString& aIconSpec) {
     return;
   }
 
+  NS_ConvertUTF16toUTF8 iconPath(aIconSpec);
+  if (g_path_is_absolute(iconPath.get())) {
+    GUniquePtr<GError> error;
+    RefPtr<GdkPixbuf> icon = dont_AddRef(
+        gdk_pixbuf_new_from_file(iconPath.get(), getter_Transfers(error)));
+    if (icon) {
+      gtk_window_set_icon(GTK_WINDOW(mShell), icon.get());
+    } else {
+      LOG("nsWindow::SetIcon() failed to load %s: %s", iconPath.get(),
+          error->message);
+      SetDefaultIcon();
+    }
+    return;
+  }
+
   nsAutoCString iconName;
   if (aIconSpec.EqualsLiteral("default")) {
     nsAutoString brandName;
