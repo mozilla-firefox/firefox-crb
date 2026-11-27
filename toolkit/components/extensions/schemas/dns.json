@@ -17,6 +17,13 @@
     "namespace": "dns",
     "description": "Asynchronous DNS API",
     "permissions": ["dns"],
+    "properties": {
+      "dohSettings": {
+        "$ref": "types.Setting",
+        "permissions": ["proxy"],
+        "description": "Configures DNS over HTTPS (DoH). This setting's value is an object of type $(ref:DoHConfig). Setting it requires the \"proxy\" permission and private browsing access."
+      }
+    },
     "types": [
       {
         "id": "DNSRecord",
@@ -55,6 +62,35 @@
             "priority_medium",
             "speculate"
           ]
+        }
+      },
+      {
+        "id": "DoHConfig",
+        "type": "object",
+        "description": "An object which describes DNS over HTTPS settings. Properties that are not specified are reset to their default value.",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["default", "off", "doh-first", "doh-only"],
+            "optional": true,
+            "description": "The DNS resolution mode. <code>default</code> lets Firefox decide, <code>off</code> disables DoH, <code>doh-first</code> uses DoH and falls back to the native resolver if DoH fails, <code>doh-only</code> only uses DoH."
+          },
+          "url": {
+            "type": "string",
+            "optional": true,
+            "description": "The https URL of the DoH server. An empty string means the Firefox default DoH server. Only allowed in <code>doh-first</code> and <code>doh-only</code> modes."
+          },
+          "bootstrapAddress": {
+            "type": "string",
+            "optional": true,
+            "description": "An IPv4 or IPv6 address of the DoH server, used instead of resolving the hostname of <code>url</code> with the native resolver. Only allowed in <code>doh-first</code> and <code>doh-only</code> modes."
+          },
+          "excludedDomains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "optional": true,
+            "description": "Domains, including their subdomains, that are always resolved with the native resolver."
+          }
         }
       }
     ],

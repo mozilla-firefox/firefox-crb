@@ -50,6 +50,7 @@
     "url": "chrome://extensions/content/parent/ext-dns.js",
     "schema": "chrome://extensions/content/schemas/dns.json",
     "scopes": ["addon_parent"],
+    "settings": true,
     "paths": [["dns"]]
   },
   "downloads": {

@@ -10,6 +10,8 @@ run-if = [
 
 ["browser_doh_region.js"]
 
+["browser_extensionControl.js"]
+
 ["browser_platformDetection.js"]
 
 ["browser_policyOverride.js"]
