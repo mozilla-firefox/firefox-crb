@@ -18,6 +18,7 @@ import mozilla.appservices.fxaclient.FxaEvent
 import mozilla.appservices.fxaclient.FxaServer
 import mozilla.appservices.fxaclient.FxaState
 import mozilla.components.concept.base.crash.CrashReporting
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AccountEventsObserver
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthFlowError
@@ -27,6 +28,7 @@ import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceConstellation
 import mozilla.components.concept.sync.DeviceType
 import mozilla.components.concept.sync.FxAEntryPoint
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.StatePersistenceCallback
 import mozilla.components.concept.sync.SyncConfig
 import mozilla.components.concept.sync.SyncEngine

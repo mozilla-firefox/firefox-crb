@@ -14,10 +14,11 @@ import androidx.fragment.app.Fragment
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.manager.SCOPE_PROFILE
 import mozilla.components.service.fxa.manager.SCOPE_SYNC
 import mozilla.components.support.ktx.android.content.hasCamera
