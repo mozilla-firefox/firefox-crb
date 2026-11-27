@@ -26,6 +26,10 @@ const SCRIPTS = {
     trustedTypes.createPolicy("default", { createHTML: s => s });
     document.write("<b>write</b>");`,
   policy_only: `trustedTypes.createPolicy("p", {});`,
+  blank_write: `
+    blank.contentDocument.open();
+    blank.contentDocument.write("<b>x</b>");
+    blank.contentDocument.close();`,
   create_html: `
     trustedTypes.createPolicy("p", { createHTML: s => s }).createHTML("x");`,
   trusted_html: `
@@ -68,8 +72,9 @@ function handleRequest(request, response) {
   const frame = params.has("frame")
     ? `<iframe src="?csp=none&script=${params.get("frame")}"></iframe>`
     : "";
+  const blank = params.has("blankframe") ? `<iframe id="blank"></iframe>` : "";
   response.write(
-    `<!DOCTYPE html><html><body${handler}>${frame}${
+    `<!DOCTYPE html><html><body${handler}>${frame}${blank}${
       script === null ? "" : `<script nonce="n"${type}>${script}</script>`
     }</body></html>`
   );
