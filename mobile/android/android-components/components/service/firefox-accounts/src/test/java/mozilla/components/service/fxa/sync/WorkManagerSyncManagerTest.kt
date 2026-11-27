@@ -624,7 +624,7 @@ class WorkManagerSyncManagerTest {
             // when the account is authenticated
             val account = TestAccount()
             whenever(accountManager.authenticatedAccount()).thenReturn(account)
-            registeredAccountObserver().onAuthenticated(account, AuthType.Signin)
+            registeredAccountObserver().onAuthenticated(account, AuthType.Signin())
             runCurrent()
 
             assertEquals(

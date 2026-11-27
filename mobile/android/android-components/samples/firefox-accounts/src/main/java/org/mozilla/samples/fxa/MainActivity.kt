@@ -178,7 +178,7 @@ open class MainActivity : AppCompatActivity(), LoginFragment.OnLoginCompleteList
 
     private fun finishAuthentication(code: String, state: String) {
         launch {
-            accountManager.finishAuthentication(FxaAuthData(AuthType.Signin, code = code, state = state))
+            accountManager.finishAuthentication(FxaAuthData(AuthType.Signin(), code = code, state = state))
         }
     }
 
