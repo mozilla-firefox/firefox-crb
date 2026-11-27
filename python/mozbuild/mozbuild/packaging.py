@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
+import os
 import shlex
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
+
+from mozshellutil import quote as shell_quote
 
 NO_PKG_FILES = (
     "core",
@@ -100,3 +103,8 @@ def all_locales(locales: Iterable[str]) -> list[str]:
 
 def multilocale_content(locales: Iterable[str]) -> str:
     return ",".join(all_locales(locales)) + "\n"
+
+
+def echo_command(argv: Sequence[str]) -> None:
+    if os.environ.get("BUILD_VERBOSE_LOG"):
+        print(shell_quote(*argv), flush=True)
