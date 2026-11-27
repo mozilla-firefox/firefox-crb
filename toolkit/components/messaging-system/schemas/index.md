@@ -102,6 +102,12 @@ The test will also validate the list of in-tree messages with the same schema
 validator that Experimenter uses to ensure that our schemas are compatible with
 Experimenter.
 
+The unit tests for `make-schemas.py` run with:
+
+```shell
+./mach python-test --subsuite fxms
+```
+
 ## Shared Definitions
 
 Some definitions are shared across multiple schemas. Instead of copying and
