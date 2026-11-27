@@ -29,7 +29,6 @@ import mozilla.components.feature.ipprotection.store.state.Uninitialized
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,6 +43,13 @@ class IPProtectionTelemetryMiddlewareTest {
 
     private var now = 0L
     private val middleware = IPProtectionTelemetryMiddleware(currentTimeInMillis = { now })
+    private val requestErrorCases =
+        listOf(
+            null to "null",
+            IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("boom")) to "null",
+            IPProtectionHandler.RequestError(errorCode = -1, cause = RuntimeException("unknown-error")) to "-1",
+            IPProtectionHandler.RequestError(errorCode = -21, cause = RuntimeException("no-gpi-token")) to "-21",
+        )
 
     @Test
     fun `GIVEN the authentication flow started WHEN it completes successfully THEN fxAccountFlowCompleted is recorded with the duration`() {
@@ -104,42 +110,38 @@ class IPProtectionTelemetryMiddlewareTest {
     }
 
     @Test
-    fun `GIVEN the VPN toggle failed with no or a non-proxy error THEN no error code is recorded`() {
+    fun `GIVEN the VPN toggle failed THEN the error code the engine reported is recorded AND null is recorded when it reported none`() {
         assertNull(Vpn.errorEncountered.testGetValue())
 
         val store = createStore(initialStatus = AccountStatus.EnrolledAndEntitled)
 
-        store.dispatch(IPProtectionAction.ActivationAction.ToggleFailed(ActivationOperation.Activate))
-        store.dispatch(
-            IPProtectionAction.ActivationAction.ToggleFailed(
-                ActivationOperation.Activate,
-                IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("boom")),
-            )
-        )
+        ActivationOperation.entries.forEach { operation ->
+            requestErrorCases.forEach { (error, _) ->
+                store.dispatch(IPProtectionAction.ActivationAction.ToggleFailed(operation, error))
+            }
+        }
 
         val events = Vpn.errorEncountered.testGetValue()
         assertNotNull(events)
-        assertEquals(2, events.size)
-        assertTrue(events.all { it.extra?.get("error_code") == "null" })
+        assertEquals(
+            ActivationOperation.entries.flatMap { requestErrorCases.map { (_, errorCode) -> errorCode } },
+            events.map { it.extra?.get("error_code") },
+        )
     }
 
     @Test
-    fun `GIVEN the location switch failed with no or a non-proxy error THEN no error code is recorded`() {
+    fun `GIVEN the location switch failed THEN the error code the engine reported is recorded AND null is recorded when it reported none`() {
         assertNull(Vpn.locationSwitchError.testGetValue())
 
         val store = createStore(initialStatus = AccountStatus.EnrolledAndEntitled)
 
-        store.dispatch(IPProtectionAction.LocationAction.LocationSwitchFailed())
-        store.dispatch(
-            IPProtectionAction.LocationAction.LocationSwitchFailed(
-                IPProtectionHandler.RequestError(errorCode = null, cause = RuntimeException("It's a null-pointer!"))
-            )
-        )
+        requestErrorCases.forEach { (error, _) ->
+            store.dispatch(IPProtectionAction.LocationAction.LocationSwitchFailed(error))
+        }
 
         val events = Vpn.locationSwitchError.testGetValue()
         assertNotNull(events)
-        assertEquals(2, events.size)
-        assertTrue(events.all { it.extra?.get("error_code") == "null" })
+        assertEquals(requestErrorCases.map { (_, errorCode) -> errorCode }, events.map { it.extra?.get("error_code") })
     }
 
     @Test

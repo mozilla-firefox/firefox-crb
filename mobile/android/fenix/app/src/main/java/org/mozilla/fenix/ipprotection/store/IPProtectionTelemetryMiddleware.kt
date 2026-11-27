@@ -21,8 +21,6 @@ import mozilla.components.lib.state.Middleware
 import mozilla.components.lib.state.Store
 import mozilla.components.support.ktx.kotlin.toSnakeCase
 import org.mozilla.fenix.GleanMetrics.Vpn
-import org.mozilla.geckoview.ExperimentalGeckoViewApi
-import org.mozilla.geckoview.IPProtectionController.IPProxyException
 
 /**
  * [Middleware] that records telemetry for the FxA authentication and authorization initiated through IP Protection as
@@ -149,7 +147,7 @@ internal class IPProtectionTelemetryMiddleware(
         }
         Vpn.errorEncountered.record(
             Vpn.ErrorEncounteredExtra(
-                errorCode = errorCodeOf(error?.cause),
+                errorCode = "${error?.errorCode}",
                 operation = operation.name.toSnakeCase(),
                 serviceState = state.serviceStatus.name.toSnakeCase(),
                 proxyState = state.proxyStatus.toString().toSnakeCase(),
@@ -210,7 +208,7 @@ internal class IPProtectionTelemetryMiddleware(
         Vpn.locationSwitchError.record(
             extra =
                 Vpn.LocationSwitchErrorExtra(
-                    errorCode = errorCodeOf(error?.cause),
+                    errorCode = "${error?.errorCode}",
                     authProvider = state.currentAuthProvider.name.toSnakeCase(),
                 )
         )
@@ -227,10 +225,6 @@ internal class IPProtectionTelemetryMiddleware(
                 )
         )
     }
-
-    // FIXME(IPP) the engine should pass the error code through: https://bugzilla.mozilla.org/show_bug.cgi?id=2066553
-    @androidx.annotation.OptIn(ExperimentalGeckoViewApi::class)
-    private fun errorCodeOf(error: Throwable?): String = "${(error as? IPProxyException)?.code}"
 
     private fun durationSince(startMs: Long?): Int? = startMs?.let { (currentTimeInMillis() - it).toInt() }
 
