@@ -192,20 +192,30 @@ class TIPWrapper {
           this.#mFocusBlurListener(aNotification.type);
         }
         break;
-      case "notify-selection-change":
-        this.#mSelection = {
-          hasRange: aNotification.hasRange,
-          offset: aNotification.hasRange ? aNotification.offset : undefined,
-          text: aNotification.hasRange ? aNotification.text : undefined,
-          collapsed: aNotification.collapsed,
-          length: aNotification.hasRange ? aNotification.length : undefined,
-          reversed: aNotification.hasRange ? aNotification.reversed : undefined,
-          writingMode: aNotification.writingMode,
-          causedByComposition: aNotification.causedByComposition,
-          occurredDuringComposition: aNotification.occurredDuringComposition,
-        };
-        if (this.#mSelectionChangeListener) {
-          this.#mSelectionChangeListener(this.selectionCache);
+      case "notify-content-change":
+        if (aNotification.selectionChanged) {
+          this.#mSelection = {
+            hasRange: aNotification.hasSelectionRange,
+            offset: aNotification.hasSelectionRange
+              ? aNotification.selectionOffset
+              : undefined,
+            text: aNotification.hasSelectionRange
+              ? aNotification.selectedText
+              : undefined,
+            collapsed: aNotification.selectionCollapsed,
+            length: aNotification.hasSelectionRange
+              ? aNotification.selectionLength
+              : undefined,
+            reversed: aNotification.hasSelectionRange
+              ? aNotification.selectionRangeReversed
+              : undefined,
+            writingMode: aNotification.writingMode,
+            causedByComposition: aNotification.causedByComposition,
+            occurredDuringComposition: aNotification.occurredDuringComposition,
+          };
+          if (this.#mSelectionChangeListener) {
+            this.#mSelectionChangeListener(this.selectionCache);
+          }
         }
         break;
     }
