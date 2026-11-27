@@ -24,6 +24,8 @@ supporting self-references and bundled schema.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from argparse import ArgumentParser
 from itertools import chain
@@ -63,6 +65,7 @@ class SchemaDefinition(NamedTuple):
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TOPSRCDIR = SCRIPT_DIR.parents[4]
+MACH = TOPSRCDIR / "mach"
 
 SCHEMA_DIR = Path("..", "templates")
 
@@ -449,8 +452,9 @@ def validate_corpus(schema_def: SchemaDefinition, schema: dict[str, Any]):
         except FileNotFoundError as e:
             if not provider_path.parent.exists():
                 new_exc = Exception(
-                    f"Could not find {provider_path}: Did you run "
-                    "`mach xpcshell extract-test-corpus.js` ?"
+                    f"Could not find {provider_path}: generate it with "
+                    "extract-test-corpus.js, or run --check without "
+                    "--skip-extract."
                 )
                 raise new_exc from e
 
@@ -468,8 +472,20 @@ def validate_corpus(schema_def: SchemaDefinition, schema: dict[str, Any]):
         print()
 
 
-def main(check=False):
+def extract_corpus():
+    """Generate the test corpus by running extract-test-corpus.js."""
+    print("Extracting test corpus with extract-test-corpus.js ...")
+    subprocess.run(
+        [sys.executable, str(MACH), "xpcshell", "extract-test-corpus.js"],
+        check=True,
+    )
+
+
+def main(check=False, skip_extract=False):
     """Generate Nimbus feature schemas for Firefox Messaging System."""
+    if check and not skip_extract:
+        extract_corpus()
+
     for schema_def in SCHEMAS:
         print(f"Generating {schema_def.schema_path} ...")
         schema = bundle_schema(schema_def)
@@ -494,6 +510,13 @@ if __name__ == "__main__":
         help="Check that the generated schemas have not changed and run validation tests.",
         default=False,
     )
+    parser.add_argument(
+        "--skip-extract",
+        action="store_true",
+        help="With --check, use the existing test corpus instead of regenerating it.",
+        default=False,
+    )
     args = parser.parse_args()
 
-    main(args.check)
+    os.chdir(SCRIPT_DIR)
+    main(args.check, args.skip_extract)

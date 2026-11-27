@@ -651,7 +651,7 @@ fxms-schemas:
                     -g ${MOZ_FETCHES_DIR}/firefox \
                     -a ${MOZ_FETCHES_DIR}/firefox/browser \
                     extract-test-corpus.js
-            ../../../../../mach python -- make-schemas.py --check &&
+            ../../../../../mach python -- make-schemas.py --check --skip-extract &&
             ../../../../../mach python-test --subsuite fxms
     when:
         files-changed:
@@ -659,6 +659,7 @@ fxms-schemas:
             - 'browser/components/asrouter/content-src/schemas/make-schemas.py'
             - 'browser/components/asrouter/content-src/schemas/test/**'
             - 'browser/components/asrouter/content-src/**/*.schema.json'
+            - 'browser/components/asrouter/modules/FeatureCalloutMessages.sys.mjs'
             - 'browser/components/asrouter/modules/OnboardingMessageProvider.sys.mjs'
             - 'browser/components/asrouter/modules/PanelTestProvider.sys.mjs'
             - 'toolkit/components/messaging-system/schemas/MultiStageProtonScreenSchemas/MultiStageProtonScreenSchemas.json'
