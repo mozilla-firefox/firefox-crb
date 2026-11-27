@@ -474,12 +474,26 @@ PrefetchRecordParent::OnDataAvailable(nsIRequest* aRequest,
                                       nsIInputStream* aStream, uint64_t aOffset,
                                       uint32_t aCount) {
   mBytesReceived += aCount;
-  uint32_t maxBytes = StaticPrefs::dom_speculation_rules_max_body_bytes();
-  if (mBytesReceived > maxBytes) {
+  auto* wgp = static_cast<WindowGlobalParent*>(Manager());
+  if (wgp) {
+    wgp->AddPrefetchBytesReceived(aCount);
+  }
+  const bool totalCapExceeded = wgp && wgp->PrefetchBytesBudgetExceeded();
+  const bool bodyCapExceeded =
+      mBytesReceived > StaticPrefs::dom_speculation_rules_max_body_bytes();
+  if (bodyCapExceeded || totalCapExceeded) {
     LOG_SPECRULES_WARN(
-        ("PrefetchRecordParent::OnDataAvailable: this=%p body cap exceeded "
-         "(%" PRIu64 " > %u); canceling",
-         this, mBytesReceived, maxBytes));
+        ("PrefetchRecordParent::OnDataAvailable: this=%p %s cap exceeded "
+         "(%" PRIu64 " bytes for this record); canceling",
+         this, totalCapExceeded ? "document total" : "body", mBytesReceived));
+    if (CanSend()) {
+      (void)SendReportSizeLimitExceeded(
+          totalCapExceeded,
+          totalCapExceeded
+              ? StaticPrefs::
+                    dom_speculation_rules_max_total_bytes_per_document()
+              : StaticPrefs::dom_speculation_rules_max_body_bytes());
+    }
     if (mChannel) {
       mChannel->Cancel(NS_ERROR_FILE_TOO_BIG);
     } else {

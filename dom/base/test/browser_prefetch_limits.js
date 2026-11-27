@@ -140,6 +140,25 @@ function assertServedFromNetwork(navigation, message) {
   Assert.equal(navigation.hits, 2, `${message}: fetched again.`);
 }
 
+// Content console messages are forwarded to the parent's console service.
+function consoleWarningObserved(predicate) {
+  return new Promise(resolve => {
+    const listener = {
+      QueryInterface: ChromeUtils.generateQI(["nsIConsoleListener"]),
+      observe(message) {
+        if (
+          message instanceof Ci.nsIScriptError &&
+          predicate(message.errorMessage)
+        ) {
+          Services.console.unregisterListener(listener);
+          resolve(message);
+        }
+      },
+    };
+    Services.console.registerListener(listener);
+  });
+}
+
 add_setup(async function () {
   await SpecialPowers.pushPrefEnv({
     set: [["dom.speculation_rules.enabled", true]],
@@ -574,6 +593,72 @@ add_task(async function test_navigation_doesnt_wait_for_queued_prefetch() {
     "A navigation doesn't wait for a queued prefetch."
   );
   Assert.ok(!navigation.fromCache, "It is served from the network.");
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_total_prefetch_bytes_are_capped() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      // One at a time, so a prefetch only starts once the previous one ended.
+      ["dom.speculation_rules.max_inflight_prefetches_per_document", 1],
+      // Room for one large target, but not two.
+      ["dom.speculation_rules.max_total_bytes_per_document", 1500],
+    ],
+  });
+
+  const targets = ["a", "b", "c"].map(n => newTarget(n, "&large=1"));
+  const watch = watchPrefetches(targets);
+  const statuses = new Map();
+  const stopped = TestUtils.topicObserved("http-on-stop-request", subject => {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    if (targets.some(t => t.url === channel.URI.spec) && isPrefetch(channel)) {
+      statuses.set(channel.URI.spec, channel.status);
+    }
+    return statuses.size === 2;
+  });
+  const warned = consoleWarningObserved(text =>
+    text.includes("exceed the maximum total size (1.5 kB)")
+  );
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate: targets }),
+    waitForLoad: true,
+  });
+  await stopped;
+  await flushPrefetchRecords(tab.linkedBrowser);
+  const warning = await warned;
+  watch.stop();
+
+  // Candidate order decides which target is fetched first.
+  const [first, second] = watch.order;
+  Assert.equal(statuses.get(first), Cr.NS_OK, "The first prefetch completes.");
+  Assert.equal(
+    statuses.get(second),
+    Cr.NS_ERROR_FILE_TOO_BIG,
+    "The prefetch that goes over the total is canceled."
+  );
+  Assert.ok(
+    warning.errorMessage.includes(second),
+    "The console warning names the canceled prefetch."
+  );
+  Assert.ok(
+    warning.flags & Ci.nsIScriptError.warningFlag,
+    "It is logged as a warning."
+  );
+  Assert.equal(
+    warning.category,
+    "Speculation Rules",
+    "It is logged under the Speculation Rules category."
+  );
+  Assert.equal(
+    watch.order.length,
+    2,
+    "Once the total is used up, no further prefetch is started."
+  );
+  const third = targets.find(t => !watch.order.includes(t.url));
+  Assert.equal(await hits(third), 0, "The remaining target isn't fetched.");
 
   BrowserTestUtils.removeTab(tab);
   await SpecialPowers.popPrefEnv();

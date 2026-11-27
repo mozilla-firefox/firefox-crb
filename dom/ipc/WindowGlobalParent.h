@@ -480,6 +480,14 @@ class WindowGlobalParent final : public WindowContext,
   // Forgets a queued record that is being canceled or destroyed.
   void RemoveQueuedPrefetch(dom::PrefetchRecordParent* aRec);
 
+  // Adds aCount response body bytes to what this document's prefetches have
+  // received over its lifetime.
+  void AddPrefetchBytesReceived(uint32_t aCount);
+
+  // Whether this document's prefetches have received more than
+  // dom.speculation_rules.max_total_bytes_per_document.
+  bool PrefetchBytesBudgetExceeded() const;
+
   static void ClearPrefetchCache(nsIPrincipal* aPartitionedPrincipal);
 
   // "Find a matching complete prefetch record": synchronous lookup of a
@@ -621,7 +629,8 @@ class WindowGlobalParent final : public WindowContext,
   nsTArray<RefPtr<PrefetchMatchWaiter>> mPrefetchWaiters;
 
   // Applies the prefetch budgets to aRec and starts its fetch, possibly
-  // evicting an older non-immediate record, or cancels it.
+  // evicting an older non-immediate record, or cancels it. Every record is
+  // canceled once the total bytes budget is used up.
   void TryStartPrefetch(dom::PrefetchRecordParent* aRec);
   uint32_t InFlightPrefetchCount();
 
@@ -632,6 +641,9 @@ class WindowGlobalParent final : public WindowContext,
   // Set while the queue must not start records: while it is being pumped, and
   // while every record is being canceled at once.
   bool mPrefetchQueueBusy = false;
+  // Response body bytes this document's prefetches have received over its
+  // lifetime. Never decreases.
+  uint64_t mPrefetchBytesReceived = 0;
 
   // Our page use counters, if we are a top-level document.
   UniquePtr<PageUseCounters> mPageUseCounters;

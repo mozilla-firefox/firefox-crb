@@ -23,6 +23,12 @@ parent:
   // Spec: https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-cancel-and-discard
   async Cancel();
   async __delete__();
+
+child:
+  // The prefetch was canceled for going over a size limit: its own response
+  // body limit, or, if aDocumentTotal, the limit on what all of the document's
+  // prefetches can receive. aLimit is that limit, in bytes.
+  async ReportSizeLimitExceeded(bool aDocumentTotal, uint32_t aLimit);
 };
 
 }  // namespace dom
