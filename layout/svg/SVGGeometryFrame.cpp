@@ -9,6 +9,7 @@
 #include "SVGAnimatedTransformList.h"
 #include "SVGGradientFrame.h"
 #include "SVGMarkerFrame.h"
+#include "WrPathRecorder.h"
 #include "gfx2DGlue.h"
 #include "gfxContext.h"
 #include "gfxPlatform.h"
@@ -715,34 +716,37 @@ WebRenderCommandsResult SVGGeometryFrame::CreateWebRenderCommands(
   SVGGeometryElement::SimpleShape shape;
   element->GetAsSimpleShape(&shape);
 
-  if (!shape.IsRoundedRect()) {
-    return Err("shape is not a rect or an ellipse");
-  }
-
   // Rounded corners and borders are rendered by WebRender from axis aligned
   // cached images; under a rotation or a skew their edges come out blurry, so
   // only plain rect fills are drawn in that case.
   const Matrix transform = aTransform * aSc.GetInheritedTransform();
   const bool axisAligned = !transform.HasNonAxisAlignedTransform();
 
-  // WebRender anti-aliases each edge separately, which bleeds past the acute
-  // corners that a skew gives to a rect.
-  if (!axisAligned && HasSkew(transform)) {
-    return Err("shape under a skew");
-  }
-
-  if (!shape.IsRect()) {
-    if (!StaticPrefs::gfx_webrender_svg_shapes_ellipses()) {
-      return Err("shape is not a simple rect");
+  // Why the shape can't be drawn with WebRender rects, rounded rects and
+  // borders, or nullptr if it can.
+  auto simpleShapeError = [&]() -> const char* {
+    if (!shape.IsRoundedRect()) {
+      return "shape is not a rect or an ellipse";
     }
-    // WebRender always anti-aliases rounded corners.
-    if (HasCrispEdges()) {
-      return Err("rounded shape with shape-rendering: crispEdges");
+    // WebRender anti-aliases each edge separately, which bleeds past the
+    // acute corners that a skew gives to a rect.
+    if (!axisAligned && HasSkew(transform)) {
+      return "shape under a skew";
     }
-    if (!axisAligned) {
-      return Err("rounded shape under a rotation or skew");
+    if (!shape.IsRect()) {
+      if (!StaticPrefs::gfx_webrender_svg_shapes_ellipses()) {
+        return "shape is not a simple rect";
+      }
+      // WebRender always anti-aliases rounded corners.
+      if (HasCrispEdges()) {
+        return "rounded shape with shape-rendering: crispEdges";
+      }
+      if (!axisAligned) {
+        return "rounded shape under a rotation or skew";
+      }
     }
-  }
+    return nullptr;
+  };
 
   const nsStyleSVG* style = StyleSVG();
   MOZ_ASSERT(style);
@@ -751,6 +755,29 @@ WebRenderCommandsResult SVGGeometryFrame::CreateWebRenderCommands(
       SVGContextPaint::GetContextPaint(GetContent());
 
   const bool hasFill = !style->mFill.kind.IsNone();
+
+  // Other shapes are filled through a WebRender path clip.
+  const char* shapeError = simpleShapeError();
+  const bool usePath = shapeError != nullptr;
+  if (usePath) {
+    if (shape.IsLine() || !hasFill || SVGUtils::HasStroke(this, contextPaint) ||
+        !SVGUtils::UseWebRenderPaths()) {
+      return Err(shapeError);
+    }
+    // WebRender path clips are always anti-aliased.
+    if (HasCrispEdges()) {
+      return Err("path with shape-rendering: crispEdges");
+    }
+    // WebRender fills a path with a solid color directly in the destination
+    // when the path is only scaled and translated. Other fills go through a
+    // mask.
+    const bool solidFastPath = style->mFill.kind.IsColor() && axisAligned;
+    if (solidFastPath ? !StaticPrefs::gfx_webrender_svg_path_solid()
+                      : !StaticPrefs::gfx_webrender_svg_path()) {
+      return Err(shapeError);
+    }
+  }
+
   SVGGradientFrame* fillGradient = nullptr;
   if (hasFill && !style->mFill.kind.IsColor()) {
     if (!StaticPrefs::gfx_webrender_svg_shapes_gradients() ||
@@ -856,10 +883,38 @@ WebRenderCommandsResult SVGGeometryFrame::CreateWebRenderCommands(
   const bool backfaceVisible = !aItem->BackfaceIsHidden();
   const bool antialias = ShouldAntiAlias();
 
+  // A path is filled by a rect covering it, clipped by a path clip.
+  wr::LayoutRect pathRect{};
+  Maybe<wr::SpaceAndClipChainHelper> pathClipHelper;
+  if (usePath) {
+    RefPtr<WrPathRecorder> recorder = MakeRefPtr<WrPathRecorder>();
+    RefPtr<Path> unused = element->BuildPath(recorder);
+    unused = recorder->Finish();
+    recorder->Transform(Matrix::Scaling(cssToDev.scale, cssToDev.scale)
+                            .PostTranslate(offset.x, offset.y));
+    if (recorder->IsEmptyOrNonFinite()) {
+      return Ok();
+    }
+    pathRect = recorder->ClipRect();
+    wr::WrClipId clipId = recorder->DefineClip(
+        aBuilder, style->mFillRule == StyleFillRule::Nonzero
+                      ? wr::FillRule::Nonzero
+                      : wr::FillRule::Evenodd);
+    wr::WrClipChainId chain = aBuilder.DefineClipChain(
+        {&clipId, 1}, aBuilder.CurrentClipChainIdIfNotRoot());
+    pathClipHelper.emplace(aBuilder, chain);
+  }
+
   // Fills the shape with a solid color. A rounded shape is a rect with a
   // rounded rect clip, whose curve and edges the clip already anti-aliases, so
-  // only the rect case carries the anti-aliasing flag.
+  // only the rect case carries the anti-aliasing flag. Likewise, a path is a
+  // rect with a path clip.
   auto pushSolidFill = [&](wr::ColorF aColor) {
+    if (usePath) {
+      aBuilder.PushRect(pathRect, pathRect, backfaceVisible, false, false,
+                        aColor);
+      return;
+    }
     wr::LayoutRect wrRect = toDevice(shape.AsRect());
     if (shape.IsRect()) {
       aBuilder.PushRect(wrRect, wrRect, backfaceVisible, antialias, false,
@@ -874,9 +929,9 @@ WebRenderCommandsResult SVGGeometryFrame::CreateWebRenderCommands(
   // Fills the shape with a gradient. Rounded shapes clip the gradient with a
   // rounded rect clip.
   auto pushGradientFill = [&](const SVGGradientFrame::WebRenderGradient& aG) {
-    wr::LayoutRect wrRect = toDevice(shape.AsRect());
+    wr::LayoutRect wrRect = usePath ? pathRect : toDevice(shape.AsRect());
     Maybe<wr::SpaceAndClipChainHelper> clipHelper;
-    if (!shape.IsRect()) {
+    if (!usePath && !shape.IsRect()) {
       wr::ComplexClipRegion region;
       region.rect = wrRect;
       region.radii = wr::EmptyBorderRadius();
@@ -894,9 +949,9 @@ WebRenderCommandsResult SVGGeometryFrame::CreateWebRenderCommands(
     }
 
     // WebRender gradient points are relative to the item's origin.
-    CSSPoint origin = shape.AsRect().TopLeft();
+    const LayoutDevicePoint itemOrigin(wrRect.min.x, wrRect.min.y);
     auto toItemVector = [&](const CSSPoint& aPoint) {
-      return wr::ToLayoutVector2D((aPoint - origin) * cssToDev);
+      return wr::ToLayoutVector2D(aPoint * cssToDev + offset - itemOrigin);
     };
     wr::LayoutSize tileSize{wrRect.width(), wrRect.height()};
     wr::LayoutSize tileSpacing{0.0f, 0.0f};

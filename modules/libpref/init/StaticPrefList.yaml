@@ -8602,6 +8602,23 @@
   value: true
   mirror: always
 
+# Filled SVG shapes that are not drawn as WebRender rects or rounded rects,
+# such as <path> and <polygon>, without a stroke or markers, are drawn with a
+# WebRender path clip when the fill is a solid color and the shape is only
+# scaled and translated. WebRender fills such paths directly in the
+# destination. Requires gfx.webrender.paths (or gfx.webrender.paths.swgl).
+- name: gfx.webrender.svg-path-solid
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# Same as gfx.webrender.svg-path-solid, for the other cases: gradient fills
+# and shapes under a rotation or a skew. They are drawn through a mask.
+- name: gfx.webrender.svg-path
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # SVG <text> with a plain opaque fill and no stroke is drawn with WebRender
 # text primitives instead of being rasterized in a blob image.
 - name: gfx.webrender.svg-text

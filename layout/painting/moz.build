@@ -25,6 +25,7 @@ EXPORTS += [
     "RetainedDisplayListHelpers.h",
     "TransformClipNode.h",
     "WindowRenderer.h",
+    "WrPathRecorder.h",
 ]
 
 EXPORTS.mozilla += [
@@ -47,6 +48,7 @@ UNIFIED_SOURCES += [
     "nsImageRenderer.cpp",
     "RetainedDisplayListBuilder.cpp",
     "WindowRenderer.cpp",
+    "WrPathRecorder.cpp",
 ]
 
 include("/ipc/chromium/chromium-config.mozbuild")
