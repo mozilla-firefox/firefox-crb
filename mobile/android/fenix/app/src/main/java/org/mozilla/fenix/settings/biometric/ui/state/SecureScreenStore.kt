@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.settings.biometric.ui.state
 
+import mozilla.components.lib.state.Middleware
 import mozilla.components.lib.state.Reducer
 import mozilla.components.lib.state.Store
 
@@ -12,13 +13,15 @@ import mozilla.components.lib.state.Store
  *
  * @param initialState The initial state of the secure screen.
  * @param reducer The reducer for the secure screen.
+ * @param middleware Middleware to handle side-effects in response to dispatched actions.
  */
 class SecureScreenStore(
     initialState: SecureScreenState = SecureScreenState.Initial,
     reducer: Reducer<SecureScreenState, SecureScreenAction> = ::secureScreenReducer,
+    middleware: List<Middleware<SecureScreenState, SecureScreenAction>> = listOf(),
 ) :
     Store<SecureScreenState, SecureScreenAction>(
         initialState = initialState,
         reducer = reducer,
-        middleware = emptyList(),
+        middleware = middleware,
     )

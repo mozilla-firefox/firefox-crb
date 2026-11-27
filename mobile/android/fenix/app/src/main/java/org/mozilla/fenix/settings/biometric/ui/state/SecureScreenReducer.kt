@@ -6,6 +6,7 @@ package org.mozilla.fenix.settings.biometric.ui.state
 
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.AuthenticationFlowAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.LifecycleAction
+import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.SuppressAction
 import org.mozilla.fenix.settings.biometric.ui.state.SecureScreenAction.UnlockScreenAction
 
 /**
@@ -23,6 +24,7 @@ fun secureScreenReducer(
     when (action) {
         is AuthenticationFlowAction -> state.handleAuthenticationFlowAction(action)
         is LifecycleAction -> state.handleLifecycleAction(action)
+        is SuppressAction -> state.handleSuppressAction(action)
         is UnlockScreenAction -> state.handleUnlockScreenAction(action)
     }
 
@@ -41,15 +43,27 @@ private fun SecureScreenState.handleAuthenticationFlowAction(action: Authenticat
     }
 }
 
+private fun SecureScreenState.handleSuppressAction(action: SuppressAction): SecureScreenState {
+    return when (action) {
+        SuppressAction.SuppressNextLock -> copy(shouldSuppressNextLock = true)
+        SuppressAction.ClearNextSuppress -> copy(shouldSuppressNextLock = false)
+        SuppressAction.OverrideSuppressedLock ->
+            copy(
+                authenticationState = BiometricAuthenticationState.ReadyToLock,
+                shouldSuppressNextLock = false,
+            )
+    }
+}
+
 private fun SecureScreenState.handleLifecycleAction(action: LifecycleAction): SecureScreenState {
     return when (action) {
         LifecycleAction.OnPause ->
             copy(
                 authenticationState =
-                    if (authenticationState.isAuthorized) {
-                        BiometricAuthenticationState.ReadyToLock
-                    } else {
-                        authenticationState
+                    when {
+                        shouldSuppressNextLock -> BiometricAuthenticationState.NextLockSuppressed
+                        authenticationState.isAuthorized -> BiometricAuthenticationState.ReadyToLock
+                        else -> authenticationState
                     }
             )
 
@@ -57,7 +71,9 @@ private fun SecureScreenState.handleLifecycleAction(action: LifecycleAction): Se
         LifecycleAction.OnResume ->
             copy(
                 authenticationState =
-                    if (authenticationState.isReadyToLock) {
+                    if (authenticationState.isLockSuppressed) {
+                        BiometricAuthenticationState.Authorized
+                    } else if (authenticationState.isReadyToLock) {
                         BiometricAuthenticationState.InProgress
                     } else {
                         authenticationState

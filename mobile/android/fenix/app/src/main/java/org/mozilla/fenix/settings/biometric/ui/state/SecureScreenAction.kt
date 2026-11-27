@@ -44,4 +44,28 @@ sealed interface SecureScreenAction : Action {
         /** Dispatched when the user taps the "Leave" or exit button. */
         data object LeaveTapped : UnlockScreenAction
     }
+
+    /** Actions related to the lock suppression functionality */
+    sealed interface SuppressAction : SecureScreenAction {
+        /**
+         * Suppresses the next lock invocation: when users are importing passwords, asking them to re-authenticate right
+         * after they left the app to select a file for import makes for poor UX, as the ongoing importing flow will be
+         * blocked by the authentication prompt. We want to make an exception for that use case.
+         */
+        data object SuppressNextLock : SuppressAction
+
+        /**
+         * Overrides the suppressed lock invocation: if the user has left the app for more than they reasonably need for
+         * selecting a file for import, we want to lock the logins screen as a security measure.
+         */
+        data object OverrideSuppressedLock : SuppressAction
+
+        /**
+         * Explicitly clears the suppression flag: ideally, we would have relied on the lifecycle methods for this, but
+         * there is a small delay before they are being invoked, so it is possible to briefly leave the app for the file
+         * picker and get back (a really quick person could select a file in that time frame) without triggering any
+         * lifecycle events. So we should be resetting the flag manually, observing the file picker state.
+         */
+        data object ClearNextSuppress : SuppressAction
+    }
 }

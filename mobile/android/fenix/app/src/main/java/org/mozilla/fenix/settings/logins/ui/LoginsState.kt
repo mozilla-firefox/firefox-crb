@@ -20,6 +20,7 @@ import mozilla.components.lib.state.State
  * @property loginsEditLoginState State representing the edit login subscreen, if visible.
  * @property loginsLoginDetailState State representing the login detail subscreen, if visible.
  * @property loginDeletionDialogState State representing the deletion state.
+ * @property loginsImportState State representing the process of importing logins from a file.
  * @property loginsSnackbarState State representing the login screen snackbar status.
  * @property newLoginState State representing the new login to be added state.
  * @property updateLoginState State representing the new login to be edited state.
@@ -35,6 +36,7 @@ internal data class LoginsState(
     val loginsEditLoginState: LoginsEditLoginState?,
     val loginsLoginDetailState: LoginsLoginDetailState?,
     val loginDeletionDialogState: LoginDeletionDialogState,
+    val loginsImportState: LoginsImportState,
     val loginsSnackbarState: LoginsSnackbarState,
     val newLoginState: NewLoginState?,
     val updateLoginState: UpdateLoginState?,
@@ -52,6 +54,7 @@ internal data class LoginsState(
                 loginsEditLoginState = null,
                 loginsLoginDetailState = null,
                 loginDeletionDialogState = LoginDeletionDialogState.None,
+                loginsImportState = LoginsImportState.Idle,
                 loginsSnackbarState = LoginsSnackbarState.None,
                 newLoginState = NewLoginState.None,
                 updateLoginState = UpdateLoginState.None,
@@ -149,4 +152,25 @@ internal sealed class LoginsSnackbarState {
 
     /** Import finished with an error */
     data class ImportFailed(val error: FileImporterError) : LoginsSnackbarState()
+}
+
+/** Represents the state of importing logins from a file */
+internal sealed class LoginsImportState {
+    /** No import in progress */
+    data object Idle : LoginsImportState()
+
+    /** The user is about to navigate away into a file picker app */
+    data object OpeningFilePicker : LoginsImportState()
+
+    /** Import has started */
+    data object ImportStarted : LoginsImportState()
+
+    /** Successfully imported data */
+    data object ImportSuccess : LoginsImportState()
+
+    /** Failed to import the data. An error has occurred */
+    data object ImportFailed : LoginsImportState()
+
+    /** User has left the file picker without selecting a file for import */
+    data object ImportCancelled : LoginsImportState()
 }

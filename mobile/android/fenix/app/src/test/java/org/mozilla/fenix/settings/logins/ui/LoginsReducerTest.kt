@@ -635,7 +635,59 @@ class LoginsReducerTest {
                 loginsSnackbarState = LoginsSnackbarState.ImportFailed(FileImporterError.ReadError)
             )
 
-        assertEquals(state, loginsReducer(state, ImportAction.ImportStarted))
-        assertEquals(state, loginsReducer(state, ImportAction.ImportCancelled))
+        assertEquals(
+            state.loginsSnackbarState,
+            loginsReducer(state, ImportAction.ImportStarted).loginsSnackbarState,
+        )
+        assertEquals(
+            state.loginsSnackbarState,
+            loginsReducer(state, ImportAction.ImportCancelled).loginsSnackbarState,
+        )
+    }
+
+    @Test
+    fun `WHEN import file is clicked THEN logins import state reflects file picker opening and the import menu is hidden`() {
+        val state = LoginsState.default.copy(importPasswordsMenuShown = true)
+
+        val result = loginsReducer(state, ImportAction.ImportFileClicked)
+
+        assertEquals(LoginsImportState.OpeningFilePicker, result.loginsImportState)
+        assertFalse(result.importPasswordsMenuShown)
+    }
+
+    @Test
+    fun `WHEN import starts THEN logins import state reflects import starting`() {
+        val state = LoginsState.default.copy(loginsImportState = LoginsImportState.OpeningFilePicker)
+
+        val result = loginsReducer(state, ImportAction.ImportStarted)
+
+        assertEquals(LoginsImportState.ImportStarted, result.loginsImportState)
+    }
+
+    @Test
+    fun `WHEN import succeeds THEN logins import state reflects successful import`() {
+        val state = LoginsState.default.copy(loginsImportState = LoginsImportState.ImportStarted)
+
+        val result = loginsReducer(state, ImportAction.ImportSucceeded(count = 71))
+
+        assertEquals(LoginsImportState.ImportSuccess, result.loginsImportState)
+    }
+
+    @Test
+    fun `WHEN import fails THEN logins import state reflects failed import`() {
+        val state = LoginsState.default.copy(loginsImportState = LoginsImportState.ImportStarted)
+
+        val result = loginsReducer(state, ImportAction.ImportFailed(FileImporterError.ReadError))
+
+        assertEquals(LoginsImportState.ImportFailed, result.loginsImportState)
+    }
+
+    @Test
+    fun `WHEN import is cancelled THEN logins import state reflects cancelled import`() {
+        val state = LoginsState.default.copy(loginsImportState = LoginsImportState.OpeningFilePicker)
+
+        val result = loginsReducer(state, ImportAction.ImportCancelled)
+
+        assertEquals(LoginsImportState.ImportCancelled, result.loginsImportState)
     }
 }
