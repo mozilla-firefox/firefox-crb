@@ -51,6 +51,8 @@ skip-if = [
 
 ["browser_privatebrowsing_about_search_banner.js"]
 
+["browser_privatebrowsing_about_urlbar.js"]
+
 ["browser_privatebrowsing_beacon.js"]
 
 ["browser_privatebrowsing_blobUrl.js"]
