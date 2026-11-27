@@ -212,6 +212,15 @@ class BrowsingContextGroup final : public nsWrapperCache {
     mLastDialogQuitTime = aLastDialogQuitTime;
   }
 
+  bool GetIsForWebExtension() {
+    MOZ_ASSERT(XRE_IsParentProcess());
+    return mIsForWebExtension;
+  }
+  void SetIsForWebExtension() {
+    MOZ_ASSERT(XRE_IsParentProcess());
+    mIsForWebExtension = true;
+  }
+
   // Whether all toplevel documents loaded in this group are allowed to be
   // Cross-Origin Isolated.
   //
@@ -285,6 +294,12 @@ class BrowsingContextGroup final : public nsWrapperCache {
 
   //  Whether or not all toplevels in this group should be suspended
   bool mToplevelsSuspended = false;
+
+  // Set on the BrowsingContextGroup reserved by a WebExtensionPolicy. Only
+  // available within the parent process. This flag is not encoded in the
+  // group's ID, so it is lost if the group is destroyed and re-created from
+  // its ID.
+  bool mIsForWebExtension = false;
 
   // DocGroups are thread-safe, and not able to be cycle collected,
   // but we still keep strong pointers. When all Documents are removed
