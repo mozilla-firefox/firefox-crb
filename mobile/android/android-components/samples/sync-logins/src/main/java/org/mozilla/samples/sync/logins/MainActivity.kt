@@ -23,7 +23,6 @@ import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.DeviceConfig
 import mozilla.components.concept.sync.DeviceType
-import mozilla.components.concept.sync.FxaService
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.concept.sync.PeriodicSyncConfig
 import mozilla.components.concept.sync.Profile
@@ -165,7 +164,7 @@ class MainActivity : AppCompatActivity(), LoginFragment.OnLoginCompleteListener,
         fragment: LoginFragment,
     ) {
         launch {
-            val authType = action?.toAuthType() ?: AuthType.Signin
+            val authType = action?.toAuthType() ?: AuthType.Signin()
             accountManager.finishAuthentication(FxaAuthData(authType, code = code, state = state))
             supportFragmentManager.popBackStack()
         }

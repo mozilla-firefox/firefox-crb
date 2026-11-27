@@ -16,6 +16,7 @@ import mozilla.appservices.fxaclient.Profile
 import mozilla.appservices.fxaclient.ScopedKey
 import mozilla.appservices.fxaclient.TabHistoryEntry
 import mozilla.appservices.sync15.DeviceType as RustDeviceType
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.Avatar
 import mozilla.components.concept.sync.DeviceCapability
@@ -28,14 +29,14 @@ import mozilla.components.concept.sync.TabPrivacy
  * Converts a raw 'action' string into an [AuthType] instance. Actions come to us from FxA during an OAuth login, either
  * over the WebChannel or via the redirect URL.
  */
-fun String?.toAuthType(): AuthType {
+fun String?.toAuthType(service: FxaService? = null): AuthType {
     return when (this) {
-        "signin" -> AuthType.Signin
-        "signup" -> AuthType.Signup
-        "pairing" -> AuthType.Pairing
+        "signin" -> AuthType.Signin(service)
+        "signup" -> AuthType.Signup(service)
+        "pairing" -> AuthType.Pairing(service)
         // We want to gracefully handle an 'action' we don't know about.
         // This also covers the `null` case.
-        else -> AuthType.OtherExternal(this)
+        else -> AuthType.OtherExternal(this, service)
     }
 }
 
