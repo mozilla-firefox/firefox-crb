@@ -5046,10 +5046,10 @@ void IMEInputHandler::OpenSystemPreferredLanguageIME() {
 
 void IMEInputHandler::OnSelectionChange(
     const IMENotification& aIMENotification) {
-  MOZ_ASSERT(aIMENotification.mSelectionChangeData.IsInitialized());
+  MOZ_ASSERT(aIMENotification.mSelectionChangeData->IsInitialized());
 
-  const IMENotification::SelectionChangeDataBase& selectionChangeData =
-      aIMENotification.mSelectionChangeData;
+  const IMENotification::SelectionChangeData& selectionChangeData =
+      aIMENotification.mSelectionChangeData.ref();
   MOZ_LOG(gIMELog, LogLevel::Info,
           ("%p "
            "IMEInputHandler::OnSelectionChange(aIMENotification."
@@ -5116,7 +5116,7 @@ static NSTextCheckingType GetTextCheckingTypes() {
 void IMEInputHandler::OnTextChange(const IMENotification& aIMENotification) {
   if (mIMECompositionStartInContent.isSome()) {
     mIMECompositionStartInContent =
-        Some(aIMENotification.mTextChangeData.ComputeNewOffset(
+        Some(aIMENotification.mTextChangeData->ComputeNewOffset(
             *mIMECompositionStartInContent));
   }
   HandleTextSubstitution(aIMENotification);
@@ -5154,12 +5154,12 @@ void IMEInputHandler::HandleTextSubstitution(
            "aIMENotification.mTextChangeData=%s",
            this, ToString(aIMENotification.mTextChangeData).c_str()));
 
-  if (aIMENotification.mTextChangeData.mCausedOnlyByComposition) {
+  if (aIMENotification.mTextChangeData->mCausedOnlyByComposition) {
     return;
   }
 
-  if (aIMENotification.mTextChangeData.mStartOffset !=
-      aIMENotification.mTextChangeData.mRemovedEndOffset) {
+  if (aIMENotification.mTextChangeData->mStartOffset !=
+      aIMENotification.mTextChangeData->mRemovedEndOffset) {
     // Text substitution runs on adding text only
     return;
   }
@@ -5168,7 +5168,7 @@ void IMEInputHandler::HandleTextSubstitution(
       NewRunnableMethod<uint32_t>(
           "IMEInputHandler::OnTextSubstitution", this,
           &IMEInputHandler::OnTextSubstitution,
-          aIMENotification.mTextChangeData.mAddedEndOffset),
+          aIMENotification.mTextChangeData->mAddedEndOffset),
       100, EventQueuePriority::Idle);
 
   // OnTextSubstitution might be called on non-e10s during dispatching a key
