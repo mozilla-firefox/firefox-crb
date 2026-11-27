@@ -30,6 +30,11 @@ toolbarbutton {
   }
 }
 
+.toolbarbutton-icon {
+  display: flex;
+  box-sizing: border-box;
+}
+
 .toolbarbutton-text {
   margin: 0;
   padding: 0;
