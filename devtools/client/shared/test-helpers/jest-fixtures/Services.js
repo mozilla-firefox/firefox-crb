@@ -540,7 +540,7 @@ const Services = {
 
   appinfo: "",
   locale: {
-    appLocalesAsLangTags: ["en-US", "en"],
+    appLocaleAsBCP47: "en-US",
   },
   obs: { addObserver: () => {} },
   strings: {

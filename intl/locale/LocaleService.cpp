@@ -448,37 +448,12 @@ LocaleService::GetLastFallbackLocale(nsACString& aRetVal) {
 }
 
 NS_IMETHODIMP
-LocaleService::GetAppLocalesAsLangTags(nsTArray<nsCString>& aRetVal) {
-  if (mAppLocales.IsEmpty()) {
-    NegotiateAppLocales(mAppLocales);
-  }
-  for (uint32_t i = 0; i < mAppLocales.Length(); i++) {
-    nsAutoCString locale(mAppLocales[i]);
-    if (locale.LowerCaseEqualsASCII("ja-jp-macos")) {
-      aRetVal.AppendElement("ja-JP-mac");
-    } else {
-      aRetVal.AppendElement(locale);
-    }
-  }
-  return NS_OK;
-}
-
-NS_IMETHODIMP
 LocaleService::GetAppLocalesAsBCP47(nsTArray<nsCString>& aRetVal) {
   if (mAppLocales.IsEmpty()) {
     NegotiateAppLocales(mAppLocales);
   }
   aRetVal = mAppLocales.Clone();
 
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-LocaleService::GetAppLocaleAsLangTag(nsACString& aRetVal) {
-  AutoTArray<nsCString, 32> locales;
-  GetAppLocalesAsLangTags(locales);
-
-  aRetVal = locales[0];
   return NS_OK;
 }
 
