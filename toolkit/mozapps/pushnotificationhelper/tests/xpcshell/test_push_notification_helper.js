@@ -75,6 +75,22 @@ registerCleanupFunction(() => {
   }
 });
 
+// This has to run before any other task reads the pref through the module,
+// because that read is what attaches the pref observer.
+add_task(async function test_set_enabled_stops_before_the_observer_exists() {
+  withStubs({ available: true, enabled: true }, calls => {
+    Services.fog.testResetFOG();
+
+    PushNotificationHelper.setEnabled(false);
+    Assert.equal(calls.stop, 1, "the helper stops");
+    Assert.equal(
+      Glean.backgroundNotificationHelper.toggled.disabled.testGetValue(),
+      1,
+      "and the toggle is counted once"
+    );
+  });
+});
+
 // The Nimbus-owned gate and the user's own switch are independent, so the
 // helper runs for exactly one of the four combinations.
 add_task(async function test_update_needs_both_prefs() {

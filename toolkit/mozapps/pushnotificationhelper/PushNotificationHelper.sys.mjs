@@ -90,6 +90,11 @@ export const PushNotificationHelper = {
    * @param {boolean} value - Whether the helper should run.
    */
   setEnabled(value) {
+    // Reading the lazy getter attaches its pref observer, which is what
+    // counts the change and updates the helper, even before init() runs.
+    if (lazy.enabled === value) {
+      return;
+    }
     Services.prefs.setBoolPref(ENABLED_PREF, value);
   },
 
