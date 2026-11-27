@@ -260,9 +260,10 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
 
     /**
      * Click a web-content element and wait for [expectedContent] to render, reloading [url] and re-clicking between
-     * attempts. Mirrors the legacy clickPageObject retry-with-refresh: a tap can land before GeckoView has wired up the
-     * page's DOM handlers, in which case the click is a silent no-op and waiting on the same document never recovers
-     * it.
+     * attempts. Mirrors the legacy clickPageObject retry-with-refresh: before GeckoView has wired up the page's DOM
+     * handlers a tap can either land as a silent no-op or fail outright (UiObject.click() returns false, surfacing as
+     * "Failed to click UiObject"), and waiting on the same document never recovers either. The click is inside the
+     * retry so both failure modes trigger a reload-and-retry.
      */
     fun clickPageObjectUntilContent(
         selector: Selector,
@@ -271,8 +272,8 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         attempts: Int = 3,
     ): BrowserPage {
         for (attempt in 1..attempts) {
-            mozClick(selector)
             try {
+                mozClick(selector)
                 return verifyPageContent(expectedContent)
             } catch (e: AssertionError) {
                 if (attempt == attempts) throw e

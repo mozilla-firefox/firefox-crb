@@ -9,6 +9,7 @@ import org.junit.Test
 import org.mozilla.fenix.customannotations.Critical
 import org.mozilla.fenix.customannotations.SmokeTest
 import org.mozilla.fenix.ui.efficiency.helpers.BaseTest
+import org.mozilla.fenix.ui.efficiency.selectors.BrowserPageSelectors
 
 class SettingsHTTPSOnlyModeTest : BaseTest() {
 
@@ -74,8 +75,11 @@ class SettingsHTTPSOnlyModeTest : BaseTest() {
         on.browserPage
             .navigateToPage("http.badssl.com")
             .verifyPageContent("Secure site not available")
-            .clickPageContent("Continue to HTTP Site")
-            .verifyPageContent("http.badssl.com")
+            .clickPageObjectUntilContent(
+                selector = BrowserPageSelectors.PAGE_CONTENT("Continue to HTTP Site"),
+                url = "http.badssl.com",
+                expectedContent = "http.badssl.com",
+            )
         on.tabDrawer.navigateToPage().closeAllTabs()
         on.home.navigateToPage()
         on.browserPage.navigateToPage("http.badssl.com").verifyPageContent("http.badssl.com")
