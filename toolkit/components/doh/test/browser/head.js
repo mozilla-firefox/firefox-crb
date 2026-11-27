@@ -47,6 +47,7 @@ const prefs = {
   ENABLED_PREF: "doh-rollout.enabled",
   ROLLOUT_TRR_MODE_PREF: "doh-rollout.mode",
   NETWORK_TRR_MODE_PREF: "network.trr.mode",
+  NETWORK_TRR_URI_PREF: "network.trr.uri",
   CONFIRMATION_NS_PREF: "network.trr.confirmationNS",
   BREADCRUMB_PREF: "doh-rollout.self-enabled",
   DOORHANGER_USER_DECISION_PREF: "doh-rollout.doorhanger-decision",
@@ -392,6 +393,13 @@ function simulateNetworkChange() {
   // TODO: Implement a mock NetworkLinkService and use it to also simulate
   // network down events.
   Services.obs.notifyObservers(null, "network:link-status-changed", "up");
+}
+
+// Mirrors the pref writes of the Default radio in about:preferences.
+function selectDefaultProtection() {
+  Services.prefs.setIntPref(prefs.NETWORK_TRR_MODE_PREF, 0);
+  Services.prefs.clearUserPref(prefs.NETWORK_TRR_URI_PREF);
+  Services.prefs.clearUserPref(prefs.DISABLED_PREF);
 }
 
 async function ensureTRRMode(mode) {
