@@ -159,9 +159,9 @@ bool Table::getFuncRef(JSContext* cx, uint32_t address,
   }
 
   Instance& instance = *elem.instance;
-  const CodeRange& codeRange = *instance.code().lookupFuncRange(elem.code);
+  uint32_t funcIndex = instance.code().funcIndexFromCheckedEntry(elem.code);
   AutoRealmUnchecked ar(cx, instance.realm());
-  return instance.getExportedFunction(cx, codeRange.funcIndex(), fun);
+  return instance.getExportedFunction(cx, funcIndex, fun);
 }
 
 void Table::setFuncRef(uint32_t address, JSFunction* fun) {
@@ -170,21 +170,23 @@ void Table::setFuncRef(uint32_t address, JSFunction* fun) {
 
   // Tables can store references to wasm functions from other instances. To
   // preserve the === function identity required by the JS embedding spec, we
-  // must set the element to the function's underlying
-  // CodeRange.funcCheckedCallEntry and Instance so that Table.get()s always
-  // produce the same function object as was imported.
-  setFuncRef(address, fun->wasmCheckedCallEntry(), &fun->wasmInstance());
+  // must set the element to the function's underlying function index and
+  // Instance so that Table.get()s always produce the same function object as
+  // was imported.
+  setFuncRef(address, fun->wasmFuncIndex(), &fun->wasmInstance());
 }
 
-void Table::setFuncRef(uint32_t address, void* code, Instance* instance) {
+void Table::setFuncRef(uint32_t address, uint32_t funcIndex,
+                       Instance* instance) {
   MOZ_ASSERT(isFunction());
+  MOZ_RELEASE_ASSERT(instance->codeMeta().funcs[funcIndex].canRefFunc());
 
   FunctionTableElem& elem = functions_[address];
   if (elem.instance) {
     gc::PreWriteBarrier(elem.instance->objectUnbarriered());
   }
 
-  elem.code = code;
+  elem.code = instance->code().getAddressOfCheckedEntry(funcIndex);
   elem.instance = instance;
   MOZ_ASSERT(elem.instance->objectUnbarriered()->isTenured(),
              "no postWriteBarrier (Table::set)");
@@ -202,10 +204,10 @@ void Table::fillFuncRef(uint32_t address, uint32_t fillCount, FuncRef ref,
   }
 
   RootedFunction fun(cx, ref.asJSFunction());
-  void* code = fun->wasmCheckedCallEntry();
+  uint32_t funcIndex = fun->wasmFuncIndex();
   Instance& instance = fun->wasmInstance();
   for (uint32_t i = address, end = address + fillCount; i != end; i++) {
-    setFuncRef(i, code, &instance);
+    setFuncRef(i, funcIndex, &instance);
   }
 }
 

@@ -26,7 +26,7 @@ namespace wasm {
 // A Table is an indexable array of opaque values. Tables are first-class
 // stateful objects exposed to WebAssembly.
 //
-// A table of FuncRef holds FunctionTableElems, which are (code*,instance*)
+// A table of FuncRef holds FunctionTableElems, which are (code**,instance*)
 // pairs, where the instance must be traced.
 //
 // A table of AnyRef holds pointers, which must be traced.
@@ -83,7 +83,7 @@ class Table : public ShareableBase<Table> {
   [[nodiscard]] bool getFuncRef(JSContext* cx, uint32_t address,
                                 MutableHandleFunction fun) const;
   void setFuncRef(uint32_t address, JSFunction* func);
-  void setFuncRef(uint32_t address, void* code, Instance* instance);
+  void setFuncRef(uint32_t address, uint32_t funcIndex, Instance* instance);
   void fillFuncRef(uint32_t address, uint32_t fillCount, FuncRef ref,
                    JSContext* cx);
 

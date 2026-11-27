@@ -685,7 +685,6 @@ class JSFunction : public js::NativeObject {
   inline js::wasm::Instance& wasmInstance() const;
   uint32_t wasmFuncIndex() const;
   void* wasmUncheckedCallEntry() const;
-  void* wasmCheckedCallEntry() const;
   inline js::wasm::SuperTypeVector& wasmSuperTypeVector() const;
   inline const js::wasm::TypeDef* wasmTypeDef() const;
 

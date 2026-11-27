@@ -495,8 +495,8 @@ class alignas(16) Instance {
                                uint32_t dstOffset);
 
   // Iterates through elements of a ModuleElemSegment containing functions.
-  // Unlike iterElemsAnyrefs, this method can get function data (instance and
-  // code pointers) without creating intermediate JSFunctions.
+  // Unlike iterElemsAnyrefs, this method can get function data (instance
+  // pointer and function index) without creating intermediate JSFunctions.
   //
   // NOTE: This method only works for element segments that use the index
   // encoding. If the expression encoding is used, you must use
@@ -504,7 +504,7 @@ class alignas(16) Instance {
   //
   // Signature for onFunc:
   //
-  //   (uint32_t index, void* code, Instance* instance) -> bool
+  //   (uint32_t index, uint32_t funcIndex, Instance* instance) -> bool
   //
   template <typename F>
   [[nodiscard]] bool iterElemsFunctions(const ModuleElemSegment& seg,

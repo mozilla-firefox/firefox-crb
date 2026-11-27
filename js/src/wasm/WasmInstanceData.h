@@ -206,19 +206,20 @@ struct TagInstanceData {
   GCPtr<WasmTagObject*> object;
 };
 
-// Table element for TableRepr::Func which carries both the code pointer and
-// a instance pointer (and thus anything reachable through the instance).
+// Table element for TableRepr::Func which carries a code-pointer slot and
+// an instance pointer (and thus anything reachable through the instance).
 
 struct FunctionTableElem {
-  // The code to call when calling this element. The table ABI is the system
-  // ABI with the additional ABI requirements that:
+  // The callee's entry in the checked-entry jump table of the instance's Code,
+  // which holds the code to call when calling this element. The table ABI is
+  // the system ABI with the additional ABI requirements that:
   //  - InstanceReg and any pinned registers have been loaded appropriately
   //  - if this is a heterogeneous table that requires a signature check,
   //    WasmTableCallSigReg holds the signature id.
-  void* code;
+  void** code;
 
   // The pointer to the callee's instance's Instance. This must be loaded into
-  // InstanceReg before calling 'code'.
+  // InstanceReg before calling through 'code'.
   Instance* instance;
 };
 
