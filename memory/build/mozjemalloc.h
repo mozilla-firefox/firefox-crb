@@ -95,12 +95,10 @@ struct ReplaceMalloc {
 };
 #  endif
 
-using CanonicalMalloc = MozJemalloc;
-
 #  ifdef MOZ_REPLACE_MALLOC
 using DefaultMalloc = ReplaceMalloc;
 #  else
-using DefaultMalloc = CanonicalMalloc;
+using DefaultMalloc = MozJemalloc;
 #  endif
 
 // Poison - write "poison" to cells upon deallocation.
