@@ -48,7 +48,7 @@ add_task(async function test_network_markers() {
         status: "STATUS_STOP",
         URI: url,
         httpVersion: "http/1.1",
-        classOfService: "UrgentStart",
+        classOfService: NAVIGATION_CLASS_OF_SERVICE,
         requestStatus: "NS_OK",
         requestMethod: "GET",
         contentType: "text/html",

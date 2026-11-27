@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="timeout" content="long">
+<title>In-flight requests during a pending navigation</title>
+<link rel="help" href="https://html.spec.whatwg.org/#navigate">
+<link rel="help" href="https://github.com/whatwg/html/issues/4489">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/common/utils.js"></script>
+<script src="resources/pending-navigation-helpers.js"></script>
+<script>
+// Starting a navigation must not cancel the requests of the document it will
+// replace: they keep running until the new document commits. Requests that are
+// still in flight at that point go away with the old document without
+// reporting anything to script.
+
+// Returns a function created in |win|'s realm, the way a handler on the page
+// itself would be, that records |entry| into |log| and then calls |onRecord|.
+// Once |win|'s document has been replaced, such a handler no longer runs.
+function popupRecorder(win, log, entry, onRecord = () => {}) {
+  return new win.Function("log", "entry", "onRecord",
+    "return () => { log.push(entry); onRecord(); };")(log, entry, onRecord);
+}
+
+// Starts an XHR in |win| and records the events it fires.
+function startXHR(win, url) {
+  const xhr = new win.XMLHttpRequest();
+  const events = [];
+  const done = new Promise(resolve => {
+    for (const type of ["load", "error", "abort", "timeout", "loadend"]) {
+      xhr.addEventListener(type,
+        popupRecorder(win, events, type, type === "loadend" ? resolve : undefined));
+    }
+  });
+  xhr.open("GET", url);
+  xhr.send();
+  return { xhr, events, done };
+}
+
+// Starts a fetch in |win| and records how it settles.
+function startFetch(win, url) {
+  const outcomes = [];
+  win.fetch(url).then(popupRecorder(win, outcomes, "resolved"),
+                      popupRecorder(win, outcomes, "rejected"));
+  return outcomes;
+}
+
+// Starts a script in |win| and records the events it fires.
+function startScript(win, url) {
+  const events = [];
+  const script = win.document.createElement("script");
+  script.onload = popupRecorder(win, events, "load");
+  script.onerror = popupRecorder(win, events, "error");
+  script.src = url;
+  win.document.head.appendChild(script);
+  return events;
+}
+
+// Starts a navigation while a script is in flight, and checks that the script
+// still loads and executes before the new document commits. With
+// |parserBlocked| the document's parser is waiting on a script of its own when
+// that happens.
+async function testInflightScriptSurvives(t, parserBlocked) {
+  const win = await openObserver(t, parserBlocked ? heldRequest(t, "script") : null);
+
+  assert_equals(await loadScript(win, resourceURL("control")), "load",
+    "A script loads without a pending navigation");
+  assert_true(win.scriptExecuted, "The control script executes");
+
+  const originalDocument = win.document;
+  let pageHidden = false;
+  win.addEventListener("pagehide", () => { pageHidden = true; }, { once: true });
+
+  const scriptRequest = heldRequest(t, "script");
+  const scriptLoaded = loadScript(win, scriptRequest.url);
+  await scriptRequest.waitForRequest();
+
+  const navigationRequest = heldRequest(t, "navigation");
+  win.location.href = navigationRequest.url;
+  await navigationRequest.waitForRequest();
+
+  assert_equals(win.document, originalDocument, "The original document is still active");
+  assert_false(pageHidden, "The original document has not been hidden");
+
+  await scriptRequest.release();
+  const scriptEvent = await Promise.race([scriptLoaded, timeout(t, 3000, "none")]);
+  const scriptExecuted = win.scriptExecuted;
+  assert_equals(win.document, originalDocument, "The navigation has not committed");
+  assert_false(pageHidden, "The original document remains visible until the script settles");
+
+  const navigated = popupMessage(t, win, ["navigated"]);
+  await navigationRequest.release();
+  await navigated;
+  assert_equals(win.document.body.textContent, "Navigated", "The navigation completes");
+
+  assert_equals(scriptEvent, "load", "The in-flight script loads while navigation is pending");
+  assert_true(scriptExecuted, "The in-flight script executes while navigation is pending");
+}
+
+promise_test(t => testInflightScriptSurvives(t, false),
+  "Starting a navigation does not cancel an in-flight script before the new document commits");
+
+promise_test(t => testInflightScriptSurvives(t, true),
+  "Starting a navigation does not cancel an in-flight script before the new document commits while parsing");
+
+promise_test(async t => {
+  const win = await openObserver(t);
+  const originalDocument = win.document;
+
+  const xhrRequest = heldRequest(t, "script");
+  const xhr = startXHR(win, xhrRequest.url);
+  await xhrRequest.waitForRequest();
+
+  const navigationRequest = heldRequest(t, "navigation");
+  win.location.href = navigationRequest.url;
+  await navigationRequest.waitForRequest();
+
+  await xhrRequest.release();
+  await Promise.race([xhr.done, timeout(t, 3000)]);
+  assert_equals(win.document, originalDocument, "The navigation has not committed");
+  assert_array_equals(xhr.events, ["load", "loadend"],
+    "The XHR completes while the navigation is pending");
+  assert_equals(xhr.xhr.responseText, SCRIPT_BODY, "The XHR gets the full body");
+
+  const navigated = popupMessage(t, win, ["navigated"]);
+  await navigationRequest.release();
+  await navigated;
+}, "An XHR started before a navigation completes if its response arrives before the navigation commits");
+
+promise_test(async t => {
+  const win = await openObserver(t);
+
+  const scriptRequest = heldRequest(t, "script");
+  const scriptEvents = startScript(win, scriptRequest.url);
+  const fetchRequest = heldRequest(t, "script");
+  const fetchOutcomes = startFetch(win, fetchRequest.url);
+  const xhrRequest = heldRequest(t, "script");
+  const xhr = startXHR(win, xhrRequest.url);
+  await scriptRequest.waitForRequest();
+  await fetchRequest.waitForRequest();
+  await xhrRequest.waitForRequest();
+
+  const navigationRequest = heldRequest(t, "navigation");
+  const navigated = popupMessage(t, win, ["navigated"]);
+  win.location.href = navigationRequest.url;
+  await navigationRequest.waitForRequest();
+  await navigationRequest.release();
+  await navigated;
+  assert_equals(win.document.body.textContent, "Navigated", "The navigation completes");
+
+  await scriptRequest.release();
+  await fetchRequest.release();
+  await xhrRequest.release();
+  await timeout(t, 1000);
+
+  assert_array_equals(scriptEvents, [], "No script handler of the replaced document runs");
+  assert_array_equals(fetchOutcomes, [], "No fetch handler of the replaced document runs");
+  assert_array_equals(xhr.events, [], "No XHR handler of the replaced document runs");
+}, "Requests still in flight when a navigation commits report nothing");
+
+promise_test(async t => {
+  const win = await openObserver(t);
+  const originalDocument = win.document;
+  const scriptRequest = heldRequest(t, "script");
+  loadScript(win, scriptRequest.url);
+  await scriptRequest.waitForRequest();
+  const navigationRequest = heldRequest(t, "navigation");
+  win.location.href = navigationRequest.url;
+  await navigationRequest.waitForRequest();
+  win.stop();
+  await scriptRequest.release();
+  await navigationRequest.release();
+  await timeout(t, 1000);
+  assert_equals(win.document, originalDocument, "window.stop cancels the navigation");
+  assert_false(win.scriptExecuted, "window.stop also stops the old document's script");
+}, "window.stop cancels both pending navigation and the old document's in-flight script");
+</script>
