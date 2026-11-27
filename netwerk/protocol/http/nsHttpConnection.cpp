@@ -1830,7 +1830,16 @@ nsresult nsHttpConnection::OnSocketWritable() {
   const uint32_t maxWriteAttempts = 128;
   uint32_t writeAttempts = 0;
 
-  if (mTransactionCaps & NS_HTTP_CONNECT_ONLY) {
+  // Only for the connection that issues the CONNECT itself, and only once the
+  // real transaction is the one riding it. An H2 outer proxy connection reaches
+  // REQUEST via StartSpdy (it tunnels per stream through CreateTunnelStream)
+  // and has to keep driving its session, so bailing out here would tear the
+  // session down before any tunnel exists. An inner connection's setup driver
+  // (TunnelSetupTransaction, a speculative transaction) still has the inner
+  // handshake to finish, so closing it here would fail the whole attempt.
+  if ((mTransactionCaps & NS_HTTP_CONNECT_ONLY) &&
+      mUsingSpdyVersion == SpdyVersion::NONE && mTransaction &&
+      mTransaction->QueryHttpTransaction()) {
     if (!mConnInfo->UsingConnect()) {
       // A CONNECT has been requested for this connection but will never
       // be performed. This should never happen.
@@ -1879,7 +1888,14 @@ nsresult nsHttpConnection::OnSocketWritable() {
           // already finished 0RTT data, or the early data limit is reached.
           mSocketOutCondition = NS_BASE_STREAM_WOULD_BLOCK;
         } else if (!mTransaction) {
-          rv = NS_ERROR_FAILURE;
+          // A connect-only connection has done its job once the CONNECT
+          // response reached the transaction; it is now waiting for the
+          // consumer to take the transport, which CompleteUpgrade may hop to
+          // the main thread to do. Stop driving I/O instead of failing, or the
+          // tunnel is closed out from under the handover.
+          rv = (mTransactionCaps & NS_HTTP_CONNECT_ONLY)
+                   ? NS_BASE_STREAM_WOULD_BLOCK
+                   : NS_ERROR_FAILURE;
           LOG(("  No Transaction In OnSocketWritable\n"));
         } else if (NS_SUCCEEDED(rv)) {
           // for non spdy sessions let the connection manager know
@@ -2057,8 +2073,11 @@ nsresult nsHttpConnection::OnSocketReadable() {
     mSocketInCondition = NS_OK;
     uint32_t n = 0;
     if (!mTransaction) {
-      rv = NS_ERROR_FAILURE;
-      LOG(("  No Transaction In OnSocketWritable\n"));
+      // See the matching case in OnSocketWritable.
+      rv = (mTransactionCaps & NS_HTTP_CONNECT_ONLY)
+               ? NS_BASE_STREAM_WOULD_BLOCK
+               : NS_ERROR_FAILURE;
+      LOG(("  No Transaction In OnSocketReadable\n"));
     } else {
       RefPtr<nsAHttpTransaction> transaction = mTransaction;
       rv = transaction->WriteSegmentsAgain(

@@ -162,6 +162,10 @@ class InnerConnectionAttempt final : public ConnectionAttempt,
   // The first refused CONNECT. The proxy has decided, so the attempt stops
   // there rather than asking again over another endpoint.
   Maybe<RefusedConnect> mRefusedConnect;
+  // The CONNECT response of the winning endpoint. A connect-only transaction
+  // needs it: the driver read it, but the channel acts on the transaction's
+  // own response head.
+  RefPtr<ProxyConnectResponseHead> mEstablishedConnect;
   TimeStamp mStart;
   nsresult mLastError = NS_OK;
   // The security info of a failed inner TLS handshake, which the real
