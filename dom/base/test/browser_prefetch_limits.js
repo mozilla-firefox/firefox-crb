@@ -407,3 +407,174 @@ add_task(async function test_budgets_are_independent() {
 
   await SpecialPowers.popPrefEnv();
 });
+
+// Records the order in which prefetches of aTargets are sent, and the largest
+// number in flight at once. Call stop() once they have all finished.
+function watchPrefetches(targets) {
+  const urls = new Set(targets.map(t => t.url));
+  const watch = { order: [], inFlight: 0, maxInFlight: 0 };
+  const observer = (subject, topic) => {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    if (!urls.has(channel.URI.spec) || !isPrefetch(channel)) {
+      return;
+    }
+    if (topic === "http-on-modify-request") {
+      watch.order.push(channel.URI.spec);
+      watch.maxInFlight = Math.max(watch.maxInFlight, ++watch.inFlight);
+    } else {
+      --watch.inFlight;
+    }
+  };
+  const topics = ["http-on-modify-request", "http-on-stop-request"];
+  topics.forEach(t => Services.obs.addObserver(observer, t));
+  watch.stop = () =>
+    topics.forEach(t => Services.obs.removeObserver(observer, t));
+  return watch;
+}
+
+add_task(async function test_inflight_prefetches_are_limited() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["dom.speculation_rules.max_inflight_prefetches_per_document", 2]],
+  });
+
+  const targets = ["a", "b", "c", "d", "e"].map(n => newTarget(n, "&slow=300"));
+  const watch = watchPrefetches(targets);
+  const stopped = prefetchesStopped(targets, targets.length);
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate: targets }),
+    waitForLoad: true,
+  });
+  await stopped;
+  watch.stop();
+
+  Assert.equal(watch.maxInFlight, 2, "At most 2 prefetches are in flight.");
+  Assert.deepEqual(
+    await Promise.all(targets.map(hits)),
+    [1, 1, 1, 1, 1],
+    "The queued prefetches are all fetched as slots free up."
+  );
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_queued_non_immediate_prefetch_starts_first() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["dom.speculation_rules.max_inflight_prefetches_per_document", 1]],
+  });
+
+  const immediate = ["a", "b", "c"].map(n => newTarget(n, "&slow=1000"));
+  const conservative = newTarget("conservative");
+  const all = [...immediate, conservative];
+  const watch = watchPrefetches(all);
+  const stopped = prefetchesStopped(all, all.length);
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate, conservative: [conservative] }),
+    waitForLoad: true,
+  });
+
+  // The first immediate prefetch is in flight and the other two are queued
+  // when the link is pressed.
+  await pressLink(tab.linkedBrowser, 0);
+  await stopped;
+  watch.stop();
+
+  Assert.equal(
+    watch.order[1],
+    conservative.url,
+    "The queued non-immediate prefetch starts before the queued immediate ones."
+  );
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_queued_prefetch_is_dropped_with_its_rule() {
+  if (Services.prefs.getBoolPref("telemetry.fog.artifact_build", false)) {
+    Assert.ok(true, "Test skipped in artifact builds. See bug 1836686.");
+    return;
+  }
+
+  Services.fog.testResetFOG();
+  await SpecialPowers.pushPrefEnv({
+    set: [["dom.speculation_rules.max_inflight_prefetches_per_document", 1]],
+  });
+
+  const inflight = newTarget("inflight", "&slow=500");
+  const queued = newTarget("queued");
+  const stopped = prefetchStopped(inflight);
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate: [inflight] }),
+    waitForLoad: true,
+  });
+  const browser = tab.linkedBrowser;
+
+  // Queue a second prefetch, then remove its rule while it's still waiting.
+  await SpecialPowers.spawn(browser, [queued.url], async url => {
+    const script = content.document.createElement("script");
+    script.id = "queued-rule";
+    script.type = "speculationrules";
+    script.textContent = JSON.stringify({
+      prefetch: [{ source: "list", urls: [url], eagerness: "immediate" }],
+    });
+    content.document.head.appendChild(script);
+  });
+  await flushPrefetchRecords(browser);
+  await SpecialPowers.spawn(browser, [], () => {
+    content.document.getElementById("queued-rule").remove();
+  });
+  await flushPrefetchRecords(browser);
+
+  // Removing the rule discards its record right away, and a record that had
+  // started a fetch would be reported then. The in-flight one is still going.
+  Assert.equal(
+    fetchedRecords(),
+    0,
+    "The queued prefetch whose rule was removed never starts."
+  );
+
+  await stopped;
+  Assert.equal(await hits(queued), 0, "Its target isn't fetched.");
+  BrowserTestUtils.removeTab(tab);
+
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_navigation_doesnt_wait_for_queued_prefetch() {
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      ["dom.speculation_rules.max_inflight_prefetches_per_document", 1],
+      // Long enough that a navigation waiting for the queued prefetch would be
+      // served from it once the in-flight one finishes.
+      ["dom.speculation_rules.wait_timeout_ms", 30000],
+    ],
+  });
+
+  const targets = ["a", "b"].map(n => newTarget(n, "&slow=1500"));
+  const started = TestUtils.topicObserved("http-on-modify-request", subject => {
+    const channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    return targets.some(t => t.url === channel.URI.spec) && isPrefetch(channel);
+  });
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    url: sourceURL({ immediate: targets }),
+    waitForLoad: true,
+  });
+  const browser = tab.linkedBrowser;
+
+  // Candidate order decides which one starts, so the other is the queued one.
+  const [first] = await started;
+  const target = targets.find(t => t.url !== first.URI.spec);
+  const navigation = await navigate(browser, target);
+  Assert.ok(
+    !navigation.fromPrefetch,
+    "A navigation doesn't wait for a queued prefetch."
+  );
+  Assert.ok(!navigation.fromCache, "It is served from the network.");
+
+  BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});

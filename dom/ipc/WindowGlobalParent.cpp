@@ -17,6 +17,7 @@
 #include "MMPrinter.h"
 #include "mozilla/AntiTrackingUtils.h"
 #include "mozilla/AsyncEventDispatcher.h"
+#include "mozilla/AutoRestore.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/BounceTrackingProtection.h"
 #include "mozilla/ClearOnShutdown.h"
@@ -2600,6 +2601,72 @@ PrefetchRecordParent* WindowGlobalParent::FindMatchingPrefetchRecord(
 }
 
 void WindowGlobalParent::AdmitPrefetchRecord(PrefetchRecordParent* aRec) {
+  // A record goes through two limits, in this order:
+  //  1. The in-flight limit: how many fetches this document can have running
+  //     at once. Over it, the record waits in a queue, and isn't rejected.
+  //  2. The budgets: how many records this document can hold in total, in
+  //     flight or completed and not expired, per bucket (immediate or
+  //     non-immediate). TryStartPrefetch checks them when the record is about
+  //     to start, so a queued record is checked when it leaves the queue.
+  if (InFlightPrefetchCount() >=
+      StaticPrefs::
+          dom_speculation_rules_max_inflight_prefetches_per_document()) {
+    LOG_SPECRULES(
+        ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p queued", this,
+         aRec));
+    aRec->MarkQueued();
+    (aRec->IsImmediate() ? mQueuedImmediatePrefetches
+                         : mQueuedNonImmediatePrefetches)
+        .AppendElement(aRec);
+    return;
+  }
+
+  TryStartPrefetch(aRec);
+}
+
+uint32_t WindowGlobalParent::InFlightPrefetchCount() {
+  nsTArray<PPrefetchRecordParent*> managed;
+  ManagedPPrefetchRecordParent(managed);
+  uint32_t count = 0;
+  for (auto* p : managed) {
+    if (static_cast<PrefetchRecordParent*>(p)->State() ==
+        PrefetchState::Ongoing) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+void WindowGlobalParent::PumpPrefetchQueue() {
+  if (mPrefetchQueueBusy) {
+    return;
+  }
+  AutoRestore<bool> busy(mPrefetchQueueBusy);
+  mPrefetchQueueBusy = true;
+
+  while ((!mQueuedNonImmediatePrefetches.IsEmpty() ||
+          !mQueuedImmediatePrefetches.IsEmpty()) &&
+         InFlightPrefetchCount() <
+             StaticPrefs::
+                 dom_speculation_rules_max_inflight_prefetches_per_document()) {
+    auto& queue = !mQueuedNonImmediatePrefetches.IsEmpty()
+                      ? mQueuedNonImmediatePrefetches
+                      : mQueuedImmediatePrefetches;
+    RefPtr<PrefetchRecordParent> rec = queue[0];
+    queue.RemoveElementAt(0);
+    LOG_SPECRULES(
+        ("WindowGlobalParent::PumpPrefetchQueue: this=%p dequeued rec=%p", this,
+         rec.get()));
+    TryStartPrefetch(rec);
+  }
+}
+
+void WindowGlobalParent::RemoveQueuedPrefetch(PrefetchRecordParent* aRec) {
+  mQueuedNonImmediatePrefetches.RemoveElement(aRec);
+  mQueuedImmediatePrefetches.RemoveElement(aRec);
+}
+
+void WindowGlobalParent::TryStartPrefetch(PrefetchRecordParent* aRec) {
   // Immediate and non-immediate records have separate budgets. A record
   // counts against its budget while its fetch is in flight, and once
   // completed until it expires.
@@ -2636,14 +2703,14 @@ void WindowGlobalParent::AdmitPrefetchRecord(PrefetchRecordParent* aRec) {
   if (count >= limit) {
     if (immediate || !oldestCompleted) {
       LOG_SPECRULES(
-          ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p rejected, "
+          ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p rejected, "
            "%s budget full (%u)",
            this, aRec, immediate ? "immediate" : "non-immediate", limit));
       aRec->MarkCanceled();
       return;
     }
     LOG_SPECRULES(
-        ("WindowGlobalParent::AdmitPrefetchRecord: this=%p rec=%p evicting "
+        ("WindowGlobalParent::TryStartPrefetch: this=%p rec=%p evicting "
          "oldest non-immediate rec=%p",
          this, aRec, oldestCompleted));
     oldestCompleted->MarkCanceled();
@@ -2728,6 +2795,10 @@ void WindowGlobalParent::ClearPrefetchCache(
               "records",
               fmt::ptr(wgp.get()), managed.Length());
         }
+        // Canceling a record frees its slot, which must not start a queued
+        // record that is about to be canceled too.
+        AutoRestore<bool> busy(wgp->mPrefetchQueueBusy);
+        wgp->mPrefetchQueueBusy = true;
         for (auto* p : managed) {
           // 1.2.3.1. is skipped: prerendering is not implemented, so a
           // record's prerendering traversable is always null.

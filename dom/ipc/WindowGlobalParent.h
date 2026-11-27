@@ -469,10 +469,16 @@ class WindowGlobalParent final : public WindowContext,
   void NotifyPrefetchStateChanged(dom::PrefetchRecordParent* aRec);
   void DedupePrefetchRecords(dom::PrefetchRecordParent* aJustCompleted);
 
-  // Applies this document's prefetch budgets to aRec, which Init accepted:
-  // starts its fetch, possibly evicting an older non-immediate record to make
-  // room, or cancels it when its budget is full.
+  // Takes aRec, which Init accepted, and either queues it or starts it subject
+  // to the prefetch budgets.
   void AdmitPrefetchRecord(dom::PrefetchRecordParent* aRec);
+
+  // Starts queued prefetch records while fewer than the allowed number are in
+  // flight. Called whenever an in-flight record completes or is canceled.
+  void PumpPrefetchQueue();
+
+  // Forgets a queued record that is being canceled or destroyed.
+  void RemoveQueuedPrefetch(dom::PrefetchRecordParent* aRec);
 
   static void ClearPrefetchCache(nsIPrincipal* aPartitionedPrincipal);
 
@@ -613,6 +619,19 @@ class WindowGlobalParent final : public WindowContext,
   // will point to ourselves.)
   RefPtr<WindowGlobalParent> mPageUseCountersWindow;
   nsTArray<RefPtr<PrefetchMatchWaiter>> mPrefetchWaiters;
+
+  // Applies the prefetch budgets to aRec and starts its fetch, possibly
+  // evicting an older non-immediate record, or cancels it.
+  void TryStartPrefetch(dom::PrefetchRecordParent* aRec);
+  uint32_t InFlightPrefetchCount();
+
+  // Prefetch records waiting for an in-flight slot, oldest first.
+  // Non-immediate ones are started before immediate ones.
+  nsTArray<RefPtr<dom::PrefetchRecordParent>> mQueuedNonImmediatePrefetches;
+  nsTArray<RefPtr<dom::PrefetchRecordParent>> mQueuedImmediatePrefetches;
+  // Set while the queue must not start records: while it is being pumped, and
+  // while every record is being canceled at once.
+  bool mPrefetchQueueBusy = false;
 
   // Our page use counters, if we are a top-level document.
   UniquePtr<PageUseCounters> mPageUseCounters;
