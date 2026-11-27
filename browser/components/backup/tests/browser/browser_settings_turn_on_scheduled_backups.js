@@ -526,17 +526,19 @@ add_task(async function test_turn_on_scheduled_backups_encryption_error() {
 });
 
 /**
- * Tests that confirming the dialog without choosing a custom folder does not
- * change the backup location pref.
+ * Tests that confirming the dialog without choosing a custom folder sets the
+ * backup location pref to the default folder, even if a different folder was
+ * previously chosen.
  */
 add_task(async function test_default_location_selected() {
-  const INITIAL_LOCATION = "backup dir path";
+  const INITIAL_LOCATION = PathUtils.join(PathUtils.tempDir, "backup dir path");
   await SpecialPowers.pushPrefEnv({
     set: [["browser.backup.location", INITIAL_LOCATION]],
   });
 
   await BrowserTestUtils.withNewTab("about:preferences#sync", async browser => {
     let sandbox = sinon.createSandbox();
+    sandbox.stub(BackupService.prototype, "createBackup").resolves(true);
     sandbox
       .stub(BackupService.prototype, "probeDefaultDirAccess")
       .resolves(true);
@@ -553,15 +555,19 @@ add_task(async function test_default_location_selected() {
     );
     turnOnScheduledBackups.confirmButtonEl.click();
     await promise;
-    await settings.updateComplete;
 
-    let locationPrefVal = Services.prefs.getStringPref(
-      "browser.backup.location"
+    await TestUtils.waitForCondition(
+      () => Services.prefs.getBoolPref(SCHEDULED_BACKUPS_ENABLED_PREF, false),
+      "Waiting for scheduled backups to be enabled"
     );
+
     Assert.equal(
-      locationPrefVal,
-      INITIAL_LOCATION,
-      "Backup location pref should not change when no custom folder is chosen"
+      Services.prefs.getStringPref("browser.backup.location"),
+      PathUtils.join(
+        BackupService.DEFAULT_PARENT_DIR_PATH,
+        BackupService.BACKUP_DIR_NAME
+      ),
+      "Backup location pref should be set to the default folder"
     );
 
     sandbox.restore();
