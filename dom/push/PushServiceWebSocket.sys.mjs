@@ -603,6 +603,7 @@ export var PushServiceWebSocket = {
       this._UAID = reply.uaid;
       this._currentState = STATE_READY;
       prefs.addObserver("userAgentID", this);
+      Services.obs.notifyObservers(null, "push-service-handshake-complete");
 
       // Handle broadcasts received in response to the "hello" message.
       if (!lazy.ObjectUtils.isEmpty(reply.broadcasts)) {

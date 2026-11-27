@@ -135,12 +135,13 @@ There's no way to know how many messages are pending, so it waits until they
 stop arriving:
 
 - `app.backgroundNotifications.receivePushMessages.perMessageTimeoutMs`
-  (default 5 seconds) restarts on every message. When it expires, receiving
-  stops.
+  (default 5 seconds) starts when the Push service finishes its handshake with
+  autopush, so a slow handshake doesn't use it up. It restarts on every
+  message. When it expires, receiving stops.
 - `app.backgroundNotifications.receivePushMessages.totalTimeoutMs` (default 60
-  seconds) never restarts, so a stream of messages can't keep Firefox alive
-  forever. When it expires, new messages are ignored and left on the server for
-  the next time.
+  seconds) starts right away and never restarts, so a stream of messages, or a
+  handshake that never completes, can't keep Firefox alive forever. When it
+  expires, new messages are ignored and left on the server for the next time.
 
 A message counts as pending until its `push-message-handled` notification
 fires, which happens after its service worker's push event settles. Receiving
