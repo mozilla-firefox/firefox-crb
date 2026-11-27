@@ -82,6 +82,8 @@ class HomeActivityTestRule(
         isGoogleLensIntegrationUserEnabled: Boolean = true,
         isFxSuggestEnabled: Boolean = true,
         showAddressBarInFocusMode: Boolean = false,
+        isTrendingSearchSuggestionsEnabled: Boolean = settings.trendingSearchSuggestionsEnabled,
+        shouldShowSearchSuggestionsInPrivate: Boolean = settings.shouldShowSearchSuggestionsInPrivate,
         crashReportOption: CrashReportOption = settings.crashReportOption(),
     ) : this(initialTouchMode, launchActivity, skipOnboarding) {
         this.isHomepageAsNewTabEnabled = isHomepageAsNewTabEnabled
@@ -115,6 +117,8 @@ class HomeActivityTestRule(
         this.isGoogleLensIntegrationUserEnabled = isGoogleLensIntegrationUserEnabled
         this.isFxSuggestEnabled = isFxSuggestEnabled
         this.showAddressBarInFocusMode = showAddressBarInFocusMode
+        this.isTrendingSearchSuggestionsEnabled = isTrendingSearchSuggestionsEnabled
+        this.shouldShowSearchSuggestionsInPrivate = shouldShowSearchSuggestionsInPrivate
         this.crashReportOption = crashReportOption
     }
 
@@ -241,6 +245,8 @@ internal constructor(
         isGoogleLensIntegrationUserEnabled: Boolean = true,
         isFxSuggestEnabled: Boolean = true,
         showAddressBarInFocusMode: Boolean = false,
+        isTrendingSearchSuggestionsEnabled: Boolean = settings.trendingSearchSuggestionsEnabled,
+        shouldShowSearchSuggestionsInPrivate: Boolean = settings.shouldShowSearchSuggestionsInPrivate,
         crashReportOption: CrashReportOption = settings.crashReportOption(),
     ) : this(initialTouchMode, launchActivity, skipOnboarding) {
         this.isHomepageAsNewTabEnabled = isHomepageAsNewTabEnabled
@@ -276,6 +282,8 @@ internal constructor(
         this.isGoogleLensIntegrationUserEnabled = isGoogleLensIntegrationUserEnabled
         this.isFxSuggestEnabled = isFxSuggestEnabled
         this.showAddressBarInFocusMode = showAddressBarInFocusMode
+        this.isTrendingSearchSuggestionsEnabled = isTrendingSearchSuggestionsEnabled
+        this.shouldShowSearchSuggestionsInPrivate = shouldShowSearchSuggestionsInPrivate
         this.crashReportOption = crashReportOption
     }
 
@@ -358,6 +366,8 @@ internal constructor(
         isGoogleLensIntegrationUserEnabled = settings.googleLensIntegrationUserEnabled
         isFxSuggestEnabled = settings.enableFxSuggest
         showAddressBarInFocusMode = settings.showAddressBarInFocusMode
+        isTrendingSearchSuggestionsEnabled = settings.trendingSearchSuggestionsEnabled
+        shouldShowSearchSuggestionsInPrivate = settings.shouldShowSearchSuggestionsInPrivate
         crashReportOption = settings.crashReportOption()
     }
 

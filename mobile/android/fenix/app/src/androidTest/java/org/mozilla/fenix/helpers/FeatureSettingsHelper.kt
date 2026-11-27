@@ -119,6 +119,12 @@ interface FeatureSettingsHelper {
     /** Whether the current URL is shown separate from the addressbar when tapped. */
     var showAddressBarInFocusMode: Boolean
 
+    /** Whether trending searches are shown in the search suggestions. */
+    var isTrendingSearchSuggestionsEnabled: Boolean
+
+    /** Whether search suggestions (including trending searches) are shown in private browsing. */
+    var shouldShowSearchSuggestionsInPrivate: Boolean
+
     /**
      * The crash reporting preference, between the following options:
      * - Ask before sending

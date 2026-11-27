@@ -59,6 +59,8 @@ class FeatureSettingsHelperDelegate : FeatureSettingsHelper {
             isGoogleLensIntegrationUserEnabled = settings.googleLensIntegrationUserEnabled,
             isFxSuggestEnabled = settings.enableFxSuggest,
             showAddressBarInFocusMode = settings.showAddressBarInFocusMode,
+            isTrendingSearchSuggestionsEnabled = settings.trendingSearchSuggestionsEnabled,
+            shouldShowSearchSuggestionsInPrivate = settings.shouldShowSearchSuggestionsInPrivate,
             crashReportOption = settings.crashReportOption(),
         )
 
@@ -98,6 +100,9 @@ class FeatureSettingsHelperDelegate : FeatureSettingsHelper {
     override var isGoogleLensIntegrationUserEnabled: Boolean by updatedFeatureFlags::isGoogleLensIntegrationUserEnabled
     override var isFxSuggestEnabled: Boolean by updatedFeatureFlags::isFxSuggestEnabled
     override var showAddressBarInFocusMode: Boolean by updatedFeatureFlags::showAddressBarInFocusMode
+    override var isTrendingSearchSuggestionsEnabled: Boolean by updatedFeatureFlags::isTrendingSearchSuggestionsEnabled
+    override var shouldShowSearchSuggestionsInPrivate: Boolean by
+        updatedFeatureFlags::shouldShowSearchSuggestionsInPrivate
     override var crashReportOption: CrashReportOption by updatedFeatureFlags::crashReportOption
 
     override fun applyFlagUpdates() {
@@ -143,6 +148,8 @@ class FeatureSettingsHelperDelegate : FeatureSettingsHelper {
         settings.migrateCollectionsToTabGroupsEnabled = featureFlags.isCollectionsToTabGroupsMigrationEnabled
         settings.hideCollectionsUi = featureFlags.isCollectionsUiHidden
         settings.showAddressBarInFocusMode = featureFlags.showAddressBarInFocusMode
+        settings.trendingSearchSuggestionsEnabled = featureFlags.isTrendingSearchSuggestionsEnabled
+        settings.shouldShowSearchSuggestionsInPrivate = featureFlags.shouldShowSearchSuggestionsInPrivate
         settings.crashReportChoice = featureFlags.crashReportOption.label
         settings.googleLensIntegrationEnabled = featureFlags.isGoogleLensIntegrationEnabled
         settings.googleLensIntegrationUserEnabled = featureFlags.isGoogleLensIntegrationUserEnabled
@@ -179,6 +186,8 @@ private data class FeatureFlags(
     var isCollectionsToTabGroupsMigrationEnabled: Boolean,
     var isCollectionsUiHidden: Boolean,
     var showAddressBarInFocusMode: Boolean,
+    var isTrendingSearchSuggestionsEnabled: Boolean,
+    var shouldShowSearchSuggestionsInPrivate: Boolean,
     var crashReportOption: CrashReportOption,
     var isGoogleLensIntegrationEnabled: Boolean,
     var isGoogleLensIntegrationUserEnabled: Boolean,
