@@ -9759,17 +9759,23 @@ async function runIMEContentObserverTest()
     });
   }
 
+  function isLayoutChangeOnlyNotification(aNotification) {
+    return aNotification.type == "notify-content-change" &&
+      aNotification.layoutChanged && !aNotification.textChanged &&
+      !aNotification.selectionChanged;
+  }
+
   function ensureToRemovePrecedingPositionChangeNotification(aDescription)
   {
     if (!notifications.length) {
       return;
     }
-    if (notifications[0].type != "notify-position-change") {
+    if (!isLayoutChangeOnlyNotification(notifications[0])) {
       return;
     }
     // Sometimes, notify-position-change is notified first separately if
     // the operation causes scroll or something.  Tests can ignore this.
-    ok(true, "notify-position-change", aDescription + "Unnecessary notify-position-change occurred, ignoring it");
+    ok(true, `${aDescription} Unnecessary layout change only notification found, ignoring it`);
     notifications.shift();
   }
 
@@ -9783,49 +9789,66 @@ async function runIMEContentObserverTest()
     if (notifications.length <= expectedCount) {
       return;
     }
-    if (notifications[notifications.length-1].type != "notify-position-change") {
+    if (!isLayoutChangeOnlyNotification(notifications[notifications.length-1])) {
       return;
     }
-    ok(true, "notify-position-change", aDescription + "Unnecessary notify-position-change occurred, ignoring it");
+    ok(true, `${aDescription} Unnecessary layout change only notification found, ignoring it`);
     notifications.pop();
   }
 
   function checkPositionChangeNotification(aNotification, aDescription)
   {
-    is(!aNotification || aNotification.type, "notify-position-change",
-       aDescription + " should cause position change notification");
+    ok(
+      aNotification?.type == "notify-content-change" && aNotification.layoutChanged,
+      `${aDescription} should cause a content change notification which notifies of a layout change (got "${
+        aNotification?.type
+      }, textChanged=${aNotification?.textChanged}, selectionChanged=${aNotification?.selectionChanged}")`);
   }
 
   function checkSelectionChangeNotification(aNotification, aDescription, aExpected)
   {
-    is(!aNotification || aNotification.type, "notify-selection-change",
-       aDescription + " should cause selection change notification");
-    if (!aNotification || (aNotification.type != "notify-selection-change")) {
+    is(aNotification.type, "notify-content-change",
+       aDescription + " should cause a content change notification");
+    if (aNotification.type != "notify-content-change") {
       return;
     }
-    is(aNotification.offset, aExpected.offset,
-       aDescription + " should cause selection change notification whose offset is " + aExpected.offset);
-    is(aNotification.text, aExpected.text,
-       aDescription + " should cause selection change notification whose text is '" + aExpected.text + "'");
-    is(aNotification.collapsed, !aExpected.text.length,
-       aDescription + " should cause selection change notification whose collapsed is " + (!aExpected.text.length));
-    is(aNotification.length, aExpected.text.length,
-       aDescription + " should cause selection change notification whose length is " + aExpected.text.length);
-    is(aNotification.reversed, aExpected.reversed || false,
-       aDescription + " should cause selection change notification whose reversed is " + (aExpected.reversed || false));
+    ok(
+      aNotification.selectionChanged,
+      `${aDescription} should cause a selection change notification`
+    );
+    if (!aNotification.selectionChanged) {
+      return;
+    }
+    is(aNotification.selectionOffset, aExpected.offset,
+       aDescription + " should cause selection change notification whose selectionOffset is " + aExpected.offset);
+    is(aNotification.selectedText, aExpected.text,
+       aDescription + " should cause selection change notification whose selectedText is '" + aExpected.text + "'");
+    is(aNotification.selectionCollapsed, !aExpected.text.length,
+       aDescription + " should cause selection change notification whose selectionCollapsed is " + (!aExpected.text.length));
+    is(aNotification.selectionLength, aExpected.text.length,
+       aDescription + " should cause selection change notification whose selectionLength is " + aExpected.text.length);
+    is(aNotification.selectionRangeReversed, aExpected.reversed || false,
+       aDescription + " should cause selection change notification whose selectionRangeReversed is " + (aExpected.reversed || false));
     is(aNotification.writingMode, aExpected.writingMode || "horizontal-tb",
        aDescription + " should cause selection change notification whose writingMode is '" + (aExpected.writingMode || "horizontal-tb"));
   }
 
   function checkTextChangeNotification(aNotification, aDescription, aExpected)
   {
-    is(!aNotification || aNotification.type, "notify-text-change",
-       aDescription + " should cause text change notification");
-    if (!aNotification || aNotification.type != "notify-text-change") {
+    is(aNotification.type, "notify-content-change",
+       aDescription + " should cause a content change notification");
+    if (aNotification.type != "notify-content-change") {
       return;
     }
-    is(aNotification.offset, aExpected.offset,
-       aDescription + " should cause text change notification whose offset is " + aExpected.offset);
+    ok(
+      aNotification.textChanged,
+      `${aDescription} should cause a text change notification`
+    );
+    if (!aNotification.textChanged) {
+      return;
+    }
+    is(aNotification.textChangeOffset, aExpected.offset,
+       aDescription + " should cause text change notification whose textChangeOffset is " + aExpected.offset);
     is(aNotification.removedLength, aExpected.removedLength,
        aDescription + " should cause text change notification whose removedLength is " + aExpected.removedLength);
     is(aNotification.addedLength, aExpected.addedLength,
@@ -10392,19 +10415,16 @@ async function runIMEContentObserverTest()
         removedLength: "\nd".length,
         addedLength: "d".length,
       });
-      checkSelectionChangeNotification(notifications[1], description, { offset: 2 + offsetAtContainer, text: "" });
-      checkPositionChangeNotification(notifications[2], description);
-      dumpUnexpectedNotifications(description, 3);
     } else {
       checkTextChangeNotification(notifications[0], description, {
         offset: offsetAtContainer + "aB".length,
         removedLength: "\n".length,
         addedLength: 0,
       });
-      is(notifications.length, 3, description + " should cause 3 notifications");
-      is(notifications[1] && notifications[1].type, "notify-selection-change", description + " should cause selection change notification");
-      is(notifications[2] && notifications[2].type, "notify-position-change", description + " should cause position change notification");
     }
+    checkSelectionChangeNotification(notifications[1], description, { offset: 2 + offsetAtContainer, text: "" });
+    checkPositionChangeNotification(notifications[2], description);
+    dumpUnexpectedNotifications(description, 3);
 
     // "a[B]d"
     synthesizeKey("KEY_ArrowLeft", {shiftKey: true}, win, callback);
