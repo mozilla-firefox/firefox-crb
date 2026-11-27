@@ -68,6 +68,7 @@ function mockDefaultBranch(setters = {}) {
   return branch;
 }
 
+// eslint-disable-next-line max-statements
 describe("PrefsFeed", () => {
   let feed;
   let FAKE_PREFS;
@@ -470,6 +471,137 @@ describe("PrefsFeed", () => {
           data: { name: "recordsHistory", value: false },
         })
       );
+    });
+  });
+  describe("widgetStudioAvailable", () => {
+    const WIDGET_STUDIO_PREFS = [
+      "browser.widgets.generated.enabled",
+      "sidebar.revamp",
+      "browser.ai.control.generatedWidgets",
+      "browser.ai.control.default",
+    ];
+
+    function setPlatformPrefs(values) {
+      const read = (pref, defaultValue) =>
+        pref in values ? values[pref] : defaultValue;
+      services.prefs.getBoolPref = jest.fn(read);
+      services.prefs.getStringPref = jest.fn(read);
+    }
+
+    function initialValue() {
+      feed.onAction({ type: at.INIT });
+      const [[{ data }]] = feed.store.dispatch.mock.calls;
+      return data.widgetStudioAvailable;
+    }
+
+    const AVAILABLE = {
+      "browser.widgets.generated.enabled": true,
+      "sidebar.revamp": true,
+    };
+
+    it("is true with custom widgets and the new sidebar on", () => {
+      setPlatformPrefs(AVAILABLE);
+      expect(initialValue()).toBe(true);
+    });
+
+    it.each(["browser.widgets.generated.enabled", "sidebar.revamp"])(
+      "is false with %s off",
+      pref => {
+        setPlatformPrefs({ ...AVAILABLE, [pref]: false });
+        expect(initialValue()).toBe(false);
+      }
+    );
+
+    it("is false before Firefox 162, which has no Custom Widgets sidebar", () => {
+      setPlatformPrefs(AVAILABLE);
+      services.vc.compare.mockImplementation((_version, other) =>
+        other === "162.0a1" ? -1 : 0
+      );
+      expect(initialValue()).toBe(false);
+    });
+
+    it.each([
+      [{ "browser.ai.control.generatedWidgets": "blocked" }, false],
+      [{ "browser.ai.control.default": "blocked" }, false],
+      [
+        {
+          "browser.ai.control.generatedWidgets": "default",
+          "browser.ai.control.default": "blocked",
+        },
+        false,
+      ],
+      [{ "browser.ai.control.generatedWidgets": "available" }, false],
+      [
+        {
+          "browser.ai.control.generatedWidgets": "available",
+          "browser.ai.control.default": "blocked",
+        },
+        false,
+      ],
+      [{ "browser.ai.control.generatedWidgets": "default" }, true],
+      [
+        {
+          "browser.ai.control.generatedWidgets": "enabled",
+          "browser.ai.control.default": "blocked",
+        },
+        true,
+      ],
+    ])("with AI controls %o is %s", (controls, expected) => {
+      setPlatformPrefs({ ...AVAILABLE, ...controls });
+      expect(initialValue()).toBe(expected);
+    });
+
+    it("observes its prefs on init and drops them on uninit", () => {
+      feed.init();
+      feed.uninit();
+      for (const pref of WIDGET_STUDIO_PREFS) {
+        expect(services.prefs.addObserver).toHaveBeenCalledWith(pref, feed);
+        expect(services.prefs.removeObserver).toHaveBeenCalledWith(pref, feed);
+      }
+    });
+
+    it("broadcasts once per flip, not once per write", () => {
+      setPlatformPrefs(AVAILABLE);
+      feed.init();
+      feed.store.dispatch.mockClear();
+
+      const broadcast = value =>
+        ac.BroadcastToContent({
+          type: at.PREF_CHANGED,
+          data: { name: "widgetStudioAvailable", value },
+        });
+
+      setPlatformPrefs({
+        ...AVAILABLE,
+        "browser.ai.control.generatedWidgets": "blocked",
+      });
+      feed.observe(
+        null,
+        "nsPref:changed",
+        "browser.ai.control.generatedWidgets"
+      );
+      expect(feed.store.dispatch.mock.calls).toEqual([[broadcast(false)]]);
+
+      feed.store.dispatch.mockClear();
+      setPlatformPrefs({
+        ...AVAILABLE,
+        "browser.ai.control.generatedWidgets": "blocked",
+        "browser.ai.control.default": "blocked",
+      });
+      feed.observe(null, "nsPref:changed", "browser.ai.control.default");
+      expect(feed.store.dispatch).not.toHaveBeenCalled();
+
+      setPlatformPrefs({
+        ...AVAILABLE,
+        "browser.ai.control.default": "blocked",
+        "browser.ai.control.generatedWidgets": "enabled",
+      });
+      feed.observe(
+        null,
+        "nsPref:changed",
+        "browser.ai.control.generatedWidgets"
+      );
+      expect(feed.store.dispatch.mock.calls).toEqual([[broadcast(true)]]);
     });
   });
   it("should send a PREF_CHANGED action when onPrefChanged is called", () => {

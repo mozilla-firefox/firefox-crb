@@ -223,6 +223,7 @@ export class ContentSection extends React.PureComponent {
       toggleWidgetsManagementPanel,
       showWidgetsManagementPanel,
       widgetsEnabled,
+      onClose,
       lockedPrefs = [],
     } = this.props;
     const {
@@ -544,6 +545,7 @@ export class ContentSection extends React.PureComponent {
                             setPref={setPref}
                             togglePanel={toggleWidgetsManagementPanel}
                             showPanel={showWidgetsManagementPanel}
+                            onClose={onClose}
                           />
                         </div>
                       </div>

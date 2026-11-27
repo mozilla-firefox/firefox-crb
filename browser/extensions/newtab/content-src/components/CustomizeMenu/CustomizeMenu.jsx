@@ -135,7 +135,9 @@ export class _CustomizeMenu extends React.PureComponent {
       this.dialogRef.current.close();
     }
     this.props.closeSubpanels();
-    if (this.personalizeButtonRef.current) {
+    // The page has lost focus when a button in this panel opened the Custom
+    // Widgets sidebar, which takes focus itself.
+    if (this.personalizeButtonRef.current && document.hasFocus()) {
       this.personalizeButtonRef.current.focus();
     }
   }
@@ -263,6 +265,7 @@ export class _CustomizeMenu extends React.PureComponent {
                   this.props.mayHaveRecentSearchesWidget
                 }
                 dispatch={this.props.dispatch}
+                onClose={this.props.onClose}
                 toggleSectionsMgmtPanel={this.props.toggleSectionsMgmtPanel}
                 showSectionsMgmtPanel={
                   activeSubpanel === CUSTOMIZE_SUBPANELS.SECTIONS

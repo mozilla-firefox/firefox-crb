@@ -87,6 +87,42 @@ function recordsHistory() {
   );
 }
 
+// The prefs that decide whether the Custom Widgets sidebar can open. They are
+// read directly, not through GeneratedWidgetsFeature, because New Tab can run
+// on Firefox versions that don't have that module. Keep widgetStudioAvailable()
+// in step with GeneratedWidgetsFeature.isEnabled.
+const WIDGET_STUDIO_PREFS = [
+  "browser.widgets.generated.enabled",
+  "sidebar.revamp",
+  "browser.ai.control.generatedWidgets",
+  "browser.ai.control.default",
+];
+
+function widgetStudioAvailable() {
+  const control = Services.prefs.getStringPref(
+    "browser.ai.control.generatedWidgets",
+    ""
+  );
+  let state = control;
+  if (!state || state === "default") {
+    state = Services.prefs.getStringPref(
+      "browser.ai.control.default",
+      "available"
+    );
+  }
+  return (
+    /**
+     * @backward-compat { version 162 }
+     * The Custom Widgets sidebar view is only registered from Firefox 162.
+     */
+    Services.vc.compare(AppConstants.MOZ_APP_VERSION, "162.0a1") >= 0 &&
+    Services.prefs.getBoolPref("browser.widgets.generated.enabled", false) &&
+    Services.prefs.getBoolPref("sidebar.revamp", false) &&
+    state !== "blocked" &&
+    control !== "available"
+  );
+}
+
 const PREF_DEFAULTS = [
   { type: "bool", key: "logowordmark.alwaysVisible", defaultValue: false },
   { type: "bool", key: "feeds.section.topstories", defaultValue: false },
@@ -721,6 +757,7 @@ export class PrefsFeed {
     );
   }
 
+  // eslint-disable-next-line max-statements
   init() {
     this._prefs.observeBranch(this);
     lazy.NimbusFeatures.newtab.onUpdate(this.onExperimentUpdated);
@@ -823,6 +860,12 @@ export class PrefsFeed {
       Services.prefs.addObserver(pref, this);
     }
 
+    this._widgetStudioAvailable = widgetStudioAvailable();
+    values.widgetStudioAvailable = this._widgetStudioAvailable;
+    for (const pref of WIDGET_STUDIO_PREFS) {
+      Services.prefs.addObserver(pref, this);
+    }
+
     // Add experiment values and default values
     values.featureConfig = lazy.NimbusFeatures.newtab.getAllVariables() || {};
     values.pocketConfig =
@@ -900,6 +943,9 @@ export class PrefsFeed {
     }
     Services.prefs.removeObserver(BROWSER_NOVA_ENABLED_PREF, this);
     for (const pref of RECORDS_HISTORY_PREFS) {
+      Services.prefs.removeObserver(pref, this);
+    }
+    for (const pref of WIDGET_STUDIO_PREFS) {
       Services.prefs.removeObserver(pref, this);
     }
   }
@@ -1249,6 +1295,20 @@ export class PrefsFeed {
               ac.BroadcastToContent({
                 type: at.PREF_CHANGED,
                 data: { name: "recordsHistory", value: nextRecordsHistory },
+              })
+            );
+          }
+        } else if (WIDGET_STUDIO_PREFS.includes(data)) {
+          const nextWidgetStudioAvailable = widgetStudioAvailable();
+          if (nextWidgetStudioAvailable !== this._widgetStudioAvailable) {
+            this._widgetStudioAvailable = nextWidgetStudioAvailable;
+            this.store.dispatch(
+              ac.BroadcastToContent({
+                type: at.PREF_CHANGED,
+                data: {
+                  name: "widgetStudioAvailable",
+                  value: nextWidgetStudioAvailable,
+                },
               })
             );
           }

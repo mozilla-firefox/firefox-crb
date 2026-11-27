@@ -5,6 +5,7 @@
 import { act, render, fireEvent } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { createStore, combineReducers } from "redux";
+import { actionCreators as ac, actionTypes as at } from "common/Actions.mjs";
 import { INITIAL_STATE, reducers } from "common/Reducers.sys.mjs";
 import { WIDGET_REGISTRY } from "common/WidgetsRegistry.mjs";
 import { WidgetsManagementPanel } from "content-src/components/Nova/CustomizeMenu/WidgetsManagementPanel/WidgetsManagementPanel";
@@ -897,6 +898,145 @@ describe("<WidgetsManagementPanel>", () => {
       fireToggle(container.querySelector("#clocks-toggle"), false);
 
       expect(outerHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Custom Widgets entry", () => {
+    const GENERATED_WIDGET = {
+      id: "generated@widget",
+      extensionID: "generated@widget",
+      name: "Generated",
+      generated: true,
+    };
+    const WITH_GENERATED_WIDGET = {
+      ExtensionWidgets: { [GENERATED_WIDGET.id]: GENERATED_WIDGET },
+    };
+    const AVAILABLE = { widgetStudioAvailable: true };
+
+    it.each([
+      ["no custom widget", {}],
+      ["a custom widget", WITH_GENERATED_WIDGET],
+    ])(
+      "renders no entry without widgetStudioAvailable and with %s",
+      async (_label, state) => {
+        const { container } = await renderPanel({}, {}, state);
+
+        expect(
+          container.querySelector(".widget-studio-cta")
+        ).not.toBeInTheDocument();
+        expect(
+          container.querySelector(".custom-widgets-section")
+        ).not.toBeInTheDocument();
+      }
+    );
+
+    it("renders the call to action when there are no custom widgets", async () => {
+      const { container } = await renderPanel({}, AVAILABLE);
+      const cta = container.querySelector(".widget-studio-cta");
+
+      expect(cta.querySelector("img")).toHaveAttribute(
+        "src",
+        "chrome://newtab/content/data/content/assets/sparkles-16.svg"
+      );
+      expect(cta.querySelector("span")).toHaveAttribute(
+        "data-l10n-id",
+        "newtab-widget-manage-first-widget-message"
+      );
+      expect(cta.querySelector("moz-button")).toHaveAttribute(
+        "data-l10n-id",
+        "newtab-widget-manage-first-widget-button"
+      );
+      expect(
+        container.querySelector(".custom-widgets-section")
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders the Custom widgets section when there is a custom widget", async () => {
+      const { container } = await renderPanel(
+        {},
+        AVAILABLE,
+        WITH_GENERATED_WIDGET
+      );
+      const section = container.querySelector(".custom-widgets-section");
+
+      expect(section.querySelector("h3 span")).toHaveAttribute(
+        "data-l10n-id",
+        "newtab-widget-manage-custom-widgets-title"
+      );
+      expect(section.querySelector("moz-box-button")).toHaveAttribute(
+        "data-l10n-id",
+        "newtab-widget-manage-custom-widgets-button"
+      );
+      expect(
+        container.querySelector(".widget-studio-cta")
+      ).not.toBeInTheDocument();
+    });
+
+    it("counts only generated widgets as custom widgets", async () => {
+      const { container } = await renderPanel({}, AVAILABLE, {
+        ExtensionWidgets: {
+          "other@widget": { id: "other@widget", name: "Other" },
+        },
+      });
+
+      expect(container.querySelector(".widget-studio-cta")).toBeInTheDocument();
+    });
+
+    it("swaps the entry when the first custom widget appears", async () => {
+      const { container, store } = await renderPanel({}, AVAILABLE);
+      expect(container.querySelector(".widget-studio-cta")).toBeInTheDocument();
+
+      act(() => {
+        store.dispatch({
+          type: at.WIDGETS_EXTENSIONS_UPDATE,
+          data: WITH_GENERATED_WIDGET.ExtensionWidgets,
+        });
+      });
+
+      expect(
+        container.querySelector(".widget-studio-cta")
+      ).not.toBeInTheDocument();
+      expect(
+        container.querySelector(".custom-widgets-section")
+      ).toBeInTheDocument();
+    });
+
+    it.each([
+      [".widget-studio-cta moz-button", {}],
+      [".custom-widgets-section moz-box-button", WITH_GENERATED_WIDGET],
+    ])(
+      "opens Custom Widgets and closes the Customize panel when %s is clicked",
+      async (selector, state) => {
+        const onClose = jest.fn();
+        const { container, store } = await renderPanel(
+          { onClose },
+          AVAILABLE,
+          state
+        );
+
+        fireEvent.click(container.querySelector(selector));
+
+        expect(dispatchedAction(store, at.OPEN_WIDGET_STUDIO)).toEqual(
+          ac.OnlyToMain({ type: at.OPEN_WIDGET_STUDIO })
+        );
+        expect(onClose).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it("hides the entry when widgetStudioAvailable turns false", async () => {
+      const { container, store } = await renderPanel({}, AVAILABLE);
+      expect(container.querySelector(".widget-studio-cta")).toBeInTheDocument();
+
+      act(() => {
+        store.dispatch({
+          type: at.PREF_CHANGED,
+          data: { name: "widgetStudioAvailable", value: false },
+        });
+      });
+
+      expect(
+        container.querySelector(".widget-studio-cta")
+      ).not.toBeInTheDocument();
     });
   });
 });

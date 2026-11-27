@@ -466,6 +466,9 @@ export class PlacesFeed {
         this.openLink(action, action.data.where);
         break;
       }
+      case at.OPEN_WIDGET_STUDIO:
+        action._target.window.SidebarController.show("viewWidgetsSidebar");
+        break;
     }
   }
 }

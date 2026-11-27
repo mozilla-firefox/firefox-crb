@@ -12,6 +12,21 @@ newtab-widget-placeholder = Watch this space
 
 newtab-wallpaper-category-title-predecessor = Predecessor
 
+# Shown at the end of the "Manage widgets" subpanel of the Customize panel
+# until someone has a custom widget, next to a button that opens the Custom
+# Widgets sidebar, where people describe a widget and Firefox builds it.
+newtab-widget-manage-first-widget-message = Build your first custom widget
+# Button that opens the Custom Widgets sidebar.
+newtab-widget-manage-first-widget-button =
+    .label = Create a widget
+
+# Heading of the section at the end of the "Manage widgets" subpanel of the
+# Customize panel once someone has a custom widget.
+newtab-widget-manage-custom-widgets-title = Custom widgets
+# Button that opens the Custom Widgets sidebar.
+newtab-widget-manage-custom-widgets-button =
+    .label = Manage custom widgets
+
 ## Solitaire widget
 
 # Context menu item linking to the Yahoo website, the provider of the solitaire game.

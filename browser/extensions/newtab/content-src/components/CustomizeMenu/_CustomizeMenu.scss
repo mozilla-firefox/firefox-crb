@@ -714,6 +714,49 @@
   }
 }
 
+// @nova-cleanup(remove-conditional): Remove the .nova-enabled ancestor, keep .widget-studio-cta as default
+.nova-enabled .widget-studio-cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  margin-block-start: var(--space-xlarge);
+  margin-inline: calc(var(--space-small) - var(--space-xlarge));
+  padding-block: var(--space-xsmall);
+  padding-inline: var(--space-medium);
+  border: var(--border-width) solid var(--border-color-deemphasized);
+  border-radius: var(--border-radius-circle);
+
+  img {
+    -moz-context-properties: fill;
+    fill: var(--color-accent-primary);
+  }
+
+  span {
+    flex: 1;
+  }
+
+  moz-button {
+    --button-font-size: var(--font-size-small);
+    --button-padding: var(--button-padding-block) var(--space-medium);
+  }
+}
+
+// @nova-cleanup(remove-conditional): Remove the .nova-enabled ancestor, keep .custom-widgets-section as default
+.nova-enabled .custom-widgets-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-large);
+  margin-block-start: var(--space-large);
+  padding-block-start: var(--space-large);
+  border-block-start: var(--border-width) solid var(--border-color-deemphasized);
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-root);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
 .widgets-mgmt-panel-container {
   padding-block: var(--space-medium);
 }

@@ -23,9 +23,12 @@ import {
 } from "common/PageLayoutVariants.mjs";
 import { setWidgetOnHome } from "content-src/components/Widgets/WidgetPlacement";
 
-function WidgetsManagementPanel({ togglePanel, showPanel, setPref }) {
+function WidgetsManagementPanel({ togglePanel, showPanel, setPref, onClose }) {
   const prefs = useSelector(state => state.Prefs.values);
   const extensionWidgets = useSelector(state => state.ExtensionWidgets);
+  const hasCustomWidgets = Object.values(extensionWidgets).some(
+    w => w.generated
+  );
   const arrowButtonRef = useRef(null);
   const panelRef = useRef(null);
   const dispatch = useDispatch();
@@ -51,6 +54,11 @@ function WidgetsManagementPanel({ togglePanel, showPanel, setPref }) {
 
   const handlePanelEntered = () => {
     arrowButtonRef.current?.focus();
+  };
+
+  const openCustomWidgets = () => {
+    dispatch(ac.OnlyToMain({ type: at.OPEN_WIDGET_STUDIO }));
+    onClose();
   };
 
   const onToggleWidget = (widget, e) => {
@@ -144,6 +152,31 @@ function WidgetsManagementPanel({ togglePanel, showPanel, setPref }) {
                 />
               ))}
             </div>
+            {prefs.widgetStudioAvailable && !hasCustomWidgets && (
+              <div className="widget-studio-cta">
+                <img
+                  src="chrome://newtab/content/data/content/assets/sparkles-16.svg"
+                  alt=""
+                />
+                <span data-l10n-id="newtab-widget-manage-first-widget-message" />
+                <moz-button
+                  type="primary"
+                  data-l10n-id="newtab-widget-manage-first-widget-button"
+                  onClick={openCustomWidgets}
+                />
+              </div>
+            )}
+            {prefs.widgetStudioAvailable && hasCustomWidgets && (
+              <div className="custom-widgets-section">
+                <h3>
+                  <span data-l10n-id="newtab-widget-manage-custom-widgets-title" />
+                </h3>
+                <moz-box-button
+                  data-l10n-id="newtab-widget-manage-custom-widgets-button"
+                  onClick={openCustomWidgets}
+                />
+              </div>
+            )}
           </div>
         </div>
       </CSSTransition>

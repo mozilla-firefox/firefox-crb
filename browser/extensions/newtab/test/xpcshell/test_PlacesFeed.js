@@ -637,6 +637,28 @@ add_task(async function test_onAction_ABOUT_SPONSORED_TOP_SITES() {
   sandbox.restore();
 });
 
+add_task(async function test_onAction_OPEN_WIDGET_STUDIO() {
+  info(
+    "PlacesFeed.onAction should open the Custom Widgets sidebar in the " +
+      "window that sent OPEN_WIDGET_STUDIO"
+  );
+  let sandbox = sinon.createSandbox();
+  let feed = getPlacesFeedForTest(sandbox);
+  let show = sandbox.stub();
+
+  feed.onAction({
+    type: "OPEN_WIDGET_STUDIO",
+    _target: { window: { SidebarController: { show } } },
+  });
+
+  Assert.ok(
+    show.calledOnceWith("viewWidgetsSidebar"),
+    "Custom Widgets sidebar shown"
+  );
+
+  sandbox.restore();
+});
+
 add_task(async function test_onAction_FILL_SEARCH_TERM() {
   info(
     "PlacesFeed.onAction should set the URL bar value to the label value " +
