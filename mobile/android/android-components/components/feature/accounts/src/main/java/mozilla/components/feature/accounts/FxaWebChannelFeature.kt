@@ -22,8 +22,12 @@ import mozilla.components.concept.engine.EngineSession
 import mozilla.components.concept.engine.webextension.MessageHandler
 import mozilla.components.concept.engine.webextension.Port
 import mozilla.components.concept.engine.webextension.WebExtensionRuntime
+import mozilla.components.concept.fxa.FxaScope
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.FxAEntryPoint
+import mozilla.components.concept.sync.FxaScope
+import mozilla.components.concept.sync.FxaService
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_CAN_LINK_ACCOUNT
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_CHANGE_PASSWORD
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_DELETE_ACCOUNT
@@ -35,8 +39,6 @@ import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAN
 import mozilla.components.feature.accounts.FxaWebChannelFeature.Companion.COMMAND_SYNC_PREFERENCES
 import mozilla.components.lib.state.ext.flowScoped
 import mozilla.components.service.fxa.FxaAuthData
-import mozilla.components.service.fxa.FxaScope
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.ServerConfig
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.service.fxa.manager.SCOPE_PROFILE

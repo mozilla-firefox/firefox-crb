@@ -14,8 +14,8 @@ import androidx.preference.Preference.OnPreferenceClickListener
 import androidx.preference.PreferenceFragmentCompat
 import kotlin.system.exitProcess
 import kotlinx.coroutines.launch
+import mozilla.components.concept.fxa.FxaService
 import mozilla.components.concept.sync.FxAEntryPoint
-import mozilla.components.service.fxa.FxaService
 import mozilla.components.service.fxa.manager.SCOPE_PROFILE
 import mozilla.components.service.fxa.manager.SCOPE_SESSION
 import mozilla.components.service.fxa.manager.SCOPE_SYNC
