@@ -89,6 +89,10 @@ Document* GetEntryDocument();
 // Settings Stack. See the HTML spec. This may be null.
 nsIGlobalObject* GetIncumbentGlobal();
 
+// Returns the JS global object of GetIncumbentGlobal(). This may be null.
+// aCx must be this thread's JSContext.
+JSObject* GetIncumbentGlobalJSObject(JSContext* aCx);
+
 // Returns the global associated with the current compartment. This may be null.
 nsIGlobalObject* GetCurrentGlobal();
 
