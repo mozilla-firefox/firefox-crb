@@ -76,6 +76,45 @@ class HappyEyeballsConnMgrDelegate {
   virtual ~HappyEyeballsConnMgrDelegate() = default;
 };
 
+// Forwards verbatim to the connection manager / entry. Friended by
+// nsHttpConnectionMgr to reach its private dispatch helpers.
+class DefaultHappyEyeballsConnMgrDelegate final
+    : public HappyEyeballsConnMgrDelegate {
+ public:
+  already_AddRefed<PendingTransactionInfo> FindTransaction(
+      bool aRemoveWhenFound, ConnectionEntry* aEntry,
+      nsAHttpTransaction* aTrans) override;
+  nsresult DispatchTransaction(ConnectionEntry* aEntry,
+                               nsHttpTransaction* aTrans,
+                               HttpConnectionBase* aConn) override;
+  void AddTransaction(nsHttpTransaction* aTrans, int32_t aPriority) override;
+  void ReportSpdyConnection(HttpConnectionBase* aConn, bool aUsingSpdy,
+                            bool aDisallowHttp3,
+                            ConnectionEntry* aEntry) override;
+  void ReportHttp3Connection(HttpConnectionBase* aConn,
+                             ConnectionEntry* aEntry) override;
+  void ReclaimConnection(HttpConnectionBase* aConn) override;
+  void ProcessSpdyPendingQ(ConnectionEntry* aEntry) override;
+  already_AddRefed<ConnectionEntry> HandOffHttp3OnlyConnection(
+      HttpConnectionBase* aConn, ConnectionEntry* aFromEnt) override;
+  void InsertIntoActiveConns(ConnectionEntry* aEntry,
+                             HttpConnectionBase* aConn) override;
+  void RemoveConnectionAttempt(ConnectionEntry* aEntry,
+                               ConnectionAttempt* aAttempt,
+                               bool aAbandon) override;
+  void RecordIPFamilyPreference(ConnectionEntry* aEntry,
+                                uint16_t aFamily) override;
+  void ResetIPFamilyPreference(ConnectionEntry* aEntry) override;
+  bool MaybeProcessCoalescingKeys(ConnectionEntry* aEntry,
+                                  const nsTArray<NetAddr>& aAddresses,
+                                  bool aIsHttp3) override;
+  bool RemoveTransFromPendingQ(ConnectionEntry* aEntry,
+                               nsHttpTransaction* aTrans) override;
+  nsresult StartRetry(ConnectionEntry* aEntry, nsHttpTransaction* aTrans,
+                      uint32_t aCaps, bool aSpeculative, bool aUrgentStart,
+                      bool aAllow1918, bool aRetryWithoutTRR) override;
+};
+
 }  // namespace net
 }  // namespace mozilla
 
