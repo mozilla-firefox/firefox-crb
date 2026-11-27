@@ -13,6 +13,7 @@
 #include "mozilla/CheckedInt.h"
 #include "mozilla/JSONStringWriteFuncs.h"
 #include "mozilla/Span.h"
+#include "mozilla/UniquePtrExtensions.h"
 #include "mozilla/ipc/BigBuffer.h"
 #include "platform.h"
 #include "mozilla/scache/StartupCacheUtils.h"
@@ -480,8 +481,72 @@ static bool ReadSourceData(mozilla::Span<const uint8_t>& aSourceBytes,
   }
 }
 
-// The source map URL and the source text of all the entries, which can both be
-// very long, are sent in a single BigBuffer after their metadata. Above a small
+static size_t SourceBufferBytes(const mozilla::JSSourceEntry& aEntry) {
+  return SourceMapURLBytes(aEntry.sourceData).Length() +
+         SourceTextBytes(aEntry.sourceData).Length();
+}
+
+// Uses the same format as ParamTraits<BigBuffer>, so that the reader can
+// handle a shared memory region it can't map.
+static void WriteSourceTextBuffer(MessageWriter* aWriter,
+                                  const mozilla::ipc::BigBuffer& aBuffer) {
+  WriteParam(aWriter, aBuffer.Size());
+  const auto* sharedMemory = aBuffer.GetSharedMemory();
+  WriteParam(aWriter, sharedMemory != nullptr);
+  if (!sharedMemory) {
+    aWriter->WriteBytes(aBuffer.Data(), aBuffer.Size());
+    return;
+  }
+  auto handle = sharedMemory->Handle().Clone();
+  if (!handle) {
+    aWriter->FatalError("Failed to write JS source shmem");
+    return;
+  }
+  WriteParam(aWriter, std::move(handle));
+}
+
+// Like ParamTraits<BigBuffer>::Read, except that a shared memory region that
+// can't be mapped leaves aResult empty and returns true, so that the sources
+// can still be read without their text.
+static bool ReadSourceTextBuffer(
+    MessageReader* aReader, mozilla::Maybe<mozilla::ipc::BigBuffer>* aResult) {
+  using namespace mozilla::ipc;
+  size_t size = 0;
+  bool isShmem = false;
+  if (!ReadParam(aReader, &size) || !ReadParam(aReader, &isShmem)) {
+    return false;
+  }
+
+  if (!isShmem) {
+    if (size == 0) {
+      aResult->emplace();
+      return true;
+    }
+    mozilla::UniqueFreePtr<uint8_t[]> buf{
+        reinterpret_cast<uint8_t*>(malloc(size))};
+    if (!buf || !aReader->ReadBytesInto(buf.get(), size)) {
+      return false;
+    }
+    aResult->emplace(BigBuffer::Adopt{}, buf.release(), size);
+    return true;
+  }
+
+  MutableSharedMemoryHandle handle;
+  if (!ReadParam(aReader, &handle) || !handle ||
+      handle.Size() != shared_memory::PageAlignedSize(size)) {
+    return false;
+  }
+  auto mapping = std::move(handle).MapWithHandle();
+  if (!mapping) {
+    NS_WARNING("Couldn't map the JS source buffer, dropping the source text");
+    return true;
+  }
+  aResult->emplace(BigBuffer::Adopt{}, std::move(mapping), size);
+  return true;
+}
+
+// The source map URLs and the source text, which can both be very long, are
+// sent in a single buffer after the metadata of all the entries. Above a small
 // threshold, this puts them in one shared memory region, instead of inlining
 // them in the message and exceeding IPC::Channel::kMaximumMessageSize.
 void ParamTraits<mozilla::ProfileGenerationAdditionalInformation>::Write(
@@ -489,44 +554,51 @@ void ParamTraits<mozilla::ProfileGenerationAdditionalInformation>::Write(
   WriteParam(aWriter, aParam.mSharedLibraries);
 
   const nsTArray<mozilla::JSSourceEntry>& entries = aParam.mJSSourceEntries;
-  mozilla::CheckedInt<size_t> sourceBufferLength = 0;
+  nsTArray<bool> includeInBuffer(entries.Length());
+  size_t sourceBufferLength = 0;
   for (const mozilla::JSSourceEntry& entry : entries) {
-    sourceBufferLength += SourceMapURLBytes(entry.sourceData).Length();
-    sourceBufferLength += SourceTextBytes(entry.sourceData).Length();
+    const size_t bytes = SourceBufferBytes(entry);
+    const bool fits =
+        bytes <= paramType::kMaxIPCSourceBufferLength - sourceBufferLength;
+    includeInBuffer.AppendElement(fits);
+    if (fits) {
+      sourceBufferLength += bytes;
+    }
   }
+  NS_WARNING_ASSERTION(!includeInBuffer.Contains(false),
+                       "Too much JS source text, sending some without it");
 
   // If the buffer can't be allocated, send the metadata without the source map
   // URLs and the text.
   mozilla::ipc::BigBuffer sourceBuffer;
-  if (sourceBufferLength.isValid() && sourceBufferLength.value() > 0) {
-    sourceBuffer =
-        mozilla::ipc::BigBuffer::TryAlloc(sourceBufferLength.value());
-    NS_WARNING_ASSERTION(sourceBuffer.Size() > 0,
+  if (sourceBufferLength > 0) {
+    sourceBuffer = mozilla::ipc::BigBuffer::TryAlloc(sourceBufferLength);
+    NS_WARNING_ASSERTION(sourceBuffer.Size() == sourceBufferLength,
                          "Couldn't allocate the JS source buffer");
   }
-  const bool includeSourceBuffer =
-      sourceBufferLength.isValid() &&
-      sourceBuffer.Size() == sourceBufferLength.value();
+  const bool haveSourceBuffer = sourceBuffer.Size() == sourceBufferLength;
 
   WriteParam(aWriter, entries.Length());
-  for (const mozilla::JSSourceEntry& entry : entries) {
-    WriteSourceMetadata(aWriter, entry, includeSourceBuffer);
+  for (size_t i = 0; i < entries.Length(); ++i) {
+    WriteSourceMetadata(aWriter, entries[i],
+                        haveSourceBuffer && includeInBuffer[i]);
   }
 
-  if (includeSourceBuffer) {
-    uint8_t* sourceCursor = sourceBuffer.Data();
-    for (const mozilla::JSSourceEntry& entry : entries) {
-      for (mozilla::Span<const uint8_t> bytes :
-           {SourceMapURLBytes(entry.sourceData),
-            SourceTextBytes(entry.sourceData)}) {
-        if (!bytes.IsEmpty()) {
-          memcpy(sourceCursor, bytes.Elements(), bytes.Length());
-          sourceCursor += bytes.Length();
-        }
+  uint8_t* sourceCursor = sourceBuffer.Data();
+  for (size_t i = 0; i < entries.Length(); ++i) {
+    if (!haveSourceBuffer || !includeInBuffer[i]) {
+      continue;
+    }
+    for (mozilla::Span<const uint8_t> bytes :
+         {SourceMapURLBytes(entries[i].sourceData),
+          SourceTextBytes(entries[i].sourceData)}) {
+      if (!bytes.IsEmpty()) {
+        memcpy(sourceCursor, bytes.Elements(), bytes.Length());
+        sourceCursor += bytes.Length();
       }
     }
   }
-  WriteParam(aWriter, std::move(sourceBuffer));
+  WriteSourceTextBuffer(aWriter, sourceBuffer);
 }
 
 bool ParamTraits<mozilla::ProfileGenerationAdditionalInformation>::Read(
@@ -552,13 +624,26 @@ bool ParamTraits<mozilla::ProfileGenerationAdditionalInformation>::Read(
         SourceTextCharSize(entryMetadata->typeTag);
   }
 
-  mozilla::ipc::BigBuffer sourceBuffer;
-  if (!sourceBufferLength.isValid() || !ReadParam(aReader, &sourceBuffer) ||
-      sourceBuffer.Size() != sourceBufferLength.value()) {
+  mozilla::Maybe<mozilla::ipc::BigBuffer> sourceBuffer;
+  if (!sourceBufferLength.isValid() ||
+      !ReadSourceTextBuffer(aReader, &sourceBuffer) ||
+      (sourceBuffer && sourceBuffer->Size() != sourceBufferLength.value())) {
     return false;
   }
 
-  mozilla::Span<const uint8_t> sourceBytes = sourceBuffer.AsSpan();
+  if (!sourceBuffer) {
+    // The buffer couldn't be mapped. Keep the sources, without what was in it.
+    for (JSSourceEntryMetadata& entryMetadata : metadata) {
+      entryMetadata.sourceMapURLLength = 0;
+      if (SourceTextCharSize(entryMetadata.typeTag) > 0) {
+        entryMetadata.typeTag = kUnavailableTag;
+        entryMetadata.textLength = 0;
+      }
+    }
+    sourceBuffer.emplace();
+  }
+
+  mozilla::Span<const uint8_t> sourceBytes = sourceBuffer->AsSpan();
   aResult->mJSSourceEntries.SetCapacity(entryCount);
   for (JSSourceEntryMetadata& entryMetadata : metadata) {
     ProfilerJSSourceData sourceData;

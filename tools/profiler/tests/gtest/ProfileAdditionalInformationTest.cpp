@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "chrome/common/ipc_message.h"
+#include "chrome/common/ipc_message_utils.h"
 #include "gtest/gtest.h"
 #include "js/Utility.h"
 #include "ProfileAdditionalInformation.h"
@@ -52,6 +54,33 @@ ProfileGenerationAdditionalInformation MakeInfo(
                                                 std::move(aEntries));
 }
 
+ProfileGenerationAdditionalInformation RoundTrip(
+    const ProfileGenerationAdditionalInformation& aInfo) {
+  IPC::Message msg(MSG_ROUTING_NONE, 0);
+  {
+    IPC::MessageWriter writer(msg);
+    IPC::WriteParam(&writer, aInfo);
+  }
+  IPC::MessageReader reader(msg);
+  ProfileGenerationAdditionalInformation result;
+  EXPECT_TRUE(IPC::ReadParam(&reader, &result));
+  return result;
+}
+
+std::string UTF8Text(const ProfilerJSSourceData& aData) {
+  if (!aData.data().is<ProfilerJSSourceData::SourceTextUTF8>()) {
+    return "<no UTF-8 text>";
+  }
+  const auto& text = aData.data().as<ProfilerJSSourceData::SourceTextUTF8>();
+  return std::string(text.chars().get(), text.length());
+}
+
+std::u16string SourceMapURL(const ProfilerJSSourceData& aData) {
+  return aData.sourceMapURLLength() == 0
+             ? std::u16string()
+             : std::u16string(aData.sourceMapURL(), aData.sourceMapURLLength());
+}
+
 }  // namespace
 
 TEST(ProfileAdditionalInformation, DeduplicatesById)
@@ -70,7 +99,6 @@ TEST(ProfileAdditionalInformation, DeduplicatesById)
   EXPECT_EQ(result[0].sourceData.sourceId(), 1u);
   EXPECT_TRUE(result[1].id.EqualsLiteral("b"));
 }
-
 TEST(ProfileAdditionalInformation, PrefersAvailableSourceData)
 {
   nsTArray<JSSourceEntry> entries;
@@ -98,4 +126,61 @@ TEST(ProfileAdditionalInformation, PrefersAvailableSourceData)
   EXPECT_EQ(result[2].sourceData.sourceId(), 4u);
   EXPECT_TRUE(
       result[2].sourceData.data().is<ProfilerJSSourceData::SourceTextUTF8>());
+}
+
+TEST(ProfileAdditionalInformation, RoundTripsInlineSources)
+{
+  nsTArray<JSSourceEntry> entries;
+  entries.AppendElement(UTF8Entry("a", 1, "function a() {}", u"a.js.map"));
+  entries.AppendElement(UTF8Entry("b", 2, ""));
+  entries.AppendElement(UTF8Entry("c", 3, "function c() {}"));
+
+  auto result = RoundTrip(MakeInfo(std::move(entries)));
+
+  const auto& sources = result.JSSourceEntries();
+  ASSERT_EQ(sources.Length(), 3u);
+  EXPECT_EQ(UTF8Text(sources[0].sourceData), "function a() {}");
+  EXPECT_EQ(SourceMapURL(sources[0].sourceData), u"a.js.map");
+  EXPECT_EQ(UTF8Text(sources[1].sourceData), "");
+  EXPECT_EQ(UTF8Text(sources[2].sourceData), "function c() {}");
+  EXPECT_EQ(sources[2].sourceData.sourceId(), 3u);
+}
+
+TEST(ProfileAdditionalInformation, RoundTripsSharedMemorySources)
+{
+  // Larger than BigBuffer::kShmemThreshold, so it goes through shared memory.
+  const std::string big(256 * 1024, 'x');
+  nsTArray<JSSourceEntry> entries;
+  entries.AppendElement(UTF8Entry("a", 1, big));
+  entries.AppendElement(UTF8Entry("b", 2, "small", u"b.js.map"));
+
+  auto result = RoundTrip(MakeInfo(std::move(entries)));
+
+  const auto& sources = result.JSSourceEntries();
+  ASSERT_EQ(sources.Length(), 2u);
+  EXPECT_EQ(UTF8Text(sources[0].sourceData), big);
+  EXPECT_EQ(UTF8Text(sources[1].sourceData), "small");
+  EXPECT_EQ(SourceMapURL(sources[1].sourceData), u"b.js.map");
+}
+
+TEST(ProfileAdditionalInformation, SendsSourcesBeyondTheLimitWithoutText)
+{
+  const std::string tooBig(
+      ProfileGenerationAdditionalInformation::kMaxIPCSourceBufferLength + 1,
+      'x');
+  nsTArray<JSSourceEntry> entries;
+  entries.AppendElement(UTF8Entry("a", 1, tooBig, u"a.js.map"));
+  entries.AppendElement(UTF8Entry("b", 2, "small"));
+
+  auto result = RoundTrip(MakeInfo(std::move(entries)));
+
+  const auto& sources = result.JSSourceEntries();
+  ASSERT_EQ(sources.Length(), 2u);
+  EXPECT_TRUE(sources[0].id.EqualsLiteral("a"));
+  EXPECT_TRUE(
+      sources[0].sourceData.data().is<ProfilerJSSourceData::Unavailable>());
+  EXPECT_EQ(SourceMapURL(sources[0].sourceData), u"");
+  EXPECT_EQ(std::string(sources[0].sourceData.filePath()),
+            "https://example.com/a.js");
+  EXPECT_EQ(UTF8Text(sources[1].sourceData), "small");
 }
