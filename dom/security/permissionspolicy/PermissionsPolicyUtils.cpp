@@ -69,7 +69,7 @@ static FeatureMap sExperimentalFeatures[] = {
     {"autoplay", PermissionsPolicyUtils::PermissionsPolicyValue::eAll},
     {"encrypted-media", PermissionsPolicyUtils::PermissionsPolicyValue::eAll},
     {"midi", PermissionsPolicyUtils::PermissionsPolicyValue::eSelf},
-    {"payment", PermissionsPolicyUtils::PermissionsPolicyValue::eAll},
+    {"payment", PermissionsPolicyUtils::PermissionsPolicyValue::eSelf},
     {"document-domain", PermissionsPolicyUtils::PermissionsPolicyValue::eAll},
     {"vr", PermissionsPolicyUtils::PermissionsPolicyValue::eAll},
     // https://immersive-web.github.io/webxr/#permissions-policy
