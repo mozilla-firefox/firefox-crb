@@ -39,6 +39,13 @@ async function clickEnableToggle(card) {
   await waitForAnimationFrame(win);
 }
 
+function promiseAddonDisabled(card) {
+  return AddonTestUtils.promiseAddonEvent(
+    "onDisabled",
+    addon => addon.id == card.addon.id
+  );
+}
+
 function mouseOver(el) {
   let win = el.documentGlobal;
   el.scrollIntoView({ block: "center" });
@@ -164,7 +171,9 @@ add_task(async function testReordering() {
   let cardOneToggle = cardOne.querySelector(".extension-enable-button");
   cardOneToggle.scrollIntoView({ block: "center" });
   cardOneToggle.focus();
+  let cardOneDisabled = promiseAddonDisabled(cardOne);
   await pressKey(win, " ");
+  await cardOneDisabled;
   await waitForAnimationFrame(win);
 
   let cardThreeToggle = cardThree.querySelector(".extension-enable-button");
@@ -176,7 +185,9 @@ add_task(async function testReordering() {
   ) {
     await pressKey(win, "VK_TAB");
   }
+  let cardThreeDisabled = promiseAddonDisabled(cardThree);
   await pressKey(win, " ");
+  await cardThreeDisabled;
 
   assertInSection(cardOne, "enabled", "cardOne is still in enabled");
   assertInSection(cardThree, "enabled", "cardThree is still in enabled");
