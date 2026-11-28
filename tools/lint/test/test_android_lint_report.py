@@ -16,7 +16,7 @@ FENIX = os.path.join("mobile", "android", "fenix")
 FOCUS = os.path.join("mobile", "android", "focus-android")
 
 
-def write_report(topobjdir, subdir, module, name, rule, mtime):
+def write_report(topobjdir, subdir, module, name, rule, mtime, level=None):
     reports = os.path.join(topobjdir, "gradle", "build", subdir, module, "reports")
     os.makedirs(reports, exist_ok=True)
     report = os.path.join(reports, name)
@@ -35,6 +35,8 @@ def write_report(topobjdir, subdir, module, name, rule, mtime):
             }
         ],
     }
+    if level:
+        issue["level"] = level
     with open(report, "w") as fh:
         json.dump({"runs": [{"results": [issue] if rule else []}]}, fh)
     os.utime(report, (mtime, mtime))
@@ -119,6 +121,21 @@ def test_objdir_with_glob_characters(config, tmp_path):
 def test_missing_report_is_a_build_failure(config, tmp_path):
     results = parse(config, tmp_path, FENIX, lint_modules=("app",))
     assert [r.rule for r in results] == ["build-failure"]
+
+
+def test_only_errors_fail(config, tmp_path):
+    for module, level in (("a", "error"), ("b", "warning"), ("c", "note"), ("d", None)):
+        write_report(
+            tmp_path, FENIX, module, "lint-results-debug.sarif", module, 1, level
+        )
+
+    results = parse(config, tmp_path, FENIX, lint_modules=("a", "b", "c", "d"))
+    assert [(r.rule, r.level) for r in results] == [
+        ("a", "error"),
+        ("b", "warning"),
+        ("c", "warning"),
+        ("d", "error"),
+    ]
 
 
 def test_findings_shared_by_variants_are_reported_once(config, tmp_path):
