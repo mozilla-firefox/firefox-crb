@@ -8,7 +8,7 @@
 # documentation and how to modify this file.
 repo: mozilla-central
 created_at: '2021-10-14T12:50:40.073465'
-updated_at: '2026-11-24T10:01:40.732794+00:00'
+updated_at: '2026-11-28T09:19:35.058340+00:00'
 export:
   path: ./docs/mots/index.md
   format: md
@@ -1647,6 +1647,9 @@ modules:
           and releases; as well as Docker and VM images used to execute those tasks.
         includes:
           - taskcluster
+        excludes:
+          - taskcluster/kinds/fetch/toolchains.yml
+          - taskcluster/kinds/toolchain/**/*
         meta:
           components:
             - Firefox Build System::Task Configuration
@@ -1667,6 +1670,24 @@ modules:
           - *jlorenzo
           - *jmaher
         machine_name: core_build_config_taskgraph
+
+      - name: 'Core: Build Config - Toolchains'
+        description: Toolchain build and fetch tasks, used in CI and installed locally
+          by `mach bootstrap`.
+        includes:
+          - taskcluster/kinds/fetch/toolchains.yml
+          - taskcluster/kinds/toolchain/**/*
+        meta:
+          group: dev-builds
+          components:
+            - Firefox Build System::Task Configuration
+          review_group: firefox-build-system-reviewers
+        owners:
+          - *glandium
+        peers:
+          - *ahochheiden
+          - *sergesanspaille
+        machine_name: core_build_config_toolchains
     machine_name: core_build_config
 
   - name: 'Core: Canvas (Graphics submodule)'
@@ -5350,5 +5371,5 @@ modules:
         - Ryan Tilder
       group: dev-platform
 hashes:
-  config: 1182da9eb3624b7c8220c9832b651188ffadf901
-  export: 3a0bcda482ec0f228bdc0102bf2978a9c1399d31
+  config: 2dc79f6bf6888b5e2d812cc5bad7ff0f44a41d8d
+  export: 6a5b55d4760fd429df8d0f7e15feefdf160d38aa
