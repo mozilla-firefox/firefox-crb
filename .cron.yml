@@ -200,11 +200,12 @@ jobs:
       when:
           - {hour: 2, minute: 0}
 
-    - name: linux64-mold-debug
+    - name: linux64-extra-builds
       job:
           type: decision-task
-          treeherder-symbol: linux64-mold-debug
-          target-tasks-method: linux64_mold_debug
+          treeherder-symbol: linux64-extra-builds
+          target-tasks-method: linux64_extra_builds
+          optimize-target-tasks: false
       run-on-projects:
           - mozilla-central
       when:

@@ -1333,10 +1333,10 @@ def target_tasks_build_linux64_clang_trunk_perf(
     return [l for l, t in full_task_graph.tasks.items() if filter(t.label)]
 
 
-@register_target_task("linux64_mold_debug")
-def target_tasks_linux64_mold_debug(full_task_graph, parameters, graph_config):
-    """Select the linux64 debug build linked with mold"""
-    return ["build-linux64-mold/debug"]
+@register_target_task("linux64_extra_builds")
+def target_tasks_linux64_extra_builds(full_task_graph, parameters, graph_config):
+    """Select the extra linux64 debug builds: linked with mold, and against libc++"""
+    return ["build-linux64-mold/debug", "build-linux64-plain-libcxx/debug"]
 
 
 # Run Updatebot's cron job 4 times daily.
