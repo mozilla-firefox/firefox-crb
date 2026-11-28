@@ -163,6 +163,7 @@ run-if = [
 ["test_harness.js"]
 
 ["test_hidden.js"]
+requesttimeoutfactor = 2  # Slow on debug: each extension launches its own extension process
 
 ["test_install.js"]
 
