@@ -23,7 +23,7 @@ import six
 from mozlog import structured
 from mozlog.formatters import JSONFormatter
 from mozlog.handlers import StreamHandler
-from runxpcshelltests import XPCShellTests
+from runxpcshelltests import TBPL_RETRY, XPCShellTests, XPCShellTestThread
 
 TEST_PASS_STRING = "TEST-PASS"
 TEST_FAIL_STRING = "TEST-UNEXPECTED-FAIL"
@@ -598,6 +598,7 @@ prefs = [
         headless=False,
         retry=None,
         verify=False,
+        testClass=XPCShellTestThread,
     ):
         """
         Assert that self.x.runTests with manifest=self.manifest
@@ -631,7 +632,7 @@ prefs = [
 
         self.assertEqual(
             expected,
-            self.x.runTests(kwargs),
+            self.x.runTests(kwargs, testClass=testClass),
             msg="""Tests should have {}, log:
 ========
 {}
@@ -1140,6 +1141,29 @@ add_test({
         self.assertInLog("TEST-UNEXPECTED-TIMEOUT")
 
         self.x.harness_timeout = old_timeout
+
+    def testLaunchFailure(self):
+        """
+        Check that failing to launch xpcshell asks for an infra retry, without
+        retrying the tests or leaving their timeout timers armed.
+        """
+        self.writeFile("test_basic.js", SIMPLE_PASSING_TEST)
+        self.writeFile("test_basic2.js", SIMPLE_PASSING_TEST)
+        self.writeManifest(["test_basic.js", "test_basic2.js"])
+
+        threads = []
+
+        class FailedLaunchThread(XPCShellTestThread):
+            def launchProcess(self, *args, **kwargs):
+                threads.append(self)
+                raise OSError(-1073283046, "Windows Error 0xc007001a")
+
+        self.assertTestResult(TBPL_RETRY, retry=True, testClass=FailedLaunchThread)
+        self.assertTrue(threads)
+        for thread in threads:
+            self.assertIsNone(thread.timer)
+        self.assertInLog("INFRA-ERROR")
+        self.assertNotInLog("will retry")
 
     def testPassFail(self):
         """
