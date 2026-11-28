@@ -4467,7 +4467,8 @@ void nsDocShell::StopActiveDocument(uint32_t aStopFlags,
   }
 }
 
-bool nsDocShell::StopForNewNavigation() {
+bool nsDocShell::StopForNewNavigation(
+    UnsetOngoingNavigation aUnsetOngoingNavigation) {
   RefPtr kungFuDeathGrip = this;
 
   // Supersedes loads waiting on the parent, which compare mStopGeneration
@@ -4477,7 +4478,7 @@ bool nsDocShell::StopForNewNavigation() {
   // This navigation supersedes one that is still pending.
   CancelNavigationLoadGroup();
 
-  ResetNavigationStateForStop(UnsetOngoingNavigation::No);
+  ResetNavigationStateForStop(aUnsetOngoingNavigation);
 
   // A new navigation only aborts the active document's parser and load.
   StopActiveDocument(nsIWebNavigation::STOP_NETWORK,
@@ -4521,6 +4522,21 @@ nsDocShell::StartNavigationForDownloadTurnedDocument(nsIChannel* aChannel,
 
   // A navigation that started after the download set mLoadType.
   mLoadType = aLoadType;
+  aChannel->SetLoadGroup(mLoadGroup);
+  return mLoadGroup.get();
+}
+
+Result<nsILoadGroup*, nsresult>
+nsDocShell::StartNavigationForJavascriptURLResult(nsIChannel* aChannel) {
+  RefPtr kungFuDeathGrip = this;
+  if (!StaticPrefs::docshell_navigation_new_load_group() || mIsBeingDestroyed) {
+    MOZ_TRY(Stop(nsIWebNavigation::STOP_ALL));
+    return nullptr;
+  }
+
+  if (!StopForNewNavigation(UnsetOngoingNavigation::Yes)) {
+    return Err(NS_BINDING_ABORTED);
+  }
   aChannel->SetLoadGroup(mLoadGroup);
   return mLoadGroup.get();
 }
