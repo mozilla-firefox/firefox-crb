@@ -42,6 +42,7 @@ public class CrashReporter {
   public CrashReporter() {}
 
   private static final String LOGTAG = "GeckoCrashReporter";
+  private static final boolean DEBUG = false;
   private static final String MINI_DUMP_PATH_KEY = "upload_file_minidump";
   private static final String PRODUCT_ID = "{eeb82917-e434-4870-8148-5c03d4caa81b}";
 
@@ -158,7 +159,7 @@ public class CrashReporter {
       @NonNull final File minidumpFile,
       @NonNull final CrashAnnotations extras)
       throws IOException, URISyntaxException {
-    Log.d(LOGTAG, "Sending crash report: " + minidumpFile.getPath());
+    if (DEBUG) Log.d(LOGTAG, "Sending crash report: " + minidumpFile.getPath());
 
     extras.sanitizeForReport();
 
