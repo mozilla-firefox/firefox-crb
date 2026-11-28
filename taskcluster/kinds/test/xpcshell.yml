@@ -76,6 +76,7 @@ xpcshell:
                     default: []
             no-fission:
                 by-test-platform:
+                    .*-libcxx.*: []
                     linux2404-64.*: ['mozilla-central']
                     default: []
             msix:

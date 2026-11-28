@@ -689,6 +689,7 @@ linux64-plain-libcxx/debug:
     worker:
         max-run-time: 5400
         env:
+            MOZ_AUTOMATION_PACKAGE_TESTS: "1"
             PERFHERDER_EXTRA_OPTIONS: plain-libcxx
     mozconfig:
         variant: plain-debug-libcxx
@@ -702,8 +703,9 @@ linux64-plain-libcxx/debug:
             disable_package_metrics: true
         script: mozharness/scripts/fx_desktop_build.py
         tooltool-downloads: public
-    # Also scheduled daily by the linux64-libcxx cron job in .cron.yml.
-    run-on-projects: [autoland]
+    # Scheduled daily, along with its tests, by the linux64-libcxx cron job in
+    # .cron.yml.
+    run-on-projects: []
     fetches:
         toolchain:
             - linux64-clang
@@ -717,16 +719,7 @@ linux64-plain-libcxx/debug:
             - sysroot-wasm32-wasi
             - onnxruntime-x86_64-linux-gnu
     optimization:
-        skip-unless-changed:
-            - "browser/config/mozconfigs/linux64/plain-debug-libcxx"
-            - "build/build-clang/**"
-            - "taskcluster/kinds/fetch/toolchains.yml"
-            - "taskcluster/kinds/toolchain/clang.yml"
-            - "taskcluster/kinds/toolchain/libcxx.yml"
-            - "taskcluster/scripts/misc/build-clang.sh"
-            - "taskcluster/scripts/misc/build-libcxx.sh"
-            - "taskcluster/scripts/misc/build-llvm-common.sh"
-            - "taskcluster/scripts/misc/repack-clang.sh"
+        skip-unless-expanded: null
 
 linux64-devedition/opt:
     description: "Linux64 devedition (shippable)"

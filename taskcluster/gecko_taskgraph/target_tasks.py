@@ -1341,8 +1341,34 @@ def target_tasks_linux64_mold_debug(full_task_graph, parameters, graph_config):
 
 @register_target_task("linux64_libcxx")
 def target_tasks_linux64_libcxx(full_task_graph, parameters, graph_config):
-    """Select the linux64 debug build against libc++"""
-    return ["build-linux64-plain-libcxx/debug"]
+    """Select the linux64 debug build against libc++ and a few of its tests"""
+    # (unittest_suite, unittest_variant) pairs to run.
+    tests = {
+        ("cppunittest", "1proc"),
+        ("gtest", "1proc"),
+        ("xpcshell", None),
+    }
+
+    def filter(task):
+        if task.attributes.get("build_platform") != "linux64-plain-libcxx":
+            return False
+        if task.attributes.get("build_type") != "debug":
+            return False
+        if task.kind == "build":
+            return True
+        return (
+            task.kind == "test"
+            and (
+                task.attributes.get("unittest_suite"),
+                task.attributes.get("unittest_variant"),
+            )
+            in tests
+            # Skip the confirm-failure (-cf) copies, which are only meant to
+            # run when requested by the confirm-failures action.
+            and "always" not in (task.optimization or {})
+        )
+
+    return [l for l, t in full_task_graph.tasks.items() if filter(t)]
 
 
 # Run Updatebot's cron job 4 times daily.

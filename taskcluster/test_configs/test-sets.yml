@@ -277,6 +277,11 @@ linux-ccov-tests:
     # on ccov builds.
     - jittest
 
+linux-libcxx-tests:
+    - cppunittest
+    - gtest
+    - xpcshell
+
 linux2204-wayland-tests:
     - mochitest-plain
     - cppunittest
