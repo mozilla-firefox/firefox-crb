@@ -237,6 +237,17 @@ async function hasPrivateAllowed(id) {
   return perms.permissions.includes("internal:privateBrowsingAllowed");
 }
 
+// AddonCard.update() hides the private browsing badge, then shows it once its
+// own ExtensionPermissions lookup resolves, which can be after the card's
+// "update" event and after hasPrivateAllowed() resolves.
+function waitForPBBadgeShown(badge) {
+  return BrowserTestUtils.waitForMutationCondition(
+    badge,
+    { attributeFilter: ["hidden"] },
+    () => !badge.hidden
+  );
+}
+
 async function assertBackButtonIsDisabled(win) {
   let backButton = await TestUtils.waitForCondition(async () => {
     let backButton = win.document.querySelector(".back-button");
@@ -1049,8 +1060,7 @@ add_task(async function testPrivateBrowsingExtension() {
   // Check the PB stuff.
   await updated;
 
-  // Not sure what better to await here.
-  await TestUtils.waitForCondition(() => !badge.hidden);
+  await waitForPBBadgeShown(badge);
 
   ok(!badge.hidden, "The PB badge is now shown");
   ok(await hasPrivateAllowed(id), "PB is allowed");
@@ -1070,6 +1080,7 @@ add_task(async function testPrivateBrowsingExtension() {
   updated = BrowserTestUtils.waitForEvent(card, "update");
   card.querySelector('[action="toggle-disabled"]').click();
   await updated;
+  await waitForPBBadgeShown(badge);
 
   // It's still allowed in PB.
   ok(await hasPrivateAllowed(id), "PB is allowed");
@@ -1087,6 +1098,7 @@ add_task(async function testPrivateBrowsingExtension() {
   updated = BrowserTestUtils.waitForEvent(card, "update");
   allow.click();
   await updated;
+  await waitForPBBadgeShown(badge);
 
   ok(!badge.hidden, "The PB badge is hidden");
   ok(await hasPrivateAllowed(id), "PB is disallowed");
@@ -1221,6 +1233,7 @@ add_task(async function testPrivateBrowsingAllowedListView() {
   // The allowed extension should have a badge on load.
   let card = getAddonCard(win, "allowed@mochi.test");
   let badge = card.querySelector(".addon-badge-private-browsing-allowed");
+  await waitForPBBadgeShown(badge);
   ok(!badge.hidden, "The PB badge is shown for the allowed add-on");
 
   await extension.unload();
