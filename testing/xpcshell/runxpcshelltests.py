@@ -259,13 +259,12 @@ class XPCShellTestThread(Thread):
     def run(self):
         try:
             self.run_test()
-        except PermissionError as e:
-            self.infra = True
-            self.exception = e
-            self.traceback = traceback.format_exc()
         except Exception as e:
             self.exception = e
             self.traceback = traceback.format_exc()
+            if self.infra:
+                # The process couldn't be launched: retrying the test can't help.
+                self.retry = False
         else:
             self.exception = None
             self.traceback = None
@@ -1184,15 +1183,23 @@ class XPCShellTestThread(Thread):
                 self.logCommand(name, self.command, test_dir)
 
             launch_time = time.monotonic()
-            proc = self.launchProcess(
-                self.command,
-                stdout=self.pStdout,
-                stderr=self.pStderr,
-                env=self.env,
-                cwd=test_dir,
-                timeout=testTimeoutInterval,
-                test_name=name,
-            )
+            try:
+                proc = self.launchProcess(
+                    self.command,
+                    stdout=self.pStdout,
+                    stderr=self.pStderr,
+                    env=self.env,
+                    cwd=test_dir,
+                    timeout=testTimeoutInterval,
+                    test_name=name,
+                )
+            except OSError:
+                self.infra = True
+                with self.lock:
+                    if self.timer:
+                        self.timer.cancel()
+                        self.timer = None
+                raise
 
             if hasattr(proc, "pid"):
                 self.proc_ident = proc.pid
@@ -2172,6 +2179,14 @@ class XPCShellTests:
             self.log.group_end(name="selftests")
             self.log.suite_end()
 
+    def abortForInfra(self, test):
+        # mozharness only marks the task for retry when it sees "INFRA-ERROR".
+        self.log.error(
+            f"INFRA-ERROR | {test.test_object['id']} | Failed to launch xpcshell: "
+            f"{test.exception}"
+        )
+        return TBPL_RETRY
+
     def runTests(self, options, testClass=XPCShellTestThread, mobileArgs=None):
         """
         Run xpcshell tests.
@@ -2732,7 +2747,7 @@ class XPCShellTests:
         # tests in the queue at most threadCount at a time
         running_tests = set()
         keep_going = True
-        infra_abort = False
+        infra_abort = None
         exceptions = []
         tracebacks = []
         self.try_again_list = []
@@ -2806,7 +2821,8 @@ class XPCShellTests:
                         # we won't add any more tests, will just wait for
                         # the currently running ones to finish
                         keep_going = False
-                    infra_abort = infra_abort and test.infra
+                    if test.infra:
+                        infra_abort = test
                     keep_going = keep_going and test.keep_going
                     self.addTestResults(test)
 
@@ -2818,7 +2834,7 @@ class XPCShellTests:
             self.log.group_end(name="parallel")
 
         if infra_abort:
-            return TBPL_RETRY  # terminate early
+            return self.abortForInfra(infra_abort)
 
         if keep_going:
             # run the other tests sequentially
@@ -2842,6 +2858,8 @@ class XPCShellTests:
                     test.log_full_output(mark_failures_as_expected=True)
                     continue
                 self.addTestResults(test)
+                if test.infra:
+                    return self.abortForInfra(test)
                 # did the test encounter any exception?
                 if test.exception:
                     exceptions.append(test.exception)
@@ -2871,6 +2889,8 @@ class XPCShellTests:
             self.join_test(test)
             self.test_ended(test)
             self.addTestResults(test)
+            if test.infra:
+                return self.abortForInfra(test)
             # did the test encounter any exception?
             if test.exception:
                 exceptions.append(test.exception)
