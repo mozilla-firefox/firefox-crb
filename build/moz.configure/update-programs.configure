@@ -40,6 +40,18 @@ option(
 set_config("MOZ_UPDATER", True, when="--enable-updater")
 set_define("MOZ_UPDATER", True, when="--enable-updater")
 
+
+@depends("--enable-updater", updater_default, when=artifact_builds)
+def check_updater_artifact_builds(updater, default):
+    if bool(updater) != default:
+        built_with = "--enable-updater" if default else "--disable-updater"
+        die(
+            f"{updater.format('--enable-updater')} is not supported with "
+            "--enable-artifact-builds because the downloaded binaries were "
+            f"built with {built_with}"
+        )
+
+
 # Updates that do not verify signatures
 # ==============================================================
 

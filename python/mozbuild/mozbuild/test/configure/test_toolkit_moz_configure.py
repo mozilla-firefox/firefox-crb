@@ -158,6 +158,36 @@ class TestToolkitMozConfigure(BaseConfigureTest):
             sandbox._value_for(sandbox["require_wine"])
         self.assertIn("Cannot find wine", out.getvalue())
 
+    def test_updater_artifact_builds(self):
+        def check(args):
+            out = StringIO()
+            sandbox = self.get_sandbox({}, {}, args, {}, out=out)
+            try:
+                sandbox._value_for(sandbox["check_updater_artifact_builds"])
+            except SystemExit:
+                return out.getvalue()
+
+        android = [
+            "--enable-application=mobile/android",
+            "--target=aarch64-linux-android",
+        ]
+        self.assertIsNone(check(["--enable-artifact-builds"]))
+        self.assertIsNone(check(["--enable-artifact-builds", "--enable-updater"]))
+        self.assertIsNone(check(["--disable-updater"]))
+        self.assertIsNone(
+            check(["--enable-artifact-builds", "--disable-updater", *android])
+        )
+        self.assertIn(
+            "--disable-updater is not supported with --enable-artifact-builds "
+            "because the downloaded binaries were built with --enable-updater",
+            check(["--enable-artifact-builds", "--disable-updater"]),
+        )
+        self.assertIn(
+            "--enable-updater is not supported with --enable-artifact-builds "
+            "because the downloaded binaries were built with --disable-updater",
+            check(["--enable-artifact-builds", "--enable-updater", *android]),
+        )
+
     def test_elfhack(self):
         class ReadElf:
             def __init__(self, with_relr):
