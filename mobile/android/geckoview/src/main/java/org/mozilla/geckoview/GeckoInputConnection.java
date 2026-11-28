@@ -114,7 +114,9 @@ import org.mozilla.gecko.util.ThreadUtils;
               }
             }
             log.append(")");
-            Log.d(LOGTAG, log.toString());
+            if (DEBUG) {
+              Log.d(LOGTAG, log.toString());
+            }
 
             mCallLevel.append(' ');
             Object ret = method.invoke(ic, args);
@@ -128,7 +130,9 @@ import org.mozilla.gecko.util.ThreadUtils;
             if (!method.getReturnType().equals(Void.TYPE)) {
               GeckoEditable.debugAppend(log.append(": "), ret);
             }
-            Log.d(LOGTAG, log.toString());
+            if (DEBUG) {
+              Log.d(LOGTAG, log.toString());
+            }
             return ret;
           }
         };
