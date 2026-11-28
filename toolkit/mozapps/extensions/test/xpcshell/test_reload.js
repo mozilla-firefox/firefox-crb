@@ -152,6 +152,9 @@ add_task(async function test_reload_to_invalid_version_fails() {
   equal(addon.version, "1.0");
   equal(addon.appDisabled, false);
   equal(addon.userDisabled, false);
+  // The running add-on's XPI stays open in the jar cache, and Windows can't
+  // delete an open file.
+  Services.obs.notifyObservers(addonDir, "flush-cache-entry");
   addonDir.remove(true);
 
   // update the manifest to make the add-on version incompatible, so the reload will reject
