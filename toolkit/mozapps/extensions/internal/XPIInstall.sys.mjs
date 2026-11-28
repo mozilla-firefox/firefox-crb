@@ -3278,7 +3278,17 @@ UpdateChecker.prototype = {
     );
     // Apply the compatibility update to the database
     if (compatUpdate) {
-      this.addon.applyCompatibilityUpdate(compatUpdate, this.syncCompatibility);
+      try {
+        await this.addon.applyCompatibilityUpdate(
+          compatUpdate,
+          this.syncCompatibility
+        );
+      } catch (e) {
+        logger.error(
+          `Failed to apply compatibility update for ${this.addon.id}`,
+          e
+        );
+      }
     }
 
     // If the request is for an application or platform version that is
