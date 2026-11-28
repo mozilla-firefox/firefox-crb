@@ -1210,7 +1210,10 @@ class nsDocShell final : public nsDocLoader,
   // Steps of StopInternal.
   MOZ_CAN_RUN_SCRIPT void ResetNavigationStateForStop(
       UnsetOngoingNavigation aUnsetOngoingNavigation);
-  MOZ_CAN_RUN_SCRIPT void StopActiveDocument(uint32_t aStopFlags);
+  // aKeepScriptsNotOwnedByParser keeps async and script-inserted scripts
+  // running, since the document stays displayed.
+  MOZ_CAN_RUN_SCRIPT void StopActiveDocument(uint32_t aStopFlags,
+                                             bool aKeepScriptsNotOwnedByParser);
 
   // With docshell.navigation.new_load_group, starts a navigation in a load
   // group of its own, see nsDocLoader::BeginNavigationLoadGroup. Of
