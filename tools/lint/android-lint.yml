@@ -37,6 +37,7 @@ android-lint:
         - 'third_party/application-services/.buildconfig-android.yml'
         - 'third_party/application-services/**/*.gradle'
         - 'mobile/android/geckoview/lint.xml'
+        - 'third_party/libwebrtc/lint.xml'
         - 'mobile/android/geckoview_example/build.gradle'
         - 'mobile/android/geckoview_example/lint.xml'
         - 'mobile/android/android-components/components/tooling/lint/**'
