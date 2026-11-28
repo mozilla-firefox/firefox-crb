@@ -414,7 +414,7 @@ nsresult nsJARChannel::OpenLocalFile() {
         if (NS_SUCCEEDED(rv)) {
           target = NewRunnableMethod<RefPtr<nsJARInputThunk>, bool>(
               "nsJARChannel::ContinueOpenLocalFile", self,
-              &nsJARChannel::ContinueOpenLocalFile, input, false);
+              &nsJARChannel::ContinueOpenLocalFile, std::move(input), false);
         } else {
           target = NewRunnableMethod<nsresult, bool>(
               "nsJARChannel::OnOpenLocalFileComplete", self,
