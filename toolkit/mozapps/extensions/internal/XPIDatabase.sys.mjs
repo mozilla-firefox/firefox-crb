@@ -724,7 +724,7 @@ export class AddonInternal {
     }
   }
 
-  applyCompatibilityUpdate(aUpdate, aSyncCompatibility) {
+  async applyCompatibilityUpdate(aUpdate, aSyncCompatibility) {
     let wasCompatible = this.isCompatible;
 
     for (let targetApp of this.targetApplications) {
@@ -747,7 +747,7 @@ export class AddonInternal {
 
     if (wasCompatible != this.isCompatible) {
       if (this.inDatabase) {
-        XPIDatabase.updateAddonDisabledState(this);
+        await XPIDatabase.updateAddonDisabledState(this);
       } else {
         this.appDisabled = !XPIDatabase.isUsableAddon(this);
       }
