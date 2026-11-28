@@ -25,6 +25,7 @@
 #include "nsIFile.h"
 #include "nsIPrefBranch.h"
 #include "nsIPrefService.h"
+#include "nsIQuotaArtificialFailure.h"
 #include "nsThreadUtils.h"
 
 namespace mozilla::dom::quota::test {
@@ -543,10 +544,9 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Simple) {
   ASSERT_TRUE(originStateMetadataAfter);
   ASSERT_TRUE(originStateMetadataAfter->mAccessed);
 
-  auto directoryMetadataHeaderAfter =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderAfter);
-  ASSERT_TRUE(directoryMetadataHeaderAfter->mAccessed);
+  auto dbMetadataAfter = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataAfter);
+  ASSERT_TRUE(dbMetadataAfter->mAccessed);
 
   ASSERT_NO_FATAL_FAILURE(AssertStorageInitialized());
 
@@ -576,10 +576,9 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Simple_OriginDirectoryExists) {
   ASSERT_TRUE(originStateMetadataBefore);
   ASSERT_FALSE(originStateMetadataBefore->mAccessed);
 
-  auto directoryMetadataHeaderBefore =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderBefore);
-  ASSERT_FALSE(directoryMetadataHeaderBefore->mAccessed);
+  auto dbMetadataBefore = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataBefore);
+  ASSERT_FALSE(dbMetadataBefore->mAccessed);
 
   PerformOnBackgroundThread([]() {
     QuotaManager* quotaManager = QuotaManager::Get();
@@ -617,10 +616,9 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Simple_OriginDirectoryExists) {
   ASSERT_TRUE(originStateMetadataAfter);
   ASSERT_TRUE(originStateMetadataAfter->mAccessed);
 
-  auto directoryMetadataHeaderAfter =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderAfter);
-  ASSERT_TRUE(directoryMetadataHeaderAfter->mAccessed);
+  auto dbMetadataAfter = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataAfter);
+  ASSERT_TRUE(dbMetadataAfter->mAccessed);
 
   ASSERT_NO_FATAL_FAILURE(AssertStorageInitialized());
 
@@ -731,10 +729,9 @@ TEST_F(TestQuotaManager,
   ASSERT_TRUE(originStateMetadataBefore);
   ASSERT_FALSE(originStateMetadataBefore->mAccessed);
 
-  auto directoryMetadataHeaderBefore =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderBefore);
-  ASSERT_FALSE(directoryMetadataHeaderBefore->mAccessed);
+  auto dbMetadataBefore = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataBefore);
+  ASSERT_FALSE(dbMetadataBefore->mAccessed);
 
   PerformOnBackgroundThread([testOriginMetadata]() {
     QuotaManager* quotaManager = QuotaManager::Get();
@@ -818,10 +815,9 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Ongoing_OriginDirectoryExists) {
   ASSERT_TRUE(originStateMetadataBefore);
   ASSERT_FALSE(originStateMetadataBefore->mAccessed);
 
-  auto directoryMetadataHeaderBefore =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderBefore);
-  ASSERT_FALSE(directoryMetadataHeaderBefore->mAccessed);
+  auto dbMetadataBefore = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataBefore);
+  ASSERT_FALSE(dbMetadataBefore->mAccessed);
 
   PerformOnBackgroundThread([saveOriginAccessTimeCountBefore,
                              saveOriginAccessTimeCountInternalBefore]() {
@@ -959,10 +955,9 @@ TEST_F(TestQuotaManager, OpenClientDirectory_Ongoing_OriginDirectoryExists) {
   ASSERT_TRUE(originStateMetadataAfter);
   ASSERT_TRUE(originStateMetadataAfter->mAccessed);
 
-  auto directoryMetadataHeaderAfter =
-      LoadDirectoryMetadataHeader(testOriginMetadata);
-  ASSERT_TRUE(directoryMetadataHeaderAfter);
-  ASSERT_TRUE(directoryMetadataHeaderAfter->mAccessed);
+  auto dbMetadataAfter = LoadOriginStateMetadataFromDB(testOriginMetadata);
+  ASSERT_TRUE(dbMetadataAfter);
+  ASSERT_TRUE(dbMetadataAfter->mAccessed);
 
   ASSERT_NO_FATAL_FAILURE(AssertStorageInitialized());
 
@@ -4209,7 +4204,7 @@ TEST_F(TestQuotaManagerAndClearStorage,
   ASSERT_NO_FATAL_FAILURE(InitializeStorage());
   ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
   ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(originMetadata));
-  const auto originalMetadata = LoadDirectoryMetadataHeader(originMetadata);
+  const auto originalMetadata = GetOriginStateMetadata(originMetadata);
   ASSERT_TRUE(originalMetadata);
   const int64_t accessTime = originalMetadata->mLastAccessTime + 1;
 
@@ -4236,10 +4231,13 @@ TEST_F(TestQuotaManagerAndClearStorage,
   const auto pendingMetadata = GetOriginStateMetadata(originMetadata);
   ASSERT_TRUE(pendingMetadata);
   EXPECT_TRUE(pendingMetadata->mDirty);
-  const auto unchangedMetadata = LoadDirectoryMetadataHeader(originMetadata);
-  ASSERT_TRUE(unchangedMetadata);
-  EXPECT_EQ(unchangedMetadata->mLastAccessTime,
-            originalMetadata->mLastAccessTime);
+  // The scan re-derives the access time from filesystem timestamps, which
+  // can differ from the original in either direction, so the row is compared
+  // against what the scan wrote rather than against the original.
+  const auto retainedMetadata = LoadOriginStateMetadataFromDB(originMetadata);
+  ASSERT_TRUE(retainedMetadata);
+  EXPECT_EQ(retainedMetadata->mLastAccessTime,
+            scannedMetadata->mLastAccessTime);
 
   ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(originMetadata));
   bool quiescentIntervalElapsed = false;
@@ -4262,10 +4260,56 @@ TEST_F(TestQuotaManagerAndClearStorage,
   const auto flushedMetadata = GetOriginStateMetadata(originMetadata);
   ASSERT_TRUE(flushedMetadata);
   EXPECT_FALSE(flushedMetadata->mDirty);
-  const auto persistedMetadata = LoadDirectoryMetadataHeader(originMetadata);
+  const auto persistedMetadata = LoadOriginStateMetadataFromDB(originMetadata);
   ASSERT_TRUE(persistedMetadata);
   EXPECT_EQ(persistedMetadata->mLastAccessTime, accessTime);
   EXPECT_FALSE(persistedMetadata->mDirty);
+}
+
+// A repository scan must initialize an origin with a clean storage database
+// row from the row instead of walking its directory, and must still walk the
+// directory once the row is dirty.
+TEST_F(TestQuotaManagerAndClearStorage,
+       InitializeTemporaryStorage_ScanSkipsOriginsWithCleanRow) {
+  const auto originMetadata = GetTestOriginMetadata();
+  const auto restorePrefs = MakeScopeExit([&] {
+    Preferences::ClearUser("dom.quotaManager.loadQuotaFromCache");
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.categories");
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.probability");
+    Preferences::ClearUser("dom.quotaManager.artificialFailure.errorCode");
+  });
+
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryOrigin(originMetadata));
+  const auto originalMetadata = GetOriginStateMetadata(originMetadata);
+  ASSERT_TRUE(originalMetadata);
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+
+  // Force a scan in which every directory walk fails.
+  Preferences::SetBool("dom.quotaManager.loadQuotaFromCache", false);
+  Preferences::SetUint("dom.quotaManager.artificialFailure.categories",
+                       nsIQuotaArtificialFailure::CATEGORY_INITIALIZE_ORIGIN);
+  Preferences::SetUint("dom.quotaManager.artificialFailure.probability", 100);
+  Preferences::SetUint("dom.quotaManager.artificialFailure.errorCode",
+                       static_cast<uint32_t>(NS_ERROR_UNEXPECTED));
+
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(AssertTemporaryStorageInitialized());
+  ASSERT_NO_FATAL_FAILURE(AssertTemporaryOriginInitialized(originMetadata));
+  const auto scannedMetadata = GetOriginStateMetadata(originMetadata);
+  ASSERT_TRUE(scannedMetadata);
+  EXPECT_EQ(scannedMetadata->mLastAccessTime,
+            originalMetadata->mLastAccessTime);
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
+
+  ASSERT_NO_FATAL_FAILURE(MarkOriginRowDirtyInDB(originMetadata));
+
+  ASSERT_NO_FATAL_FAILURE(InitializeStorage());
+  ASSERT_NO_FATAL_FAILURE(InitializeTemporaryStorage());
+  ASSERT_NO_FATAL_FAILURE(AssertTemporaryStorageNotInitialized());
+  ASSERT_NO_FATAL_FAILURE(ShutdownStorage());
 }
 
 TEST_F(TestQuotaManager, CheckIfUsageIsConsistentNoUnderflow) {

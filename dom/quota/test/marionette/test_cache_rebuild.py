@@ -557,6 +557,10 @@ class CacheRescan(QuotaTestCase):
         finally:
             for pref in FAILURE_PREFS:
                 self.marionette.clear_pref(pref)
+            # Pref changes reach prefs.js on a delayed save; a browser killed
+            # before it runs would start again with the failure still armed.
+            with self.marionette.using_context(self.marionette.CONTEXT_CHROME):
+                self.marionette.execute_script("Services.prefs.savePrefFile(null);")
 
     @contextmanager
     def _stopped_browser(self, in_app=True):
