@@ -74,6 +74,15 @@ function captureFrameImageData(video) {
   return ctx.getImageData(0, 0, width, height);
 }
 
+function hasNonBlackPixel({ data }) {
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] && (data[i] || data[i + 1] || data[i + 2])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Given two <video> elements, captures snapshots of what they're currently
  * displaying, and asserts that they're identical.
@@ -82,10 +91,18 @@ function captureFrameImageData(video) {
  *        A video element to compare against.
  * @param video2 (<video> element)
  *        A video to compare with video1.
+ * @param options (optional object)
+ *        Set dumpMismatch to false to suppress image dumps during retries.
+ *        Set requireNonBlack to reject captures containing only black or
+ *        transparent pixels.
  * @returns {Promise<boolean>}
  *   Resolves as true if the two videos match.
  */
-async function assertVideosMatch(video1, video2) {
+async function assertVideosMatch(
+  video1,
+  video2,
+  { dumpMismatch = true, requireNonBlack = false } = {}
+) {
   let video1Frame = captureFrameImageData(video1);
   let video2Frame = captureFrameImageData(video2);
 
@@ -112,10 +129,16 @@ async function assertVideosMatch(video1, video2) {
   let leftDataURL = left.toDataURL();
   let rightDataURL = right.toDataURL();
 
-  if (leftDataURL != rightDataURL) {
-    dump("Left frame: " + leftDataURL + "\n\n");
-    dump("Right frame: " + rightDataURL + "\n\n");
+  const matched =
+    leftDataURL == rightDataURL &&
+    (!requireNonBlack ||
+      (hasNonBlackPixel(video1Frame) && hasNonBlackPixel(video2Frame)));
 
+  if (!matched) {
+    if (dumpMismatch) {
+      dump("Left frame: " + leftDataURL + "\n\n");
+      dump("Right frame: " + rightDataURL + "\n\n");
+    }
     return false;
   }
 
