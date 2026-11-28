@@ -191,9 +191,6 @@ requesttimeoutfactor = 2  # Slow on tsan and debug: each of its 8 content pages 
 ["test_locale.js"]
 
 ["test_moved_extension_metadata.js"]
-skip-if = [
-  "true", # bug 1777900
-]
 
 ["test_no_addons.js"]
 
