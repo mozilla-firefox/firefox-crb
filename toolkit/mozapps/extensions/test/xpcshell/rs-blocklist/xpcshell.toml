@@ -62,8 +62,8 @@ skip-if = [
 ["test_blocklist_severities_v2.js"]
 
 ["test_blocklist_statechange_telemetry.js"]
-skip-if = [
-  "appname == 'thunderbird'", # Data irrelevant to Thunderbird. Bug 1641400.
+run-if = [
+  "appname != 'thunderbird'", # Data irrelevant to Thunderbird. Bug 1641400.
 ]
 
 ["test_blocklist_targetapp_filter.js"]
@@ -71,8 +71,8 @@ tags = "remote-settings"
 
 ["test_blocklist_telemetry.js"]
 tags = "remote-settings"
-skip-if = [
-  "appname == 'thunderbird'", # Data irrelevant to Thunderbird. Bug 1641400.
+run-if = [
+  "appname != 'thunderbird'", # Data irrelevant to Thunderbird. Bug 1641400.
 ]
 
 ["test_blocklistchange.js"]
