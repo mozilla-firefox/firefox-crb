@@ -10,8 +10,8 @@ origin:
 
   url: https://github.com/google/brotli
 
-  release: fed075f48eaffa447243a8e0452a88b103506118 (2026-11-20T14:22:23Z).
-  revision: fed075f48eaffa447243a8e0452a88b103506118
+  release: 717514a67b3f8abf53365d4471a102a60fff8ef5 (2026-11-25T13:15:51Z).
+  revision: 717514a67b3f8abf53365d4471a102a60fff8ef5
 
   license: MIT
 
