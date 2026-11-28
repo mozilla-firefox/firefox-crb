@@ -5189,7 +5189,7 @@ export var XPIInstall = {
     // Notify any other providers that a new theme has been enabled
     // (when the active theme is uninstalled, the default theme is enabled).
     if (aAddon.type === "theme" && wasActive) {
-      AddonManagerPrivate.notifyAddonChanged(null, aAddon.type);
+      await AddonManagerPrivate.notifyAddonChanged(null, aAddon.type);
     }
   },
 
