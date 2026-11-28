@@ -58,6 +58,10 @@ add_task(async function test_toggling_screenshots_pref() {
       await TestUtils.waitForCondition(() => observerSpy.callCount == 2);
       Assert.equal(observerSpy.callCount, 2, "Observer function called twice");
 
+      await BrowserTestUtils.waitForPaintingUnsuppressed(
+        browser.browsingContext
+      );
+
       let menu = document.getElementById("contentAreaContextMenu");
       let popupshown = BrowserTestUtils.waitForPopupEvent(menu, "shown");
       EventUtils.synthesizeMouseAtCenter(document.body, {
@@ -155,6 +159,10 @@ add_task(async function test_toggling_screenshots_pref() {
       ok(
         !document.getElementById("screenshot-button"),
         "Toolbar button shouldn't exist"
+      );
+
+      await BrowserTestUtils.waitForPaintingUnsuppressed(
+        browser.browsingContext
       );
 
       let menu = document.getElementById("contentAreaContextMenu");
