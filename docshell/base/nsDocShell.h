@@ -1201,6 +1201,11 @@ class nsDocShell final : public nsDocLoader,
   nsresult StopInternal(uint32_t aStopFlags,
                         UnsetOngoingNavigation aUnsetOngoingNavigation);
 
+  // Steps of StopInternal.
+  MOZ_CAN_RUN_SCRIPT void ResetNavigationStateForStop(
+      UnsetOngoingNavigation aUnsetOngoingNavigation);
+  MOZ_CAN_RUN_SCRIPT void StopActiveDocument(uint32_t aStopFlags);
+
   MOZ_CAN_RUN_SCRIPT
   void ResetOngoingNavigation(
       const mozilla::Maybe<OngoingNavigation>& aOngoingNavigation);
