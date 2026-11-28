@@ -276,11 +276,6 @@ skip-if = [
 ]
 head = "head_addons.js head_sideload.js"
 
-["test_signed_inject.js"]
-skip-if = [
-  "true", # Bug 1394122
-]
-
 ["test_signed_install.js"]
 
 ["test_signed_langpack.js"]
