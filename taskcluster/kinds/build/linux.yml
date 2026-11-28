@@ -747,6 +747,7 @@ linux64-reproduced/opt:
     worker:
         max-run-time: 9000
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             PERFHERDER_EXTRA_OPTIONS: repr
             # Must match linux64-shippable/opt: configure options end up in
             # buildconfig.html inside omni.ja, which diffoscope compares.
@@ -1406,6 +1407,7 @@ linux64-shippable/opt:
     worker:
         max-run-time: 9000
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             MOZ_AUTOMATION_PACKAGE_TESTS: "1"
             MOZ_GENERATE_SBOM: "1"
             SOURCE_DATE_EPOCH: "{build_date}"

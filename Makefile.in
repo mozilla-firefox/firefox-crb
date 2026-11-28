@@ -152,6 +152,11 @@ endif
 .PHONY: package-generated-sources
 package-generated-sources:
 	$(call py_action,package_generated_sources,'$(DIST)/$(PKG_PATH)$(GENERATED_SOURCE_FILE_PACKAGE)')
+# Only the builds compared by taskcluster/kinds/diffoscope/reproducible.yml
+# set MOZ_RUST_ARTIFACT_HASHES.
+ifdef MOZ_RUST_ARTIFACT_HASHES
+	$(call py_action,rust_artifact_hashes,'$(DIST)/$(PKG_PATH)$(RUST_ARTIFACT_HASHES_FILE)')
+endif
 
 ifdef JS_STANDALONE
 # Delegate js-specific rules to js

@@ -37,6 +37,7 @@ SYMBOL_GTEST_ARCHIVE_BASENAME = $(PKG_BASENAME).crashreporter-symbols-gtest
 
 # Generated file package naming
 GENERATED_SOURCE_FILE_PACKAGE = $(PKG_BASENAME).generated-files.tar.gz
+RUST_ARTIFACT_HASHES_FILE = $(PKG_BASENAME).rust-artifacts.txt
 
 # Code coverage package naming
 CODE_COVERAGE_ARCHIVE_BASENAME = $(PKG_BASENAME).code-coverage-gcno

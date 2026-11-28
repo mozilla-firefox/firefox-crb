@@ -194,6 +194,7 @@ android-arm-shippable/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android/releng.manifest"
             MOZ_AUTOMATION_PACKAGE_TESTS: "1"
             MOZ_GENERATE_SBOM: "1"
@@ -223,6 +224,7 @@ android-arm-reproduced/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android/releng.manifest"
             PERFHERDER_EXTRA_OPTIONS: repr
             MOZ_GENERATE_SBOM: "1"
@@ -430,6 +432,7 @@ android-aarch64-shippable/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android/releng.manifest"
             MOZ_AUTOMATION_PACKAGE_TESTS: "1"
             MOZ_GENERATE_SBOM: "1"
@@ -459,6 +462,7 @@ android-aarch64-reproduced/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android/releng.manifest"
             PERFHERDER_EXTRA_OPTIONS: repr
             MOZ_GENERATE_SBOM: "1"
@@ -695,6 +699,7 @@ android-x86_64-shippable/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android-x86/releng.manifest"
             MOZ_AUTOMATION_PACKAGE_TESTS: "1"
             MOZ_GENERATE_SBOM: "1"
@@ -724,6 +729,7 @@ android-x86_64-reproduced/opt:
     worker-type: b-linux-docker-xlarge-amd
     worker:
         env:
+            MOZ_RUST_ARTIFACT_HASHES: "1"
             TOOLTOOL_MANIFEST: "mobile/android/config/tooltool-manifests/android-x86/releng.manifest"
             PERFHERDER_EXTRA_OPTIONS: repr
             MOZ_GENERATE_SBOM: "1"
