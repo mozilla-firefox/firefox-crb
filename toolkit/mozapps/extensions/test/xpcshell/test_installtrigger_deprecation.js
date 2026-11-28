@@ -209,7 +209,15 @@ add_task(
     // RemoteSettings previously stored on disk are expected to disable InstallTrigger global and methods.
     await AddonTestUtils.promiseShutdownManager();
     Services.prefs.setBoolPref("extensions.remoteSettings.disabled", false);
+    // The stored entries are processed asynchronously after startup, without
+    // promiseStartupManager waiting for it.
+    const promiseSetPref = TestUtils.topicObserved(
+      "am-remote-settings-setpref",
+      subject =>
+        subject.wrappedJSObject.prefName === "extensions.InstallTrigger.enabled"
+    );
     await AddonTestUtils.promiseStartupManager();
+    await promiseSetPref;
     await testInstallTriggerDeprecationPrefs({
       error: /ReferenceError: InstallTrigger is not defined/,
     });
