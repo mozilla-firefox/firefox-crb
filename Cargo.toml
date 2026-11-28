@@ -303,6 +303,12 @@ cc = { path = "third_party/rust/cc" }
 # audit and build a second copy of both. Drop this patch once syn 3 is in the
 # tree anyway, or the fix is released in 0.8.
 multiversion-macros = { path = "third_party/rust/multiversion-macros" }
+# Patch uniffi_internal_macros to make its output deterministic, fixed upstream
+# in 0.33. The uniffi crates pin each other to =0.32.2 and application-services
+# requires uniffi 0.32, so updating means moving every uniffi crate,
+# application-services and the uniffi-bindgen-gecko-js bindings together. Drop
+# this patch with that update.
+uniffi_internal_macros = { path = "third_party/rust/uniffi_internal_macros" }
 
 # Patch goblin 0.7.0 to 0.8
 goblin = { path = "build/rust/goblin" }
