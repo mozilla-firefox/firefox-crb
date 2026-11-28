@@ -176,6 +176,7 @@ add_task(async function test_install_file() {
   equal(extensionInstalls.length, 1);
   equal(extensionInstalls[0], install);
 
+  let installStart = Date.now();
   await expectEvents(
     {
       addonEvents: {
@@ -194,7 +195,7 @@ add_task(async function test_install_file() {
   ok(!hasFlag(addon.permissions, AddonManager.PERM_CAN_ENABLE));
   ok(hasFlag(addon.permissions, AddonManager.PERM_CAN_DISABLE));
 
-  let updateDate = Date.now();
+  let installEnd = Date.now();
 
   await promiseRestartManager();
 
@@ -219,15 +220,8 @@ add_task(async function test_install_file() {
   ok(XPIS.test_install1.exists());
   do_check_in_crash_annotation(a1.id, a1.version);
 
-  let difference = a1.installDate.getTime() - updateDate;
-  if (Math.abs(difference) > MAX_TIME_DIFFERENCE) {
-    do_throw("Add-on install time was out by " + difference + "ms");
-  }
-
-  difference = a1.updateDate.getTime() - updateDate;
-  if (Math.abs(difference) > MAX_TIME_DIFFERENCE) {
-    do_throw("Add-on update time was out by " + difference + "ms");
-  }
+  checkTimeDuringInstall(a1.installDate, installStart, installEnd, "install");
+  checkTimeDuringInstall(a1.updateDate, installStart, installEnd, "update");
 
   equal(a1.getResourceURI("manifest.json").spec, uri2 + "manifest.json");
 
@@ -235,14 +229,32 @@ add_task(async function test_install_file() {
   // lastModifiedDate.
   let testFile = getAddonFile(a1);
   ok(testFile.exists());
-  difference = testFile.lastModifiedTime - Date.now();
-  Assert.less(Math.abs(difference), MAX_TIME_DIFFERENCE);
+  checkTimeDuringInstall(
+    testFile.lastModifiedTime,
+    installStart,
+    installEnd,
+    "file modification"
+  );
 
   await a1.uninstall();
   let { id, version } = a1;
   await promiseRestartManager();
   do_check_not_in_crash_annotation(id, version);
 });
+
+function checkTimeDuringInstall(time, installStart, installEnd, what) {
+  time = Number(time);
+  Assert.greaterOrEqual(
+    time,
+    installStart,
+    `Add-on ${what} time is not before the install started`
+  );
+  Assert.lessOrEqual(
+    time,
+    installEnd,
+    `Add-on ${what} time is not after the install finished`
+  );
+}
 
 // Tests that an install from a url downloads.
 add_task(async function test_install_url() {
@@ -281,6 +293,7 @@ add_task(async function test_install_url() {
   });
   equal(install.addon.install, install);
 
+  let installStart = Date.now();
   await expectEvents(
     {
       addonEvents: {
@@ -297,7 +310,7 @@ add_task(async function test_install_url() {
     () => install.install()
   );
 
-  let updateDate = Date.now();
+  let installEnd = Date.now();
 
   await promiseRestartManager();
 
@@ -317,19 +330,8 @@ add_task(async function test_install_url() {
   ok(XPIS.test_install2_1.exists());
   do_check_in_crash_annotation(a2.id, a2.version);
 
-  let difference = a2.installDate.getTime() - updateDate;
-  Assert.lessOrEqual(
-    Math.abs(difference),
-    MAX_TIME_DIFFERENCE,
-    "Add-on install time was correct"
-  );
-
-  difference = a2.updateDate.getTime() - updateDate;
-  Assert.lessOrEqual(
-    Math.abs(difference),
-    MAX_TIME_DIFFERENCE,
-    "Add-on update time was correct"
-  );
+  checkTimeDuringInstall(a2.installDate, installStart, installEnd, "install");
+  checkTimeDuringInstall(a2.updateDate, installStart, installEnd, "update");
 
   gInstallDate = a2.installDate;
 });
@@ -985,10 +987,13 @@ add_task(async function test_cancel_completed() {
     });
   });
 
-  install.install();
+  let installPromise = install.install();
   await cancelPromise;
 
   equal(install.state, AddonManager.STATE_INSTALLED);
+
+  let addon = await installPromise;
+  await addon.uninstall();
 });
 
 // Test that an install may be canceled after a redirect.
