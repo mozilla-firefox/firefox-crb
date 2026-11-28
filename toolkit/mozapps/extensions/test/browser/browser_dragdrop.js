@@ -2,8 +2,6 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-const ABOUT_ADDONS_URL = "chrome://mozapps/content/extensions/aboutaddons.html";
-
 const dragService = Cc["@mozilla.org/widget/dragservice;1"].getService(
   Ci.nsIDragService
 );
@@ -70,20 +68,23 @@ async function checkInstallConfirmation(...names) {
   Services.obs.removeObserver(observer, "addon-install-started");
 }
 
-function getDragOverTarget(win) {
-  return win.document.querySelector("categories-box");
-}
-
-function getDropTarget(win) {
-  return win.document.querySelector("drag-drop-addon-installer");
+// The drag-drop-addon-installer element has no box (EventUtils refuses to
+// dispatch drag events to such an element) and listens for drop on the
+// window, so the drag goes over the list view's heading. Being plain text, it
+// can't start a drag of its own, which a link (like the sidebar's help link)
+// would, replacing the test's drag data with the link's URL.
+function getDragTarget(win) {
+  return win.document.querySelector("h1.header-name");
 }
 
 function withTestPage(fn) {
   return BrowserTestUtils.withNewTab(
-    { url: ABOUT_ADDONS_URL, gBrowser },
+    { url: "about:addons", gBrowser },
     async browser => {
       let win = browser.contentWindow;
-      await win.customElements.whenDefined("drag-drop-addon-installer");
+      await win.promiseInitialized;
+      // The heading is empty, so has no box, until Fluent translates it.
+      await win.document.l10n.translateElements([getDragTarget(win)]);
       await fn(browser);
     }
   );
@@ -125,42 +126,30 @@ function initDragSession(win, { dragData, dropEffect }) {
 }
 
 async function simulateDragAndDrop(win, dragData) {
-  const dropTarget = getDropTarget(win);
-  const dragOverTarget = getDragOverTarget(win);
+  const target = getDragTarget(win);
   const dropEffect = "move";
 
   const session = initDragSession(win, { dragData, dropEffect });
 
-  info("Simulate drag over and wait for the drop target to be visible");
+  info("Simulate drag over");
 
-  EventUtils.synthesizeDragOver(
-    dragOverTarget,
-    dragOverTarget,
-    dragData,
-    dropEffect,
-    win
-  );
+  EventUtils.synthesizeDragOver(target, target, dragData, dropEffect, win);
 
   // This make sure that the fake dataTransfer has still
   // the expected drop effect after the synthesizeDragOver call.
   session.dataTransfer.dropEffect = "move";
 
-  await TestUtils.waitForCondition(
-    () => !dropTarget.hidden,
-    "Wait for the drop target element to be visible"
-  );
-
-  info("Simulate drop dragData on drop target");
+  info("Simulate drop");
 
   EventUtils.synthesizeDropAfterDragOver(
     null,
     session.dataTransfer,
-    dropTarget,
+    target,
     win,
     { _domDispatchOnly: true }
   );
 
-  dragService.getDragSession(win).endDragSession(true);
+  session.endDragSession(true);
 }
 
 // Simulates dropping a URL onto the manager
@@ -258,13 +247,30 @@ add_task(async function test_drop_incompat_file() {
   await withTestPage(async browser => {
     let url = `${TESTROOT}/addons/browser_dragdrop_incompat.xpi`;
 
-    let panelPromise = promisePopupNotificationShown("addon-install-failed");
+    // The panel may already be open with the download progress notification,
+    // in which case the failure notification replaces it in place, which fires
+    // PanelUpdated but no popupshown.
+    let { panel } = PopupNotifications;
+    let panelUpdated = BrowserTestUtils.waitForEvent(
+      panel,
+      "PanelUpdated",
+      false,
+      e => e.detail.includes("addon-install-failed")
+    );
     await simulateDragAndDrop(browser.contentWindow, [
       [{ type: "text/x-moz-url", data: url }],
     ]);
 
-    let panel = await panelPromise;
-    ok(panel, "Got addon-install-failed popup");
-    panel.button.click();
+    await panelUpdated;
+    // PanelUpdated can fire while the panel is still opening, and its button
+    // can't be clicked before the panel is open.
+    await BrowserTestUtils.waitForPopupEvent(panel, "shown");
+    let notification = panel.firstElementChild;
+    is(
+      notification.getAttribute("popupid"),
+      "addon-install-failed",
+      "Got addon-install-failed popup"
+    );
+    notification.button.click();
   });
 });
