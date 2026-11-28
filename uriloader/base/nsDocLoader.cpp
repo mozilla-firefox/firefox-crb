@@ -115,14 +115,39 @@ nsresult nsDocLoader::SetDocLoaderParent(nsDocLoader* aParent) {
   return NS_OK;
 }
 
-nsresult nsDocLoader::Init() {
+already_AddRefed<nsILoadGroup> nsDocLoader::CreateLoadGroup(
+    uint64_t aRequestContextId) {
   RefPtr loadGroup = MakeRefPtr<net::nsLoadGroup>();
-  nsresult rv = loadGroup->Init();
-  if (NS_FAILED(rv)) return rv;
+  nsresult rv = aRequestContextId
+                    ? loadGroup->InitWithRequestContextId(aRequestContextId)
+                    : loadGroup->Init();
+  if (NS_FAILED(rv)) {
+    return nullptr;
+  }
 
   loadGroup->SetGroupObserver(this, mNotifyAboutBackgroundRequests);
 
-  mLoadGroup = loadGroup;
+  if (mLoadGroup) {
+    nsCOMPtr<nsIInterfaceRequestor> callbacks;
+    mLoadGroup->GetNotificationCallbacks(getter_AddRefs(callbacks));
+    loadGroup->SetNotificationCallbacks(callbacks);
+    loadGroup->SetDefaultLoadFlags(mLoadGroup->GetDefaultLoadFlags());
+  }
+
+  if (nsCOMPtr<nsISupportsPriority> p = do_QueryInterface(mLoadGroup)) {
+    int priority = 0;
+    p->GetPriority(&priority);
+    loadGroup->SetPriority(priority);
+  }
+
+  return loadGroup.forget();
+}
+
+nsresult nsDocLoader::Init() {
+  mLoadGroup = CreateLoadGroup(0);
+  if (!mLoadGroup) {
+    return NS_ERROR_UNEXPECTED;
+  }
 
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: load group %p.\n", this, mLoadGroup.get()));
@@ -132,17 +157,13 @@ nsresult nsDocLoader::Init() {
 
 nsresult nsDocLoader::InitWithBrowsingContext(
     BrowsingContext* aBrowsingContext) {
-  RefPtr loadGroup = MakeRefPtr<net::nsLoadGroup>();
   if (!aBrowsingContext->GetRequestContextId()) {
     return NS_ERROR_NOT_AVAILABLE;
   }
-  nsresult rv = loadGroup->InitWithRequestContextId(
-      aBrowsingContext->GetRequestContextId());
-  if (NS_FAILED(rv)) return rv;
-
-  loadGroup->SetGroupObserver(this, mNotifyAboutBackgroundRequests);
-
-  mLoadGroup = loadGroup;
+  mLoadGroup = CreateLoadGroup(aBrowsingContext->GetRequestContextId());
+  if (!mLoadGroup) {
+    return NS_ERROR_FAILURE;
+  }
 
   MOZ_LOG(gDocLoaderLog, LogLevel::Debug,
           ("DocLoader:%p: load group %p.\n", this, mLoadGroup.get()));
