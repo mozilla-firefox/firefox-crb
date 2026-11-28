@@ -631,31 +631,33 @@ public class GeckoHlsPlayer
       return;
     }
     Log.d(LOGTAG, "onTracksChanged : Tracks: [");
-    int i = 0;
-    for (final Tracks.Group g : tracks.getGroups()) {
-      Log.d(
-          LOGTAG,
-          "  Group#"
-              + (i++)
-              + " type="
-              + getTrackTypeString(g.getType())
-              + ", selected="
-              + g.isSelected()
-              + ", supported="
-              + g.isSupported());
-      for (int j = 0; j < g.length; j++) {
+    if (DEBUG) {
+      int i = 0;
+      for (final Tracks.Group g : tracks.getGroups()) {
         Log.d(
             LOGTAG,
-            "    Track#"
-                + j
-                + "selected="
-                + g.isTrackSelected(j)
+            "  Group#"
+                + (i++)
+                + " type="
+                + getTrackTypeString(g.getType())
+                + ", selected="
+                + g.isSelected()
                 + ", supported="
-                + g.isTrackSupported(j)
-                + ", format="
-                + g.getTrackFormat(j)
-                + ", support="
-                + getFormatSupportString(g.getTrackSupport(j)));
+                + g.isSupported());
+        for (int j = 0; j < g.length; j++) {
+          Log.d(
+              LOGTAG,
+              "    Track#"
+                  + j
+                  + "selected="
+                  + g.isTrackSelected(j)
+                  + ", supported="
+                  + g.isTrackSupported(j)
+                  + ", format="
+                  + g.getTrackFormat(j)
+                  + ", support="
+                  + getFormatSupportString(g.getTrackSupport(j)));
+        }
       }
     }
     Log.d(LOGTAG, "]");

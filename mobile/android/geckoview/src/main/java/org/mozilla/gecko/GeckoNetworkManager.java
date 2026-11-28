@@ -42,6 +42,7 @@ import org.mozilla.gecko.util.NetworkUtils.NetworkStatus;
  */
 public class GeckoNetworkManager extends BroadcastReceiver {
   private static final String LOGTAG = "GeckoNetworkManager";
+  private static final boolean DEBUG = false;
 
   // If network configuration and/or status changed, we send details of what changed.
   // If we received a "check out new network state!" intent from the OS but nothing in it looks
@@ -208,7 +209,9 @@ public class GeckoNetworkManager extends BroadcastReceiver {
   private synchronized boolean handleManagerEvent(final ManagerEvent event) {
     final ManagerState nextState = getNextState(mCurrentState, event);
 
-    Log.d(LOGTAG, "Incoming event " + event + " for state " + mCurrentState + " -> " + nextState);
+    if (DEBUG) {
+      Log.d(LOGTAG, "Incoming event " + event + " for state " + mCurrentState + " -> " + nextState);
+    }
     if (nextState == null) {
       Log.w(LOGTAG, "Invalid event " + event + " for state " + mCurrentState);
       return false;
@@ -374,14 +377,16 @@ public class GeckoNetworkManager extends BroadcastReceiver {
     mCurrentConnectionType = NetworkUtils.getConnectionType(connectivityManager);
     mCurrentNetworkStatus = NetworkUtils.getNetworkStatus(connectivityManager);
     mCurrentConnectionSubtype = NetworkUtils.getConnectionSubType(connectivityManager);
-    Log.d(
-        LOGTAG,
-        "New network state: "
-            + mCurrentNetworkStatus
-            + ", "
-            + mCurrentConnectionType
-            + ", "
-            + mCurrentConnectionSubtype);
+    if (DEBUG) {
+      Log.d(
+          LOGTAG,
+          "New network state: "
+              + mCurrentNetworkStatus
+              + ", "
+              + mCurrentConnectionType
+              + ", "
+              + mCurrentConnectionSubtype);
+    }
   }
 
   @WrapForJNI(dispatchTo = "gecko")

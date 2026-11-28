@@ -730,7 +730,7 @@ public class GeckoSession {
             final String event,
             final GeckoBundle message,
             final EventCallback callback) {
-          Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
+          if (DEBUG) Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
           if ("GeckoView:LocationChange".equals(event)) {
             if (message.getBoolean("isTopLevel")) {
               final GeckoBundle[] perms = message.getBundleArray("permissions");
@@ -1009,7 +1009,7 @@ public class GeckoSession {
             final String event,
             final GeckoBundle message,
             final EventCallback eventCallback) {
-          Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
+          if (DEBUG) Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
 
           final GeckoResult<SlowScriptResponse> result =
               delegate.onSlowScript(GeckoSession.this, message.getString("scriptFileName"));
@@ -1056,7 +1056,7 @@ public class GeckoSession {
             final String event,
             final GeckoBundle message,
             final EventCallback callback) {
-          Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
+          if (DEBUG) Log.d(LOGTAG, "handleMessage " + event + " uri=" + message.getString("uri"));
           if ("GeckoView:PageStart".equals(event)) {
             if (getSelectionActionDelegate() != null) {
               getSelectionActionDelegate().onDismissClipboardPermissionRequest(GeckoSession.this);
@@ -1140,7 +1140,7 @@ public class GeckoSession {
             final String event,
             final GeckoBundle message,
             final EventCallback callback) {
-          Log.d(LOGTAG, "handleMessage: " + event);
+          if (DEBUG) Log.d(LOGTAG, "handleMessage: " + event);
           if (delegate == null) {
             callback.sendSuccess(/* granted */ false);
             return;
@@ -1218,7 +1218,7 @@ public class GeckoSession {
             final String event,
             final GeckoBundle message,
             final EventCallback callback) {
-          Log.d(LOGTAG, "handleMessage: " + event);
+          if (DEBUG) Log.d(LOGTAG, "handleMessage: " + event);
           if ("GeckoView:ShowSelectionAction".equals(event)) {
             final @SelectionActionDelegateAction HashSet<String> actionsSet =
                 new HashSet<>(Arrays.asList(message.getStringArray("actions")));
@@ -1769,7 +1769,7 @@ public class GeckoSession {
     @Override
     public void handleMessage(
         final String event, final GeckoBundle message, final EventCallback callback) {
-      Log.d(LOGTAG, "handleMessage " + event);
+      if (DEBUG) Log.d(LOGTAG, "handleMessage " + event);
 
       if ("GeckoView:PinOnScreen".equals(event)) {
         GeckoSession.this.setShouldPinOnScreen(message.getBoolean("pinned"));

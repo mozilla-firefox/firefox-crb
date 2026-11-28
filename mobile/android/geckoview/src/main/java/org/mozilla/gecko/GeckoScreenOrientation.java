@@ -23,6 +23,7 @@ import org.mozilla.gecko.util.ThreadUtils;
  */
 public class GeckoScreenOrientation {
   private static final String LOGTAG = "GeckoScreenOrientation";
+  private static final boolean DEBUG = false;
 
   // Make sure that any change in hal/HalScreenConfiguration.h happens here too.
   public enum ScreenOrientation {
@@ -156,7 +157,7 @@ public class GeckoScreenOrientation {
       return false;
     }
     mScreenOrientation = screenOrientation;
-    Log.d(LOGTAG, "updating to new orientation " + mScreenOrientation);
+    if (DEBUG) Log.d(LOGTAG, "updating to new orientation " + mScreenOrientation);
     notifyListeners(mScreenOrientation);
     ScreenManagerHelper.refreshScreenInfo();
     return true;

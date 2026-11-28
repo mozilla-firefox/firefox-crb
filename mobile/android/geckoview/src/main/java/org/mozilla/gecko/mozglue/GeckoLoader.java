@@ -22,6 +22,7 @@ import org.mozilla.gecko.annotation.JNITarget;
 
 public final class GeckoLoader {
   private static final String LOGTAG = "GeckoLoader";
+  private static final boolean DEBUG = false;
 
   private static File sGREDir;
 
@@ -210,7 +211,7 @@ public final class GeckoLoader {
       throw new IllegalStateException("Invalid library path for libmozglue.so: " + mozglue);
     }
     final String base = mozglue.substring(0, lastSlash);
-    Log.d(LOGTAG, "Library base=" + base);
+    if (DEBUG) Log.d(LOGTAG, "Library base=" + base);
     return base;
   }
 
@@ -296,7 +297,7 @@ public final class GeckoLoader {
           final byte[] bytes = new byte[1024];
           int read;
 
-          Log.d(LOGTAG, "Copying " + libPath + " to " + outPath);
+          if (DEBUG) Log.d(LOGTAG, "Copying " + libPath + " to " + outPath);
           boolean failed = false;
           try {
             while ((read = in.read(bytes, 0, 1024)) != -1) {
