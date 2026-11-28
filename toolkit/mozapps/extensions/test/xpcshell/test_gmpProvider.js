@@ -89,6 +89,20 @@ add_setup(async () => {
 
   createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "1", "1.9.2");
 
+  // The plugin libraries this test creates are empty files, so the real GMP
+  // service would delete their directories on its own thread (on Windows
+  // because they aren't x86 libraries), at a time the test can't wait for.
+  // The callback's promise never settles, so the mock stays in place for the
+  // whole file.
+  GMPTestUtils.overrideGmpService(
+    {
+      addPluginDirectory() {},
+      removePluginDirectory() {},
+      removeAndDeletePluginDirectory() {},
+    },
+    () => new Promise(() => {})
+  );
+
   // The GMPProvider does not register until the first content process
   // is launched, so we simulate that by firing this notification.
   Services.obs.notifyObservers(null, "ipc:first-content-process-created");
