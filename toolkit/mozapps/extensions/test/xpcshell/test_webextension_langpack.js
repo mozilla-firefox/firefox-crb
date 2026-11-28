@@ -804,7 +804,7 @@ add_task(async function test_staged_langpack_compat_startup() {
       },
     ],
   };
-  addon.__AddonInternal__.applyCompatibilityUpdate(compatUpdate);
+  await addon.__AddonInternal__.applyCompatibilityUpdate(compatUpdate);
 
   await promiseRestartManager("59");
 
