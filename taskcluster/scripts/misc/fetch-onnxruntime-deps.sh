@@ -31,7 +31,7 @@ mkdir $tardir
 cd $tardir
 
 # actual download
-grep -v '^#' ../cmake/deps.txt | while IFS=';' read -r name url sha1 ; do
+grep -v '^#' ../cmake/deps.txt | grep -v onnxruntime-extensions | while IFS=';' read -r name url sha1 ; do
     test -n "$url" || continue
     $curl -fL --retry 5 --retry-all-errors -O "$url"
     echo "$sha1  $(basename "$url")" | sha1sum -c -
