@@ -499,7 +499,12 @@ def lint(_paths, config, **lintargs):
             ):
                 continue
             err = {
-                "level": issue.get("severity").lower(),
+                # mozlint fails on every level but warning, informational findings included.
+                "level": (
+                    "error"
+                    if issue.get("severity") in ("Error", "Fatal")
+                    else "warning"
+                ),
                 "rule": issue.get("id"),
                 "message": issue.get("message"),
                 "path": location.get("file"),
@@ -603,7 +608,8 @@ def parse_lint_report(config, subdir, lint_reports, lint_modules, **lintargs):
                     .get("region", {})
                     .get("startColumn"),
                     "message": issue.get("message", {}).get("text"),
-                    "level": level,
+                    # SARIF reports informational findings as "note".
+                    "level": "error" if level == "error" else "warning",
                 }
                 if (key := tuple(err.values())) in seen:
                     continue
