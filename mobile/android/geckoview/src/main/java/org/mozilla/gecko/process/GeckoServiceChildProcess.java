@@ -4,6 +4,7 @@
 
 package org.mozilla.gecko.process;
 
+import android.annotation.SuppressLint;
 import android.app.Application;
 import android.app.Service;
 import android.content.Intent;
@@ -50,6 +51,8 @@ public class GeckoServiceChildProcess extends Service {
     }
   }
 
+  // Logs in release builds on purpose, to help read users' logs.
+  @SuppressLint("LogConditional")
   @Override
   public void onCreate() {
     super.onCreate();

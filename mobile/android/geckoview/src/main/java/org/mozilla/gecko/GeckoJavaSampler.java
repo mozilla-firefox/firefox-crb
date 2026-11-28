@@ -607,7 +607,8 @@ public class GeckoJavaSampler {
     }
   }
 
-  @SuppressLint("DiscouragedApi")
+  // Logs in release builds on purpose, to help read users' logs.
+  @SuppressLint({"DiscouragedApi", "LogConditional"})
   @WrapForJNI
   public static void start(
       @NonNull final Object[] aFilters, final int aInterval, final int aEntryCount) {
@@ -787,6 +788,8 @@ public class GeckoJavaSampler {
     }
   }
 
+  // Logs in release builds on purpose, to help read users' logs.
+  @SuppressLint("LogConditional")
   @WrapForJNI
   public static void stop() {
     synchronized (GeckoJavaSampler.class) {

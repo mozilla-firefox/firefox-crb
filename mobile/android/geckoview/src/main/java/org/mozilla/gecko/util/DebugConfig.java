@@ -32,6 +32,7 @@ import org.yaml.snakeyaml.error.YAMLException;
 @ReflectionTarget
 public class DebugConfig {
   private static final String LOGTAG = "GeckoDebugConfig";
+  private static final boolean DEBUG = false;
 
   protected Map<String, Object> prefs;
   protected Map<String, String> env;
@@ -78,7 +79,9 @@ public class DebugConfig {
       return extras;
     }
 
-    Log.d(LOGTAG, "Adding environment variables from debug config: " + env);
+    if (DEBUG) {
+      Log.d(LOGTAG, "Adding environment variables from debug config: " + env);
+    }
 
     final Bundle result = extras != null ? extras : new Bundle();
 
@@ -101,7 +104,9 @@ public class DebugConfig {
       return initArgs;
     }
 
-    Log.d(LOGTAG, "Adding arguments from debug config: " + args);
+    if (DEBUG) {
+      Log.d(LOGTAG, "Adding arguments from debug config: " + args);
+    }
 
     final ArrayList<String> combinedArgs = new ArrayList<>();
     if (initArgs != null) {
@@ -118,7 +123,9 @@ public class DebugConfig {
       return initPrefs;
     }
 
-    Log.d(LOGTAG, "Adding prefs from debug config: " + prefs);
+    if (DEBUG) {
+      Log.d(LOGTAG, "Adding prefs from debug config: " + prefs);
+    }
 
     final Map<String, Object> combinedPrefs = new HashMap<>();
     if (initPrefs != null) {
