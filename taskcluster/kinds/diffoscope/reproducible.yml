@@ -107,3 +107,39 @@ reproducible-android-x86_64-generated-files:
             -exec sed -i -E '/^ \* Using: /s@-d/tmp/aidl[0-9]+\.d @-d/tmp/aidl.d @g' {} +
     extra-args: >-
         --exclude b/*_yamls.cached
+
+reproducible-linux64-rust-artifacts:
+    symbol: Linux64r
+    artifact: target.rust-artifacts.txt
+    new: build-linux64-reproduced/opt
+    original: build-linux64-shippable/opt
+
+reproducible-macosx64-rust-artifacts:
+    symbol: Macosx64r
+    artifact: target.rust-artifacts.txt
+    new: build-macosx64-reproduced/opt
+    original: build-macosx64-x64-shippable/opt
+
+reproducible-macosx64-aarch64-rust-artifacts:
+    symbol: Macosx64-aarch64r
+    artifact: target.rust-artifacts.txt
+    new: build-macosx64-aarch64-reproduced/opt
+    original: build-macosx64-aarch64-shippable/opt
+
+reproducible-android-arm-rust-artifacts:
+    symbol: Android-armr
+    artifact: target.rust-artifacts.txt
+    new: build-android-arm-reproduced/opt
+    original: build-android-arm-shippable/opt
+
+reproducible-android-aarch64-rust-artifacts:
+    symbol: Android-aarch64r
+    artifact: target.rust-artifacts.txt
+    new: build-android-aarch64-reproduced/opt
+    original: build-android-aarch64-shippable/opt
+
+reproducible-android-x86_64-rust-artifacts:
+    symbol: Android-x86_64r
+    artifact: target.rust-artifacts.txt
+    new: build-android-x86_64-reproduced/opt
+    original: build-android-x86_64-shippable/opt
