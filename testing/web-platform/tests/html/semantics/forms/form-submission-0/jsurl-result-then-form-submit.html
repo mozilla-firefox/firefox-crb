@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link rel="help" href="https://html.spec.whatwg.org/#navigate-to-a-javascript:-url">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+
+<script>
+promise_test(async t => {
+  await new Promise(resolve => window.onload = resolve);
+
+  const iframe = document.createElement('iframe');
+  iframe.name = 'myframe';
+  const initialLoad = new Promise(resolve => iframe.onload = resolve);
+  document.body.appendChild(iframe);
+  await initialLoad;
+
+  const form = document.createElement('form');
+  form.target = iframe.name;
+  form.action = 'resources/form.html';
+  document.body.appendChild(form);
+
+  const loads = [];
+  const formLoaded = new Promise(resolve => {
+    iframe.onload = t.step_func(() => {
+      const doc = iframe.contentDocument;
+      if (doc.getElementById('result')) {
+        loads.push('result');
+        return;
+      }
+      loads.push(doc.location.pathname);
+      resolve();
+    });
+  });
+
+  window.onmessage = t.step_func(e => {
+    if (e.data === 'evaluated') {
+      form.submit();
+    }
+  });
+  iframe.src = "javascript:parent.postMessage('evaluated', '*'), '<p id=result>result</p>'";
+
+  await formLoaded;
+  assert_array_equals(loads, [
+    'result',
+    '/html/semantics/forms/form-submission-0/resources/form.html',
+  ]);
+}, 'A form submission after a javascript: URL has been evaluated does not cancel its result document.');
+</script>
