@@ -66,9 +66,11 @@ async function run_test() {
     status = gfxInfo.getFeatureStatusStr("DIRECT3D_9_LAYERS");
     Assert.equal(status, "STATUS_OK");
 
+    // nsIGfxInfo::FEATURE_BLOCKED_DRIVER_VERSION, which isn't exposed to JS.
+    const FEATURE_BLOCKED_DRIVER_VERSION = 3;
     Assert.equal(
-      Services.prefs.getIntPref("gfx.blacklist.dx_nv12"),
-      "BLOCKED_DRIVER_VERSION"
+      Services.prefs.getIntPref("gfx.blacklist.dx.nv12"),
+      FEATURE_BLOCKED_DRIVER_VERSION
     );
 
     Services.obs.removeObserver(blocklistAdded, "blocklist-data-gfxItems");
@@ -110,7 +112,7 @@ async function run_test() {
 
     var exists = false;
     try {
-      Services.prefs.getIntPref("gfx.blacklist.dx_nv12");
+      Services.prefs.getIntPref("gfx.blacklist.dx.nv12");
       exists = true;
     } catch (e) {}
 
