@@ -52,6 +52,11 @@ class WebGPUParent final : public PWebGPUParent, public SupportsWeakPtr {
                               ipc::ByteBuf&& aSerializedMessages,
                               nsTArray<ipc::ByteBuf>&& aDataBuffers,
                               nsTArray<MutableSharedMemoryHandle>&& aShmems);
+  ipc::IPCResult RecvPing(PingResolver&& aResolver) {
+    aResolver(void_t{});
+    return IPC_OK();
+  }
+  ipc::IPCResult RecvSyncPing() { return IPC_OK(); }
   ipc::IPCResult RecvCreateExternalTextureSource(
       RawId aDeviceId, RawId aQueueId, RawId aExternalTextureSourceId,
       const ExternalTextureSourceDescriptor& aDesc);

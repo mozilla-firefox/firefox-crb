@@ -6318,6 +6318,25 @@
 #endif
   mirror: always
 
+# Limits on how far WebGPUChild may get ahead of WebGPUParent, in messages,
+# handles or megabytes, not yet known to have been processed.  When any of the
+# three limits is exceeded, the content thread blocks until the parent catches
+# up.  Zero disables a limit.
+- name: dom.webgpu.ipc-congestion-check.max-unacked-flushes
+  type: RelaxedAtomicUint32
+  value: 16
+  mirror: always
+
+- name: dom.webgpu.ipc-congestion-check.max-unacked-handles
+  type: RelaxedAtomicUint32
+  value: 2048
+  mirror: always
+
+- name: dom.webgpu.ipc-congestion-check.max-unacked-megabytes
+  type: RelaxedAtomicUint32
+  value: 128
+  mirror: always
+
 # Is WebGPU allowed to run in the parent process? This should be false if
 # on a platform that supports the GPU process, else true.
 - name: dom.webgpu.allow-in-parent

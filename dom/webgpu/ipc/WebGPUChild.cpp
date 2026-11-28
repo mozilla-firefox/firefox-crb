@@ -4,6 +4,7 @@
 
 #include "WebGPUChild.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "Adapter.h"
@@ -14,7 +15,10 @@
 #include "SupportedLimits.h"
 #include "js/Warnings.h"  // JS::WarnUTF8
 #include "mozilla/Assertions.h"
+#include "mozilla/Logging.h"
 #include "mozilla/ProfilerMarkers.h"
+#include "mozilla/StaticPrefs_dom.h"
+#include "mozilla/TimeStamp.h"
 #include "mozilla/dom/GPUUncapturedErrorEvent.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/ScriptSettings.h"
@@ -30,6 +34,8 @@
 #include "mozilla/webgpu/ffi/wgpu.h"
 
 namespace mozilla::webgpu {
+
+static LazyLogModule gWebGPUCongestionLog("WebGPUCongestion");
 
 void WebGPUChild::JsWarning(nsIGlobalObject* aGlobal,
                             const nsACString& aMessage) {
@@ -334,6 +340,15 @@ void WebGPUChild::SendSerializedMessages(uint32_t aNrOfMessages,
   PROFILER_MARKER_FMT("WebGPU: SendSerializedMessages", GRAPHICS_WebGPU, {},
                       "messages: {}", aNrOfMessages);
 
+  uint64_t bytes = aSerializedMessages.mLen;
+  for (const auto& bb : mQueuedDataBuffers) {
+    bytes += bb.mLen;
+  }
+  for (const auto& handle : mQueuedHandles) {
+    bytes += handle.Size();
+  }
+  const uint64_t handles = mQueuedHandles.Length();
+
   bool sent =
       SendMessages(aNrOfMessages, std::move(aSerializedMessages),
                    std::move(mQueuedDataBuffers), std::move(mQueuedHandles));
@@ -342,7 +357,78 @@ void WebGPUChild::SendSerializedMessages(uint32_t aNrOfMessages,
 
   if (!sent) {
     ClearActorState();
+    return;
   }
+
+  mSentTotals.flushes += 1;
+  mSentTotals.handles += handles;
+  mSentTotals.bytes += bytes;
+  CheckForCongestion();
+}
+
+void WebGPUChild::CheckForCongestion() {
+  const uint64_t maxFlushes =
+      StaticPrefs::dom_webgpu_ipc_congestion_check_max_unacked_flushes();
+  const uint64_t maxHandles =
+      StaticPrefs::dom_webgpu_ipc_congestion_check_max_unacked_handles();
+  const uint64_t maxBytes =
+      uint64_t(
+          StaticPrefs::dom_webgpu_ipc_congestion_check_max_unacked_megabytes())
+      << 20;
+  // If all three prefs are set to zero, congestion checking is disabled.
+  if (!maxFlushes && !maxHandles && !maxBytes) {
+    return;
+  }
+
+  const uint64_t flushes = mSentTotals.flushes - mAckedTotals.flushes;
+  const uint64_t handles = mSentTotals.handles - mAckedTotals.handles;
+  const uint64_t bytes = mSentTotals.bytes - mAckedTotals.bytes;
+
+  const auto exceeds = [](uint64_t aValue, uint64_t aLimit) {
+    return aLimit && aValue > aLimit;
+  };
+  if (exceeds(flushes, maxFlushes) || exceeds(handles, maxHandles) ||
+      exceeds(bytes, maxBytes)) {
+    const auto start = TimeStamp::Now();
+    {
+      AUTO_PROFILER_MARKER_UNTYPED("WebGPU: SyncPing", GRAPHICS_WebGPU, {});
+      if (!SendSyncPing()) {
+        return;
+      }
+    }
+    MOZ_LOG(gWebGPUCongestionLog, LogLevel::Info,
+            ("SyncPing: %" PRIu64 " flushes, %" PRIu64 " handles, %" PRIu64
+             " bytes unacked; blocked %.1f ms",
+             flushes, handles, bytes,
+             (TimeStamp::Now() - start).ToMilliseconds()));
+    mAckedTotals = mSentTotals;
+    return;
+  }
+
+  // Like WebGLChild, start an asynchronous check well before the limit.
+  const auto early = [](uint64_t aLimit) {
+    return aLimit ? std::max<uint64_t>(aLimit / 4, 1) : 0;
+  };
+  if (mCongestionPingInFlight || (!exceeds(flushes, early(maxFlushes)) &&
+                                  !exceeds(handles, early(maxHandles)) &&
+                                  !exceeds(bytes, early(maxBytes)))) {
+    return;
+  }
+
+  mCongestionPingInFlight = true;
+  RefPtr<WebGPUChild> self = this;
+  const CongestionTotals sentAtPing = mSentTotals;
+  SendPing(
+      [self, sentAtPing](const void_t&) {
+        self->mCongestionPingInFlight = false;
+        auto& acked = self->mAckedTotals;
+        acked.flushes = std::max(acked.flushes, sentAtPing.flushes);
+        acked.handles = std::max(acked.handles, sentAtPing.handles);
+        acked.bytes = std::max(acked.bytes, sentAtPing.bytes);
+      },
+      [self](ipc::ResponseRejectReason) {
+        self->mCongestionPingInFlight = false;
+      });
 }
 
 void WebGPUChild::HandleUncapturedError(RawId aDeviceId,

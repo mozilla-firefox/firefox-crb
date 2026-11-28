@@ -5,6 +5,7 @@
 using mozilla::webgpu::RawId from "mozilla/webgpu/WebGPUTypes.h";
 using mozilla::webgpu::ExternalTextureSourceDescriptor from "mozilla/webgpu/WebGPUTypes.h";
 [MoveOnly] using mozilla::ipc::MutableSharedMemoryHandle from "mozilla/ipc/SharedMemoryHandle.h";
+using mozilla::void_t from "mozilla/ipc/IPCCore.h";
 
 include "mozilla/ipc/ByteBufUtils.h";
 include "mozilla/layers/LayersMessageUtils.h";
@@ -19,12 +20,16 @@ namespace webgpu {
  * command from the content process, and a WebGPUParent in the compositor
  * process that runs the commands.
  */
-async protocol PWebGPU
+sync protocol PWebGPU
 {
   manager PCanvasManager;
 
 parent:
   async Messages(uint32_t nrOfMessages, ByteBuf serializedMessages, ByteBuf[] dataBuffers, MutableSharedMemoryHandle[] shmems);
+
+  // Used by WebGPUChild to detect and throttle a backlog of Messages.
+  async Ping() returns (void_t ok);
+  sync SyncPing();
 
   // Ideally this would be sent in Messages(), but we need to implement
   // SurfaceDescriptor serialization first.

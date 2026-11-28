@@ -148,6 +148,23 @@ class WebGPUChild final : public PWebGPUChild {
   nsTArray<ipc::ByteBuf> mQueuedDataBuffers;
   nsTArray<ipc::MutableSharedMemoryHandle> mQueuedHandles;
 
+  /// IPC congestion control for `Messages`, similar to
+  /// `WebGLChild::FlushPendingCmds`.  Totals of what has been sent, and of what
+  /// the parent is known to have processed, as of the last `Ping` reply or
+  /// `SyncPing`.  If the difference grows too large we block on `SyncPing`
+  /// until the parent catches up, so that a parent which can't keep up (e.g.
+  /// because the GPU is saturated) doesn't accumulate an unbounded backlog of
+  /// messages.
+  struct CongestionTotals {
+    uint64_t flushes = 0;
+    uint64_t handles = 0;
+    uint64_t bytes = 0;
+  };
+  CongestionTotals mSentTotals;
+  CongestionTotals mAckedTotals;
+  bool mCongestionPingInFlight = false;
+  void CheckForCongestion();
+
   std::deque<PendingRequestAdapterPromise> mPendingRequestAdapterPromises;
   std::deque<PendingRequestDevicePromise> mPendingRequestDevicePromises;
   std::unordered_map<RawId, RefPtr<dom::Promise>> mPendingDeviceLostPromises;
