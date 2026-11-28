@@ -55,7 +55,7 @@ add_task(async function test_network_markers_early_cancel() {
       type: "Network",
       status: "STATUS_CANCEL",
       URI: url,
-      classOfService: "UrgentStart",
+      classOfService: NAVIGATION_CLASS_OF_SERVICE,
       requestStatus: "NS_BINDING_ABORTED",
       requestMethod: "GET",
       contentType: null,
