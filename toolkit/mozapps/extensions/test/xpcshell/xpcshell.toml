@@ -46,10 +46,7 @@ run-if = [
 
 ["test_ModelHubProvider.js"]
 run-if = [
-  "appname != 'thunderbird'", # Disabled in extensions.manifest
-]
-skip-if = [
-  "os == 'android'", # ModelHubProvider.sys.mjs is not included on Android
+  "os != 'android' && appname != 'thunderbird'", # Android: ModelHubProvider.sys.mjs is not included. Thunderbird: disabled in extensions.manifest.
 ]
 
 ["test_ProductAddonChecker.js"]
@@ -78,8 +75,8 @@ skip-if = [
 ["test_addons_glean_ping.js"]
 
 ["test_amo_stats_telemetry.js"]
-skip-if = [
-  "os == 'android'", # bug 1866520 - missing Glean version of stats telemetry
+run-if = [
+  "os != 'android'", # bug 1866520 - missing Glean version of stats telemetry
 ]
 
 ["test_aom_startup.js"]
@@ -159,9 +156,8 @@ tags = "webextensions"
 ["test_getInstallSourceFromHost.js"]
 
 ["test_gmpProvider.js"]
-skip-if = [
-  "appname != 'firefox'",
-  "os == 'android'", # GMPProvider.sys.mjs is not included on Android
+run-if = [
+  "os != 'android' && appname == 'firefox'", # Android: GMPProvider.sys.mjs is not included. GMPProvider is Firefox only.
 ]
 
 ["test_harness.js"]
@@ -220,15 +216,12 @@ head = "head_addons.js head_compat.js"
 
 ["test_proxies.js"]
 run-if = [
-  "os != 'android'", # Fails due to missing /bin/ln; extension proxy files are not used on Android.
-]
-skip-if = [
-  "require_signing",
+  "os != 'android' && !require_signing", # Android: fails due to missing /bin/ln, extension proxy files are not used there. Otherwise requires unsigned add-ons to be allowed.
 ]
 
 ["test_recommendations.js"]
-skip-if = [
-  "require_signing",
+run-if = [
+  "!require_signing",
 ]
 
 ["test_recordException.js"]
@@ -259,8 +252,8 @@ tags = "webextensions"
 ["test_shutdown.js"]
 
 ["test_shutdown_barriers.js"]
-skip-if = [
-  "os == 'android'",
+run-if = [
+  "os != 'android'", # Fails in GeckoViewWebExtension on Android (extension is undefined).
 ]
 
 ["test_shutdown_early.js"]
@@ -297,8 +290,8 @@ run-if = [
 ["test_signed_long.js"]
 
 ["test_signed_updatepref.js"]
-skip-if = [
-  "require_signing",
+run-if = [
+  "!require_signing",
 ]
 
 ["test_signed_verify.js"]
@@ -306,9 +299,8 @@ skip-if = [
 ["test_signed_verify_timer.js"]
 
 ["test_sitePermsAddonProvider.js"]
-skip-if = [
-  "appname == 'thunderbird'", # Disabled in extensions.manifest
-  "os == 'android'", # bug 1790084: SitePermsAddonProvider.sys.mjs not included yet on Android
+run-if = [
+  "os != 'android' && appname != 'thunderbird'", # Android: bug 1790084, SitePermsAddonProvider.sys.mjs not included yet. Thunderbird: disabled in extensions.manifest.
 ]
 
 ["test_startup.js"]
@@ -484,20 +476,20 @@ tags = "webextensions"
 
 ["test_webextension_langpack.js"]
 tags = "webextensions"
-skip-if = [
-  "os == 'android'", # Non-extension add-ons are not supported on Android, but test installs langpack.
+run-if = [
+  "os != 'android'", # Non-extension add-ons are not supported on Android, but test installs langpack.
 ]
 
 ["test_webextension_langpack_update_locales.js"]
 tags = "webextensions"
-skip-if = [
-  "os == 'android'", # Non-extension add-ons are not supported on Android, but test installs langpack.
+run-if = [
+  "os != 'android'", # Non-extension add-ons are not supported on Android, but test installs langpack.
 ]
 
 ["test_webextension_theme.js"]
 tags = "webextensions"
-skip-if = [
-  "os == 'android'", # Non-extension add-ons are not supported on Android, but test installs static theme.
+run-if = [
+  "os != 'android'", # Non-extension add-ons are not supported on Android, but test installs static theme.
 ]
 
 ["test_xpi_relocated_location.js"]
