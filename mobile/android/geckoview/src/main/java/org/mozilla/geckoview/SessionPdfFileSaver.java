@@ -117,7 +117,7 @@ public final class SessionPdfFileSaver {
                 }
               });
     } catch (final Exception e) {
-      Log.d(LOGTAG, e.getMessage());
+      Log.w(LOGTAG, "Failed to create the PDF download response", e);
       return null;
     }
   }
