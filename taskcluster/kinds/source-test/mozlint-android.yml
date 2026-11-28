@@ -119,6 +119,7 @@ lints:
             - 'mobile/android/test_runner/**'
             - 'third_party/libwebrtc/rtc_base/java/**'
             - 'third_party/libwebrtc/sdk/android/**'
+            - 'third_party/libwebrtc/lint.xml'
             # Build stuff.
             - 'config/milestone.txt'
             - 'build.gradle'
