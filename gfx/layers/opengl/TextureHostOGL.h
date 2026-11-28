@@ -417,7 +417,7 @@ class SurfaceTextureHost : public TextureHost {
 class AndroidHardwareBufferTextureSource : public TextureSource,
                                            public TextureSourceOGL {
  public:
-  AndroidHardwareBufferTextureSource(
+  static already_AddRefed<AndroidHardwareBufferTextureSource> Create(
       TextureSourceProvider* aProvider,
       AndroidHardwareBuffer* aAndroidHardwareBuffer, gfx::SurfaceFormat aFormat,
       GLenum aWrapMode, gfx::IntSize aSize);
@@ -443,8 +443,12 @@ class AndroidHardwareBufferTextureSource : public TextureSource,
 
   gl::GLContext* gl() const { return mGL; }
 
- protected:
-  virtual ~AndroidHardwareBufferTextureSource();
+ private:
+  AndroidHardwareBufferTextureSource(
+      TextureSourceProvider* aProvider,
+      AndroidHardwareBuffer* aAndroidHardwareBuffer, gfx::SurfaceFormat aFormat,
+      GLenum aWrapMode, gfx::IntSize aSize);
+  ~AndroidHardwareBufferTextureSource() override;
 
   bool EnsureEGLImage();
   void DestroyEGLImage();
