@@ -119,6 +119,7 @@ lints:
             - 'mobile/android/test_runner/**'
             - 'third_party/libwebrtc/rtc_base/java/**'
             - 'third_party/libwebrtc/sdk/android/**'
+            - 'third_party/libwebrtc/lint.xml'
             # Build stuff.
             - 'config/milestone.txt'
             - 'build.gradle'
@@ -127,7 +128,7 @@ lints:
             - 'gradle/**'
             - 'gradlew'
             - 'gradlew.bat'
-            - 'mobile/android/shared-lint.xml'
+            - 'mobile/android/lint.xml'
             - 'mobile/android/shared-settings.gradle'
             - 'mobile/android/android-components/.buildconfig.yml'
             - 'mobile/android/android-components/.config.yml'
@@ -190,7 +191,7 @@ fenix:
             - 'mobile/android/config/**'
             - 'mobile/android/gradle.configure'
             - 'mobile/android/**/moz.build'
-            - 'mobile/android/shared-lint.xml'
+            - 'mobile/android/lint.xml'
             - 'mobile/android/gradle.py'
             - 'mobile/android/mach_commands.py'
             # Other misc lint related files.
@@ -239,7 +240,7 @@ focus:
             - 'mobile/android/config/**'
             - 'mobile/android/gradle.configure'
             - 'mobile/android/**/moz.build'
-            - 'mobile/android/shared-lint.xml'
+            - 'mobile/android/lint.xml'
             - 'mobile/android/gradle.py'
             - 'mobile/android/mach_commands.py'
             # Other misc lint related files.
@@ -317,6 +318,7 @@ android-components:
             - 'gradle/**'
             - 'gradlew'
             - 'gradlew.bat'
+            - 'mobile/android/lint.xml'
             - 'mobile/android/shared-settings.gradle'
             - 'mobile/android/annotations/build.gradle'
             - 'mobile/android/geckoview/build.gradle'
