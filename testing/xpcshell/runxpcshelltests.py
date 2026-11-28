@@ -259,10 +259,6 @@ class XPCShellTestThread(Thread):
     def run(self):
         try:
             self.run_test()
-        except PermissionError as e:
-            self.infra = True
-            self.exception = e
-            self.traceback = traceback.format_exc()
         except Exception as e:
             self.exception = e
             self.traceback = traceback.format_exc()
@@ -1184,15 +1180,25 @@ class XPCShellTestThread(Thread):
                 self.logCommand(name, self.command, test_dir)
 
             launch_time = time.monotonic()
-            proc = self.launchProcess(
-                self.command,
-                stdout=self.pStdout,
-                stderr=self.pStderr,
-                env=self.env,
-                cwd=test_dir,
-                timeout=testTimeoutInterval,
-                test_name=name,
-            )
+            try:
+                proc = self.launchProcess(
+                    self.command,
+                    stdout=self.pStdout,
+                    stderr=self.pStderr,
+                    env=self.env,
+                    cwd=test_dir,
+                    timeout=testTimeoutInterval,
+                    test_name=name,
+                )
+            except OSError:
+                # Retrying a test whose process can't be launched can't help.
+                self.infra = True
+                self.retry = False
+                with self.lock:
+                    if self.timer:
+                        self.timer.cancel()
+                        self.timer = None
+                raise
 
             if hasattr(proc, "pid"):
                 self.proc_ident = proc.pid
@@ -2732,7 +2738,7 @@ class XPCShellTests:
         # tests in the queue at most threadCount at a time
         running_tests = set()
         keep_going = True
-        infra_abort = False
+        infra_failure = None
         exceptions = []
         tracebacks = []
         self.try_again_list = []
@@ -2806,7 +2812,8 @@ class XPCShellTests:
                         # we won't add any more tests, will just wait for
                         # the currently running ones to finish
                         keep_going = False
-                    infra_abort = infra_abort and test.infra
+                    if test.infra:
+                        infra_failure = test
                     keep_going = keep_going and test.keep_going
                     self.addTestResults(test)
 
@@ -2817,10 +2824,7 @@ class XPCShellTests:
         if parallel_group_started:
             self.log.group_end(name="parallel")
 
-        if infra_abort:
-            return TBPL_RETRY  # terminate early
-
-        if keep_going:
+        if keep_going and not infra_failure:
             # run the other tests sequentially
             if sequential_tests:
                 self.log.group_start(name="sequential")
@@ -2842,6 +2846,9 @@ class XPCShellTests:
                     test.log_full_output(mark_failures_as_expected=True)
                     continue
                 self.addTestResults(test)
+                if test.infra:
+                    infra_failure = test
+                    break
                 # did the test encounter any exception?
                 if test.exception:
                     exceptions.append(test.exception)
@@ -2853,14 +2860,15 @@ class XPCShellTests:
                 self.log.group_end(name="sequential")
 
         # retry tests that failed when run in parallel
-        if self.try_again_list:
+        retry_list = [] if infra_failure else self.try_again_list
+        if retry_list:
             self.log.info("Retrying tests that failed when run in parallel.")
             self.log.group_start(name="retry")
 
         try_again_kwargs = kwargs.copy()
         try_again_kwargs["retry"] = False
         try_again_kwargs["is_retry"] = True
-        for test_object in self.try_again_list:
+        for test_object in retry_list:
             test = testClass(
                 test_object,
                 verbose=self.verbose,
@@ -2871,6 +2879,9 @@ class XPCShellTests:
             self.join_test(test)
             self.test_ended(test)
             self.addTestResults(test)
+            if test.infra:
+                infra_failure = test
+                break
             # did the test encounter any exception?
             if test.exception:
                 exceptions.append(test.exception)
@@ -2878,7 +2889,7 @@ class XPCShellTests:
                 break
             keep_going = test.keep_going
 
-        if self.try_again_list:
+        if retry_list:
             self.log.group_end(name="retry")
 
         # restore default SIGINT behaviour
@@ -2894,6 +2905,18 @@ class XPCShellTests:
                 shutil.rmtree(directory)
             except Exception:
                 self.log.info("%s could not be cleaned up." % directory)
+
+        if infra_failure:
+            # mozharness only marks the task for retry when it sees "INFRA-ERROR";
+            # outside automation nothing retries, so the launch failure is a failure.
+            in_automation = os.environ.get("MOZ_AUTOMATION") == "1"
+            prefix = "INFRA-ERROR" if in_automation else "TEST-UNEXPECTED-FAIL"
+            self.log.error(
+                f"{prefix} | {infra_failure.test_object['id']} | "
+                f"Failed to launch xpcshell: {infra_failure.exception}"
+            )
+            self.log.info(infra_failure.traceback)
+            return TBPL_RETRY if in_automation else False
 
         if exceptions:
             self.log.info("Following exceptions were raised:")
