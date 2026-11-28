@@ -3,9 +3,8 @@
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
-<!-- Shared Android lint rules for the Fenix, Focus and GeckoView Example applications. Referenced
-     explicitly through `lintConfig` in each app's build.gradle rather than being named lint.xml, so
-     that it is never picked up implicitly by another project through lint's directory hierarchy. -->
+<!-- Android lint rules for every project under mobile/android, which lint finds through its directory
+     hierarchy. -->
 <lint>
     <!-- Lints that don't apply to our translation process -->
     <issue id="MissingTranslation" severity="ignore" />
@@ -25,7 +24,9 @@
     <issue id="TypographyFractions">
         <ignore path="**/values-*/strings.xml" />
     </issue>
+    <!-- GeckoView Example is not localized. -->
     <issue id="BrandUsage" severity="error">
+        <ignore regexp="geckoview_example/" />
         <ignore path="**/values-*/strings.xml" />
         <ignore path="**/values/*_strings.xml" />
         <ignore path="**/values/app.xml" />
@@ -41,11 +42,14 @@
         <ignore path="**/values-*/strings.xml" />
     </issue>
     <issue id="BlankString" severity="error">
+        <ignore regexp="geckoview_example/" />
         <ignore path="**/values/*_strings.xml" />
     </issue>
     <issue id="PlaceholderComment" severity="error">
+        <ignore regexp="geckoview_example/" />
         <ignore path="**/values-*/strings.xml" />
         <ignore path="**/values/*_strings.xml" />
+        <ignore path="**/samples/**/values/strings.xml" />
     </issue>
     <issue id="Typos" severity="error">
         <ignore path="**/values-*/strings.xml" />
@@ -83,6 +87,8 @@
         <!-- Localized strings are removed by the l10n import a while after the string is removed from
              the default strings.xml, so the localized files temporarily hold unreferenced strings. -->
         <ignore path="**/values-*/strings.xml" />
+        <!-- android-components resources are used by apps lint does not see (bug 1795427). -->
+        <ignore regexp="android-components/" />
     </issue>
     <issue id="UseCompoundDrawables" severity="error" />
     <issue id="Overdraw" severity="error" />

@@ -17,6 +17,7 @@ android-ac:
         - 'gradlew.bat'
         - 'mobile/android/shared-settings.gradle'
         - 'mobile/android/version.txt'
+        - 'mobile/android/lint.xml'
         - 'mobile/android/gradle/**'
         - 'mobile/android/android-components/**'
         - 'mobile/android/fenix/plugins/**'
