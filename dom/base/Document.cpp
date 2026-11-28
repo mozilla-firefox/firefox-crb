@@ -4603,6 +4603,9 @@ void Document::StopDocumentLoad() {
   if (mParser) {
     mParserAborted = true;
     mParser->Terminate();
+    if (StaticPrefs::docshell_navigation_new_load_group()) {
+      DisallowBFCaching(BFCacheStatus::PARSER_ABORTED);
+    }
   }
 }
 

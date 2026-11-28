@@ -138,6 +138,12 @@ class nsDocLoader : public nsIDocumentLoader,
   void FireOnLocationChange(nsIWebProgress* aWebProgress, nsIRequest* aRequest,
                             nsIURI* aUri, uint32_t aFlags);
 
+  // Swap the outgoing loadgroup back to the doc loader's active one, for a
+  // navigation that never used its group. Unlike CancelNavigationLoadGroup,
+  // this doesn't cancel the group, which would also cancel the tail-blocked
+  // requests of the request context both groups share.
+  void RevertNavigationLoadGroup();
+
  protected:
   explicit nsDocLoader(bool aNotifyAboutBackgroundRequests);
   virtual ~nsDocLoader();
@@ -150,6 +156,22 @@ class nsDocLoader : public nsIDocumentLoader,
   already_AddRefed<nsILoadGroup> CreateLoadGroup(uint64_t aRequestContextId);
 
   bool IsBusy();
+
+  // With docshell.navigation.new_load_group, a navigation loads in a load
+  // group of its own. BeginNavigationLoadGroup makes a new group mLoadGroup,
+  // and keeps the active document's group, where that document's requests go
+  // on loading, in mOutgoingLoadGroup. If the navigation commits,
+  // CommitNavigationLoadGroup cancels the outgoing group. If it ends without
+  // committing, the outgoing group becomes mLoadGroup again.
+  bool BeginNavigationLoadGroup(uint64_t aRequestContextId);
+  void CommitNavigationLoadGroup();
+
+  // Ends a pending navigation by cancelling its load group.
+  void CancelNavigationLoadGroup();
+
+  bool HasPendingNavigationLoadGroup() const { return !!mOutgoingLoadGroup; }
+
+  static bool HasRequests(nsILoadGroup* aLoadGroup);
 
   void SetBackgroundLoadIframe();
 
@@ -239,6 +261,10 @@ class nsDocLoader : public nsIDocumentLoader,
       bool aFlushLayout,
       const mozilla::Maybe<nsresult>& aOverrideStatus = mozilla::Nothing());
 
+  // A navigation is about to replace the active document while it is still
+  // loading. End that load now as aborted, not firing its load event.
+  MOZ_CAN_RUN_SCRIPT void AbortActiveDocumentLoad();
+
  protected:
   struct nsStatusInfo : public mozilla::LinkedListElement<nsStatusInfo> {
     nsString mStatusMessage;
@@ -286,6 +312,10 @@ class nsDocLoader : public nsIDocumentLoader,
 
   nsCOMPtr<nsILoadGroup> mLoadGroup;
 
+  // The active document's load group while a navigation is pending, see
+  // BeginNavigationLoadGroup.
+  nsCOMPtr<nsILoadGroup> mOutgoingLoadGroup;
+
   // We hold weak refs to all our kids
   nsTObserverArray<nsDocLoader*> mChildList;
 
@@ -323,6 +353,18 @@ class nsDocLoader : public nsIDocumentLoader,
      been called then IsBusy should return false even if we are still
      flushing. */
   bool mIsFlushingLayout;
+
+  // Set while AbortActiveDocumentLoad ends the active document's load, whose
+  // requests are still pending.
+  bool mAbortingActiveDocumentLoad = false;
+
+  // Approximates https://html.spec.whatwg.org/#delaying-load-events-mode.
+  // The spec sets it for the whole navigation and only clears it in
+  // finalize a cross-document navigation. Here it's only set when
+  // AbortActiveDocumentLoad ends a load the parent was waiting on, since
+  // otherwise the navigation's own document load keeps the parent busy, and
+  // it's also cleared when the navigation ends without committing.
+  bool mIsDelayingLoadEvents = false;
 
  private:
   /**
@@ -371,6 +413,14 @@ class nsDocLoader : public nsIDocumentLoader,
     return mIsLoadingDocument || mDocumentOpenedButNotLoaded ||
            mIsLoadingJavascriptURI;
   }
+
+  // Makes mOutgoingLoadGroup mLoadGroup again. Returns the navigation's group,
+  // or null if there was no pending navigation.
+  nsCOMPtr<nsILoadGroup> RestoreOutgoingLoadGroup();
+
+  // Tells a parent kept waiting by mIsDelayingLoadEvents that the navigation
+  // ended without loading anything.
+  void StopDelayingLoadEvents();
 
   static mozilla::Maybe<nsLiteralCString> StatusCodeToL10nId(nsresult aStatus);
 };

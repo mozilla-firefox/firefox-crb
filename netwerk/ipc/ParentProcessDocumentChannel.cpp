@@ -4,6 +4,7 @@
 
 #include "ParentProcessDocumentChannel.h"
 
+#include "mozilla/StaticPrefs_docshell.h"
 #include "mozilla/StaticPrefs_extensions.h"
 #include "mozilla/extensions/StreamFilterParent.h"
 #include "mozilla/net/ParentChannelWrapper.h"
@@ -111,7 +112,24 @@ ParentProcessDocumentChannel::OnRedirectVerifyCallback(nsresult aResult) {
     aResult = NS_ERROR_ABORT;
   } else {
     const nsCOMPtr<nsIChannel> channel = mDocumentLoadListener->GetChannel();
-    mLoadGroup->AddRequest(channel, nullptr);
+    nsCOMPtr<nsILoadGroup> loadGroup = mLoadGroup;
+    if (!mLoadState->FileName().IsVoid()) {
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=2089000
+      if (RefPtr<nsDocShell> docShell = GetDocShell()) {
+        auto result = docShell->StartNavigationForDownloadTurnedDocument(
+            channel, mLoadState->LoadType());
+        if (result.isErr()) {
+          aResult = result.unwrapErr();
+          Cancel(aResult);
+          mPromise.Resolve(aResult, __func__);
+          return NS_OK;
+        }
+        if (result.inspect()) {
+          loadGroup = result.inspect();
+        }
+      }
+    }
+    loadGroup->AddRequest(channel, nullptr);
     // Adding the channel to the loadgroup could have triggered a status
     // change with an observer being called destroying the docShell, resulting
     // in the PPDC to be canceled.
@@ -193,7 +211,13 @@ NS_IMETHODIMP ParentProcessDocumentChannel::AsyncOpen(
   }
 
   mListener = aListener;
-  if (mLoadGroup) {
+  // As in DocumentChannelChild::AsyncOpen, a known download is not a document
+  // load. In the load group it would be cancelled when a pending navigation
+  // commits.
+  const bool isKnownDownload =
+      StaticPrefs::docshell_navigation_new_load_group() &&
+      !mLoadState->FileName().IsVoid();
+  if (mLoadGroup && !isKnownDownload) {
     mLoadGroup->AddRequest(this, nullptr);
   }
 
@@ -263,8 +287,10 @@ NS_IMETHODIMP ParentProcessDocumentChannel::CancelWithReason(
 
   mCanceled = true;
   // This will force the DocumentListener to abort the promise if there's one
-  // pending.
-  mDocumentLoadListener->Cancel(aStatusCode, aReason);
+  // pending. There is none if AsyncOpen was never called or failed.
+  if (mDocumentLoadListener) {
+    mDocumentLoadListener->Cancel(aStatusCode, aReason);
+  }
 
   return NS_OK;
 }
