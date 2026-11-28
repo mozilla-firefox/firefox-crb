@@ -1505,6 +1505,8 @@ public class GeckoAppShell {
     return getApplicationContext().getPackageResourcePath();
   }
 
+  // Logs in release builds on purpose, to help read users' logs.
+  @SuppressLint("LogConditional")
   @WrapForJNI(calledFrom = "any")
   public static void setCommunicationAudioModeOn(final boolean on) {
     final AudioManager am =

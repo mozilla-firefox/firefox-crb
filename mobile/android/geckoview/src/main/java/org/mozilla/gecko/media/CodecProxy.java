@@ -446,8 +446,12 @@ public final class CodecProxy {
     } catch (final NullPointerException npe) {
       // Sometimes NPE happens when unmarshalling IPC reply, but it's fine because
       // releasing/rendering has been done remotely already.
-      Log.d(
-          LOGTAG, "ignore NPE when " + (render ? "render" : "release") + " output: " + sample, npe);
+      if (DEBUG) {
+        Log.d(
+            LOGTAG,
+            "ignore NPE when " + (render ? "render" : "release") + " output: " + sample,
+            npe);
+      }
     }
     sample.dispose();
 
