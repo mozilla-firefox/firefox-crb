@@ -210,6 +210,17 @@ jobs:
       when:
           - {hour: 3, minute: 0}
 
+    - name: linux64-libcxx
+      job:
+          type: decision-task
+          treeherder-symbol: linux64-libcxx
+          target-tasks-method: linux64_libcxx
+          optimize-target-tasks: false
+      run-on-projects:
+          - mozilla-central
+      when:
+          - {hour: 3, minute: 0}
+
     - name: updatebot-cron-job
       job:
           type: decision-task

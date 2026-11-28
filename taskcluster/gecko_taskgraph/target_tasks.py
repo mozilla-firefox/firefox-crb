@@ -1339,6 +1339,12 @@ def target_tasks_linux64_mold_debug(full_task_graph, parameters, graph_config):
     return ["build-linux64-mold/debug"]
 
 
+@register_target_task("linux64_libcxx")
+def target_tasks_linux64_libcxx(full_task_graph, parameters, graph_config):
+    """Select the linux64 debug build against libc++"""
+    return ["build-linux64-plain-libcxx/debug"]
+
+
 # Run Updatebot's cron job 4 times daily.
 @register_target_task("updatebot_cron")
 def target_tasks_updatebot_cron(full_task_graph, parameters, graph_config):
