@@ -512,8 +512,7 @@ void CanvasChild::EndTransaction() {
   // flush our external surface/image references, to ensure they actually get
   // freed on a timely basis.
   if (mRecorder) {
-    mRecorder->ClearProcessedExternalSurfaces();
-    mRecorder->ClearProcessedExternalImages();
+    mRecorder->ClearProcessedExternalResources();
   }
 
   ++mTransactionsSinceGetDataSurface;
@@ -596,7 +595,7 @@ bool CanvasChild::EnsureDataSurfaceShmem(size_t aSizeRequired) {
   }
 
   if (ShouldGrowDataSurfaceShmem(aSizeRequired)) {
-    if (!mRecorder || mRecorder->HasFailed()) {
+    if (!mRecorder || mRecorder->HasInvalidCurrentBuffer()) {
       return false;
     }
 
@@ -613,7 +612,7 @@ bool CanvasChild::EnsureDataSurfaceShmem(size_t aSizeRequired) {
     // The translator only accepts the new buffer while paused, so we must not
     // send it unless the pause was actually recorded.
     RecordEvent(RecordedPauseTranslation());
-    if (mRecorder->HasFailed()) {
+    if (mRecorder->HasInvalidCurrentBuffer()) {
       return false;
     }
 

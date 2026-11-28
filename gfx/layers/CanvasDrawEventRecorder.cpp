@@ -42,7 +42,7 @@ CanvasDrawEventRecorder::CanvasDrawEventRecorder(
   mMaxDefaultBuffers = StaticPrefs::gfx_canvas_remote_max_default_buffers();
   mMaxSpinCount = StaticPrefs::gfx_canvas_remote_max_spin_count();
   mDropBufferLimit = StaticPrefs::gfx_canvas_remote_drop_buffer_limit();
-  mDropBufferOnZero = mDropBufferLimit;
+  mBufferDropCountdown = mDropBufferLimit;
 }
 
 CanvasDrawEventRecorder::~CanvasDrawEventRecorder() { MOZ_ASSERT(!mWorkerRef); }
@@ -68,9 +68,8 @@ bool CanvasDrawEventRecorder::Init(TextureType aTextureType,
   mHeader->processedCount = 0;
   mHeader->readerState = State::Paused;
 
-  // We always keep at least two buffers. This means that when we
-  // have to add a new buffer, there is at least a full buffer that requires
-  // translating while the handle is sent over.
+  // Send the current buffer first and the spare second. The translator uses
+  // the first handle as its current buffer and queues the second for reuse.
   AutoTArray<ipc::ReadOnlySharedMemoryHandle, 2> bufferHandles;
   auto buffer = CreateAndMapShmem(mDefaultBufferSize);
   if (NS_WARN_IF(buffer.isNothing())) {
@@ -121,8 +120,7 @@ int64_t CanvasDrawEventRecorder::CreateCheckpoint() {
   NS_ASSERT_OWNINGTHREAD(CanvasDrawEventRecorder);
   int64_t checkpoint = mHeader->eventCount;
   RecordEvent(RecordedCheckpoint());
-  ClearProcessedExternalSurfaces();
-  ClearProcessedExternalImages();
+  ClearProcessedExternalResources();
   return checkpoint;
 }
 
@@ -136,16 +134,20 @@ bool CanvasDrawEventRecorder::WaitForCheckpoint(int64_t aCheckpoint) {
     }
   } while (--spinCount != 0);
 
+  // Publish AboutToWait before rechecking the count so the translator waits
+  // for our decision before deciding whether to signal.
   mHeader->writerState = State::AboutToWait;
   if (mHeader->processedCount >= aCheckpoint) {
     mHeader->writerState = State::Processing;
     return true;
   }
 
+  // Publish the target before Waiting so the translator can read it when it
+  // sees that we are waiting.
   mHeader->writerWaitCount = aCheckpoint;
   mHeader->writerState = State::Waiting;
 
-  // Wait unless we detect the reading side has closed.
+  // Use a timed wait to periodically check for reader closure or failure.
   while (!mHelpers->ReaderClosed() && mHeader->readerState != State::Failed) {
     if (mWriterSemaphore->Wait(Some(TimeDuration::FromMilliseconds(100)))) {
       MOZ_ASSERT(mHeader->processedCount >= aCheckpoint);
@@ -174,82 +176,69 @@ gfx::ContiguousBuffer& CanvasDrawEventRecorder::GetContiguousBuffer(
     return mCurrentBuffer;
   }
 
-  // We make sure that our buffer can hold aSize + 1 to ensure we always have
-  // room for the end of buffer event.
-
-  // Check if there is enough room is our current buffer.
+  // Leave one byte for the end-of-buffer event.
   if (mCurrentBuffer.SizeRemaining() > aSize) {
     return mCurrentBuffer;
   }
 
-  bool useRecycledBuffer = false;
-  if (mRecycledBuffers.front().Capacity() > aSize) {
-    // The recycled buffer is big enough, check if it is free.
-    if (mRecycledBuffers.front().eventCount <= mHeader->processedCount) {
-      useRecycledBuffer = true;
-    } else if (mRecycledBuffers.size() >= mMaxDefaultBuffers) {
-      // We've hit he max number of buffers, wait for the next one to be free.
-      // We wait for (eventCount - 1), as we check and signal in the translator
-      // during the play event, before the processedCount has been updated.
-      useRecycledBuffer = true;
-      if (!WaitForCheckpoint(mRecycledBuffers.front().eventCount - 1)) {
-        // The wait failed or we're shutting down, just return an empty buffer.
-        mCurrentBuffer = CanvasBuffer();
-        return mCurrentBuffer;
-      }
-    }
+  if (mRecycledBuffers.front().Capacity() <= aSize) {
+    return AllocateAndSwitchBuffer(aSize);
   }
 
-  if (useRecycledBuffer) {
-    // Only queue default size buffers for recycling.
-    if (mCurrentBuffer.Capacity() == mDefaultBufferSize) {
-      WriteInternalEvent(RECYCLE_BUFFER);
-      mRecycledBuffers.emplace(std::move(mCurrentBuffer.shmem),
-                               mHeader->eventCount);
-    } else {
-      WriteInternalEvent(DROP_BUFFER);
+  const int64_t recycleEventCount = mRecycledBuffers.front().eventCount;
+  const bool canReuseNow = recycleEventCount <= mHeader->processedCount;
+  if (!canReuseNow) {
+    if (mRecycledBuffers.size() < mMaxDefaultBuffers) {
+      return AllocateAndSwitchBuffer(aSize);
     }
 
-    mCurrentBuffer = CanvasBuffer(std::move(mRecycledBuffers.front().shmem));
-    mRecycledBuffers.pop();
-
-    // If we have more than one recycled buffers free a configured number of
-    // times in a row then drop one.
-    if (mRecycledBuffers.size() > 1 &&
-        mRecycledBuffers.front().eventCount < mHeader->processedCount) {
-      if (--mDropBufferOnZero == 0) {
-        WriteInternalEvent(DROP_BUFFER);
-        mCurrentBuffer =
-            CanvasBuffer(std::move(mRecycledBuffers.front().shmem));
-        mRecycledBuffers.pop();
-        mDropBufferOnZero = mDropBufferLimit;
-      }
-    } else {
-      mDropBufferOnZero = mDropBufferLimit;
+    // When replaying RECYCLE_BUFFER, NextBuffer checks whether to signal
+    // before processedCount includes that event. Wait for the preceding count
+    // so this check can wake the writer.
+    if (!WaitForCheckpoint(recycleEventCount - 1)) {
+      mCurrentBuffer = CanvasBuffer();
+      return mCurrentBuffer;
     }
-
-    return mCurrentBuffer;
   }
-
-  // We don't have a buffer free or it is not big enough, so create a new one.
-  WriteInternalEvent(PAUSE_TRANSLATION);
 
   // Only queue default size buffers for recycling.
   if (mCurrentBuffer.Capacity() == mDefaultBufferSize) {
-    mRecycledBuffers.emplace(std::move(mCurrentBuffer.shmem),
-                             mHeader->eventCount);
+    WriteInternalEvent(RECYCLE_BUFFER);
+    QueueCurrentBufferForReuse();
+    SwitchToNextRecycledBuffer();
+  } else {
+    DropCurrentAndSwitchToNextBuffer();
+  }
+
+  // Count reuse switches that leave a spare buffer. Reset the countdown
+  // when a reuse switch leaves no spare.
+  if (!HasSpareRecycledBuffer()) {
+    mBufferDropCountdown = mDropBufferLimit;
+  } else if (--mBufferDropCountdown == 0) {
+    DropCurrentAndSwitchToNextBuffer();
+    mBufferDropCountdown = mDropBufferLimit;
+  }
+
+  return mCurrentBuffer;
+}
+
+gfx::ContiguousBuffer& CanvasDrawEventRecorder::AllocateAndSwitchBuffer(
+    size_t aSize) {
+  // Publish the pause event before sending AddBuffer. The translator must
+  // finish reading this buffer and enter Paused before handling the message.
+  WriteInternalEvent(PAUSE_TRANSLATION);
+
+  // Match the translator's AddBuffer path, which recycles default-sized
+  // buffers.
+  if (mCurrentBuffer.Capacity() == mDefaultBufferSize) {
+    QueueCurrentBufferForReuse();
   }
 
   size_t bufferSize = std::max(mDefaultBufferSize,
                                ipc::shared_memory::PageAlignedSize(aSize + 1));
   auto newBuffer = CreateAndMapShmem(bufferSize);
-  if (NS_WARN_IF(newBuffer.isNothing())) {
-    mHeader->writerState = State::Failed;
-    mCurrentBuffer = CanvasBuffer();
-    return mCurrentBuffer;
-  }
-
-  if (!mHelpers->AddBuffer(std::move(newBuffer->handle).ToReadOnly())) {
+  if (NS_WARN_IF(newBuffer.isNothing()) ||
+      !mHelpers->AddBuffer(std::move(newBuffer->handle).ToReadOnly())) {
     mHeader->writerState = State::Failed;
     mCurrentBuffer = CanvasBuffer();
     return mCurrentBuffer;
@@ -259,19 +248,38 @@ gfx::ContiguousBuffer& CanvasDrawEventRecorder::GetContiguousBuffer(
   return mCurrentBuffer;
 }
 
+void CanvasDrawEventRecorder::DropCurrentAndSwitchToNextBuffer() {
+  // Record the switch in the old buffer so the translator can advance to the
+  // same queued buffer without recycling the old one.
+  WriteInternalEvent(DROP_BUFFER);
+  SwitchToNextRecycledBuffer();
+}
+
+void CanvasDrawEventRecorder::QueueCurrentBufferForReuse() {
+  mRecycledBuffers.emplace(std::move(mCurrentBuffer.shmem),
+                           mHeader->eventCount);
+}
+
+void CanvasDrawEventRecorder::SwitchToNextRecycledBuffer() {
+  MOZ_ASSERT(!mRecycledBuffers.empty());
+  mCurrentBuffer = CanvasBuffer(std::move(mRecycledBuffers.front().shmem));
+  mRecycledBuffers.pop();
+}
+
+bool CanvasDrawEventRecorder::HasSpareRecycledBuffer() const {
+  return mRecycledBuffers.size() > 1 &&
+         mRecycledBuffers.front().eventCount < mHeader->processedCount;
+}
+
 void CanvasDrawEventRecorder::DropFreeBuffers() {
   // If we encountered an error, we may have invalidated mCurrentBuffer in
   // GetContiguousBuffer. We must not make it valid again, because the reader
   // would not know to switch to the new buffer.
-  while (mCurrentBuffer.IsValid() && mRecycledBuffers.size() > 1 &&
-         mRecycledBuffers.front().eventCount < mHeader->processedCount) {
-    WriteInternalEvent(DROP_BUFFER);
-    mCurrentBuffer = CanvasBuffer(std::move(mRecycledBuffers.front().shmem));
-    mRecycledBuffers.pop();
+  while (mCurrentBuffer.IsValid() && HasSpareRecycledBuffer()) {
+    DropCurrentAndSwitchToNextBuffer();
   }
 
-  ClearProcessedExternalSurfaces();
-  ClearProcessedExternalImages();
+  ClearProcessedExternalResources();
 }
 
 void CanvasDrawEventRecorder::IncrementEventCount() {
@@ -295,25 +303,29 @@ void CanvasDrawEventRecorder::CheckAndSignalReader() {
         }
         continue;
       case State::Waiting:
-        if (mHeader->processedCount < mHeader->eventCount) {
-          // We have to use compareExchange here because the reader can change
-          // from Waiting to Stopped.
-          if (mHeader->readerState.compareExchange(State::Waiting,
-                                                   State::Processing)) {
-            mReaderSemaphore->Signal();
-            return;
-          }
-
-          MOZ_ASSERT(mHeader->readerState == State::Stopped);
-          continue;
+        if (mHeader->processedCount >= mHeader->eventCount) {
+          return;
         }
-        return;
+
+        // The reader can time out and transition to Stopped. Signal only if
+        // we win the race to leave Waiting.
+        if (mHeader->readerState.compareExchange(State::Waiting,
+                                                 State::Processing)) {
+          mReaderSemaphore->Signal();
+          return;
+        }
+
+        // Recheck the state so we can restart a reader that stopped waiting.
+        MOZ_ASSERT(mHeader->readerState == State::Stopped);
+        continue;
       case State::Stopped:
-        if (mHeader->processedCount < mHeader->eventCount) {
-          mHeader->readerState = State::Processing;
-          if (!mHelpers->RestartReader()) {
-            mHeader->writerState = State::Failed;
-          }
+        if (mHeader->processedCount >= mHeader->eventCount) {
+          return;
+        }
+
+        mHeader->readerState = State::Processing;
+        if (!mHelpers->RestartReader()) {
+          mHeader->writerState = State::Failed;
         }
         return;
       default:
@@ -348,6 +360,8 @@ void CanvasDrawEventRecorder::QueueProcessPendingDeletionsLocked(
   }
 
   if (!NS_IsMainThread()) {
+    // MainThreadWorkerRunnable must be created and dispatched on the main
+    // thread, so forward the dispatch there first.
     NS_DispatchToMainThread(NS_NewRunnableFunction(
         "CanvasDrawEventRecorder::QueueProcessPendingDeletionsLocked",
         [self = std::move(aRecorder)]() mutable {
@@ -382,7 +396,8 @@ void CanvasDrawEventRecorder::QueueProcessPendingDeletions(
     RefPtr<CanvasDrawEventRecorder>&& aRecorder) {
   auto lockedPendingDeletions = mPendingDeletions.Lock();
   if (lockedPendingDeletions->empty()) {
-    // We raced to handle the deletions, and something got there first.
+    // The owning worker may have drained the queue before this task reached
+    // the main thread.
     return;
   }
 
@@ -401,10 +416,11 @@ void CanvasDrawEventRecorder::AddPendingDeletion(
     MOZ_RELEASE_ASSERT(!mIsOnWorker || mWorkerRef,
                        "AddPendingDeletion called after worker shutdown!");
 
-    // If we are not on the owning thread, we must queue an event to run the
-    // deletions, if we transitioned from empty to non-empty.
-    if ((mWorkerRef && !mWorkerRef->Private()->IsOnCurrentThread()) ||
-        (!mWorkerRef && !NS_IsMainThread())) {
+    const bool isOnOwningThread =
+        mWorkerRef ? mWorkerRef->Private()->IsOnCurrentThread()
+                   : NS_IsMainThread();
+    if (!isOnOwningThread) {
+      // Schedule processing only when the first deletion is queued.
       if (wasEmpty) {
         RefPtr<CanvasDrawEventRecorder> self(this);
         QueueProcessPendingDeletionsLocked(std::move(self));
@@ -412,7 +428,8 @@ void CanvasDrawEventRecorder::AddPendingDeletion(
       return;
     }
 
-    // Otherwise, we can just run all of them right now.
+    // Take the whole queue under the lock and run the callbacks after
+    // releasing it.
     pendingDeletions.swap(*lockedPendingDeletions);
   }
 
@@ -461,8 +478,11 @@ static void ClearProcessedEntries(Holder& aEntries, int64_t aProcessedCount) {
   }
 }
 
-void CanvasDrawEventRecorder::ClearProcessedExternalSurfaces() {
+void CanvasDrawEventRecorder::ClearProcessedExternalResources() {
   ClearProcessedEntries(mExternalSurfaces, mHeader->processedCount);
+  // Read processedCount again for images because the translator may have
+  // made progress while the surface references were being released.
+  ClearProcessedExternalImages();
 }
 
 void CanvasDrawEventRecorder::ClearProcessedExternalImages() {

@@ -35,32 +35,42 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
   explicit CanvasDrawEventRecorder(dom::ThreadSafeWorkerRef* aWorkerRef);
   ~CanvasDrawEventRecorder() override;
 
+  // State of either endpoint of the shared event stream.
   enum class State : uint32_t {
+    // Recording or replay is active or about to resume.
     Processing,
 
-    /**
-     * This is the important state to make sure the other side signals or starts
-     * us as soon as data or space is available. We set AboutToWait first and
-     * then re-check the condition. If we went straight to Waiting or Stopped
-     * then in between the last check and setting the state, the other side
-     * could have used all available data or space and never have signaled us
-     * because it didn't know we were about to wait, causing a deadlock.
-     * While we are in this state, the other side must wait until we resolve the
-     * AboutToWait state to one of the other states and then signal or start us
-     * if it needs to.
-     */
+    // Publish this before rechecking for progress. The peer waits for the
+    // decision so it cannot miss a transition to Waiting or Stopped.
     AboutToWait,
+
+    // Blocked on the endpoint's cross-process semaphore.
     Waiting,
+
+    // The translator paused replay until a follow-up IPC message arrives.
     Paused,
+
+    // The translator is idle. The recorder requests a restart when it
+    // publishes more events.
     Stopped,
+
+    // The endpoint encountered a failure and cannot continue.
     Failed,
   };
 
+  // Shared control block for the recorder (writer) and translator (reader).
+  // Both sides publish progress here and can update the peer's state when
+  // waking it.
   struct Header {
+    // Number of events the recorder has published to the stream.
     Atomic<int64_t> eventCount;
+    // Processed event count the recorder is waiting for.
     Atomic<int64_t> writerWaitCount;
     Atomic<State> writerState;
+    // Keep the writer and reader field groups apart in shared memory.
     uint8_t padding1[44];
+    // Number of events the translator has finished processing. A signal sent
+    // during replay of an event precedes that event's increment.
     Atomic<int64_t> processedCount;
     Atomic<State> readerState;
   };
@@ -80,8 +90,8 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
     virtual bool AddBuffer(ipc::ReadOnlySharedMemoryHandle&& aBufferHandle) = 0;
 
     /**
-     * @returns true if the reader of the CanvasEventRingBuffer has permanently
-     *          stopped processing, otherwise returns false.
+     * @returns true if the canvas actor exists and either IPC can no longer
+     *          be sent or application shutdown is impending.
      */
     virtual bool ReaderClosed() = 0;
 
@@ -120,30 +130,27 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
 
   void Flush() final { NS_ASSERT_OWNINGTHREAD(CanvasDrawEventRecorder); }
 
+  // Record a checkpoint marker and return the event count before recording it.
   int64_t CreateCheckpoint();
 
   /**
-   * Waits until the given checkpoint has been read by the translator.
+   * Wait for the translator's processed event count to reach aCheckpoint.
    *
-   * @params aCheckpoint the checkpoint to wait for
-   * @returns true if the checkpoint was reached, false if the reader is closed
-   *          or we timeout.
+   * @param aCheckpoint the processed event count to wait for
+   * @returns true if the count was reached, false if the reader closes or
+   *          fails while waiting
    */
   bool WaitForCheckpoint(int64_t aCheckpoint);
 
   TextureType GetTextureType() { return mTextureType; }
 
-  /**
-   * @returns true if a previous failure means events can no longer be
-   *          recorded.
-   */
-  bool HasFailed() { return !mCurrentBuffer.IsValid(); }
+  bool HasInvalidCurrentBuffer() { return !mCurrentBuffer.IsValid(); }
 
   void DropFreeBuffers();
 
-  void ClearProcessedExternalSurfaces();
-
-  void ClearProcessedExternalImages();
+  // Release references to external surfaces and images already processed by
+  // the translator.
+  void ClearProcessedExternalResources();
 
   already_AddRefed<layers::CanvasChild> GetCanvasChild() const override {
     return mHelpers->GetCanvasChild();
@@ -157,6 +164,31 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
  private:
   void WriteInternalEvent(EventType aEventType);
 
+  // Allocate a buffer with room for aSize bytes of event data and make it
+  // current. Return a reference to mCurrentBuffer. If allocation or sending
+  // fails, mark the writer as failed and invalidate mCurrentBuffer first.
+  gfx::ContiguousBuffer& AllocateAndSwitchBuffer(size_t aSize);
+
+  // Discard the current buffer and switch to the first recycled buffer.
+  // The caller must ensure the current buffer is valid and the first recycled
+  // buffer is ready for reuse.
+  void DropCurrentAndSwitchToNextBuffer();
+
+  // Move the default-sized current buffer into the reuse queue. Call this
+  // after recording the event that ends the current buffer.
+  void QueueCurrentBufferForReuse();
+
+  // Take the first recycled buffer as the current buffer. The caller must
+  // ensure it is ready for reuse and record the switch in the old buffer
+  // before calling this.
+  void SwitchToNextRecycledBuffer();
+
+  // Return true if the queue has at least two buffers and processedCount is
+  // strictly greater than the event count stored with the first buffer.
+  bool HasSpareRecycledBuffer() const;
+
+  void ClearProcessedExternalImages();
+
   void CheckAndSignalReader();
 
   void QueueProcessPendingDeletions(
@@ -168,7 +200,10 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
   size_t mMaxDefaultBuffers;
   uint32_t mMaxSpinCount;
   uint32_t mDropBufferLimit;
-  uint32_t mDropBufferOnZero;
+  // Remaining reuse switches that must leave a spare buffer before an
+  // automatic drop. Reset to mDropBufferLimit after an automatic drop or
+  // when a reuse switch leaves no spare buffer.
+  uint32_t mBufferDropCountdown;
 
   UniquePtr<Helpers> mHelpers;
 
@@ -190,6 +225,8 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
 
   struct RecycledBuffer {
     ipc::SharedMemoryMapping shmem;
+    // The recorder's event count after recording RECYCLE_BUFFER or
+    // PAUSE_TRANSLATION for this buffer. The initial spare starts at zero.
     int64_t eventCount = 0;
     explicit RecycledBuffer(ipc::SharedMemoryMapping&& aShmem,
                             int64_t aEventCount)
@@ -200,7 +237,9 @@ class CanvasDrawEventRecorder final : public gfx::DrawEventRecorderPrivate,
   CanvasBuffer mCurrentBuffer;
   std::queue<RecycledBuffer> mRecycledBuffers;
 
+  // The recorder waits here and the translator signals it at the target count.
   UniquePtr<CrossProcessSemaphore> mWriterSemaphore;
+  // The recorder signals this to wake a translator in State::Waiting.
   UniquePtr<CrossProcessSemaphore> mReaderSemaphore;
 
   RefPtr<dom::ThreadSafeWorkerRef> mWorkerRef;
