@@ -48,6 +48,7 @@ import org.mozilla.geckoview.GeckoSession.PromptDelegate.WebAuthnRelatedOriginPr
 
 /* package */ class PromptController {
   private static final String LOGTAG = "Prompts";
+  private static final boolean DEBUG = false;
 
   private static class PromptStorage implements BasePrompt.Observer {
     private final Map<String, BasePrompt> mPrompts = new HashMap<>();
@@ -127,7 +128,7 @@ import org.mozilla.geckoview.GeckoSession.PromptDelegate.WebAuthnRelatedOriginPr
 
   public void handleEvent(
       final GeckoSession session, final GeckoBundle message, final EventCallback callback) {
-    Log.d(LOGTAG, "handleEvent " + message.getString("type"));
+    if (DEBUG) Log.d(LOGTAG, "handleEvent " + message.getString("type"));
     final PromptDelegate delegate = session.getPromptDelegate();
     if (delegate == null) {
       // Default behavior is same as calling dismiss() on callback.

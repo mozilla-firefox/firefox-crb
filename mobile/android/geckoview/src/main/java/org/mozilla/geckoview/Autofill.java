@@ -1184,7 +1184,7 @@ public class Autofill {
     @Override
     public void handleMessage(
         final String event, final GeckoBundle message, final EventCallback callback) {
-      Log.d(LOGTAG, "handleMessage " + event);
+      if (DEBUG) Log.d(LOGTAG, "handleMessage " + event);
       if ("GeckoView:AddAutofill".equals(event)) {
         addNode(message.getBundle("node"), callback);
       } else if ("GeckoView:StartAutofill".equals(event)) {

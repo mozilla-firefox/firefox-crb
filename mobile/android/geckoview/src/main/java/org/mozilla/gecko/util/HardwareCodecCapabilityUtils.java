@@ -21,6 +21,7 @@ import org.mozilla.gecko.annotation.WrapForJNI;
 
 public final class HardwareCodecCapabilityUtils {
   private static final String LOGTAG = "HardwareCodecCapability";
+  private static final boolean DEBUG = false;
 
   // List of supported HW VP8 encoders.
   private static final String[] supportedVp8HwEncCodecPrefixes = {"OMX.qcom.", "OMX.Intel."};
@@ -167,8 +168,10 @@ public final class HardwareCodecCapabilityUtils {
     final Set<String> mimeTypes = new HashSet<>();
     addSupportedMimeTypesWithAccelInfo(mimeTypes, getDecoderInfos(), false);
     addSupportedMimeTypesWithAccelInfo(mimeTypes, getEncoderInfos(), true);
-    for (final String typeit : mimeTypes) {
-      Log.d(LOGTAG, "MIME support: " + typeit);
+    if (DEBUG) {
+      for (final String typeit : mimeTypes) {
+        Log.d(LOGTAG, "MIME support: " + typeit);
+      }
     }
     return mimeTypes.toArray(new String[0]);
   }
@@ -256,7 +259,7 @@ public final class HardwareCodecCapabilityUtils {
   // See Bug1360626 and
   // https://codereview.chromium.org/1869103002 for details.
   private static boolean isAdaptivePlaybackBlocklisted(final String aMimeType) {
-    Log.d(LOGTAG, "The device ModelID is " + Build.MODEL);
+    if (DEBUG) Log.d(LOGTAG, "The device ModelID is " + Build.MODEL);
     if (!aMimeType.equals("video/avc") && !aMimeType.equals("video/avc1")) {
       return false;
     }
@@ -289,7 +292,7 @@ public final class HardwareCodecCapabilityUtils {
       if (name == null) {
         continue; // No HW support in this codec; try the next one.
       }
-      Log.d(LOGTAG, "Found candidate" + (aIsEncoder ? " encoder " : " decoder ") + name);
+      if (DEBUG) Log.d(LOGTAG, "Found candidate" + (aIsEncoder ? " encoder " : " decoder ") + name);
 
       if (!isHardwareAccelerated(info, getSupportedHWCodecPrefixes(aMimeType, aIsEncoder))) {
         continue;
@@ -297,16 +300,18 @@ public final class HardwareCodecCapabilityUtils {
 
       // Check if codec supports either yuv420 or nv12.
       final CodecCapabilities capabilities = info.getCapabilitiesForType(aMimeType);
-      for (final int colorFormat : capabilities.colorFormats) {
-        Log.v(LOGTAG, "   Color: 0x" + Integer.toHexString(colorFormat));
-      }
-      for (final MediaCodecInfo.CodecProfileLevel pl : capabilities.profileLevels) {
-        Log.v(
-            LOGTAG,
-            "   Profile: 0x"
-                + Integer.toHexString(pl.profile)
-                + "/Level=0x"
-                + Integer.toHexString(pl.level));
+      if (DEBUG) {
+        for (final int colorFormat : capabilities.colorFormats) {
+          Log.v(LOGTAG, "   Color: 0x" + Integer.toHexString(colorFormat));
+        }
+        for (final MediaCodecInfo.CodecProfileLevel pl : capabilities.profileLevels) {
+          Log.v(
+              LOGTAG,
+              "   Profile: 0x"
+                  + Integer.toHexString(pl.profile)
+                  + "/Level=0x"
+                  + Integer.toHexString(pl.level));
+        }
       }
       final int codecColorFormat = getSupportsYUV420orNV12(capabilities);
       if (codecColorFormat != COLOR_FORMAT_NOT_SUPPORTED) {
@@ -400,7 +405,7 @@ public final class HardwareCodecCapabilityUtils {
       }
       max = Math.max(max, widestFramePixels(video));
       max = Math.max(max, tallestFramePixels(video));
-      Log.d(LOGTAG, "Encoder " + info.getName() + " max pixels " + max);
+      if (DEBUG) Log.d(LOGTAG, "Encoder " + info.getName() + " max pixels " + max);
     }
     sMaxEncoderPixels.put(aMimeType, max);
     return max;

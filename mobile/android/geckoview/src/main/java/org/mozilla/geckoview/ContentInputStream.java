@@ -161,9 +161,10 @@ import org.mozilla.gecko.annotation.WrapForJNI;
       // A SecurityException could happen if the uri is no more valid or if
       // we're in an isolated process.
       Log.e(LOGTAG, "Cannot read the uri: " + uri, e);
+      return false;
     }
 
-    Log.d(LOGTAG, "The uri isn't readable: " + uri);
+    Log.w(LOGTAG, "The uri isn't readable: " + uri);
     return false;
   }
 

@@ -20,6 +20,7 @@ import org.mozilla.gecko.annotation.WrapForJNI;
 // certificates that have been added to the android CA store.
 public class EnterpriseRoots {
   private static final String LOGTAG = "EnterpriseRoots";
+  private static final boolean DEBUG = false;
 
   // Gecko calls this function from C++ to find third-party root certificates
   // it can use as trust anchors for TLS connections.
@@ -89,7 +90,7 @@ public class EnterpriseRoots {
         }
       }
     }
-    Log.d(LOGTAG, "found " + roots.size() + " enterprise roots");
+    if (DEBUG) Log.d(LOGTAG, "found " + roots.size() + " enterprise roots");
     return roots.toArray(new byte[0][0]);
   }
 }

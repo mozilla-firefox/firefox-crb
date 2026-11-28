@@ -27,6 +27,7 @@ public class CrashPullController {
   public CrashPullController() {}
 
   private static final String LOGTAG = "CrashPull";
+  private static final boolean DEBUG = false;
 
   /**
    * Implement this interface to get notification of a remote settings request to submit one or more
@@ -85,7 +86,7 @@ public class CrashPullController {
     @Override // BundleEventListener
     public synchronized void handleMessage(
         final String event, final GeckoBundle message, final EventCallback callback) {
-      Log.d(LOGTAG, "handleMessage " + event);
+      if (DEBUG) Log.d(LOGTAG, "handleMessage " + event);
 
       if (mDelegate == null) {
         if (callback != null) {

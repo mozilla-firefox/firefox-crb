@@ -4,25 +4,10 @@
 
 package org.mozilla.gecko.media;
 
-import android.util.Log;
-
 public class Utils {
   public static long getThreadId() {
     final Thread t = Thread.currentThread();
     return t.getId();
-  }
-
-  public static String getThreadSignature() {
-    final Thread t = Thread.currentThread();
-    final long l = t.getId();
-    final String name = t.getName();
-    final long p = t.getPriority();
-    final String gname = t.getThreadGroup().getName();
-    return (name + ":(id)" + l + ":(priority)" + p + ":(group)" + gname);
-  }
-
-  public static void logThreadSignature() {
-    Log.d("ThreadUtils", getThreadSignature());
   }
 
   private static final char[] hexArray = "0123456789ABCDEF".toCharArray();

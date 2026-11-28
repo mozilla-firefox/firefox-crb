@@ -28,6 +28,7 @@ import org.mozilla.gecko.util.XPCOMEventTarget;
 
 /* package */ final class ServiceAllocator {
   private static final String LOGTAG = "ServiceAllocator";
+  private static final boolean DEBUG = false;
   private static final int MAX_NUM_ISOLATED_CONTENT_SERVICES =
       GeckoChildProcessServices.MAX_NUM_ISOLATED_CONTENT_SERVICES;
 
@@ -389,30 +390,32 @@ import org.mozilla.gecko.util.XPCOMEventTarget;
         }
       }
 
-      final String svcName = mBindDelegate.getServiceName();
-      String pid;
-      try {
-        pid = String.valueOf(getPid());
-      } catch (final Exception e) {
-        pid = "not connected";
-      }
+      if (DEBUG) {
+        final String svcName = mBindDelegate.getServiceName();
+        String pid;
+        try {
+          pid = String.valueOf(getPid());
+        } catch (final Exception e) {
+          pid = "not connected";
+        }
 
-      final StringBuilder builder = new StringBuilder(svcName);
-      builder
-          .append(" updateBindings: ")
-          .append(mCurrentPriority)
-          .append(" priority, ")
-          .append(mRelativeImportance)
-          .append(" importance, ")
-          .append(pid)
-          .append(" pid, ")
-          .append(numBindSuccesses)
-          .append(" successful binds, ")
-          .append(numBindFailures)
-          .append(" failed binds, ")
-          .append(numUnbindSuccesses)
-          .append(" successful unbinds");
-      Log.d(LOGTAG, builder.toString());
+        final StringBuilder builder = new StringBuilder(svcName);
+        builder
+            .append(" updateBindings: ")
+            .append(mCurrentPriority)
+            .append(" priority, ")
+            .append(mRelativeImportance)
+            .append(" importance, ")
+            .append(pid)
+            .append(" pid, ")
+            .append(numBindSuccesses)
+            .append(" successful binds, ")
+            .append(numBindFailures)
+            .append(" failed binds, ")
+            .append(numUnbindSuccesses)
+            .append(" successful unbinds");
+        Log.d(LOGTAG, builder.toString());
+      }
 
       return numBindFailures == 0;
     }

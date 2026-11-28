@@ -39,6 +39,7 @@ import org.webrtc.VideoFrame.I420Buffer;
 
 public class VideoCaptureAndroid implements CameraVideoCapturer.CameraEventsHandler, CapturerObserver {
   private final static String TAG = "WEBRTC-JC";
+  private final static boolean DEBUG = false;
 
   private final String deviceName;
   private volatile long native_capturer;  // |VideoCaptureAndroid*| in C++.
@@ -133,8 +134,10 @@ public class VideoCaptureAndroid implements CameraVideoCapturer.CameraEventsHand
       final int width, final int height,
       final int min_mfps, final int max_mfps,
       long native_capturer) {
-    Log.d(TAG, "startCapture: " + width + "x" + height + "@" +
-        min_mfps + ":" + max_mfps);
+    if (DEBUG) {
+      Log.d(TAG, "startCapture: " + width + "x" + height + "@" +
+          min_mfps + ":" + max_mfps);
+    }
 
     if (cameraVideoCapturer == null) {
       return false;

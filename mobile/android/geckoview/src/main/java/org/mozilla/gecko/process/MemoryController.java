@@ -4,6 +4,7 @@
 
 package org.mozilla.gecko.process;
 
+import android.annotation.SuppressLint;
 import android.content.ComponentCallbacks2;
 import android.content.res.Configuration;
 import android.util.Log;
@@ -32,6 +33,8 @@ public class MemoryController implements ComponentCallbacks2 {
     return LOW;
   }
 
+  // Logs in release builds on purpose, to help read users' logs.
+  @SuppressLint("LogConditional")
   public void onTrimMemory(final int level) {
     Log.i(LOGTAG, "onTrimMemory(" + level + ")");
     onMemoryNotification(memoryLevelFromTrim(level));
