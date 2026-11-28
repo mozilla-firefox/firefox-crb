@@ -18,6 +18,7 @@
 #include "mozilla/RefPtr.h"
 #include "mozilla/ResultVariant.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/StaticPrefs_docshell.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_extensions.h"
 #include "mozilla/StaticPrefs_fission.h"
@@ -1149,9 +1150,21 @@ auto DocumentLoadListener::Open(nsDocShellLoadState* aLoadState,
     (void)httpChannel->SetRequestContextID(
         loadingContext->GetRequestContextId());
 
-    nsCOMPtr<nsIClassOfService> cos(do_QueryInterface(httpChannel));
-    if (cos && aUrgentStart) {
-      cos->AddClassFlags(nsIClassOfService::UrgentStart);
+    if (nsCOMPtr<nsIClassOfService> cos = do_QueryInterface(httpChannel)) {
+      uint32_t flags = 0;
+      if (aUrgentStart) {
+        flags |= nsIClassOfService::UrgentStart;
+      }
+      if (mIsDocumentLoad &&
+          StaticPrefs::docshell_navigation_new_load_group()) {
+        // The request context is shared with the outgoing document, which keeps
+        // loading until this navigation commits. Its parser-blocking scripts
+        // must not hold back the navigation.
+        flags |= nsIClassOfService::Unblocked;
+      }
+      if (flags != 0) {
+        cos->AddClassFlags(flags);
+      }
     }
   }
 
