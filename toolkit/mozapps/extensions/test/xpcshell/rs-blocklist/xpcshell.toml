@@ -126,10 +126,6 @@ skip-if = [
 ["test_gfxBlocklist_minRefreshRate_match.js"]
 
 ["test_gfxBlocklist_prefs.js"]
-# Bug 1248787 - consistently fails
-skip-if = [
-  "true",
-]
 
 ["test_gfxBlocklist_refreshRateStatus_match.js"]
 
