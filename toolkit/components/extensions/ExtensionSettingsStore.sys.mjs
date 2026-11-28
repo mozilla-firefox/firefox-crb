@@ -118,7 +118,15 @@ async function reloadFile(saveChanges) {
 }
 
 // Checks that the store is ready and that the requested type exists.
+// Returns false once the store has been finalized at shutdown.
 function ensureType(type) {
+  if (_store._finalizePromise) {
+    console.warn(
+      `The ExtensionSettingsStore was accessed for ${type} after it was finalized at shutdown.`
+    );
+    return false;
+  }
+
   if (!_store.dataReady) {
     throw new Error(
       "The ExtensionSettingsStore was accessed before the initialize promise resolved."
@@ -129,6 +137,7 @@ function ensureType(type) {
   if (!_store.data[type]) {
     _store.data[type] = {};
   }
+  return true;
 }
 
 /**
@@ -155,7 +164,9 @@ function ensureType(type) {
  * @returns {SettingItem} Null if no setting is stored for the key.
  */
 function getItem(type, key, id) {
-  ensureType(type);
+  if (!ensureType(type)) {
+    return null;
+  }
 
   let keyInfo = _store.data[type][key];
   if (!keyInfo) {
@@ -199,7 +210,9 @@ function getItem(type, key, id) {
  * @returns {Array} an array of objects with properties for key, value, id, and enabled
  */
 function getAllItems(type, key) {
-  ensureType(type);
+  if (!ensureType(type)) {
+    return [];
+  }
 
   let keyInfo = _store.data[type][key];
   if (!keyInfo) {
@@ -247,7 +260,9 @@ function precedenceComparator(a, b) {
  */
 function alterSetting(id, type, key, action) {
   let returnItem = null;
-  ensureType(type);
+  if (!ensureType(type)) {
+    return null;
+  }
 
   let keyInfo = _store.data[type][key];
   if (!keyInfo) {
@@ -387,11 +402,16 @@ export var ExtensionSettingsStore = {
       throw new Error("initialValueCallback must be a function.");
     }
 
-    ensureType(type);
+    if (!ensureType(type)) {
+      return null;
+    }
 
     if (!_store.data[type][key]) {
       // The setting for this key does not exist. Set the initial value.
       let initialValue = await initialValueCallback(callbackArgument);
+      if (!ensureType(type)) {
+        return null;
+      }
       _store.data[type][key] = {
         initialValue,
         precedenceList: [],
@@ -408,6 +428,9 @@ export var ExtensionSettingsStore = {
     if (foundIndex === -1) {
       // No item for this extension, so add a new one.
       let addon = await lazy.AddonManager.getAddonByID(id);
+      if (!ensureType(type)) {
+        return null;
+      }
       keyInfo.precedenceList.push({
         id,
         installDate: addon.installDate.valueOf(),
@@ -531,7 +554,9 @@ export var ExtensionSettingsStore = {
    *          A list of settings which have been stored for the extension.
    */
   getAllForExtension(id, type) {
-    ensureType(type);
+    if (!ensureType(type)) {
+      return [];
+    }
 
     let keysObj = _store.data[type];
     let items = [];
@@ -612,7 +637,9 @@ export var ExtensionSettingsStore = {
    *          The level of control of the extension over the key.
    */
   async getLevelOfControl(id, type, key) {
-    ensureType(type);
+    if (!ensureType(type)) {
+      return "not_controllable";
+    }
 
     let keyInfo = _store.data[type][key];
     if (!keyInfo || !keyInfo.precedenceList.length) {
