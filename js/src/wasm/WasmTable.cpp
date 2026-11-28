@@ -106,12 +106,18 @@ void Table::tracePrivate(JSTracer* trc) {
 
   switch (repr()) {
     case TableRepr::Func: {
+      // Entries usually refer to a few instances in long runs, and re-tracing
+      // the same instance achieves nothing, so skip runs of the same instance.
+      Instance* lastTraced = nullptr;
       for (uint32_t i = 0; i < length_; i++) {
-        if (functions_[i].instance) {
-          wasm::TraceInstanceEdge(trc, functions_[i].instance,
-                                  "wasm table instance");
-        } else {
+        Instance* instance = functions_[i].instance;
+        if (!instance) {
           MOZ_ASSERT(!functions_[i].code);
+          continue;
+        }
+        if (instance != lastTraced) {
+          wasm::TraceInstanceEdge(trc, instance, "wasm table instance");
+          lastTraced = instance;
         }
       }
       break;
