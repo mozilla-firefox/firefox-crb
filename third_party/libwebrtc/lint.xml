@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GeckoView compiles these vendored sources through srcDir, and they aren't fixed by hand. This file
+     takes precedence over the lint.xml files above it, whose per-check severities would override an "all"
+     ignore there. -->
+<lint>
+    <issue id="all" severity="ignore" />
+</lint>
