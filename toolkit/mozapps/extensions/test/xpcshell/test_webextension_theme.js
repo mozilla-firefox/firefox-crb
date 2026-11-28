@@ -361,5 +361,16 @@ add_task(async function test_builtin_theme_permissions() {
   await addon.enable();
   checkPerms(addon);
 
+  let defaultThemeEnabled = false;
+  AddonTestUtils.promiseAddonEvent(
+    "onEnabled",
+    enabledAddon => enabledAddon.id == DEFAULT_THEME
+  ).then(() => {
+    defaultThemeEnabled = true;
+  });
   await addon.uninstall();
+  ok(
+    defaultThemeEnabled,
+    "Default theme is enabled when the active theme's uninstall resolves"
+  );
 });
