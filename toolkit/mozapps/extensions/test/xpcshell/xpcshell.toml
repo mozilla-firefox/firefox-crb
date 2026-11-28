@@ -180,6 +180,7 @@ requesttimeoutfactor = 2  # Slow on debug: each extension launches its own exten
 ["test_installtrigger_deprecation.js"]
 prefs = ["dom.security.https_first=false"]
 head = "head_addons.js head_amremotesettings.js"
+requesttimeoutfactor = 2  # Slow on tsan and debug: each of its 8 content pages starts its own content process
 
 ["test_isDebuggable.js"]
 
