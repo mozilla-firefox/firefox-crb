@@ -288,6 +288,10 @@ audit-as-crates-io = false
 [policy.mtu]
 audit-as-crates-io = true
 
+[policy.multiversion-macros]
+audit-as-crates-io = true
+notes = "This is the upstream code plus a fix for https://github.com/calebzulawski/multiversion/pull/50"
+
 [policy.naga]
 audit-as-crates-io = true
 notes = "Part of the wgpu repository, pinned as the rest of wgpu crates."
