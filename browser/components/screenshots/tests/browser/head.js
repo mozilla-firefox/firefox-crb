@@ -556,6 +556,17 @@ class ScreenshotsHelper {
       );
       return outerHeight === targetH && outerWidth === targetW;
     }, "Waiting for window to resize");
+    // The content process only gets its new size once the parent has laid out
+    // the resized window, which can happen after outerWidth/outerHeight change.
+    await TestUtils.waitForCondition(async () => {
+      let { clientWidth, clientHeight } = this.browser;
+      let [contentWidth, contentHeight] = await SpecialPowers.spawn(
+        this.browser,
+        [],
+        () => [content.innerWidth, content.innerHeight]
+      );
+      return contentWidth === clientWidth && contentHeight === clientHeight;
+    }, "Waiting for the content to get its new size");
   }
 
   waitForContentMousePosition(left, top) {
