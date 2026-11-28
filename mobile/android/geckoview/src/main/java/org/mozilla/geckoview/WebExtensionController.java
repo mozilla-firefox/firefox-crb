@@ -38,6 +38,7 @@ import org.mozilla.geckoview.WebExtension.InvalidMetaDataException;
  */
 public class WebExtensionController {
   private static final String LOGTAG = "WebExtension";
+  private static final boolean DEBUG = false;
 
   private AddonManagerDelegate mAddonManagerDelegate;
   private ExtensionProcessDelegate mExtensionProcessDelegate;
@@ -143,15 +144,17 @@ public class WebExtensionController {
 
   /* package */ void releasePendingMessages(
       final WebExtension extension, final String nativeApp, final GeckoSession session) {
-    Log.i(
-        LOGTAG,
-        "releasePendingMessages:"
-            + " extension="
-            + extension.id
-            + " nativeApp="
-            + nativeApp
-            + " session="
-            + session);
+    if (DEBUG) {
+      Log.i(
+          LOGTAG,
+          "releasePendingMessages:"
+              + " extension="
+              + extension.id
+              + " nativeApp="
+              + nativeApp
+              + " session="
+              + session);
+    }
     final List<Message> messages =
         mPendingMessages.remove(new MessageRecipient(nativeApp, extension.id, session));
     if (messages == null) {
@@ -1078,7 +1081,9 @@ public class WebExtensionController {
       final GeckoSession session) {
     final Message message = new Message(event, bundle, callback, session);
 
-    Log.d(LOGTAG, "handleMessage " + event);
+    if (DEBUG) {
+      Log.d(LOGTAG, "handleMessage " + event);
+    }
 
     try {
       if ("GeckoView:WebExtension:InstallPrompt".equals(event)) {

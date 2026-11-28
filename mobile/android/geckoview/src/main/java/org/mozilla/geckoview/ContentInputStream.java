@@ -163,7 +163,7 @@ import org.mozilla.gecko.annotation.WrapForJNI;
       Log.e(LOGTAG, "Cannot read the uri: " + uri, e);
     }
 
-    Log.d(LOGTAG, "The uri isn't readable: " + uri);
+    Log.w(LOGTAG, "The uri isn't readable: " + uri);
     return false;
   }
 

@@ -277,7 +277,9 @@ import org.mozilla.gecko.util.WebAuthnUtils;
                               .setTransports(responseData.getTransports())
                               .build();
 
-                      Log.d(LOGTAG, "MakeCredentialResponse: " + credentialResponse.toString());
+                      if (DEBUG) {
+                        Log.d(LOGTAG, "MakeCredentialResponse: " + credentialResponse.toString());
+                      }
                       result.complete(credentialResponse);
                     },
                     e -> {
@@ -495,7 +497,9 @@ import org.mozilla.gecko.util.WebAuthnUtils;
                               .setAuthenticatorAttachment(
                                   publicKeyCredentialData.getAuthenticatorAttachment())
                               .build();
-                      Log.d(LOGTAG, "GetAssertionResponse: " + assertionResponse.toString());
+                      if (DEBUG) {
+                        Log.d(LOGTAG, "GetAssertionResponse: " + assertionResponse.toString());
+                      }
                       result.complete(assertionResponse);
                     },
                     e -> {
