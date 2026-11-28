@@ -1957,6 +1957,17 @@ class AddonInstall {
     const stagedAddon = stagingDir.clone();
     stagedAddon.append(`${this.addon.id}.xpi`);
 
+    let releasedFiles = false;
+    // releaseStagingDir is refcounted: release only once.
+    let releaseFiles = () => {
+      if (releasedFiles) {
+        return;
+      }
+      releasedFiles = true;
+      this.removeTemporaryFile();
+      this.location.installer.releaseStagingDir();
+    };
+
     try {
       await this.location.installer.requestStagingDir();
 
@@ -1984,6 +1995,7 @@ class AddonInstall {
           id: this.addon.id,
           source: stagedAddon,
         });
+        releaseFiles();
 
         // Update the metadata in the database
         this.addon.sourceBundle = file;
@@ -2076,8 +2088,7 @@ class AddonInstall {
       );
       this._callInstallListeners("onInstallFailed");
     } finally {
-      this.removeTemporaryFile();
-      this.location.installer.releaseStagingDir();
+      releaseFiles();
     }
   }
 
