@@ -1688,6 +1688,8 @@ export class TopSitesFeed {
   /**
    * Fetch topsites spocs from the DiscoveryStream feed.
    *
+   * TODO: Bug 2098822 remove this unsupported feature
+   *
    * @returns {Array} An array of sponsored tile objects.
    */
   fetchDiscoveryStreamSpocs() {
