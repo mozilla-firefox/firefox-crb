@@ -202,12 +202,12 @@ add_task(async function test_network_markers_service_worker_use() {
           // "Missed" when the cache answered before we get a result from the network.
           // "Unresolved" when we got a response from the network before the cache subsystem.
           cache: Expect.stringMatches(/^(Missed|Unresolved)$/),
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
 
         Assert.objectContainsOnly(contentMarker.data, {
           ...commonDataProperties,
-          classOfService: "UrgentStart",
+          classOfService: NAVIGATION_CLASS_OF_SERVICE,
         });
       } else {
         // This is the other file firefox-logo-nightly.svg.

@@ -9,6 +9,20 @@ const BASE_URL = "http://example.com/browser/tools/profiler/tests/browser/";
 const BASE_URL_HTTPS =
   "https://example.com/browser/tools/profiler/tests/browser/";
 
+// DocumentLoadListener also marks document loads Unblocked when navigations
+// get their own load group. The navigation shares its request context with
+// the outgoing document, which now keeps loading until the navigation commits.
+// Necko holds back any request in a request context that has blocking (Leader)
+// transactions in flight, such as synchronous <head> scripts and stylesheets,
+// unless it is Unblocked. Without the flag, a slow <script> in the outgoing
+// document could stall the navigation that is about to replace it.
+const NAVIGATION_CLASS_OF_SERVICE = Services.prefs.getBoolPref(
+  "docshell.navigation.new_load_group",
+  false
+)
+  ? "Unblocked | UrgentStart"
+  : "UrgentStart";
+
 registerCleanupFunction(async () => {
   if (Services.profiler.IsActive()) {
     info(
