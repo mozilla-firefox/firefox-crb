@@ -25,7 +25,7 @@ support-files = [
   "persistentStorageDirectory_shared.zip",
   "removeLocalStorage1_profile.zip",
   "removeLocalStorage2_profile.zip",
-  "secondaryCacheValidity_profile.zip",
+  "restorationFileValidity_profile.zip",
   "tempMetadataCleanup_profile.zip",
   "unknownFiles_profile.zip",
 ]
@@ -40,9 +40,9 @@ run-if = [
   "false", # Only used for recreating getCachedUsageForPrincipal_profile.zip
 ]
 
-["make_secondaryCacheValidity.js"]
+["make_restorationFileValidity.js"]
 run-if = [
-  "false", # Only used for recreating secondaryCacheValidity_profile.zip
+  "false", # Only used for recreating restorationFileValidity_profile.zip
 ]
 
 ["make_unknownFiles.js"]
@@ -167,7 +167,7 @@ skip-if = [
 
 ["test_removeLocalStorage.js"]
 
-["test_secondaryCacheValidity.js"]
+["test_restorationFileValidity.js"]
 prefs = ["security.storage.encryption.sqlite.enabled=false"]
 
 ["test_shutdownDuringAllTemporaryOriginsInitialization.js"]
