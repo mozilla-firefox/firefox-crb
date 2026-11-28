@@ -16,7 +16,7 @@
 
 #include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
 #  include "mozilla/PlatformMutex.h"
 #endif
 #include "mozilla/ThreadSafety.h"
@@ -47,15 +47,13 @@ OS_EXPORT OS_NOTHROW OS_NONNULL_ALL void os_unfair_lock_lock_with_options(
 // that is constinit, but the mutex won't be initialised, you must still
 // call Init() before the mutex can be used.
 struct MOZ_CAPABILITY("mutex") Mutex
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
     : private mozilla::detail::MutexImpl
 #endif
 {
 #if defined(XP_DARWIN)
   os_unfair_lock mMutex = OS_UNFAIR_LOCK_INIT;
-#elif defined(XP_LINUX) && !defined(ANDROID)
-  pthread_mutex_t mMutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP;
-#elif !defined(XP_WIN)
+#elif !defined(XP_WIN) && !defined(XP_LINUX)
   pthread_mutex_t mMutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
@@ -77,22 +75,11 @@ struct MOZ_CAPABILITY("mutex") Mutex
 #ifdef MOZ_DEBUG
     mInitialised = true;
 #endif
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
     reset();
     return true;
 #elif defined(XP_DARWIN)
     mMutex = OS_UNFAIR_LOCK_INIT;
-#elif defined(XP_LINUX) && !defined(ANDROID)
-    pthread_mutexattr_t attr;
-    if (pthread_mutexattr_init(&attr) != 0) {
-      return false;
-    }
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    if (pthread_mutex_init(&mMutex, &attr) != 0) {
-      pthread_mutexattr_destroy(&attr);
-      return false;
-    }
-    pthread_mutexattr_destroy(&attr);
 #else
     if (pthread_mutex_init(&mMutex, nullptr) != 0) {
       return false;
@@ -104,7 +91,7 @@ struct MOZ_CAPABILITY("mutex") Mutex
   inline void Lock() MOZ_CAPABILITY_ACQUIRE() {
     MOZ_ASSERT(mInitialised);
 
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
     mozilla::detail::MutexImpl::lock();
 #elif defined(XP_DARWIN)
     // We rely on a non-public function to improve performance here.
@@ -127,7 +114,7 @@ struct MOZ_CAPABILITY("mutex") Mutex
   inline void Unlock() MOZ_CAPABILITY_RELEASE() {
     MOZ_ASSERT(mInitialised);
 
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
     mozilla::detail::MutexImpl::unlock();
 #elif defined(XP_DARWIN)
     os_unfair_lock_unlock(&mMutex);

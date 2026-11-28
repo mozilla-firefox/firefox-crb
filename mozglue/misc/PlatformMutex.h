@@ -5,7 +5,7 @@
 #ifndef mozilla_PlatformMutex_h
 #define mozilla_PlatformMutex_h
 
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
 #  include <atomic>
 #endif
 
@@ -25,7 +25,7 @@ class ConditionVariableImpl;
 
 class MutexImpl {
  public:
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
   constexpr MutexImpl() = default;
 #else
   explicit MFBT_API MutexImpl();
@@ -45,7 +45,7 @@ class MutexImpl {
   // through the PLT.
   MFBT_API bool tryLock();
 
-#if defined(XP_WIN)
+#if defined(XP_WIN) || defined(XP_LINUX)
   void reset() { mFutex.mValue.store(0, std::memory_order_relaxed); }
 #endif
 

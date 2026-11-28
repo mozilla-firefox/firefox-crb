@@ -19,6 +19,11 @@ if CONFIG["OS_TARGET"] == "WINNT":
         "/mozglue/misc/Mutex_futex.cpp",
         "/mozglue/misc/ProcessType.cpp",
     ]
+elif CONFIG["OS_ARCH"] == "Linux":
+    SOURCES += [
+        "/mozglue/misc/Futex_linux.cpp",
+        "/mozglue/misc/Mutex_futex.cpp",
+    ]
 
 if CONFIG["OS_TARGET"] == "Linux":
     LDFLAGS += ["-static-libstdc++"]
