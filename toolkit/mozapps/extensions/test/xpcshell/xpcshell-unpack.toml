@@ -8,8 +8,8 @@ dupe-manifest = true
 tags = "addons"
 
 ["test_filepointer.js"]
-skip-if = [
-  "require_signing",
+run-if = [
+  "!require_signing",
 ]
 
 ["test_webextension_paths.js"]
