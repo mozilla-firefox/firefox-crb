@@ -199,18 +199,13 @@ void JitFrameIter::settle() {
     wasm::Frame* prevFP = (wasm::Frame*)jitFrame.prevFp();
 
     if (mustUnwindActivation_) {
-      // The JS-JIT exit frame doesn't support stack switching and will only be
-      // used if original wasm func was on the main stack.
-#ifdef ENABLE_WASM_JSPI
-      MOZ_ASSERT(!act_->cx()->wasm().findStackForAddress(
-          act_->cx(), reinterpret_cast<uintptr_t>(prevFP->wasmCaller())));
-#endif
       act_->setWasmExitFP(prevFP);
     }
 
     uintptr_t* shadowStackPointer = jitFrame.shadowStackPointer();
     iter_.destroy();
-    iter_.construct<wasm::WasmFrameIter>(act_, prevFP, shadowStackPointer);
+    iter_.construct<wasm::WasmFrameIter>(act_, prevFP, shadowStackPointer,
+                                         /* enteredFromJitExit = */ true);
     MOZ_ASSERT(!asWasm().done());
     return;
   }

@@ -2174,8 +2174,7 @@ static bool GenerateImportInterpExit(MacroAssembler& masm, const FuncImport& fi,
 static bool GenerateImportJitExit(MacroAssembler& masm,
                                   uint32_t funcImportInstanceOffset,
                                   const FuncType& funcType,
-                                  unsigned funcImportIndex,
-                                  uint32_t fallbackOffset, Label* throwLabel,
+                                  unsigned funcImportIndex, Label* throwLabel,
                                   ImportOffsets* offsets) {
   AutoCreatedBy acb(masm, "GenerateImportJitExit");
 
@@ -2231,7 +2230,27 @@ static bool GenerateImportJitExit(MacroAssembler& masm,
 
   // Generate a minimal prologue. Don't allocate a stack frame until we know
   // how big it should be.
-  GenerateJitExitPrologue(masm, fallbackOffset, offsets);
+  GenerateJitExitPrologue(masm, offsets);
+
+#ifdef ENABLE_WASM_JSPI
+  // Run the JS callee on the main stack. The frame size computations below
+  // assume sp is congruent to fp modulo JitStackAlignment, which a switch to
+  // the (WasmStackAlignment-aligned) main stack does not preserve by itself.
+  const unsigned offsetOfStackSaveSlots =
+      sizeOfInstanceSlot + 2 * sizeof(void*);
+  const unsigned sizeOfStackSaveArea =
+      AlignBytes(offsetOfStackSaveSlots, JitStackAlignment);
+  const Address savedStackSlots(FramePointer, -int32_t(offsetOfStackSaveSlots));
+  masm.subFromStackPtr(Imm32(sizeOfStackSaveArea));
+  GenerateExitPrologueMainStackSwitch(masm, savedStackSlots, InstanceReg,
+                                      ABINonArgReg0, ABINonArgReg1,
+                                      ABINonArgReg2);
+  constexpr unsigned fpMisalignment = sizeof(Frame) % JitStackAlignment;
+  if constexpr (fpMisalignment != 0) {
+    masm.andToStackPtr(Imm32(~(JitStackAlignment - 1)));
+    masm.subFromStackPtr(Imm32(fpMisalignment));
+  }
+#endif
 
   // 1. Allocate the stack frame.
   // 1.1. Get the callee. This must be a JSFunction if we're using this JIT
@@ -2376,6 +2395,11 @@ static bool GenerateImportJitExit(MacroAssembler& masm,
 
   Label done;
   masm.bind(&done);
+
+#ifdef ENABLE_WASM_JSPI
+  GenerateExitEpilogueMainStackReturn(masm, savedStackSlots, InstanceReg,
+                                      ABINonArgReturnReg0, ABINonArgReturnReg1);
+#endif
 
   masm.moveToStackPtr(FramePointer);
   GenerateJitExitEpilogue(masm, offsets);
@@ -3793,7 +3817,7 @@ bool wasm::GenerateStubs(const CodeMetadata& codeMeta,
     ImportOffsets jitOffsets;
     if (!GenerateImportJitExit(
             masm, codeMeta.offsetOfFuncImportInstanceData(funcIndex), funcType,
-            funcIndex, interpOffsets.begin, &throwLabel, &jitOffsets)) {
+            funcIndex, &throwLabel, &jitOffsets)) {
       return false;
     }
     if (!code->codeRanges.emplaceBack(CodeRange::ImportJitExit, funcIndex,

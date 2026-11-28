@@ -80,7 +80,8 @@ static uint32_t FuncIndexForBytecodeOffset(const Code& code,
 // WasmFrameIter implementation
 
 WasmFrameIter::WasmFrameIter(JitActivation* activation, wasm::Frame* fp,
-                             uintptr_t* shadowStackPointer)
+                             uintptr_t* shadowStackPointer,
+                             bool enteredFromJitExit)
     : cx_(activation->cx()),
       activation_(activation),
       fp_(fp ? fp : activation->wasmExitFP())
@@ -102,7 +103,8 @@ WasmFrameIter::WasmFrameIter(JitActivation* activation, wasm::Frame* fp,
       cx()->wasm().findStackForAddress(cx(), reinterpret_cast<uintptr_t>(fp_));
   // Exit frames dynamically switch to the main stack. We need to mark this as
   // a stack switch.
-  bool dynamicSwitchToMainStack = contStack_ && fp_ == activation->wasmExitFP();
+  bool dynamicSwitchToMainStack =
+      contStack_ && (enteredFromJitExit || fp_ == activation->wasmExitFP());
 #  ifdef JS_HW_SHADOW_STACK
   if (shadowStackPointer_ && dynamicSwitchToMainStack) {
     // Since VM exits always switch to the main stack, the shadowStackPointer
@@ -1628,35 +1630,11 @@ static void AssertNoWasmExitFPInJitExit(MacroAssembler& masm) {
 }
 
 void wasm::GenerateJitExitPrologue(MacroAssembler& masm,
-                                   uint32_t fallbackOffset,
                                    ImportOffsets* offsets) {
   masm.haltingAlign(CodeAlignment);
 
-#ifdef ENABLE_WASM_JSPI
-  {
-#  if defined(JS_CODEGEN_ARM64)
-    AutoForbidPoolsAndNops afp(&masm,
-                               /* number of instructions in scope = */ 4);
-#  endif
-    offsets->begin = masm.indirectTarget(TargetKind::Call).offset();
-    Label fallback;
-    masm.bind(&fallback, BufferOffset(fallbackOffset));
-
-    const Register scratch = ABINonArgReg0;
-    masm.loadPtr(Address(InstanceReg, Instance::offsetOfCx()), scratch);
-    masm.loadPtr(Address(scratch, JSContext::offsetOfWasm() +
-                                      wasm::Context::offsetOfCurrentStack()),
-                 scratch);
-    masm.branchTestPtr(Assembler::NonZero, scratch, scratch, &fallback);
-  }
-
-  uint32_t entryOffset;
-  GenerateCallablePrologue(masm, &entryOffset);
-  offsets->afterFallbackCheck = entryOffset;
-#else
   GenerateCallablePrologue(masm, &offsets->begin);
   offsets->afterFallbackCheck = offsets->begin;
-#endif  // ENABLE_WASM_JSPI
 
   AssertNoWasmExitFPInJitExit(masm);
 

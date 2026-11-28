@@ -153,8 +153,13 @@ class WasmFrameIter {
   // internally adjusted to point to the shadow stack entry corresponding to
   // the current frame's return address, popping the entry for the Wasm exit
   // frame, or for the frame wasm::StartUnwinding() unwound on a trap.
+  //
+  // `enteredFromJitExit` is true when `fp` is the frame of a JIT exit whose JS
+  // callee frames are being iterated. These always run on the main stack, so
+  // the exit has switched stacks if `fp` is on a continuation stack.
   explicit WasmFrameIter(jit::JitActivation* activation, Frame* fp = nullptr,
-                         uintptr_t* shadowStackPointer = nullptr);
+                         uintptr_t* shadowStackPointer = nullptr,
+                         bool enteredFromJitExit = false);
 
   // Iterate over frames from a known starting (instance, fp, ra).
   WasmFrameIter(Instance* instance, Frame* fp, void* returnAddress);
@@ -620,8 +625,7 @@ void GenerateExitEpilogue(jit::MacroAssembler& masm, ExitReason reason,
 void GenerateMinimalPrologue(jit::MacroAssembler& masm, uint32_t* entry);
 void GenerateMinimalEpilogue(jit::MacroAssembler& masm, uint32_t* ret);
 
-void GenerateJitExitPrologue(jit::MacroAssembler& masm, uint32_t fallbackOffset,
-                             ImportOffsets* offsets);
+void GenerateJitExitPrologue(jit::MacroAssembler& masm, ImportOffsets* offsets);
 void GenerateJitExitEpilogue(jit::MacroAssembler& masm,
                              CallableOffsets* offsets);
 
