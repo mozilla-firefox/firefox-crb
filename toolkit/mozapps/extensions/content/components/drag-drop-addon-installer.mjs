@@ -34,7 +34,7 @@ class DragDropAddonInstaller extends HTMLElement {
     return (
       types.includes("text/uri-list") ||
       types.includes("text/x-moz-url") ||
-      types.includes("application/x-moz-file")
+      types.includes("Files")
     );
   }
 
