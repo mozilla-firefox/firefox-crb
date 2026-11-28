@@ -4751,8 +4751,14 @@ AMRemoteSettings = {
         this.client = lazy.RemoteSettings(this.RS_COLLECTION);
         this.onSync = this.processEntries.bind(this);
         this.client.on("sync", this.onSync);
-        // Process existing entries if any, once the browser has been fully initialized.
-        this.promiseStartup.then(() => this.processEntries());
+        // Process existing entries if any, once the browser has been fully initialized,
+        // unless this client was shut down in the meantime.
+        const client = this.client;
+        this.promiseStartup.then(() => {
+          if (this.client === client) {
+            this.processEntries();
+          }
+        });
       }
     } catch (err) {
       logger.error("Failure to initialize AddonManager RemoteSettings", err);
