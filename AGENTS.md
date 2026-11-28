@@ -46,7 +46,7 @@ that has definitely changed locally. If you're unsure, ask.
 - `./mach run`: Run the project
 - `./mach doc --no-serve --no-open`: Build the documentation
 - `./mach python --virtualenv <virtualenv_name>`: Execute Python of a Mach command's virtualenv. Value of `virtualenv_name` is in relevant `@Command` decorator. This avoids `ImportError`s.
-- `treeherder-cli`: Pull CI results for a try push.
+- `treeherder-cli`: Pull CI results for a try push, and control its jobs: `--cancel-push`, `--cancel`, `--retrigger`, `--retrigger-failures` and `--add-jobs`. Use it rather than the Treeherder web UI or a new `mach try` push. `treeherder-cli --help` maps common questions to flags.
 - Use the MCP resource `@moz:bugzilla://bug/{bug_id}` to retrieve a bug
 - Use the MCP resource `@moz:phabricator://revision/D{revision_id}` to retrieve a Phabricator revision
 
@@ -66,6 +66,14 @@ You can find the review identifier by inspecting the commit log with:
 ## Workflow
 - This repository moves fast. If the local checkout looks old compared to `origin/main`, suggest pulling the latest changes before going further.
 - You can run tests by using `./mach test --auto`. Once you are satisfied with the tests you run locally, ask the user if they would like you to use `mach try auto` to run tests in CI
+- Manage try pushes with `treeherder-cli`:
+  - When you push a new revision that supersedes an earlier try push, or a push is already broken (e.g. build bustage), offer to cancel the old one with `treeherder-cli <rev> --cancel-push`.
+  - To check whether a failure is intermittent, retrigger it with `--retrigger-failures --times 3`. Ask the user before using a higher value.
+  - To run missing jobs, use `--add-jobs '<regex>'` instead of pushing again.
+  - Always run `--retrigger*`/`--add-jobs` with `--dry-run` first.
+  - Only act on pushes the user owns unless they ask otherwise.
+  - Confirm with the user before acting on anything on `autoland` or `mozilla-central`.
+  - If it reports "Not logged in", ask the user to run `treeherder-cli login` themselves (e.g. `! treeherder-cli login` in Claude Code).
 - When running slow commands like `./mach test`, `./mach mochitest`, etc., NEVER pipe their output through `tail`, `grep`, `head`, or other filters. Instead redirect output to a temporary file in `artifacts/` (create if necessary) and selectively read this file. This avoids having to re-run slow commands multiple times to extract different pieces of information.
 - Do not run `./mach build faster` when only front-end test files (JS, HTML, etc.) were modified — they don't need compilation.
 - Running tests with `--headless` is preferred if possible for the patch.
