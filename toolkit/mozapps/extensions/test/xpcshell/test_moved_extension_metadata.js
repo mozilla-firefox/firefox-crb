@@ -2,13 +2,8 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-// This test is disabled but is being kept around so it can eventualy
-// be modernized and re-enabled.  But is uses obsolete test helpers that
-// fail lint, so just skip linting it for now.
-/* eslint-disable */
-
 // This verifies that moving an extension in the filesystem without any other
-// change still keeps updated compatibility information
+// change still keeps updated compatibility information and its disabled state.
 
 // The test extension uses an insecure update url.
 Services.prefs.setBoolPref("extensions.checkUpdateSecurity", false);
@@ -17,8 +12,13 @@ Services.prefs.setIntPref(
   "extensions.enabledScopes",
   AddonManager.SCOPE_PROFILE + AddonManager.SCOPE_USER
 );
+Services.prefs.setIntPref("extensions.sideloadScopes", AddonManager.SCOPE_USER);
+Services.prefs.setIntPref(
+  "extensions.startupScanScopes",
+  AddonManager.SCOPE_USER
+);
 
-createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "2", "1.9.2");
+createAppInfo("xpcshell@tests.mozilla.org", "XPCShell", "2", "2");
 
 var testserver = AddonTestUtils.createHttpServer({ hosts: ["example.com"] });
 testserver.registerDirectory("/data/", do_get_file("data"));
@@ -30,7 +30,9 @@ userDir.append(gAppInfo.ID);
 var dirProvider = {
   getFile(aProp, aPersistent) {
     aPersistent.value = false;
-    if (aProp == "XREUSysExt") return userDir.parent;
+    if (aProp == "XREUSysExt") {
+      return userDir.parent;
+    }
     return null;
   },
 
@@ -38,73 +40,63 @@ var dirProvider = {
 };
 Services.dirsvc.registerProvider(dirProvider);
 
-var addon1 = {
-  id: "addon1@tests.mozilla.org",
-  version: "1.0",
-  name: "Test 1",
-  bootstrap: true,
-  updateURL: "http://example.com/data/test_bug655254.json",
-  targetApplications: [
+const ID1 = "addon1@tests.mozilla.org";
+const ID2 = "addon2@tests.mozilla.org";
+
+function moveUserDir(newName) {
+  userDir.parent.moveTo(gProfD, newName);
+  userDir = gProfD.clone();
+  userDir.append(newName);
+  userDir.append(gAppInfo.ID);
+  Assert.ok(userDir.exists(), "User scope directory was moved");
+}
+
+add_task(async function test_moved_keeps_compatibility_update() {
+  await promiseWriteWebManifestForExtension(
     {
-      id: "xpcshell@tests.mozilla.org",
-      minVersion: "1",
-      maxVersion: "1",
-    },
-  ],
-};
-
-const ADDONS = [
-  {
-    "install.rdf": {
-      id: "addon2@tests.mozilla.org",
-      name: "Test 2",
-
-      targetApplications: [
-        {
-          id: "xpcshell@tests.mozilla.org",
-          minVersion: "2",
-          maxVersion: "2",
+      manifest_version: 2,
+      name: "Test 1",
+      version: "1.0",
+      browser_specific_settings: {
+        gecko: {
+          id: ID1,
+          update_url: "http://example.com/data/test_bug655254.json",
+          strict_min_version: "1",
+          strict_max_version: "1",
         },
-      ],
+      },
     },
-    "bootstrap.js": `
-      /* exported startup, shutdown */
-      function startup(data, reason) {
-        Services.prefs.setIntPref("bootstraptest.active_version", 1);
-      }
+    userDir
+  );
 
-      function shutdown(data, reason) {
-        Services.prefs.setIntPref("bootstraptest.active_version", 0);
-      }
-    `,
-  },
-];
-
-const XPIS = ADDONS.map(addon => AddonTestUtils.createTempXPIFile(addon));
-
-add_task(async function test_1() {
-  var time = Date.now();
-  var dir = await promiseWriteInstallRDFForExtension(addon1, userDir);
-  setExtensionModifiedTime(dir, time);
-
-  await manuallyInstall(XPIS[0], userDir, "addon2@tests.mozilla.org");
+  await manuallyInstall(
+    AddonTestUtils.createTempWebExtensionFile({
+      manifest: {
+        name: "Test 2",
+        version: "1.0",
+        browser_specific_settings: {
+          gecko: {
+            id: ID2,
+            strict_min_version: "2",
+            strict_max_version: "2",
+          },
+        },
+      },
+    }),
+    userDir,
+    ID2
+  );
 
   await promiseStartupManager();
 
-  let [a1, a2] = await AddonManager.getAddonsByIDs([
-    "addon1@tests.mozilla.org",
-    "addon2@tests.mozilla.org",
-  ]);
-  Assert.notEqual(a1, null);
-  Assert.ok(a1.appDisabled);
-  Assert.ok(!a1.isActive);
-  Assert.ok(!isExtensionInBootstrappedList(userDir, a1.id));
+  let [a1, a2] = await AddonManager.getAddonsByIDs([ID1, ID2]);
+  Assert.ok(a1.appDisabled, "Add-on 1 is initially incompatible");
+  Assert.ok(!a1.isActive, "Add-on 1 is initially inactive");
+  Assert.ok(!isExtensionInBootstrappedList(userDir, ID1));
 
-  Assert.notEqual(a2, null);
-  Assert.ok(!a2.appDisabled);
-  Assert.ok(a2.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a2.id));
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 1);
+  Assert.ok(!a2.appDisabled, "Add-on 2 is compatible");
+  Assert.ok(a2.isActive, "Add-on 2 is active");
+  Assert.ok(isExtensionInBootstrappedList(userDir, ID2));
 
   await AddonTestUtils.promiseFindAddonUpdates(
     a1,
@@ -113,74 +105,45 @@ add_task(async function test_1() {
 
   await promiseRestartManager();
 
-  let a1_2 = await AddonManager.getAddonByID("addon1@tests.mozilla.org");
-  Assert.notEqual(a1_2, null);
-  Assert.ok(!a1_2.appDisabled);
-  Assert.ok(a1_2.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a1_2.id));
+  a1 = await AddonManager.getAddonByID(ID1);
+  Assert.ok(!a1.appDisabled, "Compatibility update made add-on 1 compatible");
+  Assert.ok(a1.isActive, "Add-on 1 is active after the compatibility update");
+  Assert.ok(isExtensionInBootstrappedList(userDir, ID1));
 
   await promiseShutdownManager();
-
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 0);
-
-  userDir.parent.moveTo(gProfD, "extensions3");
-  userDir = gProfD.clone();
-  userDir.append("extensions3");
-  userDir.append(gAppInfo.ID);
-  Assert.ok(userDir.exists());
-
+  moveUserDir("extensions3");
   await promiseStartupManager();
 
-  let [a1_3, a2_3] = await AddonManager.getAddonsByIDs([
-    "addon1@tests.mozilla.org",
-    "addon2@tests.mozilla.org",
-  ]);
-  Assert.notEqual(a1_3, null);
-  Assert.ok(!a1_3.appDisabled);
-  Assert.ok(a1_3.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a1_3.id));
+  [a1, a2] = await AddonManager.getAddonsByIDs([ID1, ID2]);
+  Assert.ok(!a1.appDisabled, "Moved add-on 1 is still compatible");
+  Assert.ok(a1.isActive, "Moved add-on 1 is still active");
+  Assert.ok(isExtensionInBootstrappedList(userDir, ID1));
 
-  Assert.notEqual(a2_3, null);
-  Assert.ok(!a2_3.appDisabled);
-  Assert.ok(a2_3.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a2_3.id));
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 1);
+  Assert.ok(!a2.appDisabled, "Moved add-on 2 is still compatible");
+  Assert.ok(a2.isActive, "Moved add-on 2 is still active");
+  Assert.ok(isExtensionInBootstrappedList(userDir, ID2));
 });
 
-// Set up the profile
-add_task(async function test_2() {
-  let a2 = await AddonManager.getAddonByID("addon2@tests.mozilla.org");
-  Assert.notEqual(a2, null);
-  Assert.ok(!a2.appDisabled);
-  Assert.ok(a2.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a2.id));
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 1);
+add_task(async function test_moved_keeps_user_disabled() {
+  let a2 = await AddonManager.getAddonByID(ID2);
+  Assert.ok(a2.isActive, "Add-on 2 is active");
 
   await a2.disable();
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 0);
+  Assert.ok(!a2.isActive, "Add-on 2 is disabled");
 
   await promiseShutdownManager();
-
-  userDir.parent.moveTo(gProfD, "extensions4");
-  userDir = gProfD.clone();
-  userDir.append("extensions4");
-  userDir.append(gAppInfo.ID);
-  Assert.ok(userDir.exists());
-
+  moveUserDir("extensions4");
   await promiseStartupManager();
 
-  let [a1_2, a2_2] = await AddonManager.getAddonsByIDs([
-    "addon1@tests.mozilla.org",
-    "addon2@tests.mozilla.org",
-  ]);
-  Assert.notEqual(a1_2, null);
-  Assert.ok(!a1_2.appDisabled);
-  Assert.ok(a1_2.isActive);
-  Assert.ok(isExtensionInBootstrappedList(userDir, a1_2.id));
+  let a1;
+  [a1, a2] = await AddonManager.getAddonsByIDs([ID1, ID2]);
+  Assert.ok(!a1.appDisabled, "Moved add-on 1 is still compatible");
+  Assert.ok(a1.isActive, "Moved add-on 1 is still active");
+  Assert.ok(isExtensionInBootstrappedList(userDir, ID1));
 
-  Assert.notEqual(a2_2, null);
-  Assert.ok(a2_2.userDisabled);
-  Assert.ok(!a2_2.isActive);
-  Assert.ok(!isExtensionInBootstrappedList(userDir, a2_2.id));
-  Assert.equal(Services.prefs.getIntPref("bootstraptest.active_version"), 0);
+  Assert.ok(a2.userDisabled, "Moved add-on 2 is still user disabled");
+  Assert.ok(!a2.isActive, "Moved add-on 2 is still inactive");
+  Assert.ok(!isExtensionInBootstrappedList(userDir, ID2));
+
+  await promiseShutdownManager();
 });
