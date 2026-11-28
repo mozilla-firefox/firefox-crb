@@ -8,10 +8,6 @@ android {
         version = release(project.ext.compileSdkMajorVersion) { minorApiLevel = project.ext.compileSdkMinorVersion }
     }
 
-    lint {
-        lintConfig = file("../shared-lint.xml")
-    }
-
     defaultConfig {
         targetSdk project.ext.targetSdkVersion
         minSdk project.ext.minSdkVersion

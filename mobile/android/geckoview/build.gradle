@@ -80,10 +80,6 @@ android {
         buildConfigField 'boolean', 'MOZILLA_OFFICIAL', mozconfig.substs.MOZILLA_OFFICIAL ? 'true' : 'false';
     }
 
-    lint {
-        lintConfig = file("lint.xml")
-    }
-
     sourceSets {
         main {
             java {

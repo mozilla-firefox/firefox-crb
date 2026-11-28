@@ -263,10 +263,6 @@ android {
         }
     }
 
-    lint {
-        lintConfig = file("../../shared-lint.xml")
-    }
-
     // Exclude native libraries for unsupported architectures from third-party dependencies
     packaging {
         jniLibs {

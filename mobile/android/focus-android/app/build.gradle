@@ -59,10 +59,6 @@ android {
         }
     }
 
-    lint {
-        lintConfig = file("../../shared-lint.xml")
-    }
-
     // We have a three dimensional build configuration:
     // BUILD TYPE (debug, release) X PRODUCT FLAVOR (focus, klar)
 
