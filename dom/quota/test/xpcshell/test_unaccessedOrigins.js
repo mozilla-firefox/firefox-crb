@@ -18,39 +18,26 @@ async function testUnaccessedOrigins() {
     return getRelativeFile("storage/default/https+++" + getHostname(index));
   }
 
+  // Access times accumulate as a maximum, so an origin only looks unaccessed
+  // when it is old by every available measure. Age the stored row as well as
+  // the directory the recovery scan derives its timestamp from.
   function updateOriginLastAccessTime(index, deltaSec) {
+    let dbFile = getRelativeFile("storage.sqlite");
+    let conn = Services.storage.openUnsharedDatabase(dbFile);
+
+    let stmt = conn.createStatement(
+      "UPDATE origin SET last_access_time = last_access_time + :delta " +
+        "WHERE origin = :origin"
+    );
+    stmt.params.delta = deltaSec * PR_USEC_PER_SEC;
+    stmt.params.origin = getOrigin(index);
+    stmt.executeStep();
+    stmt.finalize();
+
+    conn.close();
+
     let originDir = getOriginDir(index);
-
-    let metadataFile = originDir.clone();
-    metadataFile.append(".metadata-v2");
-
-    let fileRandomAccessStream = Cc[
-      "@mozilla.org/network/file-random-access-stream;1"
-    ].createInstance(Ci.nsIFileRandomAccessStream);
-    fileRandomAccessStream.init(metadataFile, -1, -1, 0);
-
-    let binaryInputStream = Cc[
-      "@mozilla.org/binaryinputstream;1"
-    ].createInstance(Ci.nsIBinaryInputStream);
-    binaryInputStream.setInputStream(fileRandomAccessStream);
-
-    let lastAccessTime = binaryInputStream.read64();
-
-    let seekableStream = fileRandomAccessStream.QueryInterface(
-      Ci.nsISeekableStream
-    );
-    seekableStream.seek(Ci.nsISeekableStream.NS_SEEK_SET, 0);
-
-    binaryOutputStream = Cc["@mozilla.org/binaryoutputstream;1"].createInstance(
-      Ci.nsIBinaryOutputStream
-    );
-    binaryOutputStream.setOutputStream(fileRandomAccessStream);
-
-    binaryOutputStream.write64(lastAccessTime + deltaSec * PR_USEC_PER_SEC);
-
-    binaryOutputStream.close();
-
-    binaryInputStream.close();
+    originDir.lastModifiedTime = originDir.lastModifiedTime + deltaSec * 1000;
   }
 
   function verifyOriginDir(index, shouldExist) {

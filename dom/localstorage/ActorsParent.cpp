@@ -8491,8 +8491,8 @@ Result<UsageInfo, nsresult> QuotaClient::InitOrigin(
     maybeCipherKey = Some(key);
   }
 
-  QM_TRY_INSPECT(
-      const UsageInfo& res,
+  QM_TRY_UNWRAP(
+      auto res,
       ([fileExists, usageFileExists, &file, &usageFile, &usageJournalFile,
         &aOriginMetadata, &maybeCipherKey]() -> Result<UsageInfo, nsresult> {
         if (fileExists) {
@@ -8572,6 +8572,12 @@ Result<UsageInfo, nsresult> QuotaClient::InitOrigin(
         return Ok{};
       }));
 #endif
+
+  if (fileExists) {
+    QM_TRY_INSPECT(const int64_t& lastModifiedTime,
+                   MOZ_TO_RESULT_INVOKE_MEMBER(file, GetLastModifiedTime));
+    res.UpdateLastModifiedTime(lastModifiedTime * int64_t(PR_USEC_PER_MSEC));
+  }
 
   return res;
 }

@@ -12714,6 +12714,12 @@ nsresult QuotaClient::GetUsageForOriginInternal(
         MOZ_ASSERT(fileSize >= 0);
 
         *aUsageInfo += DatabaseUsageType(Some(uint64_t(fileSize)));
+
+        QM_TRY_INSPECT(
+            const int64_t& lastModifiedTime,
+            MOZ_TO_RESULT_INVOKE_MEMBER(databaseFile, GetLastModifiedTime));
+        aUsageInfo->UpdateLastModifiedTime(lastModifiedTime *
+                                           int64_t(PR_USEC_PER_MSEC));
       }
 
       {
@@ -12736,6 +12742,21 @@ nsresult QuotaClient::GetUsageForOriginInternal(
                            (ErrToOk<0, int64_t>)));
         MOZ_ASSERT(walFileSize >= 0);
         *aUsageInfo += DatabaseUsageType(Some(uint64_t(walFileSize)));
+
+        if (walFileSize > 0) {
+          QM_TRY_INSPECT(
+              const int64_t& walLastModifiedTime,
+              QM_OR_ELSE_LOG_VERBOSE_IF(
+                  MOZ_TO_RESULT_INVOKE_MEMBER(walFile, GetLastModifiedTime),
+                  ([](const nsresult rv) {
+                    return rv == NS_ERROR_FILE_NOT_FOUND;
+                  }),
+                  (ErrToOk<0, int64_t>)));
+          if (walLastModifiedTime > 0) {
+            aUsageInfo->UpdateLastModifiedTime(walLastModifiedTime *
+                                               int64_t(PR_USEC_PER_MSEC));
+          }
+        }
       }
 
       {

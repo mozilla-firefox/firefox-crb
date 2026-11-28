@@ -71,6 +71,7 @@
 #include "nsThreadUtils.h"
 #include "nscore.h"
 #include "prio.h"
+#include "prtime.h"
 
 namespace mozilla::dom {
 
@@ -1731,8 +1732,15 @@ Result<UsageInfo, nsresult> QuotaClient::GetUsageForOrigin(
 
           MOZ_ASSERT(fileSize >= 0);
 
-          return usageInfo +
-                 UsageInfo{DatabaseUsageType(Some(uint64_t(fileSize)))};
+          QM_TRY_INSPECT(
+              const int64_t& lastModifiedTime,
+              MOZ_TO_RESULT_INVOKE_MEMBER(file, GetLastModifiedTime));
+
+          auto result = usageInfo +
+                        UsageInfo{DatabaseUsageType(Some(uint64_t(fileSize)))};
+          result.UpdateLastModifiedTime(lastModifiedTime *
+                                        int64_t(PR_USEC_PER_MSEC));
+          return result;
         }
 
         (void)WARN_IF_FILE_IS_UNKNOWN(*file);

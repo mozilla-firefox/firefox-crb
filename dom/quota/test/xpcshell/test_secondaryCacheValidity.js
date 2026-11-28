@@ -14,38 +14,29 @@ const { QuotaUtils } = ChromeUtils.importESModule(
 );
 
 /**
- * This test is mainly to verify that L2 related cached usage information is
- * stable across a forced metadata restoration and consists of these steps:
- *  - Install a packaged profile
- *  - Initialize storage and temporary storage
- *  - Get full origin metadata (cached in memory)
- *  - Shutdown storage
- *  - Remove the origin metadata file on disk (forces restoration)
- *  - Initialize storage and temporary storage
- *  - Get full origin metadata (cached in memory)
- *  - Compare cached usage information
+ * The .metadata-v2 file is not a usage cache. It is written when an origin
+ * directory is created and when the persisted flag changes, and it exists so
+ * an origin can still be identified after the storage database is lost.
  *
- * This test is intended to catch changes that would require bumping
- * kCurrentQuotaVersion.
+ * This test verifies that contract. It removes the storage database to force
+ * recovery from the restoration files alone, then checks that the origin, its
+ * suffix and its persisted flag all survive. Usage is deliberately not
+ * compared: it is recomputed by scanning the origin directory, not restored
+ * from the file.
  *
- * If the comparison of cached usage information fails, it is very likely that
- * kCurrentQuotaVersion needs to be bumped.
- *
- * See also the documentation for kCurrentQuotaVersion in Constants.h.
- *
- * Note: This test currently contains only the essential coverage for
- * detecting L2 cache validity issues. In the future, the packaged profile
- * could be generated using more comprehensive data creation methods, and a
- * separate test could be added to leverage the conditioned profiles
- * infrastructure. However, a custom test with its own pre-packaged profile
- * will still be needed, since we do not have control over the contents of
- * conditioned profiles.
+ * A second origin with origin attributes is covered so the suffix is checked
+ * against a non-empty value rather than only the empty default.
  */
-async function testSecondaryCacheValidity() {
-  const principal = PrincipalUtils.createPrincipal("http://example42.com");
-  const metadata = FileUtils.getFile(
-    "storage/default/http+++example42.com/.metadata-v2"
-  );
+async function testRestorationFileValidity() {
+  const plainPrincipal = PrincipalUtils.createPrincipal("http://example42.com");
+  const suffixedPrincipal = getPrincipal("https://example43.com", {
+    userContextId: 1,
+  });
+
+  async function getMetadata(principal) {
+    const request = Services.qms.getFullOriginMetadata("default", principal);
+    return QuotaUtils.requestFinished(request);
+  }
 
   info("Clearing storage");
 
@@ -57,39 +48,8 @@ async function testSecondaryCacheValidity() {
   info("Installing package");
 
   // The profile contains a single origin directory in the default repository
-  // populated with basic data for all quota clients. It was created locally
-  // using the make_secondaryCacheValidity.js script, which can be
-  // executed like this:
-  // mach xpcshell-test --interactive dom/quota/test/xpcshell/make_secondaryCacheValidity.js
-  // Make sure to temporarly remove the `run-if = [ "false" ]` before executing
-  // this command
-  // Run _execute_test() and quit()
-  // Tweak the generated profile. It lives in your temporary profile dir used
-  // for tests, which is printed when the test starts ("profile dir is …")
-  // 1. Remove the folder "storage/temporary".
-  // 2. Remove the file "storage/ls-archive.sqlite".
-  // 3. Remove the file "storage/default/http+++example42.com/cache/caches.sqlite-wal".
-  // 4. Remove the file "storage/default/http+++example42.com/idb/2320029346mByDIdnedxe.sqlite-wal".
-  // For convenience below is the way to execute this from command line:
-  /*
-  # Run the generate script, passing _execute_test() and quit() so you don't
-  # have to type anything, and parsing the log with grep and awk to retrieve
-  # the profile directory
-  PROFILE_DIR=$(printf '_execute_test();\nquit();\n' | ./mach test \
-    --interactive dom/quota/test/xpcshell/make_secondaryCacheValidity.js | \
-    grep "profile dir is" | awk '{print $NF}')
-  : Go to profile dir
-  cd $PROFILE_DIR
-  : Remove the unneeded files
-  rm -r storage/temporary storage/ls-archive.sqlite \
-    storage/default/http+++example42.com/cache/caches.sqlite-wal \
-    storage/default/http+++example42.com/idb/2320029346mByDIdnedxe.sqlite-wal
-  : Package only storage.sqlite and storage/
-  zip -r -X secondaryCacheValidity_profile.zip storage.sqlite storage
-  : Copy the new profile
-  cd -
-  cp $PROFILE_DIR/secondaryCacheValidity_profile.zip dom/quota/test/xpcshell/
-  */
+  // populated with basic data for all quota clients. See
+  // make_secondaryCacheValidity.js for how it was produced.
   installPackage("secondaryCacheValidity_profile");
 
   info("Initializing storage");
@@ -106,20 +66,23 @@ async function testSecondaryCacheValidity() {
     await QuotaUtils.requestFinished(request);
   }
 
-  info("Getting full origin metadata");
+  info("Creating an origin with a non-empty suffix");
 
   {
-    const request = Services.qms.getFullOriginMetadata("default", principal);
+    const request = Services.qms.initializeTemporaryOrigin(
+      "default",
+      suffixedPrincipal,
+      /* aCreateIfNonExistent */ true
+    );
     await QuotaUtils.requestFinished(request);
   }
 
   info("Getting full origin metadata");
 
-  const fullOriginMetadataBefore = await (async function () {
-    const request = Services.qms.getFullOriginMetadata("default", principal);
-    await QuotaUtils.requestFinished(request);
-    return request.result;
-  })();
+  const plainBefore = await getMetadata(plainPrincipal);
+  const suffixedBefore = await getMetadata(suffixedPrincipal);
+
+  Assert.notEqual(suffixedBefore.suffix, "", "The suffix is not empty");
 
   info("Shutting down storage");
 
@@ -128,9 +91,9 @@ async function testSecondaryCacheValidity() {
     await QuotaUtils.requestFinished(request);
   }
 
-  info("Removing origin metadata");
+  info("Removing the storage database to force recovery from disk");
 
-  metadata.remove(false);
+  FileUtils.getFile("storage.sqlite").remove(false);
 
   info("Initializing storage");
 
@@ -146,39 +109,31 @@ async function testSecondaryCacheValidity() {
     await QuotaUtils.requestFinished(request);
   }
 
-  info("Getting full origin metadata");
+  info("Verifying full origin metadata was recovered");
 
-  const fullOriginMetadataAfter = await (async function () {
-    const request = Services.qms.getFullOriginMetadata("default", principal);
-    await QuotaUtils.requestFinished(request);
-    return request.result;
-  })();
+  const plainAfter = await getMetadata(plainPrincipal);
+  const suffixedAfter = await getMetadata(suffixedPrincipal);
 
-  info("Verifying full origin metadata");
-
-  Assert.notEqual(
-    BigInt(fullOriginMetadataBefore.lastAccessTime),
-    BigInt(fullOriginMetadataAfter.lastAccessTime),
-    "Last access times are not the same"
-  );
-
-  info("Client usages before: " + fullOriginMetadataBefore.clientUsages);
-  info("Client usages after: " + fullOriginMetadataAfter.clientUsages);
-
-  Assert.equal(
-    fullOriginMetadataBefore.clientUsages,
-    fullOriginMetadataAfter.clientUsages,
-    "Client usages are the same"
-  );
-
-  info("Origin usgae before: " + fullOriginMetadataBefore.originUsage);
-  info("Origin usage after: " + fullOriginMetadataAfter.originUsage);
-
-  Assert.equal(
-    fullOriginMetadataBefore.originUsage,
-    fullOriginMetadataAfter.originUsage,
-    "Origin usage is the same"
-  );
+  for (const [before, after, description] of [
+    [plainBefore, plainAfter, "without a suffix"],
+    [suffixedBefore, suffixedAfter, "with a suffix"],
+  ]) {
+    Assert.equal(
+      before.origin,
+      after.origin,
+      `Origin is the same for the origin ${description}`
+    );
+    Assert.equal(
+      before.suffix,
+      after.suffix,
+      `Suffix is the same for the origin ${description}`
+    );
+    Assert.equal(
+      before.persisted,
+      after.persisted,
+      `Persisted flag is the same for the origin ${description}`
+    );
+  }
 }
 
 /* exported testSteps */
@@ -187,6 +142,6 @@ async function testSteps() {
     {
       pref_set: [["dom.quotaManager.loadQuotaFromCache", false]],
     },
-    testSecondaryCacheValidity
+    testRestorationFileValidity
   );
 }

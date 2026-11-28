@@ -5,10 +5,12 @@
 #ifndef mozilla_dom_quota_usageinfo_h_
 #define mozilla_dom_quota_usageinfo_h_
 
+#include <algorithm>
 #include <cstdint>
 
 #include "mozilla/CheckedInt.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/dom/quota/Constants.h"
 
 namespace mozilla::dom::quota {
 
@@ -68,6 +70,8 @@ class UsageInfo final {
   UsageInfo& operator+=(const UsageInfo& aUsageInfo) {
     mDatabaseUsage += aUsageInfo.mDatabaseUsage;
     mFileUsage += aUsageInfo.mFileUsage;
+    mLastModifiedTime =
+        std::max(mLastModifiedTime, aUsageInfo.mLastModifiedTime);
     return *this;
   }
 
@@ -91,9 +95,16 @@ class UsageInfo final {
     return res;
   }
 
+  void UpdateLastModifiedTime(int64_t aTimestamp) {
+    mLastModifiedTime = std::max(mLastModifiedTime, aTimestamp);
+  }
+
+  int64_t LastModifiedTime() const { return mLastModifiedTime; }
+
  private:
   DatabaseUsageType mDatabaseUsage;
   FileUsageType mFileUsage;
+  int64_t mLastModifiedTime = kDefaultLastAccessTime;
 };
 
 }  // namespace mozilla::dom::quota

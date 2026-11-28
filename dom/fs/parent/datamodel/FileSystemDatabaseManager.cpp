@@ -15,6 +15,7 @@
 #include "mozilla/dom/quota/ResultExtensions.h"
 #include "nsCOMPtr.h"
 #include "nsIFile.h"
+#include "prtime.h"
 
 namespace mozilla::dom::fs::data {
 
@@ -86,7 +87,11 @@ Result<quota::UsageInfo, QMResult> FileSystemDatabaseManager::GetUsage(
   int64_t dbSize = 0;
   QM_TRY(QM_TO_RESULT(databaseFile->GetFileSize(&dbSize)));
 
+  int64_t lastModifiedTime = 0;
+  QM_TRY(QM_TO_RESULT(databaseFile->GetLastModifiedTime(&lastModifiedTime)));
+
   quota::UsageInfo result(quota::DatabaseUsageType(Some(dbSize)));
+  result.UpdateLastModifiedTime(lastModifiedTime * int64_t(PR_USEC_PER_MSEC));
 
   QM_TRY_INSPECT(const Usage& fileUsage, GetFileUsage(aConnection));
 
