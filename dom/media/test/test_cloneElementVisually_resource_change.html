@@ -25,6 +25,35 @@
 
 /* import-globals-from cloneElementVisually_helpers.js */
 
+async function checkPausedFrames(original, clone, message) {
+  if (await assertVideosMatch(original, clone, { dumpMismatch: false })) {
+    ok(true, message);
+    return;
+  }
+
+  // Pause can be delivered before both captures can read the paused frame.
+  // The two resources have no all-black frames, so two failed readbacks must
+  // not turn an initial mismatch into a pass.
+  const maxRetries = 10;
+  let retries = 0;
+  let matched = false;
+  await SimpleTest.promiseWaitForCondition(
+    async () => {
+      matched = await assertVideosMatch(original, clone, {
+        dumpMismatch: ++retries === maxRetries,
+        requireNonBlack: true,
+      });
+      return matched;
+    },
+    message,
+    100,
+    maxRetries
+  );
+  if (matched) {
+    ok(true, message);
+  }
+}
+
 /**
  * Tests that cloning survives changes to the underlying video resource.
  */
@@ -43,8 +72,11 @@ add_task(async () => {
     originalVideo.pause();
     await waitForEventOnce(originalVideo, "pause");
 
-    ok(await assertVideosMatch(originalVideo, clone),
-       "Initial video should match.");
+    await checkPausedFrames(
+      originalVideo,
+      clone,
+      "Initial video should match."
+    );
 
     await setVideoSrc(originalVideo, TEST_VIDEO_2);
 
@@ -54,8 +86,7 @@ add_task(async () => {
     originalVideo.pause();
     await waitForEventOnce(originalVideo, "pause");
 
-    ok(await assertVideosMatch(originalVideo, clone),
-       "New video should match.");
+    await checkPausedFrames(originalVideo, clone, "New video should match.");
   });
 
   await setVideoSrc(originalVideo, TEST_VIDEO_1);
