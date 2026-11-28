@@ -542,7 +542,13 @@ class XPIState {
     ) {
       this.lastModifiedTime = saved.currentModifiedTime;
     } else if (saved.currentModifiedTime === null) {
-      this.missing = true;
+      // AddonManagerStartup looks for the add-on file in the location's
+      // previous directory, not in the one it has been relocated to.
+      if (isRelocatedLocation && this.file.exists()) {
+        this.getModTime(this.file);
+      } else {
+        this.missing = true;
+      }
     }
   }
 
